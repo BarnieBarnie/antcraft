@@ -9,7 +9,9 @@ public enum BotRole {
 	/** Crafts colony orders at the core and activates stored Bot Cores. */
 	CRAFTER,
 	/** Digs out the colony quarry layer by layer and stores what it mines. */
-	MINER;
+	MINER,
+	/** Harvests ripe crops around the colony and replants them. */
+	FARMER;
 
 	public String id() {
 		return this.name().toLowerCase(Locale.ROOT);

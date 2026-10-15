@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.entity;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
+import io.github.barniebarnie.antcraft.entity.goal.FarmerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
@@ -77,6 +78,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(3, new LumberjackGoal(this));
 		this.goalSelector.addGoal(3, new CrafterGoal(this));
 		this.goalSelector.addGoal(3, new MinerGoal(this));
+		this.goalSelector.addGoal(3, new FarmerGoal(this));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));

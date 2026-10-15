@@ -47,6 +47,8 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 600)
 	public void killsHostileMob(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		// An unarmed bot and a husk are an even match; armed, the outcome does not depend on luck.
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
 		// Husks do not burn in daylight, so only the bot can kill it.
 		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 6);
 

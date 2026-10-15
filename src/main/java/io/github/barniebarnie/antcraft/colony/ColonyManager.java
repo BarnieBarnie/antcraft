@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.colony;
 import com.mojang.serialization.Codec;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
@@ -28,6 +29,8 @@ public class ColonyManager extends SavedData {
 	private static final int SURVEY_INTERVAL = 100;
 	/** Quarry layers open for mining at once, so a couple of miners can work side by side. */
 	private static final int MINING_LAYERS = 2;
+	/** How far above and below the core crops are looked for. */
+	private static final int CROP_SCAN_HEIGHT = 4;
 	/** Jobs whose bot has not reported for this long are freed for others. */
 	private static final long CLAIM_TIMEOUT = 600;
 
@@ -105,6 +108,17 @@ public class ColonyManager extends SavedData {
 		bot.setColonyId(null);
 	}
 
+	private void surveyCrops(ServerLevel level, Colony colony) {
+		colony.board().removeOpenIf(job -> job.type() == JobType.HARVEST_CROP && !Farming.isRipe(level.getBlockState(job.target())));
+		BlockPos core = colony.core();
+		int r = colony.radius();
+		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -CROP_SCAN_HEIGHT, -r), core.offset(r, CROP_SCAN_HEIGHT, r))) {
+			if (Farming.isRipe(level.getBlockState(pos))) {
+				colony.board().post(JobType.HARVEST_CROP, pos);
+			}
+		}
+	}
+
 	public void tick(ServerLevel level) {
 		long now = level.getGameTime();
 		for (Colony colony : this.colonies.values()) {
@@ -117,6 +131,7 @@ public class ColonyManager extends SavedData {
 			for (TreeScanner.Tree tree : TreeScanner.findAll(new LevelTreeView(level), colony.core(), colony.radius())) {
 				colony.board().post(JobType.CHOP_TREE, tree.base());
 			}
+			this.surveyCrops(level, colony);
 			colony.quarry().ifPresent(quarry -> {
 				Set<BlockPos> layers = new HashSet<>();
 				for (int y : quarry.layersToWork(pos -> Mining.isMinable(level, pos), MINING_LAYERS)) {
