@@ -15,6 +15,8 @@ import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -29,16 +31,17 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.LeavesBlock;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Lumberjack work loop: get a tree (from the colony job board, or by searching near
- * home when not in a colony), chop every log, clear the leaves the tree leaves behind,
- * remove the scaffold blocks it placed to get up there, pick up the drops, replant a
- * sapling, and bring logs to the home chest or colony core. Before a tree it tops up
+ * home when not in a colony), chop every log, remove the scaffold blocks it placed to get
+ * up there, pick up the drops, replant a sapling, and bring logs to the home chest or colony
+ * core. It leaves the canopy alone (only breaking leaves in its way): with the logs gone the
+ * leaves decay by themselves. That is slow, so when it could not replant it comes back later
+ * for saplings and apples the leaves dropped. Before a tree it tops up
  * its scaffold blocks from home, so it can pillar up to logs it cannot reach. It only uses
  * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast.
  */
@@ -55,10 +58,13 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int SCAFFOLD_STOCK = 16;
 	/** How long to wait before fetching scaffold again after home could not be reached. */
 	private static final int RESTOCK_RETRY_TICKS = 600;
-	/** Leaves need a few ticks to notice their logs are gone. */
-	private static final int LEAF_SETTLE_TICKS = 20;
-	/** Leaves decay further than this from a log, so a tree's canopy cannot reach further. */
-	private static final int LEAF_RANGE = LeavesBlock.DECAY_DISTANCE - 1;
+	/**
+	 * How long to keep coming back to a felled tree for the saplings its decaying leaves drop. Leaves
+	 * take minutes to decay, and dropped items despawn after five.
+	 */
+	private static final int REVISIT_TICKS = 12000;
+	/** At most this many felled trees are remembered to come back to; the oldest is forgotten first. */
+	private static final int MAX_REVISITS = 8;
 	/**
 	 * How many times per tree cleanup may pillar up to scaffold it cannot otherwise reach. Each retry
 	 * places new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
@@ -67,13 +73,18 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** The scaffold blocks lumberjacks fetch and place: ones they can take down quickly without a tool. */
 	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
 
-	private enum State { SEARCH, RESTOCK, CHOP, LEAVES, CLEANUP, COLLECT, REPLANT, DEPOSIT }
+	private enum State { SEARCH, RESTOCK, CHOP, CLEANUP, COLLECT, REPLANT, DEPOSIT }
 
 	/**
 	 * States in which placed blocks are scaffolding for the current tree, to be removed afterwards.
 	 * Not {@link State#CLEANUP}: cleanup never places blocks, or it would have to remove them again.
 	 */
-	private static final Set<State> TREE_WORK = EnumSet.of(State.CHOP, State.LEAVES);
+	private static final Set<State> TREE_WORK = EnumSet.of(State.CHOP);
+	/**
+	 * States that never place blocks. Collecting comes after cleanup, so blocks placed then would be
+	 * left behind; drops it cannot walk to (say, on a canopy left to decay) fall down later.
+	 */
+	private static final Set<State> NO_PLACING = EnumSet.of(State.CLEANUP, State.COLLECT);
 
 	private final AntBot bot;
 	private final PathFollower follower;
@@ -83,8 +94,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private @Nullable Goal travelGoal;
 	private final Set<BlockPos> unreachableLogs = new HashSet<>();
 	private final Set<Integer> unreachableItems = new HashSet<>();
-	private final Set<BlockPos> unreachableLeaves = new HashSet<>();
-	private @Nullable BlockPos leaf;
+	/** Where the current tree stood: drops are collected around it and a sapling planted there. */
+	private @Nullable BlockPos site;
+	/** Felled trees not yet replanted, with the game time they were felled, to come back to for saplings. */
+	private final Map<BlockPos, Long> revisits = new LinkedHashMap<>();
 	/** Scaffold that cannot be reached without placing more; retried once the rest is down. */
 	private final Set<BlockPos> unreachablePlaced = new HashSet<>();
 	/** Scaffold that could not be reached even by pillaring; left behind. */
@@ -161,7 +174,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			case SEARCH -> this.search(level);
 			case RESTOCK -> this.restock(level);
 			case CHOP -> this.chop(level);
-			case LEAVES -> this.leaves(level);
 			case CLEANUP -> this.cleanup(level);
 			case COLLECT -> this.collect(level);
 			case REPLANT -> this.replant(level);
@@ -174,7 +186,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.bot.setWorking(next != State.SEARCH);
 		this.travelGoal = null;
 		this.follower.stop();
-		this.follower.setMayPlace(next != State.CLEANUP);
+		this.follower.setMayPlace(!NO_PLACING.contains(next));
 		this.breaker.reset();
 		this.retrying = null;
 	}
@@ -192,6 +204,9 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.enter(State.DEPOSIT);
 			return;
 		}
+		if (this.revisit(level)) {
+			return;
+		}
 		if (this.restockCooldown == 0 && PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD) < RESTOCK_BELOW && this.homeScaffold(level) > 0) {
 			this.enter(State.RESTOCK);
 			return;
@@ -200,7 +215,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (found.isPresent()) {
 			this.tree = found.get();
 			this.unreachableLogs.clear();
-			this.unreachableLeaves.clear();
 			this.unreachablePlaced.clear();
 			this.abandonedPlaced.clear();
 			this.retriesLeft = SCAFFOLD_RETRIES;
@@ -284,69 +298,19 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				this.colony(level).ifPresent(colony -> colony.board().complete(done));
 				this.jobId = null;
 			}
-			this.enter(State.LEAVES);
-			this.leaf = null;
-			this.cooldown = LEAF_SETTLE_TICKS;
+			// The leaves decay by themselves now; take the scaffolding down while still up there.
+			this.enter(State.CLEANUP);
 			return;
 		}
 
 		Goal reach = new Goal.Reach(next, REACH);
 		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
 			this.travelGoal = null;
-			this.breaker.tick(level, next);
+			// Straight into the inventory: dropped logs could land on the canopy, out of reach.
+			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.unreachableLogs.add(next);
 		}
-	}
-
-	/** Breaks the leaves that no longer touch a log; they would decay anyway, but slowly. */
-	private void leaves(ServerLevel level) {
-		if (this.cooldown > 0) {
-			this.cooldown--;
-			return;
-		}
-		if (this.leaf == null || !isDecaying(level.getBlockState(this.leaf))) {
-			this.leaf = this.nearestDecayingLeaf(level);
-			this.travelGoal = null;
-			if (this.leaf == null) {
-				this.enter(State.CLEANUP);
-				return;
-			}
-		}
-		Goal reach = new Goal.Reach(this.leaf, REACH);
-		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
-			this.travelGoal = null;
-			if (this.breaker.tick(level, this.leaf, true)) {
-				this.leaf = null;
-			}
-		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
-			this.unreachableLeaves.add(this.leaf);
-			this.leaf = null;
-		}
-	}
-
-	private @Nullable BlockPos nearestDecayingLeaf(ServerLevel level) {
-		BlockPos min = this.tree.logs().getFirst();
-		BlockPos max = min;
-		for (BlockPos log : this.tree.logs()) {
-			min = BlockPos.min(min, log);
-			max = BlockPos.max(max, log);
-		}
-		BlockPos feet = this.bot.blockPosition();
-		BlockPos nearest = null;
-		for (BlockPos pos : BlockPos.betweenClosed(min.offset(-LEAF_RANGE, -LEAF_RANGE, -LEAF_RANGE), max.offset(LEAF_RANGE, LEAF_RANGE, LEAF_RANGE))) {
-			if (isDecaying(level.getBlockState(pos)) && !this.unreachableLeaves.contains(pos)
-				&& (nearest == null || pos.distSqr(feet) < nearest.distSqr(feet))) {
-				nearest = pos.immutable();
-			}
-		}
-		return nearest;
-	}
-
-	/** Natural leaves cut off from every log. */
-	private static boolean isDecaying(BlockState state) {
-		return state.is(BlockTags.LEAVES) && state.hasProperty(LeavesBlock.PERSISTENT) && !state.getValue(LeavesBlock.PERSISTENT)
-			&& state.getValue(LeavesBlock.DISTANCE) >= LeavesBlock.DECAY_DISTANCE;
 	}
 
 	/**
@@ -381,7 +345,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 			this.placed().clear();
 			this.unreachableItems.clear();
-			this.enter(this.tree != null ? State.COLLECT : State.SEARCH);
+			this.site = this.tree != null ? this.tree.base() : null;
+			this.enter(this.site != null ? State.COLLECT : State.SEARCH);
 			return;
 		}
 		Goal reach = new Goal.Reach(next, REACH);
@@ -416,7 +381,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	private void collect(ServerLevel level) {
-		AABB area = new AABB(this.tree.base()).inflate(COLLECT_RADIUS);
+		AABB area = new AABB(this.site).inflate(COLLECT_RADIUS);
 		ItemEntity nearest = level.getEntitiesOfClass(ItemEntity.class, area,
 				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && this.bot.wantsToPickUp(level, item.getItem()))
 			.stream()
@@ -433,9 +398,21 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	private void replant(ServerLevel level) {
-		BlockPos base = this.tree.base();
+		BlockPos base = this.site;
+		if (!level.getBlockState(base).isAir() || !level.getBlockState(base.below()).is(BlockTags.DIRT)) {
+			this.revisits.remove(base);
+			this.enter(State.SEARCH);
+			return;
+		}
 		ItemStack sapling = findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS));
-		if (sapling == null || !level.getBlockState(base).isAir() || !level.getBlockState(base.below()).is(BlockTags.DIRT)) {
+		if (sapling == null) {
+			// The leaves may still drop one as they decay.
+			if (!this.revisits.containsKey(base)) {
+				if (this.revisits.size() >= MAX_REVISITS) {
+					this.revisits.remove(this.revisits.keySet().iterator().next());
+				}
+				this.revisits.put(base, level.getGameTime());
+			}
 			this.enter(State.SEARCH);
 			return;
 		}
@@ -445,10 +422,35 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				level.setBlockAndUpdate(base, blockItem.getBlock().defaultBlockState());
 				sapling.shrink(1);
 			}
+			this.revisits.remove(base);
 			this.enter(State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.enter(State.SEARCH);
 		}
+	}
+
+	/**
+	 * Goes back to a felled tree that was not replanted once its decaying leaves have dropped a
+	 * sapling or apple, to pick the drops up and replant. Forgets trees felled too long ago.
+	 */
+	private boolean revisit(ServerLevel level) {
+		long now = level.getGameTime();
+		this.revisits.values().removeIf(felled -> now - felled > REVISIT_TICKS);
+		for (BlockPos base : this.revisits.keySet()) {
+			boolean dropped = !level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
+				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && isLeafDrop(item.getItem())
+					&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
+			if (dropped) {
+				this.site = base;
+				this.enter(State.COLLECT);
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static boolean isLeafDrop(ItemStack stack) {
+		return stack.is(ItemTags.SAPLINGS) || stack.is(Items.APPLE);
 	}
 
 	private void deposit(ServerLevel level) {

@@ -11,9 +11,11 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -73,14 +75,17 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	/** No logs, leaves or scaffold blocks are left above the floor. */
+	/**
+	 * No logs or scaffold blocks are left above the floor. Leaves may be left: they decay by
+	 * themselves once the logs are gone.
+	 */
 	private static void assertAreaCleared(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
 			if (pos.equals(CHEST)) {
 				continue;
 			}
 			BlockState state = helper.getBlockState(pos);
-			helper.assertTrue(!state.is(BlockTags.LOGS) && !state.is(BlockTags.LEAVES) && !state.is(Blocks.DIRT),
+			helper.assertTrue(!state.is(BlockTags.LOGS) && !state.is(Blocks.DIRT),
 				state.getBlock() + " left at " + pos.toShortString());
 		}
 	}
@@ -239,7 +244,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	@GameTest(padding = PADDING, maxTicks = 2400)
-	public void pillarsUpToTallTreeAndClearsLeavesAndPillars(GameTestHelper helper) {
+	public void pillarsUpToTallTreeAndClearsPillars(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
 		AntBot bot = lumberjack(helper, 2, 4);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
@@ -316,6 +321,106 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			}
 			helper.assertTrue(bot.getInventory().isEmpty(), "bot picked something up");
 			helper.succeed();
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void leavesDecayingLeavesForNatureToRemove(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		lumberjack(helper, 2, 4);
+		long[] trunkGoneAt = {-1};
+		int[] leavesLeft = {-1};
+		// Leaves the bot does not need out of the way are not broken. Natural decay is slow
+		// (a few per cent per leaf in this window), so nearly all of them are still there.
+		helper.onEachTick(() -> {
+			if (trunkGoneAt[0] < 0 && countBlocks(helper, BlockTags.LOGS) == 0) {
+				trunkGoneAt[0] = helper.getTick();
+			}
+			if (trunkGoneAt[0] >= 0 && leavesLeft[0] < 0 && helper.getTick() >= trunkGoneAt[0] + 100) {
+				leavesLeft[0] = countBlocks(helper, BlockTags.LEAVES);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(leavesLeft[0] >= 0, "not yet checked the leaves");
+			helper.assertTrue(leavesLeft[0] >= 6, "only " + leavesLeft[0] + " of 9 leaves left");
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	private static int countBlocks(GameTestHelper helper, TagKey<Block> tag) {
+		int count = 0;
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+			if (helper.getBlockState(pos).is(tag)) {
+				count++;
+			}
+		}
+		return count;
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void comesBackForSaplingsDroppedByDecayingLeaves(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		lumberjack(helper, 2, 4);
+		boolean[] decayed = {false};
+		// Once the bot has stored the logs and moved on, the leaves decay and drop a sapling.
+		helper.onEachTick(() -> {
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			if (!decayed[0] && chest.countItem(Items.OAK_LOG) == 4) {
+				decayed[0] = true;
+				for (BlockPos pos : BlockPos.betweenClosed(4, 4, 4, 6, 5, 6)) {
+					if (helper.getBlockState(pos).is(BlockTags.LEAVES)) {
+						helper.setBlock(pos, Blocks.AIR);
+					}
+				}
+				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 4, 6));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(decayed[0], "logs not stored yet");
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void doesNotPillarUpToDropsItCannotWalkTo(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		// A drop stuck up high, as on a canopy that is left to decay. Pillaring up to it would
+		// leave scaffolding behind, since collecting is done after cleanup.
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(2, y, 6, Blocks.STONE);
+		}
+		helper.spawnItem(Items.APPLE, new BlockPos(2, 5, 6));
+		AntBot bot = lumberjack(helper, 2, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+
+		helper.succeedWhen(() -> {
+			assertTreeStored(helper);
+			assertNoDirtLeft(helper);
+			helper.assertTrue(bot.getInventory().countItem(Items.DIRT) == 16, "bot has " + bot.getInventory().countItem(Items.DIRT) + " dirt");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void breaksLeavesInTheWayToReachTheLogs(GameTestHelper helper) {
+		tree(helper, 6, 6, false);
+		// The bot starts shut in by leaves, out of reach of the tree.
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+		for (int y = 1; y <= 2; y++) {
+			helper.setBlock(1, y, 4, leaves);
+			helper.setBlock(3, y, 4, leaves);
+			helper.setBlock(2, y, 3, leaves);
+			helper.setBlock(2, y, 5, leaves);
+		}
+		helper.setBlock(2, 3, 4, leaves);
+		lumberjack(helper, 2, 4);
+
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, 6, y, 6);
+			}
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
 }
