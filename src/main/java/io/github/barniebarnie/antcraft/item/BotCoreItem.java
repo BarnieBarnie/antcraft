@@ -1,19 +1,16 @@
 package io.github.barniebarnie.antcraft.item;
 
-import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.BotActivation;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.gameevent.GameEvent;
 
 /** Placing a Bot Core on a block activates a new bot there. */
 public class BotCoreItem extends Item {
@@ -40,16 +37,10 @@ public class BotCoreItem extends Item {
 		BlockPos pos = context.getClickedPos();
 		BlockPos spawnPos = level.getBlockState(pos).getCollisionShape(level, pos).isEmpty() ? pos : pos.relative(context.getClickedFace());
 		ItemStack stack = context.getItemInHand();
-		AntBot bot = ModEntities.ANT_BOT.spawn(level, stack, player, spawnPos, EntitySpawnReason.SPAWN_ITEM_USE, true, false);
-		if (bot == null) {
+		if (BotActivation.activate(level, spawnPos) == null) {
 			return InteractionResult.FAIL;
 		}
-
-		bot.setCustomName(Component.literal("Ant " + bot.getUUID().toString().substring(0, 4)));
-		ColonyManager colonies = ColonyManager.get(level);
-		colonies.nearest(spawnPos, ColonyManager.JOIN_DISTANCE).ifPresent(colony -> colonies.join(bot, colony));
 		stack.consume(1, player);
-		level.gameEvent(player, GameEvent.ENTITY_PLACE, spawnPos);
 		return InteractionResult.SUCCESS;
 	}
 

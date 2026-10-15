@@ -9,5 +9,10 @@
 	"commands.antcraft.no_bots": "No bots found",
 	"commands.antcraft.role": "Set the role of %s bot(s) to %s",
 	"commands.antcraft.home": "Set the home of %s bot(s) to %s",
-	"block.antcraft.colony_core": "Colony Core"
+	"block.antcraft.colony_core": "Colony Core",
+	"commands.antcraft.colony.none": "No colony within %s blocks",
+	"commands.antcraft.colony.info": "Colony at %s: %s members %s, %s jobs (%s claimed), radius %s",
+	"commands.antcraft.colony.order_line": "Order: %s %s. To gather: %s. Missing: %s",
+	"commands.antcraft.colony.ordered": "Ordered %s %s",
+	"commands.antcraft.colony.cancelled": "Cancelled the order for %s"
 }

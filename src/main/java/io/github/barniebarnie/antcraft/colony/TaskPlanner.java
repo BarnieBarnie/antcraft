@@ -52,7 +52,10 @@ public final class TaskPlanner {
 		final List<Craft<I>> crafts = new ArrayList<>();
 		final Map<I, Integer> gather = new LinkedHashMap<>();
 		final Map<I, Integer> missing = new LinkedHashMap<>();
-		/** Set when a recipe chain needs an item it is already making; such a plan is unusable. */
+		/**
+		 * Set when a recipe chain needs an item it is already making, or uses a storage recipe
+		 * without having its ingredient; such a plan is unusable.
+		 */
 		boolean cycle;
 
 		State(Map<I, Integer> stock) {
@@ -123,6 +126,8 @@ public final class TaskPlanner {
 				return;
 			}
 
+			// Break the item down when any recipe is usable, so the player sees which ingredients
+			// are missing; only report the item itself when nothing can make it.
 			State<I> best = null;
 			for (Recipe<I> recipe : this.book.recipesFor(item)) {
 				State<I> trial = state.copy();
@@ -139,6 +144,11 @@ public final class TaskPlanner {
 		}
 
 		void craft(State<I> state, Recipe<I> recipe, int wanted, Set<I> path) {
+			if (this.isStorageRecipe(recipe) && recipe.ingredients().keySet().stream().flatMap(Set::stream).noneMatch(i -> state.stock.getOrDefault(i, 0) > 0)) {
+				// Packing ingots into a block or unpacking it only makes sense with some already at hand.
+				state.cycle = true;
+				return;
+			}
 			int times = (wanted + recipe.count() - 1) / recipe.count();
 			Set<I> innerPath = new HashSet<>(path);
 			innerPath.add(recipe.output());
@@ -150,6 +160,25 @@ public final class TaskPlanner {
 			if (leftover > 0) {
 				state.stock.merge(recipe.output(), leftover, Integer::sum);
 			}
+		}
+
+		/**
+		 * A storage recipe turns one item into another that turns straight back
+		 * (9 ingots to a block, a block to 9 ingots).
+		 */
+		boolean isStorageRecipe(Recipe<I> recipe) {
+			if (recipe.ingredients().size() != 1) {
+				return false;
+			}
+			Set<I> ingredient = recipe.ingredients().keySet().iterator().next();
+			for (I item : ingredient) {
+				for (Recipe<I> back : this.book.recipesFor(item)) {
+					if (back.ingredients().size() == 1 && back.ingredients().keySet().iterator().next().contains(recipe.output())) {
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 
 		/** Needs {@code count} items, any mix of {@code options}. */

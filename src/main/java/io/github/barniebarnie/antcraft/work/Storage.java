@@ -1,9 +1,14 @@
 package io.github.barniebarnie.antcraft.work;
 
+import io.github.barniebarnie.antcraft.colony.TaskPlanner;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
@@ -34,5 +39,69 @@ public final class Storage {
 		}
 		from.setChanged();
 		to.setChanged();
+	}
+
+	/** How many of each item the container holds. */
+	public static Map<Item, Integer> stock(Container container) {
+		Map<Item, Integer> stock = new HashMap<>();
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			ItemStack stack = container.getItem(i);
+			if (!stack.isEmpty()) {
+				stock.merge(stack.getItem(), stack.getCount(), Integer::sum);
+			}
+		}
+		return stock;
+	}
+
+	/** Whether the container holds every ingredient for {@code times} crafts of the recipe. */
+	public static boolean canCraft(Container container, TaskPlanner.Recipe<Item> recipe, int times) {
+		Map<Item, Integer> stock = stock(container);
+		for (Map.Entry<Set<Item>, Integer> ingredient : recipe.ingredients().entrySet()) {
+			int needed = ingredient.getValue() * times;
+			for (Item option : ingredient.getKey()) {
+				int taken = Math.min(needed, stock.getOrDefault(option, 0));
+				stock.merge(option, -taken, Integer::sum);
+				needed -= taken;
+			}
+			if (needed > 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Takes the ingredients for one craft out of the container and puts the result in.
+	 * Whatever does not fit is returned for the caller to carry or drop.
+	 */
+	public static ItemStack craft(Container container, TaskPlanner.Recipe<Item> recipe) {
+		if (!canCraft(container, recipe, 1)) {
+			return ItemStack.EMPTY;
+		}
+		for (Map.Entry<Set<Item>, Integer> ingredient : recipe.ingredients().entrySet()) {
+			int needed = ingredient.getValue();
+			for (int i = 0; i < container.getContainerSize() && needed > 0; i++) {
+				ItemStack stack = container.getItem(i);
+				if (ingredient.getKey().contains(stack.getItem())) {
+					needed -= stack.split(needed).getCount();
+				}
+			}
+		}
+		ItemStack leftover = HopperBlockEntity.addItem(null, container, new ItemStack(recipe.output(), recipe.count()), null);
+		container.setChanged();
+		return leftover;
+	}
+
+	/** Removes up to {@code count} of an item; returns how many were removed. */
+	public static int take(Container container, Item item, int count) {
+		int taken = 0;
+		for (int i = 0; i < container.getContainerSize() && taken < count; i++) {
+			ItemStack stack = container.getItem(i);
+			if (stack.is(item)) {
+				taken += stack.split(count - taken).getCount();
+			}
+		}
+		container.setChanged();
+		return taken;
 	}
 }

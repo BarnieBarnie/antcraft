@@ -55,7 +55,7 @@ public class ColonyManager extends SavedData {
 		if (existing.isPresent()) {
 			return existing.get();
 		}
-		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS);
+		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}

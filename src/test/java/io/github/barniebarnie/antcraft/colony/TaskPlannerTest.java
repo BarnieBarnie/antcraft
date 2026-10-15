@@ -100,9 +100,18 @@ class TaskPlannerTest {
 
 	@Test
 	void recipeCyclesDoNotLoopForever() {
+		// Storage recipes need some of their ingredient at hand, so with nothing the block itself is missing.
 		TaskPlanner.Plan<String> plan = plan("iron_block", 1, Map.of());
 
-		assertEquals(Map.of("iron_ingot", 9), plan.missing());
+		assertEquals(Map.of("iron_block", 1), plan.missing());
+	}
+
+	@Test
+	void packsIngotsIntoABlockWhenSomeAreInStock() {
+		TaskPlanner.Plan<String> plan = plan("iron_block", 1, Map.of("iron_ingot", 9));
+
+		assertEquals(List.of("iron_block"), craftOrder(plan));
+		assertTrue(plan.isReady());
 	}
 
 	@Test
@@ -111,5 +120,13 @@ class TaskPlannerTest {
 		TaskPlanner.Plan<String> plan = plan("wooden_pickaxe", 1, Map.of("oak_planks", 2));
 
 		assertTrue(!plan.toGather().isEmpty() || plan.crafts().stream().anyMatch(c -> c.recipe().output().equals("oak_planks")));
+	}
+
+	@Test
+	void reportsTheItemItselfWhenNoRecipeCanBeCompleted() {
+		// Ingots could come from a block, but there is no block either: ask for ingots, not "1 iron block".
+		TaskPlanner.Plan<String> plan = plan("iron_ingot", 6, Map.of());
+
+		assertEquals(Map.of("iron_ingot", 6), plan.missing());
 	}
 }
