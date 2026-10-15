@@ -5,8 +5,11 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.Farming;
+import io.github.barniebarnie.antcraft.work.GameRecipeBook;
+import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -21,6 +24,8 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
@@ -65,7 +70,7 @@ public class ColonyManager extends SavedData {
 		if (existing.isPresent()) {
 			return existing.get();
 		}
-		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty());
+		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS);
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -121,6 +126,17 @@ public class ColonyManager extends SavedData {
 		}
 	}
 
+	/** Orders whatever the colony is short of. */
+	private void surveyStock(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null || colony.stockTargets().isEmpty()) {
+			return;
+		}
+		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
+		StockPlanner.ordersToAdd(targets, Storage.stock(core), colony.orders(), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable)
+			.forEach(colony::addOrder);
+	}
+
 	/**
 	 * Gives unassigned members (such as freshly built bots) whatever work the colony needs
 	 * most, and moves idle members the colony assigned to roles that have work.
@@ -173,6 +189,7 @@ public class ColonyManager extends SavedData {
 				}
 				colony.board().removeOpenIf(job -> job.type() == JobType.MINE_LAYER && !layers.contains(job.target()));
 			});
+			this.surveyStock(level, colony);
 			this.assignRoles(level, colony);
 		}
 	}

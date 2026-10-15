@@ -5,9 +5,13 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
+import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.RoleAssigner;
+import io.github.barniebarnie.antcraft.colony.StockPlanner;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -30,12 +34,16 @@ import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
@@ -48,10 +56,13 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft role &lt;role&gt; [bots]
  * /antcraft home &lt;pos&gt; [bots]
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|quarry &lt;from&gt; &lt;to&gt;|radius &lt;blocks&gt;   (nearest colony)
+ * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
 	private static final int COLONY_RANGE = 64;
+	private static final DynamicCommandExceptionType UNKNOWN_ITEM = new DynamicCommandExceptionType(
+		name -> Component.translatableEscape("commands.antcraft.colony.stock.unknown", name));
 
 	private AntCraftCommands() {
 	}
@@ -95,6 +106,15 @@ public final class AntCraftCommands {
 				.then(Commands.literal("radius")
 					.then(Commands.argument("blocks", IntegerArgumentType.integer(4, 128))
 						.executes(ctx -> setRadius(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "blocks")))))
+				.then(Commands.literal("stock")
+					.executes(ctx -> listStock(ctx.getSource()))
+					.then(Commands.literal("set")
+						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
+							.then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
+								.executes(ctx -> setStock(ctx.getSource(), stockMatch(ctx), IntegerArgumentType.getInteger(ctx, "count"))))))
+					.then(Commands.literal("remove")
+						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
+							.executes(ctx -> removeStock(ctx.getSource(), stockMatch(ctx))))))
 				.then(Commands.literal("cancel")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value())))))
@@ -135,6 +155,16 @@ public final class AntCraftCommands {
 
 		Container core = Storage.containerAt(level, colony.core());
 		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);
+		List<String> low = new ArrayList<>();
+		for (StockTarget target : colony.stockTargets()) {
+			int have = StockPlanner.have(target.toPlannerTarget(), stock);
+			if (have < target.count()) {
+				low.add(have + "/" + target.count() + " " + target.name());
+			}
+		}
+		if (!low.isEmpty()) {
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.low", String.join(", ", low)), false);
+		}
 		for (Map.Entry<Item, Integer> order : colony.orders().entrySet()) {
 			Map<Item, Integer> available = new java.util.HashMap<>(stock);
 			available.remove(order.getKey());
@@ -143,6 +173,61 @@ public final class AntCraftCommands {
 				order.getValue(), itemName(order.getKey()), names(plan.toGather()), names(plan.missing())), false);
 		}
 		return colony.members().size();
+	}
+
+	private static Either<TagKey<Item>, Item> stockMatch(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+		Either<ResourceKey<Item>, TagKey<Item>> match = ResourceOrTagKeyArgument.getResourceOrTagKey(ctx, "match", Registries.ITEM, UNKNOWN_ITEM).unwrap();
+		Optional<TagKey<Item>> tag = match.right();
+		if (tag.isPresent()) {
+			return Either.left(tag.get());
+		}
+		ResourceKey<Item> key = match.left().orElseThrow();
+		Item item = BuiltInRegistries.ITEM.getOptional(key).orElseThrow(() -> UNKNOWN_ITEM.create(key.identifier().toString()));
+		return Either.right(item);
+	}
+
+	private static int listStock(CommandSourceStack source) {
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		Colony colony = found.get();
+		Container core = Storage.containerAt(source.getLevel(), colony.core());
+		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);
+		if (colony.stockTargets().isEmpty()) {
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.empty"), false);
+		}
+		for (StockTarget target : colony.stockTargets()) {
+			int have = StockPlanner.have(target.toPlannerTarget(), stock);
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.line", target.name(), have, target.count()), false);
+		}
+		return colony.stockTargets().size();
+	}
+
+	private static int setStock(CommandSourceStack source, Either<TagKey<Item>, Item> match, int count) {
+		Optional<Colony> colony = nearestColony(source);
+		colony.ifPresent(c -> {
+			// Keep the preferred items of an existing target, such as stone before wooden pickaxes.
+			StockTarget target = c.stockTargets().stream().filter(t -> t.match().equals(match)).findFirst()
+				.map(t -> t.withCount(count))
+				.orElse(new StockTarget(match, count, List.of()));
+			c.setStockTarget(target);
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.set", target.name(), count), false);
+		});
+		return colony.isPresent() ? 1 : 0;
+	}
+
+	private static int removeStock(CommandSourceStack source, Either<TagKey<Item>, Item> match) {
+		Optional<Colony> colony = nearestColony(source);
+		if (colony.isEmpty()) {
+			return 0;
+		}
+		if (!colony.get().removeStockTarget(match)) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.stock.not_found", StockTarget.name(match)));
+			return 0;
+		}
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.removed", StockTarget.name(match)), false);
+		return 1;
 	}
 
 	private static String itemName(Item item) {

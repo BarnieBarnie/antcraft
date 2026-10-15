@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -44,6 +45,8 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CORE)).orElseThrow();
 		colony.setRadius(6);
+		// No default stock targets, so only the test's own orders give the colony work.
+		colony.setStockTargets(List.of());
 		return colony;
 	}
 

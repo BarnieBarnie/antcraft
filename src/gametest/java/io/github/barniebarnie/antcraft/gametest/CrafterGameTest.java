@@ -2,17 +2,21 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
+import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -37,6 +41,8 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CORE)).orElseThrow();
 		colony.setRadius(6);
+		// No default stock targets, so only the test's own orders give the colony work.
+		colony.setStockTargets(List.of());
 		return colony;
 	}
 
@@ -94,5 +100,40 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		crafter(helper, colony);
 
 		helper.succeedWhen(() -> helper.assertTrue(colony.members().size() == 2, "members: " + colony.members().size()));
+	}
+
+	@GameTest(maxTicks = 600)
+	public void craftsUpToStockTarget(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PLANKS, 4)));
+		store(helper, new ItemStack(Items.OAK_LOG, 2));
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.OAK_PLANKS) == 4, "core has " + core(helper).countItem(Items.OAK_PLANKS) + " planks");
+			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 1, "core has " + core(helper).countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	@GameTest(maxTicks = 900)
+	public void reordersWhenStockDropsBelowTarget(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PLANKS, 4)));
+		store(helper, new ItemStack(Items.OAK_LOG, 2));
+		crafter(helper, colony);
+
+		boolean[] taken = {false};
+		helper.onEachTick(() -> {
+			if (!taken[0] && core(helper).countItem(Items.OAK_PLANKS) == 4) {
+				// Someone uses the planks up.
+				Storage.take(core(helper), Items.OAK_PLANKS, 4);
+				taken[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(taken[0], "planks never reached the target");
+			helper.assertTrue(core(helper).countItem(Items.OAK_PLANKS) == 4, "core has " + core(helper).countItem(Items.OAK_PLANKS) + " planks");
+			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 0, "core has " + core(helper).countItem(Items.OAK_LOG) + " logs");
+		});
 	}
 }

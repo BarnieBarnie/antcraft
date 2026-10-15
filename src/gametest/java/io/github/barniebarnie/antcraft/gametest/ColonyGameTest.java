@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.DefaultStock;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -53,6 +54,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		Colony colony = colonyAt(helper).orElseThrow(() -> new AssertionError("no colony founded"));
 		// Keep the colony to this test area so it does not post jobs for other tests' trees.
 		colony.setRadius(6);
+		// No default stock targets, so only the test's own orders give the colony work.
+		colony.setStockTargets(List.of());
 		return colony;
 	}
 
@@ -120,6 +123,14 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	@GameTest
 	public void placingCoreFoundsColony(GameTestHelper helper) {
 		placeCore(helper);
+		helper.succeed();
+	}
+
+	@GameTest
+	public void newColonyStartsWithDefaultStockTargets(GameTestHelper helper) {
+		helper.setBlock(CORE, ModBlocks.COLONY_CORE);
+		Colony colony = colonyAt(helper).orElseThrow(() -> new AssertionError("no colony founded"));
+		helper.assertValueEqual(colony.stockTargets(), DefaultStock.TARGETS, "stock targets");
 		helper.succeed();
 	}
 

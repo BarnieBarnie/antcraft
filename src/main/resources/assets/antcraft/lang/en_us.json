@@ -16,5 +16,12 @@
 	"commands.antcraft.colony.ordered": "Ordered %s %s",
 	"commands.antcraft.colony.cancelled": "Cancelled the order for %s",
 	"commands.antcraft.colony.quarry": "Quarry set from %s to %s",
-	"commands.antcraft.colony.radius": "Colony work radius set to %s blocks"
+	"commands.antcraft.colony.radius": "Colony work radius set to %s blocks",
+	"commands.antcraft.colony.stock.low": "Low stock: %s",
+	"commands.antcraft.colony.stock.line": "%s: %s / %s",
+	"commands.antcraft.colony.stock.empty": "The colony keeps nothing in stock",
+	"commands.antcraft.colony.stock.set": "Colony keeps %2$s %1$s in stock",
+	"commands.antcraft.colony.stock.removed": "Colony no longer keeps %s in stock",
+	"commands.antcraft.colony.stock.not_found": "The colony has no stock target for %s",
+	"commands.antcraft.colony.stock.unknown": "Unknown item %s"
 }

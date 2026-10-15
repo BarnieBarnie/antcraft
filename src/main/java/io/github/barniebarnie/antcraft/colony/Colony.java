@@ -2,6 +2,8 @@ package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import com.mojang.datafixers.util.Either;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.tags.TagKey;
 import io.github.barniebarnie.antcraft.work.Quarry;
 import net.minecraft.world.item.Item;
 
@@ -26,7 +29,9 @@ public class Colony {
 		JobBoard.CODEC.optionalFieldOf("jobs", new JobBoard()).forGetter(Colony::board),
 		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
 		Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).optionalFieldOf("orders", Map.of()).forGetter(Colony::orders),
-		Quarry.CODEC.optionalFieldOf("quarry").forGetter(Colony::quarry)
+		Quarry.CODEC.optionalFieldOf("quarry").forGetter(Colony::quarry),
+		// Colonies saved before stock targets existed get the defaults.
+		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -36,10 +41,12 @@ public class Colony {
 	private int radius;
 	private final Map<Item, Integer> orders;
 	private Optional<Quarry> quarry;
+	private final List<StockTarget> stock;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
-	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Quarry> quarry) {
+	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Quarry> quarry,
+			List<StockTarget> stock) {
 		this.id = id;
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
@@ -47,6 +54,7 @@ public class Colony {
 		this.radius = radius;
 		this.orders = new LinkedHashMap<>(orders);
 		this.quarry = quarry;
+		this.stock = new ArrayList<>(stock);
 	}
 
 	/** The area miners dig out, if the player has marked one. */
@@ -93,6 +101,31 @@ public class Colony {
 	/** Records that {@code count} of an ordered item were made; finished orders are removed. */
 	public void fulfil(Item item, int count) {
 		this.orders.computeIfPresent(item, (key, left) -> left - count > 0 ? left - count : null);
+	}
+
+	/** What the colony keeps in stock; shortfalls become orders. */
+	public List<StockTarget> stockTargets() {
+		return List.copyOf(this.stock);
+	}
+
+	public void setStockTargets(List<StockTarget> targets) {
+		this.stock.clear();
+		this.stock.addAll(targets);
+	}
+
+	/** Adds the target, or replaces the one for the same item or tag. */
+	public void setStockTarget(StockTarget target) {
+		for (int i = 0; i < this.stock.size(); i++) {
+			if (this.stock.get(i).match().equals(target.match())) {
+				this.stock.set(i, target);
+				return;
+			}
+		}
+		this.stock.add(target);
+	}
+
+	public boolean removeStockTarget(Either<TagKey<Item>, Item> match) {
+		return this.stock.removeIf(target -> target.match().equals(match));
 	}
 
 	public void setRadius(int radius) {

@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
+import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -43,6 +44,8 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 	private static Colony colony(GameTestHelper helper) {
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CORE)).orElseThrow(() -> new AssertionError("no colony founded"));
 		colony.setRadius(RADIUS);
+		// No default stock targets, so only the test's own orders give the colony work.
+		colony.setStockTargets(List.of());
 		return colony;
 	}
 
