@@ -1,11 +1,16 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -17,7 +22,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.level.block.state.BlockState;
@@ -186,6 +193,49 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			assertNoDirtLeft(helper);
 			assertTreeStored(helper);
 			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void takesScaffoldDownAfterPlayerChangesRole(GameTestHelper helper) {
+		scaffoldThenNewRole(helper, AntBot::setRole);
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void takesScaffoldDownAfterColonyChangesRole(GameTestHelper helper) {
+		scaffoldThenNewRole(helper, AntBot::assignRole);
+	}
+
+	/**
+	 * A colony lumberjack stands on top of its scaffold pillar when it is made a farmer. It takes
+	 * the pillar down first, and then harvests the colony's ripe wheat.
+	 */
+	private static void scaffoldThenNewRole(GameTestHelper helper, BiConsumer<AntBot, BotRole> changeRole) {
+		BlockPos corePos = new BlockPos(1, 1, 6);
+		helper.setBlock(corePos, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(corePos)).orElseThrow();
+		colony.setRadius(6);
+		// No default stock targets, so harvesting is the only colony work.
+		colony.setStockTargets(List.of());
+		for (int x = 3; x <= 5; x++) {
+			helper.setBlock(x, 0, 5, Blocks.FARMLAND);
+			helper.setBlock(x, 1, 5, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		}
+		AntBot bot = lumberjack(helper, 6, 8, 2);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		leftoverPillar(helper, bot, 6, 2);
+		changeRole.accept(bot, BotRole.FARMER);
+
+		Container core = (Container) helper.getBlockEntity(corePos, BlockEntity.class);
+		helper.onEachTick(() -> {
+			if (core.countItem(Items.WHEAT) > 0 && helper.getBlockState(new BlockPos(6, 1, 2)).is(Blocks.DIRT)) {
+				helper.fail("farmed before taking the scaffold down");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertNoDirtLeft(helper);
+			helper.assertTrue(bot.getScaffold().isEmpty(), "bot still has scaffold " + bot.getScaffold());
+			helper.assertTrue(core.countItem(Items.WHEAT) == 3, "core has " + core.countItem(Items.WHEAT) + " wheat");
 		});
 	}
 

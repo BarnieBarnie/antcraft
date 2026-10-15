@@ -139,9 +139,18 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.placed().add(pos.immutable());
 	}
 
+	/**
+	 * Also runs for a bot that is no longer a lumberjack but still has scaffolding up, so it takes
+	 * that down before its new role's work. This goal is registered before the other role goals at
+	 * the same priority, so it gets the bot first, and they cannot take over while it runs.
+	 */
 	@Override
 	public boolean canUse() {
-		return this.bot.getRole() == BotRole.LUMBERJACK && this.bot.getWalkTarget() == null;
+		return (this.isLumberjack() || !this.placed().isEmpty()) && this.bot.getWalkTarget() == null;
+	}
+
+	private boolean isLumberjack() {
+		return this.bot.getRole() == BotRole.LUMBERJACK;
 	}
 
 	@Override
@@ -160,12 +169,21 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.follower.stop();
 		this.breaker.reset();
 		this.travelGoal = null;
+		if (!this.isLumberjack()) {
+			// Done with the scaffolding left from being a lumberjack; the new role reports its own work.
+			this.bot.setWorking(false);
+		}
 	}
 
 	@Override
 	public void tick() {
 		if (!(this.bot.level() instanceof ServerLevel level)) {
 			return;
+		}
+		if (!this.isLumberjack() && this.state != State.CLEANUP) {
+			// The role changed mid-tree: give the tree back and only take the scaffolding down.
+			this.releaseJob(level);
+			this.enter(State.CLEANUP);
 		}
 		if (this.jobId != null && level.getGameTime() % 20 == 0) {
 			this.colony(level).ifPresent(colony -> colony.board().heartbeat(this.bot.getUUID(), level.getGameTime()));
@@ -178,6 +196,14 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			case COLLECT -> this.collect(level);
 			case REPLANT -> this.replant(level);
 			case DEPOSIT -> this.deposit(level);
+		}
+	}
+
+	/** Gives the claimed tree job back to the board, so another lumberjack can take it. */
+	private void releaseJob(ServerLevel level) {
+		if (this.jobId != null) {
+			this.colony(level).ifPresent(colony -> colony.board().release(this.bot.getUUID()));
+			this.jobId = null;
 		}
 	}
 

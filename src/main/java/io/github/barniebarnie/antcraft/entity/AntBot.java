@@ -90,6 +90,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
 		this.goalSelector.addGoal(2, new ReturnHomeGoal(this));
+		// First of the role goals: it also takes down scaffolding left from being a lumberjack, before any other role's work.
 		this.goalSelector.addGoal(3, new LumberjackGoal(this));
 		this.goalSelector.addGoal(3, new CrafterGoal(this));
 		this.goalSelector.addGoal(3, new MinerGoal(this));
