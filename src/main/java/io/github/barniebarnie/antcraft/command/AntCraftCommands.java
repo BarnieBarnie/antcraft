@@ -7,6 +7,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.RoleAssigner;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -126,8 +127,11 @@ public final class AntCraftCommands {
 			}
 		}
 		long claimed = colony.board().jobs().stream().filter(job -> !job.isOpen()).count();
+		long idle = colony.members().stream()
+			.filter(member -> level.getEntity(member) instanceof AntBot bot && bot.getIdleTicks() >= RoleAssigner.IDLE_TICKS_BEFORE_REASSIGN)
+			.count();
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.info",
-			colony.core().toShortString(), colony.members().size(), roles.toString(), colony.board().jobs().size(), claimed, colony.radius()), false);
+			colony.core().toShortString(), colony.members().size(), roles.toString(), colony.board().jobs().size(), claimed, colony.radius(), idle), false);
 
 		Container core = Storage.containerAt(level, colony.core());
 		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);

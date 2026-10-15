@@ -28,7 +28,7 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 
 **Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, redstone on the sides) and place it. Bots activated within 32 blocks join the colony and use the core, which holds 54 stacks, as their home. The colony surveys its area every 5 seconds and posts a job for every natural tree it finds; each lumberjack claims a different tree, so they never get in each other's way. If a bot dies or goes missing, its job is freed for the others. Breaking the core dissolves the colony and drops its contents.
 
-**Roles.** Colony bots without a role get one automatically, based on what the colony needs most (open jobs per worker, a crafter when there are orders, otherwise a guard). Roles you set yourself are kept.
+**Roles.** Colony bots without a role get one automatically, based on what the colony needs most (open jobs per worker, a crafter when there are orders, otherwise a guard). Roles you set yourself (`/antcraft role`) are kept. A lumberjack, miner or farmer the colony assigned that has had nothing to do for 30 seconds is moved to a role with waiting work (or to crafter when there are orders and no crafter). `/antcraft colony info` shows how many members are idle.
 
 Colony bots stay around their colony. They only start fights with mobs inside the colony radius (they still fight back anywhere when attacked), and a bot that ends up outside the radius with nothing to do, for example after a chase, walks back to the core. Bots busy with a job outside the radius, like a lumberjack at a tree on the edge, finish it first.
 
@@ -52,7 +52,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 | `/antcraft stop [bots]` | Cancels the walk target |
 | `/antcraft role <role> [bots]` | Gives bots a job: `lumberjack`, `miner`, `farmer`, `crafter`, `guard`, `hauler` or `none` |
 | `/antcraft home <pos> [bots]` | Sets the chest bots bring their work to |
-| `/antcraft colony info` | Members by role, jobs, and for each order what is still to gather or missing |
+| `/antcraft colony info` | Members by role, idle members, jobs, and for each order what is still to gather or missing |
 | `/antcraft colony order <item> <count>` | Asks the colony to craft something, e.g. `antcraft:bot_core 2` |
 | `/antcraft colony cancel <item>` | Cancels an order |
 | `/antcraft colony quarry <from> <to>` | Marks a box for miners to dig out |

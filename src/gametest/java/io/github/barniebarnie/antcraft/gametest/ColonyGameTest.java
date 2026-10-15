@@ -18,6 +18,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
@@ -25,8 +26,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -74,6 +78,43 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		bot.setRole(BotRole.LUMBERJACK);
 		return bot;
+	}
+
+	@GameTest(maxTicks = 1000)
+	public void idleColonyLumberjackBecomesFarmer(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		helper.setBlock(4, 0, 4, Blocks.FARMLAND);
+		helper.setBlock(4, 1, 4, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, CropBlock.MAX_AGE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		// No trees here, so the lumberjack the colony picked has nothing to do.
+		bot.assignRole(BotRole.LUMBERJACK);
+
+		helper.succeedWhen(() -> helper.assertValueEqual(bot.getRole(), BotRole.FARMER, "role"));
+	}
+
+	@GameTest
+	public void whoSetTheRoleSurvivesSaveAndLoad(GameTestHelper helper) {
+		AntBot assigned = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		assigned.assignRole(BotRole.MINER);
+		AntBot chosen = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		chosen.setRole(BotRole.FARMER);
+
+		AntBot assignedCopy = reload(helper, assigned);
+		AntBot chosenCopy = reload(helper, chosen);
+		helper.assertValueEqual(assignedCopy.getRole(), BotRole.MINER, "assigned role");
+		helper.assertFalse(assignedCopy.isRoleSetByPlayer(), "colony-assigned role came back as set by a player");
+		helper.assertValueEqual(chosenCopy.getRole(), BotRole.FARMER, "chosen role");
+		helper.assertTrue(chosenCopy.isRoleSetByPlayer(), "player-set role came back as colony-assigned");
+		helper.succeed();
+	}
+
+	private static AntBot reload(GameTestHelper helper, AntBot bot) {
+		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+		bot.saveWithoutId(output);
+		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+		return copy;
 	}
 
 	@GameTest

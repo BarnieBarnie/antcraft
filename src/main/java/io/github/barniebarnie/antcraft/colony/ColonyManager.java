@@ -121,7 +121,10 @@ public class ColonyManager extends SavedData {
 		}
 	}
 
-	/** Gives unassigned members (such as freshly built bots) whatever work the colony needs most. */
+	/**
+	 * Gives unassigned members (such as freshly built bots) whatever work the colony needs
+	 * most, and moves idle members the colony assigned to roles that have work.
+	 */
 	private void assignRoles(ServerLevel level, Colony colony) {
 		List<AntBot> members = new ArrayList<>();
 		for (UUID id : colony.members()) {
@@ -134,17 +137,18 @@ public class ColonyManager extends SavedData {
 		Map<JobType, Integer> openJobs = new EnumMap<>(JobType.class);
 		colony.board().jobs().stream().filter(Job::isOpen).forEach(job -> openJobs.merge(job.type(), 1, Integer::sum));
 
+		boolean hasOrders = !colony.orders().isEmpty();
 		for (AntBot bot : members) {
-			if (bot.getRole() != BotRole.NONE) {
+			BotRole current = bot.getRole();
+			BotRole role = current == BotRole.NONE
+				? RoleAssigner.choose(roles, openJobs, hasOrders)
+				: RoleAssigner.reassign(current, bot.isRoleSetByPlayer(), bot.getIdleTicks(), roles, openJobs, hasOrders);
+			if (role == current) {
 				continue;
 			}
-			BotRole role = RoleAssigner.choose(roles, openJobs, !colony.orders().isEmpty());
-			if (role == BotRole.NONE) {
-				return;
-			}
-			bot.setRole(role);
+			bot.assignRole(role);
 			roles.merge(role, 1, Integer::sum);
-			roles.merge(BotRole.NONE, -1, Integer::sum);
+			roles.merge(current, -1, Integer::sum);
 		}
 	}
 

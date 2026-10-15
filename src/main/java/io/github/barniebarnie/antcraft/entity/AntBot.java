@@ -52,6 +52,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 	private @Nullable BlockPos walkTarget;
 	private BotRole role = BotRole.NONE;
+	/** Roles set by a player are kept; the colony may change the ones it assigned itself. */
+	private boolean roleSetByPlayer = true;
 	private @Nullable BlockPos home;
 	private @Nullable UUID colonyId;
 	/** Set by the role goals while they have a job; not saved, they set it again after loading. */
@@ -144,10 +146,25 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.role;
 	}
 
+	/** Sets the role on a player's behalf; the colony will not change it. */
 	public void setRole(BotRole role) {
+		this.changeRole(role, true);
+	}
+
+	/** Sets the role on the colony's behalf; the colony may move the bot to other work later. */
+	public void assignRole(BotRole role) {
+		this.changeRole(role, false);
+	}
+
+	private void changeRole(BotRole role, boolean byPlayer) {
 		this.role = role;
+		this.roleSetByPlayer = byPlayer;
 		this.working = false;
 		this.idleTicks = 0;
+	}
+
+	public boolean isRoleSetByPlayer() {
+		return this.roleSetByPlayer;
 	}
 
 	/** Whether the bot's role has work in progress, such as a claimed job. */
@@ -229,6 +246,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.writeInventoryToTag(output);
 		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
 		output.putString("Role", this.role.id());
+		output.putBoolean("RoleSetByPlayer", this.roleSetByPlayer);
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 	}
@@ -239,6 +257,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.readInventoryFromTag(input);
 		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
 		this.role = BotRole.byId(input.getStringOr("Role", BotRole.NONE.id()));
+		// Bots saved before this flag existed keep their role.
+		this.roleSetByPlayer = input.getBooleanOr("RoleSetByPlayer", true);
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 	}
