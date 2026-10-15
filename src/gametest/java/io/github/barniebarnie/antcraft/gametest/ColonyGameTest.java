@@ -144,4 +144,18 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.succeed();
 		});
 	}
+
+	@GameTest(maxTicks = 1200)
+	public void unassignedMemberTakesUpWorkTheColonyNeeds(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		tree(helper, 5, 5);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(bot.getRole(), BotRole.LUMBERJACK, "role");
+			Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
 }

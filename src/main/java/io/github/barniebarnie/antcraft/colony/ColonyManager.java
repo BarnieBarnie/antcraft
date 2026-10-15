@@ -3,12 +3,14 @@ package io.github.barniebarnie.antcraft.colony;
 import com.mojang.serialization.Codec;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.LinkedHashMap;
@@ -119,6 +121,33 @@ public class ColonyManager extends SavedData {
 		}
 	}
 
+	/** Gives unassigned members (such as freshly built bots) whatever work the colony needs most. */
+	private void assignRoles(ServerLevel level, Colony colony) {
+		List<AntBot> members = new ArrayList<>();
+		for (UUID id : colony.members()) {
+			if (level.getEntity(id) instanceof AntBot bot) {
+				members.add(bot);
+			}
+		}
+		Map<BotRole, Integer> roles = new EnumMap<>(BotRole.class);
+		members.forEach(bot -> roles.merge(bot.getRole(), 1, Integer::sum));
+		Map<JobType, Integer> openJobs = new EnumMap<>(JobType.class);
+		colony.board().jobs().stream().filter(Job::isOpen).forEach(job -> openJobs.merge(job.type(), 1, Integer::sum));
+
+		for (AntBot bot : members) {
+			if (bot.getRole() != BotRole.NONE) {
+				continue;
+			}
+			BotRole role = RoleAssigner.choose(roles, openJobs, !colony.orders().isEmpty());
+			if (role == BotRole.NONE) {
+				return;
+			}
+			bot.setRole(role);
+			roles.merge(role, 1, Integer::sum);
+			roles.merge(BotRole.NONE, -1, Integer::sum);
+		}
+	}
+
 	public void tick(ServerLevel level) {
 		long now = level.getGameTime();
 		for (Colony colony : this.colonies.values()) {
@@ -140,6 +169,7 @@ public class ColonyManager extends SavedData {
 				}
 				colony.board().removeOpenIf(job -> job.type() == JobType.MINE_LAYER && !layers.contains(job.target()));
 			});
+			this.assignRoles(level, colony);
 		}
 	}
 }

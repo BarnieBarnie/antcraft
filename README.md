@@ -28,6 +28,17 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 
 **Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, redstone on the sides) and place it. Bots activated within 32 blocks join the colony and use the core, which holds 54 stacks, as their home. The colony surveys its area every 5 seconds and posts a job for every natural tree it finds; each lumberjack claims a different tree, so they never get in each other's way. If a bot dies or goes missing, its job is freed for the others. Breaking the core dissolves the colony and drops its contents.
 
+**Roles.** Colony bots without a role get one automatically, based on what the colony needs most (open jobs per worker, a crafter when there are orders, otherwise a guard). Roles you set yourself are kept.
+
+- **Lumberjack:** see below.
+- **Miner:** digs out the quarry layer by layer and stores the haul. Takes a pickaxe from the core, or orders a wooden one when there is none.
+- **Farmer:** harvests ripe crops around the colony, replants, and stores the produce.
+- **Crafter:** works through colony orders at the core, ingredients first, and turns Bot Cores in storage into new colony bots. So `/antcraft colony order antcraft:bot_core 1` makes the colony build a new bot once the pumpkin, iron and redstone are in the core.
+- **Guard:** takes the best weapon from the core and patrols around it.
+- **Hauler:** collects loose items around the colony and stores them.
+
+Bots use the best tool or weapon they carry, and tools wear out.
+
 **Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe): in a colony it takes tree jobs from the job board, otherwise it searches within 24 blocks of its home, picks up the drops, replants a sapling, and brings the logs to its home chest.
 
 **Commands** (operators only):
@@ -37,8 +48,13 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 | `/antcraft status` | Shows whether bots are enabled, and the bot count |
 | `/antcraft goto <pos> [bots]` | Sends bots to a position. Without `[bots]`, the nearest bot within 64 blocks |
 | `/antcraft stop [bots]` | Cancels the walk target |
-| `/antcraft role <none\|lumberjack> [bots]` | Gives bots a job to work on when they have no direct order |
+| `/antcraft role <role> [bots]` | Gives bots a job: `lumberjack`, `miner`, `farmer`, `crafter`, `guard`, `hauler` or `none` |
 | `/antcraft home <pos> [bots]` | Sets the chest bots bring their work to |
+| `/antcraft colony info` | Members by role, jobs, and for each order what is still to gather or missing |
+| `/antcraft colony order <item> <count>` | Asks the colony to craft something, e.g. `antcraft:bot_core 2` |
+| `/antcraft colony cancel <item>` | Cancels an order |
+| `/antcraft colony quarry <from> <to>` | Marks a box for miners to dig out |
+| `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
 
 **Config** (`config/antcraft.properties`):
 
@@ -55,7 +71,7 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 | M1 | Bot entity (player-skinned mob) with inventory, spawned from a crafted item; walks to a target (done) |
 | M2 | Pathfinding that digs, pillars and bridges; lumberjack role chops trees and deposits logs (done) |
 | M3 | Colony core block with storage and a shared job board; multiple bots claim tasks (done) |
-| M4 | Miner, farmer, hauler and guard roles; hierarchical tasks ("build house" requires "gather 64 logs"); bots craft new bots |
+| M4 | Miner, farmer, hauler and guard roles; hierarchical tasks ("build house" requires "gather 64 logs"); bots craft new bots (done) |
 | M5 | Blueprint builder: load `.nbt` structures / Litematica schematics, compute material lists and build order |
 | M6 | AI architect: blueprints designed outside the game (e.g. by an LLM) in a documented JSON format, imported and validated in-game, then built by the colony |
 
