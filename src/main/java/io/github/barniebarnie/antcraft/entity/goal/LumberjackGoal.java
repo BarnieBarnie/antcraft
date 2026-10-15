@@ -16,7 +16,6 @@ import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -65,7 +64,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * How long to keep coming back to a felled tree for the saplings its decaying leaves drop. Leaves
 	 * take minutes to decay, and dropped items despawn after five.
 	 */
-	private static final int REVISIT_TICKS = 12000;
+	public static final int REVISIT_TICKS = 12000;
 	/** At most this many felled trees are remembered to come back to; the oldest is forgotten first. */
 	private static final int MAX_REVISITS = 8;
 	/**
@@ -102,8 +101,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private final Set<Integer> unreachableItems = new HashSet<>();
 	/** Where the current tree stood: drops are collected around it and a sapling planted there. */
 	private @Nullable BlockPos site;
-	/** Felled trees not yet replanted, with the game time they were felled, to come back to for saplings. */
-	private final Map<BlockPos, Long> revisits = new LinkedHashMap<>();
 	/** Scaffold that cannot be reached without placing more; retried once the rest is down. */
 	private final Set<BlockPos> unreachablePlaced = new HashSet<>();
 	/** Scaffold that could not be reached even by pillaring; left behind. */
@@ -135,6 +132,15 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 */
 	private Set<BlockPos> placed() {
 		return this.bot.getScaffold();
+	}
+
+	/**
+	 * Felled trees not yet replanted, with the game time they were felled, to come back to for
+	 * saplings. Bots in a colony post replant jobs instead. Kept by the bot and saved with it, so
+	 * it survives unloading; the felled time is game time, so entries still expire after loading.
+	 */
+	private Map<BlockPos, Long> revisits() {
+		return this.bot.getRevisits();
 	}
 
 	/**
@@ -511,7 +517,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		BlockPos base = this.site;
 		if (!Replanting.isPlantable(level, base)) {
 			// Replanted by someone else, or built over.
-			this.revisits.remove(base);
+			this.revisits().remove(base);
 			this.completeJob(level);
 			this.enter(State.SEARCH);
 			return;
@@ -528,11 +534,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		if (sapling == null) {
 			// The leaves may still drop one as they decay.
-			if (!this.revisits.containsKey(base)) {
-				if (this.revisits.size() >= MAX_REVISITS) {
-					this.revisits.remove(this.revisits.keySet().iterator().next());
+			Map<BlockPos, Long> revisits = this.revisits();
+			if (!revisits.containsKey(base)) {
+				if (revisits.size() >= MAX_REVISITS) {
+					revisits.remove(revisits.keySet().iterator().next());
 				}
-				this.revisits.put(base, level.getGameTime());
+				revisits.put(base, level.getGameTime());
 			}
 			this.enter(State.SEARCH);
 			return;
@@ -543,7 +550,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				level.setBlockAndUpdate(base, blockItem.getBlock().defaultBlockState());
 				sapling.shrink(1);
 			}
-			this.revisits.remove(base);
+			this.revisits().remove(base);
 			this.completeJob(level);
 			this.enter(State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
@@ -559,8 +566,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 */
 	private boolean revisit(ServerLevel level) {
 		long now = level.getGameTime();
-		this.revisits.values().removeIf(felled -> now - felled > REVISIT_TICKS);
-		for (BlockPos base : this.revisits.keySet()) {
+		this.revisits().values().removeIf(felled -> now - felled > REVISIT_TICKS);
+		for (BlockPos base : this.revisits().keySet()) {
 			boolean dropped = !level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
 				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && isLeafDrop(item.getItem())
 					&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();

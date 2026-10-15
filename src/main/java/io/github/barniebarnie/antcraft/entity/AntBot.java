@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -13,7 +15,9 @@ import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -64,6 +68,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private int idleTicks;
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
+	/** Felled trees the bot could not replant, with the game time they were felled; saved, so it comes back after unloading. */
+	private final Map<BlockPos, Long> revisits = new LinkedHashMap<>();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -192,6 +198,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.scaffold;
 	}
 
+	/**
+	 * Trees this bot felled without a sapling to replant, with the game time each was felled, oldest
+	 * first. Saved with the bot; callers change it in place.
+	 */
+	public Map<BlockPos, Long> getRevisits() {
+		return this.revisits;
+	}
+
 	/** The storage block this bot brings its work to, usually a chest. */
 	public @Nullable BlockPos getHome() {
 		return this.home;
@@ -261,6 +275,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
+		output.store("Revisits", Revisit.CODEC.listOf(), this.revisits.entrySet().stream()
+			.map(entry -> new Revisit(entry.getKey(), entry.getValue())).toList());
 	}
 
 	@Override
@@ -275,5 +291,16 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
+		this.revisits.clear();
+		input.read("Revisits", Revisit.CODEC.listOf())
+			.ifPresent(list -> list.forEach(revisit -> this.revisits.put(revisit.pos(), revisit.felled())));
+	}
+
+	/** A saved entry of {@link #getRevisits()}. */
+	private record Revisit(BlockPos pos, long felled) {
+		static final Codec<Revisit> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+			BlockPos.CODEC.fieldOf("Pos").forGetter(Revisit::pos),
+			Codec.LONG.fieldOf("Felled").forGetter(Revisit::felled)
+		).apply(instance, Revisit::new));
 	}
 }

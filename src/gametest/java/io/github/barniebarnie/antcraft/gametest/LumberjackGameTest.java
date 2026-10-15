@@ -434,6 +434,47 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A solo lumberjack fells a tree without a sapling to replant, then its chunk unloads and loads
+	 * again. When the leaves drop a sapling later, the loaded bot still comes back to plant it.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void remembersTreeToReplantAcrossReload(GameTestHelper helper) {
+		bareTree(helper, 5, 5);
+		AntBot bot = lumberjack(helper, 2, 4);
+		AntBot[] copy = {null};
+		helper.onEachTick(() -> {
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			if (copy[0] == null && chest.countItem(Items.OAK_LOG) == 4) {
+				copy[0] = reload(helper, bot);
+				bot.discard();
+				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(copy[0] != null, "logs not stored yet");
+			helper.assertTrue(copy[0].isAlive(), "reloaded bot is gone");
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+		});
+	}
+
+	/** A remembered tree is forgotten once it was felled too long ago, counted in game time across a reload. */
+	@GameTest(padding = PADDING, maxTicks = 400)
+	public void forgetsTreeFelledTooLongAgoAcrossReload(GameTestHelper helper) {
+		AntBot bot = lumberjack(helper, 2, 4);
+		long now = helper.getLevel().getGameTime();
+		// Felled long enough ago that it is forgotten 50 ticks from now.
+		bot.getRevisits().put(helper.absolutePos(new BlockPos(5, 1, 5)), now - LumberjackGoal.REVISIT_TICKS + 50);
+		AntBot copy = reload(helper, bot);
+		bot.discard();
+		helper.runAfterDelay(100, () -> helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6)));
+		helper.runAfterDelay(300, () -> {
+			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
+			helper.assertBlockNotPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+			helper.succeed();
+		});
+	}
+
+	/**
 	 * A 4-log oak with a single leaf on top, out of the way, trunk at (x, 1..4, z). Once the logs are
 	 * gone the leaf is removed, so no sapling can drop by chance: the test decides when one is available.
 	 */
