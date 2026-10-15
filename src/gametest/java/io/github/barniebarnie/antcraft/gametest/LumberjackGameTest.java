@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -429,6 +430,97 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(decayed[0], "logs not stored yet");
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+		});
+	}
+
+	/**
+	 * A 4-log oak with a single leaf on top, out of the way, trunk at (x, 1..4, z). Once the logs are
+	 * gone the leaf is removed, so no sapling can drop by chance: the test decides when one is available.
+	 */
+	private static void bareTree(GameTestHelper helper, int x, int z) {
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(x, y, z, Blocks.OAK_LOG);
+		}
+		helper.setBlock(x, 5, z, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1).setValue(LeavesBlock.PERSISTENT, false));
+		helper.onEachTick(() -> {
+			if (countBlocks(helper, BlockTags.LOGS) == 0 && helper.getBlockState(new BlockPos(x, 5, z)).is(BlockTags.LEAVES)) {
+				helper.setBlock(x, 5, z, Blocks.AIR);
+			}
+		});
+	}
+
+	/** Turns the home chest into a colony core, with no stock targets so the colony orders no crafting. */
+	private static Colony colonyAtHome(GameTestHelper helper) {
+		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CHEST)).orElseThrow();
+		colony.setRadius(6);
+		colony.setStockTargets(List.of());
+		return colony;
+	}
+
+	private static AntBot colonyLumberjack(GameTestHelper helper, Colony colony, int x, int z) {
+		AntBot bot = lumberjack(helper, x, z);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		return bot;
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void nearerLumberjackReplantsTreeFelledWithoutSapling(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		bareTree(helper, 5, 5);
+		AntBot feller = colonyLumberjack(helper, colony, 2, 2);
+		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
+		AntBot[] planter = {null};
+		helper.onEachTick(() -> {
+			// The feller had no sapling and posted a replant job; it is now taking its logs home.
+			if (planter[0] == null && colony.board().has(JobType.REPLANT, base) && feller.isWorking()) {
+				planter[0] = colonyLumberjack(helper, colony, 6, 3);
+				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6));
+			}
+			if (colony.board().jobOf(feller.getUUID()).filter(job -> job.type() == JobType.REPLANT).isPresent()) {
+				helper.fail("the feller claimed the replant job instead of the nearer lumberjack");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(planter[0] != null, "no replant job posted yet");
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+			helper.assertTrue(!colony.board().has(JobType.REPLANT, base), "replant job still on the board");
+			Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void replantsWithSaplingFromColonyCore(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_SAPLING));
+		bareTree(helper, 5, 5);
+		colonyLumberjack(helper, colony, 2, 2);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+			helper.assertTrue(core.countItem(Items.OAK_SAPLING) == 0, "sapling still in the core");
+			helper.assertTrue(colony.board().jobs().isEmpty(), "jobs left on the board: " + colony.board().jobs());
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 200)
+	public void dropsReplantJobsForReplantedOrUnplantableBases(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		BlockPos replanted = new BlockPos(5, 1, 5);
+		helper.setBlock(replanted, Blocks.OAK_SAPLING);
+		BlockPos paved = new BlockPos(3, 1, 3);
+		helper.setBlock(paved.below(), Blocks.STONE);
+		BlockPos open = new BlockPos(6, 1, 2);
+		for (BlockPos pos : List.of(replanted, paved, open)) {
+			colony.board().post(JobType.REPLANT, helper.absolutePos(pos));
+		}
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!colony.board().has(JobType.REPLANT, helper.absolutePos(replanted)), "job kept for a replanted base");
+			helper.assertTrue(!colony.board().has(JobType.REPLANT, helper.absolutePos(paved)), "job kept for a base on stone");
+			helper.assertTrue(colony.board().has(JobType.REPLANT, helper.absolutePos(open)), "job dropped for a plantable base");
 		});
 	}
 

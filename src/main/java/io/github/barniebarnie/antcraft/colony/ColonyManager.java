@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
@@ -180,6 +181,8 @@ public class ColonyManager extends SavedData {
 			for (TreeScanner.Tree tree : TreeScanner.findAll(new LevelTreeView(level), colony.core(), colony.radius())) {
 				colony.board().post(JobType.CHOP_TREE, tree.base());
 			}
+			// Replanted since, or built over.
+			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT && !Replanting.isPlantable(level, job.target()));
 			this.surveyCrops(level, colony);
 			colony.quarry().ifPresent(quarry -> {
 				Set<BlockPos> layers = new HashSet<>();

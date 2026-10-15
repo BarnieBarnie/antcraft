@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
+import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
@@ -41,7 +42,9 @@ import org.jspecify.annotations.Nullable;
  * up there, pick up the drops, replant a sapling, and bring logs to the home chest or colony
  * core. It leaves the canopy alone (only breaking leaves in its way): with the logs gone the
  * leaves decay by themselves. That is slow, so when it could not replant it comes back later
- * for saplings and apples the leaves dropped. Before a tree it tops up
+ * for saplings and apples the leaves dropped. In a colony that is shared work instead: it posts a
+ * replant job, which the nearest lumberjack takes once a sapling lies near the base or the colony
+ * core holds one. Before a tree it tops up
  * its scaffold blocks from home, so it can pillar up to logs it cannot reach. It only uses
  * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast.
  */
@@ -73,7 +76,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** The scaffold blocks lumberjacks fetch and place: ones they can take down quickly without a tool. */
 	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
 
-	private enum State { SEARCH, RESTOCK, CHOP, CLEANUP, COLLECT, REPLANT, DEPOSIT }
+	/** The colony jobs lumberjacks take. */
+	private static final Set<JobType> JOBS = EnumSet.of(JobType.CHOP_TREE, JobType.REPLANT);
+
+	private enum State { SEARCH, RESTOCK, CHOP, CLEANUP, COLLECT, FETCH_SAPLING, REPLANT, DEPOSIT }
 
 	/**
 	 * States in which placed blocks are scaffolding for the current tree, to be removed afterwards.
@@ -194,15 +200,25 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			case CHOP -> this.chop(level);
 			case CLEANUP -> this.cleanup(level);
 			case COLLECT -> this.collect(level);
+			case FETCH_SAPLING -> this.fetchSapling(level);
 			case REPLANT -> this.replant(level);
 			case DEPOSIT -> this.deposit(level);
 		}
 	}
 
-	/** Gives the claimed tree job back to the board, so another lumberjack can take it. */
+	/** Gives the claimed job back to the board, so another lumberjack can take it. */
 	private void releaseJob(ServerLevel level) {
 		if (this.jobId != null) {
 			this.colony(level).ifPresent(colony -> colony.board().release(this.bot.getUUID()));
+			this.jobId = null;
+		}
+	}
+
+	/** Takes the claimed job off the board: it is done, or cannot be done any more. */
+	private void completeJob(ServerLevel level) {
+		if (this.jobId != null) {
+			UUID done = this.jobId;
+			this.colony(level).ifPresent(colony -> colony.board().complete(done));
 			this.jobId = null;
 		}
 	}
@@ -237,47 +253,119 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.enter(State.RESTOCK);
 			return;
 		}
-		Optional<TreeScanner.Tree> found = this.nextTree(level);
-		if (found.isPresent()) {
-			this.tree = found.get();
-			this.unreachableLogs.clear();
-			this.unreachablePlaced.clear();
-			this.abandonedPlaced.clear();
-			this.retriesLeft = SCAFFOLD_RETRIES;
-			this.enter(State.CHOP);
-		} else if (logs > 0 && this.bot.getHome() != null) {
+		boolean started = this.bot.getColonyId() != null ? this.takeJob(level) : this.takeNearbyTree(level);
+		if (started) {
+			return;
+		}
+		if (logs > 0 && this.bot.getHome() != null) {
 			this.enter(State.DEPOSIT);
 		} else {
 			this.cooldown = this.bot.getColonyId() != null ? IDLE_JOB_CHECK_TICKS : IDLE_RESCAN_TICKS;
 		}
 	}
 
-	/** In a colony, claims a tree job from the board; otherwise searches around home. */
-	private Optional<TreeScanner.Tree> nextTree(ServerLevel level) {
-		LevelTreeView view = new LevelTreeView(level);
-		if (this.bot.getColonyId() == null) {
-			BlockPos origin = this.bot.getHome() != null ? this.bot.getHome() : this.bot.blockPosition();
-			return TreeScanner.findNearest(view, origin, SEARCH_RADIUS);
-		}
+	/** Outside a colony: searches around home for a tree. Returns whether it found one. */
+	private boolean takeNearbyTree(ServerLevel level) {
+		BlockPos origin = this.bot.getHome() != null ? this.bot.getHome() : this.bot.blockPosition();
+		Optional<TreeScanner.Tree> found = TreeScanner.findNearest(new LevelTreeView(level), origin, SEARCH_RADIUS);
+		found.ifPresent(this::startTree);
+		return found.isPresent();
+	}
+
+	/**
+	 * In a colony: claims the nearest tree or replant job from the board. Replant jobs are only
+	 * taken once there is a sapling for them. Returns whether it started on one.
+	 */
+	private boolean takeJob(ServerLevel level) {
 		Optional<Colony> colony = this.colony(level);
 		if (colony.isEmpty()) {
 			// The colony was dissolved: carry on alone.
 			this.bot.setColonyId(null);
 			this.bot.setHome(null);
-			return Optional.empty();
+			return false;
 		}
+		LevelTreeView view = new LevelTreeView(level);
 		while (true) {
-			Optional<Job> job = colony.get().board().claim(this.bot.getUUID(), Set.of(JobType.CHOP_TREE), this.bot.blockPosition(), level.getGameTime());
+			Optional<Job> job = colony.get().board().claim(this.bot.getUUID(), JOBS, this.bot.blockPosition(), level.getGameTime(),
+				open -> open.type() != JobType.REPLANT || this.hasSaplingFor(level, colony.get(), open.target()));
 			if (job.isEmpty()) {
-				return Optional.empty();
+				return false;
 			}
-			Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, job.get().target());
-			if (tree.isPresent()) {
-				this.jobId = job.get().id();
-				return tree;
+			BlockPos target = job.get().target();
+			if (job.get().type() == JobType.REPLANT) {
+				if (Replanting.isPlantable(level, target)) {
+					this.jobId = job.get().id();
+					this.startReplant(level, target);
+					return true;
+				}
+			} else {
+				Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, target);
+				if (tree.isPresent()) {
+					this.jobId = job.get().id();
+					this.startTree(tree.get());
+					return true;
+				}
 			}
-			// The tree is gone; drop the job and try the next one.
+			// The tree is gone, or the base was replanted or built over; drop the job and try the next one.
 			colony.get().board().complete(job.get().id());
+		}
+	}
+
+	private void startTree(TreeScanner.Tree found) {
+		this.tree = found;
+		this.unreachableLogs.clear();
+		this.unreachablePlaced.clear();
+		this.abandonedPlaced.clear();
+		this.retriesLeft = SCAFFOLD_RETRIES;
+		this.enter(State.CHOP);
+	}
+
+	/** Replants {@code base} for a replant job, first getting a sapling: one it carries, one lying nearby, or one from the core. */
+	private void startReplant(ServerLevel level, BlockPos base) {
+		this.site = base;
+		if (findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS)) != null) {
+			this.enter(State.REPLANT);
+		} else if (this.saplingNear(level, base)) {
+			this.enter(State.COLLECT);
+		} else {
+			this.enter(State.FETCH_SAPLING);
+		}
+	}
+
+	/** Whether this bot could get a sapling to plant at {@code base}. */
+	private boolean hasSaplingFor(ServerLevel level, Colony colony, BlockPos base) {
+		if (findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS)) != null || this.saplingNear(level, base)) {
+			return true;
+		}
+		Container core = Storage.containerAt(level, colony.core());
+		return core != null && findItem(core, stack -> stack.is(ItemTags.SAPLINGS)) != null;
+	}
+
+	private boolean saplingNear(ServerLevel level, BlockPos base) {
+		return !level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
+			item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && item.getItem().is(ItemTags.SAPLINGS)
+				&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
+	}
+
+	/** Takes a sapling from the colony core for the replant job. */
+	private void fetchSapling(ServerLevel level) {
+		BlockPos core = this.colony(level).map(Colony::core).orElse(null);
+		Container container = core == null ? null : Storage.containerAt(level, core);
+		if (container == null) {
+			this.releaseJob(level);
+			this.enter(State.SEARCH);
+			return;
+		}
+		Goal reach = new Goal.Reach(core, REACH);
+		if (reach.isReached(this.bot.blockPosition())) {
+			this.bot.getLookControl().setLookAt(core.getX() + 0.5, core.getY() + 0.5, core.getZ() + 0.5);
+			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS), 1);
+			// If another bot took the last sapling first, replanting gives the job back.
+			this.enter(State.REPLANT);
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.releaseJob(level);
+			this.cooldown = IDLE_RESCAN_TICKS;
+			this.enter(State.SEARCH);
 		}
 	}
 
@@ -319,11 +407,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 		}
 		if (next == null) {
-			if (this.jobId != null) {
-				UUID done = this.jobId;
-				this.colony(level).ifPresent(colony -> colony.board().complete(done));
-				this.jobId = null;
-			}
+			this.completeJob(level);
 			// The leaves decay by themselves now; take the scaffolding down while still up there.
 			this.enter(State.CLEANUP);
 			return;
@@ -425,12 +509,23 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private void replant(ServerLevel level) {
 		BlockPos base = this.site;
-		if (!level.getBlockState(base).isAir() || !level.getBlockState(base.below()).is(BlockTags.DIRT)) {
+		if (!Replanting.isPlantable(level, base)) {
+			// Replanted by someone else, or built over.
 			this.revisits.remove(base);
+			this.completeJob(level);
 			this.enter(State.SEARCH);
 			return;
 		}
 		ItemStack sapling = findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS));
+		Optional<Colony> colony = this.colony(level);
+		if (sapling == null && colony.isPresent()) {
+			// The leaves may still drop one as they decay. In a colony, whichever lumberjack is
+			// nearest when a sapling turns up replants it.
+			this.releaseJob(level);
+			colony.get().board().post(JobType.REPLANT, base);
+			this.enter(State.SEARCH);
+			return;
+		}
 		if (sapling == null) {
 			// The leaves may still drop one as they decay.
 			if (!this.revisits.containsKey(base)) {
@@ -449,8 +544,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				sapling.shrink(1);
 			}
 			this.revisits.remove(base);
+			this.completeJob(level);
 			this.enter(State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			// A replant job for a base no one can walk to is dropped, so lumberjacks do not keep trying.
+			this.completeJob(level);
 			this.enter(State.SEARCH);
 		}
 	}
@@ -521,7 +619,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		return count;
 	}
 
-	private static @Nullable ItemStack findItem(SimpleContainer inventory, java.util.function.Predicate<ItemStack> predicate) {
+	private static @Nullable ItemStack findItem(Container inventory, java.util.function.Predicate<ItemStack> predicate) {
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
 			if (!stack.isEmpty() && predicate.test(stack)) {

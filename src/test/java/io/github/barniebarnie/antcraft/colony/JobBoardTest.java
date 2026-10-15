@@ -147,4 +147,41 @@ class JobBoardTest {
 		assertEquals(board.jobs(), loaded.jobs());
 		assertFalse(loaded.jobOf(ALICE).isEmpty());
 	}
+
+	@Test
+	void replantJobIsClaimedByTheNearerLumberjack() {
+		JobBoard board = new JobBoard();
+		Set<JobType> lumberjack = Set.of(JobType.CHOP_TREE, JobType.REPLANT);
+		Job tree = board.post(JobType.CHOP_TREE, new BlockPos(2, 1, 0)).orElseThrow();
+		Job replant = board.post(JobType.REPLANT, new BlockPos(28, 1, 0)).orElseThrow();
+
+		// Alice stands by the tree, Bob by the felled one: each takes the job nearest to them.
+		assertEquals(tree.id(), board.claim(ALICE, lumberjack, BlockPos.ZERO, 0).orElseThrow().id());
+		assertEquals(replant.id(), board.claim(BOB, lumberjack, new BlockPos(30, 1, 0), 0).orElseThrow().id());
+	}
+
+	@Test
+	void jobThatIsNotReadyIsNotClaimed() {
+		JobBoard board = new JobBoard();
+		Set<JobType> lumberjack = Set.of(JobType.CHOP_TREE, JobType.REPLANT);
+		board.post(JobType.REPLANT, new BlockPos(1, 1, 0));
+		Job tree = board.post(JobType.CHOP_TREE, new BlockPos(9, 1, 0)).orElseThrow();
+
+		// No sapling for the nearer replant job yet, so the bot takes the tree.
+		Job claimed = board.claim(ALICE, lumberjack, BlockPos.ZERO, 0, job -> job.type() != JobType.REPLANT).orElseThrow();
+		assertEquals(tree.id(), claimed.id());
+		assertTrue(board.claim(BOB, lumberjack, BlockPos.ZERO, 0, job -> job.type() != JobType.REPLANT).isEmpty());
+	}
+
+	@Test
+	void replantJobSurvivesSaveAndLoad() {
+		JobBoard board = new JobBoard();
+		board.post(JobType.REPLANT, new BlockPos(3, 1, 0));
+
+		var json = JobBoard.CODEC.encodeStart(JsonOps.INSTANCE, board).getOrThrow();
+		JobBoard loaded = JobBoard.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+		assertEquals(board.jobs(), loaded.jobs());
+		assertTrue(loaded.has(JobType.REPLANT, new BlockPos(3, 1, 0)));
+	}
 }

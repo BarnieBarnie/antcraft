@@ -50,13 +50,22 @@ public class JobBoard {
 	 * among the types it can do.
 	 */
 	public Optional<Job> claim(UUID bot, Set<JobType> types, BlockPos from, long now) {
+		return this.claim(bot, types, from, now, job -> true);
+	}
+
+	/**
+	 * Like {@link #claim(UUID, Set, BlockPos, long)}, but only claims an open job that is
+	 * {@code ready} to be worked on, such as a replant job once there is a sapling for it.
+	 * The bot's current job is given back whether it is ready or not.
+	 */
+	public Optional<Job> claim(UUID bot, Set<JobType> types, BlockPos from, long now, Predicate<Job> ready) {
 		Optional<Job> current = this.jobOf(bot);
 		if (current.isPresent()) {
 			this.heartbeat(bot, now);
 			return this.jobOf(bot);
 		}
 		Optional<Job> nearest = this.jobs.stream()
-			.filter(job -> job.isOpen() && types.contains(job.type()))
+			.filter(job -> job.isOpen() && types.contains(job.type()) && ready.test(job))
 			.min(Comparator.comparingDouble(job -> job.target().distSqr(from)));
 		nearest.ifPresent(job -> this.replace(job, job.claim(bot, now)));
 		return nearest.flatMap(job -> this.jobOf(bot));
