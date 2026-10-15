@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -18,7 +19,10 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** Farmer work loop: harvest ripe crops from the job board, replant them, store the produce. */
+/**
+ * Farmer work loop: harvest ripe crops from the job board, replant them, store the produce.
+ * Now and then it swaps its hoe for a better one in the core, or orders the best one the colony can make.
+ */
 public class FarmerGoal extends ColonyWorkGoal {
 	/** Seeds a farmer keeps for replanting. */
 	private static final int KEEP_SEEDS = 16;
@@ -40,6 +44,9 @@ public class FarmerGoal extends ColonyWorkGoal {
 				this.storeProduce(core);
 				this.depositing = false;
 			}
+			return;
+		}
+		if (this.upgradeTool(level, colony, ToolKind.HOE)) {
 			return;
 		}
 		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS) {
@@ -87,7 +94,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 		int seeds = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty()) {
+			if (stack.isEmpty() || ToolKind.HOE.is(stack)) {
 				continue;
 			}
 			if (Farming.isSeed(stack)) {
@@ -99,13 +106,13 @@ public class FarmerGoal extends ColonyWorkGoal {
 		return seeds > KEEP_SEEDS;
 	}
 
-	/** Puts everything in the core except the seeds needed for replanting. */
+	/** Puts everything in the core except hoes and the seeds needed for replanting. */
 	private void storeProduce(Container core) {
 		SimpleContainer inventory = this.bot.getInventory();
 		int keptSeeds = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty()) {
+			if (stack.isEmpty() || ToolKind.HOE.is(stack)) {
 				continue;
 			}
 			int keep = 0;

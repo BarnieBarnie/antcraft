@@ -14,6 +14,8 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
@@ -89,6 +91,48 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			}
 			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 0, "harvested unripe wheat");
 			helper.succeed();
+		});
+	}
+
+	private static int carried(AntBot bot, Item item) {
+		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
+	}
+
+	@GameTest(maxTicks = 400)
+	public void swapsToBetterHoeInCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.STONE_HOE));
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(carried(bot, Items.STONE_HOE) == 1, "farmer has no stone hoe");
+			helper.assertTrue(carried(bot, Items.WOODEN_HOE) == 0, "farmer kept its wooden hoe");
+			helper.assertTrue(core(helper).countItem(Items.WOODEN_HOE) == 1, "wooden hoe not back in the core");
+		});
+	}
+
+	@GameTest(maxTicks = 400)
+	public void ordersBetterHoeTheColonyCanMake(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		core(helper).setItem(1, new ItemStack(Items.STICK, 2));
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+
+		helper.succeedWhen(() -> helper.assertTrue(colony.orders().getOrDefault(Items.STONE_HOE, 0) == 1, "orders: " + colony.orders()));
+	}
+
+	@GameTest(maxTicks = 800)
+	public void keepsItsHoeWhenStoringProduce(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		wheatRow(helper, 7);
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 3, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
+			helper.assertTrue(carried(bot, Items.WOODEN_HOE) == 1, "farmer stored its hoe");
 		});
 	}
 }

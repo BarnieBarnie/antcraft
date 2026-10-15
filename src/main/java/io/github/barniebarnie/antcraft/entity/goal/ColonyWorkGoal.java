@@ -7,6 +7,8 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -14,6 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
@@ -24,6 +27,8 @@ import org.jspecify.annotations.Nullable;
 public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	protected static final double REACH = 4.0;
 	protected static final int IDLE_TICKS = 20;
+	/** How often a bot looks for a better tool in the core. */
+	protected static final int UPGRADE_CHECK_TICKS = 100;
 
 	protected final AntBot bot;
 	protected final PathFollower follower;
@@ -32,6 +37,9 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	private @Nullable Goal travelGoal;
 	protected boolean hasJob;
 	protected int cooldown;
+	/** The better tool the bot is on its way to fetch from the core, or null. */
+	private @Nullable Item upgrade;
+	private long nextUpgradeCheck;
 
 	protected ColonyWorkGoal(AntBot bot, BotRole role) {
 		this.bot = bot;
@@ -77,6 +85,37 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	}
 
 	protected abstract void work(ServerLevel level, Colony colony);
+
+	/**
+	 * Now and then looks for a better {@code kind} of tool: it fetches one from the core, leaving
+	 * the ones it replaces there, or orders the best one the colony can make. Returns true while the
+	 * bot is busy fetching one, so the caller skips its own work this tick.
+	 */
+	protected boolean upgradeTool(ServerLevel level, Colony colony, ToolKind kind) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null) {
+			this.upgrade = null;
+			return false;
+		}
+		if (this.upgrade == null) {
+			if (level.getGameTime() < this.nextUpgradeCheck) {
+				return false;
+			}
+			this.nextUpgradeCheck = level.getGameTime() + UPGRADE_CHECK_TICKS;
+			Optional<Item> better = kind.findUpgrade(level, this.bot, core, colony);
+			if (better.isEmpty()) {
+				return false;
+			}
+			this.upgrade = better.get();
+			this.resetMovement();
+		}
+		if (this.reach(colony.core())) {
+			kind.swap(this.bot, core, this.upgrade);
+			this.upgrade = null;
+			this.resetMovement();
+		}
+		return true;
+	}
 
 	protected void resetMovement() {
 		this.follower.stop();

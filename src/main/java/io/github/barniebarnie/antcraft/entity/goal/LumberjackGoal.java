@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -45,7 +46,8 @@ import org.jspecify.annotations.Nullable;
  * replant job, which the nearest lumberjack takes once a sapling lies near the base or the colony
  * core holds one. Before a tree it tops up
  * its scaffold blocks from home, so it can pillar up to logs it cannot reach. It only uses
- * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast.
+ * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast. Between trees
+ * it swaps its axe for a better one at home, and in a colony orders the best axe the colony can make.
  */
 public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int SEARCH_RADIUS = 24;
@@ -60,6 +62,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int SCAFFOLD_STOCK = 16;
 	/** How long to wait before fetching scaffold again after home could not be reached. */
 	private static final int RESTOCK_RETRY_TICKS = 600;
+	/** How often, between trees, it looks for a better axe at home. */
+	private static final int UPGRADE_CHECK_TICKS = 100;
 	/**
 	 * How long to keep coming back to a felled tree for the saplings its decaying leaves drop. Leaves
 	 * take minutes to decay, and dropped items despawn after five.
@@ -78,7 +82,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** The colony jobs lumberjacks take. */
 	private static final Set<JobType> JOBS = EnumSet.of(JobType.CHOP_TREE, JobType.REPLANT);
 
-	private enum State { SEARCH, RESTOCK, CHOP, CLEANUP, COLLECT, FETCH_SAPLING, REPLANT, DEPOSIT }
+	private enum State { SEARCH, RESTOCK, UPGRADE, CHOP, CLEANUP, COLLECT, FETCH_SAPLING, REPLANT, DEPOSIT }
 
 	/**
 	 * States in which placed blocks are scaffolding for the current tree, to be removed afterwards.
@@ -111,6 +115,9 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private int cooldown;
 	private int restockCooldown;
 	private @Nullable UUID jobId;
+	/** The better axe it is on its way to fetch from home, or null. */
+	private @Nullable Item upgrade;
+	private long nextUpgradeCheck;
 
 	public LumberjackGoal(AntBot bot) {
 		this.bot = bot;
@@ -203,6 +210,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		switch (this.state) {
 			case SEARCH -> this.search(level);
 			case RESTOCK -> this.restock(level);
+			case UPGRADE -> this.fetchUpgrade(level);
 			case CHOP -> this.chop(level);
 			case CLEANUP -> this.cleanup(level);
 			case COLLECT -> this.collect(level);
@@ -252,7 +260,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.enter(State.DEPOSIT);
 			return;
 		}
-		if (this.revisit(level)) {
+		if (this.checkUpgrade(level) || this.revisit(level)) {
 			return;
 		}
 		if (this.restockCooldown == 0 && PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD) < RESTOCK_BELOW && this.homeScaffold(level) > 0) {
@@ -395,6 +403,50 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.enter(State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.restockCooldown = RESTOCK_RETRY_TICKS;
+			this.enter(State.SEARCH);
+		}
+	}
+
+	/**
+	 * Now and then, between trees, heads home for a better axe. In a colony home is the core, and
+	 * when it holds no better axe the lumberjack orders the best one the colony can make; a lumberjack
+	 * on its own has no one to order from. Returns true when it is now on its way to fetch one.
+	 */
+	private boolean checkUpgrade(ServerLevel level) {
+		if (level.getGameTime() < this.nextUpgradeCheck) {
+			return false;
+		}
+		this.nextUpgradeCheck = level.getGameTime() + UPGRADE_CHECK_TICKS;
+		Container home = this.bot.getHome() == null ? null : Storage.containerAt(level, this.bot.getHome());
+		if (home == null) {
+			return false;
+		}
+		Optional<Item> better = ToolKind.AXE.findUpgrade(level, this.bot, home, this.colony(level).orElse(null));
+		better.ifPresent(axe -> {
+			this.upgrade = axe;
+			this.enter(State.UPGRADE);
+		});
+		return better.isPresent();
+	}
+
+	/** Takes the better axe from home and leaves the axes it replaces there. */
+	private void fetchUpgrade(ServerLevel level) {
+		BlockPos home = this.bot.getHome();
+		Container container = home == null ? null : Storage.containerAt(level, home);
+		Item target = this.upgrade;
+		if (container == null || target == null) {
+			this.upgrade = null;
+			this.enter(State.SEARCH);
+			return;
+		}
+		Goal reach = new Goal.Reach(home, REACH);
+		if (reach.isReached(this.bot.blockPosition())) {
+			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
+			ToolKind.AXE.swap(this.bot, container, target);
+			this.upgrade = null;
+			this.enter(State.SEARCH);
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.upgrade = null;
 			this.enter(State.SEARCH);
 		}
 	}

@@ -531,6 +531,50 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	private static int carried(AntBot bot, net.minecraft.world.item.Item item) {
+		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 400)
+	public void swapsToBetterAxeInColonyCore(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.STONE_AXE));
+		AntBot bot = colonyLumberjack(helper, colony, 5, 5);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_AXE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(carried(bot, Items.STONE_AXE) == 1, "lumberjack has no stone axe");
+			helper.assertTrue(carried(bot, Items.WOODEN_AXE) == 0, "lumberjack kept its wooden axe");
+			helper.assertTrue(core.countItem(Items.WOODEN_AXE) == 1, "wooden axe not back in the core");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 400)
+	public void ordersBetterAxeTheColonyCanMake(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+		core.setItem(1, new ItemStack(Items.STICK, 2));
+		AntBot bot = colonyLumberjack(helper, colony, 5, 5);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_AXE));
+
+		helper.succeedWhen(() -> helper.assertTrue(colony.orders().getOrDefault(Items.STONE_AXE, 0) == 1, "orders: " + colony.orders()));
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 400)
+	public void soloLumberjackSwapsToBetterAxeInHomeChest(GameTestHelper helper) {
+		Container chest = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.STONE_AXE));
+		AntBot bot = lumberjack(helper, 5, 5);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_AXE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(carried(bot, Items.STONE_AXE) == 1, "lumberjack has no stone axe");
+			helper.assertTrue(chest.countItem(Items.WOODEN_AXE) == 1, "wooden axe not back in the chest");
+		});
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 1600)
 	public void replantsWithSaplingFromColonyCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
