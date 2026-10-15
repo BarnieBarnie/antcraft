@@ -11,7 +11,11 @@ public enum BotRole {
 	/** Digs out the colony quarry layer by layer and stores what it mines. */
 	MINER,
 	/** Harvests ripe crops around the colony and replants them. */
-	FARMER;
+	FARMER,
+	/** Arms itself from the core and patrols around it, fighting hostile mobs. */
+	GUARD,
+	/** Collects loose items around the colony and stores them in the core. */
+	HAULER;
 
 	public String id() {
 		return this.name().toLowerCase(Locale.ROOT);
