@@ -12,6 +12,33 @@ AntCraft runs entirely on the server side, so it cannot be used as a cheat clien
 - **Dedicated servers:** disabled by default. The server owner must explicitly set `enabled = true` in the config.
 - Bot commands are restricted to operators. Owners can cap the bot count and whitelist who may spawn bots.
 
+## Usage
+
+**Crafting a Bot Core** (shaped):
+
+```
+ . P .      P = carved pumpkin
+ I R I      I = iron ingot
+ . I .      R = block of redstone
+```
+
+Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory, which they drop when they die. They fight hostile mobs (except creepers, for now).
+
+**Commands** (operators only):
+
+| Command | Effect |
+|---------|--------|
+| `/antcraft status` | Shows whether bots are enabled, and the bot count |
+| `/antcraft goto <pos> [bots]` | Sends bots to a position. Without `[bots]`, the nearest bot within 64 blocks |
+| `/antcraft stop [bots]` | Cancels the walk target |
+
+**Config** (`config/antcraft.properties`):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `enableOnDedicatedServer` | `false` | Must be `true` for bots to work on a dedicated server. When `false`, bots cannot be placed, and any existing bots stand still |
+| `maxBotsPerLevel` | `64` | Maximum number of bots per dimension |
+
 ## Roadmap
 
 | Milestone | Goal |

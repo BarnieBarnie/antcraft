@@ -1,0 +1,141 @@
+package io.github.barniebarnie.antcraft.entity;
+
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
+import io.github.barniebarnie.antcraft.registry.ModEntities;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.FloatGoal;
+import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
+import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
+import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
+import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
+import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.npc.InventoryCarrier;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+import org.jspecify.annotations.Nullable;
+
+/**
+ * A colony worker. Carries an inventory, picks up items, defends itself
+ * against hostile mobs and can be sent to a target position.
+ */
+public class AntBot extends PathfinderMob implements InventoryCarrier {
+	private static final int INVENTORY_SIZE = 27;
+
+	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
+	private @Nullable BlockPos walkTarget;
+
+	public AntBot(EntityType<? extends AntBot> type, Level level) {
+		super(type, level);
+		this.setCanPickUpLoot(true);
+	}
+
+	public static AttributeSupplier.Builder createAttributes() {
+		return Mob.createMobAttributes()
+			.add(Attributes.MAX_HEALTH, 20.0)
+			.add(Attributes.MOVEMENT_SPEED, 0.3)
+			.add(Attributes.ATTACK_DAMAGE, 4.0)
+			.add(Attributes.FOLLOW_RANGE, 32.0);
+	}
+
+	public static int countIn(ServerLevel level) {
+		return level.getEntities(ModEntities.ANT_BOT, AntBot::isAlive).size();
+	}
+
+	@Override
+	protected void registerGoals() {
+		this.goalSelector.addGoal(0, new FloatGoal(this));
+		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
+		this.goalSelector.addGoal(2, new WalkToTargetGoal(this, 1.0));
+		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
+		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
+		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
+		// Creepers are left alone until bots can fight at range.
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true, (target, level) -> !(target instanceof Creeper)));
+	}
+
+	@Override
+	public void tick() {
+		if (this.level() instanceof ServerLevel level) {
+			// Bots on a server that has not opted in stand still instead of being deleted,
+			// so enabling the mod again later restores them.
+			boolean allowed = AntCraftConfig.botsAllowed(level.getServer());
+			if (this.isNoAi() == allowed) {
+				this.setNoAi(!allowed);
+			}
+		}
+		super.tick();
+	}
+
+	public @Nullable BlockPos getWalkTarget() {
+		return this.walkTarget;
+	}
+
+	public void setWalkTarget(@Nullable BlockPos target) {
+		this.walkTarget = target;
+		if (target == null) {
+			this.getNavigation().stop();
+		}
+	}
+
+	@Override
+	public SimpleContainer getInventory() {
+		return this.inventory;
+	}
+
+	@Override
+	public boolean wantsToPickUp(ServerLevel level, ItemStack itemStack) {
+		return this.inventory.canAddItem(itemStack);
+	}
+
+	@Override
+	protected void pickUpItem(ServerLevel level, ItemEntity entity) {
+		InventoryCarrier.pickUpItem(level, this, this, entity);
+	}
+
+	@Override
+	protected void dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean killedByPlayer) {
+		super.dropCustomDeathLoot(level, source, killedByPlayer);
+		for (ItemStack stack : this.inventory.removeAllItems()) {
+			this.spawnAtLocation(level, stack);
+		}
+	}
+
+	@Override
+	public boolean requiresCustomPersistence() {
+		return true;
+	}
+
+	@Override
+	public boolean removeWhenFarAway(double distSqr) {
+		return false;
+	}
+
+	@Override
+	protected void addAdditionalSaveData(ValueOutput output) {
+		super.addAdditionalSaveData(output);
+		this.writeInventoryToTag(output);
+		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
+	}
+
+	@Override
+	protected void readAdditionalSaveData(ValueInput input) {
+		super.readAdditionalSaveData(input);
+		this.readInventoryFromTag(input);
+		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
+	}
+}

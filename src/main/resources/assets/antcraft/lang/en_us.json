@@ -1,0 +1,10 @@
+{
+	"entity.antcraft.ant_bot": "Ant Bot",
+	"item.antcraft.bot_core": "Bot Core",
+	"message.antcraft.disabled": "AntCraft bots are disabled on this server. The server owner can enable them in config/antcraft.properties.",
+	"message.antcraft.limit": "This world already has the maximum of %s bots.",
+	"commands.antcraft.status": "AntCraft is %s. Bots in this dimension: %s / %s",
+	"commands.antcraft.goto": "Sent %s bot(s) to %s",
+	"commands.antcraft.stop": "Stopped %s bot(s)",
+	"commands.antcraft.no_bots": "No bots found"
+}
