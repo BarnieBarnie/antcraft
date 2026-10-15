@@ -8,5 +8,6 @@
 	"commands.antcraft.stop": "Stopped %s bot(s)",
 	"commands.antcraft.no_bots": "No bots found",
 	"commands.antcraft.role": "Set the role of %s bot(s) to %s",
-	"commands.antcraft.home": "Set the home of %s bot(s) to %s"
+	"commands.antcraft.home": "Set the home of %s bot(s) to %s",
+	"block.antcraft.colony_core": "Colony Core"
 }

@@ -1,10 +1,13 @@
 package io.github.barniebarnie.antcraft;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import net.fabricmc.api.ModInitializer;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.resources.Identifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,9 +23,11 @@ public class AntCraft implements ModInitializer {
 	@Override
 	public void onInitialize() {
 		AntCraftConfig.load();
+		ModBlocks.register();
 		ModEntities.register();
 		ModItems.register();
 		AntCraftCommands.register();
+		ServerTickEvents.END_LEVEL_TICK.register(level -> ColonyManager.get(level).tick(level));
 		LOGGER.info("AntCraft loaded");
 	}
 }

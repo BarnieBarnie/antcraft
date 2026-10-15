@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.item;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -45,6 +46,8 @@ public class BotCoreItem extends Item {
 		}
 
 		bot.setCustomName(Component.literal("Ant " + bot.getUUID().toString().substring(0, 4)));
+		ColonyManager colonies = ColonyManager.get(level);
+		colonies.nearest(spawnPos, ColonyManager.JOIN_DISTANCE).ifPresent(colony -> colonies.join(bot, colony));
 		stack.consume(1, player);
 		level.gameEvent(player, GameEvent.ENTITY_PLACE, spawnPos);
 		return InteractionResult.SUCCESS;

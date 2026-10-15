@@ -26,7 +26,9 @@ Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-
 
 Bots find their own way: they walk, jump, drop up to 3 blocks, dig through blocks in the way, and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, or blocks next to lava or water.
 
-**Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe) within 24 blocks of its home, picks up the drops, replants a sapling, and brings the logs to its home chest.
+**Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, redstone on the sides) and place it. Bots activated within 32 blocks join the colony and use the core, which holds 54 stacks, as their home. The colony surveys its area every 5 seconds and posts a job for every natural tree it finds; each lumberjack claims a different tree, so they never get in each other's way. If a bot dies or goes missing, its job is freed for the others. Breaking the core dissolves the colony and drops its contents.
+
+**Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe): in a colony it takes tree jobs from the job board, otherwise it searches within 24 blocks of its home, picks up the drops, replants a sapling, and brings the logs to its home chest.
 
 **Commands** (operators only):
 
@@ -52,7 +54,7 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 | M0 | Project scaffold, build, CI (done) |
 | M1 | Bot entity (player-skinned mob) with inventory, spawned from a crafted item; walks to a target (done) |
 | M2 | Pathfinding that digs, pillars and bridges; lumberjack role chops trees and deposits logs (done) |
-| M3 | Colony core block with storage and a shared job board; multiple bots claim tasks |
+| M3 | Colony core block with storage and a shared job board; multiple bots claim tasks (done) |
 | M4 | Miner, farmer, hauler and guard roles; hierarchical tasks ("build house" requires "gather 64 logs"); bots craft new bots |
 | M5 | Blueprint builder: load `.nbt` structures / Litematica schematics, compute material lists and build order |
 | M6 | AI architect: blueprints designed outside the game (e.g. by an LLM) in a documented JSON format, imported and validated in-game, then built by the colony |

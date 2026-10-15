@@ -8,6 +8,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 
 public final class ModItems {
@@ -19,10 +20,21 @@ public final class ModItems {
 		new BotCoreItem(new Item.Properties().setId(BOT_CORE_KEY).stacksTo(16))
 	);
 
+	public static final ResourceKey<Item> COLONY_CORE_KEY = ResourceKey.create(Registries.ITEM, AntCraft.id("colony_core"));
+
+	public static final Item COLONY_CORE = Registry.register(
+		BuiltInRegistries.ITEM,
+		COLONY_CORE_KEY,
+		new BlockItem(ModBlocks.COLONY_CORE, new Item.Properties().setId(COLONY_CORE_KEY).useBlockDescriptionPrefix())
+	);
+
 	private ModItems() {
 	}
 
 	public static void register() {
-		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(output -> output.accept(BOT_CORE));
+		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(output -> {
+			output.accept(BOT_CORE);
+			output.accept(COLONY_CORE);
+		});
 	}
 }

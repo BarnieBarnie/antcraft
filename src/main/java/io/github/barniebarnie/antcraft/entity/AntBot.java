@@ -1,10 +1,13 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -41,6 +44,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable BlockPos walkTarget;
 	private BotRole role = BotRole.NONE;
 	private @Nullable BlockPos home;
+	private @Nullable UUID colonyId;
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -113,6 +117,23 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.home = home;
 	}
 
+	public @Nullable UUID getColonyId() {
+		return this.colonyId;
+	}
+
+	/** Set through {@link ColonyManager#join} and {@link ColonyManager#leave}, which also keep the member list in sync. */
+	public void setColonyId(@Nullable UUID colonyId) {
+		this.colonyId = colonyId;
+	}
+
+	@Override
+	public void die(DamageSource source) {
+		super.die(source);
+		if (this.level() instanceof ServerLevel level) {
+			ColonyManager.get(level).leave(this);
+		}
+	}
+
 	@Override
 	public SimpleContainer getInventory() {
 		return this.inventory;
@@ -153,6 +174,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
 		output.putString("Role", this.role.id());
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
+		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 	}
 
 	@Override
@@ -162,5 +184,6 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
 		this.role = BotRole.byId(input.getStringOr("Role", BotRole.NONE.id()));
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
+		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 	}
 }
