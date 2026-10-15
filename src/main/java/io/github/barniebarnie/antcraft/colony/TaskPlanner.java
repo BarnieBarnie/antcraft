@@ -15,11 +15,33 @@ import java.util.function.Predicate;
  * what is in stock first. Generic over the item type so it can be tested without a game.
  */
 public final class TaskPlanner {
-	/** Each ingredient is a set of interchangeable items (any planks) and how many are needed. */
-	public record Recipe<I>(I output, int count, Map<Set<I>, Integer> ingredients) {
+	/** Ticks a furnace takes to smelt one item. */
+	public static final int SMELT_TICKS = 200;
+
+	/**
+	 * Each ingredient is a set of interchangeable items (any planks) and how many are needed.
+	 *
+	 * @param smelting made in a furnace, one ingredient at a time and with fuel, instead of at a crafting table
+	 */
+	public record Recipe<I>(I output, int count, Map<Set<I>, Integer> ingredients, boolean smelting) {
+		public Recipe(I output, int count, Map<Set<I>, Integer> ingredients) {
+			this(output, count, ingredients, false);
+		}
 	}
 
-	public record Craft<I>(Recipe<I> recipe, int times) {
+	/** @param fuel what the furnace burns for a smelting step (empty for crafting) */
+	public record Craft<I>(Recipe<I> recipe, int times, Map<I, Integer> fuel) {
+		public Craft(Recipe<I> recipe, int times) {
+			this(recipe, times, Map.of());
+		}
+	}
+
+	/** Interchangeable fuel items and how long each one burns. */
+	public record Fuel<I>(Set<I> items, int burnTicks) {
+		/** How many of one fuel item it takes to smelt {@code smelts} items. */
+		public int itemsFor(int smelts) {
+			return (int) (((long) smelts * SMELT_TICKS + this.burnTicks - 1) / this.burnTicks);
+		}
 	}
 
 	/**
@@ -36,6 +58,11 @@ public final class TaskPlanner {
 
 	public interface RecipeBook<I> {
 		List<Recipe<I>> recipesFor(I item);
+
+		/** Furnace fuels, best first. Without any, smelting needs no fuel. */
+		default List<Fuel<I>> fuels() {
+			return List.of();
+		}
 	}
 
 	private TaskPlanner() {
@@ -144,7 +171,7 @@ public final class TaskPlanner {
 		}
 
 		void craft(State<I> state, Recipe<I> recipe, int wanted, Set<I> path) {
-			if (this.isStorageRecipe(recipe) && recipe.ingredients().keySet().stream().flatMap(Set::stream).noneMatch(i -> state.stock.getOrDefault(i, 0) > 0)) {
+			if (!recipe.smelting() && this.isStorageRecipe(recipe) && recipe.ingredients().keySet().stream().flatMap(Set::stream).noneMatch(i -> state.stock.getOrDefault(i, 0) > 0)) {
 				// Packing ingots into a block or unpacking it only makes sense with some already at hand.
 				state.cycle = true;
 				return;
@@ -155,11 +182,54 @@ public final class TaskPlanner {
 			for (Map.Entry<Set<I>, Integer> ingredient : recipe.ingredients().entrySet()) {
 				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, innerPath);
 			}
-			state.crafts.add(new Craft<>(recipe, times));
+			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count()) : Map.of();
+			state.crafts.add(new Craft<>(recipe, times, fuel));
 			int leftover = times * recipe.count() - wanted;
 			if (leftover > 0) {
 				state.stock.merge(recipe.output(), leftover, Integer::sum);
 			}
+		}
+
+		/**
+		 * Fuel for smelting {@code smelts} items: from stock in the book's order of preference, and
+		 * whatever is still short as the first fuel that can be gathered.
+		 */
+		Map<I, Integer> fuel(State<I> state, int smelts) {
+			Map<I, Integer> used = new LinkedHashMap<>();
+			long ticks = (long) smelts * SMELT_TICKS;
+			for (Fuel<I> fuel : this.book.fuels()) {
+				List<I> byStock = new ArrayList<>(fuel.items());
+				byStock.sort(Comparator.comparingInt((I option) -> state.stock.getOrDefault(option, 0)).reversed());
+				for (I item : byStock) {
+					if (ticks <= 0) {
+						return Map.copyOf(used);
+					}
+					int taken = state.take(item, (int) ((ticks + fuel.burnTicks() - 1) / fuel.burnTicks()));
+					if (taken > 0) {
+						used.merge(item, taken, Integer::sum);
+						ticks -= (long) taken * fuel.burnTicks();
+					}
+				}
+			}
+			if (ticks <= 0 || this.book.fuels().isEmpty()) {
+				return Map.copyOf(used);
+			}
+			int smeltsLeft = (int) ((ticks + SMELT_TICKS - 1) / SMELT_TICKS);
+			for (Fuel<I> fuel : this.book.fuels()) {
+				for (I item : fuel.items()) {
+					if (this.gatherable.test(item)) {
+						int count = fuel.itemsFor(smeltsLeft);
+						state.gather.merge(item, count, Integer::sum);
+						used.merge(item, count, Integer::sum);
+						return Map.copyOf(used);
+					}
+				}
+			}
+			Fuel<I> best = this.book.fuels().getFirst();
+			I item = best.items().iterator().next();
+			state.missing.merge(item, best.itemsFor(smeltsLeft), Integer::sum);
+			used.merge(item, best.itemsFor(smeltsLeft), Integer::sum);
+			return Map.copyOf(used);
 		}
 
 		/**

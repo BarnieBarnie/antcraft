@@ -129,4 +129,97 @@ class TaskPlannerTest {
 
 		assertEquals(Map.of("iron_ingot", 6), plan.missing());
 	}
+	/** The tiny book plus a furnace: raw iron smelts into ingots, fuel is coal, then charcoal, then logs. */
+	private static final TaskPlanner.RecipeBook<String> FURNACE_BOOK = new TaskPlanner.RecipeBook<>() {
+		@Override
+		public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+			return switch (item) {
+				case "iron_ingot" -> List.of(new TaskPlanner.Recipe<>("iron_ingot", 1, Map.of(Set.of("raw_iron"), 1), true));
+				case "iron_pickaxe" -> List.of(recipe("iron_pickaxe", 1, Map.of(Set.of("iron_ingot"), 3, Set.of("stick"), 2)));
+				default -> BOOK.recipesFor(item);
+			};
+		}
+
+		@Override
+		public List<TaskPlanner.Fuel<String>> fuels() {
+			return List.of(
+				new TaskPlanner.Fuel<>(Set.of("coal"), 1600),
+				new TaskPlanner.Fuel<>(Set.of("charcoal"), 1600),
+				new TaskPlanner.Fuel<>(Set.of("oak_log", "birch_log"), 300));
+		}
+	};
+	private static final Set<String> GATHERABLE_ORES = Set.of("oak_log", "birch_log", "cobblestone", "raw_iron", "coal");
+
+	private static TaskPlanner.Plan<String> smeltPlan(String item, int count, Map<String, Integer> stock) {
+		return TaskPlanner.plan(item, count, new HashMap<>(stock), FURNACE_BOOK, GATHERABLE_ORES::contains);
+	}
+
+	private static TaskPlanner.Craft<String> smeltStep(TaskPlanner.Plan<String> plan) {
+		List<TaskPlanner.Craft<String>> steps = plan.crafts().stream().filter(c -> c.recipe().smelting()).toList();
+		assertEquals(1, steps.size(), "smelting steps: " + plan.crafts());
+		return steps.getFirst();
+	}
+
+	@Test
+	void smeltsRawIronWithCoalFromStock() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 3, Map.of("raw_iron", 3, "coal", 4));
+
+		TaskPlanner.Craft<String> step = smeltStep(plan);
+		assertEquals("iron_ingot", step.recipe().output());
+		assertEquals(3, step.times());
+		// One coal smelts 8 items.
+		assertEquals(Map.of("coal", 1), step.fuel());
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void fuelRoundsUpPerEightItems() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 9, Map.of("raw_iron", 9, "coal", 5));
+
+		assertEquals(Map.of("coal", 2), smeltStep(plan).fuel());
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void plansAnIronPickaxeFromRawIronAndCoal() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_pickaxe", 1, Map.of("raw_iron", 3, "coal", 1, "oak_planks", 2));
+
+		TaskPlanner.Craft<String> step = smeltStep(plan);
+		assertEquals(3, step.times());
+		assertEquals(Map.of("coal", 1), step.fuel());
+		assertEquals("iron_pickaxe", craftOrder(plan).getLast());
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void withoutFuelThePlanGathersCoal() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 2, Map.of("raw_iron", 2));
+
+		assertEquals(Map.of("coal", 1), plan.toGather());
+		assertTrue(!plan.isReady());
+	}
+
+	@Test
+	void prefersCoalOverLogs() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 2, Map.of("raw_iron", 2, "coal", 1, "oak_log", 5));
+
+		assertEquals(Map.of("coal", 1), smeltStep(plan).fuel());
+	}
+
+	@Test
+	void burnsLogsWhenThereIsNoCoal() {
+		// A log burns for one and a half items.
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 2, Map.of("raw_iron", 2, "birch_log", 5));
+
+		assertEquals(Map.of("birch_log", 2), smeltStep(plan).fuel());
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void fuelInStockIsSharedBetweenSmeltingSteps() {
+		// 8 ingots from stock use the only coal; the 9th needs fresh coal.
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 9, Map.of("raw_iron", 9, "coal", 1));
+
+		assertEquals(Map.of("coal", 1), plan.toGather());
+	}
 }

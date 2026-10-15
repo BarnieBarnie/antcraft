@@ -136,4 +136,64 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 0, "core has " + core(helper).countItem(Items.OAK_LOG) + " logs");
 		});
 	}
+
+	private static int furnacesNearCore(GameTestHelper helper) {
+		int furnaces = 0;
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {
+			if (helper.getBlockState(pos).is(Blocks.FURNACE)) {
+				furnaces++;
+			}
+		}
+		return furnaces;
+	}
+
+	private static void assertIngots(GameTestHelper helper, Colony colony, int ingots) {
+		helper.assertTrue(core(helper).countItem(Items.IRON_INGOT) == ingots, "core has " + core(helper).countItem(Items.IRON_INGOT) + " iron ingots");
+		helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
+		// The coal went into a furnace: the ingots were smelted, not crafted.
+		helper.assertTrue(core(helper).countItem(Items.COAL) == 0, "coal left in core: " + core(helper).countItem(Items.COAL));
+	}
+
+	@GameTest(maxTicks = 900)
+	public void smeltsRawIronInAFurnaceNextToTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(CORE.east(), Blocks.FURNACE);
+		store(helper, new ItemStack(Items.RAW_IRON, 2), new ItemStack(Items.COAL, 1));
+		colony.addOrder(Items.IRON_INGOT, 2);
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			assertIngots(helper, colony, 2);
+			helper.assertTrue(core(helper).countItem(Items.RAW_IRON) == 0, "raw iron left in core");
+			helper.assertTrue(furnacesNearCore(helper) == 1, "furnaces: " + furnacesNearCore(helper));
+		});
+	}
+
+	@GameTest(maxTicks = 900)
+	public void placesAStoredFurnaceToSmelt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		store(helper, new ItemStack(Items.RAW_IRON, 2), new ItemStack(Items.COAL, 1), new ItemStack(Items.FURNACE));
+		colony.addOrder(Items.IRON_INGOT, 2);
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			assertIngots(helper, colony, 2);
+			helper.assertTrue(furnacesNearCore(helper) == 1, "furnaces: " + furnacesNearCore(helper));
+			helper.assertTrue(core(helper).countItem(Items.FURNACE) == 0, "furnace still in core");
+		});
+	}
+
+	@GameTest(maxTicks = 1000)
+	public void craftsAFurnaceFromCobblestoneToSmelt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		store(helper, new ItemStack(Items.RAW_IRON, 2), new ItemStack(Items.COAL, 1), new ItemStack(Items.COBBLESTONE, 8));
+		colony.addOrder(Items.IRON_INGOT, 2);
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			assertIngots(helper, colony, 2);
+			helper.assertTrue(furnacesNearCore(helper) == 1, "furnaces: " + furnacesNearCore(helper));
+			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == 0, "cobblestone left: " + core(helper).countItem(Items.COBBLESTONE));
+		});
+	}
 }

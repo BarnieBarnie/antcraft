@@ -15,25 +15,39 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
+import net.minecraft.world.level.block.entity.HopperBlockEntity;
+import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Crafter work loop at the colony core: turn stored Bot Cores into new bots, and
- * work through colony orders one craft at a time, ingredients first.
+ * work through colony orders one craft at a time, ingredients first. Smelting steps
+ * run in a furnace next to the core; the crafter places one if there is none.
  */
 public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final double REACH = 4.0;
 	private static final int CRAFT_TICKS = 10;
 	private static final int IDLE_TICKS = 20;
+	/** How far from the core a furnace counts as the colony's furnace. */
+	private static final int FURNACE_RANGE = 2;
+	private static final int FURNACE_INPUT = 0;
+	private static final int FURNACE_FUEL = 1;
+	private static final int FURNACE_RESULT = 2;
 
 	private final AntBot bot;
 	private final PathFollower follower;
@@ -116,14 +130,33 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 		}
 
+		AbstractFurnaceBlockEntity furnace = findFurnace(level, colony.core());
+		if (furnace != null && !furnace.getItem(FURNACE_RESULT).isEmpty()) {
+			return () -> collect(colony, core, furnace);
+		}
+
 		GameRecipeBook book = GameRecipeBook.of(level.getServer());
 		for (Map.Entry<Item, Integer> order : colony.orders().entrySet()) {
 			Map<Item, Integer> stock = Storage.stock(core);
+			if (furnace != null) {
+				// What is in the furnace is still the colony's.
+				for (int slot : new int[] {FURNACE_INPUT, FURNACE_FUEL}) {
+					ItemStack stack = furnace.getItem(slot);
+					if (!stack.isEmpty()) {
+						stock.merge(stack.getItem(), stack.getCount(), Integer::sum);
+					}
+				}
+			}
 			// An order asks for new items, so what is already stored does not count toward it.
 			stock.remove(order.getKey());
 			TaskPlanner.Plan<Item> plan = TaskPlanner.plan(order.getKey(), order.getValue(), stock, book, Gatherables::isGatherable);
 			for (TaskPlanner.Craft<Item> craft : plan.crafts()) {
-				if (Storage.canCraft(core, craft.recipe(), 1)) {
+				if (craft.recipe().smelting()) {
+					Runnable smelt = this.smeltWork(level, colony, core, furnace, craft, book);
+					if (smelt != null) {
+						return smelt;
+					}
+				} else if (Storage.canCraft(core, craft.recipe(), 1)) {
 					return () -> {
 						ItemStack leftover = Storage.craft(core, craft.recipe());
 						if (craft.recipe().output() == order.getKey()) {
@@ -134,6 +167,139 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 							Containers.dropItemStack(level, above.getX() + 0.5, above.getY(), above.getZ() + 0.5, leftover);
 						}
 					};
+				}
+			}
+		}
+		return null;
+	}
+
+	/** The next step of a smelting craft, or null if it has to wait. */
+	private @Nullable Runnable smeltWork(ServerLevel level, Colony colony, Container core, @Nullable AbstractFurnaceBlockEntity furnace,
+			TaskPlanner.Craft<Item> craft, GameRecipeBook book) {
+		Set<Item> inputs = craft.recipe().ingredients().keySet().iterator().next();
+		Item input = inputs.stream().filter(item -> core.countItem(item) > 0).findFirst().orElse(null);
+		if (furnace == null) {
+			return input == null ? null : this.furnaceWork(level, colony, core, book);
+		}
+
+		ItemStack loaded = furnace.getItem(FURNACE_INPUT);
+		if (!loaded.isEmpty()) {
+			if (!inputs.contains(loaded.getItem()) || isLit(furnace) || !furnace.getItem(FURNACE_FUEL).isEmpty()) {
+				// Busy with this or something else.
+				return null;
+			}
+			// The fire went out before the input was done.
+			int smelts = loaded.getCount();
+			return fuelFor(core, furnace, book) == null ? null : () -> refuel(core, furnace, book, smelts);
+		}
+		if (input == null) {
+			return null;
+		}
+		int smelts = Math.min(Math.min(core.countItem(input), craft.times() * craft.recipe().count()), input.getDefaultMaxStackSize());
+		if (!isLit(furnace) && furnace.getItem(FURNACE_FUEL).isEmpty() && fuelFor(core, furnace, book) == null) {
+			return null;
+		}
+		return () -> {
+			int taken = Storage.take(core, input, smelts);
+			furnace.setItem(FURNACE_INPUT, new ItemStack(input, taken));
+			refuel(core, furnace, book, taken);
+		};
+	}
+
+	/** Places a stored furnace next to the core, or takes the next step toward crafting one. */
+	private @Nullable Runnable furnaceWork(ServerLevel level, Colony colony, Container core, GameRecipeBook book) {
+		if (core.countItem(Items.FURNACE) > 0) {
+			BlockPos spot = furnaceSpot(level, colony.core());
+			if (spot == null) {
+				return null;
+			}
+			return () -> {
+				if (level.getBlockState(spot).isAir() && Storage.take(core, Items.FURNACE, 1) == 1) {
+					Direction away = Direction.getApproximateNearest(spot.getX() - colony.core().getX(), 0, spot.getZ() - colony.core().getZ());
+					level.setBlockAndUpdate(spot, Blocks.FURNACE.defaultBlockState().setValue(AbstractFurnaceBlock.FACING, away));
+				}
+			};
+		}
+		TaskPlanner.Plan<Item> plan = TaskPlanner.plan(Items.FURNACE, 1, Storage.stock(core), book, Gatherables::isGatherable);
+		for (TaskPlanner.Craft<Item> craft : plan.crafts()) {
+			if (!craft.recipe().smelting() && Storage.canCraft(core, craft.recipe(), 1)) {
+				return () -> {
+					ItemStack leftover = Storage.craft(core, craft.recipe());
+					if (!leftover.isEmpty()) {
+						BlockPos above = colony.core().above();
+						Containers.dropItemStack(level, above.getX() + 0.5, above.getY(), above.getZ() + 0.5, leftover);
+					}
+				};
+			}
+		}
+		return null;
+	}
+
+	/** Moves the furnace's output into the core; ordered items count toward their order. */
+	private static void collect(Colony colony, Container core, AbstractFurnaceBlockEntity furnace) {
+		ItemStack result = furnace.getItem(FURNACE_RESULT);
+		Item item = result.getItem();
+		int before = result.getCount();
+		ItemStack rest = HopperBlockEntity.addItem(null, core, result.copy(), null);
+		furnace.setItem(FURNACE_RESULT, rest);
+		furnace.setChanged();
+		int moved = before - rest.getCount();
+		if (moved > 0) {
+			colony.fulfil(item, moved);
+		}
+	}
+
+	/** The first fuel, in the book's order, that the core holds and the furnace's fuel slot can take. */
+	private static TaskPlanner.@Nullable Fuel<Item> fuelFor(Container core, AbstractFurnaceBlockEntity furnace, GameRecipeBook book) {
+		ItemStack inSlot = furnace.getItem(FURNACE_FUEL);
+		for (TaskPlanner.Fuel<Item> fuel : book.fuels()) {
+			for (Item item : fuel.items()) {
+				if (core.countItem(item) > 0 && (inSlot.isEmpty() || inSlot.is(item))) {
+					return new TaskPlanner.Fuel<>(Set.of(item), fuel.burnTicks());
+				}
+			}
+		}
+		return null;
+	}
+
+	/** Tops up the fuel slot from the core so it can smelt {@code smelts} items. */
+	private static void refuel(Container core, AbstractFurnaceBlockEntity furnace, GameRecipeBook book, int smelts) {
+		TaskPlanner.Fuel<Item> fuel = fuelFor(core, furnace, book);
+		if (fuel == null) {
+			return;
+		}
+		Item item = fuel.items().iterator().next();
+		int inSlot = furnace.getItem(FURNACE_FUEL).getCount();
+		int wanted = fuel.itemsFor(smelts) - inSlot;
+		if (wanted > 0) {
+			int taken = Storage.take(core, item, wanted);
+			furnace.setItem(FURNACE_FUEL, new ItemStack(item, inSlot + taken));
+		}
+		furnace.setChanged();
+	}
+
+	private static boolean isLit(AbstractFurnaceBlockEntity furnace) {
+		return furnace.getBlockState().getValue(AbstractFurnaceBlock.LIT);
+	}
+
+	private static @Nullable AbstractFurnaceBlockEntity findFurnace(ServerLevel level, BlockPos core) {
+		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-FURNACE_RANGE, -1, -FURNACE_RANGE), core.offset(FURNACE_RANGE, 1, FURNACE_RANGE))) {
+			if (level.getBlockState(pos).is(Blocks.FURNACE) && level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace) {
+				return furnace;
+			}
+		}
+		return null;
+	}
+
+	/** A free spot next to the core, on solid ground and with nobody standing in it. */
+	private static @Nullable BlockPos furnaceSpot(ServerLevel level, BlockPos core) {
+		for (int range = 1; range <= FURNACE_RANGE; range++) {
+			for (Direction direction : Direction.Plane.HORIZONTAL) {
+				BlockPos pos = core.relative(direction, range);
+				if (level.getBlockState(pos).isAir()
+						&& level.getBlockState(pos.below()).isFaceSturdy(level, pos.below(), Direction.UP)
+						&& level.getEntities(null, new AABB(pos)).isEmpty()) {
+					return pos;
 				}
 			}
 		}
