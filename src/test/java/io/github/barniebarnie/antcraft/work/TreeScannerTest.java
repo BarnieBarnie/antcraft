@@ -101,4 +101,26 @@ class TreeScannerTest {
 		Grid grid = new Grid().trunk(20, 0, 1, 4).canopy(20, 4, 0, 'n');
 		assertTrue(TreeScanner.findNearest(grid, BlockPos.ZERO, 10).isEmpty());
 	}
+
+	@Test
+	void findsAllTreesInRange() {
+		Grid grid = new Grid()
+			.trunk(8, 0, 1, 4).canopy(8, 4, 0, 'n')
+			.trunk(-3, 0, 1, 4).canopy(-3, 4, 0, 'n')
+			.trunk(0, 6, 1, 3);
+		assertEquals(2, TreeScanner.findAll(grid, BlockPos.ZERO, 10).size());
+	}
+
+	@Test
+	void treeAtFindsTheTreeContainingALog() {
+		Grid grid = new Grid().trunk(5, 0, 1, 4).canopy(5, 4, 0, 'n');
+		TreeScanner.Tree tree = TreeScanner.treeAt(grid, new BlockPos(5, 3, 0)).orElseThrow();
+
+		assertEquals(new BlockPos(5, 1, 0), tree.base());
+	}
+
+	@Test
+	void treeAtIsEmptyWhenNoLog() {
+		assertTrue(TreeScanner.treeAt(new Grid(), new BlockPos(5, 1, 0)).isEmpty());
+	}
 }

@@ -30,25 +30,30 @@ public final class TreeScanner {
 	}
 
 	public static Optional<Tree> findNearest(TreeView view, BlockPos origin, int radius) {
+		return findAll(view, origin, radius).stream().min(Comparator.comparingDouble(tree -> tree.base().distSqr(origin)));
+	}
+
+	/** Every natural tree with a log within {@code radius} blocks horizontally of {@code origin}. */
+	public static List<Tree> findAll(TreeView view, BlockPos origin, int radius) {
 		Set<BlockPos> seen = new HashSet<>();
-		Tree best = null;
-		double bestDist = Double.MAX_VALUE;
+		List<Tree> trees = new ArrayList<>();
 		for (BlockPos pos : BlockPos.betweenClosed(origin.offset(-radius, -SCAN_BELOW, -radius), origin.offset(radius, SCAN_ABOVE, radius))) {
 			if (seen.contains(pos) || !view.isLog(pos)) {
 				continue;
 			}
 			Set<BlockPos> logs = connectedLogs(view, pos.immutable());
 			seen.addAll(logs);
-			Optional<Tree> tree = toTree(view, logs);
-			if (tree.isPresent()) {
-				double dist = tree.get().base().distSqr(origin);
-				if (dist < bestDist) {
-					best = tree.get();
-					bestDist = dist;
-				}
-			}
+			toTree(view, logs).ifPresent(trees::add);
 		}
-		return Optional.ofNullable(best);
+		return trees;
+	}
+
+	/** The natural tree that the log at {@code log} belongs to. */
+	public static Optional<Tree> treeAt(TreeView view, BlockPos log) {
+		if (!view.isLog(log)) {
+			return Optional.empty();
+		}
+		return toTree(view, connectedLogs(view, log.immutable()));
 	}
 
 	private static Set<BlockPos> connectedLogs(TreeView view, BlockPos start) {
