@@ -60,7 +60,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
-		this.goalSelector.addGoal(2, new WalkToTargetGoal(this, 1.0));
+		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));

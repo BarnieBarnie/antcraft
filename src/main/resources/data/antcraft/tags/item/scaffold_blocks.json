@@ -1,0 +1,13 @@
+{
+	"values": [
+		"minecraft:dirt",
+		"minecraft:cobblestone",
+		"minecraft:cobbled_deepslate",
+		"minecraft:netherrack",
+		"minecraft:stone",
+		"minecraft:andesite",
+		"minecraft:diorite",
+		"minecraft:granite",
+		"minecraft:tuff"
+	]
+}

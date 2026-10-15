@@ -1,39 +1,26 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
+import io.github.barniebarnie.antcraft.pathing.Goal;
 import java.util.EnumSet;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.phys.Vec3;
 
-/** Walks the bot to its walk target, then clears the target. */
-public class WalkToTargetGoal extends Goal {
-	private static final double ARRIVED_DIST_SQR = 2.0 * 2.0;
-	private static final int REPATH_INTERVAL = 20;
-	private static final int MAX_FAILED_PATHS = 5;
-
+/** Takes the bot to its walk target, digging, bridging and pillaring as needed, then clears the target. */
+public class WalkToTargetGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private final AntBot bot;
-	private final double speed;
-	private int repathCooldown;
-	private int failedPaths;
+	private final PathFollower follower;
+	private BlockPos activeTarget;
 
-	public WalkToTargetGoal(AntBot bot, double speed) {
+	public WalkToTargetGoal(AntBot bot) {
 		this.bot = bot;
-		this.speed = speed;
-		this.setFlags(EnumSet.of(Goal.Flag.MOVE));
+		this.follower = new PathFollower(bot);
+		this.setFlags(EnumSet.of(Flag.MOVE));
 	}
 
 	@Override
 	public boolean canUse() {
-		BlockPos target = this.bot.getWalkTarget();
-		if (target == null) {
-			return false;
-		}
-		if (this.arrived(target)) {
-			this.bot.setWalkTarget(null);
-			return false;
-		}
-		return true;
+		return this.bot.getWalkTarget() != null;
 	}
 
 	@Override
@@ -42,14 +29,19 @@ public class WalkToTargetGoal extends Goal {
 	}
 
 	@Override
+	public boolean requiresUpdateEveryTick() {
+		return true;
+	}
+
+	@Override
 	public void start() {
-		this.repathCooldown = 0;
-		this.failedPaths = 0;
+		this.activeTarget = null;
 	}
 
 	@Override
 	public void stop() {
-		this.bot.getNavigation().stop();
+		this.follower.stop();
+		this.activeTarget = null;
 	}
 
 	@Override
@@ -58,24 +50,12 @@ public class WalkToTargetGoal extends Goal {
 		if (target == null) {
 			return;
 		}
-		if (this.arrived(target)) {
-			this.bot.setWalkTarget(null);
-			return;
+		if (!target.equals(this.activeTarget)) {
+			this.activeTarget = target;
+			this.follower.start(new Goal.Near(target, 1));
 		}
-		if (--this.repathCooldown > 0 && !this.bot.getNavigation().isDone()) {
-			return;
-		}
-
-		this.repathCooldown = REPATH_INTERVAL;
-		boolean pathFound = this.bot.getNavigation().moveTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5, this.speed);
-		if (pathFound) {
-			this.failedPaths = 0;
-		} else if (++this.failedPaths >= MAX_FAILED_PATHS) {
+		if (this.follower.tick() != PathFollower.Status.RUNNING) {
 			this.bot.setWalkTarget(null);
 		}
-	}
-
-	private boolean arrived(BlockPos target) {
-		return this.bot.distanceToSqr(Vec3.atBottomCenterOf(target)) <= ARRIVED_DIST_SQR;
 	}
 }
