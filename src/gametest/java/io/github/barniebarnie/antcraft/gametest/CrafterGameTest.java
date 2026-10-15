@@ -196,4 +196,21 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == 0, "cobblestone left: " + core(helper).countItem(Items.COBBLESTONE));
 		});
 	}
+
+	@GameTest(maxTicks = 1400)
+	public void makesCharcoalFromLogsToSmelt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(CORE.east(), Blocks.FURNACE);
+		// Burning logs directly takes 3 for 4 ingots; one charcoal (a log, smelted with a log) does it with 2.
+		store(helper, new ItemStack(Items.RAW_IRON, 4), new ItemStack(Items.OAK_LOG, 3));
+		colony.addOrder(Items.IRON_INGOT, 4);
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.IRON_INGOT) == 4, "core has " + core(helper).countItem(Items.IRON_INGOT) + " iron ingots");
+			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
+			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 1, "core has " + core(helper).countItem(Items.OAK_LOG) + " logs");
+			helper.assertTrue(core(helper).countItem(Items.CHARCOAL) == 0, "charcoal left in core: " + core(helper).countItem(Items.CHARCOAL));
+		});
+	}
 }

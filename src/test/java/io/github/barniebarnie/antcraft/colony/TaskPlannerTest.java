@@ -136,6 +136,7 @@ class TaskPlannerTest {
 			return switch (item) {
 				case "iron_ingot" -> List.of(new TaskPlanner.Recipe<>("iron_ingot", 1, Map.of(Set.of("raw_iron"), 1), true));
 				case "iron_pickaxe" -> List.of(recipe("iron_pickaxe", 1, Map.of(Set.of("iron_ingot"), 3, Set.of("stick"), 2)));
+				case "charcoal" -> List.of(new TaskPlanner.Recipe<>("charcoal", 1, Map.of(Set.of("oak_log", "birch_log"), 1), true));
 				default -> BOOK.recipesFor(item);
 			};
 		}
@@ -221,5 +222,63 @@ class TaskPlannerTest {
 		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 9, Map.of("raw_iron", 9, "coal", 1));
 
 		assertEquals(Map.of("coal", 1), plan.toGather());
+	}
+
+	private static TaskPlanner.Craft<String> smeltStepFor(TaskPlanner.Plan<String> plan, String output) {
+		List<TaskPlanner.Craft<String>> steps = plan.crafts().stream().filter(c -> c.recipe().smelting() && c.recipe().output().equals(output)).toList();
+		assertEquals(1, steps.size(), "steps making " + output + ": " + plan.crafts());
+		return steps.getFirst();
+	}
+
+	/** Logs a plan uses up, as ingredients and as fuel. */
+	private static int logsUsed(TaskPlanner.Plan<String> plan) {
+		int logs = 0;
+		for (TaskPlanner.Craft<String> craft : plan.crafts()) {
+			if (craft.recipe().output().equals("charcoal")) {
+				logs += craft.times();
+			}
+			logs += craft.fuel().getOrDefault("oak_log", 0) + craft.fuel().getOrDefault("birch_log", 0);
+		}
+		return logs;
+	}
+
+	@Test
+	void makesCharcoalFromLogsWhenThatSavesLogs() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 16, Map.of("raw_iron", 16, "oak_log", 16));
+
+		TaskPlanner.Craft<String> charcoal = smeltStepFor(plan, "charcoal");
+		TaskPlanner.Craft<String> ingots = smeltStepFor(plan, "iron_ingot");
+		assertTrue(plan.crafts().indexOf(charcoal) < plan.crafts().indexOf(ingots), "charcoal first: " + plan.crafts());
+		assertEquals(Map.of("charcoal", 2), ingots.fuel());
+		// Burning logs directly would take 11 (16 items, a log burns for one and a half).
+		assertTrue(logsUsed(plan) < 11, "logs used: " + logsUsed(plan));
+		assertEquals(4, logsUsed(plan));
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void burnsALogDirectlyForOneItem() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 1, Map.of("raw_iron", 1, "oak_log", 5));
+
+		assertEquals(Map.of("oak_log", 1), smeltStep(plan).fuel());
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void makesNoCharcoalWithCoalInStock() {
+		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 16, Map.of("raw_iron", 16, "coal", 2, "oak_log", 16));
+
+		assertEquals(Map.of("coal", 2), smeltStep(plan).fuel());
+		assertTrue(plan.isReady());
+	}
+
+	@Test
+	void charcoalIsNotMadeToFuelMakingCharcoal() {
+		TaskPlanner.Plan<String> plan = smeltPlan("charcoal", 16, Map.of("oak_log", 32));
+
+		TaskPlanner.Craft<String> step = smeltStep(plan);
+		assertEquals(16, step.times());
+		assertEquals(Map.of("oak_log", 11), step.fuel());
+		assertTrue(plan.isReady());
 	}
 }

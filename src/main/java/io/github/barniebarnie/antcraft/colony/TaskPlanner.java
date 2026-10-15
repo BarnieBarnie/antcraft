@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Breaks a request ("1 wooden pickaxe") into crafting steps and raw materials, using
@@ -118,6 +119,13 @@ public final class TaskPlanner {
 			return new long[] {missingCount, gatherCount, craftCount};
 		}
 
+		/** Like {@link #score()}, but using up less stock beats crafting less: for choosing a fuel. */
+		long[] fuelScore() {
+			long[] score = this.score();
+			long stockLeft = this.stock.values().stream().mapToLong(Integer::longValue).sum();
+			return new long[] {score[0], score[1], -stockLeft, score[2]};
+		}
+
 		int take(I item, int wanted) {
 			int available = this.stock.getOrDefault(item, 0);
 			int taken = Math.min(available, wanted);
@@ -182,7 +190,7 @@ public final class TaskPlanner {
 			for (Map.Entry<Set<I>, Integer> ingredient : recipe.ingredients().entrySet()) {
 				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, innerPath);
 			}
-			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count()) : Map.of();
+			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count(), innerPath) : Map.of();
 			state.crafts.add(new Craft<>(recipe, times, fuel));
 			int leftover = times * recipe.count() - wanted;
 			if (leftover > 0) {
@@ -191,18 +199,59 @@ public final class TaskPlanner {
 		}
 
 		/**
-		 * Fuel for smelting {@code smelts} items: from stock in the book's order of preference, and
-		 * whatever is still short as the first fuel that can be gathered.
+		 * Fuel for smelting {@code smelts} items. Either burns what is in stock in the book's order
+		 * of preference (gathering the rest), or first makes a better fuel, such as charcoal from
+		 * logs, when that uses up less. A fuel on {@code path} is being made already, so it is not
+		 * made again to fuel itself.
 		 */
-		Map<I, Integer> fuel(State<I> state, int smelts) {
+		Map<I, Integer> fuel(State<I> state, int smelts, Set<I> path) {
+			State<I> best = state.copy();
+			Map<I, Integer> bestUsed = this.burn(best, smelts);
+			List<Fuel<I>> fuels = this.book.fuels();
+			for (int rank = 0; rank < fuels.size(); rank++) {
+				for (I item : fuels.get(rank).items()) {
+					if (path.contains(item)) {
+						continue;
+					}
+					for (Recipe<I> recipe : this.book.recipesFor(item)) {
+						State<I> trial = state.copy();
+						Map<I, Integer> used = this.makeFuel(trial, smelts, rank, item, recipe, path);
+						if (used != null && !trial.cycle && BY_SCORE.compare(trial.fuelScore(), best.fuelScore()) < 0) {
+							best = trial;
+							bestUsed = used;
+						}
+					}
+				}
+			}
+			state.assign(best);
+			return bestUsed;
+		}
+
+		/**
+		 * Burns stock of the fuels up to {@code rank} and makes {@code item} for the rest, or returns
+		 * null when stock alone covers it.
+		 */
+		@Nullable Map<I, Integer> makeFuel(State<I> state, int smelts, int rank, I item, Recipe<I> recipe, Set<I> path) {
 			Map<I, Integer> used = new LinkedHashMap<>();
-			long ticks = (long) smelts * SMELT_TICKS;
-			for (Fuel<I> fuel : this.book.fuels()) {
+			long ticks = this.burnStock(state, this.book.fuels().subList(0, rank + 1), (long) smelts * SMELT_TICKS, used);
+			if (ticks <= 0) {
+				return null;
+			}
+			Fuel<I> fuel = this.book.fuels().get(rank);
+			int count = (int) ((ticks + fuel.burnTicks() - 1) / fuel.burnTicks());
+			this.craft(state, recipe, count, path);
+			used.merge(item, count, Integer::sum);
+			return Map.copyOf(used);
+		}
+
+		/** Burns fuel from stock, best first, and returns the ticks still to cover. */
+		long burnStock(State<I> state, List<Fuel<I>> fuels, long ticks, Map<I, Integer> used) {
+			for (Fuel<I> fuel : fuels) {
 				List<I> byStock = new ArrayList<>(fuel.items());
 				byStock.sort(Comparator.comparingInt((I option) -> state.stock.getOrDefault(option, 0)).reversed());
 				for (I item : byStock) {
 					if (ticks <= 0) {
-						return Map.copyOf(used);
+						return ticks;
 					}
 					int taken = state.take(item, (int) ((ticks + fuel.burnTicks() - 1) / fuel.burnTicks()));
 					if (taken > 0) {
@@ -211,6 +260,16 @@ public final class TaskPlanner {
 					}
 				}
 			}
+			return ticks;
+		}
+
+		/**
+		 * Fuel from stock in the book's order of preference, and whatever is still short as the
+		 * first fuel that can be gathered.
+		 */
+		Map<I, Integer> burn(State<I> state, int smelts) {
+			Map<I, Integer> used = new LinkedHashMap<>();
+			long ticks = this.burnStock(state, this.book.fuels(), (long) smelts * SMELT_TICKS, used);
 			if (ticks <= 0 || this.book.fuels().isEmpty()) {
 				return Map.copyOf(used);
 			}
