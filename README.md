@@ -17,12 +17,12 @@ AntCraft runs entirely on the server side, so it cannot be used as a cheat clien
 | Milestone | Goal |
 |-----------|------|
 | M0 | Project scaffold, build, CI |
-| M1 | Spawnable bot entity (player-skinned mob) with inventory; walks to a target |
+| M1 | Bot entity (player-skinned mob) with inventory, spawned from a crafted item; walks to a target |
 | M2 | Pathfinding that digs, pillars and bridges; lumberjack role chops trees and deposits logs |
 | M3 | Colony core block with storage and a shared job board; multiple bots claim tasks |
-| M4 | Miner, farmer and hauler roles; hierarchical tasks ("build house" requires "gather 64 logs") |
+| M4 | Miner, farmer, hauler and guard roles; hierarchical tasks ("build house" requires "gather 64 logs"); bots craft new bots |
 | M5 | Blueprint builder: load `.nbt` structures / Litematica schematics, compute material lists and build order |
-| M6 | AI architect: an LLM designs a blueprint (validated JSON) which the colony builds |
+| M6 | AI architect: blueprints designed outside the game (e.g. by an LLM) in a documented JSON format, imported and validated in-game, then built by the colony |
 
 ## Architecture (planned)
 
@@ -30,6 +30,9 @@ AntCraft runs entirely on the server side, so it cannot be used as a cheat clien
 - **Navigation**: custom A* over block costs (walk, dig, place, climb).
 - **Task system**: a colony-wide job board (blackboard pattern). Bots pick jobs by role, distance and priority. Jobs can spawn sub-jobs.
 - **Colony**: storage, member list, and a goal queue, persisted as world saved data.
+- **Bot creation**: bots are crafted, not spawned from nothing. A player crafts the first bot; once the colony has the materials, bots can craft and activate new bots themselves, so the colony grows over time.
+- **Combat**: bots defend themselves and the colony against hostile mobs. A dedicated guard role patrols the colony area.
+- **Blueprints**: designed outside the game and imported as files. No network or API calls from inside Minecraft.
 - **Gating**: `AntCraftConfig` checks whether the server is dedicated and has opted in before allowing any bot to spawn.
 
 ## Development
