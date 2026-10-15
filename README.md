@@ -30,6 +30,8 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 
 **Roles.** Colony bots without a role get one automatically, based on what the colony needs most (open jobs per worker, a crafter when there are orders, otherwise a guard). Roles you set yourself are kept.
 
+Colony bots stay around their colony. They only start fights with mobs inside the colony radius (they still fight back anywhere when attacked), and a bot that ends up outside the radius with nothing to do, for example after a chase, walks back to the core. Bots busy with a job outside the radius, like a lumberjack at a tree on the edge, finish it first.
+
 - **Lumberjack:** see below.
 - **Miner:** digs out the quarry layer by layer and stores the haul. Takes a pickaxe from the core, or orders a wooden one when there is none.
 - **Farmer:** harvests ripe crops around the colony, replants, and stores the produce.

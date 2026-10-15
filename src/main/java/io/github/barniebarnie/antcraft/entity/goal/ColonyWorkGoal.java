@@ -65,6 +65,7 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 		if (colony.isEmpty()) {
 			return;
 		}
+		this.bot.setWorking(this.hasJob);
 		if (this.hasJob && level.getGameTime() % 20 == 0) {
 			colony.get().board().heartbeat(this.bot.getUUID(), level.getGameTime());
 		}

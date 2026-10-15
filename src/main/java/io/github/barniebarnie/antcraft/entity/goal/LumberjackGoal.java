@@ -136,6 +136,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private void enter(State next) {
 		this.state = next;
+		this.bot.setWorking(next != State.SEARCH);
 		this.travelGoal = null;
 		this.follower.stop();
 		this.breaker.reset();

@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.FarmerGoal;
@@ -8,6 +9,7 @@ import io.github.barniebarnie.antcraft.entity.goal.GuardGoal;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
+import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.UUID;
@@ -52,6 +54,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private BotRole role = BotRole.NONE;
 	private @Nullable BlockPos home;
 	private @Nullable UUID colonyId;
+	/** Set by the role goals while they have a job; not saved, they set it again after loading. */
+	private boolean working;
+	private int idleTicks;
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -77,6 +82,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
+		this.goalSelector.addGoal(2, new ReturnHomeGoal(this));
 		this.goalSelector.addGoal(3, new LumberjackGoal(this));
 		this.goalSelector.addGoal(3, new CrafterGoal(this));
 		this.goalSelector.addGoal(3, new MinerGoal(this));
@@ -87,7 +93,18 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
 		// Creepers are left alone until bots can fight at range.
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true, (target, level) -> !(target instanceof Creeper)));
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true,
+			(target, level) -> !(target instanceof Creeper) && this.mayTarget(level, target)));
+	}
+
+	/** Colony members only go after mobs inside the colony, so they are not lured away. */
+	private boolean mayTarget(ServerLevel level, LivingEntity target) {
+		if (this.colonyId == null) {
+			return true;
+		}
+		return ColonyManager.get(level).byId(this.colonyId)
+			.map(colony -> Territory.of(colony).mayTarget(target.blockPosition()))
+			.orElse(true);
 	}
 
 	@Override
@@ -101,6 +118,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			}
 		}
 		super.tick();
+		this.idleTicks = this.working ? 0 : this.idleTicks + 1;
 	}
 
 	@Override
@@ -128,6 +146,22 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	public void setRole(BotRole role) {
 		this.role = role;
+		this.working = false;
+		this.idleTicks = 0;
+	}
+
+	/** Whether the bot's role has work in progress, such as a claimed job. */
+	public boolean isWorking() {
+		return this.working;
+	}
+
+	public void setWorking(boolean working) {
+		this.working = working;
+	}
+
+	/** Ticks since the bot last had work. */
+	public int getIdleTicks() {
+		return this.idleTicks;
 	}
 
 	/** The storage block this bot brings its work to, usually a chest. */
