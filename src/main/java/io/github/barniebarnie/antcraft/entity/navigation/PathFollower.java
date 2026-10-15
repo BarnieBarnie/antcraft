@@ -51,6 +51,7 @@ public class PathFollower {
 	private int replansWithoutProgress;
 
 	private final BlockBreaker breaker;
+	private boolean mayPlace = true;
 	private Consumer<BlockPos> placeListener = pos -> {
 	};
 
@@ -62,6 +63,11 @@ public class PathFollower {
 	/** Called with every block this follower places, so callers can clean up their scaffolding. */
 	public void setPlaceListener(Consumer<BlockPos> listener) {
 		this.placeListener = listener;
+	}
+
+	/** Whether paths may place scaffold blocks; applies from the next path planned. */
+	public void setMayPlace(boolean mayPlace) {
+		this.mayPlace = mayPlace;
 	}
 
 	public void start(Goal goal) {
@@ -136,7 +142,7 @@ public class PathFollower {
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem());
-		PathFinder.Options options = new PathFinder.Options(true, scaffoldCount(this.bot.getInventory()) > 0, MAX_NODES, MAX_DROP);
+		PathFinder.Options options = new PathFinder.Options(true, this.mayPlace && scaffoldCount(this.bot.getInventory()) > 0, MAX_NODES, MAX_DROP);
 		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
 		this.stepIndex = 0;
 		this.stepTicks = 0;

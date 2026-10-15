@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.level.block.state.BlockState;
 
 public class LumberjackGameTest implements CustomTestMethodInvoker {
@@ -81,10 +83,70 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static AntBot lumberjack(GameTestHelper helper, int x, int z) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		return lumberjack(helper, x, 1, z);
+	}
+
+	private static AntBot lumberjack(GameTestHelper helper, int x, int y, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, y, z);
 		bot.setHome(helper.absolutePos(CHEST));
 		bot.setRole(BotRole.LUMBERJACK);
 		return bot;
+	}
+
+	/**
+	 * A dirt pillar at (x, 1..7, z) that the bot remembers placing as scaffolding, so it starts in cleanup.
+	 * Its top blocks are 5 and 6 blocks above the ground, out of reach from it.
+	 */
+	private static void leftoverPillar(GameTestHelper helper, AntBot bot, int x, int z) {
+		LumberjackGoal goal = bot.getGoalSelector().getAvailableGoals().stream()
+			.map(WrappedGoal::getGoal)
+			.filter(LumberjackGoal.class::isInstance)
+			.map(LumberjackGoal.class::cast)
+			.findFirst()
+			.orElseThrow();
+		for (int y = 1; y <= 7; y++) {
+			helper.setBlock(x, y, z, Blocks.DIRT);
+			goal.adoptScaffold(helper.absolutePos(new BlockPos(x, y, z)));
+		}
+	}
+
+	/** The bot only chops the tree after cleanup is done, so storing its logs shows cleanup finished. */
+	private static void assertTreeStored(GameTestHelper helper) {
+		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void takesHighPillarDownWhileStandingOnIt(GameTestHelper helper) {
+		tree(helper, 2, 6, false);
+		AntBot bot = lumberjack(helper, 5, 8, 5);
+		leftoverPillar(helper, bot, 5, 5);
+
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 7; y++) {
+				helper.assertBlockNotPresent(Blocks.DIRT, 5, y, 5);
+			}
+			assertTreeStored(helper);
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void givesUpOnScaffoldItCannotReachWithoutPlacingMore(GameTestHelper helper) {
+		tree(helper, 2, 6, false);
+		AntBot bot = lumberjack(helper, 6, 2);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		leftoverPillar(helper, bot, 5, 5);
+
+		helper.succeedWhen(() -> {
+			// Only the two blocks it could not reach may be left; it built nothing new to get at them.
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+				if (pos.getX() == 5 && pos.getZ() == 5 && pos.getY() >= 6) {
+					continue;
+				}
+				helper.assertTrue(!helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos.toShortString());
+			}
+			assertTreeStored(helper);
+		});
 	}
 
 	@GameTest(padding = PADDING, maxTicks = 1200)

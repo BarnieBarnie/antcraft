@@ -59,8 +59,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private enum State { SEARCH, RESTOCK, CHOP, LEAVES, CLEANUP, COLLECT, REPLANT, DEPOSIT }
 
-	/** States in which placed blocks are scaffolding for the current tree, to be removed afterwards. */
-	private static final Set<State> TREE_WORK = EnumSet.of(State.CHOP, State.LEAVES, State.CLEANUP);
+	/**
+	 * States in which placed blocks are scaffolding for the current tree, to be removed afterwards.
+	 * Not {@link State#CLEANUP}: cleanup never places blocks, or it would have to remove them again.
+	 */
+	private static final Set<State> TREE_WORK = EnumSet.of(State.CHOP, State.LEAVES);
 
 	private final AntBot bot;
 	private final PathFollower follower;
@@ -89,6 +92,14 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 		});
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+	}
+
+	/**
+	 * Treats the block at {@code pos} as scaffolding this bot placed for its current tree,
+	 * so it is taken down in the next cleanup. Lets game tests set up leftover scaffolding.
+	 */
+	public void adoptScaffold(BlockPos pos) {
+		this.placed.add(pos.immutable());
 	}
 
 	@Override
@@ -139,6 +150,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.bot.setWorking(next != State.SEARCH);
 		this.travelGoal = null;
 		this.follower.stop();
+		this.follower.setMayPlace(next != State.CLEANUP);
 		this.breaker.reset();
 	}
 
@@ -310,7 +322,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			&& state.getValue(LeavesBlock.DISTANCE) >= LeavesBlock.DECAY_DISTANCE;
 	}
 
-	/** Takes down the scaffold blocks placed for this tree, getting them back. Blocks within reach go first, top down. */
+	/**
+	 * Takes down the scaffold blocks placed for this tree, getting them back. Blocks within reach go
+	 * first, top down, so a pillar the bot stands on comes down under it. Walking to the others never
+	 * places new scaffolding: a block that cannot be reached without it is given up on.
+	 */
 	private void cleanup(ServerLevel level) {
 		BlockPos feet = this.bot.blockPosition();
 		this.placed.removeIf(pos -> !level.getBlockState(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.SCAFFOLD_BLOCKS));
