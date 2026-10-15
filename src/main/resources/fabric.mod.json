@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "antcraft",
+	"version": "${version}",
+	"name": "AntCraft",
+	"description": "Colonies of virtual bots that gather resources and build structures together. Singleplayer by default; dedicated servers must opt in.",
+	"authors": [
+		"BarnieBarnie"
+	],
+	"contact": {
+		"sources": "https://github.com/BarnieBarnie/antcraft",
+		"issues": "https://github.com/BarnieBarnie/antcraft/issues"
+	},
+	"license": "MIT",
+	"icon": "assets/antcraft/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"io.github.barniebarnie.antcraft.AntCraft"
+		],
+		"client": [
+			"io.github.barniebarnie.antcraft.client.AntCraftClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-api": "*"
+	}
+}
