@@ -66,6 +66,8 @@ What changes. Mention affected classes and config keys.
 Milestone, open questions, related issues.
 ```
 
+If the issue cannot start until another issue is done, add a line `Blocked by #N` to Notes. The `work-issues` skill reads that line to order its work; use "Relates to #N" for links that are not blocking.
+
 Drop sections that would be empty. Acceptance criteria must be testable, since the project is test-driven (see CLAUDE.md).
 
 Labels: one of `bug`, `enhancement` (features and improvements), plus optional area labels the repo already has. Check with `gh label list`; do not invent new labels unless the user asks.
