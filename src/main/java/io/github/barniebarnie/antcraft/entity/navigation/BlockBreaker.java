@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity.navigation;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -31,6 +32,7 @@ public class BlockBreaker {
 			this.reset();
 			this.target = pos;
 			this.progress = 0;
+			Tools.equipBestTool(this.bot, level.getBlockState(pos));
 			this.total = LevelWorldView.breakTicks(level.getBlockState(pos), level, pos, this.bot.getMainHandItem());
 			if (this.total < 0) {
 				this.target = null;

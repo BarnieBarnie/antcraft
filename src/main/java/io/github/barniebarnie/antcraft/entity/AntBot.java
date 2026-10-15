@@ -12,6 +12,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -49,6 +51,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
 		this.setCanPickUpLoot(true);
+		// Tools and weapons are the colony's property: always drop what is in hand.
+		this.setGuaranteedDrop(EquipmentSlot.MAINHAND);
 	}
 
 	public static AttributeSupplier.Builder createAttributes() {
@@ -87,6 +91,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			}
 		}
 		super.tick();
+	}
+
+	@Override
+	public void setTarget(@Nullable LivingEntity target) {
+		if (target != null && target != this.getTarget()) {
+			Tools.equipBestWeapon(this);
+		}
+		super.setTarget(target);
 	}
 
 	public @Nullable BlockPos getWalkTarget() {

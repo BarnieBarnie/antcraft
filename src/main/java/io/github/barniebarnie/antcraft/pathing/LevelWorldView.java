@@ -1,21 +1,25 @@
 package io.github.barniebarnie.antcraft.pathing;
 
+import io.github.barniebarnie.antcraft.entity.Tools;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** {@link WorldView} backed by a live level, using the given tool for break times. */
+/** {@link WorldView} backed by a live level. Break times assume the bot uses its best tool for each block. */
 public class LevelWorldView implements WorldView {
 	private final Level level;
-	private final ItemStack tool;
+	private final SimpleContainer inventory;
+	private final ItemStack hand;
 
-	public LevelWorldView(Level level, ItemStack tool) {
+	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand) {
 		this.level = level;
-		this.tool = tool;
+		this.inventory = inventory;
+		this.hand = hand;
 	}
 
 	@Override
@@ -50,7 +54,7 @@ public class LevelWorldView implements WorldView {
 		if (state.hasBlockEntity()) {
 			return -1;
 		}
-		return breakTicks(state, this.level, pos, this.tool);
+		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));
 	}
 
 	public static int breakTicks(BlockState state, Level level, BlockPos pos, ItemStack tool) {

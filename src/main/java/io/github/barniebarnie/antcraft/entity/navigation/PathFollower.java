@@ -86,7 +86,7 @@ public class PathFollower {
 		}
 
 		Step step = this.path.steps().get(this.stepIndex);
-		LevelWorldView world = new LevelWorldView(level, this.bot.getMainHandItem());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem());
 
 		for (BlockPos pos : step.breaks()) {
 			if (!world.isPassable(pos)) {
@@ -126,7 +126,7 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getMainHandItem());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem());
 		PathFinder.Options options = new PathFinder.Options(true, scaffoldCount(this.bot.getInventory()) > 0, MAX_NODES, MAX_DROP);
 		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
 		this.stepIndex = 0;
