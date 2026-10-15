@@ -19,11 +19,13 @@ public final class DefaultStock {
 	public static final TagKey<Item> COLONY_FOOD = TagKey.create(Registries.ITEM, AntCraft.id("colony_food"));
 
 	public static final List<StockTarget> TARGETS = List.of(
-		StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE, Items.WOODEN_PICKAXE),
-		StockTarget.of(ItemTags.AXES, 1, Items.STONE_AXE, Items.WOODEN_AXE),
-		StockTarget.of(ItemTags.SHOVELS, 1, Items.STONE_SHOVEL, Items.WOODEN_SHOVEL),
-		StockTarget.of(ItemTags.HOES, 1, Items.STONE_HOE, Items.WOODEN_HOE),
-		StockTarget.of(ItemTags.SWORDS, 2, Items.STONE_SWORD, Items.WOODEN_SWORD),
+		// Best first. An option is only ordered when it can be made from stock right now, so
+		// iron waits for raw iron and fuel (or ingots) and diamond for diamonds.
+		StockTarget.of(ItemTags.PICKAXES, 2, Items.DIAMOND_PICKAXE, Items.IRON_PICKAXE, Items.STONE_PICKAXE, Items.WOODEN_PICKAXE),
+		StockTarget.of(ItemTags.AXES, 1, Items.DIAMOND_AXE, Items.IRON_AXE, Items.STONE_AXE, Items.WOODEN_AXE),
+		StockTarget.of(ItemTags.SHOVELS, 1, Items.DIAMOND_SHOVEL, Items.IRON_SHOVEL, Items.STONE_SHOVEL, Items.WOODEN_SHOVEL),
+		StockTarget.of(ItemTags.HOES, 1, Items.DIAMOND_HOE, Items.IRON_HOE, Items.STONE_HOE, Items.WOODEN_HOE),
+		StockTarget.of(ItemTags.SWORDS, 2, Items.DIAMOND_SWORD, Items.IRON_SWORD, Items.STONE_SWORD, Items.WOODEN_SWORD),
 		StockTarget.of(ItemTags.LOGS, 32),
 		StockTarget.of(ItemTags.PLANKS, 32),
 		StockTarget.of(Items.STICK, 16),
