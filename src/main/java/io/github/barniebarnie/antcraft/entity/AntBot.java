@@ -12,6 +12,9 @@ import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -59,6 +62,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Set by the role goals while they have a job; not saved, they set it again after loading. */
 	private boolean working;
 	private int idleTicks;
+	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
+	private final Set<BlockPos> scaffold = new HashSet<>();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -181,6 +186,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.idleTicks;
 	}
 
+	/** Scaffold blocks this bot placed and still has to take down. Saved with the bot; callers change it in place. */
+	public Set<BlockPos> getScaffold() {
+		return this.scaffold;
+	}
+
 	/** The storage block this bot brings its work to, usually a chest. */
 	public @Nullable BlockPos getHome() {
 		return this.home;
@@ -249,6 +259,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.putBoolean("RoleSetByPlayer", this.roleSetByPlayer);
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
+		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
 	}
 
 	@Override
@@ -261,5 +272,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.roleSetByPlayer = input.getBooleanOr("RoleSetByPlayer", true);
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
+		this.scaffold.clear();
+		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
 	}
 }

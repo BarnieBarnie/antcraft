@@ -56,6 +56,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int LEAF_SETTLE_TICKS = 20;
 	/** Leaves decay further than this from a log, so a tree's canopy cannot reach further. */
 	private static final int LEAF_RANGE = LeavesBlock.DECAY_DISTANCE - 1;
+	/**
+	 * How many times per tree cleanup may pillar up to scaffold it cannot otherwise reach. Each retry
+	 * places new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
+	 */
+	private static final int SCAFFOLD_RETRIES = 8;
 
 	private enum State { SEARCH, RESTOCK, CHOP, LEAVES, CLEANUP, COLLECT, REPLANT, DEPOSIT }
 
@@ -75,9 +80,13 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private final Set<Integer> unreachableItems = new HashSet<>();
 	private final Set<BlockPos> unreachableLeaves = new HashSet<>();
 	private @Nullable BlockPos leaf;
-	/** Scaffold blocks placed while working on the current tree. */
-	private final Set<BlockPos> placed = new HashSet<>();
+	/** Scaffold that cannot be reached without placing more; retried once the rest is down. */
 	private final Set<BlockPos> unreachablePlaced = new HashSet<>();
+	/** Scaffold that could not be reached even by pillaring; left behind. */
+	private final Set<BlockPos> abandonedPlaced = new HashSet<>();
+	/** The scaffold block cleanup is pillaring up to, or null when not retrying one. */
+	private @Nullable BlockPos retrying;
+	private int retriesLeft = SCAFFOLD_RETRIES;
 	private int cooldown;
 	private int restockCooldown;
 	private @Nullable UUID jobId;
@@ -87,11 +96,20 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
 		this.follower.setPlaceListener(pos -> {
-			if (TREE_WORK.contains(this.state)) {
-				this.placed.add(pos);
+			if (TREE_WORK.contains(this.state) || this.retrying != null) {
+				this.placed().add(pos);
 			}
 		});
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+	}
+
+	/**
+	 * Scaffold blocks placed while working on the current tree. The bot keeps them, so they are saved
+	 * with it and cleanup resumes after loading. (Goals are made before the bot's fields are set, so
+	 * this is looked up each time.)
+	 */
+	private Set<BlockPos> placed() {
+		return this.bot.getScaffold();
 	}
 
 	/**
@@ -99,7 +117,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * so it is taken down in the next cleanup. Lets game tests set up leftover scaffolding.
 	 */
 	public void adoptScaffold(BlockPos pos) {
-		this.placed.add(pos.immutable());
+		this.placed().add(pos.immutable());
 	}
 
 	@Override
@@ -115,7 +133,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	@Override
 	public void start() {
 		// Interrupted mid-tree: take the scaffolding down before anything else.
-		this.enter(this.placed.isEmpty() ? State.SEARCH : State.CLEANUP);
+		this.enter(this.placed().isEmpty() ? State.SEARCH : State.CLEANUP);
 	}
 
 	@Override
@@ -152,6 +170,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.follower.stop();
 		this.follower.setMayPlace(next != State.CLEANUP);
 		this.breaker.reset();
+		this.retrying = null;
 	}
 
 	private void search(ServerLevel level) {
@@ -177,6 +196,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.unreachableLogs.clear();
 			this.unreachableLeaves.clear();
 			this.unreachablePlaced.clear();
+			this.abandonedPlaced.clear();
+			this.retriesLeft = SCAFFOLD_RETRIES;
 			this.enter(State.CHOP);
 		} else if (logs > 0 && this.bot.getHome() != null) {
 			this.enter(State.DEPOSIT);
@@ -246,7 +267,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private void chop(ServerLevel level) {
 		BlockPos next = null;
 		for (BlockPos log : this.tree.logs()) {
-			if (level.getBlockState(log).is(BlockTags.LOGS) && !this.unreachableLogs.contains(log) && !this.placed.contains(log)) {
+			if (level.getBlockState(log).is(BlockTags.LOGS) && !this.unreachableLogs.contains(log) && !this.placed().contains(log)) {
 				next = log;
 				break;
 			}
@@ -325,17 +346,34 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/**
 	 * Takes down the scaffold blocks placed for this tree, getting them back. Blocks within reach go
 	 * first, top down, so a pillar the bot stands on comes down under it. Walking to the others never
-	 * places new scaffolding: a block that cannot be reached without it is given up on.
+	 * places new scaffolding. Blocks that cannot be reached that way are retried once the rest is down:
+	 * the bot pillars up to them, and that pillar is taken down in turn, under it. Retries are limited
+	 * per tree, and a block it cannot reach even by pillaring is left behind.
 	 */
 	private void cleanup(ServerLevel level) {
 		BlockPos feet = this.bot.blockPosition();
-		this.placed.removeIf(pos -> !level.getBlockState(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.SCAFFOLD_BLOCKS));
-		BlockPos next = this.placed.stream()
-			.filter(pos -> !this.unreachablePlaced.contains(pos))
+		this.placed().removeIf(pos -> !level.getBlockState(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.SCAFFOLD_BLOCKS));
+		if (this.retrying != null) {
+			this.retry(feet);
+			return;
+		}
+		BlockPos next = this.placed().stream()
+			.filter(pos -> !this.unreachablePlaced.contains(pos) && !this.abandonedPlaced.contains(pos))
 			.max(Comparator.<BlockPos, Boolean>comparing(pos -> new Goal.Reach(pos, REACH).isReached(feet)).thenComparingInt(BlockPos::getY))
 			.orElse(null);
 		if (next == null) {
-			this.placed.clear();
+			BlockPos retry = this.retriesLeft <= 0 ? null : this.placed().stream()
+				.filter(pos -> !this.abandonedPlaced.contains(pos))
+				.max(Comparator.comparingInt(BlockPos::getY))
+				.orElse(null);
+			if (retry != null) {
+				this.retriesLeft--;
+				this.retrying = retry;
+				this.travelGoal = null;
+				this.follower.setMayPlace(true);
+				return;
+			}
+			this.placed().clear();
 			this.unreachableItems.clear();
 			this.enter(this.tree != null ? State.COLLECT : State.SEARCH);
 			return;
@@ -344,11 +382,31 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (reach.isReached(feet) && this.bot.onGround()) {
 			this.travelGoal = null;
 			if (this.breaker.tick(level, next, true)) {
-				this.placed.remove(next);
+				this.placed().remove(next);
 			}
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.unreachablePlaced.add(next);
 		}
+	}
+
+	/** Pillars up to the scaffold block being retried; once there, cleanup looks at every block again from up there. */
+	private void retry(BlockPos feet) {
+		BlockPos target = this.retrying;
+		Goal reach = new Goal.Reach(target, REACH);
+		if (!this.placed().contains(target) || (reach.isReached(feet) && this.bot.onGround())) {
+			this.unreachablePlaced.clear();
+			this.endRetry();
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.abandonedPlaced.add(target);
+			this.endRetry();
+		}
+	}
+
+	private void endRetry() {
+		this.retrying = null;
+		this.travelGoal = null;
+		this.follower.stop();
+		this.follower.setMayPlace(false);
 	}
 
 	private void collect(ServerLevel level) {

@@ -19,6 +19,9 @@ import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.util.ProblemReporter;
 
 public class LumberjackGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(1, 1, 1);
@@ -98,16 +101,20 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * Its top blocks are 5 and 6 blocks above the ground, out of reach from it.
 	 */
 	private static void leftoverPillar(GameTestHelper helper, AntBot bot, int x, int z) {
-		LumberjackGoal goal = bot.getGoalSelector().getAvailableGoals().stream()
+		LumberjackGoal goal = goal(bot);
+		for (int y = 1; y <= 7; y++) {
+			helper.setBlock(x, y, z, Blocks.DIRT);
+			goal.adoptScaffold(helper.absolutePos(new BlockPos(x, y, z)));
+		}
+	}
+
+	private static LumberjackGoal goal(AntBot bot) {
+		return bot.getGoalSelector().getAvailableGoals().stream()
 			.map(WrappedGoal::getGoal)
 			.filter(LumberjackGoal.class::isInstance)
 			.map(LumberjackGoal.class::cast)
 			.findFirst()
 			.orElseThrow();
-		for (int y = 1; y <= 7; y++) {
-			helper.setBlock(x, y, z, Blocks.DIRT);
-			goal.adoptScaffold(helper.absolutePos(new BlockPos(x, y, z)));
-		}
 	}
 
 	/** The bot only chops the tree after cleanup is done, so storing its logs shows cleanup finished. */
@@ -130,22 +137,90 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
-	public void givesUpOnScaffoldItCannotReachWithoutPlacingMore(GameTestHelper helper) {
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void retriesHighScaffoldOnceTheRestIsDown(GameTestHelper helper) {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 6, 2);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 		leftoverPillar(helper, bot, 5, 5);
 
 		helper.succeedWhen(() -> {
-			// Only the two blocks it could not reach may be left; it built nothing new to get at them.
-			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
-				if (pos.getX() == 5 && pos.getZ() == 5 && pos.getY() >= 6) {
-					continue;
-				}
-				helper.assertTrue(!helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos.toShortString());
-			}
+			// The top of the pillar is out of reach from the ground once the rest is gone; the bot
+			// pillars up to it, and takes that pillar down too.
+			assertNoDirtLeft(helper);
 			assertTreeStored(helper);
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void givesUpOnScaffoldItCannotReachEvenByPillaring(GameTestHelper helper) {
+		tree(helper, 2, 6, false);
+		AntBot bot = lumberjack(helper, 6, 2);
+		helper.setBlock(5, 7, 5, Blocks.DIRT);
+		goal(bot).adoptScaffold(helper.absolutePos(new BlockPos(5, 7, 5)));
+
+		// With no scaffold blocks to pillar with, it gives up on the floating block and moves on.
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.DIRT, 5, 7, 5);
+			assertTreeStored(helper);
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void scaffoldSurvivesSaveAndLoad(GameTestHelper helper) {
+		tree(helper, 2, 6, false);
+		AntBot bot = lumberjack(helper, 6, 2);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(5, y, 5, Blocks.DIRT);
+			goal(bot).adoptScaffold(helper.absolutePos(new BlockPos(5, y, 5)));
+		}
+		AntBot copy = reload(helper, bot);
+		bot.discard();
+
+		helper.succeedWhen(() -> {
+			assertNoDirtLeft(helper);
+			assertTreeStored(helper);
+			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
+		});
+	}
+
+	/** Saves the bot and loads it into a new bot, as when its chunk unloads and loads again. */
+	private static AntBot reload(GameTestHelper helper, AntBot bot) {
+		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+		bot.saveWithoutId(output);
+		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+		return copy;
+	}
+
+	private static void assertNoDirtLeft(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+			helper.assertTrue(!helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos.toShortString());
+		}
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 3600)
+	public void pillarsUpToWideCanopyAndLeavesNoScaffold(GameTestHelper helper) {
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, false);
+		for (int y = 6; y <= 7; y++) {
+			for (int dx = -2; dx <= 2; dx++) {
+				for (int dz = -2; dz <= 2; dz++) {
+					helper.setBlock(4 + dx, y, 4 + dz, leaves);
+				}
+			}
+		}
+		for (int y = 1; y <= 7; y++) {
+			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
+		}
+		AntBot bot = lumberjack(helper, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
 
