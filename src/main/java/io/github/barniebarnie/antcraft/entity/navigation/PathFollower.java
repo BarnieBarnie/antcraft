@@ -8,11 +8,13 @@ import io.github.barniebarnie.antcraft.pathing.MoveType;
 import io.github.barniebarnie.antcraft.pathing.Path;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.pathing.Step;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.BlockItem;
@@ -49,10 +51,17 @@ public class PathFollower {
 	private int replansWithoutProgress;
 
 	private final BlockBreaker breaker;
+	private Consumer<BlockPos> placeListener = pos -> {
+	};
 
 	public PathFollower(AntBot bot) {
 		this.bot = bot;
 		this.breaker = new BlockBreaker(bot);
+	}
+
+	/** Called with every block this follower places, so callers can clean up their scaffolding. */
+	public void setPlaceListener(Consumer<BlockPos> listener) {
+		this.placeListener = listener;
 	}
 
 	public void start(Goal goal) {
@@ -184,13 +193,14 @@ public class PathFollower {
 				level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
 				this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 				stack.shrink(1);
+				this.placeListener.accept(pos.immutable());
 				return true;
 			}
 		}
 		return false;
 	}
 
-	public static int scaffoldCount(SimpleContainer inventory) {
+	public static int scaffoldCount(Container inventory) {
 		int count = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);

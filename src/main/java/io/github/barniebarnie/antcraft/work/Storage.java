@@ -41,6 +41,32 @@ public final class Storage {
 		to.setChanged();
 	}
 
+	/** Moves up to {@code max} matching items from {@code from} into {@code to}; returns how many were moved. */
+	public static int moveItems(Container from, Container to, Predicate<ItemStack> filter, int max) {
+		int moved = 0;
+		for (int i = 0; i < from.getContainerSize() && moved < max; i++) {
+			ItemStack stack = from.getItem(i);
+			if (!stack.isEmpty() && filter.test(stack)) {
+				ItemStack taken = stack.split(max - moved);
+				int count = taken.getCount();
+				ItemStack rest = HopperBlockEntity.addItem(null, to, taken, null);
+				moved += count - rest.getCount();
+				if (!rest.isEmpty()) {
+					// Whatever did not fit goes back where it came from.
+					if (stack.isEmpty()) {
+						from.setItem(i, rest);
+					} else {
+						stack.grow(rest.getCount());
+					}
+					break;
+				}
+			}
+		}
+		from.setChanged();
+		to.setChanged();
+		return moved;
+	}
+
 	/** How many of each item the container holds. */
 	public static Map<Item, Integer> stock(Container container) {
 		Map<Item, Integer> stock = new HashMap<>();

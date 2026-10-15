@@ -27,13 +27,17 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Lumberjack work loop: get a tree (from the colony job board, or by searching near
- * home when not in a colony), chop every log, pick up the drops, replant a sapling,
- * and bring logs to the home chest or colony core.
+ * home when not in a colony), chop every log, clear the leaves the tree leaves behind,
+ * remove the scaffold blocks it placed to get up there, pick up the drops, replant a
+ * sapling, and bring logs to the home chest or colony core. Before a tree it tops up
+ * its scaffold blocks from home, so it can pillar up to logs it cannot reach.
  */
 public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int SEARCH_RADIUS = 24;
@@ -43,8 +47,20 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int IDLE_RESCAN_TICKS = 40;
 	/** Checking the job board is cheap, so colony bots look for work more often than solo bots search. */
 	private static final int IDLE_JOB_CHECK_TICKS = 10;
+	/** Fetches scaffold blocks from home when carrying fewer than this. */
+	private static final int RESTOCK_BELOW = 8;
+	private static final int SCAFFOLD_STOCK = 16;
+	/** How long to wait before fetching scaffold again after home could not be reached. */
+	private static final int RESTOCK_RETRY_TICKS = 600;
+	/** Leaves need a few ticks to notice their logs are gone. */
+	private static final int LEAF_SETTLE_TICKS = 20;
+	/** Leaves decay further than this from a log, so a tree's canopy cannot reach further. */
+	private static final int LEAF_RANGE = LeavesBlock.DECAY_DISTANCE - 1;
 
-	private enum State { SEARCH, CHOP, COLLECT, REPLANT, DEPOSIT }
+	private enum State { SEARCH, RESTOCK, CHOP, LEAVES, CLEANUP, COLLECT, REPLANT, DEPOSIT }
+
+	/** States in which placed blocks are scaffolding for the current tree, to be removed afterwards. */
+	private static final Set<State> TREE_WORK = EnumSet.of(State.CHOP, State.LEAVES, State.CLEANUP);
 
 	private final AntBot bot;
 	private final PathFollower follower;
@@ -54,13 +70,24 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private @Nullable Goal travelGoal;
 	private final Set<BlockPos> unreachableLogs = new HashSet<>();
 	private final Set<Integer> unreachableItems = new HashSet<>();
+	private final Set<BlockPos> unreachableLeaves = new HashSet<>();
+	private @Nullable BlockPos leaf;
+	/** Scaffold blocks placed while working on the current tree. */
+	private final Set<BlockPos> placed = new HashSet<>();
+	private final Set<BlockPos> unreachablePlaced = new HashSet<>();
 	private int cooldown;
+	private int restockCooldown;
 	private @Nullable UUID jobId;
 
 	public LumberjackGoal(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
+		this.follower.setPlaceListener(pos -> {
+			if (TREE_WORK.contains(this.state)) {
+				this.placed.add(pos);
+			}
+		});
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
@@ -76,7 +103,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	@Override
 	public void start() {
-		this.enter(State.SEARCH);
+		// Interrupted mid-tree: take the scaffolding down before anything else.
+		this.enter(this.placed.isEmpty() ? State.SEARCH : State.CLEANUP);
 	}
 
 	@Override
@@ -96,7 +124,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		switch (this.state) {
 			case SEARCH -> this.search(level);
+			case RESTOCK -> this.restock(level);
 			case CHOP -> this.chop(level);
+			case LEAVES -> this.leaves(level);
+			case CLEANUP -> this.cleanup(level);
 			case COLLECT -> this.collect(level);
 			case REPLANT -> this.replant(level);
 			case DEPOSIT -> this.deposit(level);
@@ -111,6 +142,9 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	private void search(ServerLevel level) {
+		if (this.restockCooldown > 0) {
+			this.restockCooldown--;
+		}
 		if (this.cooldown > 0) {
 			this.cooldown--;
 			return;
@@ -120,10 +154,16 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.enter(State.DEPOSIT);
 			return;
 		}
+		if (this.restockCooldown == 0 && PathFollower.scaffoldCount(this.bot.getInventory()) < RESTOCK_BELOW && this.homeScaffold(level) > 0) {
+			this.enter(State.RESTOCK);
+			return;
+		}
 		Optional<TreeScanner.Tree> found = this.nextTree(level);
 		if (found.isPresent()) {
 			this.tree = found.get();
 			this.unreachableLogs.clear();
+			this.unreachableLeaves.clear();
+			this.unreachablePlaced.clear();
 			this.enter(State.CHOP);
 		} else if (logs > 0 && this.bot.getHome() != null) {
 			this.enter(State.DEPOSIT);
@@ -161,6 +201,30 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
+	private int homeScaffold(ServerLevel level) {
+		Container home = this.bot.getHome() == null ? null : Storage.containerAt(level, this.bot.getHome());
+		return home == null ? 0 : PathFollower.scaffoldCount(home);
+	}
+
+	private void restock(ServerLevel level) {
+		BlockPos home = this.bot.getHome();
+		Container container = home == null ? null : Storage.containerAt(level, home);
+		if (container == null) {
+			this.enter(State.SEARCH);
+			return;
+		}
+		Goal reach = new Goal.Reach(home, REACH);
+		if (reach.isReached(this.bot.blockPosition())) {
+			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
+			int wanted = SCAFFOLD_STOCK - PathFollower.scaffoldCount(this.bot.getInventory());
+			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(PathFollower.SCAFFOLD_BLOCKS), wanted);
+			this.enter(State.SEARCH);
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.restockCooldown = RESTOCK_RETRY_TICKS;
+			this.enter(State.SEARCH);
+		}
+	}
+
 	private Optional<Colony> colony(ServerLevel level) {
 		UUID id = this.bot.getColonyId();
 		return id == null ? Optional.empty() : ColonyManager.get(level).byId(id);
@@ -169,7 +233,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private void chop(ServerLevel level) {
 		BlockPos next = null;
 		for (BlockPos log : this.tree.logs()) {
-			if (level.getBlockState(log).is(BlockTags.LOGS) && !this.unreachableLogs.contains(log)) {
+			if (level.getBlockState(log).is(BlockTags.LOGS) && !this.unreachableLogs.contains(log) && !this.placed.contains(log)) {
 				next = log;
 				break;
 			}
@@ -180,8 +244,9 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				this.colony(level).ifPresent(colony -> colony.board().complete(done));
 				this.jobId = null;
 			}
-			this.unreachableItems.clear();
-			this.enter(State.COLLECT);
+			this.enter(State.LEAVES);
+			this.leaf = null;
+			this.cooldown = LEAF_SETTLE_TICKS;
 			return;
 		}
 
@@ -191,6 +256,81 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.breaker.tick(level, next);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.unreachableLogs.add(next);
+		}
+	}
+
+	/** Breaks the leaves that no longer touch a log; they would decay anyway, but slowly. */
+	private void leaves(ServerLevel level) {
+		if (this.cooldown > 0) {
+			this.cooldown--;
+			return;
+		}
+		if (this.leaf == null || !isDecaying(level.getBlockState(this.leaf))) {
+			this.leaf = this.nearestDecayingLeaf(level);
+			this.travelGoal = null;
+			if (this.leaf == null) {
+				this.enter(State.CLEANUP);
+				return;
+			}
+		}
+		Goal reach = new Goal.Reach(this.leaf, REACH);
+		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
+			this.travelGoal = null;
+			if (this.breaker.tick(level, this.leaf, true)) {
+				this.leaf = null;
+			}
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.unreachableLeaves.add(this.leaf);
+			this.leaf = null;
+		}
+	}
+
+	private @Nullable BlockPos nearestDecayingLeaf(ServerLevel level) {
+		BlockPos min = this.tree.logs().getFirst();
+		BlockPos max = min;
+		for (BlockPos log : this.tree.logs()) {
+			min = BlockPos.min(min, log);
+			max = BlockPos.max(max, log);
+		}
+		BlockPos feet = this.bot.blockPosition();
+		BlockPos nearest = null;
+		for (BlockPos pos : BlockPos.betweenClosed(min.offset(-LEAF_RANGE, -LEAF_RANGE, -LEAF_RANGE), max.offset(LEAF_RANGE, LEAF_RANGE, LEAF_RANGE))) {
+			if (isDecaying(level.getBlockState(pos)) && !this.unreachableLeaves.contains(pos)
+				&& (nearest == null || pos.distSqr(feet) < nearest.distSqr(feet))) {
+				nearest = pos.immutable();
+			}
+		}
+		return nearest;
+	}
+
+	/** Natural leaves cut off from every log. */
+	private static boolean isDecaying(BlockState state) {
+		return state.is(BlockTags.LEAVES) && state.hasProperty(LeavesBlock.PERSISTENT) && !state.getValue(LeavesBlock.PERSISTENT)
+			&& state.getValue(LeavesBlock.DISTANCE) >= LeavesBlock.DECAY_DISTANCE;
+	}
+
+	/** Takes down the scaffold blocks placed for this tree, getting them back. Blocks within reach go first, top down. */
+	private void cleanup(ServerLevel level) {
+		BlockPos feet = this.bot.blockPosition();
+		this.placed.removeIf(pos -> !level.getBlockState(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.SCAFFOLD_BLOCKS));
+		BlockPos next = this.placed.stream()
+			.filter(pos -> !this.unreachablePlaced.contains(pos))
+			.max(Comparator.<BlockPos, Boolean>comparing(pos -> new Goal.Reach(pos, REACH).isReached(feet)).thenComparingInt(BlockPos::getY))
+			.orElse(null);
+		if (next == null) {
+			this.placed.clear();
+			this.unreachableItems.clear();
+			this.enter(this.tree != null ? State.COLLECT : State.SEARCH);
+			return;
+		}
+		Goal reach = new Goal.Reach(next, REACH);
+		if (reach.isReached(feet) && this.bot.onGround()) {
+			this.travelGoal = null;
+			if (this.breaker.tick(level, next, true)) {
+				this.placed.remove(next);
+			}
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.unreachablePlaced.add(next);
 		}
 	}
 

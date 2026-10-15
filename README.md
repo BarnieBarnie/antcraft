@@ -39,7 +39,7 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 
 Bots use the best tool or weapon they carry, and tools wear out.
 
-**Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe): in a colony it takes tree jobs from the job board, otherwise it searches within 24 blocks of its home, picks up the drops, replants a sapling, and brings the logs to its home chest.
+**Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe): in a colony it takes tree jobs from the job board, otherwise it searches within 24 blocks of its home, breaks the leaves left without a log, takes down any scaffold blocks it placed to get up there, picks up the drops, replants a sapling, and brings the logs to its home chest. Before each tree it tops up to 16 scaffold blocks from its home chest or colony core, so it can pillar up to logs it cannot reach from the ground.
 
 **Commands** (operators only):
 

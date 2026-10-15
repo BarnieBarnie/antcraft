@@ -9,7 +9,9 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
@@ -18,6 +20,8 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public class LumberjackGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(1, 1, 1);
+	/** Solo lumberjacks search 24 blocks around home, so keep them out of each other's test areas. */
+	private static final int PADDING = 32;
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -47,6 +51,35 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
+	/** A 7-log oak, trunk at (x, 1..7, z), with a canopy at y 6..7 that the bot cannot reach from the ground. */
+	private static void tallTree(GameTestHelper helper, int x, int z) {
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, false);
+		for (int y = 6; y <= 7; y++) {
+			for (int dx = -1; dx <= 1; dx++) {
+				for (int dz = -1; dz <= 1; dz++) {
+					helper.setBlock(x + dx, y, z + dz, leaves);
+				}
+			}
+		}
+		for (int y = 1; y <= 7; y++) {
+			helper.setBlock(x, y, z, Blocks.OAK_LOG);
+		}
+	}
+
+	/** No logs, leaves or scaffold blocks are left above the floor. */
+	private static void assertAreaCleared(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+			if (pos.equals(CHEST)) {
+				continue;
+			}
+			BlockState state = helper.getBlockState(pos);
+			helper.assertTrue(!state.is(BlockTags.LOGS) && !state.is(BlockTags.LEAVES) && !state.is(Blocks.DIRT),
+				state.getBlock() + " left at " + pos.toShortString());
+		}
+	}
+
 	private static AntBot lumberjack(GameTestHelper helper, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		bot.setHome(helper.absolutePos(CHEST));
@@ -54,7 +87,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void chopsTreeAndStoresLogsInHomeChest(GameTestHelper helper) {
 		tree(helper, 5, 5, false);
 		lumberjack(helper, 2, 4);
@@ -68,7 +101,33 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void pillarsUpToTallTreeAndClearsLeavesAndPillars(GameTestHelper helper) {
+		tallTree(helper, 5, 5);
+		AntBot bot = lumberjack(helper, 2, 4);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void takesScaffoldFromHomeToReachTallTree(GameTestHelper helper) {
+		tallTree(helper, 5, 5);
+		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
+		lumberjack(helper, 2, 4);
+
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 200)
 	public void leavesPlayerBuiltLogsAlone(GameTestHelper helper) {
 		tree(helper, 5, 5, true);
 		AntBot bot = lumberjack(helper, 2, 4);
