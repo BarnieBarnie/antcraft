@@ -1,10 +1,12 @@
 package io.github.barniebarnie.antcraft.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,6 +27,8 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft status
  * /antcraft goto &lt;pos&gt; [bots]   (defaults to the nearest bot)
  * /antcraft stop [bots]
+ * /antcraft role &lt;role&gt; [bots]
+ * /antcraft home &lt;pos&gt; [bots]
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
@@ -37,6 +41,14 @@ public final class AntCraftCommands {
 	}
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+		LiteralArgumentBuilder<CommandSourceStack> role = Commands.literal("role");
+		for (BotRole value : BotRole.values()) {
+			role.then(Commands.literal(value.id())
+				.executes(ctx -> setRole(ctx.getSource(), nearestBot(ctx.getSource()), value))
+				.then(Commands.argument("bots", EntityArgument.entities())
+					.executes(ctx -> setRole(ctx.getSource(), bots(ctx), value))));
+		}
+
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 			.then(Commands.literal("status").executes(AntCraftCommands::status))
@@ -48,7 +60,33 @@ public final class AntCraftCommands {
 			.then(Commands.literal("stop")
 				.executes(ctx -> stop(ctx.getSource(), nearestBot(ctx.getSource())))
 				.then(Commands.argument("bots", EntityArgument.entities())
-					.executes(ctx -> stop(ctx.getSource(), bots(ctx))))));
+					.executes(ctx -> stop(ctx.getSource(), bots(ctx)))))
+			.then(role)
+			.then(Commands.literal("home")
+				.then(Commands.argument("pos", BlockPosArgument.blockPos())
+					.executes(ctx -> setHome(ctx, nearestBot(ctx.getSource())))
+					.then(Commands.argument("bots", EntityArgument.entities())
+						.executes(ctx -> setHome(ctx, bots(ctx)))))));
+	}
+
+	private static int setRole(CommandSourceStack source, List<AntBot> bots, BotRole role) {
+		if (!checkAllowed(source) || !checkAny(source, bots)) {
+			return 0;
+		}
+		bots.forEach(bot -> bot.setRole(role));
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.role", bots.size(), role.id()), false);
+		return bots.size();
+	}
+
+	private static int setHome(CommandContext<CommandSourceStack> ctx, List<AntBot> bots) {
+		CommandSourceStack source = ctx.getSource();
+		if (!checkAllowed(source) || !checkAny(source, bots)) {
+			return 0;
+		}
+		BlockPos pos = BlockPosArgument.getBlockPos(ctx, "pos");
+		bots.forEach(bot -> bot.setHome(pos));
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.home", bots.size(), pos.toShortString()), false);
+		return bots.size();
 	}
 
 	private static int status(CommandContext<CommandSourceStack> ctx) {

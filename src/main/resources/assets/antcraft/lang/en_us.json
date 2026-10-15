@@ -6,5 +6,7 @@
 	"commands.antcraft.status": "AntCraft is %s. Bots in this dimension: %s / %s",
 	"commands.antcraft.goto": "Sent %s bot(s) to %s",
 	"commands.antcraft.stop": "Stopped %s bot(s)",
-	"commands.antcraft.no_bots": "No bots found"
+	"commands.antcraft.no_bots": "No bots found",
+	"commands.antcraft.role": "Set the role of %s bot(s) to %s",
+	"commands.antcraft.home": "Set the home of %s bot(s) to %s"
 }

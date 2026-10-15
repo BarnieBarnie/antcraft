@@ -24,6 +24,10 @@ AntCraft runs entirely on the server side, so it cannot be used as a cheat clien
 
 Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory, which they drop when they die. They fight hostile mobs (except creepers, for now).
 
+Bots find their own way: they walk, jump, drop up to 3 blocks, dig through blocks in the way, and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, or blocks next to lava or water.
+
+**Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe) within 24 blocks of its home, picks up the drops, replants a sapling, and brings the logs to its home chest.
+
 **Commands** (operators only):
 
 | Command | Effect |
@@ -31,6 +35,8 @@ Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-
 | `/antcraft status` | Shows whether bots are enabled, and the bot count |
 | `/antcraft goto <pos> [bots]` | Sends bots to a position. Without `[bots]`, the nearest bot within 64 blocks |
 | `/antcraft stop [bots]` | Cancels the walk target |
+| `/antcraft role <none\|lumberjack> [bots]` | Gives bots a job to work on when they have no direct order |
+| `/antcraft home <pos> [bots]` | Sets the chest bots bring their work to |
 
 **Config** (`config/antcraft.properties`):
 
@@ -43,9 +49,9 @@ Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-
 
 | Milestone | Goal |
 |-----------|------|
-| M0 | Project scaffold, build, CI |
-| M1 | Bot entity (player-skinned mob) with inventory, spawned from a crafted item; walks to a target |
-| M2 | Pathfinding that digs, pillars and bridges; lumberjack role chops trees and deposits logs |
+| M0 | Project scaffold, build, CI (done) |
+| M1 | Bot entity (player-skinned mob) with inventory, spawned from a crafted item; walks to a target (done) |
+| M2 | Pathfinding that digs, pillars and bridges; lumberjack role chops trees and deposits logs (done) |
 | M3 | Colony core block with storage and a shared job board; multiple bots claim tasks |
 | M4 | Miner, farmer, hauler and guard roles; hierarchical tasks ("build house" requires "gather 64 logs"); bots craft new bots |
 | M5 | Blueprint builder: load `.nbt` structures / Litematica schematics, compute material lists and build order |

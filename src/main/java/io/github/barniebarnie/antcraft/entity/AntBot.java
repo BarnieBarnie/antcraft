@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.minecraft.core.BlockPos;
@@ -38,6 +39,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 	private @Nullable BlockPos walkTarget;
+	private BotRole role = BotRole.NONE;
+	private @Nullable BlockPos home;
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -61,6 +64,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
+		this.goalSelector.addGoal(3, new LumberjackGoal(this));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
@@ -90,6 +94,23 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (target == null) {
 			this.getNavigation().stop();
 		}
+	}
+
+	public BotRole getRole() {
+		return this.role;
+	}
+
+	public void setRole(BotRole role) {
+		this.role = role;
+	}
+
+	/** The storage block this bot brings its work to, usually a chest. */
+	public @Nullable BlockPos getHome() {
+		return this.home;
+	}
+
+	public void setHome(@Nullable BlockPos home) {
+		this.home = home;
 	}
 
 	@Override
@@ -130,6 +151,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.addAdditionalSaveData(output);
 		this.writeInventoryToTag(output);
 		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
+		output.putString("Role", this.role.id());
+		output.storeNullable("Home", BlockPos.CODEC, this.home);
 	}
 
 	@Override
@@ -137,5 +160,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.readAdditionalSaveData(input);
 		this.readInventoryFromTag(input);
 		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
+		this.role = BotRole.byId(input.getStringOr("Role", BotRole.NONE.id()));
+		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 	}
 }

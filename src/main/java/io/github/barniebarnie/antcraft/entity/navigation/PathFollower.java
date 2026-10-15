@@ -48,12 +48,11 @@ public class PathFollower {
 	private int stepBudget;
 	private int replansWithoutProgress;
 
-	private @Nullable BlockPos breaking;
-	private int breakProgress;
-	private int breakTotal;
+	private final BlockBreaker breaker;
 
 	public PathFollower(AntBot bot) {
 		this.bot = bot;
+		this.breaker = new BlockBreaker(bot);
 	}
 
 	public void start(Goal goal) {
@@ -64,7 +63,7 @@ public class PathFollower {
 	}
 
 	public void stop() {
-		this.resetBreaking();
+		this.breaker.reset();
 		this.goal = null;
 		this.path = null;
 	}
@@ -91,7 +90,7 @@ public class PathFollower {
 
 		for (BlockPos pos : step.breaks()) {
 			if (!world.isPassable(pos)) {
-				this.breakBlock(level, pos);
+				this.breaker.tick(level, pos);
 				return Status.RUNNING;
 			}
 		}
@@ -125,7 +124,7 @@ public class PathFollower {
 		if (this.replansWithoutProgress++ >= MAX_REPLANS_WITHOUT_PROGRESS) {
 			return false;
 		}
-		this.resetBreaking();
+		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
 		LevelWorldView world = new LevelWorldView(level, this.bot.getMainHandItem());
 		PathFinder.Options options = new PathFinder.Options(true, scaffoldCount(this.bot.getInventory()) > 0, MAX_NODES, MAX_DROP);
@@ -170,38 +169,6 @@ public class PathFollower {
 				this.path = null;
 			}
 		}
-	}
-
-	private void breakBlock(ServerLevel level, BlockPos pos) {
-		this.bot.getMoveControl().setWait();
-		this.bot.getLookControl().setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-		if (!pos.equals(this.breaking)) {
-			this.resetBreaking();
-			this.breaking = pos;
-			this.breakProgress = 0;
-			this.breakTotal = LevelWorldView.breakTicks(level.getBlockState(pos), level, pos, this.bot.getMainHandItem());
-			if (this.breakTotal < 0) {
-				this.path = null;
-				return;
-			}
-		}
-
-		this.breakProgress++;
-		if (this.breakProgress % 5 == 1) {
-			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
-		}
-		level.destroyBlockProgress(this.bot.getId(), pos, Math.min(9, this.breakProgress * 10 / Math.max(1, this.breakTotal)));
-		if (this.breakProgress >= this.breakTotal) {
-			level.destroyBlock(pos, true, this.bot);
-			this.resetBreaking();
-		}
-	}
-
-	private void resetBreaking() {
-		if (this.breaking != null && this.bot.level() instanceof ServerLevel level) {
-			level.destroyBlockProgress(this.bot.getId(), this.breaking, -1);
-		}
-		this.breaking = null;
 	}
 
 	private boolean placeBlock(ServerLevel level, BlockPos pos) {

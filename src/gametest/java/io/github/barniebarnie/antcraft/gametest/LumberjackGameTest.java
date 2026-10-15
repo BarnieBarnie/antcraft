@@ -1,0 +1,84 @@
+package io.github.barniebarnie.antcraft.gametest;
+
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.registry.ModEntities;
+import java.lang.reflect.Method;
+import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
+import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+
+public class LumberjackGameTest implements CustomTestMethodInvoker {
+	private static final BlockPos CHEST = new BlockPos(1, 1, 1);
+
+	@Override
+	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+			}
+		}
+		helper.setBlock(CHEST, Blocks.CHEST);
+		method.invoke(this, helper);
+	}
+
+	/** A 4-log oak with a small canopy, trunk at (x, 1..4, z). */
+	private static void tree(GameTestHelper helper, int x, int z, boolean playerPlacedLeaves) {
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, playerPlacedLeaves);
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				helper.setBlock(x + dx, 4, z + dz, leaves);
+			}
+		}
+		helper.setBlock(x, 5, z, leaves);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(x, y, z, Blocks.OAK_LOG);
+		}
+	}
+
+	private static AntBot lumberjack(GameTestHelper helper, int x, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		bot.setHome(helper.absolutePos(CHEST));
+		bot.setRole(BotRole.LUMBERJACK);
+		return bot;
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void chopsTreeAndStoresLogsInHomeChest(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		lumberjack(helper, 2, 4);
+
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, 5, y, 5);
+			}
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	@GameTest(maxTicks = 200)
+	public void leavesPlayerBuiltLogsAlone(GameTestHelper helper) {
+		tree(helper, 5, 5, true);
+		AntBot bot = lumberjack(helper, 2, 4);
+
+		helper.runAfterDelay(160, () -> {
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockPresent(Blocks.OAK_LOG, 5, y, 5);
+			}
+			helper.assertTrue(bot.getInventory().isEmpty(), "bot picked something up");
+			helper.succeed();
+		});
+	}
+}

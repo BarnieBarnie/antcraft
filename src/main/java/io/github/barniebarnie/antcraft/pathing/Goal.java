@@ -39,4 +39,25 @@ public interface Goal {
 			return Math.max(0, estimate(feet, this.pos) - this.range * PathFinder.FALL_COST_PER_BLOCK);
 		}
 	}
+
+	/** Stand where the bot's eyes are within {@code reach} of the block's centre, e.g. to break or use it. */
+	record Reach(BlockPos pos, double reach) implements Goal {
+		private static final double EYE_HEIGHT = 1.62;
+
+		@Override
+		public boolean isReached(BlockPos feet) {
+			if (feet.equals(this.pos) || feet.above().equals(this.pos)) {
+				return false;
+			}
+			double dx = feet.getX() - this.pos.getX();
+			double dy = feet.getY() + EYE_HEIGHT - (this.pos.getY() + 0.5);
+			double dz = feet.getZ() - this.pos.getZ();
+			return dx * dx + dy * dy + dz * dz <= this.reach * this.reach;
+		}
+
+		@Override
+		public double heuristic(BlockPos feet) {
+			return Math.max(0, estimate(feet, this.pos) - this.reach * PathFinder.WALK_COST);
+		}
+	}
 }
