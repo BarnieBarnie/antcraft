@@ -6,7 +6,9 @@ import net.minecraft.util.StringRepresentable;
 
 public enum JobType implements StringRepresentable {
 	/** Chop the tree whose lowest log is at the job target. */
-	CHOP_TREE;
+	CHOP_TREE,
+	/** Mine the colony quarry layer at the job target's height. */
+	MINE_LAYER;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 

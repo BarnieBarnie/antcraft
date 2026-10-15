@@ -14,5 +14,7 @@
 	"commands.antcraft.colony.info": "Colony at %s: %s members %s, %s jobs (%s claimed), radius %s",
 	"commands.antcraft.colony.order_line": "Order: %s %s. To gather: %s. Missing: %s",
 	"commands.antcraft.colony.ordered": "Ordered %s %s",
-	"commands.antcraft.colony.cancelled": "Cancelled the order for %s"
+	"commands.antcraft.colony.cancelled": "Cancelled the order for %s",
+	"commands.antcraft.colony.quarry": "Quarry set from %s to %s",
+	"commands.antcraft.colony.radius": "Colony work radius set to %s blocks"
 }

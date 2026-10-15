@@ -6,11 +6,13 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import io.github.barniebarnie.antcraft.work.Quarry;
 import net.minecraft.world.item.Item;
 
 /** A colony: its core block (storage), member bots, work radius and job board. */
@@ -23,7 +25,8 @@ public class Colony {
 		UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(c -> List.copyOf(c.members)),
 		JobBoard.CODEC.optionalFieldOf("jobs", new JobBoard()).forGetter(Colony::board),
 		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
-		Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).optionalFieldOf("orders", Map.of()).forGetter(Colony::orders)
+		Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).optionalFieldOf("orders", Map.of()).forGetter(Colony::orders),
+		Quarry.CODEC.optionalFieldOf("quarry").forGetter(Colony::quarry)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -32,16 +35,29 @@ public class Colony {
 	private final JobBoard board;
 	private int radius;
 	private final Map<Item, Integer> orders;
+	private Optional<Quarry> quarry;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
-	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders) {
+	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Quarry> quarry) {
 		this.id = id;
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
 		this.board = board;
 		this.radius = radius;
 		this.orders = new LinkedHashMap<>(orders);
+		this.quarry = quarry;
+	}
+
+	/** The area miners dig out, if the player has marked one. */
+	public Optional<Quarry> quarry() {
+		return this.quarry;
+	}
+
+	public void setQuarry(Quarry quarry) {
+		this.quarry = Optional.of(quarry);
+		this.board.removeOpenIf(job -> job.type() == JobType.MINE_LAYER);
+		this.lastSurvey = -1;
 	}
 
 	public UUID id() {

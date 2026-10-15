@@ -11,7 +11,8 @@
 			"io.github.barniebarnie.antcraft.gametest.LumberjackGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ColonyGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ToolGameTest",
-			"io.github.barniebarnie.antcraft.gametest.CrafterGameTest"
+			"io.github.barniebarnie.antcraft.gametest.CrafterGameTest",
+			"io.github.barniebarnie.antcraft.gametest.MinerGameTest"
 		]
 	},
 	"depends": {

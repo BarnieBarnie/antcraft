@@ -14,6 +14,7 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
+import io.github.barniebarnie.antcraft.work.Quarry;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -45,7 +46,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft stop [bots]
  * /antcraft role &lt;role&gt; [bots]
  * /antcraft home &lt;pos&gt; [bots]
- * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;   (nearest colony)
+ * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|quarry &lt;from&gt; &lt;to&gt;|radius &lt;blocks&gt;   (nearest colony)
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
@@ -86,6 +87,13 @@ public final class AntCraftCommands {
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
 							.executes(ctx -> order(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value(), IntegerArgumentType.getInteger(ctx, "count"))))))
+				.then(Commands.literal("quarry")
+					.then(Commands.argument("from", BlockPosArgument.blockPos())
+						.then(Commands.argument("to", BlockPosArgument.blockPos())
+							.executes(ctx -> setQuarry(ctx.getSource(), BlockPosArgument.getBlockPos(ctx, "from"), BlockPosArgument.getBlockPos(ctx, "to"))))))
+				.then(Commands.literal("radius")
+					.then(Commands.argument("blocks", IntegerArgumentType.integer(4, 128))
+						.executes(ctx -> setRadius(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "blocks")))))
 				.then(Commands.literal("cancel")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value())))))
@@ -151,6 +159,25 @@ public final class AntCraftCommands {
 		colony.ifPresent(c -> {
 			c.addOrder(item, count);
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.ordered", count, itemName(item)), false);
+		});
+		return colony.isPresent() ? 1 : 0;
+	}
+
+	private static int setQuarry(CommandSourceStack source, BlockPos from, BlockPos to) {
+		Optional<Colony> colony = nearestColony(source);
+		colony.ifPresent(c -> {
+			Quarry quarry = new Quarry(from, to);
+			c.setQuarry(quarry);
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.quarry", quarry.min().toShortString(), quarry.max().toShortString()), false);
+		});
+		return colony.isPresent() ? 1 : 0;
+	}
+
+	private static int setRadius(CommandSourceStack source, int radius) {
+		Optional<Colony> colony = nearestColony(source);
+		colony.ifPresent(c -> {
+			c.setRadius(radius);
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.radius", radius), false);
 		});
 		return colony.isPresent() ? 1 : 0;
 	}

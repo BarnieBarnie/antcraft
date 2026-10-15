@@ -4,9 +4,12 @@ import com.mojang.serialization.Codec;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
+import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,8 @@ public class ColonyManager extends SavedData {
 	/** Bot Cores activated this close to a colony core join that colony. */
 	public static final int JOIN_DISTANCE = 32;
 	private static final int SURVEY_INTERVAL = 100;
+	/** Quarry layers open for mining at once, so a couple of miners can work side by side. */
+	private static final int MINING_LAYERS = 2;
 	/** Jobs whose bot has not reported for this long are freed for others. */
 	private static final long CLAIM_TIMEOUT = 600;
 
@@ -55,7 +60,7 @@ public class ColonyManager extends SavedData {
 		if (existing.isPresent()) {
 			return existing.get();
 		}
-		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of());
+		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -112,6 +117,14 @@ public class ColonyManager extends SavedData {
 			for (TreeScanner.Tree tree : TreeScanner.findAll(new LevelTreeView(level), colony.core(), colony.radius())) {
 				colony.board().post(JobType.CHOP_TREE, tree.base());
 			}
+			colony.quarry().ifPresent(quarry -> {
+				Set<BlockPos> layers = new HashSet<>();
+				for (int y : quarry.layersToWork(pos -> Mining.isMinable(level, pos), MINING_LAYERS)) {
+					layers.add(quarry.layerTarget(y));
+					colony.board().post(JobType.MINE_LAYER, quarry.layerTarget(y));
+				}
+				colony.board().removeOpenIf(job -> job.type() == JobType.MINE_LAYER && !layers.contains(job.target()));
+			});
 		}
 	}
 }

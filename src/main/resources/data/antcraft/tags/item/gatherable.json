@@ -1,0 +1,19 @@
+{
+	"values": [
+		"#minecraft:logs",
+		"minecraft:cobblestone",
+		"minecraft:cobbled_deepslate",
+		"minecraft:dirt",
+		"minecraft:gravel",
+		"minecraft:flint",
+		"minecraft:sand",
+		"minecraft:coal",
+		"minecraft:raw_iron",
+		"minecraft:raw_copper",
+		"minecraft:raw_gold",
+		"minecraft:redstone",
+		"minecraft:lapis_lazuli",
+		"minecraft:diamond",
+		"minecraft:emerald"
+	]
+}
