@@ -19,9 +19,12 @@ import net.minecraft.server.MinecraftServer;
  */
 public final class AntCraftConfig {
 	private static final String FILE_NAME = "antcraft.properties";
+	private static final int DEFAULT_MAX_BOTS = 64;
 
-	private static boolean enableOnDedicatedServer = false;
-	private static int maxBotsPerLevel = 64;
+	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
+	}
+
+	private static Values values = new Values(false, DEFAULT_MAX_BOTS);
 
 	private AntCraftConfig() {
 	}
@@ -37,15 +40,10 @@ public final class AntCraftConfig {
 			}
 		}
 
-		enableOnDedicatedServer = Boolean.parseBoolean(props.getProperty("enableOnDedicatedServer", "false"));
-		try {
-			maxBotsPerLevel = Math.max(0, Integer.parseInt(props.getProperty("maxBotsPerLevel", "64").trim()));
-		} catch (NumberFormatException e) {
-			maxBotsPerLevel = 64;
-		}
+		values = parse(props);
 
-		props.setProperty("enableOnDedicatedServer", Boolean.toString(enableOnDedicatedServer));
-		props.setProperty("maxBotsPerLevel", Integer.toString(maxBotsPerLevel));
+		props.setProperty("enableOnDedicatedServer", Boolean.toString(values.enableOnDedicatedServer()));
+		props.setProperty("maxBotsPerLevel", Integer.toString(values.maxBotsPerLevel()));
 		try (Writer writer = Files.newBufferedWriter(path)) {
 			props.store(writer, "AntCraft settings. Bots are disabled on dedicated servers unless enableOnDedicatedServer=true.");
 		} catch (IOException e) {
@@ -53,11 +51,31 @@ public final class AntCraftConfig {
 		}
 	}
 
+	public static Values parse(Properties props) {
+		boolean enableOnDedicatedServer = Boolean.parseBoolean(props.getProperty("enableOnDedicatedServer", "false").trim());
+		int maxBots;
+		try {
+			maxBots = Math.max(0, Integer.parseInt(props.getProperty("maxBotsPerLevel", Integer.toString(DEFAULT_MAX_BOTS)).trim()));
+		} catch (NumberFormatException e) {
+			maxBots = DEFAULT_MAX_BOTS;
+		}
+		return new Values(enableOnDedicatedServer, maxBots);
+	}
+
+	public static boolean botsAllowed(boolean dedicatedServer, boolean enableOnDedicatedServer) {
+		return !dedicatedServer || enableOnDedicatedServer;
+	}
+
 	public static boolean botsAllowed(MinecraftServer server) {
-		return !server.isDedicatedServer() || enableOnDedicatedServer;
+		return botsAllowed(server.isDedicatedServer(), values.enableOnDedicatedServer());
 	}
 
 	public static int maxBotsPerLevel() {
-		return maxBotsPerLevel;
+		return values.maxBotsPerLevel();
+	}
+
+	/** Overrides the loaded settings. Used by game tests, which run on a dedicated server. */
+	public static void setValues(Values newValues) {
+		values = newValues;
 	}
 }

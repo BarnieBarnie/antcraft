@@ -23,6 +23,15 @@ jobs:
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build
+      - name: store test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: reports
+          path: |
+            build/reports/
+            build/test-results/
+            build/run/gameTest/logs/
       - name: capture build artifacts
         uses: actions/upload-artifact@v7
         with:

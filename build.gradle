@@ -29,6 +29,23 @@ dependencies {
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+
+	testImplementation "net.fabricmc:fabric-loader-junit:${project.loader_version}"
+}
+
+test {
+	useJUnitPlatform()
+}
+
+// Server game tests live in src/gametest and run headless as part of `build`.
+fabricApi {
+	configureTests {
+		createSourceSet = true
+		modId = "antcraft-gametest"
+		enableGameTests = true
+		enableClientGameTests = false
+		eula = true
+	}
 }
 
 processResources {

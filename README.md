@@ -68,8 +68,12 @@ Requires JDK 25.
 
 ```sh
 ./gradlew runClient   # launch Minecraft with the mod
-./gradlew build       # jar in build/libs/
+./gradlew test        # unit tests
+./gradlew runGameTest # bot behaviour tests on a headless server
+./gradlew build       # runs both test suites; jar in build/libs/
 ```
+
+Development is test-first. See [CLAUDE.md](CLAUDE.md) for the workflow.
 
 Targets Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API.
 

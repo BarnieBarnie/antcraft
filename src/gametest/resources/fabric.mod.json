@@ -1,0 +1,15 @@
+{
+	"schemaVersion": 1,
+	"id": "antcraft-gametest",
+	"version": "1.0.0",
+	"name": "AntCraft Game Tests",
+	"environment": "*",
+	"entrypoints": {
+		"fabric-gametest": [
+			"io.github.barniebarnie.antcraft.gametest.AntBotGameTest"
+		]
+	},
+	"depends": {
+		"antcraft": "*"
+	}
+}
