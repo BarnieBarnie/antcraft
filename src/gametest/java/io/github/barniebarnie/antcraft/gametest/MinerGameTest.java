@@ -108,6 +108,51 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().containsKey(Items.WOODEN_PICKAXE), "orders: " + colony.orders()));
 	}
 
+	private static int pickaxes(AntBot bot, net.minecraft.world.item.Item pickaxe) {
+		return bot.getInventory().countItem(pickaxe) + (bot.getMainHandItem().is(pickaxe) ? bot.getMainHandItem().getCount() : 0);
+	}
+
+	/** Cobblestone and sticks in the core become a stone pickaxe that replaces the wooden one. */
+	@GameTest(maxTicks = 1200)
+	public void upgradesToStonePickaxe(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+		core(helper).setItem(1, new ItemStack(Items.STICK, 2));
+		quarry(helper, colony, new BlockPos(3, 1, 3), new BlockPos(6, 2, 6));
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 4);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		member(helper, colony, BotRole.CRAFTER, 2, 1);
+
+		helper.onEachTick(() -> {
+			if (colony.orders().getOrDefault(Items.STONE_PICKAXE, 0) > 1) {
+				helper.fail("upgrade ordered more than once: " + colony.orders());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(pickaxes(miner, Items.STONE_PICKAXE) == 1, "miner has no stone pickaxe");
+			helper.assertTrue(pickaxes(miner, Items.WOODEN_PICKAXE) == 0, "miner kept its wooden pickaxe");
+			helper.assertTrue(core(helper).countItem(Items.WOODEN_PICKAXE) == 1, "wooden pickaxe not back in the core");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void ordersNothingAtTheBestReachableTier(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// Plenty for stone pickaxes, but no ingots or diamonds for anything better.
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		core(helper).setItem(1, new ItemStack(Items.STICK, 16));
+		quarry(helper, colony, new BlockPos(3, 1, 3), new BlockPos(6, 2, 6));
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 4);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (!colony.orders().isEmpty()) {
+				helper.fail("miner ordered " + colony.orders());
+			}
+		});
+		helper.runAfterDelay(250, helper::succeed);
+	}
+
 	/** Lumberjack logs become a pickaxe at the crafter, which the miner uses to dig. */
 	@GameTest(maxTicks = 3000)
 	public void colonyMakesItsOwnPickaxeAndMines(GameTestHelper helper) {
