@@ -22,10 +22,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -37,7 +39,8 @@ import org.jspecify.annotations.Nullable;
  * home when not in a colony), chop every log, clear the leaves the tree leaves behind,
  * remove the scaffold blocks it placed to get up there, pick up the drops, replant a
  * sapling, and bring logs to the home chest or colony core. Before a tree it tops up
- * its scaffold blocks from home, so it can pillar up to logs it cannot reach.
+ * its scaffold blocks from home, so it can pillar up to logs it cannot reach. It only uses
+ * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast.
  */
 public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int SEARCH_RADIUS = 24;
@@ -61,6 +64,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * places new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
 	 */
 	private static final int SCAFFOLD_RETRIES = 8;
+	/** The scaffold blocks lumberjacks fetch and place: ones they can take down quickly without a tool. */
+	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
 
 	private enum State { SEARCH, RESTOCK, CHOP, LEAVES, CLEANUP, COLLECT, REPLANT, DEPOSIT }
 
@@ -95,6 +100,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
+		this.follower.setScaffold(SCAFFOLD);
 		this.follower.setPlaceListener(pos -> {
 			if (TREE_WORK.contains(this.state) || this.retrying != null) {
 				this.placed().add(pos);
@@ -186,7 +192,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.enter(State.DEPOSIT);
 			return;
 		}
-		if (this.restockCooldown == 0 && PathFollower.scaffoldCount(this.bot.getInventory()) < RESTOCK_BELOW && this.homeScaffold(level) > 0) {
+		if (this.restockCooldown == 0 && PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD) < RESTOCK_BELOW && this.homeScaffold(level) > 0) {
 			this.enter(State.RESTOCK);
 			return;
 		}
@@ -237,7 +243,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private int homeScaffold(ServerLevel level) {
 		Container home = this.bot.getHome() == null ? null : Storage.containerAt(level, this.bot.getHome());
-		return home == null ? 0 : PathFollower.scaffoldCount(home);
+		return home == null ? 0 : PathFollower.scaffoldCount(home, SCAFFOLD);
 	}
 
 	private void restock(ServerLevel level) {
@@ -250,8 +256,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		Goal reach = new Goal.Reach(home, REACH);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
-			int wanted = SCAFFOLD_STOCK - PathFollower.scaffoldCount(this.bot.getInventory());
-			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(PathFollower.SCAFFOLD_BLOCKS), wanted);
+			int wanted = SCAFFOLD_STOCK - PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD);
+			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(SCAFFOLD), wanted);
 			this.enter(State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.restockCooldown = RESTOCK_RETRY_TICKS;

@@ -264,6 +264,47 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void takesOnlyDirtFromHomeNotCobblestone(GameTestHelper helper) {
+		tallTree(helper, 5, 5);
+		Container home = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		// Cobblestone first, so a bot that takes any scaffold block takes it.
+		home.setItem(0, new ItemStack(Items.COBBLESTONE, 16));
+		home.setItem(1, new ItemStack(Items.DIRT, 16));
+		AntBot bot = lumberjack(helper, 2, 4);
+
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			helper.assertTrue(home.countItem(Items.OAK_LOG) == 7, "chest has " + home.countItem(Items.OAK_LOG) + " logs");
+			helper.assertTrue(home.countItem(Items.COBBLESTONE) == 16, "chest has " + home.countItem(Items.COBBLESTONE) + " cobblestone");
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 0, "bot took cobblestone");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void pillarsWithDirtNotCobblestoneItCarries(GameTestHelper helper) {
+		tallTree(helper, 5, 5);
+		AntBot bot = lumberjack(helper, 2, 4);
+		// Cobblestone first, so a bot that places any scaffold block places it.
+		bot.getInventory().setItem(0, new ItemStack(Items.COBBLESTONE, 16));
+		bot.getInventory().setItem(1, new ItemStack(Items.DIRT, 16));
+
+		// Cleanup would get placed cobblestone back, so watch the world rather than the inventory.
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+				if (helper.getBlockState(pos).is(Blocks.COBBLESTONE)) {
+					helper.fail("bot placed cobblestone at " + pos.toShortString());
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 16, "bot lost cobblestone");
+		});
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 200)
 	public void leavesPlayerBuiltLogsAlone(GameTestHelper helper) {
 		tree(helper, 5, 5, true);

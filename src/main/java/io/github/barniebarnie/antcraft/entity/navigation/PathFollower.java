@@ -32,6 +32,11 @@ import org.jspecify.annotations.Nullable;
  */
 public class PathFollower {
 	public static final TagKey<Item> SCAFFOLD_BLOCKS = TagKey.create(Registries.ITEM, AntCraft.id("scaffold_blocks"));
+	/**
+	 * Scaffold blocks that break quickly by hand (item tag {@code antcraft:lumberjack_scaffold_blocks}), for bots
+	 * that take their scaffolding down again without a tool for it. Keep it a subset of {@link #SCAFFOLD_BLOCKS}.
+	 */
+	public static final TagKey<Item> FAST_SCAFFOLD_BLOCKS = TagKey.create(Registries.ITEM, AntCraft.id("lumberjack_scaffold_blocks"));
 
 	public enum Status { RUNNING, ARRIVED, FAILED }
 
@@ -52,6 +57,7 @@ public class PathFollower {
 
 	private final BlockBreaker breaker;
 	private boolean mayPlace = true;
+	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 	private Consumer<BlockPos> placeListener = pos -> {
 	};
 
@@ -68,6 +74,11 @@ public class PathFollower {
 	/** Whether paths may place scaffold blocks; applies from the next path planned. */
 	public void setMayPlace(boolean mayPlace) {
 		this.mayPlace = mayPlace;
+	}
+
+	/** Which blocks paths may place as scaffolding; {@link #SCAFFOLD_BLOCKS} unless set. */
+	public void setScaffold(TagKey<Item> scaffold) {
+		this.scaffold = scaffold;
 	}
 
 	public void start(Goal goal) {
@@ -142,7 +153,7 @@ public class PathFollower {
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem());
-		PathFinder.Options options = new PathFinder.Options(true, this.mayPlace && scaffoldCount(this.bot.getInventory()) > 0, MAX_NODES, MAX_DROP);
+		PathFinder.Options options = new PathFinder.Options(true, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
 		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
 		this.stepIndex = 0;
 		this.stepTicks = 0;
@@ -190,7 +201,7 @@ public class PathFollower {
 		SimpleContainer inventory = this.bot.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.is(SCAFFOLD_BLOCKS) && stack.getItem() instanceof BlockItem blockItem) {
+			if (stack.is(this.scaffold) && stack.getItem() instanceof BlockItem blockItem) {
 				BlockState state = blockItem.getBlock().defaultBlockState();
 				Vec3 center = Vec3.atCenterOf(pos);
 				this.bot.getLookControl().setLookAt(center.x, center.y, center.z);
@@ -207,10 +218,15 @@ public class PathFollower {
 	}
 
 	public static int scaffoldCount(Container inventory) {
+		return scaffoldCount(inventory, SCAFFOLD_BLOCKS);
+	}
+
+	/** How many blocks in {@code scaffold} the container holds. */
+	public static int scaffoldCount(Container inventory, TagKey<Item> scaffold) {
 		int count = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.is(SCAFFOLD_BLOCKS)) {
+			if (stack.is(scaffold)) {
 				count += stack.getCount();
 			}
 		}

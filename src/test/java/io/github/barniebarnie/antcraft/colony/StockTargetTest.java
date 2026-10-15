@@ -55,7 +55,7 @@ class StockTargetTest {
 	void defaultsCoverProgression() {
 		List<String> names = DefaultStock.TARGETS.stream().map(StockTarget::name).toList();
 		for (String expected : List.of("#minecraft:pickaxes", "#minecraft:axes", "#minecraft:swords", "#minecraft:planks", "minecraft:stick",
-				"#antcraft:colony_food", "#minecraft:head_armor", "#minecraft:chest_armor", "#minecraft:leg_armor", "#minecraft:foot_armor")) {
+				"#antcraft:colony_food", "#antcraft:lumberjack_scaffold_blocks","#minecraft:head_armor", "#minecraft:chest_armor", "#minecraft:leg_armor", "#minecraft:foot_armor")) {
 			assertTrue(names.contains(expected), "defaults lack " + expected + ": " + names);
 		}
 	}
