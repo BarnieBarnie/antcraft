@@ -188,6 +188,17 @@ class ColonyTest {
 	}
 
 	@Test
+	void coloniesLoadedWithoutJobsGetTheirOwnBoard() {
+		String json = """
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0]}
+			""";
+		Colony first = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json)).getOrThrow();
+		Colony second = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json)).getOrThrow();
+		first.board().post(JobType.CHOP_TREE, new BlockPos(5, 64, 5));
+		assertTrue(second.board().jobs().isEmpty(), "colonies share a job board");
+	}
+
+	@Test
 	void plansOrdersAndBlockedStepsSurviveSaveAndLoad() {
 		Colony colony = colony();
 		colony.addBuild(plan(Blocks.COBBLESTONE));

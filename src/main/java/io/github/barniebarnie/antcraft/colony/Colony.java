@@ -75,8 +75,8 @@ public class Colony {
 		UUIDUtil.CODEC.fieldOf("id").forGetter(Colony::id),
 		BlockPos.CODEC.fieldOf("core").forGetter(Colony::core),
 		UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(c -> List.copyOf(c.members)),
-		// Lenient: jobs of a type that no longer exists (the quarry's mine_layer) drop the list; the next survey posts them again.
-		JobBoard.CODEC.lenientOptionalFieldOf("jobs", new JobBoard()).forGetter(Colony::board),
+		// Lenient: a new board per colony, never a shared default. Jobs of a type that no longer exists (the quarry's mine_layer) drop the list; the next survey posts them again.
+		JobBoard.CODEC.lenientOptionalFieldOf("jobs").xmap(jobs -> jobs.orElseGet(JobBoard::new), Optional::of).forGetter(Colony::board),
 		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
 		ITEM_COUNTS.optionalFieldOf("orders", Map.of()).forGetter(Colony::orders),
 		// Old saves may still have a "quarry"; it is ignored.
