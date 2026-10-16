@@ -172,8 +172,41 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(colony.field().isPresent(), "no field");
 			Field field = colony.field().get();
 			helper.assertTrue(field.center().distManhattan(colony.core()) <= 8, "field far from core: " + field.center());
-			helper.assertTrue(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "no water in the middle");
 			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).isEmpty(), "unplanted: " + field.toPlant(crop -> planted(helper, crop)));
+		});
+	}
+
+	@GameTest(maxTicks = 800)
+	public void fillsABucketAtNearbyWaterForTheField(GameTestHelper helper) {
+		BlockPos source = new BlockPos(7, 0, 7);
+		helper.setBlock(source, Blocks.WATER);
+		Colony colony = colony(helper);
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
+		bot.getInventory().addItem(new ItemStack(Items.BUCKET));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.field().isPresent(), "no field");
+			helper.assertTrue(helper.getLevel().getBlockState(colony.field().get().center()).is(Blocks.WATER), "no water in the middle");
+			helper.assertBlockNotPresent(Blocks.WATER, source);
+			helper.assertTrue(carried(bot, Items.BUCKET) == 1, "farmer did not keep the empty bucket");
+		});
+	}
+
+	@GameTest(maxTicks = 400)
+	public void ordersABucketAndTheFieldWaterWaits(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
+
+		helper.runAfterDelay(350, () -> {
+			helper.assertTrue(colony.orders().getOrDefault(Items.BUCKET, 0) == 1, "orders: " + colony.orders());
+			Field field = colony.field().orElseThrow();
+			helper.assertFalse(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "water without a bucket");
+			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).size() < 24, "nothing planted while the water waits");
+			helper.succeed();
 		});
 	}
 }

@@ -10,8 +10,10 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -19,10 +21,13 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BucketPickup;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,7 +35,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Farmer work loop: harvest ripe crops from the job board, replant them, store the produce.
- * It also tills and plants the colony field, breaking grass for seeds when the colony has none.
+ * It also tills and plants the colony field, breaking grass for seeds when the colony has none, and
+ * waters the field's middle with a bucket.
  * Now and then it swaps its hoe for a better one in the core, or orders the best one the colony can make.
  */
 public class FarmerGoal extends ColonyWorkGoal {
@@ -38,12 +44,17 @@ public class FarmerGoal extends ColonyWorkGoal {
 	private static final int KEEP_SEEDS = 16;
 	private static final int MIN_FREE_SLOTS = 2;
 
-	private static final int GRASS_SCAN_HEIGHT = 4;
+	private static final int SCAN_HEIGHT = 4;
+	/** How often a farmer with an empty bucket looks for water to fill it at. */
+	private static final int WATER_SCAN_TICKS = 100;
 	private static final Set<JobType> JOBS = EnumSet.of(JobType.HARVEST_CROP, JobType.PLANT_CROP);
 
 	private boolean depositing;
 	/** Grass the farmer is breaking for seeds. */
 	private @Nullable BlockPos grass;
+	/** Water the farmer is filling its bucket at. */
+	private @Nullable BlockPos water;
+	private long nextWaterScan;
 
 	public FarmerGoal(AntBot bot) {
 		super(bot, BotRole.FARMER);
@@ -66,6 +77,9 @@ public class FarmerGoal extends ColonyWorkGoal {
 		}
 		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS) {
 			this.depositing = true;
+			return;
+		}
+		if (this.waterField(level, colony)) {
 			return;
 		}
 
@@ -124,7 +138,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			return;
 		}
 		if (!level.getBlockState(crop.below()).is(Blocks.FARMLAND)) {
-			this.till(level, colony, crop.below());
+			this.till(level, crop.below());
 		}
 		int slot = findSlot(this.bot.getInventory(), Farming::isSeed);
 		Block seed = ((BlockItem) this.bot.getInventory().getItem(slot).getItem()).getBlock();
@@ -136,7 +150,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 		this.hasJob = false;
 	}
 
-	private void till(ServerLevel level, Colony colony, BlockPos soil) {
+	private void till(ServerLevel level, BlockPos soil) {
 		ItemStack hand = this.bot.getMainHandItem();
 		if (!ToolKind.HOE.is(hand)) {
 			int slot = findSlot(this.bot.getInventory(), ToolKind.HOE::is);
@@ -146,9 +160,80 @@ public class FarmerGoal extends ColonyWorkGoal {
 		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 		level.setBlockAndUpdate(soil, Blocks.FARMLAND.defaultBlockState());
 		this.bot.getMainHandItem().hurtAndBreak(1, this.bot, EquipmentSlot.MAINHAND);
-		// ponytail: the water comes for free; a bucket trip if that ever matters.
-		colony.field().map(Field::center).filter(center -> !level.getBlockState(center).is(Blocks.WATER))
-			.ifPresent(center -> level.setBlockAndUpdate(center, Blocks.WATER.defaultBlockState()));
+	}
+
+	/**
+	 * Waters the middle of the colony field with a bucket: it pours a water bucket, fills an empty
+	 * one at the nearest water in the territory, or fetches one from the core. Without any bucket in
+	 * the colony it orders one. Returns true while busy, so the caller skips its own work this tick.
+	 * ponytail: the field is planted while the water waits; farmland under a crop stays tilled when
+	 * dry, the crops just grow slower until the water comes.
+	 */
+	private boolean waterField(ServerLevel level, Colony colony) {
+		BlockPos center = colony.field().map(Field::center).orElse(null);
+		if (center == null || level.getBlockState(center).is(Blocks.WATER)) {
+			return false;
+		}
+		SimpleContainer inventory = this.bot.getInventory();
+		int full = findSlot(inventory, stack -> stack.is(Items.WATER_BUCKET));
+		if (full >= 0) {
+			if (this.reach(center)) {
+				this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+				level.setBlockAndUpdate(center, Blocks.WATER.defaultBlockState());
+				inventory.setItem(full, new ItemStack(Items.BUCKET));
+			}
+			return true;
+		}
+		int empty = findSlot(inventory, stack -> stack.is(Items.BUCKET));
+		if (empty >= 0) {
+			return this.fillBucket(level, colony, empty);
+		}
+		Container core = Storage.containerAt(level, colony.core());
+		if (core != null && findSlot(core, FarmerGoal::isBucket) >= 0) {
+			if (this.reach(colony.core())) {
+				Storage.moveItems(core, inventory, FarmerGoal::isBucket, 1);
+			}
+			return true;
+		}
+		// ponytail: a bucket in a storage chest counts as owned but is not fetched; the hauler keeps a stack of anything in the core, so one only ends up there by hand.
+		Map<Item, Integer> stock = Storage.colonyStock(level, colony);
+		if (stock.getOrDefault(Items.BUCKET, 0) + stock.getOrDefault(Items.WATER_BUCKET, 0) == 0 && !colony.orders().containsKey(Items.BUCKET)) {
+			colony.addOrder(Items.BUCKET, 1);
+		}
+		return false;
+	}
+
+	/** Walks to the nearest water source and fills the bucket in {@code slot}; false when there is no water to fill it at. */
+	private boolean fillBucket(ServerLevel level, Colony colony, int slot) {
+		if (this.water == null || !isWaterSource(level.getBlockState(this.water))) {
+			this.water = null;
+			if (level.getGameTime() < this.nextWaterScan) {
+				return false;
+			}
+			this.nextWaterScan = level.getGameTime() + WATER_SCAN_TICKS;
+			this.water = this.nearest(level, colony, FarmerGoal::isWaterSource);
+			if (this.water == null) {
+				return false;
+			}
+		}
+		if (this.reach(this.water)) {
+			BlockState state = level.getBlockState(this.water);
+			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+			ItemStack filled = ((BucketPickup) state.getBlock()).pickupBlock(this.bot, level, this.water, state);
+			if (filled.is(Items.WATER_BUCKET)) {
+				this.bot.getInventory().setItem(slot, filled);
+			}
+			this.water = null;
+		}
+		return true;
+	}
+
+	private static boolean isWaterSource(BlockState state) {
+		return state.is(Blocks.WATER) && state.getFluidState().isSource();
+	}
+
+	private static boolean isBucket(ItemStack stack) {
+		return stack.is(Items.BUCKET) || stack.is(Items.WATER_BUCKET);
 	}
 
 	/** Whether this farmer can plant at {@code crop} now: it carries a seed and the soil is tilled, or it has a hoe. */
@@ -176,7 +261,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			return;
 		}
 		if (this.grass == null || !Farming.isSeedGrass(level.getBlockState(this.grass))) {
-			this.grass = this.nearestGrass(level, colony);
+			this.grass = this.nearest(level, colony, Farming::isSeedGrass);
 			if (this.grass == null) {
 				this.cooldown = IDLE_TICKS;
 				return;
@@ -187,12 +272,12 @@ public class FarmerGoal extends ColonyWorkGoal {
 		}
 	}
 
-	private @Nullable BlockPos nearestGrass(ServerLevel level, Colony colony) {
+	private @Nullable BlockPos nearest(ServerLevel level, Colony colony, Predicate<BlockState> wanted) {
 		BlockPos core = colony.core();
 		int r = colony.radius();
 		BlockPos nearest = null;
-		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -GRASS_SCAN_HEIGHT, -r), core.offset(r, GRASS_SCAN_HEIGHT, r))) {
-			if (Farming.isSeedGrass(level.getBlockState(pos)) && (nearest == null || pos.distSqr(this.bot.blockPosition()) < nearest.distSqr(this.bot.blockPosition()))) {
+		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -SCAN_HEIGHT, -r), core.offset(r, SCAN_HEIGHT, r))) {
+			if (wanted.test(level.getBlockState(pos)) && (nearest == null || pos.distSqr(this.bot.blockPosition()) < nearest.distSqr(this.bot.blockPosition()))) {
 				nearest = pos.immutable();
 			}
 		}
@@ -215,7 +300,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 		int seeds = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty() || ToolKind.HOE.is(stack)) {
+			if (stack.isEmpty() || isKept(stack)) {
 				continue;
 			}
 			if (Farming.isSeed(stack)) {
@@ -227,13 +312,18 @@ public class FarmerGoal extends ColonyWorkGoal {
 		return seeds > KEEP_SEEDS;
 	}
 
-	/** Puts everything in the core except hoes and the seeds needed for replanting. */
+	/** Tools a farmer keeps when storing produce. */
+	private static boolean isKept(ItemStack stack) {
+		return ToolKind.HOE.is(stack) || isBucket(stack);
+	}
+
+	/** Puts everything in the core except hoes, buckets and the seeds needed for replanting. */
 	private void storeProduce(Container core) {
 		SimpleContainer inventory = this.bot.getInventory();
 		int keptSeeds = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty() || ToolKind.HOE.is(stack)) {
+			if (stack.isEmpty() || isKept(stack)) {
 				continue;
 			}
 			int keep = 0;
