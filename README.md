@@ -109,6 +109,12 @@ Requires JDK 25.
 
 Development is test-first. See [CLAUDE.md](CLAUDE.md) for the workflow.
 
+The bot role skins are drawn by `tools/skins.py` (needs Pillow). To add or tweak a role's skin, edit its entry in `ROLES` and regenerate them all:
+
+```sh
+python3 tools/skins.py src/main/resources/assets/antcraft/textures/entity/bot
+```
+
 Targets Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API.
 
 ## License
