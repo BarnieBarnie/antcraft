@@ -23,5 +23,13 @@
 	"commands.antcraft.colony.stock.set": "Colony keeps %2$s %1$s in stock",
 	"commands.antcraft.colony.stock.removed": "Colony no longer keeps %s in stock",
 	"commands.antcraft.colony.stock.not_found": "The colony has no stock target for %s",
-	"commands.antcraft.colony.stock.unknown": "Unknown item %s"
+	"commands.antcraft.colony.stock.unknown": "Unknown item %s",
+	"commands.antcraft.colony.build.empty": "The colony has nothing to build",
+	"commands.antcraft.colony.build.line": "%s. Build at %s: %s of %s steps left",
+	"commands.antcraft.colony.build.line_mineshaft": "%s. Mineshaft at %s: %s of %s steps left (move it with /antcraft colony mineshaft)",
+	"commands.antcraft.colony.build.copied": "Copied %s blocks into a build at %s (build %s)",
+	"commands.antcraft.colony.build.too_big": "That region holds %s blocks; at most %s can be copied",
+	"commands.antcraft.colony.build.not_found": "The colony has no build %s",
+	"commands.antcraft.colony.build.is_mineshaft": "Build %s is the colony mineshaft; move it with /antcraft colony mineshaft instead",
+	"commands.antcraft.colony.build.cancelled": "Cancelled build %s at %s"
 }

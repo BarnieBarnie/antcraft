@@ -18,10 +18,12 @@ import java.util.Set;
 import java.util.stream.Stream;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -33,6 +35,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.Vec3;
 
 public class BuilderGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CORE = new BlockPos(1, 1, 1);
@@ -120,6 +123,73 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(stocked[0], "no order for stairs: " + colony.orders());
 			assertState(helper, 4, 1, 4, STAIRS_EAST);
 		});
+	}
+
+	/** Runs a command as the server would for an operator standing at the colony core. */
+	private static void command(GameTestHelper helper, PermissionSet permissions, String command) {
+		CommandSourceStack source = helper.getLevel().getServer().createCommandSourceStack()
+			.withLevel(helper.getLevel())
+			.withPosition(Vec3.atCenterOf(helper.absolutePos(CORE)))
+			.withPermission(permissions)
+			.withSuppressedOutput();
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(source, command);
+	}
+
+	private static String coords(GameTestHelper helper, int x, int y, int z) {
+		BlockPos pos = helper.absolutePos(new BlockPos(x, y, z));
+		return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+	}
+
+	private static String copy(GameTestHelper helper) {
+		return "antcraft colony build copy " + coords(helper, 5, 1, 1) + " " + coords(helper, 6, 2, 1) + " " + coords(helper, 5, 1, 5);
+	}
+
+	@GameTest(maxTicks = 600)
+	public void copyCommandAddsPlanThatBuilderBuilds(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		core(helper).setItem(1, new ItemStack(Items.OAK_STAIRS, 1));
+		helper.setBlock(5, 1, 1, Blocks.COBBLESTONE);
+		helper.setBlock(6, 1, 1, Blocks.COBBLESTONE);
+		helper.setBlock(new BlockPos(5, 2, 1), STAIRS_EAST);
+		// In the way of the copy, where the original has air.
+		helper.setBlock(6, 2, 5, Blocks.DIRT);
+
+		command(helper, PermissionSet.ALL_PERMISSIONS, copy(helper));
+		helper.assertTrue(colony.builds().size() == 1, "copy not added: " + colony.builds());
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 5, COBBLE);
+			assertState(helper, 6, 1, 5, COBBLE);
+			assertState(helper, 5, 2, 5, STAIRS_EAST);
+			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(6, 2, 5));
+			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
+		});
+	}
+
+	@GameTest(maxTicks = 20)
+	public void buildCommandsAreOperatorOnly(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		command(helper, PermissionSet.NO_PERMISSIONS, copy(helper));
+		helper.assertTrue(colony.builds().isEmpty(), "copied without permission");
+		helper.succeed();
+	}
+
+	@GameTest(maxTicks = 20)
+	public void cancelRemovesCopyButNotTheMineshaft(GameTestHelper helper) {
+		Mineshaft mine = MinerGameTest.mine(helper);
+		Colony colony = colony(helper);
+		colony.setMineshaft(mine);
+		BuildPlan shaft = colony.mineshaft().orElseThrow().plan();
+		command(helper, PermissionSet.ALL_PERMISSIONS, copy(helper));
+		helper.assertTrue(colony.builds().size() == 2, "copy not added: " + colony.builds());
+
+		command(helper, PermissionSet.ALL_PERMISSIONS, "antcraft colony build cancel 1");
+		helper.assertTrue(colony.builds().size() == 2, "mineshaft cancelled: " + colony.builds());
+		command(helper, PermissionSet.ALL_PERMISSIONS, "antcraft colony build cancel 2");
+		helper.assertTrue(colony.builds().equals(List.of(shaft)), "copy not cancelled: " + colony.builds());
+		helper.succeed();
 	}
 
 	/** Saves the bot and loads it into a new bot, as when its chunk unloads and loads again. */

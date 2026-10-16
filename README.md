@@ -63,6 +63,9 @@ Bots use the best tool or weapon they carry, and tools wear out.
 | `/antcraft colony stock set <item\|#tag> <count>` | Keeps at least this many in stock, e.g. `#minecraft:pickaxes 3` or `minecraft:torch 16` |
 | `/antcraft colony stock remove <item\|#tag>` | Stops keeping it in stock |
 | `/antcraft colony mineshaft <pos>` | Moves the colony mineshaft so its stairs start at `<pos>` (ground level); builders dig the new one |
+| `/antcraft colony build copy <from> <to> <at>` | Copies the blocks between `<from>` and `<to>` (air included, so it clears too) into a build whose lowest corner is `<at>`; builders build the copy. Block states only, no chest contents |
+| `/antcraft colony build list` | Numbered list of the colony's builds with the steps left; the mineshaft is labelled |
+| `/antcraft colony build cancel <n>` | Drops build `<n>` from the list (not the mineshaft: move that with `colony mineshaft`) |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
 
 **Config** (`config/antcraft.properties`):

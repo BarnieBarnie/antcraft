@@ -17,10 +17,12 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,10 +60,13 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft home &lt;pos&gt; [bots]
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
+ * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|cancel &lt;n&gt;
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
 	private static final int COLONY_RANGE = 64;
+	/** Largest region {@code colony build copy} takes, the same as vanilla /clone. */
+	private static final int MAX_COPY_VOLUME = 32768;
 	private static final DynamicCommandExceptionType UNKNOWN_ITEM = new DynamicCommandExceptionType(
 		name -> Component.translatableEscape("commands.antcraft.colony.stock.unknown", name));
 
@@ -115,6 +120,17 @@ public final class AntCraftCommands {
 					.then(Commands.literal("remove")
 						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
 							.executes(ctx -> removeStock(ctx.getSource(), stockMatch(ctx))))))
+				.then(Commands.literal("build")
+					.then(Commands.literal("list").executes(ctx -> listBuilds(ctx.getSource())))
+					.then(Commands.literal("copy")
+						.then(Commands.argument("from", BlockPosArgument.blockPos())
+							.then(Commands.argument("to", BlockPosArgument.blockPos())
+								.then(Commands.argument("at", BlockPosArgument.blockPos())
+									.executes(ctx -> copyBuild(ctx.getSource(), BlockPosArgument.getLoadedBlockPos(ctx, "from"),
+										BlockPosArgument.getLoadedBlockPos(ctx, "to"), BlockPosArgument.getBlockPos(ctx, "at")))))))
+					.then(Commands.literal("cancel")
+						.then(Commands.argument("n", IntegerArgumentType.integer(1))
+							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
 				.then(Commands.literal("cancel")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value())))))
@@ -277,6 +293,66 @@ public final class AntCraftCommands {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.cancelled", itemName(item)), false);
 		});
 		return colony.isPresent() ? 1 : 0;
+	}
+
+	private static boolean isMineshaft(Colony colony, BuildPlan plan) {
+		return colony.mineshaft().map(shaft -> shaft.plan().equals(plan)).orElse(false);
+	}
+
+	private static int listBuilds(CommandSourceStack source) {
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		Colony colony = found.get();
+		List<BuildPlan> builds = colony.builds();
+		if (builds.isEmpty()) {
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.empty"), false);
+		}
+		for (int i = 0; i < builds.size(); i++) {
+			BuildPlan plan = builds.get(i);
+			long left = plan.steps().stream().filter(step -> !step.isDone(source.getLevel().getBlockState(step.pos()))).count();
+			String key = isMineshaft(colony, plan) ? "commands.antcraft.colony.build.line_mineshaft" : "commands.antcraft.colony.build.line";
+			int n = i + 1;
+			source.sendSuccess(() -> Component.translatable(key, n, plan.target().toShortString(), left, plan.steps().size()), false);
+		}
+		return builds.size();
+	}
+
+	private static int copyBuild(CommandSourceStack source, BlockPos from, BlockPos to, BlockPos at) {
+		BlockPos size = BlockPos.max(from, to).subtract(BlockPos.min(from, to)).offset(1, 1, 1);
+		long volume = (long) size.getX() * size.getY() * size.getZ();
+		if (volume > MAX_COPY_VOLUME) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.too_big", volume, MAX_COPY_VOLUME));
+			return 0;
+		}
+		Optional<Colony> colony = nearestColony(source);
+		colony.ifPresent(c -> {
+			c.addBuild(RegionPlan.copy(source.getLevel()::getBlockState, from, to, at));
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.copied", volume, at.toShortString(), c.builds().size()), false);
+		});
+		return colony.isPresent() ? 1 : 0;
+	}
+
+	private static int cancelBuild(CommandSourceStack source, int n) {
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		Colony colony = found.get();
+		List<BuildPlan> builds = colony.builds();
+		if (n > builds.size()) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.not_found", n));
+			return 0;
+		}
+		BuildPlan plan = builds.get(n - 1);
+		if (isMineshaft(colony, plan)) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.is_mineshaft", n));
+			return 0;
+		}
+		colony.removeBuild(plan);
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.cancelled", n, plan.target().toShortString()), false);
+		return 1;
 	}
 
 	private static int setRole(CommandSourceStack source, List<AntBot> bots, BotRole role) {
