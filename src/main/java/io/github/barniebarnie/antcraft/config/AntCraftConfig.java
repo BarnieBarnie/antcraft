@@ -6,6 +6,8 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
@@ -20,8 +22,14 @@ import net.minecraft.server.MinecraftServer;
 public final class AntCraftConfig {
 	private static final String FILE_NAME = "antcraft.properties";
 	private static final int DEFAULT_MAX_BOTS = 64;
+	/** Iron and copper, gold and lapis, diamonds and redstone. */
+	private static final List<Integer> DEFAULT_MINESHAFT_LEVELS = List.of(16, -16, -58);
 
-	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
+	/** {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from. */
+	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, DEFAULT_MINESHAFT_LEVELS);
+		}
 	}
 
 	private static Values values = new Values(false, DEFAULT_MAX_BOTS);
@@ -44,6 +52,7 @@ public final class AntCraftConfig {
 
 		props.setProperty("enableOnDedicatedServer", Boolean.toString(values.enableOnDedicatedServer()));
 		props.setProperty("maxBotsPerLevel", Integer.toString(values.maxBotsPerLevel()));
+		props.setProperty("mineshaftLevels", String.join(",", values.mineshaftLevels().stream().map(String::valueOf).toList()));
 		try (Writer writer = Files.newBufferedWriter(path)) {
 			props.store(writer, "AntCraft settings. Bots are disabled on dedicated servers unless enableOnDedicatedServer=true.");
 		} catch (IOException e) {
@@ -59,7 +68,13 @@ public final class AntCraftConfig {
 		} catch (NumberFormatException e) {
 			maxBots = DEFAULT_MAX_BOTS;
 		}
-		return new Values(enableOnDedicatedServer, maxBots);
+		List<Integer> levels;
+		try {
+			levels = Arrays.stream(props.getProperty("mineshaftLevels", "").split(",")).map(String::trim).map(Integer::parseInt).toList();
+		} catch (NumberFormatException e) {
+			levels = DEFAULT_MINESHAFT_LEVELS;
+		}
+		return new Values(enableOnDedicatedServer, maxBots, levels);
 	}
 
 	public static boolean botsAllowed(boolean dedicatedServer, boolean enableOnDedicatedServer) {
@@ -68,6 +83,10 @@ public final class AntCraftConfig {
 
 	public static boolean botsAllowed(MinecraftServer server) {
 		return botsAllowed(server.isDedicatedServer(), values.enableOnDedicatedServer());
+	}
+
+	public static List<Integer> mineshaftLevels() {
+		return values.mineshaftLevels();
 	}
 
 	public static int maxBotsPerLevel() {

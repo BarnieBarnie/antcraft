@@ -13,7 +13,7 @@ public final class RoleAssigner {
 	/** Which role does which kind of job. */
 	private static final Map<JobType, BotRole> WORKERS = Map.of(
 		JobType.CHOP_TREE, BotRole.LUMBERJACK,
-		JobType.MINE_LAYER, BotRole.MINER,
+		JobType.MINE_BRANCH, BotRole.MINER,
 		JobType.HARVEST_CROP, BotRole.FARMER,
 		JobType.BUILD, BotRole.BUILDER
 	);

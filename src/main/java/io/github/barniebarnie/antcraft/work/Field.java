@@ -45,7 +45,7 @@ public record Field(BlockPos center) {
 
 	/**
 	 * The field nearest the core on flat soil inside the territory, clear of the core and of the
-	 * {@code avoid} areas (such as a quarry).
+	 * {@code avoid} areas (such as the mineshaft).
 	 *
 	 * @param isSoil whether a block can be tilled (or already is farmland)
 	 * @param isOpen whether the block above soil leaves room for a crop

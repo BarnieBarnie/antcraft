@@ -19,7 +19,8 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
-import io.github.barniebarnie.antcraft.work.Quarry;
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -55,7 +56,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft stop [bots]
  * /antcraft role &lt;role&gt; [bots]
  * /antcraft home &lt;pos&gt; [bots]
- * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|quarry &lt;from&gt; &lt;to&gt;|radius &lt;blocks&gt;   (nearest colony)
+ * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  */
 public final class AntCraftCommands {
@@ -99,10 +100,9 @@ public final class AntCraftCommands {
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
 							.executes(ctx -> order(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value(), IntegerArgumentType.getInteger(ctx, "count"))))))
-				.then(Commands.literal("quarry")
-					.then(Commands.argument("from", BlockPosArgument.blockPos())
-						.then(Commands.argument("to", BlockPosArgument.blockPos())
-							.executes(ctx -> setQuarry(ctx.getSource(), BlockPosArgument.getBlockPos(ctx, "from"), BlockPosArgument.getBlockPos(ctx, "to"))))))
+				.then(Commands.literal("mineshaft")
+					.then(Commands.argument("pos", BlockPosArgument.blockPos())
+						.executes(ctx -> setMineshaft(ctx.getSource(), BlockPosArgument.getBlockPos(ctx, "pos")))))
 				.then(Commands.literal("radius")
 					.then(Commands.argument("blocks", IntegerArgumentType.integer(4, 128))
 						.executes(ctx -> setRadius(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "blocks")))))
@@ -252,12 +252,11 @@ public final class AntCraftCommands {
 		return colony.isPresent() ? 1 : 0;
 	}
 
-	private static int setQuarry(CommandSourceStack source, BlockPos from, BlockPos to) {
+	private static int setMineshaft(CommandSourceStack source, BlockPos top) {
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
-			Quarry quarry = new Quarry(from, to);
-			c.setQuarry(quarry);
-			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.quarry", quarry.min().toShortString(), quarry.max().toShortString()), false);
+			c.setMineshaft(new Mineshaft(top, AntCraftConfig.mineshaftLevels()));
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.mineshaft", top.toShortString()), false);
 		});
 		return colony.isPresent() ? 1 : 0;
 	}

@@ -28,20 +28,22 @@ Bots find their own way: they walk, jump, drop up to 3 blocks, dig through block
 
 **Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, redstone on the sides) and place it. Bots activated within 32 blocks join the colony and use the core, which holds 54 stacks, as their home. The colony surveys its area every 5 seconds and posts a job for every natural tree it finds; each lumberjack claims a different tree, so they never get in each other's way. If a bot dies or goes missing, its job is freed for the others. Breaking the core dissolves the colony and drops its contents.
 
-**Stock.** A colony keeps a base stock in its core, so crafters have work and the colony grows on its own. A new colony keeps 2 pickaxes, 1 axe, shovel and hoe, 2 swords (any material; stone when there is cobblestone, else wood), 32 logs, 32 planks, 16 sticks, 64 cobblestone, 32 scaffold blocks, 16 food (bread) and one piece of each armor slot. Every survey, the colony orders what is short and can be crafted from what is in the core right now; gathered items such as logs and cobblestone come from the gathering roles. Armor needs ingots, so it waits until the colony can smelt. Change the list with `/antcraft colony stock`.
+**Stock.** A colony keeps a base stock in its core, so crafters have work and the colony grows on its own. A new colony keeps 2 pickaxes, 1 axe, shovel and hoe, 2 swords (any material; stone when there is cobblestone, else wood), 32 logs, 32 planks, 16 sticks, 64 cobblestone, 32 scaffold blocks, 16 food (bread), 32 torches and one piece of each armor slot. Every survey, the colony orders what is short and can be crafted from what is in the core right now; gathered items such as logs and cobblestone come from the gathering roles. Armor needs ingots, so it waits until the colony can smelt. Change the list with `/antcraft colony stock`.
 
 **Roles.** Colony bots without a role get one automatically, based on what the colony needs most (open jobs per worker, a crafter when there are orders, otherwise a guard). Roles you set yourself (`/antcraft role`) are kept. A lumberjack, miner or farmer the colony assigned that has had nothing to do for 30 seconds is moved to a role with waiting work (or to crafter when there are orders and no crafter). `/antcraft colony info` shows how many members are idle.
 
 Colony bots stay around their colony. They only start fights with mobs inside the colony radius (they still fight back anywhere when attacked), and a bot that ends up outside the radius with nothing to do, for example after a chase, walks back to the core. Bots busy with a job outside the radius, like a lumberjack at a tree on the edge, finish it first.
 
 - **Lumberjack:** see below.
-- **Miner:** digs out the quarry layer by layer and stores the haul. Takes a pickaxe from the core, or orders a wooden one when there is none.
+- **Miner:** branch-mines from the colony mineshaft and stores the haul. Takes a pickaxe from the core, or orders a wooden one when there is none.
 - **Farmer:** harvests ripe crops around the colony, replants, and stores the produce.
 - **Crafter:** works through colony orders at the core, ingredients first, and turns Bot Cores in storage into new colony bots. So `/antcraft colony order antcraft:bot_core 1` makes the colony build a new bot once the pumpkin, iron and redstone are in the core.
 - **Guard:** takes the best weapon from the core and patrols around it.
 - **Hauler:** collects loose items around the colony and stores them.
 
 Bots use the best tool or weapon they carry, and tools wear out.
+
+**Mineshaft:** once a colony has a miner, it picks a mineshaft site beside the core and builders dig it: a 1-wide staircase spiralling down a 2x2 column, with a landing and a hall at each mining level (`mineshaftLevels`), and torches every 8 blocks. Any bot can walk the stairs without scaffold, and no bot breaks the stairs, their floors or the torches. Miners dig 2-high branches off both sides of each hall, 3 blocks apart, one job per branch, and take the ores they see in the walls and ceiling. They light the branches with torches from the core as they go. They work the deepest landing whose ores the colony wants (orders or stock targets, e.g. `/antcraft colony stock set minecraft:raw_iron 32`), otherwise the deepest one.
 
 **Lumberjack:** chops natural trees (logs touching natural leaves, so your log houses are safe): in a colony it takes tree jobs from the job board, otherwise it searches within 24 blocks of its home, takes down any scaffold blocks it placed to get up there, picks up the drops, replants a sapling, and brings the logs to its home chest. Before each tree it tops up to 16 scaffold blocks from its home chest or colony core, so it can pillar up to logs it cannot reach from the ground. It leaves the canopy to decay by itself (only breaking leaves in its way), and when it had no sapling to replant it comes back for the saplings the leaves drop. In a colony replanting is shared: it posts a replant job, and the nearest lumberjack takes it once a sapling lies near the stump or the colony core holds one.
 
@@ -60,7 +62,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 | `/antcraft colony stock` | Lists what the colony keeps in stock, with how many it has |
 | `/antcraft colony stock set <item\|#tag> <count>` | Keeps at least this many in stock, e.g. `#minecraft:pickaxes 3` or `minecraft:torch 16` |
 | `/antcraft colony stock remove <item\|#tag>` | Stops keeping it in stock |
-| `/antcraft colony quarry <from> <to>` | Marks a box for miners to dig out |
+| `/antcraft colony mineshaft <pos>` | Moves the colony mineshaft so its stairs start at `<pos>` (ground level); builders dig the new one |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
 
 **Config** (`config/antcraft.properties`):
@@ -69,6 +71,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 |-----|---------|---------|
 | `enableOnDedicatedServer` | `false` | Must be `true` for bots to work on a dedicated server. When `false`, bots cannot be placed, and any existing bots stand still |
 | `maxBotsPerLevel` | `64` | Maximum number of bots per dimension |
+| `mineshaftLevels` | `16,-16,-58` | Heights of the landings of new mineshafts: iron and copper, gold and lapis, diamonds and redstone |
 
 ## Roadmap
 

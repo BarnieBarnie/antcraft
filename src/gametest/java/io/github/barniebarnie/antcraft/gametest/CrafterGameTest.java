@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.DefaultStock;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -75,6 +76,17 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(core(helper).countItem(Items.STICK) >= 4, "core has " + core(helper).countItem(Items.STICK) + " sticks");
 			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
 		});
+	}
+
+	/** The default stock keeps torches for the mineshaft. */
+	@GameTest(maxTicks = 400)
+	public void keepsTorchesInStock(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(DefaultStock.TARGETS.stream().filter(target -> target.matches(Items.TORCH)).toList());
+		store(helper, new ItemStack(Items.COAL, 1), new ItemStack(Items.STICK, 1));
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> helper.assertTrue(core(helper).countItem(Items.TORCH) == 4, "core has " + core(helper).countItem(Items.TORCH) + " torches"));
 	}
 
 	@GameTest(maxTicks = 400)

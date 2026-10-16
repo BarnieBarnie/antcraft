@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
 
@@ -13,6 +14,16 @@ class AntCraftConfigTest {
 		AntCraftConfig.Values values = AntCraftConfig.parse(new Properties());
 		assertFalse(values.enableOnDedicatedServer());
 		assertEquals(64, values.maxBotsPerLevel());
+		assertEquals(List.of(16, -16, -58), values.mineshaftLevels());
+	}
+
+	@Test
+	void readsMineshaftLevels() {
+		Properties props = new Properties();
+		props.setProperty("mineshaftLevels", " 20, -10 ,-50");
+		assertEquals(List.of(20, -10, -50), AntCraftConfig.parse(props).mineshaftLevels());
+		props.setProperty("mineshaftLevels", "deep");
+		assertEquals(List.of(16, -16, -58), AntCraftConfig.parse(props).mineshaftLevels());
 	}
 
 	@Test

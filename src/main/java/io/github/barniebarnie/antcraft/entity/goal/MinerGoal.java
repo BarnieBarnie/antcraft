@@ -8,26 +8,33 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Mining;
-import io.github.barniebarnie.antcraft.work.Quarry;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 
 /**
  * Miner work loop: make sure it has a pickaxe (from the core, or by ordering one),
- * claim a quarry layer, mine it out, and bring the haul to the core. Now and then it
+ * claim a mineshaft branch, dig it out with the ores in its walls, light it with torches from
+ * the core as it goes, and bring the haul to the core. Now and then it
  * looks for a better pickaxe: it swaps to one in the core, leaving the old one there,
  * or orders the best one the colony can make.
  */
@@ -35,6 +42,8 @@ public class MinerGoal extends ColonyWorkGoal {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
 	private static final int KEEP_SCAFFOLD = 8;
 	private static final int MIN_FREE_SLOTS = 2;
+	/** Torches a miner takes along. */
+	private static final int CARRY_TORCHES = 16;
 	private enum State { TOOL, WORK, DEPOSIT }
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
@@ -95,9 +104,9 @@ public class MinerGoal extends ColonyWorkGoal {
 			this.enter(State.DEPOSIT);
 			return;
 		}
-		Optional<Quarry> quarry = colony.quarry();
-		Optional<Job> job = quarry.isEmpty() ? Optional.empty()
-			: colony.board().claim(this.bot.getUUID(), Set.of(JobType.MINE_LAYER), this.bot.blockPosition(), level.getGameTime());
+		Optional<Mineshaft> shaft = colony.mineshaft();
+		Optional<Job> job = shaft.isEmpty() ? Optional.empty()
+			: colony.board().claim(this.bot.getUUID(), Set.of(JobType.MINE_BRANCH), this.bot.blockPosition(), level.getGameTime());
 		this.hasJob = job.isPresent();
 		if (job.isEmpty()) {
 			if (this.hasItemsToStore()) {
@@ -107,9 +116,11 @@ public class MinerGoal extends ColonyWorkGoal {
 			}
 			return;
 		}
-
-		List<BlockPos> blocks = quarry.get().blocksInLayer(job.get().target().getY(),
-			pos -> Mining.isMinable(level, pos) && !this.unreachable.contains(pos), this.bot.blockPosition());
+		Optional<Mineshaft.Branch> branch = shaft.get().branch(job.get().target());
+		if (branch.isPresent() && this.light(level, colony, branch.get())) {
+			return;
+		}
+		List<BlockPos> blocks = branch.map(b -> this.toMine(level, b)).orElse(List.of());
 		if (blocks.isEmpty()) {
 			colony.board().complete(job.get().id());
 			this.hasJob = false;
@@ -125,6 +136,58 @@ public class MinerGoal extends ColonyWorkGoal {
 		}
 	}
 
+	/** The branch's blocks left to dig, from the hall outwards, then the ores in the walls and ceiling of what is dug. */
+	private List<BlockPos> toMine(ServerLevel level, Mineshaft.Branch branch) {
+		List<BlockPos> blocks = new ArrayList<>();
+		for (BlockPos cell : branch.cells()) {
+			if (Mining.isMinable(level, cell) && !this.unreachable.contains(cell)) {
+				blocks.add(cell);
+			}
+		}
+		for (BlockPos cell : branch.cells()) {
+			if (!level.getBlockState(cell).isAir()) {
+				continue;
+			}
+			for (Direction dir : Direction.values()) {
+				BlockPos side = cell.relative(dir);
+				// Not below the floor, which would leave holes to trip over.
+				if (dir != Direction.DOWN && !branch.cells().contains(side) && !blocks.contains(side) && !this.unreachable.contains(side)
+						&& level.getBlockState(side).is(ConventionalBlockTags.ORES) && Mining.isMinable(level, side)) {
+					blocks.add(side);
+				}
+			}
+		}
+		return blocks;
+	}
+
+	/**
+	 * Puts a torch on the first dug torch spot that is still dark, fetching torches from the core if
+	 * it has none. Returns true while busy with that.
+	 */
+	private boolean light(ServerLevel level, Colony colony, Mineshaft.Branch branch) {
+		BlockState torch = Blocks.TORCH.defaultBlockState();
+		Optional<BlockPos> dark = branch.torches().stream()
+			.filter(pos -> level.getBlockState(pos).isAir() && torch.canSurvive(level, pos)).findFirst();
+		if (dark.isEmpty()) {
+			return false;
+		}
+		if (this.bot.getInventory().countItem(Items.TORCH) == 0) {
+			Container core = Storage.containerAt(level, colony.core());
+			if (core == null || core.countItem(Items.TORCH) == 0) {
+				// ponytail: no torches anywhere, so the spot stays dark; the colony's torch stock target orders more.
+				return false;
+			}
+			this.enter(State.DEPOSIT);
+			return true;
+		}
+		if (this.reach(dark.get())) {
+			level.setBlockAndUpdate(dark.get(), torch);
+			Storage.take(this.bot.getInventory(), Items.TORCH, 1);
+			colony.protect(dark.get());
+		}
+		return true;
+	}
+
 	private void deposit(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
 		if (core == null) {
@@ -134,17 +197,21 @@ public class MinerGoal extends ColonyWorkGoal {
 		}
 		if (this.reach(colony.core())) {
 			this.storeHaul(core);
+			int torches = CARRY_TORCHES - this.bot.getInventory().countItem(Items.TORCH);
+			if (torches > 0) {
+				Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(Items.TORCH), torches);
+			}
 			this.enter(State.WORK);
 		}
 	}
 
-	/** Puts everything in the core except pickaxes and a few scaffold blocks. */
+	/** Puts everything in the core except pickaxes, torches and a few scaffold blocks. */
 	private void storeHaul(Container core) {
 		SimpleContainer inventory = this.bot.getInventory();
 		int keptScaffold = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty() || stack.is(ItemTags.PICKAXES)) {
+			if (stack.isEmpty() || stack.is(ItemTags.PICKAXES) || stack.is(Items.TORCH)) {
 				continue;
 			}
 			int keep = 0;
@@ -164,7 +231,7 @@ public class MinerGoal extends ColonyWorkGoal {
 		int scaffold = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty() || stack.is(ItemTags.PICKAXES)) {
+			if (stack.isEmpty() || stack.is(ItemTags.PICKAXES) || stack.is(Items.TORCH)) {
 				continue;
 			}
 			if (stack.is(PathFollower.SCAFFOLD_BLOCKS)) {

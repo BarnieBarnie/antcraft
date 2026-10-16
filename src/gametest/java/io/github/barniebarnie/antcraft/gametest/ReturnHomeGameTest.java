@@ -64,7 +64,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 200)
 	public void idleMemberWalksBackIntoTerritory(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		// No quarry, so the miner has no work.
+		// No mineshaft dug, so the miner has no work.
 		AntBot bot = member(helper, colony, BotRole.MINER, 6, 6);
 
 		helper.succeedWhen(() -> helper.assertTrue(territory(colony).contains(bot.blockPosition()), "bot still at " + bot.blockPosition().toShortString()));

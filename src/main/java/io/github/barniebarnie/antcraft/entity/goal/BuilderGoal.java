@@ -7,12 +7,14 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
@@ -25,7 +27,8 @@ import net.minecraft.world.level.gameevent.GameEvent;
 /**
  * Builder work loop: claim a build job and work through its plan step by step. For each block
  * to place it fetches what the plan still needs of it from the core, and orders it from the
- * colony's crafter when the core has none. Blocks it places are protected from other bots.
+ * colony's crafter when the core has none. Blocks it places are protected from other bots. It digs
+ * with the best pickaxe in the core, such as down a mineshaft.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	public BuilderGoal(AntBot bot) {
@@ -36,6 +39,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
+		if (this.upgradeTool(level, colony, ToolKind.PICKAXE)) {
+			return;
+		}
 		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.BUILD), this.bot.blockPosition(), level.getGameTime());
 		this.hasJob = job.isPresent();
 		if (job.isEmpty()) {
@@ -101,7 +107,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		if (this.reach(colony.core())) {
-			Storage.moveItems(this.bot.getInventory(), core, stack -> !needed.containsKey(stack.getItem()));
+			Storage.moveItems(this.bot.getInventory(), core, stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES));
 			Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(item), count);
 		}
 	}

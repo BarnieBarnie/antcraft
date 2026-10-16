@@ -18,7 +18,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
-import io.github.barniebarnie.antcraft.work.Quarry;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
 import net.minecraft.world.item.Item;
 
 /** A colony: its core block (storage), member bots, work radius and job board. */
@@ -29,10 +29,12 @@ public class Colony {
 		UUIDUtil.CODEC.fieldOf("id").forGetter(Colony::id),
 		BlockPos.CODEC.fieldOf("core").forGetter(Colony::core),
 		UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(c -> List.copyOf(c.members)),
-		JobBoard.CODEC.optionalFieldOf("jobs", new JobBoard()).forGetter(Colony::board),
+		// Lenient: jobs of a type that no longer exists (the quarry's mine_layer) drop the list; the next survey posts them again.
+		JobBoard.CODEC.lenientOptionalFieldOf("jobs", new JobBoard()).forGetter(Colony::board),
 		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
 		Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).optionalFieldOf("orders", Map.of()).forGetter(Colony::orders),
-		Quarry.CODEC.optionalFieldOf("quarry").forGetter(Colony::quarry),
+		// Old saves may still have a "quarry"; it is ignored.
+		Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Colony::mineshaft),
 		// Colonies saved before stock targets existed get the defaults.
 		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets),
 		BuildPlan.CODEC.listOf().optionalFieldOf("builds", List.of()).forGetter(Colony::builds),
@@ -46,7 +48,9 @@ public class Colony {
 	private final JobBoard board;
 	private int radius;
 	private final Map<Item, Integer> orders;
-	private Optional<Quarry> quarry;
+	private Optional<Mineshaft> mineshaft;
+	/** The mineshaft's stair floors and torches, which bots leave standing. */
+	private Set<BlockPos> shaftBlocks;
 	private final List<StockTarget> stock;
 	private final List<BuildPlan> builds;
 	/** Blocks build plans placed, which bots leave standing. */
@@ -55,7 +59,7 @@ public class Colony {
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
-	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Quarry> quarry,
+	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
 			List<StockTarget> stock, List<BuildPlan> builds, List<BlockPos> protectedBlocks, Optional<Field> field) {
 		this.field = field;
 		this.id = id;
@@ -64,7 +68,8 @@ public class Colony {
 		this.board = board;
 		this.radius = radius;
 		this.orders = new LinkedHashMap<>(orders);
-		this.quarry = quarry;
+		this.mineshaft = mineshaft;
+		this.shaftBlocks = mineshaft.map(Mineshaft::protectedBlocks).orElse(Set.of());
 		this.stock = new ArrayList<>(stock);
 		this.builds = new ArrayList<>(builds);
 		this.protectedBlocks = new HashSet<>(protectedBlocks);
@@ -91,7 +96,7 @@ public class Colony {
 
 	/** Whether a build plan placed the block at {@code pos}, so bots must not break it. */
 	public boolean isProtected(BlockPos pos) {
-		return this.protectedBlocks.contains(pos);
+		return this.protectedBlocks.contains(pos) || this.shaftBlocks.contains(pos);
 	}
 
 	public void protect(BlockPos pos) {
@@ -102,15 +107,18 @@ public class Colony {
 		this.protectedBlocks.remove(pos);
 	}
 
-	/** The area miners dig out, if the player has marked one. */
-	public Optional<Quarry> quarry() {
-		return this.quarry;
+	/** Where the colony mines, once it has picked a site. */
+	public Optional<Mineshaft> mineshaft() {
+		return this.mineshaft;
 	}
 
-	public void setQuarry(Quarry quarry) {
-		this.quarry = Optional.of(quarry);
-		this.board.removeOpenIf(job -> job.type() == JobType.MINE_LAYER);
-		this.lastSurvey = -1;
+	/** Moves the mine: builders dig the new shaft instead of the old one, and miners wait for it. */
+	public void setMineshaft(Mineshaft shaft) {
+		this.mineshaft.ifPresent(old -> this.removeBuild(old.plan()));
+		this.mineshaft = Optional.of(shaft);
+		this.shaftBlocks = shaft.protectedBlocks();
+		this.board.removeOpenIf(job -> job.type() == JobType.MINE_BRANCH);
+		this.addBuild(shaft.plan());
 	}
 
 	/** The crop field the colony started itself, if it needed one. */

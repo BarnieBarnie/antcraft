@@ -21,7 +21,7 @@ class RoleAssignerTest {
 	void picksTheRoleWithTheMostOpenJobsPerWorker() {
 		// 6 trees for 1 lumberjack (3 each once a second joins) beats 2 layers for no miners (2).
 		Map<BotRole, Integer> roles = Map.of(BotRole.LUMBERJACK, 1);
-		Map<JobType, Integer> jobs = Map.of(JobType.CHOP_TREE, 6, JobType.MINE_LAYER, 2);
+		Map<JobType, Integer> jobs = Map.of(JobType.CHOP_TREE, 6, JobType.MINE_BRANCH, 2);
 		assertEquals(BotRole.LUMBERJACK, RoleAssigner.choose(roles, jobs, false));
 	}
 

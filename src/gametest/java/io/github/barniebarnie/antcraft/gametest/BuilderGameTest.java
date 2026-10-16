@@ -9,8 +9,10 @@ import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
-import io.github.barniebarnie.antcraft.work.Quarry;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.Mining;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -162,37 +164,63 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 600)
 	public void otherBotsDoNotBreakPlacedBlocks(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
-		BlockPos from = new BlockPos(3, 1, 3);
-		BlockPos to = new BlockPos(5, 1, 5);
 		BlockPos planks = new BlockPos(4, 1, 4);
-		for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
-			helper.setBlock(pos, pos.equals(planks) ? Blocks.AIR : Blocks.STONE);
-		}
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.OAK_PLANKS.defaultBlockState()))));
 		member(helper, colony, BotRole.BUILDER, 1, 4);
 
-		boolean[] mining = {false};
+		LevelWorldView view = new LevelWorldView(helper.getLevel(), new SimpleContainer(1), ItemStack.EMPTY, Set.of());
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_PLANKS, planks);
+			helper.assertTrue(view.breakTicks(helper.absolutePos(planks)) < 0, "pathing may break the placed planks");
+			helper.assertFalse(Mining.isMinable(helper.getLevel(), helper.absolutePos(planks)), "miners may break the placed planks");
+		});
+	}
+
+	/** Every block in the area that is not air. */
+	private static Set<BlockPos> solid(GameTestHelper helper) {
+		Set<BlockPos> solid = new HashSet<>();
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 7, 7)) {
+			if (!helper.getBlockState(pos).isAir()) {
+				solid.add(pos.immutable());
+			}
+		}
+		return solid;
+	}
+
+	@GameTest(maxTicks = 2400)
+	public void digsMineshaftAndWalksBackUp(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
+		colony.setStockTargets(List.of());
+		Container core = (Container) helper.getBlockEntity(MinerGameTest.MINE_CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.TORCH, 8));
+		colony.setMineshaft(shaft);
+		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
+		ColonyManager.get(helper.getLevel()).join(builder, colony);
+		builder.setRole(BotRole.BUILDER);
+		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		BlockPos home = new BlockPos(1, 5, 1);
+		Set<?>[] dug = {null};
 		helper.onEachTick(() -> {
-			// The quarry around the planks is set once they stand, so the miner meets a finished build.
-			if (!mining[0] && colony.builds().isEmpty()) {
-				mining[0] = true;
-				colony.setQuarry(new Quarry(helper.absolutePos(from), helper.absolutePos(to)));
-				AntBot miner = member(helper, colony, BotRole.MINER, 1, 6);
-				miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
-				LevelWorldView view = new LevelWorldView(helper.getLevel(), new SimpleContainer(1), ItemStack.EMPTY, Set.of());
-				helper.assertTrue(view.breakTicks(helper.absolutePos(planks)) < 0, "pathing may break the placed planks");
+			if (dug[0] == null && colony.builds().isEmpty()) {
+				helper.assertTrue(shaft.plan().nextStep(helper.getLevel()::getBlockState).isEmpty(), "plan dropped before it was done");
+				helper.assertTrue(helper.relativePos(builder.blockPosition()).getY() < 3, "builder not down the shaft");
+				dug[0] = solid(helper);
+				builder.setWalkTarget(helper.absolutePos(home));
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(mining[0], "planks not built");
-			for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
-				helper.assertBlockNotPresent(Blocks.STONE, pos);
-			}
-			helper.assertBlockPresent(Blocks.OAK_PLANKS, planks);
+			helper.assertTrue(dug[0] != null, "shaft not dug, next step " + shaft.plan().nextStep(helper.getLevel()::getBlockState));
+			helper.assertTrue(builder.blockPosition().distManhattan(helper.absolutePos(home)) <= 2, "builder at " + helper.relativePos(builder.blockPosition()));
+			// It walked up the stairs as they are, without digging or building its own way.
+			helper.assertTrue(solid(helper).equals(dug[0]), "blocks changed on the way up");
+			MinerGameTest.assertLit(helper, MinerGameTest.dugPath(shaft, false));
 		});
 	}
 }

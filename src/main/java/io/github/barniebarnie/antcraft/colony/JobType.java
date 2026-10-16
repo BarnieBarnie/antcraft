@@ -7,8 +7,8 @@ import net.minecraft.util.StringRepresentable;
 public enum JobType implements StringRepresentable {
 	/** Chop the tree whose lowest log is at the job target. */
 	CHOP_TREE,
-	/** Mine the colony quarry layer at the job target's height. */
-	MINE_LAYER,
+	/** Dig the mineshaft branch that starts at the job target. */
+	MINE_BRANCH,
 	/** Harvest and replant the ripe crop at the job target. */
 	HARVEST_CROP,
 	/** Plant a sapling at the job target, where a felled tree stood that had no sapling to replant it. */
