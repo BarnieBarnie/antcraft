@@ -4,6 +4,8 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
+import java.util.HashSet;
+import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -89,5 +91,41 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 4, 3)));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
+	}
+
+	/**
+	 * A bot with no role pillars up in a one-wide corridor. Another bot without scaffold blocks
+	 * then has to get past the pillar: it gives up instead of digging it out from under the first.
+	 */
+	@GameTest(maxTicks = 600)
+	public void leavesPillarOfOtherBotAlone(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 2, Blocks.BEDROCK);
+		fill(helper, 1, 1, 4, 6, 7, 6, Blocks.BEDROCK);
+		AntBot owner = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		owner.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		owner.setWalkTarget(helper.absolutePos(new BlockPos(3, 4, 3)));
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		Set<BlockPos> pillar = new HashSet<>();
+		helper.onEachTick(() -> {
+			if (pillar.isEmpty() && owner.getWalkTarget() == null) {
+				for (int y = 1; y <= 6; y++) {
+					if (helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.DIRT)) {
+						pillar.add(new BlockPos(3, y, 3));
+					}
+				}
+				helper.assertFalse(pillar.isEmpty(), "the owner did not pillar");
+				other.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+			}
+			for (BlockPos pos : pillar) {
+				if (!helper.getBlockState(pos).is(Blocks.DIRT)) {
+					helper.fail("the other bot broke the pillar at " + pos.toShortString());
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertFalse(pillar.isEmpty(), "the owner has not pillared yet");
+			helper.assertTrue(other.getWalkTarget() == null, "the other bot is still walking");
+		});
 	}
 }

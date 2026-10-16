@@ -170,13 +170,13 @@ public class PathFollower {
 	}
 
 	/**
-	 * Scaffolding nearby bots placed and will take down themselves, which this bot must not break.
+	 * Scaffolding nearby bots placed and still need or will take down themselves, which this bot must not break.
 	 * ponytail: only bots within {@link #KEEP_SCAN} blocks count; widen it if paths get much longer.
 	 */
 	private Set<BlockPos> othersScaffold(ServerLevel level) {
 		Set<BlockPos> keep = new HashSet<>();
 		for (AntBot other : level.getEntitiesOfClass(AntBot.class, this.bot.getBoundingBox().inflate(KEEP_SCAN), other -> other != this.bot)) {
-			keep.addAll(other.getScaffold());
+			keep.addAll(other.getProtectedScaffold());
 		}
 		return keep;
 	}
@@ -230,6 +230,7 @@ public class PathFollower {
 				level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
 				this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 				stack.shrink(1);
+				this.bot.addPathScaffold(pos);
 				this.placeListener.accept(pos.immutable());
 				return true;
 			}

@@ -59,6 +59,12 @@ import org.jspecify.annotations.Nullable;
  */
 public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private static final int INVENTORY_SIZE = 27;
+	/**
+	 * Path scaffold stays protected while the bot is within this many blocks of it, measured flat, so a
+	 * pillar the bot stands on counts as near however tall it is.
+	 * ponytail: a distance stands in for "still needed"; a bot coming back over a bridge it left may have to bridge again.
+	 */
+	private static final int PATH_SCAFFOLD_RANGE = 8;
 	/** The role id, synched so clients can dress the bot for its role. */
 	public static final EntityDataAccessor<String> DATA_ROLE = SynchedEntityData.defineId(AntBot.class, EntityDataSerializers.STRING);
 
@@ -73,6 +79,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private int idleTicks;
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
+	/**
+	 * Every block the bot placed while following a path, which other bots leave alone until the bot
+	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
+	 */
+	private final Set<BlockPos> pathScaffold = new HashSet<>();
 	/** Not saved: after loading the bot looks for a tree again. */
 	private List<BlockPos> tree = List.of();
 	/** Felled trees the bot could not replant, with the game time they were felled; saved, so it comes back after unloading. */
@@ -146,6 +157,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			}
 		}
 		super.tick();
+		BlockPos feet = this.blockPosition();
+		this.pathScaffold.removeIf(pos -> Math.max(Math.abs(pos.getX() - feet.getX()), Math.abs(pos.getZ() - feet.getZ())) > PATH_SCAFFOLD_RANGE);
 		this.idleTicks = this.working ? 0 : this.idleTicks + 1;
 	}
 
@@ -210,6 +223,18 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Scaffold blocks this bot placed and still has to take down. Saved with the bot; callers change it in place. */
 	public Set<BlockPos> getScaffold() {
 		return this.scaffold;
+	}
+
+	/** Records a block placed while following a path, so other bots leave it alone while this bot is near it. */
+	public void addPathScaffold(BlockPos pos) {
+		this.pathScaffold.add(pos.immutable());
+	}
+
+	/** Blocks other bots must not break: scaffold this bot will take down, and path scaffold it is still near. */
+	public Set<BlockPos> getProtectedScaffold() {
+		Set<BlockPos> all = new HashSet<>(this.scaffold);
+		all.addAll(this.pathScaffold);
+		return all;
 	}
 
 	/** Logs of the tree the bot is felling, so other lumberjacks leave that tree alone. Empty when it is not felling one. */
