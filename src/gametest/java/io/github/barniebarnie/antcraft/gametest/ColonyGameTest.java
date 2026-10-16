@@ -112,6 +112,21 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/** Clients pick the bot's skin by role, so the role has to be in the synched data. */
+	@GameTest
+	public void roleIsSyncedAndSurvivesSaveAndLoad(GameTestHelper helper) {
+		AntBot assigned = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		assigned.assignRole(BotRole.MINER);
+		AntBot chosen = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		chosen.setRole(BotRole.GUARD);
+		helper.assertValueEqual(assigned.getEntityData().get(AntBot.DATA_ROLE), BotRole.MINER.id(), "synched assigned role");
+		helper.assertValueEqual(chosen.getEntityData().get(AntBot.DATA_ROLE), BotRole.GUARD.id(), "synched chosen role");
+
+		AntBot copy = reload(helper, chosen);
+		helper.assertValueEqual(copy.getEntityData().get(AntBot.DATA_ROLE), BotRole.GUARD.id(), "synched role after load");
+		helper.succeed();
+	}
+
 	private static AntBot reload(GameTestHelper helper, AntBot bot) {
 		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
 		bot.saveWithoutId(output);

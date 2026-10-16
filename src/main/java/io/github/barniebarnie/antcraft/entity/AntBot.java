@@ -22,6 +22,9 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
@@ -55,10 +58,11 @@ import org.jspecify.annotations.Nullable;
  */
 public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private static final int INVENTORY_SIZE = 27;
+	/** The role id, synched so clients can dress the bot for its role. */
+	public static final EntityDataAccessor<String> DATA_ROLE = SynchedEntityData.defineId(AntBot.class, EntityDataSerializers.STRING);
 
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 	private @Nullable BlockPos walkTarget;
-	private BotRole role = BotRole.NONE;
 	/** Roles set by a player are kept; the colony may change the ones it assigned itself. */
 	private boolean roleSetByPlayer = true;
 	private @Nullable BlockPos home;
@@ -84,6 +88,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			.add(Attributes.MOVEMENT_SPEED, 0.3)
 			.add(Attributes.ATTACK_DAMAGE, 4.0)
 			.add(Attributes.FOLLOW_RANGE, 32.0);
+	}
+
+	@Override
+	protected void defineSynchedData(SynchedEntityData.Builder builder) {
+		super.defineSynchedData(builder);
+		builder.define(DATA_ROLE, BotRole.NONE.id());
 	}
 
 	public static int countIn(ServerLevel level) {
@@ -155,7 +165,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	public BotRole getRole() {
-		return this.role;
+		return BotRole.byId(this.entityData.get(DATA_ROLE));
 	}
 
 	/** Sets the role on a player's behalf; the colony will not change it. */
@@ -169,7 +179,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	private void changeRole(BotRole role, boolean byPlayer) {
-		this.role = role;
+		this.entityData.set(DATA_ROLE, role.id());
 		this.roleSetByPlayer = byPlayer;
 		this.working = false;
 		this.idleTicks = 0;
@@ -270,7 +280,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.addAdditionalSaveData(output);
 		this.writeInventoryToTag(output);
 		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
-		output.putString("Role", this.role.id());
+		output.putString("Role", this.entityData.get(DATA_ROLE));
 		output.putBoolean("RoleSetByPlayer", this.roleSetByPlayer);
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
@@ -284,7 +294,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.readAdditionalSaveData(input);
 		this.readInventoryFromTag(input);
 		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
-		this.role = BotRole.byId(input.getStringOr("Role", BotRole.NONE.id()));
+		this.entityData.set(DATA_ROLE, BotRole.byId(input.getStringOr("Role", BotRole.NONE.id())).id());
 		// Bots saved before this flag existed keep their role.
 		this.roleSetByPlayer = input.getBooleanOr("RoleSetByPlayer", true);
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);

@@ -1,6 +1,9 @@
 package io.github.barniebarnie.antcraft.client.render;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotSkins;
+import java.util.HashMap;
+import java.util.Map;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.client.model.player.PlayerModel;
 import net.minecraft.client.renderer.entity.ArmorModelSet;
@@ -13,17 +16,9 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
 
-/** Renders bots with the player model and one of the default (wide-arm) player skins. */
+/** Renders bots with the player model, in the skin of their role (see {@link BotSkins}). */
 public class AntBotRenderer extends HumanoidMobRenderer<AntBot, AvatarRenderState, PlayerModel> {
-	private static final String[] SKIN_NAMES = {"alex", "ari", "efe", "kai", "makena", "noor", "steve", "sunny", "zuri"};
-	private static final PlayerSkin[] SKINS = new PlayerSkin[SKIN_NAMES.length];
-
-	static {
-		for (int i = 0; i < SKIN_NAMES.length; i++) {
-			ClientAsset.ResourceTexture body = new ClientAsset.ResourceTexture(Identifier.withDefaultNamespace("entity/player/wide/" + SKIN_NAMES[i]));
-			SKINS[i] = new PlayerSkin(body, null, null, PlayerModelType.WIDE, true);
-		}
-	}
+	private static final Map<Identifier, PlayerSkin> SKINS = new HashMap<>();
 
 	public AntBotRenderer(EntityRendererProvider.Context context) {
 		super(context, new PlayerModel(context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
@@ -42,8 +37,8 @@ public class AntBotRenderer extends HumanoidMobRenderer<AntBot, AvatarRenderStat
 	@Override
 	public void extractRenderState(AntBot entity, AvatarRenderState state, float partialTicks) {
 		super.extractRenderState(entity, state, partialTicks);
-		// Based on the UUID so a bot keeps its skin across reloads.
-		state.skin = SKINS[Math.floorMod(entity.getUUID().hashCode(), SKINS.length)];
+		state.skin = SKINS.computeIfAbsent(BotSkins.texture(entity.getRole(), entity.getUUID()),
+			texture -> new PlayerSkin(new ClientAsset.ResourceTexture(texture), null, null, PlayerModelType.WIDE, true));
 		state.showCape = false;
 	}
 
