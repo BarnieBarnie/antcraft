@@ -190,6 +190,16 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	@Override
 	public void start() {
+		// A solo bot loaded mid-tree goes back to the logs it still claims, leaves or not. Colony bots
+		// get trees from the job board instead, and a claim with no logs left is dropped by enter().
+		Optional<TreeScanner.Tree> claimed = this.isLumberjack() && this.bot.getColonyId() == null && this.bot.level() instanceof ServerLevel level
+			? TreeScanner.remaining(new LevelTreeView(level), this.bot.getTree())
+			: Optional.empty();
+		if (claimed.isPresent()) {
+			// Scaffolding already up stays in placed(), so cleanup after the tree takes it down too.
+			this.startTree(claimed.get());
+			return;
+		}
 		// Interrupted mid-tree: take the scaffolding down before anything else.
 		this.enter(this.placed().isEmpty() ? State.SEARCH : State.CLEANUP);
 	}

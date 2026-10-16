@@ -84,7 +84,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
 	 */
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
-	/** Not saved: after loading the bot looks for a tree again. */
+	/** Saved, so after loading a solo lumberjack goes back to its tree and others still leave it alone. */
 	private List<BlockPos> tree = List.of();
 	/** Felled trees the bot could not replant, with the game time they were felled; saved, so it comes back after unloading. */
 	private final Map<BlockPos, Long> revisits = new LinkedHashMap<>();
@@ -323,6 +323,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
+		output.store("Tree", BlockPos.CODEC.listOf(), this.tree);
 		output.store("Revisits", Revisit.CODEC.listOf(), this.revisits.entrySet().stream()
 			.map(entry -> new Revisit(entry.getKey(), entry.getValue())).toList());
 	}
@@ -339,6 +340,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
+		this.tree = input.read("Tree", BlockPos.CODEC.listOf()).map(List::copyOf).orElse(List.of());
 		this.revisits.clear();
 		input.read("Revisits", Revisit.CODEC.listOf())
 			.ifPresent(list -> list.forEach(revisit -> this.revisits.put(revisit.pos(), revisit.felled())));

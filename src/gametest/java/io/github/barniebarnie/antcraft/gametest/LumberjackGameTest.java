@@ -520,6 +520,72 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	private static List<BlockPos> trunk(GameTestHelper helper, int x, int z) {
+		List<BlockPos> logs = new ArrayList<>();
+		for (int y = 1; y <= 4; y++) {
+			logs.add(helper.absolutePos(new BlockPos(x, y, z)));
+		}
+		return logs;
+	}
+
+	/**
+	 * A solo lumberjack's tree claim is saved with it: after a reload it goes back to its tree, and
+	 * another solo lumberjack leaves that tree alone.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void soloTreeClaimSurvivesReload(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		List<BlockPos> logs = trunk(helper, 5, 5);
+		AntBot bot = lumberjack(helper, 2, 2);
+		bot.setTree(logs);
+		AntBot copy = reload(helper, bot);
+		bot.discard();
+		helper.assertTrue(copy.getTree().equals(logs), "claim not loaded: " + copy.getTree());
+		AntBot other = lumberjack(helper, 6, 4);
+
+		helper.onEachTick(() -> {
+			if (other.getTree().stream().anyMatch(logs::contains)) {
+				helper.fail("the other lumberjack picked the claimed tree");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(carried(other, Items.OAK_LOG) == 0, "the other lumberjack has logs");
+			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
+		});
+	}
+
+	/** A saved claim on a tree whose logs are all gone is dropped after loading. */
+	@GameTest(padding = PADDING, maxTicks = 100)
+	public void dropsSavedClaimOnTreeWithNoLogsLeft(GameTestHelper helper) {
+		AntBot bot = lumberjack(helper, 2, 2);
+		bot.setTree(trunk(helper, 5, 5));
+		AntBot copy = reload(helper, bot);
+		bot.discard();
+
+		helper.succeedWhen(() -> helper.assertTrue(copy.getTree().isEmpty(), "claim kept: " + copy.getTree()));
+	}
+
+	/**
+	 * A solo lumberjack interrupted mid-tree whose leaves have decayed since: what is left no longer
+	 * looks like a tree, but the bot remembers its logs and fells the rest after loading.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void soloLumberjackFellsLeaflessRestOfItsTreeAfterReload(GameTestHelper helper) {
+		for (int y = 2; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		AntBot bot = lumberjack(helper, 2, 2);
+		bot.setTree(trunk(helper, 5, 5));
+		AntBot copy = reload(helper, bot);
+		bot.discard();
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
+		});
+	}
+
 	/** A remembered tree is forgotten once it was felled too long ago, counted in game time across a reload. */
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void forgetsTreeFelledTooLongAgoAcrossReload(GameTestHelper helper) {
