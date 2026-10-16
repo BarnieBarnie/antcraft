@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -304,6 +305,41 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(colony.mineshaft().isPresent(), "no mineshaft site");
 			helper.assertTrue(colony.builds().contains(colony.mineshaft().get().plan()), "no plan for the builders");
 		});
+	}
+
+	/** Bots that join with no role, as freshly built ones do. */
+	private static void newcomers(GameTestHelper helper, Colony colony, int count, int y) {
+		for (int i = 0; i < count; i++) {
+			ColonyManager.get(helper.getLevel()).join(helper.spawn(ModEntities.ANT_BOT, 1 + i, y, 1), colony);
+		}
+	}
+
+	/** The starter roster has a builder, who digs the shaft the starter miner picked a site for. */
+	@GameTest(maxTicks = 300)
+	public void starterMinerGetsMineshaftWork(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		newcomers(helper, colony, 3, 1);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.mineshaft().isPresent(), "no mineshaft site");
+			helper.assertTrue(colony.board().jobs().stream().anyMatch(job -> job.type() == JobType.BUILD && !job.isOpen()), "nobody digs the shaft");
+		});
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void newColonyStoresCobblestone(GameTestHelper helper) {
+		Mineshaft shaft = mine(helper);
+		Colony colony = colony(helper, MINE_CORE);
+		// Shallow levels in place of the configured ones, which lie below the test area.
+		colony.setMineshaft(shaft);
+		// One each for the miner and the builder: a builder does not order a pickaxe of its own.
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		core(helper, MINE_CORE).setItem(1, new ItemStack(Items.STONE_PICKAXE));
+		// The shaft plan places torches, and a new colony cannot make them yet.
+		core(helper, MINE_CORE).setItem(2, new ItemStack(Items.TORCH, 8));
+		newcomers(helper, colony, 3, 5);
+
+		helper.succeedWhen(() -> helper.assertTrue(core(helper, MINE_CORE).countItem(Items.COBBLESTONE) > 0, "no cobblestone stored yet"));
 	}
 
 	private static int pickaxes(AntBot bot, net.minecraft.world.item.Item pickaxe) {
