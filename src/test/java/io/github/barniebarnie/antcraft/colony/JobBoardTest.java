@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -183,5 +184,40 @@ class JobBoardTest {
 
 		assertEquals(board.jobs(), loaded.jobs());
 		assertTrue(loaded.has(JobType.REPLANT, new BlockPos(3, 1, 0)));
+	}
+
+	/** A felled tree's lower logs are gone: the rest is scanned as a tree with a new base. */
+	@Test
+	void treeOverlappingAClaimedTreeIsNotPostedAgain() {
+		JobBoard board = new JobBoard();
+		List<BlockPos> logs = List.of(new BlockPos(5, 1, 5), new BlockPos(5, 2, 5), new BlockPos(5, 3, 5));
+		board.post(JobType.CHOP_TREE, logs.getFirst(), logs);
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 0);
+
+		assertTrue(board.post(JobType.CHOP_TREE, logs.get(1), logs.subList(1, 3)).isEmpty());
+		assertTrue(board.claim(BOB, CHOP, BlockPos.ZERO, 0).isEmpty());
+	}
+
+	@Test
+	void separateTreeIsPosted() {
+		JobBoard board = new JobBoard();
+		board.post(JobType.CHOP_TREE, new BlockPos(5, 1, 5), List.of(new BlockPos(5, 1, 5), new BlockPos(5, 2, 5)));
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 0);
+
+		assertTrue(board.post(JobType.CHOP_TREE, new BlockPos(9, 1, 5), List.of(new BlockPos(9, 1, 5))).isPresent());
+	}
+
+	@Test
+	void treeLogsSurviveClaimAndSaveAndLoad() {
+		JobBoard board = new JobBoard();
+		List<BlockPos> logs = List.of(new BlockPos(5, 1, 5), new BlockPos(5, 2, 5));
+		board.post(JobType.CHOP_TREE, logs.getFirst(), logs);
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 0);
+
+		var json = JobBoard.CODEC.encodeStart(JsonOps.INSTANCE, board).getOrThrow();
+		JobBoard loaded = JobBoard.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+		assertEquals(logs, loaded.jobOf(ALICE).orElseThrow().area());
+		assertTrue(loaded.post(JobType.CHOP_TREE, logs.get(1), List.of(logs.get(1))).isEmpty());
 	}
 }

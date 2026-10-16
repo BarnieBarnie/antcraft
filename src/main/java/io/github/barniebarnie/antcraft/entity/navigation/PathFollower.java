@@ -8,6 +8,8 @@ import io.github.barniebarnie.antcraft.pathing.MoveType;
 import io.github.barniebarnie.antcraft.pathing.Path;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.pathing.Step;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -46,6 +48,8 @@ public class PathFollower {
 	private static final int STEP_BASE_BUDGET = 60;
 	private static final double ARRIVED_DIST_SQR = 0.35 * 0.35;
 	private static final double SPEED = 1.0;
+	/** How far away other bots' scaffolding is looked for, to keep paths from digging through it. */
+	private static final double KEEP_SCAN = 48;
 
 	private final AntBot bot;
 	private @Nullable Goal goal;
@@ -112,10 +116,14 @@ public class PathFollower {
 		}
 
 		Step step = this.path.steps().get(this.stepIndex);
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), Set.of());
 
 		for (BlockPos pos : step.breaks()) {
 			if (!world.isPassable(pos)) {
+				if (this.othersScaffold(level).contains(pos)) {
+					this.path = null; // another bot placed scaffolding here since: plan around it
+					return Status.RUNNING;
+				}
 				this.breaker.tick(level, pos);
 				return Status.RUNNING;
 			}
@@ -152,13 +160,25 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level));
 		PathFinder.Options options = new PathFinder.Options(true, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
 		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
 		this.stepIndex = 0;
 		this.stepTicks = 0;
 		this.stepBudget = this.budgetFor(world);
 		return !this.path.steps().isEmpty() || this.goal.isReached(this.bot.blockPosition());
+	}
+
+	/**
+	 * Scaffolding nearby bots placed and will take down themselves, which this bot must not break.
+	 * ponytail: only bots within {@link #KEEP_SCAN} blocks count; widen it if paths get much longer.
+	 */
+	private Set<BlockPos> othersScaffold(ServerLevel level) {
+		Set<BlockPos> keep = new HashSet<>();
+		for (AntBot other : level.getEntitiesOfClass(AntBot.class, this.bot.getBoundingBox().inflate(KEEP_SCAN), other -> other != this.bot)) {
+			keep.addAll(other.getScaffold());
+		}
+		return keep;
 	}
 
 	private int budgetFor(LevelWorldView world) {

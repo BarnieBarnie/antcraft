@@ -179,7 +179,8 @@ public class ColonyManager extends SavedData {
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !level.getBlockState(job.target()).is(BlockTags.LOGS));
 			for (TreeScanner.Tree tree : TreeScanner.findAll(new LevelTreeView(level), colony.core(), colony.radius())) {
-				colony.board().post(JobType.CHOP_TREE, tree.base());
+				// Covering its logs keeps the rest of a tree being felled from being posted as a new tree.
+				colony.board().post(JobType.CHOP_TREE, tree.base(), tree.logs());
 			}
 			// Replanted since, or built over.
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT && !Replanting.isPlantable(level, job.target()));

@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -10,7 +11,11 @@ import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -648,6 +653,100 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			}
 			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void onlyOneColonyLumberjackWorksOnATree(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		tallTree(helper, 5, 5);
+		AntBot a = colonyLumberjack(helper, colony, 2, 4);
+		AntBot b = colonyLumberjack(helper, colony, 4, 2);
+		a.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		b.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		Set<UUID> claimers = new HashSet<>();
+		helper.onEachTick(() -> {
+			List<Job> chops = colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE).toList();
+			chops.forEach(job -> job.claimedBy().ifPresent(claimers::add));
+			if (chops.size() > 1) {
+				helper.fail("tree posted again while claimed: " + chops);
+			}
+			if (claimers.size() > 1) {
+				helper.fail("both lumberjacks claimed the tree");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(claimers.size() == 1, "nobody claimed the tree");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void onlyOneSoloLumberjackWorksOnATree(GameTestHelper helper) {
+		tallTree(helper, 5, 5);
+		AntBot a = lumberjack(helper, 2, 4);
+		AntBot b = lumberjack(helper, 4, 2);
+		a.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		b.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		Set<AntBot> choppers = new HashSet<>();
+		helper.onEachTick(() -> {
+			for (AntBot bot : List.of(a, b)) {
+				if (carried(bot, Items.OAK_LOG) > 0) {
+					choppers.add(bot);
+				}
+			}
+			if (choppers.size() > 1) {
+				helper.fail("both lumberjacks chopped the tree");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	/**
+	 * The lumberjack stands inside a ring of dirt another bot placed as scaffolding, with the tree
+	 * outside. Digging through would be quicker, but it pillars over the ring instead.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void leavesScaffoldOfOtherBotsAlone(GameTestHelper helper) {
+		tree(helper, 6, 1, false);
+		// The owner is walled in with barriers, out of reach of its scaffold, so it cannot take it down itself.
+		AntBot owner = helper.spawn(ModEntities.ANT_BOT, 7, 1, 7);
+		for (BlockPos wall : List.of(new BlockPos(6, 1, 7), new BlockPos(7, 1, 6), new BlockPos(8, 1, 7), new BlockPos(7, 1, 8))) {
+			helper.setBlock(wall, Blocks.BARRIER);
+			helper.setBlock(wall.above(), Blocks.BARRIER);
+		}
+		helper.setBlock(7, 3, 7, Blocks.BARRIER);
+		List<BlockPos> ring = new ArrayList<>();
+		for (int x = 0; x <= 2; x++) {
+			for (int z = 4; z <= 6; z++) {
+				if (x == 1 && z == 5) {
+					continue;
+				}
+				for (int y = 1; y <= 2; y++) {
+					ring.add(new BlockPos(x, y, z));
+					helper.setBlock(x, y, z, Blocks.DIRT);
+				}
+			}
+		}
+		AntBot bot = lumberjack(helper, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		helper.onEachTick(() -> {
+			// The owner gives up on scaffold it cannot reach; keep the ring its scaffold.
+			ring.forEach(pos -> owner.getScaffold().add(helper.absolutePos(pos)));
+			for (BlockPos pos : ring) {
+				if (!helper.getBlockState(pos).is(Blocks.DIRT)) {
+					helper.fail("the other bot's scaffold at " + pos.toShortString() + " was broken");
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, 6, y, 1);
+			}
 		});
 	}
 }

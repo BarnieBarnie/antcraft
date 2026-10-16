@@ -72,6 +72,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private int idleTicks;
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
+	/** Not saved: after loading the bot looks for a tree again. */
+	private List<BlockPos> tree = List.of();
 	/** Felled trees the bot could not replant, with the game time they were felled; saved, so it comes back after unloading. */
 	private final Map<BlockPos, Long> revisits = new LinkedHashMap<>();
 
@@ -206,6 +208,15 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Scaffold blocks this bot placed and still has to take down. Saved with the bot; callers change it in place. */
 	public Set<BlockPos> getScaffold() {
 		return this.scaffold;
+	}
+
+	/** Logs of the tree the bot is felling, so other lumberjacks leave that tree alone. Empty when it is not felling one. */
+	public List<BlockPos> getTree() {
+		return this.tree;
+	}
+
+	public void setTree(List<BlockPos> logs) {
+		this.tree = List.copyOf(logs);
 	}
 
 	/**

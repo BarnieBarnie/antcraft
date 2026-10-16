@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.pathing;
 
 import io.github.barniebarnie.antcraft.entity.Tools;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -15,11 +16,14 @@ public class LevelWorldView implements WorldView {
 	private final Level level;
 	private final SimpleContainer inventory;
 	private final ItemStack hand;
+	private final Set<BlockPos> keep;
 
-	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand) {
+	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
+	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
 		this.level = level;
 		this.inventory = inventory;
 		this.hand = hand;
+		this.keep = keep;
 	}
 
 	@Override
@@ -51,7 +55,7 @@ public class LevelWorldView implements WorldView {
 	public float breakTicks(BlockPos pos) {
 		BlockState state = this.level.getBlockState(pos);
 		// Leave containers and other block entities alone.
-		if (state.hasBlockEntity()) {
+		if (state.hasBlockEntity() || this.keep.contains(pos)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));

@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.serialization.Codec;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -33,10 +34,19 @@ public class JobBoard {
 
 	/** Adds a job unless one of the same type already targets that position. */
 	public Optional<Job> post(JobType type, BlockPos target) {
-		if (this.has(type, target)) {
+		return this.post(type, target, List.of());
+	}
+
+	/**
+	 * Adds a job covering {@code area} unless one of the same type already targets that position
+	 * or covers any of it. So the rest of a tree being felled, which has a new lowest log, is not
+	 * posted as a second tree.
+	 */
+	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area) {
+		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {
 			return Optional.empty();
 		}
-		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L);
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area));
 		this.jobs.add(job);
 		return Optional.of(job);
 	}

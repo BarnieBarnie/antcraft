@@ -17,6 +17,7 @@ import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -185,6 +186,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	@Override
 	public void stop() {
+		this.bot.setTree(List.of());
 		this.follower.stop();
 		this.breaker.reset();
 		this.travelGoal = null;
@@ -239,6 +241,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private void enter(State next) {
 		this.state = next;
+		if (next != State.CHOP) {
+			// Done with the tree, or gave it up: other lumberjacks may take what is left of it.
+			this.bot.setTree(List.of());
+		}
 		this.bot.setWorking(next != State.SEARCH);
 		this.travelGoal = null;
 		this.follower.stop();
@@ -281,7 +287,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** Outside a colony: searches around home for a tree. Returns whether it found one. */
 	private boolean takeNearbyTree(ServerLevel level) {
 		BlockPos origin = this.bot.getHome() != null ? this.bot.getHome() : this.bot.blockPosition();
-		Optional<TreeScanner.Tree> found = TreeScanner.findNearest(new LevelTreeView(level), origin, SEARCH_RADIUS);
+		Set<BlockPos> taken = new HashSet<>();
+		level.getEntitiesOfClass(AntBot.class, new AABB(origin).inflate(SEARCH_RADIUS * 2), other -> other != this.bot)
+			.forEach(other -> taken.addAll(other.getTree()));
+		Optional<TreeScanner.Tree> found = TreeScanner.findAll(new LevelTreeView(level), origin, SEARCH_RADIUS).stream()
+			.filter(tree -> tree.logs().stream().noneMatch(taken::contains))
+			.min(Comparator.comparingDouble(tree -> tree.base().distSqr(origin)));
 		found.ifPresent(this::startTree);
 		return found.isPresent();
 	}
@@ -327,6 +338,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private void startTree(TreeScanner.Tree found) {
 		this.tree = found;
+		this.bot.setTree(found.logs());
 		this.unreachableLogs.clear();
 		this.unreachablePlaced.clear();
 		this.abandonedPlaced.clear();
