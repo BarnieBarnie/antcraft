@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
@@ -14,13 +15,13 @@ import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.stream.Stream;
 import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
@@ -78,7 +80,7 @@ public class ColonyManager extends SavedData {
 			return existing.get();
 		}
 		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS,
-			List.of(), List.of(), Optional.empty());
+			List.of(), List.of(), Optional.empty(), Optional.empty());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -143,8 +145,7 @@ public class ColonyManager extends SavedData {
 			}
 		}
 		if (colony.field().isEmpty() && crops == 0 && this.hasRole(level, colony, BotRole.FARMER)) {
-			List<BoundingBox> avoid = colony.mineshaft().map(shaft -> List.of(shaft.area())).orElse(List.of());
-			Field.choose(core, r, avoid, pos -> Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
+			Field.choose(core, r, occupied(colony), pos -> Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
 				.ifPresent(colony::setField);
 		}
 		colony.field().ifPresent(field -> {
@@ -160,14 +161,8 @@ public class ColonyManager extends SavedData {
 	 */
 	private void surveyMine(ServerLevel level, Colony colony) {
 		if (colony.mineshaft().isEmpty() && this.hasRole(level, colony, BotRole.MINER)) {
-			// Beside the core, on the side away from the field if there is one.
-			// ponytail: no terrain check, the player can move it with /antcraft colony mineshaft.
-			BlockPos core = colony.core();
-			Mineshaft shaft = Stream.of(core.offset(2, 0, 2), core.offset(-3, 0, -3), core.offset(2, 0, -3), core.offset(-3, 0, 2))
-				.map(top -> new Mineshaft(top, AntCraftConfig.mineshaftLevels()))
-				.filter(s -> colony.field().map(field -> !field.area().intersects(s.area())).orElse(true))
-				.findFirst().orElseGet(() -> new Mineshaft(core.offset(2, 0, 2), AntCraftConfig.mineshaftLevels()));
-			colony.setMineshaft(shaft);
+			// The colony has no shaft yet, so this avoids the field and storage only.
+			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), occupied(colony)));
 		}
 		Set<BlockPos> posted = new HashSet<>();
 		colony.mineshaft().ifPresent(shaft -> {
@@ -198,6 +193,26 @@ public class ColonyManager extends SavedData {
 		return colony.members().stream().anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getRole() == role);
 	}
 
+	/** Areas the colony already uses, which a new area must keep clear of. Add new kinds of areas here. */
+	private static List<BoundingBox> occupied(Colony colony) {
+		List<BoundingBox> areas = new ArrayList<>();
+		colony.mineshaft().ifPresent(shaft -> areas.add(shaft.area()));
+		colony.field().ifPresent(field -> areas.add(field.area()));
+		colony.storage().ifPresent(storage -> areas.add(storage.area()));
+		return areas;
+	}
+
+	/** Picks the storage area once the colony has a hauler to keep it. */
+	private void surveyStorage(ServerLevel level, Colony colony) {
+		if (colony.storage().isPresent() || !this.hasRole(level, colony, BotRole.HAULER)) {
+			return;
+		}
+		StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
+				pos -> level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
+				pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty())
+			.ifPresent(colony::setStorage);
+	}
+
 	/** Orders whatever the colony is short of. */
 	private void surveyStock(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
@@ -205,7 +220,7 @@ public class ColonyManager extends SavedData {
 			return;
 		}
 		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
-		StockPlanner.ordersToAdd(targets, Storage.stock(core), colony.orders(), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable)
+		StockPlanner.ordersToAdd(targets, Storage.colonyStock(level, colony), colony.orders(), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable)
 			.forEach(colony::addOrder);
 	}
 
@@ -226,11 +241,12 @@ public class ColonyManager extends SavedData {
 		colony.board().jobs().stream().filter(Job::isOpen).forEach(job -> openJobs.merge(job.type(), 1, Integer::sum));
 
 		boolean hasOrders = !colony.orders().isEmpty();
+		boolean needsHauler = HaulerGoal.needsHauler(level, colony);
 		for (AntBot bot : members) {
 			BotRole current = bot.getRole();
 			BotRole role = current == BotRole.NONE
-				? RoleAssigner.choose(roles, openJobs, hasOrders)
-				: RoleAssigner.reassign(current, bot.isRoleSetByPlayer(), bot.getIdleTicks(), roles, openJobs, hasOrders);
+				? RoleAssigner.choose(roles, openJobs, hasOrders, needsHauler)
+				: RoleAssigner.reassign(current, bot.isRoleSetByPlayer(), bot.getIdleTicks(), roles, openJobs, hasOrders, needsHauler);
 			if (role == current) {
 				continue;
 			}
@@ -261,6 +277,7 @@ public class ColonyManager extends SavedData {
 			this.surveyCrops(level, colony);
 			this.surveyMine(level, colony);
 			colony.builds().forEach(plan -> colony.board().post(JobType.BUILD, plan.target()));
+			this.surveyStorage(level, colony);
 			this.surveyStock(level, colony);
 			this.assignRoles(level, colony);
 		}

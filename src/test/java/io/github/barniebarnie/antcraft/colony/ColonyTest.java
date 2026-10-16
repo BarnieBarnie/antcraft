@@ -28,7 +28,7 @@ class ColonyTest {
 
 	private static Colony colony() {
 		return new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(),
-			Optional.empty(), List.of(), List.of(), List.of(), Optional.empty());
+			Optional.empty(), List.of(), List.of(), List.of(), Optional.empty(), Optional.empty());
 	}
 
 	@Test

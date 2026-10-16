@@ -7,7 +7,12 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
+import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.StorageArea;
+import io.github.barniebarnie.antcraft.work.StorageCategory;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +20,7 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -84,6 +90,64 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(visited.size() >= 6, "guard visited only " + visited.size() + " spots");
 			helper.assertTrue(guard.blockPosition().closerThan(helper.absolutePos(CORE), colony.radius() + 1), "guard wandered off");
+		});
+	}
+
+	/** Chests stand on the rows z=4 and z=6, with an aisle between them. */
+	private static final BlockPos STORAGE = new BlockPos(2, 1, 4);
+
+	private static List<Container> storageChests(GameTestHelper helper, Colony colony) {
+		List<Container> chests = new ArrayList<>();
+		for (BlockPos spot : colony.storage().orElseThrow().chestSpots()) {
+			Container chest = Storage.containerAt(helper.getLevel(), spot);
+			if (chest != null) {
+				chests.add(chest);
+			}
+		}
+		return chests;
+	}
+
+	@GameTest(maxTicks = 600)
+	public void haulerMovesSurplusFromAFullCoreIntoWoodChests(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		Container core = core(helper);
+		// Two chests to place, and logs in every other slot.
+		core.setItem(0, new ItemStack(Items.CHEST, 2));
+		for (int i = 1; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
+		}
+		int logs = core.countItem(Items.OAK_LOG);
+		member(helper, colony, BotRole.HAULER);
+
+		helper.succeedWhen(() -> {
+			// Without stock targets, the core keeps one stack.
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 64, "core holds " + core.countItem(Items.OAK_LOG) + " logs");
+			List<Container> chests = storageChests(helper, colony);
+			int stored = chests.stream().mapToInt(chest -> chest.countItem(Items.OAK_LOG)).sum();
+			helper.assertTrue(stored == logs - 64, "storage holds " + stored + " logs");
+			for (Container chest : chests) {
+				for (int i = 0; i < chest.getContainerSize(); i++) {
+					ItemStack stack = chest.getItem(i);
+					helper.assertTrue(stack.isEmpty() || StorageCategory.of(stack) == StorageCategory.WOOD, "not a wood chest: " + stack);
+				}
+			}
+		});
+	}
+
+	@GameTest(maxTicks = 400)
+	public void haulerBringsAMissingPickaxeBackFromStorage(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)));
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		helper.setBlock(STORAGE, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		member(helper, colony, BotRole.HAULER);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.STONE_PICKAXE) == 1, "pickaxe not in the core");
+			helper.assertTrue(chest.countItem(Items.STONE_PICKAXE) == 0, "pickaxe still in storage");
 		});
 	}
 

@@ -144,4 +144,17 @@ class MineshaftTest {
 		var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, SHAFT).getOrThrow();
 		assertEquals(SHAFT, Mineshaft.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
 	}
+
+	@Test
+	void siteBesideTheCoreKeepsClearOfStorageAndField() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of());
+		// Storage was chosen first, right where the shaft would go.
+		StorageArea storage = new StorageArea(first.top().offset(-1, 0, 0));
+		Field field = new Field(core.offset(-4, -1, -4));
+		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(storage.area(), field.area()));
+		assertFalse(shaft.area().intersects(storage.area()), "shaft overlaps storage at " + shaft.top());
+		assertFalse(shaft.area().intersects(field.area()), "shaft overlaps the field at " + shaft.top());
+	}
 }

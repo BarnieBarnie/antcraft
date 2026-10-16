@@ -2,7 +2,6 @@ package io.github.barniebarnie.antcraft.work;
 
 import com.mojang.serialization.Codec;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -16,8 +15,6 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 public record Field(BlockPos center) {
 	/** Blocks from the middle to the edge: a 5x5 field, every block within reach of the water. */
 	public static final int RADIUS = 2;
-	/** How far below and above the core's floor the field may lie. */
-	private static final int HEIGHT_RANGE = 2;
 
 	public static final Codec<Field> CODEC = BlockPos.CODEC.xmap(Field::new, Field::center);
 
@@ -51,24 +48,7 @@ public record Field(BlockPos center) {
 	 * @param isOpen whether the block above soil leaves room for a crop
 	 */
 	public static Optional<Field> choose(BlockPos core, int radius, List<BoundingBox> avoid, Predicate<BlockPos> isSoil, Predicate<BlockPos> isOpen) {
-		// Keep a ring around the core free so bots can always reach it.
-		BoundingBox coreArea = BoundingBox.fromCorners(core.offset(-1, -1, -1), core.offset(1, 1, 1));
-		int reach = radius - RADIUS;
-		List<BlockPos> centers = new ArrayList<>();
-		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-reach, 0, -reach), core.offset(reach, 0, reach))) {
-			centers.add(pos.immutable());
-		}
-		centers.sort(Comparator.comparingInt(pos -> pos.distManhattan(core)));
-		// ponytail: scans up to the whole territory when there is no room; cache failures if surveys get slow.
-		for (BlockPos column : centers) {
-			for (int dy = 0; dy <= HEIGHT_RANGE; dy = dy > 0 ? -dy : -dy + 1) {
-				Field field = new Field(column.offset(0, -1 + dy, 0));
-				if (!field.area().intersects(coreArea) && avoid.stream().noneMatch(field.area()::intersects) && field.isFlat(isSoil, isOpen)) {
-					return Optional.of(field);
-				}
-			}
-		}
-		return Optional.empty();
+		return Sites.nearest(core, radius - RADIUS, avoid, pos -> new Field(pos.below()), Field::area, field -> field.isFlat(isSoil, isOpen));
 	}
 
 	private boolean isFlat(Predicate<BlockPos> isSoil, Predicate<BlockPos> isOpen) {

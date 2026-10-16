@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
@@ -57,10 +58,13 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		this(top, levels, DEFAULT_BRANCHES_PER_SIDE, DEFAULT_BRANCH_LENGTH, DEFAULT_TORCH_SPACING);
 	}
 
-	/** The site the colony picks by itself, beside the core. */
-	public static Mineshaft nextTo(BlockPos core, List<Integer> levels) {
-		// ponytail: fixed offset, no terrain check; move it with /antcraft colony mineshaft.
-		return new Mineshaft(core.offset(2, 0, 2), levels);
+	/** The site the colony picks by itself: on a side of the core clear of the {@code avoid} areas (field, storage). */
+	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid) {
+		// ponytail: four fixed spots, no terrain check; move it with /antcraft colony mineshaft.
+		return Stream.of(core.offset(2, 0, 2), core.offset(-3, 0, -3), core.offset(2, 0, -3), core.offset(-3, 0, 2))
+			.map(top -> new Mineshaft(top, levels))
+			.filter(shaft -> avoid.stream().noneMatch(shaft.area()::intersects))
+			.findFirst().orElseGet(() -> new Mineshaft(core.offset(2, 0, 2), levels));
 	}
 
 	/** The column the stairs wind down, from the bottom floor to the top of the entrance. */

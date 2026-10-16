@@ -19,6 +19,7 @@ import net.minecraft.tags.TagKey;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.StorageArea;
 import net.minecraft.world.item.Item;
 
 /** A colony: its core block (storage), member bots, work radius and job board. */
@@ -39,7 +40,8 @@ public class Colony {
 		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets),
 		BuildPlan.CODEC.listOf().optionalFieldOf("builds", List.of()).forGetter(Colony::builds),
 		BlockPos.CODEC.listOf().optionalFieldOf("protected", List.of()).forGetter(c -> List.copyOf(c.protectedBlocks)),
-		Field.CODEC.optionalFieldOf("field").forGetter(Colony::field)
+		Field.CODEC.optionalFieldOf("field").forGetter(Colony::field),
+		StorageArea.CODEC.optionalFieldOf("storage").forGetter(Colony::storage)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -56,12 +58,15 @@ public class Colony {
 	/** Blocks build plans placed, which bots leave standing. */
 	private final Set<BlockPos> protectedBlocks;
 	private Optional<Field> field;
+	private Optional<StorageArea> storage;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
-			List<StockTarget> stock, List<BuildPlan> builds, List<BlockPos> protectedBlocks, Optional<Field> field) {
+			List<StockTarget> stock, List<BuildPlan> builds, List<BlockPos> protectedBlocks, Optional<Field> field,
+			Optional<StorageArea> storage) {
 		this.field = field;
+		this.storage = storage;
 		this.id = id;
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
@@ -129,6 +134,15 @@ public class Colony {
 	void setField(Field field) {
 		this.field = Optional.of(field);
 		this.board.removeOpenIf(job -> job.type() == JobType.PLANT_CROP);
+	}
+
+	/** Where haulers keep the colony's storage chests, once the colony has picked a spot. */
+	public Optional<StorageArea> storage() {
+		return this.storage;
+	}
+
+	public void setStorage(StorageArea storage) {
+		this.storage = Optional.of(storage);
 	}
 
 	public UUID id() {

@@ -82,7 +82,7 @@ public class MinerGoal extends ColonyWorkGoal {
 		Optional<Item> best = ToolKind.PICKAXE.betterIn(stock, null);
 		int slot = core == null ? -1 : findSlot(core, stack -> best.isPresent() ? stack.is(best.get()) : stack.is(ItemTags.PICKAXES));
 		if (slot < 0) {
-			ToolKind.PICKAXE.order(level, colony, null, stock);
+			ToolKind.PICKAXE.order(level, colony, null, Storage.colonyStock(level, colony));
 			this.cooldown = IDLE_TICKS;
 			return;
 		}

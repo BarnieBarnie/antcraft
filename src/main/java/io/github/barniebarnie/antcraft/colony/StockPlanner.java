@@ -21,6 +21,13 @@ public final class StockPlanner {
 	private StockPlanner() {
 	}
 
+	/** Everything in the given stocks together, such as the core and the storage chests. */
+	public static <I> Map<I, Integer> total(List<Map<I, Integer>> stocks) {
+		Map<I, Integer> total = new HashMap<>();
+		stocks.forEach(stock -> stock.forEach((item, count) -> total.merge(item, count, Integer::sum)));
+		return total;
+	}
+
 	/** How many items in {@code stock} count toward the target. */
 	public static <I> int have(Target<I> target, Map<I, Integer> stock) {
 		int have = 0;

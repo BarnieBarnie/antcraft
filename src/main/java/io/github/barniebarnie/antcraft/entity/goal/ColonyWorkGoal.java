@@ -161,7 +161,7 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 		return -1;
 	}
 
-	protected static int freeSlots(SimpleContainer inventory) {
+	protected static int freeSlots(Container inventory) {
 		int free = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			if (inventory.getItem(i).isEmpty()) {

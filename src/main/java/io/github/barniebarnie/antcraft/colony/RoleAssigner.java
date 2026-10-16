@@ -25,10 +25,15 @@ public final class RoleAssigner {
 	 * @param roles how many members already have each role
 	 * @param openJobs unclaimed jobs on the board, by type
 	 * @param hasOrders whether the colony has crafting orders
+	 * @param needsHauler whether the core is nearly full or storage holds items the core needs
 	 */
-	public static BotRole choose(Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders) {
+	public static BotRole choose(Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders, boolean needsHauler) {
 		if (hasOrders && roles.getOrDefault(BotRole.CRAFTER, 0) == 0) {
 			return BotRole.CRAFTER;
+		}
+		// A full core stalls every role that deposits.
+		if (needsHauler && roles.getOrDefault(BotRole.HAULER, 0) == 0) {
+			return BotRole.HAULER;
 		}
 
 		BotRole best = BotRole.NONE;
@@ -56,7 +61,7 @@ public final class RoleAssigner {
 	 * @param roles how many members have each role, this bot included
 	 */
 	public static BotRole reassign(BotRole current, boolean setByPlayer, int idleTicks,
-			Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders) {
+			Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders, boolean needsHauler) {
 		Optional<JobType> own = WORKERS.entrySet().stream().filter(worker -> worker.getValue() == current).map(Map.Entry::getKey).findFirst();
 		if (setByPlayer || own.isEmpty() || idleTicks < IDLE_TICKS_BEFORE_REASSIGN || openJobs.getOrDefault(own.get(), 0) > 0) {
 			return current;
@@ -65,7 +70,7 @@ public final class RoleAssigner {
 		Map<BotRole, Integer> others = new EnumMap<>(BotRole.class);
 		others.putAll(roles);
 		others.merge(current, -1, Integer::sum);
-		BotRole next = choose(others, openJobs, hasOrders);
+		BotRole next = choose(others, openJobs, hasOrders, needsHauler);
 		// Guarding is the fallback for bots with no work at all; an idle worker may get work again soon.
 		return next == BotRole.NONE || next == BotRole.GUARD ? current : next;
 	}

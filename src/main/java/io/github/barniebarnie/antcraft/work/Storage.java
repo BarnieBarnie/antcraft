@@ -1,7 +1,13 @@
 package io.github.barniebarnie.antcraft.work;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.StockPlanner;
+import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -77,6 +83,56 @@ public final class Storage {
 			}
 		}
 		return stock;
+	}
+
+	/** The colony's storage chests by position, the core not included. */
+	public static Map<BlockPos, Container> storageChests(ServerLevel level, Colony colony) {
+		Map<BlockPos, Container> chests = new LinkedHashMap<>();
+		colony.storage().ifPresent(storage -> storage.chestSpots().forEach(spot -> {
+			Container chest = containerAt(level, spot);
+			if (chest != null) {
+				chests.put(spot, chest);
+			}
+		}));
+		return chests;
+	}
+
+	/**
+	 * Everything the colony has: the core and its storage chests. Use this to decide what the colony
+	 * owns; bots still only take items from the core.
+	 */
+	public static Map<Item, Integer> colonyStock(ServerLevel level, Colony colony) {
+		List<Map<Item, Integer>> stocks = new ArrayList<>();
+		Container core = containerAt(level, colony.core());
+		if (core != null) {
+			stocks.add(stock(core));
+		}
+		storageChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
+		return StockPlanner.total(stocks);
+	}
+
+	/** What the core should hold for work under way: the ingredients open orders use up from {@code stock}, and build materials. */
+	public static Map<Item, Integer> neededInCore(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
+		TaskPlanner.RecipeBook<Item> book = GameRecipeBook.of(level.getServer());
+		List<Map<Item, Integer>> needs = new ArrayList<>();
+		colony.orders().forEach((item, count) -> {
+			Map<Item, Integer> available = new HashMap<>(stock);
+			available.remove(item);
+			needs.add(Stockkeeping.ingredients(TaskPlanner.plan(item, count, available, book, Gatherables::isGatherable).crafts(), available));
+		});
+		colony.builds().forEach(plan -> needs.add(plan.materials(level::getBlockState)));
+		return StockPlanner.total(needs);
+	}
+
+	/** Whether some of {@code stack} would fit in the container. */
+	public static boolean hasRoomFor(Container container, ItemStack stack) {
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			ItemStack slot = container.getItem(i);
+			if (slot.isEmpty() || ItemStack.isSameItemSameComponents(slot, stack) && slot.getCount() < slot.getMaxStackSize()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Whether the container holds every ingredient for {@code times} crafts of the recipe. */

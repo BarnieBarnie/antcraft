@@ -100,7 +100,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 		int count = needed.getOrDefault(item, 1);
 		if (core == null || core.countItem(item) == 0) {
 			int ordered = colony.orders().getOrDefault(item, 0);
-			if (core != null && ordered < count) {
+			// Items in storage need no order: a hauler brings them into the core.
+			if (core != null && ordered < count && Storage.colonyStock(level, colony).getOrDefault(item, 0) == 0) {
 				colony.addOrder(item, count - ordered);
 			}
 			this.cooldown = IDLE_TICKS;

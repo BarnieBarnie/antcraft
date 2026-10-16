@@ -154,7 +154,7 @@ public final class AntCraftCommands {
 			colony.core().toShortString(), colony.members().size(), roles.toString(), colony.board().jobs().size(), claimed, colony.radius(), idle), false);
 
 		Container core = Storage.containerAt(level, colony.core());
-		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);
+		Map<Item, Integer> stock = core == null ? Map.of() : Storage.colonyStock(level, colony);
 		List<String> low = new ArrayList<>();
 		for (StockTarget target : colony.stockTargets()) {
 			int have = StockPlanner.have(target.toPlannerTarget(), stock);
@@ -193,7 +193,7 @@ public final class AntCraftCommands {
 		}
 		Colony colony = found.get();
 		Container core = Storage.containerAt(source.getLevel(), colony.core());
-		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);
+		Map<Item, Integer> stock = core == null ? Map.of() : Storage.colonyStock(source.getLevel(), colony);
 		if (colony.stockTargets().isEmpty()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.empty"), false);
 		}

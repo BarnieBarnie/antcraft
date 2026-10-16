@@ -69,7 +69,7 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 		Map<Item, Integer> stock = Storage.stock(storage);
 		Optional<Item> better = this.betterIn(stock, current);
 		if (better.isEmpty() && current != null && colony != null) {
-			this.order(level, colony, current, stock);
+			this.order(level, colony, current, Storage.colonyStock(level, colony));
 		}
 		return better;
 	}

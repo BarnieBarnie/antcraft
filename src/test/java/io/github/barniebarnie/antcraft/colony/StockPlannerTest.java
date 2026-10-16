@@ -96,6 +96,20 @@ class StockPlannerTest {
 	}
 
 	@Test
+	void itemsMovedToStorageStillCount() {
+		// The hauler moved the sticks from the core into a storage chest.
+		Map<String, Integer> core = Map.of("oak_planks", 2);
+		Map<String, Integer> storage = Map.of("stick", 6);
+		assertEquals(Map.of("stick", 4), orders(List.of(item("stick", 4)), core, Map.of()));
+		assertTrue(orders(List.of(item("stick", 4)), StockPlanner.total(List.of(core, storage)), Map.of()).isEmpty());
+	}
+
+	@Test
+	void totalAddsUpStocks() {
+		assertEquals(Map.of("stick", 7, "oak_log", 1), StockPlanner.total(List.of(Map.of("stick", 6), Map.of("stick", 1, "oak_log", 1))));
+	}
+
+	@Test
 	void reportsHowManyAreStocked() {
 		StockPlanner.Target<String> anyPickaxe = new StockPlanner.Target<>(PICKAXES::contains, List.of("stone_pickaxe"), 2);
 		assertEquals(3, StockPlanner.have(anyPickaxe, Map.of("wooden_pickaxe", 1, "stone_pickaxe", 2, "stick", 5)));
