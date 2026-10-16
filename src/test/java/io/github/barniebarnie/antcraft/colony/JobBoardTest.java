@@ -231,4 +231,53 @@ class JobBoardTest {
 		assertEquals(logs, loaded.jobOf(ALICE).orElseThrow().area());
 		assertTrue(loaded.post(JobType.CHOP_TREE, logs.get(1), List.of(logs.get(1))).isEmpty());
 	}
+
+	/** A tree with logs the bot could not reach goes back on the board, but no one takes it before its time. */
+	@Test
+	void jobToRetryLaterIsNotClaimedBeforeItsTime() {
+		JobBoard board = new JobBoard();
+		List<BlockPos> logs = List.of(new BlockPos(5, 1, 5), new BlockPos(5, 2, 5));
+		board.post(JobType.CHOP_TREE, logs.getFirst(), logs);
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 0);
+
+		assertTrue(board.retryLater(ALICE, 600, 3));
+		assertTrue(board.jobOf(ALICE).isEmpty());
+		assertTrue(board.claim(BOB, CHOP, BlockPos.ZERO, 599).isEmpty());
+		Job retried = board.claim(BOB, CHOP, BlockPos.ZERO, 600).orElseThrow();
+		assertEquals(1, retried.tries());
+		assertEquals(logs, retried.area());
+	}
+
+	/** After the last try the job is given up: never claimed again, but it stays so the tree is not posted anew. */
+	@Test
+	void jobIsGivenUpAfterItsLastTry() {
+		JobBoard board = new JobBoard();
+		List<BlockPos> logs = List.of(new BlockPos(5, 1, 5), new BlockPos(5, 2, 5));
+		board.post(JobType.CHOP_TREE, logs.getFirst(), logs);
+
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 0);
+		assertTrue(board.retryLater(ALICE, 100, 3));
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 100);
+		assertTrue(board.retryLater(ALICE, 200, 3));
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 200);
+		assertFalse(board.retryLater(ALICE, 300, 3));
+
+		assertTrue(board.jobs().getFirst().givenUp());
+		assertTrue(board.claim(BOB, CHOP, BlockPos.ZERO, Long.MAX_VALUE - 1).isEmpty());
+		assertTrue(board.post(JobType.CHOP_TREE, logs.get(1), List.of(logs.get(1))).isEmpty());
+	}
+
+	@Test
+	void triesAndRetryTimeSurviveSaveAndLoad() {
+		JobBoard board = new JobBoard();
+		board.post(JobType.CHOP_TREE, new BlockPos(5, 1, 5));
+		board.claim(ALICE, CHOP, BlockPos.ZERO, 0);
+		board.retryLater(ALICE, 600, 3);
+
+		var json = JobBoard.CODEC.encodeStart(JsonOps.INSTANCE, board).getOrThrow();
+		JobBoard loaded = JobBoard.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+		assertEquals(board.jobs(), loaded.jobs());
+		assertTrue(loaded.claim(BOB, CHOP, BlockPos.ZERO, 599).isEmpty());
+	}
 }

@@ -52,7 +52,7 @@ public class JobBoard {
 		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {
 			return Optional.empty();
 		}
-		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item);
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item, 0, 0L);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -62,7 +62,7 @@ public class JobBoard {
 		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
 			return Optional.empty();
 		}
-		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty());
+		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -81,7 +81,8 @@ public class JobBoard {
 
 	/**
 	 * Like {@link #claim(UUID, Set, BlockPos, long)}, but only claims an open job that is
-	 * {@code ready} to be worked on, such as a replant job once there is a sapling for it.
+	 * {@code ready} to be worked on, such as a replant job once there is a sapling for it. Jobs to
+	 * retry later are not claimed before their time.
 	 * The bot's current job is given back whether it is ready or not.
 	 */
 	public Optional<Job> claim(UUID bot, Set<JobType> types, BlockPos from, long now, Predicate<Job> ready) {
@@ -91,7 +92,7 @@ public class JobBoard {
 			return this.jobOf(bot);
 		}
 		Optional<Job> nearest = this.jobs.stream()
-			.filter(job -> job.isOpen() && types.contains(job.type()) && ready.test(job))
+			.filter(job -> job.isOpen() && job.notBefore() <= now && types.contains(job.type()) && ready.test(job))
 			.min(Comparator.comparingDouble(job -> job.target().distSqr(from)));
 		nearest.ifPresent(job -> this.replace(job, job.claim(bot, now)));
 		return nearest.flatMap(job -> this.jobOf(bot));
@@ -111,6 +112,17 @@ public class JobBoard {
 
 	public void release(UUID bot) {
 		this.jobOf(bot).ifPresent(job -> this.replace(job, job.release()));
+	}
+
+	/**
+	 * Gives the bot's job back to be tried again from {@code notBefore}, such as a tree with logs it could
+	 * not reach. After {@code maxTries} tries it is given up instead. Returns whether it will be retried.
+	 */
+	public boolean retryLater(UUID bot, long notBefore, int maxTries) {
+		Optional<Job> job = this.jobOf(bot);
+		boolean retry = job.map(j -> j.tries() + 1 < maxTries).orElse(false);
+		job.ifPresent(j -> this.replace(j, j.retryLater(retry ? notBefore : Long.MAX_VALUE)));
+		return retry;
 	}
 
 	/** Frees jobs whose bot has not reported for {@code timeout} ticks. Returns how many were freed. */

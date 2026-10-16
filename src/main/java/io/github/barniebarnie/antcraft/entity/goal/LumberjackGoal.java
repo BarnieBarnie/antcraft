@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
@@ -79,6 +80,13 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * places new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
 	 */
 	private static final int SCAFFOLD_RETRIES = 8;
+	/**
+	 * A colony tree with logs it could not reach, even with scaffold, goes back on the job board to retry
+	 * this long after; say once the colony has more scaffold, or a player cleared the way.
+	 */
+	private static final int TREE_RETRY_TICKS = 600;
+	/** How many visits a colony tree gets before its unreachable logs are given up for good. */
+	private static final int TREE_TRIES = 5;
 	/** The scaffold blocks lumberjacks fetch and place: ones they can take down quickly without a tool. */
 	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
 
@@ -262,6 +270,24 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.colony(level).ifPresent(colony -> colony.board().complete(done));
 			this.jobId = null;
 		}
+	}
+
+	/**
+	 * Gives the tree back to the board with the logs it could not reach, to be retried later. After its
+	 * last try it is given up: it stays on the board, so it is not posted anew, but no one takes it.
+	 */
+	private void retryJobLater(ServerLevel level) {
+		if (this.jobId == null) {
+			// ponytail: a solo bot has no board to come back through; give it saved revisits with logs if that matters.
+			return;
+		}
+		this.colony(level).ifPresent(colony -> {
+			if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + TREE_RETRY_TICKS, TREE_TRIES)) {
+				AntCraft.LOGGER.info("Colony at {} gave up on the tree at {}: {} logs out of reach after {} tries",
+					colony.core().toShortString(), this.tree.base().toShortString(), this.unreachableLogs.size(), TREE_TRIES);
+			}
+		});
+		this.jobId = null;
 	}
 
 	private void enter(State next) {
@@ -527,7 +553,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 		}
 		if (next == null) {
-			this.completeJob(level);
+			if (this.unreachableLogs.stream().anyMatch(log -> level.getBlockState(log).is(BlockTags.LOGS))) {
+				this.retryJobLater(level);
+			} else {
+				this.completeJob(level);
+			}
 			// The leaves decay by themselves now; take the scaffolding down while still up there.
 			this.enter(State.CLEANUP);
 			return;

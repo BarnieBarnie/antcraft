@@ -749,6 +749,29 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A colony tree whose top logs are out of reach, with no scaffold anywhere: the lumberjack gives the
+	 * job back to retry later. Once the core holds scaffold, a later visit fells the rest.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void comesBackForLogsItCouldNotReach(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		tallTree(helper, 5, 5);
+		colonyLumberjack(helper, colony, 2, 4);
+		boolean[] stocked = {false};
+		helper.onEachTick(() -> {
+			if (!stocked[0] && colony.board().jobs().stream().anyMatch(job -> job.type() == JobType.CHOP_TREE && job.tries() == 1)) {
+				stocked[0] = true;
+				((Container) helper.getBlockEntity(CHEST, BlockEntity.class)).setItem(0, new ItemStack(Items.DIRT, 16));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(stocked[0], "the tree was not given back to retry");
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_TREE), "chop job left: " + colony.board().jobs());
+		});
+	}
+
 	/** Leafless logs no tree job covers, like a player's log fence, are left alone. */
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void leavesLeaflessLogsOfNoKnownTreeAlone(GameTestHelper helper) {
