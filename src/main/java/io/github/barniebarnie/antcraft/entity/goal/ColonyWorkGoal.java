@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -95,6 +96,11 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	 * bot is busy fetching one, so the caller skips its own work this tick.
 	 */
 	protected boolean upgradeTool(ServerLevel level, Colony colony, ToolKind kind) {
+		return this.upgradeTool(level, colony, kind, () -> false);
+	}
+
+	/** Like {@link #upgradeTool(ServerLevel, Colony, ToolKind)}; a bot without one orders one too while it {@code needs} one. */
+	protected boolean upgradeTool(ServerLevel level, Colony colony, ToolKind kind, BooleanSupplier needs) {
 		Container core = Storage.containerAt(level, colony.core());
 		if (core == null) {
 			this.upgrade = null;
@@ -105,7 +111,7 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 				return false;
 			}
 			this.nextUpgradeCheck = level.getGameTime() + UPGRADE_CHECK_TICKS;
-			Optional<Item> better = kind.findUpgrade(level, this.bot, core, colony);
+			Optional<Item> better = kind.findUpgrade(level, this.bot, core, colony, needs);
 			if (better.isEmpty()) {
 				return false;
 			}

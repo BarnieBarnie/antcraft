@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -62,13 +63,18 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	/**
 	 * The best tool in {@code storage} that beats what the bot carries, to go and fetch. If there
 	 * is none and the bot is in {@code colony}, orders the best tier the colony can make instead.
-	 * A bot without a tool of this kind only fetches one: roles that can work without one do not order.
+	 * A bot without a tool of this kind only fetches one, unless it {@code needs} one now: roles that
+	 * can work without one do not order.
 	 */
 	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony) {
+		return this.findUpgrade(level, bot, storage, colony, () -> false);
+	}
+
+	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony, BooleanSupplier needs) {
 		Item current = this.bestCarried(bot);
 		Map<Item, Integer> stock = Storage.stock(storage);
 		Optional<Item> better = this.betterIn(stock, current);
-		if (better.isEmpty() && current != null && colony != null) {
+		if (better.isEmpty() && (current != null || needs.getAsBoolean()) && colony != null) {
 			this.order(level, colony, current, Storage.colonyStock(level, colony));
 		}
 		return better;

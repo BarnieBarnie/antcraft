@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
@@ -124,6 +125,33 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(stocked[0], "no order for stairs: " + colony.orders());
 			assertState(helper, 4, 1, 4, STAIRS_EAST);
+		});
+	}
+
+	/** The miner takes the core's only pickaxe; the builder orders its own instead of digging by hand for good. */
+	@GameTest(maxTicks = 600)
+	public void ordersAPickaxeWhenTheMinerTookTheLastOne(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		helper.setBlock(5, 1, 5, Blocks.STONE);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(5, 1, 5))))));
+		// The miner stands at the core, so it gets there first.
+		AntBot miner = member(helper, colony, BotRole.MINER, 2, 1);
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 6, 6);
+
+		boolean[] stocked = {false};
+		helper.onEachTick(() -> {
+			if (!stocked[0] && colony.orders().containsKey(Items.WOODEN_PICKAXE)) {
+				// What a crafter would bring.
+				core(helper).setItem(1, new ItemStack(Items.WOODEN_PICKAXE));
+				stocked[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(ToolKind.PICKAXE.bestCarried(miner) == Items.STONE_PICKAXE, "miner did not take the core's pickaxe");
+			helper.assertTrue(stocked[0], "no pickaxe ordered: " + colony.orders());
+			helper.assertTrue(ToolKind.PICKAXE.bestCarried(builder) == Items.WOODEN_PICKAXE, "builder has no pickaxe");
+			helper.assertBlockNotPresent(Blocks.STONE, new BlockPos(5, 1, 5));
 		});
 	}
 

@@ -14,6 +14,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -30,7 +31,7 @@ import org.jspecify.annotations.Nullable;
  * to place it fetches what the plan still needs of it from the core; steps whose item the core
  * lacks wait while the rest goes on. It places blocks only where no bot or mob stands, and blocks
  * it places are protected from other bots. It digs with the best pickaxe in the core, such as
- * down a mineshaft.
+ * down a mineshaft, and orders one if it has none and a plan has such digging to do.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	public BuilderGoal(AntBot bot) {
@@ -41,7 +42,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
-		if (this.upgradeTool(level, colony, ToolKind.PICKAXE)) {
+		if (this.upgradeTool(level, colony, ToolKind.PICKAXE, () -> needsPickaxe(level, colony))) {
 			return;
 		}
 		Container core = Storage.containerAt(level, colony.core());
@@ -91,6 +92,14 @@ public class BuilderGoal extends ColonyWorkGoal {
 			}
 			Item item = step.item();
 			return item == Items.AIR || this.bot.getInventory().countItem(item) > 0 || core != null && core.countItem(item) > 0;
+		});
+	}
+
+	/** Whether a plan still has a block in the way that is dug with a pickaxe, such as stone. */
+	private static boolean needsPickaxe(ServerLevel level, Colony colony) {
+		return colony.builds().stream().flatMap(plan -> plan.steps().stream()).anyMatch(step -> {
+			BlockState state = level.getBlockState(step.pos());
+			return state.is(BlockTags.MINEABLE_WITH_PICKAXE) && step.needsClearing(state);
 		});
 	}
 
