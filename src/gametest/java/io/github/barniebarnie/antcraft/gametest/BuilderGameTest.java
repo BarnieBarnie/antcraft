@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.ToolKind;
@@ -252,7 +253,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 				copy[0] = reload(helper, builder);
 				Colony loaded = Colony.CODEC.parse(NbtOps.INSTANCE, Colony.CODEC.encodeStart(NbtOps.INSTANCE, colony).getOrThrow()).getOrThrow();
 				helper.assertTrue(loaded.builds().equals(colony.builds()), "plans not saved: " + loaded.builds());
-				helper.assertTrue(loaded.isProtected(helper.absolutePos(new BlockPos(4, 1, 6))), "placed block not saved as protected");
+				helper.assertTrue(loaded.isProtected(helper.getLevel()::getBlockState, helper.absolutePos(new BlockPos(4, 1, 6))), "placed block not saved as protected");
 			}
 		});
 		helper.succeedWhen(() -> {
@@ -277,6 +278,33 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.OAK_PLANKS, planks);
 			helper.assertTrue(view.breakTicks(helper.absolutePos(planks)) < 0, "pathing may break the placed planks");
 			helper.assertFalse(Mining.isMinable(helper.getLevel(), helper.absolutePos(planks)), "miners may break the placed planks");
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void replacedBlocksAreNoLongerProtected(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
+		BlockPos planks = new BlockPos(4, 1, 4);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.OAK_PLANKS.defaultBlockState()))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		BlockPos pos = helper.absolutePos(planks);
+		LevelWorldView view = new LevelWorldView(helper.getLevel(), new SimpleContainer(1), ItemStack.EMPTY, Set.of());
+		boolean[] replaced = {false};
+		helper.onEachTick(() -> {
+			if (!replaced[0] && colony.builds().isEmpty() && helper.getBlockState(planks).is(Blocks.OAK_PLANKS)) {
+				helper.assertTrue(ColonyManager.isProtected(helper.getLevel(), pos), "placed planks not protected");
+				// A player breaks the planks and puts a log there.
+				helper.setBlock(planks, Blocks.OAK_LOG);
+				replaced[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(replaced[0], "planks not placed");
+			helper.assertFalse(ColonyManager.isProtected(helper.getLevel(), pos), "player's log still protected");
+			helper.assertTrue(new LevelTreeView(helper.getLevel()).isLog(pos), "lumberjacks skip the player's log");
+			helper.assertTrue(view.breakTicks(pos) >= 0, "pathing may not break the player's log");
 		});
 	}
 

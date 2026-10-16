@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -20,6 +21,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -35,6 +37,53 @@ class ColonyTest {
 	private static Colony colony() {
 		return new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(),
 			Optional.empty(), List.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+	}
+
+	/** A world of air: the mineshaft's floors stay protected even when broken, since the builder rebuilds them. */
+	private static final Function<BlockPos, BlockState> AIR = pos -> Blocks.AIR.defaultBlockState();
+	private static final BlockPos PLACED = new BlockPos(5, 64, 5);
+
+	private static Function<BlockPos, BlockState> world(Block block) {
+		return pos -> block.defaultBlockState();
+	}
+
+	@Test
+	void protectionFollowsThePlacedBlock() {
+		Colony colony = colony();
+		colony.protect(PLACED, Blocks.OAK_PLANKS);
+		assertTrue(colony.isProtected(world(Blocks.OAK_PLANKS), PLACED));
+		assertFalse(colony.isProtected(world(Blocks.OAK_LOG), PLACED));
+		// Forgotten once replaced, so planks put back later by a player are not protected either.
+		assertFalse(colony.isProtected(world(Blocks.OAK_PLANKS), PLACED));
+	}
+
+	@Test
+	void surveyForgetsReplacedBlocksButKeepsUnloadedOnes() {
+		Colony colony = colony();
+		BlockPos unloaded = new BlockPos(9, 64, 9);
+		colony.protect(PLACED, Blocks.OAK_PLANKS);
+		colony.protect(unloaded, Blocks.OAK_PLANKS);
+		colony.forgetReplaced(pos -> pos.equals(unloaded) ? null : Blocks.AIR.defaultBlockState());
+		assertEquals(1, colony.protectedCount());
+		assertTrue(colony.isProtected(world(Blocks.OAK_PLANKS), unloaded));
+	}
+
+	@Test
+	void protectedBlocksSurviveSaveAndLoad() {
+		Colony colony = colony();
+		colony.protect(PLACED, Blocks.OAK_PLANKS);
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertFalse(loaded.isProtected(world(Blocks.OAK_LOG), PLACED));
+	}
+
+	@Test
+	void oldSavesProtectWhateverIsThereOnFirstCheck() {
+		String json = """
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0], "protected": [[5, 64, 5]]}
+			""";
+		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json)).getOrThrow();
+		assertTrue(colony.isProtected(world(Blocks.STONE), PLACED));
+		assertFalse(colony.isProtected(world(Blocks.OAK_LOG), PLACED));
 	}
 
 	private static BuildPlan plan(Block block) {
@@ -185,12 +234,12 @@ class ColonyTest {
 		Colony colony = colony();
 		colony.setMineshaft(SHAFT);
 		assertEquals(List.of(SHAFT.plan()), colony.builds());
-		assertTrue(colony.isProtected(SHAFT.stairs().getLast().below()));
+		assertTrue(colony.isProtected(AIR, SHAFT.stairs().getLast().below()));
 
 		Mineshaft moved = new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4);
 		colony.setMineshaft(moved);
 		assertEquals(List.of(moved.plan()), colony.builds());
-		assertFalse(colony.isProtected(SHAFT.stairs().getLast().below()));
+		assertFalse(colony.isProtected(AIR, SHAFT.stairs().getLast().below()));
 	}
 
 	@Test
@@ -200,6 +249,6 @@ class ColonyTest {
 		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(Optional.of(SHAFT), loaded.mineshaft());
-		assertTrue(loaded.isProtected(SHAFT.stairs().getLast().below()));
+		assertTrue(loaded.isProtected(AIR, SHAFT.stairs().getLast().below()));
 	}
 }

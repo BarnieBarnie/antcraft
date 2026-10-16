@@ -6,6 +6,7 @@ import com.mojang.datafixers.util.Either;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -15,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -25,6 +27,10 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import org.jspecify.annotations.Nullable;
 
 /** A colony: its core block (storage), member bots, work radius and job board. */
 public class Colony {
@@ -35,6 +41,11 @@ public class Colony {
 		Codec.unboundedMap(UUIDUtil.STRING_CODEC, BuildPlan.CODEC),
 		BuildPlan.CODEC.listOf().xmap(Colony::withIds, plans -> List.copyOf(plans.values())));
 	private static final Codec<Map<Item, Integer>> ITEM_COUNTS = Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT);
+	/** Saves from before protection kept the block hold only positions; those protect whatever is there on first check. */
+	private static final Codec<List<Placed>> PROTECTED = Codec.withAlternative(
+		Placed.CODEC.listOf(),
+		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Placed(pos, Optional.empty())).toList(),
+			placed -> placed.stream().map(Placed::pos).toList()));
 	private static final Codec<Map<OrderPurpose, Map<Item, Integer>>> SYSTEM_ORDERS = Codec.unboundedMap(OrderPurpose.CODEC, ITEM_COUNTS);
 
 	/** What the colony placed an order for itself, so it can withdraw the order once that no longer needs it. */
@@ -52,6 +63,14 @@ public class Colony {
 		}
 	}
 
+	/** A block a build plan placed; an empty block is not known yet, from an old save. */
+	record Placed(BlockPos pos, Optional<Block> block) {
+		static final Codec<Placed> CODEC = RecordCodecBuilder.create(i -> i.group(
+			BlockPos.CODEC.fieldOf("pos").forGetter(Placed::pos),
+			BuiltInRegistries.BLOCK.byNameCodec().optionalFieldOf("block").forGetter(Placed::block)
+		).apply(i, Placed::new));
+	}
+
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.CODEC.fieldOf("id").forGetter(Colony::id),
 		BlockPos.CODEC.fieldOf("core").forGetter(Colony::core),
@@ -65,7 +84,7 @@ public class Colony {
 		// Colonies saved before stock targets existed get the defaults.
 		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets),
 		BUILDS.optionalFieldOf("builds", Map.of()).forGetter(c -> c.builds),
-		BlockPos.CODEC.listOf().optionalFieldOf("protected", List.of()).forGetter(c -> List.copyOf(c.protectedBlocks)),
+		PROTECTED.optionalFieldOf("protected", List.of()).forGetter(Colony::placed),
 		Field.CODEC.optionalFieldOf("field").forGetter(Colony::field),
 		StorageArea.CODEC.optionalFieldOf("storage").forGetter(Colony::storage),
 		// Saves from before storage orders hold only the build part, under its own key.
@@ -86,8 +105,8 @@ public class Colony {
 	private final List<StockTarget> stock;
 	/** Build plans by the id of their build job, so plans that start at the same spot get a job each. */
 	private final Map<UUID, BuildPlan> builds;
-	/** Blocks build plans placed, which bots leave standing. */
-	private final Set<BlockPos> protectedBlocks;
+	/** Blocks build plans placed, by position, which bots leave standing while they are there; a null block is adopted on first check. */
+	private final Map<BlockPos, Block> protectedBlocks = new HashMap<>();
 	private Optional<Field> field;
 	private Optional<StorageArea> storage;
 	/** The parts of {@link #orders} the colony placed itself, by purpose, which are withdrawn once no longer needed. */
@@ -98,7 +117,7 @@ public class Colony {
 	long lastSurvey = -1;
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
-			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<BlockPos> protectedBlocks, Optional<Field> field,
+			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
 			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<BlockPos> blockedSteps,
 			Map<OrderPurpose, Map<Item, Integer>> systemOrders) {
 		systemOrders.forEach((purpose, counts) -> this.systemOrders.put(purpose, new LinkedHashMap<>(counts)));
@@ -116,7 +135,7 @@ public class Colony {
 		this.shaftBlocks = mineshaft.map(Mineshaft::protectedBlocks).orElse(Set.of());
 		this.stock = new ArrayList<>(stock);
 		this.builds = new LinkedHashMap<>(builds);
-		this.protectedBlocks = new HashSet<>(protectedBlocks);
+		protectedBlocks.forEach(placed -> this.protectedBlocks.put(placed.pos(), placed.block().orElse(null)));
 	}
 
 	private static Map<UUID, BuildPlan> withIds(List<BuildPlan> plans) {
@@ -192,13 +211,52 @@ public class Colony {
 		steps.stream().filter(pos -> !this.blockedSteps.contains(pos)).forEach(pos -> this.blockedSteps.add(pos.immutable()));
 	}
 
-	/** Whether a build plan placed the block at {@code pos}, so bots must not break it. */
-	public boolean isProtected(BlockPos pos) {
-		return this.protectedBlocks.contains(pos) || this.shaftBlocks.contains(pos);
+	private List<Placed> placed() {
+		return this.protectedBlocks.entrySet().stream().map(e -> new Placed(e.getKey(), Optional.ofNullable(e.getValue()))).toList();
 	}
 
-	public void protect(BlockPos pos) {
-		this.protectedBlocks.add(pos.immutable());
+	/**
+	 * Whether bots must leave the block at {@code pos} standing: a block a build plan placed that is
+	 * still there, or part of the mineshaft. Once a placed block is gone or replaced its position is
+	 * forgotten. The mineshaft stays protected even when broken, since its plan has the builder put it back.
+	 */
+	public boolean isProtected(Function<BlockPos, BlockState> world, BlockPos pos) {
+		if (this.shaftBlocks.contains(pos)) {
+			return true;
+		}
+		if (!this.protectedBlocks.containsKey(pos)) {
+			return false;
+		}
+		Block block = world.apply(pos).getBlock();
+		Block placed = this.protectedBlocks.get(pos);
+		if (placed == null && block != Blocks.AIR) {
+			this.protectedBlocks.put(pos, block);
+			return true;
+		}
+		if (block == placed) {
+			return true;
+		}
+		this.protectedBlocks.remove(pos);
+		return false;
+	}
+
+	/** Forgets placed blocks that are gone or replaced, so the set does not grow for good. {@code world} gives null where it cannot tell. */
+	void forgetReplaced(Function<BlockPos, @Nullable BlockState> world) {
+		for (BlockPos pos : List.copyOf(this.protectedBlocks.keySet())) {
+			BlockState state = world.apply(pos);
+			if (state != null) {
+				this.isProtected(p -> state, pos);
+			}
+		}
+	}
+
+	int protectedCount() {
+		return this.protectedBlocks.size();
+	}
+
+	/** Protects {@code block}, just placed at {@code pos}, while it stays there. */
+	public void protect(BlockPos pos, Block block) {
+		this.protectedBlocks.put(pos.immutable(), block);
 	}
 
 	public void unprotect(BlockPos pos) {

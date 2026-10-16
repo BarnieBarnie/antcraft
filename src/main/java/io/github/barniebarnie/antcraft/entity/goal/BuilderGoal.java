@@ -206,7 +206,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	private void place(ServerLevel level, Colony colony, BuildPlan.Step step) {
 		this.put(level, step.pos(), step.state(), step.item());
-		colony.protect(step.pos());
+		colony.protect(step.pos(), step.state().getBlock());
 	}
 
 	/** Places {@code state} at {@code pos}, using up one {@code item} unless that is air. */

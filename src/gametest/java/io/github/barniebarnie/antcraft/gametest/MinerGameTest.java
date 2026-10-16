@@ -160,7 +160,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		Mineshaft.Branch first = shaft.branches(shaft.levels().getLast()).getFirst();
 		BlockPos planks = first.cells().get(3);
 		helper.getLevel().setBlockAndUpdate(planks, Blocks.OAK_PLANKS.defaultBlockState());
-		colony.protect(planks);
+		colony.protect(planks, Blocks.OAK_PLANKS);
 		for (int i = 0; i < 2; i++) {
 			AntBot miner = member(helper, colony, BotRole.MINER, 1 + i, 5, 1);
 			miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));

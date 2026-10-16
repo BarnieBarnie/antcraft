@@ -188,7 +188,7 @@ public class MinerGoal extends ColonyWorkGoal {
 		if (this.reach(dark.get())) {
 			level.setBlockAndUpdate(dark.get(), torch);
 			Storage.take(this.bot.getInventory(), Items.TORCH, 1);
-			colony.protect(dark.get());
+			colony.protect(dark.get(), Blocks.TORCH);
 		}
 		return true;
 	}

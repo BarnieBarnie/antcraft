@@ -104,9 +104,17 @@ public class ColonyManager extends SavedData {
 			.min(Comparator.comparingDouble(colony -> colony.core().distSqr(pos)));
 	}
 
-	/** Whether a colony build plan placed the block at {@code pos}, so bots must not break it. */
+	/** Whether a colony build plan placed the block at {@code pos} and it is still there, so bots must not break it. */
 	public static boolean isProtected(Level level, BlockPos pos) {
-		return level instanceof ServerLevel server && get(server).colonies.values().stream().anyMatch(colony -> colony.isProtected(pos));
+		if (!(level instanceof ServerLevel server)) {
+			return false;
+		}
+		for (Colony colony : get(server).colonies.values()) {
+			if (colony.isProtected(level::getBlockState, pos)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public List<Colony> all() {
@@ -305,6 +313,7 @@ public class ColonyManager extends SavedData {
 			}
 			colony.lastSurvey = now;
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
+			colony.forgetReplaced(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			LevelTreeView trees = new LevelTreeView(level);
 			// A tree job stays while any of its logs stand, even once the leaves have decayed.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())
