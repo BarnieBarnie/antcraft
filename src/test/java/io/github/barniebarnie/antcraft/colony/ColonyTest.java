@@ -205,7 +205,7 @@ class ColonyTest {
 		colony.postBuildJobs();
 		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.COBBLESTONE, 1));
 		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));
-		colony.reportBlocked(List.of(new BlockPos(1, 2, 3)));
+		colony.reportBlocked(UUID.randomUUID(), List.of(new BlockPos(1, 2, 3)));
 		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(colony.builds(), loaded.builds());
@@ -214,6 +214,92 @@ class ColonyTest {
 		loaded.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 		loaded.orderFor(Colony.OrderPurpose.STORAGE, Map.of());
 		assertTrue(loaded.orders().isEmpty(), "build order not saved as such: " + loaded.orders());
+	}
+
+	/** A plan with one step at (5, 64, 5) that a builder reported blocked, and the id of its job. */
+	private static UUID blockedPlan(Colony colony, BuildPlan.Step step) {
+		colony.addBuild(new BuildPlan(List.of(step)));
+		colony.postBuildJobs();
+		UUID id = colony.board().jobs().getFirst().id();
+		colony.board().complete(id);
+		colony.reportBlocked(id, List.of(step.pos()));
+		return id;
+	}
+
+	@Test
+	void aPlanLeftWithOnlyBlockedStepsWaitsWithoutAJob() {
+		Colony colony = colony();
+		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.postBuildJobs();
+		assertTrue(colony.board().jobs().isEmpty(), "blocked plan posted again: " + colony.board().jobs());
+		assertTrue(colony.builds().isEmpty(), "blocked plan still counted as a build under way");
+		assertEquals(List.of(PLACED), colony.blockedSteps());
+	}
+
+	@Test
+	void recheckKeepsStepsThatAreStillBlocked() {
+		Colony colony = colony();
+		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.recheckBlocked(world(Blocks.BEDROCK), step -> false);
+		assertEquals(List.of(PLACED), colony.blockedSteps());
+	}
+
+	@Test
+	void recheckDropsStepsWhoseTargetBlockIsInPlace() {
+		Colony colony = colony();
+		blockedPlan(colony, new BuildPlan.Step(PLACED, Blocks.COBBLESTONE.defaultBlockState()));
+		colony.recheckBlocked(world(Blocks.COBBLESTONE), step -> false);
+		assertTrue(colony.blockedSteps().isEmpty(), "done step still reported: " + colony.blockedSteps());
+	}
+
+	@Test
+	void recheckHandsAWorkableStepBackToItsPlan() {
+		Colony colony = colony();
+		UUID id = blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.recheckBlocked(world(Blocks.STONE), step -> true);
+		colony.postBuildJobs();
+		assertTrue(colony.blockedSteps().isEmpty(), "workable step still reported: " + colony.blockedSteps());
+		assertEquals(List.of(id), colony.board().jobs().stream().map(Job::id).toList());
+	}
+
+	@Test
+	void recheckDropsStepsOfPlansThatAreGone() {
+		Colony colony = colony();
+		UUID id = blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.removeBuild(colony.build(id).orElseThrow());
+		colony.reportBlocked(UUID.randomUUID(), List.of(new BlockPos(1, 2, 3)));
+		colony.recheckBlocked(world(Blocks.BEDROCK), step -> false);
+		assertTrue(colony.blockedSteps().isEmpty(), "steps of gone plans still reported: " + colony.blockedSteps());
+	}
+
+	@Test
+	void recheckLeavesStepsInUnloadedChunks() {
+		Colony colony = colony();
+		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.recheckBlocked(pos -> null, step -> true);
+		assertEquals(List.of(PLACED), colony.blockedSteps());
+	}
+
+	@Test
+	void clearingBlockedStepsGivesUpTheirPlans() {
+		Colony colony = colony();
+		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		assertEquals(1, colony.clearBlocked());
+		colony.recheckBlocked(world(Blocks.AIR), step -> true);
+		colony.postBuildJobs();
+		assertTrue(colony.blockedSteps().isEmpty());
+		assertTrue(colony.board().jobs().isEmpty(), "given up plan posted again: " + colony.board().jobs());
+	}
+
+	@Test
+	void blockedStepsSavedAsPositionsStillLoad() {
+		var json = JsonParser.parseString("""
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0], "blocked_steps": [[1, 2, 3]]}
+			""");
+		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(List.of(new BlockPos(1, 2, 3)), colony.blockedSteps());
+		colony.recheckBlocked(world(Blocks.BEDROCK), step -> false);
+		assertTrue(colony.blockedSteps().isEmpty(), "step of an unknown plan kept");
 	}
 
 	@Test

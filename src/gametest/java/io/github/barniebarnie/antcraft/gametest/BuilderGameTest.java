@@ -399,6 +399,51 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(maxTicks = 800)
+	public void doesABlockedStepOnceTheBedrockIsReplacedByStone(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] replaced = {false};
+		helper.onEachTick(() -> {
+			if (!replaced[0] && !colony.blockedSteps().isEmpty()) {
+				helper.setBlock(4, 1, 4, Blocks.STONE);
+				replaced[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(replaced[0], "bedrock never reported");
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "still reported blocked: " + colony.blockedSteps());
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void clearsTheBlockedListOnCommand(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] cleared = {false};
+		helper.onEachTick(() -> {
+			if (!cleared[0] && !colony.blockedSteps().isEmpty()) {
+				command(helper, PermissionSet.NO_PERMISSIONS, "antcraft colony blocked clear");
+				helper.assertFalse(colony.blockedSteps().isEmpty(), "cleared without permission");
+				command(helper, PermissionSet.ALL_PERMISSIONS, "antcraft colony blocked clear");
+				cleared[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(cleared[0], "bedrock never reported");
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "still reported blocked: " + colony.blockedSteps());
+		});
+	}
+
 	/** A fluid source at (4, 1, 4), walled in by stone so it does not spread. */
 	private static BuildPlan pool(GameTestHelper helper, BlockState fluid) {
 		for (Direction side : Direction.Plane.HORIZONTAL) {

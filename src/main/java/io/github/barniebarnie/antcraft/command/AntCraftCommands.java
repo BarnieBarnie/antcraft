@@ -55,6 +55,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft home &lt;pos&gt; [bots]
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
+ * /antcraft colony blocked clear
  * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|cancel &lt;n&gt;
  */
 public final class AntCraftCommands {
@@ -96,6 +97,8 @@ public final class AntCraftCommands {
 			.then(role)
 			.then(Commands.literal("colony")
 				.then(Commands.literal("info").executes(ctx -> colonyInfo(ctx.getSource())))
+				.then(Commands.literal("blocked")
+					.then(Commands.literal("clear").executes(ctx -> clearBlocked(ctx.getSource()))))
 				.then(Commands.literal("order")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
@@ -310,6 +313,17 @@ public final class AntCraftCommands {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.copied", volume, at.toShortString(), c.builds().size()), false);
 		});
 		return colony.isPresent() ? 1 : 0;
+	}
+
+	/** Gives up on the build steps builders reported blocked, and the plans waiting on them. */
+	private static int clearBlocked(CommandSourceStack source) {
+		Optional<Colony> colony = nearestColony(source);
+		if (colony.isEmpty()) {
+			return 0;
+		}
+		int count = colony.get().clearBlocked();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.cleared", count), false);
+		return count;
 	}
 
 	private static int cancelBuild(CommandSourceStack source, int n) {

@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -46,6 +47,11 @@ public class Colony {
 		Placed.CODEC.listOf(),
 		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Placed(pos, Optional.empty())).toList(),
 			placed -> placed.stream().map(Placed::pos).toList()));
+	/** Saves from before blocked steps kept their plan hold only positions; their plans are gone, so the next recheck drops them. */
+	private static final Codec<List<Blocked>> BLOCKED = Codec.withAlternative(
+		Blocked.CODEC.listOf(),
+		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Blocked(new UUID(0, 0), pos)).toList(),
+			blocked -> blocked.stream().map(Blocked::pos).toList()));
 	private static final Codec<Map<OrderPurpose, Map<Item, Integer>>> SYSTEM_ORDERS = Codec.unboundedMap(OrderPurpose.CODEC, ITEM_COUNTS);
 
 	/** What the colony placed an order for itself, so it can withdraw the order once that no longer needs it. */
@@ -71,6 +77,14 @@ public class Colony {
 		).apply(i, Placed::new));
 	}
 
+	/** A step of the plan with id {@code plan} that a builder could not do. */
+	record Blocked(UUID plan, BlockPos pos) {
+		static final Codec<Blocked> CODEC = RecordCodecBuilder.create(i -> i.group(
+			UUIDUtil.STRING_CODEC.fieldOf("plan").forGetter(Blocked::plan),
+			BlockPos.CODEC.fieldOf("pos").forGetter(Blocked::pos)
+		).apply(i, Blocked::new));
+	}
+
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.CODEC.fieldOf("id").forGetter(Colony::id),
 		BlockPos.CODEC.fieldOf("core").forGetter(Colony::core),
@@ -89,7 +103,7 @@ public class Colony {
 		StorageArea.CODEC.optionalFieldOf("storage").forGetter(Colony::storage),
 		// Saves from before storage orders hold only the build part, under its own key.
 		ITEM_COUNTS.optionalFieldOf("build_orders", Map.of()).forGetter(c -> Map.of()),
-		BlockPos.CODEC.listOf().optionalFieldOf("blocked_steps", List.of()).forGetter(Colony::blockedSteps),
+		BLOCKED.optionalFieldOf("blocked_steps", List.of()).forGetter(c -> c.blockedSteps),
 		SYSTEM_ORDERS.optionalFieldOf("system_orders", Map.of()).forGetter(c -> c.systemOrders)
 	).apply(i, Colony::new));
 
@@ -111,14 +125,14 @@ public class Colony {
 	private Optional<StorageArea> storage;
 	/** The parts of {@link #orders} the colony placed itself, by purpose, which are withdrawn once no longer needed. */
 	private final Map<OrderPurpose, Map<Item, Integer>> systemOrders = new EnumMap<>(OrderPurpose.class);
-	/** Steps finished plans left undone because an unbreakable block was in the way. */
-	private final List<BlockPos> blockedSteps;
+	/** Steps builders could not do, such as behind bedrock; their plans wait without a job until a recheck finds them workable. */
+	private final List<Blocked> blockedSteps;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
 			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
-			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<BlockPos> blockedSteps,
+			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<Blocked> blockedSteps,
 			Map<OrderPurpose, Map<Item, Integer>> systemOrders) {
 		systemOrders.forEach((purpose, counts) -> this.systemOrders.put(purpose, new LinkedHashMap<>(counts)));
 		buildOrders.forEach((item, count) -> this.part(OrderPurpose.BUILD).merge(item, count, Integer::sum));
@@ -144,9 +158,13 @@ public class Colony {
 		return builds;
 	}
 
-	/** Build plans the colony's builders still have to carry out, in the order they were added. */
+	/** Build plans the colony's builders still have to carry out, in the order they were added; plans waiting on blocked steps are left out. */
 	public List<BuildPlan> builds() {
-		return List.copyOf(this.builds.values());
+		return this.builds.entrySet().stream().filter(e -> !this.isBlocked(e.getKey())).map(Map.Entry::getValue).toList();
+	}
+
+	private boolean isBlocked(UUID plan) {
+		return this.blockedSteps.stream().anyMatch(blocked -> blocked.plan().equals(plan));
 	}
 
 	public void addBuild(BuildPlan plan) {
@@ -165,10 +183,14 @@ public class Colony {
 		return Optional.ofNullable(this.builds.get(job));
 	}
 
-	/** Posts a build job for each plan, keyed by the plan, and drops open jobs of plans that are gone. */
+	/** Posts a build job for each plan, keyed by the plan, and drops open jobs of plans that are gone or blocked. */
 	public void postBuildJobs() {
-		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && !this.builds.containsKey(job.id()));
-		this.builds.forEach((id, plan) -> this.board.post(id, JobType.BUILD, plan.target()));
+		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && (!this.builds.containsKey(job.id()) || this.isBlocked(job.id())));
+		this.builds.forEach((id, plan) -> {
+			if (!this.isBlocked(id)) {
+				this.board.post(id, JobType.BUILD, plan.target());
+			}
+		});
 	}
 
 	private Map<Item, Integer> part(OrderPurpose purpose) {
@@ -207,13 +229,44 @@ public class Colony {
 		}
 	}
 
-	/** Steps finished plans had to leave undone because an unbreakable block was in the way. */
+	/** Where builders could not do a step, such as behind bedrock. */
 	public List<BlockPos> blockedSteps() {
-		return List.copyOf(this.blockedSteps);
+		return this.blockedSteps.stream().map(Blocked::pos).toList();
 	}
 
-	public void reportBlocked(Collection<BlockPos> steps) {
-		steps.stream().filter(pos -> !this.blockedSteps.contains(pos)).forEach(pos -> this.blockedSteps.add(pos.immutable()));
+	/** Records the steps of the plan with id {@code plan} that a builder cannot do; the plan waits without a job until a recheck frees it. */
+	public void reportBlocked(UUID plan, Collection<BlockPos> steps) {
+		steps.stream().map(pos -> new Blocked(plan, pos.immutable())).filter(b -> !this.blockedSteps.contains(b)).forEach(this.blockedSteps::add);
+	}
+
+	/**
+	 * Drops blocked steps whose plan is gone, and those that are done or that {@code workable}
+	 * says a builder could do now. A plan with such a step gets all its blocked steps dropped, so
+	 * it gets a job again and its builder reports whatever is still blocked. {@code world} gives
+	 * null where it cannot tell, such as in unloaded chunks.
+	 */
+	public void recheckBlocked(Function<BlockPos, @Nullable BlockState> world, Predicate<BuildPlan.Step> workable) {
+		Set<UUID> freed = new HashSet<>();
+		for (Blocked blocked : this.blockedSteps) {
+			Optional<BuildPlan.Step> step = Optional.ofNullable(this.builds.get(blocked.plan()))
+				.flatMap(plan -> plan.steps().stream().filter(s -> s.pos().equals(blocked.pos())).findFirst());
+			BlockState state = world.apply(blocked.pos());
+			if (step.isEmpty() || state != null && (step.get().isDone(state) || workable.test(step.get()))) {
+				freed.add(blocked.plan());
+			}
+		}
+		if (this.blockedSteps.removeIf(blocked -> freed.contains(blocked.plan()))) {
+			this.lastSurvey = -1;
+		}
+	}
+
+	/** Gives up on every blocked step and the plans waiting on them. Returns how many steps there were. */
+	public int clearBlocked() {
+		int count = this.blockedSteps.size();
+		this.blockedSteps.forEach(blocked -> this.builds.remove(blocked.plan()));
+		this.blockedSteps.clear();
+		this.lastSurvey = -1;
+		return count;
 	}
 
 	private List<Placed> placed() {

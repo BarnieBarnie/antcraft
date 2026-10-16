@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -143,13 +144,22 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	/** How {@code step}'s block is cleared with what the bot and the core hold; see {@link BuildPlan.Step#clearing}. */
 	private BuildPlan.Clearing clearing(ServerLevel level, @Nullable Container core, BuildPlan.Step step) {
+		return clearing(level, step, this.has(core, BuilderGoal::isBucket), this.has(core, BuilderGoal::isFiller));
+	}
+
+	/** Whether a builder with a bucket and a filler block at hand could do {@code step} now, such as once a blocking block is gone. */
+	public static boolean isWorkable(ServerLevel level, BuildPlan.Step step) {
+		return clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED;
+	}
+
+	private static BuildPlan.Clearing clearing(ServerLevel level, BuildPlan.Step step, boolean hasBucket, boolean hasFiller) {
 		BlockPos pos = step.pos();
 		BuildPlan.Clearing clearing = BuildPlan.Clearing.BREAK;
 		// A wrong block in a place step is simply replaced, fluid or not, so only clear steps mind fluids.
 		if (step.isClear()) {
 			FluidState fluid = level.getFluidState(pos);
 			boolean settling = !fluid.isEmpty() && level.getFluidTicks().hasScheduledTick(pos, fluid.getType());
-			clearing = step.clearing(level::getBlockState, settling, this.has(core, BuilderGoal::isBucket), this.has(core, BuilderGoal::isFiller));
+			clearing = step.clearing(level::getBlockState, settling, hasBucket, hasFiller);
 		}
 		return clearing == BuildPlan.Clearing.BREAK && isUnbreakable(level, pos) ? BuildPlan.Clearing.BLOCKED : clearing;
 	}
@@ -185,9 +195,10 @@ public class BuilderGoal extends ColonyWorkGoal {
 	}
 
 	/**
-	 * Nothing in the plan can be worked on now. With only blocks or fluids it cannot clear left in the way the
-	 * plan is finished and those steps are reported; while it waits for materials, which the
-	 * colony orders, the job is freed for later.
+	 * Nothing in the plan can be worked on now. With nothing left the plan is finished; with only
+	 * blocks or fluids it cannot clear left in the way those steps are reported, and the plan waits
+	 * for the colony to find them workable again. While it waits for materials, which the colony
+	 * orders, the job is freed for later.
 	 */
 	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan) {
 		if (plan.isPresent() && this.isWaiting(level, core, plan.get())) {
@@ -195,8 +206,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 			this.cooldown = IDLE_TICKS;
 		} else {
 			plan.ifPresent(p -> {
-				colony.reportBlocked(p.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).map(BuildPlan.Step::pos).toList());
-				colony.removeBuild(p);
+				List<BlockPos> blocked = p.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).map(BuildPlan.Step::pos).toList();
+				if (blocked.isEmpty()) {
+					colony.removeBuild(p);
+				} else {
+					colony.reportBlocked(job.id(), blocked);
+				}
 			});
 			colony.board().complete(job.id());
 		}

@@ -14,6 +14,7 @@
 	"commands.antcraft.colony.info": "Colony at %s: %s members %s, %s jobs (%s claimed), radius %s, %s idle",
 	"commands.antcraft.colony.order_line": "Order: %s %s. To gather: %s. Missing: %s",
 	"commands.antcraft.colony.blocked": "Build steps left undone, an unbreakable block is in the way: %s",
+	"commands.antcraft.colony.blocked.cleared": "Gave up on %s blocked build steps",
 	"commands.antcraft.colony.ordered": "Ordered %s %s",
 	"commands.antcraft.colony.cancelled": "Cancelled the order for %s",
 	"commands.antcraft.colony.mineshaft": "The colony mineshaft now starts at %s; builders dig it out",

@@ -37,7 +37,8 @@ class ColonyStatusTest {
 	private static ColonyStatus status() {
 		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(LUMBERJACK, MINER, IDLE_MINER, UNLOADED), new JobBoard(), 20,
 			Map.of(), Optional.empty(), List.of(StockTarget.of(Items.OAK_LOG, 32), StockTarget.of(Items.TORCH, 8), StockTarget.of(Items.COBBLESTONE, 64)),
-			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(new BlockPos(3, 64, 3)), Map.of());
+			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		colony.reportBlocked(UUID.randomUUID(), List.of(new BlockPos(3, 64, 3)));
 		colony.board().post(JobType.CHOP_TREE, new BlockPos(5, 64, 5));
 		colony.board().post(JobType.CHOP_TREE, new BlockPos(6, 64, 6));
 		colony.board().post(JobType.MINE_BRANCH, new BlockPos(7, 64, 7));

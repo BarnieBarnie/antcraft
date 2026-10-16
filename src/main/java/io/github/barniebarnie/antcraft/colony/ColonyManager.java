@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
@@ -314,6 +315,8 @@ public class ColonyManager extends SavedData {
 			colony.lastSurvey = now;
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
 			colony.forgetReplaced(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
+			// ponytail: assumes a bucket and filler at hand; a builder without them just reports the step again.
+			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, step -> BuilderGoal.isWorkable(level, step));
 			LevelTreeView trees = new LevelTreeView(level);
 			// A tree job stays while any of its logs stand, even once the leaves have decayed.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())
