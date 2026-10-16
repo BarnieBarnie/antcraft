@@ -17,6 +17,14 @@ public final class Stockkeeping {
 	private Stockkeeping() {
 	}
 
+	/**
+	 * How many storage chests to order: one per category of surplus that no chest has room for, less
+	 * the empty chests, no more than there are free spots, and less the chests the colony already holds.
+	 */
+	public static int chestsToOrder(int fullCategories, int emptyChests, int freeSpots, int held) {
+		return Math.max(0, Math.min(fullCategories - emptyChests, freeSpots) - held);
+	}
+
 	/** How many of each item to move out of the core into storage. */
 	public static <I> Map<I, Integer> toStore(Map<I, Integer> core, List<StockPlanner.Target<I>> targets, Map<I, Integer> ingredients,
 			ToIntFunction<I> minKeep) {

@@ -28,7 +28,7 @@ class ColonyStorageTest {
 
 	private static Colony colony() {
 		return new Colony(UUID.randomUUID(), BlockPos.ZERO, List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS, Map.of(), List.of(),
-			Optional.empty(), Optional.empty(), Map.of(), List.of());
+			Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
 	}
 
 	@Test

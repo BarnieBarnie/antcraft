@@ -33,6 +33,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -80,7 +81,7 @@ public class ColonyManager extends SavedData {
 			return existing.get();
 		}
 		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS,
-			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of());
+			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -202,9 +203,18 @@ public class ColonyManager extends SavedData {
 		return areas;
 	}
 
-	/** Picks the storage area once the colony has a hauler to keep it. */
-	private void surveyStorage(ServerLevel level, Colony colony) {
-		if (colony.storage().isPresent() || !this.hasRole(level, colony, BotRole.HAULER)) {
+	/**
+	 * Picks the storage area once the colony has a hauler to keep it, and orders the chests it needs
+	 * beyond the chests in {@code spare}; orders it no longer needs are withdrawn.
+	 */
+	private void surveyStorage(ServerLevel level, Colony colony, Map<Item, Integer> spare) {
+		if (!this.hasRole(level, colony, BotRole.HAULER)) {
+			colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of());
+			return;
+		}
+		if (colony.storage().isPresent()) {
+			int chests = HaulerGoal.chestsToOrder(level, colony, Math.max(0, spare.getOrDefault(Items.CHEST, 0)));
+			colony.orderFor(Colony.OrderPurpose.STORAGE, chests > 0 ? Map.of(Items.CHEST, chests) : Map.of());
 			return;
 		}
 		StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
@@ -218,23 +228,30 @@ public class ColonyManager extends SavedData {
 	 * colony holds, its bots' inventories included, while it has a builder to place them. Orders
 	 * plans no longer need are withdrawn.
 	 */
-	private void surveyBuilds(ServerLevel level, Colony colony) {
+	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have) {
 		colony.postBuildJobs();
 		if (!this.hasRole(level, colony, BotRole.BUILDER)) {
-			colony.orderForBuilds(Map.of());
+			colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 			return;
 		}
+		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream().map(plan -> plan.materials(level::getBlockState)).toList());
+		Map<Item, Integer> needed = new HashMap<>(materials);
+		needed.replaceAll((item, count) -> count - have.getOrDefault(item, 0));
+		needed.values().removeIf(count -> count <= 0);
+		colony.orderFor(Colony.OrderPurpose.BUILD, needed);
+		// What builders will place is not there for anything else.
+		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));
+	}
+
+	/** What the colony holds: its stock and its bots' inventories. */
+	private static Map<Item, Integer> held(ServerLevel level, Colony colony) {
 		List<Map<Item, Integer>> held = new ArrayList<>(List.of(Storage.colonyStock(level, colony)));
 		for (UUID id : colony.members()) {
 			if (level.getEntity(id) instanceof AntBot bot) {
 				held.add(Storage.stock(bot.getInventory()));
 			}
 		}
-		Map<Item, Integer> have = StockPlanner.total(held);
-		Map<Item, Integer> needed = new HashMap<>(StockPlanner.total(colony.builds().stream().map(plan -> plan.materials(level::getBlockState)).toList()));
-		needed.replaceAll((item, count) -> count - have.getOrDefault(item, 0));
-		needed.values().removeIf(count -> count <= 0);
-		colony.orderForBuilds(needed);
+		return new HashMap<>(StockPlanner.total(held));
 	}
 
 	/** Orders whatever the colony is short of. */
@@ -300,8 +317,9 @@ public class ColonyManager extends SavedData {
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT && !Replanting.isPlantable(level, job.target()));
 			this.surveyCrops(level, colony);
 			this.surveyMine(level, colony);
-			this.surveyBuilds(level, colony);
-			this.surveyStorage(level, colony);
+			Map<Item, Integer> have = held(level, colony);
+			this.surveyBuilds(level, colony, have);
+			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
 			this.assignRoles(level, colony);
 		}

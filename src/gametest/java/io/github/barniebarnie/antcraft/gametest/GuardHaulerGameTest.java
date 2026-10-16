@@ -135,6 +135,30 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(maxTicks = 500)
+	public void storageChestOrderIsWithdrawnWhenAPlayerBringsAChest(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		Container core = core(helper);
+		// More logs than the core keeps, and no chest to store them in: storage needs one. No crafter makes it.
+		for (int i = 0; i < 3; i++) {
+			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
+		}
+		member(helper, colony, BotRole.HAULER);
+		boolean[] brought = {false};
+
+		helper.onEachTick(() -> {
+			if (!brought[0] && colony.orders().containsKey(Items.CHEST)) {
+				core.setItem(10, new ItemStack(Items.CHEST));
+				brought[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(brought[0], "storage never ordered a chest");
+			helper.assertTrue(!colony.orders().containsKey(Items.CHEST), "chest order left: " + colony.orders());
+		});
+	}
+
 	@GameTest(maxTicks = 400)
 	public void haulerBringsAMissingPickaxeBackFromStorage(GameTestHelper helper) {
 		Colony colony = colony(helper);

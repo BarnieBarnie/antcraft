@@ -85,4 +85,19 @@ class StockkeepingTest {
 		assertTrue(Stockkeeping.toCore(Set.of("cobblestone", "wooden_pickaxe"), Set.of(), TARGETS, stock));
 		assertTrue(Stockkeeping.toCore(Set.of("oak_log"), Set.of(), TARGETS, Map.of("oak_log", 31)));
 	}
+
+	@Test
+	void storageNeedsAChestPerFullCategoryLessEmptyChestsSpotsAndChestsHeld() {
+		// Three categories have no chest with room, and there are spots for them all.
+		assertEquals(3, Stockkeeping.chestsToOrder(3, 0, 5, 0));
+		// An empty chest takes one category.
+		assertEquals(2, Stockkeeping.chestsToOrder(3, 1, 5, 0));
+		// No more chests than free spots.
+		assertEquals(2, Stockkeeping.chestsToOrder(3, 0, 2, 0));
+		// Chests the colony already holds are placed instead.
+		assertEquals(1, Stockkeeping.chestsToOrder(3, 0, 5, 2));
+		assertEquals(0, Stockkeeping.chestsToOrder(1, 0, 5, 3));
+		assertEquals(0, Stockkeeping.chestsToOrder(0, 0, 5, 0));
+		assertEquals(0, Stockkeeping.chestsToOrder(2, 0, 0, 0));
+	}
 }

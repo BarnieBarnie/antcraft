@@ -5,10 +5,12 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Either;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -17,6 +19,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.StringRepresentable;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
@@ -32,6 +35,22 @@ public class Colony {
 		Codec.unboundedMap(UUIDUtil.STRING_CODEC, BuildPlan.CODEC),
 		BuildPlan.CODEC.listOf().xmap(Colony::withIds, plans -> List.copyOf(plans.values())));
 	private static final Codec<Map<Item, Integer>> ITEM_COUNTS = Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT);
+	private static final Codec<Map<OrderPurpose, Map<Item, Integer>>> SYSTEM_ORDERS = Codec.unboundedMap(OrderPurpose.CODEC, ITEM_COUNTS);
+
+	/** What the colony placed an order for itself, so it can withdraw the order once that no longer needs it. */
+	public enum OrderPurpose implements StringRepresentable {
+		/** Materials build plans still have to place. */
+		BUILD,
+		/** Chests for the storage area. */
+		STORAGE;
+
+		public static final Codec<OrderPurpose> CODEC = StringRepresentable.fromEnum(OrderPurpose::values);
+
+		@Override
+		public String getSerializedName() {
+			return this.name().toLowerCase(Locale.ROOT);
+		}
+	}
 
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.CODEC.fieldOf("id").forGetter(Colony::id),
@@ -49,8 +68,10 @@ public class Colony {
 		BlockPos.CODEC.listOf().optionalFieldOf("protected", List.of()).forGetter(c -> List.copyOf(c.protectedBlocks)),
 		Field.CODEC.optionalFieldOf("field").forGetter(Colony::field),
 		StorageArea.CODEC.optionalFieldOf("storage").forGetter(Colony::storage),
-		ITEM_COUNTS.optionalFieldOf("build_orders", Map.of()).forGetter(c -> c.buildOrders),
-		BlockPos.CODEC.listOf().optionalFieldOf("blocked_steps", List.of()).forGetter(Colony::blockedSteps)
+		// Saves from before storage orders hold only the build part, under its own key.
+		ITEM_COUNTS.optionalFieldOf("build_orders", Map.of()).forGetter(c -> Map.of()),
+		BlockPos.CODEC.listOf().optionalFieldOf("blocked_steps", List.of()).forGetter(Colony::blockedSteps),
+		SYSTEM_ORDERS.optionalFieldOf("system_orders", Map.of()).forGetter(c -> c.systemOrders)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -69,8 +90,8 @@ public class Colony {
 	private final Set<BlockPos> protectedBlocks;
 	private Optional<Field> field;
 	private Optional<StorageArea> storage;
-	/** The part of {@link #orders} placed for build plans, which is withdrawn once the plans no longer need it. */
-	private final Map<Item, Integer> buildOrders;
+	/** The parts of {@link #orders} the colony placed itself, by purpose, which are withdrawn once no longer needed. */
+	private final Map<OrderPurpose, Map<Item, Integer>> systemOrders = new EnumMap<>(OrderPurpose.class);
 	/** Steps finished plans left undone because an unbreakable block was in the way. */
 	private final List<BlockPos> blockedSteps;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
@@ -78,8 +99,10 @@ public class Colony {
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
 			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<BlockPos> protectedBlocks, Optional<Field> field,
-			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<BlockPos> blockedSteps) {
-		this.buildOrders = new LinkedHashMap<>(buildOrders);
+			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<BlockPos> blockedSteps,
+			Map<OrderPurpose, Map<Item, Integer>> systemOrders) {
+		systemOrders.forEach((purpose, counts) -> this.systemOrders.put(purpose, new LinkedHashMap<>(counts)));
+		buildOrders.forEach((item, count) -> this.part(OrderPurpose.BUILD).merge(item, count, Integer::sum));
 		this.blockedSteps = new ArrayList<>(blockedSteps);
 		this.field = field;
 		this.storage = storage;
@@ -129,21 +152,26 @@ public class Colony {
 		this.builds.forEach((id, plan) -> this.board.post(id, JobType.BUILD, plan.target()));
 	}
 
+	private Map<Item, Integer> part(OrderPurpose purpose) {
+		return this.systemOrders.computeIfAbsent(purpose, key -> new LinkedHashMap<>());
+	}
+
 	/**
-	 * Sets what build plans need ordered: orders grow by what plans need beyond what they already
-	 * ordered, and shrink by what they no longer need, such as when the items turned up some other
-	 * way or the plan is gone. Other orders are left alone.
+	 * Sets what {@code purpose} needs ordered: orders grow by what it needs beyond what it already
+	 * ordered, and shrink by what it no longer needs, such as when the items turned up some other
+	 * way. Player orders and orders for other purposes are left alone.
 	 */
-	public void orderForBuilds(Map<Item, Integer> needed) {
-		Set<Item> items = new HashSet<>(this.buildOrders.keySet());
+	public void orderFor(OrderPurpose purpose, Map<Item, Integer> needed) {
+		Map<Item, Integer> part = this.part(purpose);
+		Set<Item> items = new HashSet<>(part.keySet());
 		items.addAll(needed.keySet());
 		for (Item item : items) {
 			int ordered = this.orders.getOrDefault(item, 0);
 			// The order may have been cancelled meanwhile.
-			int forBuilds = Math.min(this.buildOrders.getOrDefault(item, 0), ordered);
+			int placed = Math.min(part.getOrDefault(item, 0), ordered);
 			int want = needed.getOrDefault(item, 0);
-			setCount(this.orders, item, ordered - forBuilds + want);
-			setCount(this.buildOrders, item, want);
+			setCount(this.orders, item, ordered - placed + want);
+			setCount(part, item, want);
 		}
 	}
 
@@ -240,16 +268,21 @@ public class Colony {
 		this.orders.merge(item, count, Integer::sum);
 	}
 
-	/** Drops the whole order for {@code item}, including the part build plans placed. */
+	/** Drops the whole order for {@code item}, including the parts the colony placed itself. */
 	public void cancelOrder(Item item) {
 		this.orders.remove(item);
-		this.buildOrders.remove(item);
+		this.systemOrders.values().forEach(part -> part.remove(item));
 	}
 
-	/** Records that {@code count} of an ordered item were made, for build plans first; finished orders are removed. */
+	/** Records that {@code count} of an ordered item were made, for the colony's own orders first; finished orders are removed. */
 	public void fulfil(Item item, int count) {
 		this.orders.computeIfPresent(item, (key, left) -> left - count > 0 ? left - count : null);
-		this.buildOrders.computeIfPresent(item, (key, left) -> left - count > 0 ? left - count : null);
+		int left = count;
+		for (Map<Item, Integer> part : this.systemOrders.values()) {
+			int placed = part.getOrDefault(item, 0);
+			setCount(part, item, placed - left);
+			left -= Math.min(placed, left);
+		}
 	}
 
 	/** What the colony keeps in stock; shortfalls become orders. */

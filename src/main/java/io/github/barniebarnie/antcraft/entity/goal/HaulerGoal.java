@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -31,7 +32,7 @@ import org.jspecify.annotations.Nullable;
  * Hauler work loop: pick up loose items around the colony and store them in the core, and keep
  * the core at its working stock. What the core holds above that goes to the storage chests, one
  * category per chest; what the core is short of (stock targets, ingredients for open orders) comes
- * back. Haulers place the storage chests themselves, from chests the colony orders.
+ * back. Haulers place the storage chests themselves, from chests the colony survey orders.
  */
 public class HaulerGoal extends ColonyWorkGoal {
 	private static final int MIN_FREE_SLOTS = 1;
@@ -185,20 +186,36 @@ public class HaulerGoal extends ColonyWorkGoal {
 			if (chest != null) {
 				return new Trip(colony.core(), chest, store.getKey(), store.getValue());
 			}
-			BlockPos spot = colony.storage().get().chestSpots().stream()
-				.filter(pos -> !stocks.chests().containsKey(pos) && level.getBlockState(pos).canBeReplaced())
-				.findFirst().orElse(null);
-			if (spot == null) {
-				continue;
-			}
-			if (stocks.inCore().getOrDefault(Items.CHEST, 0) > 0) {
+			// The colony survey orders the chest if there is none (see chestsToOrder).
+			BlockPos spot = freeSpots(level, colony, stocks).findFirst().orElse(null);
+			if (spot != null && stocks.inCore().getOrDefault(Items.CHEST, 0) > 0) {
 				return new Trip(colony.core(), spot, Items.CHEST, 1);
-			}
-			if (!colony.orders().containsKey(Items.CHEST)) {
-				colony.addOrder(Items.CHEST, 1);
 			}
 		}
 		return null;
+	}
+
+	private static Stream<BlockPos> freeSpots(ServerLevel level, Colony colony, Stocks stocks) {
+		return colony.storage().orElseThrow().chestSpots().stream()
+			.filter(pos -> !stocks.chests().containsKey(pos) && level.getBlockState(pos).canBeReplaced());
+	}
+
+	/** How many chests the storage area still needs ordered, beyond the {@code held} chests the colony has to place. */
+	public static int chestsToOrder(ServerLevel level, Colony colony, int held) {
+		Stocks stocks = colony.storage().isEmpty() ? null : Stocks.of(level, colony);
+		if (stocks == null) {
+			return 0;
+		}
+		Set<StorageCategory> full = new HashSet<>();
+		for (Item item : stocks.toStore().keySet()) {
+			ItemStack stack = new ItemStack(item);
+			StorageCategory category = StorageCategory.of(stack);
+			if (stocks.chests().values().stream().noneMatch(chest -> !chest.isEmpty() && category(chest) == category && Storage.hasRoomFor(chest, stack))) {
+				full.add(category);
+			}
+		}
+		int empty = (int) stocks.chests().values().stream().filter(Container::isEmpty).count();
+		return Stockkeeping.chestsToOrder(full.size(), empty, (int) freeSpots(level, colony, stocks).count(), held);
 	}
 
 	/** A chest of the item's category with room for it, else an empty chest. */

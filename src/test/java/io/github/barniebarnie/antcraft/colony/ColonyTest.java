@@ -34,7 +34,7 @@ class ColonyTest {
 
 	private static Colony colony() {
 		return new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(),
-			Optional.empty(), List.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of());
+			Optional.empty(), List.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
 	}
 
 	private static BuildPlan plan(Block block) {
@@ -70,13 +70,13 @@ class ColonyTest {
 	void buildOrdersAreWithdrawnOnceNoLongerNeeded() {
 		Colony colony = colony();
 		colony.addOrder(Items.OAK_STAIRS, 2);
-		colony.orderForBuilds(Map.of(Items.OAK_STAIRS, 3, Items.TORCH, 4));
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_STAIRS, 3, Items.TORCH, 4));
 		assertEquals(Map.of(Items.OAK_STAIRS, 5, Items.TORCH, 4), colony.orders());
 
 		// Some stairs turned up and the torches are no longer needed: the player's order stays.
-		colony.orderForBuilds(Map.of(Items.OAK_STAIRS, 1));
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_STAIRS, 1));
 		assertEquals(Map.of(Items.OAK_STAIRS, 3), colony.orders());
-		colony.orderForBuilds(Map.of());
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 		assertEquals(Map.of(Items.OAK_STAIRS, 2), colony.orders());
 	}
 
@@ -84,20 +84,57 @@ class ColonyTest {
 	void craftedItemsGoToBuildOrdersFirst() {
 		Colony colony = colony();
 		colony.addOrder(Items.OAK_STAIRS, 2);
-		colony.orderForBuilds(Map.of(Items.OAK_STAIRS, 1));
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_STAIRS, 1));
 		colony.fulfil(Items.OAK_STAIRS, 1);
 		// The crafted stair is in stock now, so the plan needs no more.
-		colony.orderForBuilds(Map.of());
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 		assertEquals(Map.of(Items.OAK_STAIRS, 2), colony.orders());
 	}
 
 	@Test
 	void cancelledBuildOrderIsNotTakenOutOfOtherOrders() {
 		Colony colony = colony();
-		colony.orderForBuilds(Map.of(Items.TORCH, 4));
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.TORCH, 4));
 		colony.cancelOrder(Items.TORCH);
 		colony.addOrder(Items.TORCH, 2);
-		colony.orderForBuilds(Map.of());
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
+		assertEquals(Map.of(Items.TORCH, 2), colony.orders());
+	}
+
+	@Test
+	void storageOrdersAreWithdrawnWithoutTouchingPlayerOrBuildOrders() {
+		Colony colony = colony();
+		colony.addOrder(Items.CHEST, 2);
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.CHEST, 1));
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));
+		assertEquals(Map.of(Items.CHEST, 4), colony.orders());
+
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of());
+		assertEquals(Map.of(Items.CHEST, 3), colony.orders());
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
+		assertEquals(Map.of(Items.CHEST, 2), colony.orders());
+	}
+
+	@Test
+	void craftedItemsGoToSystemOrdersBeforePlayerOrders() {
+		Colony colony = colony();
+		colony.addOrder(Items.CHEST, 1);
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.CHEST, 1));
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));
+		colony.fulfil(Items.CHEST, 2);
+		// Both crafted chests are in stock now, so neither builds nor storage need more.
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of());
+		assertEquals(Map.of(Items.CHEST, 1), colony.orders());
+	}
+
+	@Test
+	void buildOrdersSavedUnderTheOldKeyStillLoad() {
+		String json = """
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0], "orders": {"minecraft:torch": 6}, "build_orders": {"minecraft:torch": 4}}
+			""";
+		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json)).getOrThrow();
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 		assertEquals(Map.of(Items.TORCH, 2), colony.orders());
 	}
 
@@ -106,14 +143,16 @@ class ColonyTest {
 		Colony colony = colony();
 		colony.addBuild(plan(Blocks.COBBLESTONE));
 		colony.postBuildJobs();
-		colony.orderForBuilds(Map.of(Items.COBBLESTONE, 1));
+		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.COBBLESTONE, 1));
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));
 		colony.reportBlocked(List.of(new BlockPos(1, 2, 3)));
 		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(colony.builds(), loaded.builds());
 		assertTrue(loaded.build(colony.board().jobs().getFirst().id()).isPresent(), "plan lost its job");
 		assertEquals(List.of(new BlockPos(1, 2, 3)), loaded.blockedSteps());
-		loaded.orderForBuilds(Map.of());
+		loaded.orderFor(Colony.OrderPurpose.BUILD, Map.of());
+		loaded.orderFor(Colony.OrderPurpose.STORAGE, Map.of());
 		assertTrue(loaded.orders().isEmpty(), "build order not saved as such: " + loaded.orders());
 	}
 
