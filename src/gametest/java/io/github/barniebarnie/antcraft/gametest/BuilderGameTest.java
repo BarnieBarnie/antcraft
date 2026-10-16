@@ -199,6 +199,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		colony.setStockTargets(List.of());
 		Container core = (Container) helper.getBlockEntity(MinerGameTest.MINE_CORE, BlockEntity.class);
 		core.setItem(0, new ItemStack(Items.TORCH, 8));
+		core.setItem(1, new ItemStack(Items.CHEST, 2));
 		colony.setMineshaft(shaft);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
@@ -221,6 +222,9 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			// It walked up the stairs as they are, without digging or building its own way.
 			helper.assertTrue(solid(helper).equals(dug[0]), "blocks changed on the way up");
 			MinerGameTest.assertLit(helper, MinerGameTest.dugPath(shaft, false));
+			for (int level : shaft.levels()) {
+				helper.assertTrue(helper.getLevel().getBlockState(shaft.landingChest(level)).is(Blocks.CHEST), "no chest at landing " + level);
+			}
 		});
 	}
 }

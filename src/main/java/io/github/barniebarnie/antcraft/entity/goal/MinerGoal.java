@@ -3,6 +3,9 @@ package io.github.barniebarnie.antcraft.entity.goal;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.StockPlanner;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
+import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
@@ -12,6 +15,7 @@ import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +34,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Miner work loop: make sure it has a pickaxe (from the core, or by ordering one),
@@ -189,6 +194,14 @@ public class MinerGoal extends ColonyWorkGoal {
 	}
 
 	private void deposit(ServerLevel level, Colony colony) {
+		BlockPos chest = this.landingChest(level, colony);
+		if (chest != null) {
+			if (this.reach(chest)) {
+				this.storeHaul(Storage.containerAt(level, chest));
+				this.enter(State.WORK);
+			}
+			return;
+		}
 		Container core = Storage.containerAt(level, colony.core());
 		if (core == null) {
 			this.enter(State.WORK);
@@ -205,8 +218,35 @@ public class MinerGoal extends ColonyWorkGoal {
 		}
 	}
 
-	/** Puts everything in the core except pickaxes, torches and a few scaffold blocks. */
-	private void storeHaul(Container core) {
+	/**
+	 * The nearest landing chest with room, when the miner unloads because it is full and carries
+	 * nothing the colony wants in the core; else null, and it walks up to the core.
+	 */
+	private @Nullable BlockPos landingChest(ServerLevel level, Colony colony) {
+		SimpleContainer inventory = this.bot.getInventory();
+		if (freeSlots(inventory) >= MIN_FREE_SLOTS) {
+			return null;
+		}
+		Set<Item> carried = new HashSet<>();
+		for (int i = 0; i < inventory.getContainerSize(); i++) {
+			ItemStack stack = inventory.getItem(i);
+			if (!stack.isEmpty() && !stack.is(ItemTags.PICKAXES) && !stack.is(Items.TORCH)) {
+				carried.add(stack.getItem());
+			}
+		}
+		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
+		if (Stockkeeping.toCore(carried, colony.orders().keySet(), targets, Storage.colonyStock(level, colony))) {
+			return null;
+		}
+		return Storage.landingChests(level, colony).entrySet().stream()
+			.filter(chest -> freeSlots(chest.getValue()) > 0)
+			.map(Map.Entry::getKey)
+			.min(Comparator.comparingDouble(pos -> pos.distSqr(this.bot.blockPosition())))
+			.orElse(null);
+	}
+
+	/** Puts everything in the container except pickaxes, torches and a few scaffold blocks. */
+	private void storeHaul(Container container) {
 		SimpleContainer inventory = this.bot.getInventory();
 		int keptScaffold = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
@@ -219,11 +259,11 @@ public class MinerGoal extends ColonyWorkGoal {
 				keep = Math.min(stack.getCount(), KEEP_SCAFFOLD - keptScaffold);
 				keptScaffold += keep;
 			}
-			ItemStack rest = HopperBlockEntity.addItem(null, core, stack.split(stack.getCount() - keep), null);
+			ItemStack rest = HopperBlockEntity.addItem(null, container, stack.split(stack.getCount() - keep), null);
 			stack.grow(rest.getCount());
 		}
 		inventory.setChanged();
-		core.setChanged();
+		container.setChanged();
 	}
 
 	private boolean hasItemsToStore() {

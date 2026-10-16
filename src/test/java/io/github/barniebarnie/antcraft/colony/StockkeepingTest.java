@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -71,5 +72,17 @@ class StockkeepingTest {
 		List<TaskPlanner.Craft<String>> crafts = List.of(new TaskPlanner.Craft<>(planksFromLog, 1), new TaskPlanner.Craft<>(sticks, 1));
 		// Planks made in the first step are used in the second; the birch planks in stock are not needed.
 		assertEquals(Map.of("oak_log", 1), Stockkeeping.ingredients(crafts, Map.of("oak_log", 5, "birch_planks", 8)));
+	}
+
+	@Test
+	void minerBringsItsHaulToTheCoreOnlyWhenTheColonyWantsSomethingInIt() {
+		Map<String, Integer> stock = Map.of("oak_log", 40, "stone_pickaxe", 1);
+		// Nothing ordered, and the targets of what it carries are met: the landing chest will do.
+		assertFalse(Stockkeeping.toCore(Set.of("cobblestone", "oak_log"), Set.of(), TARGETS, stock));
+		// An open order for something it carries.
+		assertTrue(Stockkeeping.toCore(Set.of("cobblestone", "raw_iron"), Set.of("raw_iron"), TARGETS, stock));
+		// A stock target the colony is below.
+		assertTrue(Stockkeeping.toCore(Set.of("cobblestone", "wooden_pickaxe"), Set.of(), TARGETS, stock));
+		assertTrue(Stockkeeping.toCore(Set.of("oak_log"), Set.of(), TARGETS, Map.of("oak_log", 31)));
 	}
 }

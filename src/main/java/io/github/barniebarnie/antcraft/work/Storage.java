@@ -97,9 +97,22 @@ public final class Storage {
 		return chests;
 	}
 
+	/** The chests at the mineshaft landings by position, those placed so far. */
+	public static Map<BlockPos, Container> landingChests(ServerLevel level, Colony colony) {
+		Map<BlockPos, Container> chests = new LinkedHashMap<>();
+		colony.mineshaft().ifPresent(shaft -> shaft.levels().forEach(y -> {
+			Container chest = containerAt(level, shaft.landingChest(y));
+			if (chest != null) {
+				chests.put(shaft.landingChest(y), chest);
+			}
+		}));
+		return chests;
+	}
+
 	/**
-	 * Everything the colony has: the core and its storage chests. Use this to decide what the colony
-	 * owns; bots still only take items from the core.
+	 * Everything the colony has: the core, its storage chests and the mineshaft landing chests,
+	 * whose haul a hauler brings up. Use this to decide what the colony owns; bots still only take
+	 * items from the core.
 	 */
 	public static Map<Item, Integer> colonyStock(ServerLevel level, Colony colony) {
 		List<Map<Item, Integer>> stocks = new ArrayList<>();
@@ -108,6 +121,7 @@ public final class Storage {
 			stocks.add(stock(core));
 		}
 		storageChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
+		landingChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
 		return StockPlanner.total(stocks);
 	}
 

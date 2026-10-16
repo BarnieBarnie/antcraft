@@ -19,6 +19,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * The colony mine: a 1-wide staircase that spirals down a 2x2 column from {@code top} (the feet
@@ -88,6 +90,18 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return this.stairs().get(this.top.getY() - level);
 	}
 
+	/**
+	 * Where the landing chest of a mining level goes: beside the landing, out of the column on the
+	 * side opposite the hall's, so it is clear of the stairs, the hall and the branches.
+	 */
+	public BlockPos landingChest(int level) {
+		return this.landing(level).relative(this.chestSide(level));
+	}
+
+	private Direction chestSide(int level) {
+		return this.landing(level).getZ() == this.top.getZ() ? Direction.NORTH : Direction.SOUTH;
+	}
+
 	/** Away from the column, on the side the landing's stair is on. */
 	private Direction out(int level) {
 		return this.landing(level).getX() == this.top.getX() ? Direction.WEST : Direction.EAST;
@@ -140,6 +154,9 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 					this.dig(steps, cell.above(), torches);
 					this.dig(steps, cell, torches);
 				}
+				// Facing the landing, where miners and haulers use it.
+				BlockState chest = Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, this.chestSide(stair.getY()).getOpposite());
+				steps.put(this.landingChest(stair.getY()), new BuildPlan.Step(this.landingChest(stair.getY()), chest));
 			}
 		}
 		return new BuildPlan(List.copyOf(steps.values()));

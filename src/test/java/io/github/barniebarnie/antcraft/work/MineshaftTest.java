@@ -82,8 +82,30 @@ class MineshaftTest {
 	@Test
 	void torchesEveryFewStairsAndAtEachLanding() {
 		assertEquals(List.of(new BlockPos(0, 10, 0), new BlockPos(0, 6, 0)), SHAFT.torches());
-		assertEquals(Map.of(Items.TORCH, 2), SHAFT.plan().materials());
+		assertEquals(Map.of(Items.TORCH, 2, Items.CHEST, 1), SHAFT.plan().materials());
 		assertTrue(steps().get(new BlockPos(0, 6, 0)).state().is(Blocks.TORCH));
+	}
+
+	@Test
+	void aChestBesideEachLandingClearOfStairsHallsAndBranches() {
+		// The landing at y=6 is on the column's north side, so its chest goes north of it.
+		BlockPos chest = SHAFT.landingChest(6);
+		assertEquals(new BlockPos(0, 6, -1), chest);
+		List<BuildPlan.Step> steps = SHAFT.plan().steps();
+		assertTrue(steps.stream().anyMatch(step -> step.pos().equals(chest) && step.state().is(Blocks.CHEST)), "no chest in the plan");
+		// Placed once the landing and its hall are dug, so the builder can stand there.
+		List<BlockPos> positions = steps.stream().map(BuildPlan.Step::pos).toList();
+		assertTrue(positions.indexOf(chest) > positions.indexOf(SHAFT.hall(6).getLast()));
+		Mineshaft wide = new Mineshaft(TOP, List.of(8, 7, 6, 3), 3, 16, 8);
+		for (int level : wide.levels()) {
+			BlockPos spot = wide.landingChest(level);
+			assertEquals(1, spot.distManhattan(wide.landing(level)), "not beside the landing at " + level);
+			assertFalse(wide.area().isInside(spot), "in the stair column at " + level);
+			for (int other : wide.levels()) {
+				assertFalse(wide.hall(other).contains(spot) || wide.hall(other).contains(spot.below()), "in a hall at " + level);
+				assertTrue(wide.branches(other).stream().noneMatch(branch -> branch.cells().contains(spot)), "in a branch at " + level);
+			}
+		}
 	}
 
 	@Test

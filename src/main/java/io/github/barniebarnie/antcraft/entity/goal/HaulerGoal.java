@@ -40,8 +40,14 @@ public class HaulerGoal extends ColonyWorkGoal {
 	/** A trip that takes longer than this is given up, for example when a chest cannot be reached. */
 	private static final int TRIP_TICKS = 1200;
 
-	/** Moving up to {@code count} of an item between containers; a chest carried to an empty spot is placed there. */
-	private record Trip(BlockPos from, BlockPos to, Item item, int count) {
+	/**
+	 * Moving up to {@code count} of an item, or of everything when {@code item} is null, between
+	 * containers; a chest carried to an empty spot is placed there.
+	 */
+	private record Trip(BlockPos from, BlockPos to, @Nullable Item item, int count) {
+		boolean carries(ItemStack stack) {
+			return this.item == null || stack.is(this.item);
+		}
 	}
 
 	/** The core, the storage chests and what the core should keep, as one snapshot. */
@@ -81,7 +87,8 @@ public class HaulerGoal extends ColonyWorkGoal {
 	/** Whether the colony needs a hauler: its core is nearly full, or storage holds items the core is short of. */
 	public static boolean needsHauler(ServerLevel level, Colony colony) {
 		Stocks stocks = Stocks.of(level, colony);
-		return stocks != null && (freeSlots(stocks.core()) <= NEARLY_FULL_FREE_SLOTS || !stocks.toFetch().isEmpty());
+		return stocks != null && (freeSlots(stocks.core()) <= NEARLY_FULL_FREE_SLOTS || !stocks.toFetch().isEmpty()
+			|| Storage.landingChests(level, colony).values().stream().anyMatch(chest -> !chest.isEmpty()));
 	}
 
 	@Override
@@ -140,12 +147,29 @@ public class HaulerGoal extends ColonyWorkGoal {
 		return false;
 	}
 
-	/** The next item to bring back into the core, else the next to store, or null if the core is in order. */
+	/**
+	 * The next item to bring back into the core, else the next to store, else a mineshaft landing
+	 * chest to empty into the core, or null if there is nothing to do.
+	 */
 	private @Nullable Trip planTrip(ServerLevel level, Colony colony) {
 		Stocks stocks = colony.storage().isEmpty() ? null : Stocks.of(level, colony);
-		if (stocks == null) {
+		Trip trip = stocks == null ? null : this.planStorageTrip(level, colony, stocks);
+		if (trip != null) {
+			return trip;
+		}
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null || freeSlots(core) == 0) {
 			return null;
 		}
+		// The haul goes to the core; what the core does not need is stored from there.
+		return Storage.landingChests(level, colony).entrySet().stream()
+			.filter(chest -> !chest.getValue().isEmpty())
+			.findFirst()
+			.map(chest -> new Trip(chest.getKey(), colony.core(), null, Integer.MAX_VALUE))
+			.orElse(null);
+	}
+
+	private @Nullable Trip planStorageTrip(ServerLevel level, Colony colony, Stocks stocks) {
 		for (Map.Entry<Item, Integer> fetch : stocks.toFetch().entrySet()) {
 			if (!Storage.hasRoomFor(stocks.core(), new ItemStack(fetch.getKey()))) {
 				continue;
@@ -214,7 +238,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 			if (from == null) {
 				this.trip = null;
 			} else if (this.reach(trip.from())) {
-				Storage.moveItems(from, inventory, stack -> stack.is(trip.item()), trip.count());
+				Storage.moveItems(from, inventory, trip::carries, trip.count());
 				this.loaded = true;
 			}
 			return;
@@ -223,7 +247,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 			Container to = Storage.containerAt(level, trip.to());
 			if (to != null) {
 				// Whatever does not fit goes back to the core with the next deposit.
-				Storage.moveItems(inventory, to, stack -> stack.is(trip.item()));
+				Storage.moveItems(inventory, to, trip::carries);
 			} else if (trip.item() == Items.CHEST && level.getBlockState(trip.to()).canBeReplaced() && Storage.take(inventory, Items.CHEST, 1) == 1) {
 				// ponytail: placed facing north, wherever the hauler stands; check for entities in the spot if bots get stuck in chests.
 				level.setBlockAndUpdate(trip.to(), Blocks.CHEST.defaultBlockState());

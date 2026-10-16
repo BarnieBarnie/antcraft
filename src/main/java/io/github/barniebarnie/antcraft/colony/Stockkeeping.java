@@ -55,6 +55,24 @@ public final class Stockkeeping {
 		return fetch;
 	}
 
+	/**
+	 * Whether a miner takes its haul up to the core rather than leaving it in the landing chest: when
+	 * it carries something the colony has an open order for, or is below a stock target of.
+	 */
+	public static <I> boolean toCore(Set<I> carried, Set<I> ordered, List<StockPlanner.Target<I>> targets, Map<I, Integer> stock) {
+		for (I item : carried) {
+			if (ordered.contains(item)) {
+				return true;
+			}
+			for (StockPlanner.Target<I> target : targets) {
+				if (target.matches().test(item) && StockPlanner.have(target, stock) < target.count()) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	private static <I> int take(I item, int wanted, Map<I, Integer> left, Map<I, Integer> fetch) {
 		int taken = Math.min(wanted, left.getOrDefault(item, 0));
 		if (taken > 0) {

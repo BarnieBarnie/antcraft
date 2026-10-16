@@ -5,11 +5,13 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -193,6 +195,83 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 					}
 				}
 			}
+		});
+	}
+
+	/** A miner at the deepest landing with a pickaxe and every other slot full of {@code haul}. */
+	private static AntBot fullMiner(GameTestHelper helper, Colony colony, Mineshaft shaft, ItemStack... haul) {
+		BlockPos landing = helper.relativePos(shaft.landing(shaft.levels().getLast()));
+		AntBot miner = member(helper, colony, BotRole.MINER, landing.getX(), landing.getY(), landing.getZ());
+		SimpleContainer inventory = miner.getInventory();
+		inventory.addItem(new ItemStack(Items.STONE_PICKAXE));
+		for (ItemStack stack : haul) {
+			inventory.addItem(stack);
+		}
+		while (inventory.canAddItem(new ItemStack(Items.DIRT))) {
+			inventory.addItem(new ItemStack(Items.DIRT, 64));
+		}
+		return miner;
+	}
+
+	private static Container landingChest(GameTestHelper helper, Mineshaft shaft) {
+		return Storage.containerAt(helper.getLevel(), shaft.landingChest(shaft.levels().getLast()));
+	}
+
+	private static boolean anyBranchDug(GameTestHelper helper, Mineshaft shaft) {
+		return shaft.branches(shaft.levels().getLast()).stream().anyMatch(branch -> helper.getLevel().getBlockState(branch.start()).isAir());
+	}
+
+	@GameTest(maxTicks = 600)
+	public void fullMinerUnloadsIntoTheLandingChestAndGoesBackToItsBranch(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		fullMiner(helper, colony, shaft);
+
+		helper.onEachTick(() -> {
+			if (core(helper, MINE_CORE).countItem(Items.DIRT) > 0) {
+				helper.fail("miner walked its haul up to the core");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(landingChest(helper, shaft).countItem(Items.DIRT) > 0, "landing chest is empty");
+			helper.assertTrue(anyBranchDug(helper, shaft), "no branch dug");
+		});
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void minerBringsWhatTheColonyOrderedToTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		colony.addOrder(Items.RAW_IRON, 1);
+		fullMiner(helper, colony, shaft, new ItemStack(Items.RAW_IRON));
+
+		helper.onEachTick(() -> {
+			if (landingChest(helper, shaft).countItem(Items.RAW_IRON) > 0) {
+				helper.fail("ordered raw iron left in the landing chest");
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(core(helper, MINE_CORE).countItem(Items.RAW_IRON) == 1, "raw iron not in the core"));
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void haulerEmptiesTheLandingChestIntoTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = landingChest(helper, shaft);
+		chest.setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		chest.setItem(1, new ItemStack(Items.RAW_IRON, 3));
+		// The colony counts it as its own already, so nothing down there gets ordered again.
+		helper.assertTrue(Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.RAW_IRON, 0) == 3, "landing chest not in colony stock");
+		helper.assertTrue(HaulerGoal.needsHauler(helper.getLevel(), colony), "a full landing chest does not call for a hauler");
+		member(helper, colony, BotRole.HAULER, 1, 5, 1);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chest.isEmpty(), "landing chest not emptied");
+			Container core = core(helper, MINE_CORE);
+			helper.assertTrue(core.countItem(Items.COBBLESTONE) == 64 && core.countItem(Items.RAW_IRON) == 3, "haul not in the core");
 		});
 	}
 
