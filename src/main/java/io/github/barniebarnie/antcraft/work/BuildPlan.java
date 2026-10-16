@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
@@ -79,6 +80,11 @@ public record BuildPlan(List<Step> steps) {
 			}
 			return true;
 		}
+
+		/** Whether {@code world} has to be broken first, including the same block placed the wrong way round. */
+		public boolean needsClearing(BlockState world) {
+			return !world.isAir() && !this.isDone(world) && (this.isClear() || !world.canBeReplaced());
+		}
 	}
 
 	/** The position a build is known by, such as on the job board. */
@@ -88,7 +94,12 @@ public record BuildPlan(List<Step> steps) {
 
 	/** The first step the world does not match yet. */
 	public Optional<Step> nextStep(Function<BlockPos, BlockState> world) {
-		return this.steps.stream().filter(step -> !step.isDone(world.apply(step.pos()))).findFirst();
+		return this.nextStep(world, step -> true);
+	}
+
+	/** The first step the world does not match yet among those that {@code workable} allows, so a blocked step does not hold up the rest. */
+	public Optional<Step> nextStep(Function<BlockPos, BlockState> world, Predicate<Step> workable) {
+		return this.steps.stream().filter(step -> !step.isDone(world.apply(step.pos())) && workable.test(step)).findFirst();
 	}
 
 	/** Every item the plan places. */

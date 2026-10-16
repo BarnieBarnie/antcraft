@@ -80,7 +80,7 @@ public class ColonyManager extends SavedData {
 			return existing.get();
 		}
 		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS,
-			List.of(), List.of(), Optional.empty(), Optional.empty());
+			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -213,6 +213,30 @@ public class ColonyManager extends SavedData {
 			.ifPresent(colony::setStorage);
 	}
 
+	/**
+	 * Posts a job per build plan, and orders what the plans still have to place beyond what the
+	 * colony holds, its bots' inventories included, while it has a builder to place them. Orders
+	 * plans no longer need are withdrawn.
+	 */
+	private void surveyBuilds(ServerLevel level, Colony colony) {
+		colony.postBuildJobs();
+		if (!this.hasRole(level, colony, BotRole.BUILDER)) {
+			colony.orderForBuilds(Map.of());
+			return;
+		}
+		List<Map<Item, Integer>> held = new ArrayList<>(List.of(Storage.colonyStock(level, colony)));
+		for (UUID id : colony.members()) {
+			if (level.getEntity(id) instanceof AntBot bot) {
+				held.add(Storage.stock(bot.getInventory()));
+			}
+		}
+		Map<Item, Integer> have = StockPlanner.total(held);
+		Map<Item, Integer> needed = new HashMap<>(StockPlanner.total(colony.builds().stream().map(plan -> plan.materials(level::getBlockState)).toList()));
+		needed.replaceAll((item, count) -> count - have.getOrDefault(item, 0));
+		needed.values().removeIf(count -> count <= 0);
+		colony.orderForBuilds(needed);
+	}
+
 	/** Orders whatever the colony is short of. */
 	private void surveyStock(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
@@ -276,7 +300,7 @@ public class ColonyManager extends SavedData {
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT && !Replanting.isPlantable(level, job.target()));
 			this.surveyCrops(level, colony);
 			this.surveyMine(level, colony);
-			colony.builds().forEach(plan -> colony.board().post(JobType.BUILD, plan.target()));
+			this.surveyBuilds(level, colony);
 			this.surveyStorage(level, colony);
 			this.surveyStock(level, colony);
 			this.assignRoles(level, colony);

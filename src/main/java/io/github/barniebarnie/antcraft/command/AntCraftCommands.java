@@ -188,6 +188,10 @@ public final class AntCraftCommands {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.order_line",
 				order.getValue(), itemName(order.getKey()), names(plan.toGather()), names(plan.missing())), false);
 		}
+		if (!colony.blockedSteps().isEmpty()) {
+			String blocked = String.join(", ", colony.blockedSteps().stream().map(BlockPos::toShortString).toList());
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked", blocked), false);
+		}
 		return colony.members().size();
 	}
 
@@ -289,7 +293,7 @@ public final class AntCraftCommands {
 	private static int cancel(CommandSourceStack source, Item item) {
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
-			c.orders().remove(item);
+			c.cancelOrder(item);
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.cancelled", itemName(item)), false);
 		});
 		return colony.isPresent() ? 1 : 0;

@@ -248,9 +248,15 @@ public class HaulerGoal extends ColonyWorkGoal {
 			if (to != null) {
 				// Whatever does not fit goes back to the core with the next deposit.
 				Storage.moveItems(inventory, to, trip::carries);
-			} else if (trip.item() == Items.CHEST && level.getBlockState(trip.to()).canBeReplaced() && Storage.take(inventory, Items.CHEST, 1) == 1) {
-				// ponytail: placed facing north, wherever the hauler stands; check for entities in the spot if bots get stuck in chests.
-				level.setBlockAndUpdate(trip.to(), Blocks.CHEST.defaultBlockState());
+			} else if (trip.item() == Items.CHEST && level.getBlockState(trip.to()).canBeReplaced()) {
+				if (!this.isFreeToPlace(level, trip.to(), Blocks.CHEST.defaultBlockState())) {
+					// Waits for the spot to clear; the trip times out if it never does.
+					return;
+				}
+				// ponytail: placed facing north, wherever the hauler stands.
+				if (Storage.take(inventory, Items.CHEST, 1) == 1) {
+					level.setBlockAndUpdate(trip.to(), Blocks.CHEST.defaultBlockState());
+				}
 			}
 			this.trip = null;
 		}

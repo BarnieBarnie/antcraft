@@ -18,6 +18,9 @@ import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -148,6 +151,22 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 		}
 		if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.cooldown = IDLE_TICKS;
+		}
+		return false;
+	}
+
+	/**
+	 * Whether {@code state} can go at {@code pos} without boxing in a bot or mob standing there,
+	 * as for a player placing a block. If the bot itself is in the way, it steps to the middle of
+	 * its own block, out of the spot.
+	 */
+	protected boolean isFreeToPlace(ServerLevel level, BlockPos pos, BlockState state) {
+		if (level.isUnobstructed(state, pos, CollisionContext.empty())) {
+			return true;
+		}
+		if (this.bot.getBoundingBox().intersects(new AABB(pos))) {
+			BlockPos feet = this.bot.blockPosition();
+			this.bot.getMoveControl().setWantedPosition(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, 1.0);
 		}
 		return false;
 	}

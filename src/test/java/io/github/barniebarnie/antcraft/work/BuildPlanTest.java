@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
 import java.util.HashMap;
@@ -90,6 +92,25 @@ class BuildPlanTest {
 		var world = world(B, Blocks.COBBLESTONE.defaultBlockState());
 		assertEquals(Map.of(Items.COBBLESTONE, 1, Items.OAK_STAIRS, 1),
 			plan().materials(pos -> world.getOrDefault(pos, Blocks.AIR.defaultBlockState())));
+	}
+
+	@Test
+	void stepsThatCannotBeWorkedOnAreSkipped() {
+		// The first step is blocked, so the rest of the plan goes on.
+		var world = world(A, Blocks.BEDROCK.defaultBlockState());
+		assertEquals(Optional.of(plan().steps().get(1)),
+			plan().nextStep(pos -> world.getOrDefault(pos, Blocks.AIR.defaultBlockState()), step -> !step.pos().equals(A)));
+	}
+
+	@Test
+	void whateverStandsInTheWayNeedsClearing() {
+		BuildPlan.Step cobble = new BuildPlan.Step(B, Blocks.COBBLESTONE.defaultBlockState());
+		assertTrue(BuildPlan.Step.clear(A).needsClearing(Blocks.DIRT.defaultBlockState()));
+		assertTrue(new BuildPlan.Step(D, stairs(Direction.EAST)).needsClearing(stairs(Direction.WEST)));
+		assertTrue(cobble.needsClearing(Blocks.DIRT.defaultBlockState()));
+		assertFalse(cobble.needsClearing(Blocks.AIR.defaultBlockState()));
+		// Placing replaces grass, so it need not be broken first.
+		assertFalse(cobble.needsClearing(Blocks.SHORT_GRASS.defaultBlockState()));
 	}
 
 	@Test

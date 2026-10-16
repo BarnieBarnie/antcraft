@@ -27,6 +27,8 @@ import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -295,6 +297,112 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			for (int level : shaft.levels()) {
 				helper.assertTrue(helper.getLevel().getBlockState(shaft.landingChest(level)).is(Blocks.CHEST), "no chest at landing " + level);
 			}
+		});
+	}
+
+	/** A new colony has no torches or chests yet: the builder digs the shaft anyway and places them once they come. */
+	@GameTest(maxTicks = 2400)
+	public void digsMineshaftBeforeItsTorchesAndChestsAreMade(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
+		colony.setStockTargets(List.of());
+		colony.setMineshaft(shaft);
+		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
+		ColonyManager.get(helper.getLevel()).join(builder, colony);
+		builder.setRole(BotRole.BUILDER);
+		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.succeedWhen(() -> {
+			for (BuildPlan.Step step : shaft.plan().steps()) {
+				BlockState state = helper.getLevel().getBlockState(step.pos());
+				helper.assertTrue(step.isDone(state) || state.isAir(), "not dug at " + helper.relativePos(step.pos()) + ": " + state);
+			}
+			helper.assertFalse(colony.builds().isEmpty(), "plan dropped while torches and chests are still to place");
+			helper.assertTrue(colony.orders().containsKey(Items.TORCH) && colony.orders().containsKey(Items.CHEST), "not ordered: " + colony.orders());
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void finishesAroundAStepBehindBedrockAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
+		helper.setBlock(5, 1, 3, Blocks.DIRT);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))),
+			BuildPlan.Step.clear(helper.absolutePos(new BlockPos(5, 1, 3))),
+			step(helper, 5, 1, 5, COBBLE))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(5, 1, 3));
+			assertState(helper, 5, 1, 5, COBBLE);
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "blocked step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void waitsForAMobToLeaveTheSpot(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		BlockPos spot = new BlockPos(4, 1, 4);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, COBBLE))));
+		Pig pig = helper.spawn(EntityTypes.PIG, spot);
+		pig.setNoAi(true);
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.onEachTick(() -> {
+			if (pig.isAlive() && helper.getBlockState(spot).is(Blocks.COBBLESTONE)) {
+				helper.fail("placed a block into the pig");
+			}
+		});
+		helper.runAfterDelay(200, pig::discard);
+		helper.succeedWhen(() -> {
+			helper.assertFalse(pig.isAlive(), "pig still there");
+			assertState(helper, 4, 1, 4, COBBLE);
+		});
+	}
+
+	@GameTest(maxTicks = 400)
+	public void withdrawsOrderWhenPlanIsCancelled(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BuildPlan plan = new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST)));
+		colony.addBuild(plan);
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] cancelled = {false};
+		helper.onEachTick(() -> {
+			if (!cancelled[0] && colony.orders().containsKey(Items.OAK_STAIRS)) {
+				colony.removeBuild(plan);
+				cancelled[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(cancelled[0], "no order for stairs");
+			helper.assertTrue(colony.orders().isEmpty(), "order not withdrawn: " + colony.orders());
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void withdrawsOrderWhenPlanFinishesWithItemsFromElsewhere(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] stocked = {false};
+		helper.onEachTick(() -> {
+			if (!stocked[0] && colony.orders().containsKey(Items.OAK_STAIRS)) {
+				// Brought by a player, not crafted, so the order is never fulfilled.
+				core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS, 1));
+				stocked[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, STAIRS_EAST);
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(colony.orders().isEmpty(), "order not withdrawn: " + colony.orders());
 		});
 	}
 }

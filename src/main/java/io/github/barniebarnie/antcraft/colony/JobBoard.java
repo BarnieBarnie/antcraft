@@ -51,6 +51,16 @@ public class JobBoard {
 		return Optional.of(job);
 	}
 
+	/** Adds a job with a given id, such as a build plan's, unless a job with that id is posted already. */
+	public Optional<Job> post(UUID id, JobType type, BlockPos target) {
+		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
+			return Optional.empty();
+		}
+		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of());
+		this.jobs.add(job);
+		return Optional.of(job);
+	}
+
 	public boolean has(JobType type, BlockPos target) {
 		return this.jobs.stream().anyMatch(job -> job.type() == type && job.target().equals(target));
 	}
