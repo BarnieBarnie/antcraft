@@ -33,6 +33,11 @@ class RoleAssignerTest {
 	}
 
 	@Test
+	void builderForAnOpenBuildJob() {
+		assertEquals(BotRole.BUILDER, RoleAssigner.choose(Map.of(BotRole.GUARD, 1), Map.of(JobType.BUILD, 1), false));
+	}
+
+	@Test
 	void guardWhenThereIsNoWork() {
 		assertEquals(BotRole.GUARD, RoleAssigner.choose(Map.of(BotRole.LUMBERJACK, 1), Map.of(), false));
 	}

@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.pathing;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -54,8 +55,8 @@ public class LevelWorldView implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		BlockState state = this.level.getBlockState(pos);
-		// Leave containers and other block entities alone.
-		if (state.hasBlockEntity() || this.keep.contains(pos)) {
+		// Leave containers, other block entities, blocks the caller keeps and what colony builders built alone.
+		if (state.hasBlockEntity() || this.keep.contains(pos) || ColonyManager.isProtected(this.level, pos)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));

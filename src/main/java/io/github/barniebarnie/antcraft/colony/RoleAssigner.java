@@ -14,7 +14,8 @@ public final class RoleAssigner {
 	private static final Map<JobType, BotRole> WORKERS = Map.of(
 		JobType.CHOP_TREE, BotRole.LUMBERJACK,
 		JobType.MINE_LAYER, BotRole.MINER,
-		JobType.HARVEST_CROP, BotRole.FARMER
+		JobType.HARVEST_CROP, BotRole.FARMER,
+		JobType.BUILD, BotRole.BUILDER
 	);
 
 	private RoleAssigner() {
@@ -49,7 +50,7 @@ public final class RoleAssigner {
 
 	/**
 	 * The role an idle member should switch to, or {@code current} to keep it. Only roles
-	 * the colony assigned and that take jobs from the board (lumberjack, miner, farmer) are
+	 * the colony assigned and that take jobs from the board (lumberjack, miner, farmer, builder) are
 	 * switched, and only when none of their own jobs are open and other work is waiting.
 	 *
 	 * @param roles how many members have each role, this bot included

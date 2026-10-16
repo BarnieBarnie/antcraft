@@ -5,6 +5,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.FarmerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.GuardGoal;
@@ -115,6 +116,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(3, new FarmerGoal(this));
 		this.goalSelector.addGoal(3, new GuardGoal(this));
 		this.goalSelector.addGoal(3, new HaulerGoal(this));
+		this.goalSelector.addGoal(3, new BuilderGoal(this));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));

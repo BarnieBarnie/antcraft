@@ -27,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
@@ -71,7 +72,8 @@ public class ColonyManager extends SavedData {
 		if (existing.isPresent()) {
 			return existing.get();
 		}
-		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS);
+		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS,
+			List.of(), List.of());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -92,6 +94,11 @@ public class ColonyManager extends SavedData {
 		return this.colonies.values().stream()
 			.filter(colony -> colony.core().closerThan(pos, maxDistance))
 			.min(Comparator.comparingDouble(colony -> colony.core().distSqr(pos)));
+	}
+
+	/** Whether a colony build plan placed the block at {@code pos}, so bots must not break it. */
+	public static boolean isProtected(Level level, BlockPos pos) {
+		return level instanceof ServerLevel server && get(server).colonies.values().stream().anyMatch(colony -> colony.isProtected(pos));
 	}
 
 	public List<Colony> all() {
@@ -193,6 +200,7 @@ public class ColonyManager extends SavedData {
 				}
 				colony.board().removeOpenIf(job -> job.type() == JobType.MINE_LAYER && !layers.contains(job.target()));
 			});
+			colony.builds().forEach(plan -> colony.board().post(JobType.BUILD, plan.target()));
 			this.surveyStock(level, colony);
 			this.assignRoles(level, colony);
 		}

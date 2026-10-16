@@ -15,7 +15,9 @@ public enum BotRole {
 	/** Arms itself from the core and patrols around it, fighting hostile mobs. */
 	GUARD,
 	/** Collects loose items around the colony and stores them in the core. */
-	HAULER;
+	HAULER,
+	/** Carries out the colony's build plans with materials from the core. */
+	BUILDER;
 
 	public String id() {
 		return this.name().toLowerCase(Locale.ROOT);

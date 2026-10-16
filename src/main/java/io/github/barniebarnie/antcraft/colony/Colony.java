@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Either;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,6 +16,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Quarry;
 import net.minecraft.world.item.Item;
 
@@ -31,7 +33,9 @@ public class Colony {
 		Codec.unboundedMap(BuiltInRegistries.ITEM.byNameCodec(), Codec.INT).optionalFieldOf("orders", Map.of()).forGetter(Colony::orders),
 		Quarry.CODEC.optionalFieldOf("quarry").forGetter(Colony::quarry),
 		// Colonies saved before stock targets existed get the defaults.
-		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets)
+		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets),
+		BuildPlan.CODEC.listOf().optionalFieldOf("builds", List.of()).forGetter(Colony::builds),
+		BlockPos.CODEC.listOf().optionalFieldOf("protected", List.of()).forGetter(c -> List.copyOf(c.protectedBlocks))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -42,11 +46,14 @@ public class Colony {
 	private final Map<Item, Integer> orders;
 	private Optional<Quarry> quarry;
 	private final List<StockTarget> stock;
+	private final List<BuildPlan> builds;
+	/** Blocks build plans placed, which bots leave standing. */
+	private final Set<BlockPos> protectedBlocks;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Quarry> quarry,
-			List<StockTarget> stock) {
+			List<StockTarget> stock, List<BuildPlan> builds, List<BlockPos> protectedBlocks) {
 		this.id = id;
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
@@ -55,6 +62,40 @@ public class Colony {
 		this.orders = new LinkedHashMap<>(orders);
 		this.quarry = quarry;
 		this.stock = new ArrayList<>(stock);
+		this.builds = new ArrayList<>(builds);
+		this.protectedBlocks = new HashSet<>(protectedBlocks);
+	}
+
+	/** Build plans the colony's builders still have to carry out, in the order they were added. */
+	public List<BuildPlan> builds() {
+		return List.copyOf(this.builds);
+	}
+
+	public void addBuild(BuildPlan plan) {
+		this.builds.add(plan);
+		this.lastSurvey = -1;
+	}
+
+	public void removeBuild(BuildPlan plan) {
+		this.builds.remove(plan);
+	}
+
+	/** The plan a build job points at. */
+	public Optional<BuildPlan> build(BlockPos target) {
+		return this.builds.stream().filter(plan -> plan.target().equals(target)).findFirst();
+	}
+
+	/** Whether a build plan placed the block at {@code pos}, so bots must not break it. */
+	public boolean isProtected(BlockPos pos) {
+		return this.protectedBlocks.contains(pos);
+	}
+
+	public void protect(BlockPos pos) {
+		this.protectedBlocks.add(pos.immutable());
+	}
+
+	public void unprotect(BlockPos pos) {
+		this.protectedBlocks.remove(pos);
 	}
 
 	/** The area miners dig out, if the player has marked one. */
