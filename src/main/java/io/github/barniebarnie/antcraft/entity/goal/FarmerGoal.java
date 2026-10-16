@@ -27,7 +27,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.BucketPickup;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -217,12 +216,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			}
 		}
 		if (this.reach(this.water)) {
-			BlockState state = level.getBlockState(this.water);
-			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
-			ItemStack filled = ((BucketPickup) state.getBlock()).pickupBlock(this.bot, level, this.water, state);
-			if (filled.is(Items.WATER_BUCKET)) {
-				this.bot.getInventory().setItem(slot, filled);
-			}
+			this.scoop(level, this.water, slot);
 			this.water = null;
 		}
 		return true;

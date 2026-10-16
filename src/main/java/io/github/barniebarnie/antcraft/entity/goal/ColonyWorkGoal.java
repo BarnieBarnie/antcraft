@@ -16,9 +16,12 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.block.BucketPickup;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -175,6 +178,17 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 			this.bot.getMoveControl().setWantedPosition(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, 1.0);
 		}
 		return false;
+	}
+
+	/** Scoops the fluid at {@code pos} up into the empty bucket in {@code slot}, as a player would. Returns the filled bucket, or empty if nothing could be scooped. */
+	protected ItemStack scoop(ServerLevel level, BlockPos pos, int slot) {
+		BlockState state = level.getBlockState(pos);
+		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+		ItemStack filled = state.getBlock() instanceof BucketPickup pickup ? pickup.pickupBlock(this.bot, level, pos, state) : ItemStack.EMPTY;
+		if (!filled.isEmpty()) {
+			this.bot.getInventory().setItem(slot, filled);
+		}
+		return filled;
 	}
 
 	protected static int findSlot(Container container, Predicate<ItemStack> filter) {

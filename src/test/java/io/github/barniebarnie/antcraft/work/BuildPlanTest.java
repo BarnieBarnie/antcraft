@@ -9,12 +9,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.StairsShape;
@@ -46,6 +48,10 @@ class BuildPlanTest {
 			world.put((BlockPos) posAndState[i], (BlockState) posAndState[i + 1]);
 		}
 		return world;
+	}
+
+	private static Function<BlockPos, BlockState> at(Map<BlockPos, BlockState> world) {
+		return pos -> world.getOrDefault(pos, Blocks.AIR.defaultBlockState());
 	}
 
 	private static Optional<BuildPlan.Step> next(Map<BlockPos, BlockState> world) {
@@ -111,6 +117,31 @@ class BuildPlanTest {
 		assertFalse(cobble.needsClearing(Blocks.AIR.defaultBlockState()));
 		// Placing replaces grass, so it need not be broken first.
 		assertFalse(cobble.needsClearing(Blocks.SHORT_GRASS.defaultBlockState()));
+	}
+
+	@Test
+	void fluidInAClearStepIsScoopedFilledLeftToSettleOrBlocked() {
+		BuildPlan.Step clear = BuildPlan.Step.clear(A);
+		var source = at(world(A, Blocks.WATER.defaultBlockState()));
+		assertEquals(BuildPlan.Clearing.SCOOP, clear.clearing(source, false, true, true));
+		assertEquals(BuildPlan.Clearing.FILL, clear.clearing(source, false, false, true));
+		assertEquals(BuildPlan.Clearing.BLOCKED, clear.clearing(source, false, false, false));
+		// Flowing fluid cannot be scooped: it dries up once its source is gone, unless it is fed from outside the plan.
+		var flowing = at(world(A, Blocks.LAVA.defaultBlockState().setValue(LiquidBlock.LEVEL, 2)));
+		assertEquals(BuildPlan.Clearing.SETTLE, clear.clearing(flowing, true, true, true));
+		assertEquals(BuildPlan.Clearing.BLOCKED, clear.clearing(flowing, false, true, true));
+	}
+
+	@Test
+	void blockDammingAFluidIsLeftStanding() {
+		BuildPlan.Step clear = BuildPlan.Step.clear(A);
+		// Breaking it would let the water in; it waits until the water beside or above it is gone.
+		var beside = world(A, Blocks.DIRT.defaultBlockState(), B, Blocks.WATER.defaultBlockState());
+		assertEquals(BuildPlan.Clearing.BLOCKED, clear.clearing(at(beside), false, true, true));
+		var above = world(A, Blocks.DIRT.defaultBlockState(), A.above(), Blocks.WATER.defaultBlockState());
+		assertEquals(BuildPlan.Clearing.BLOCKED, clear.clearing(at(above), false, true, true));
+		var below = world(A, Blocks.DIRT.defaultBlockState(), A.below(), Blocks.WATER.defaultBlockState());
+		assertEquals(BuildPlan.Clearing.BREAK, clear.clearing(at(below), false, true, true));
 	}
 
 	@Test

@@ -14,6 +14,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
@@ -85,7 +86,33 @@ public record BuildPlan(List<Step> steps) {
 		public boolean needsClearing(BlockState world) {
 			return !world.isAir() && !this.isDone(world) && (this.isClear() || !world.canBeReplaced());
 		}
+
+		/**
+		 * How a clear step gets its block out of the way, as a player would. A fluid source is
+		 * scooped up with an empty bucket, or else filled with a block that is broken next. Flowing
+		 * fluid is left to dry up while it is {@code settling}; fed from outside the plan, it cannot
+		 * be cleared. A block holding back a fluid beside or above it is left standing until that
+		 * fluid is gone, so the fluid does not flow back in.
+		 */
+		public Clearing clearing(Function<BlockPos, BlockState> world, boolean settling, boolean hasBucket, boolean hasFiller) {
+			BlockState here = world.apply(this.pos);
+			if (here.getBlock() instanceof LiquidBlock) {
+				if (!here.getFluidState().isSource()) {
+					return settling ? Clearing.SETTLE : Clearing.BLOCKED;
+				}
+				return hasBucket ? Clearing.SCOOP : hasFiller ? Clearing.FILL : Clearing.BLOCKED;
+			}
+			for (Direction side : new Direction[] {Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+				if (!world.apply(this.pos.relative(side)).getFluidState().isEmpty()) {
+					return Clearing.BLOCKED;
+				}
+			}
+			return Clearing.BREAK;
+		}
 	}
+
+	/** See {@link Step#clearing}. */
+	public enum Clearing { BREAK, SCOOP, FILL, SETTLE, BLOCKED }
 
 	/** The position a build is known by, such as on the job board. */
 	public BlockPos target() {

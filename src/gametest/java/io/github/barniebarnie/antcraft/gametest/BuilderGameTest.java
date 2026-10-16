@@ -371,6 +371,57 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A fluid source at (4, 1, 4), walled in by stone so it does not spread. */
+	private static BuildPlan pool(GameTestHelper helper, BlockState fluid) {
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(new BlockPos(4, 1, 4).relative(side), Blocks.STONE);
+		}
+		helper.setBlock(4, 1, 4, fluid);
+		return new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4)))));
+	}
+
+	@GameTest(maxTicks = 300)
+	public void scoopsAWaterSourceWithABucket(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.BUCKET));
+		colony.addBuild(pool(helper, Blocks.WATER.defaultBlockState()));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "reported blocked: " + colony.blockedSteps());
+			helper.assertTrue(builder.getInventory().countItem(Items.WATER_BUCKET) + core(helper).countItem(Items.WATER_BUCKET) == 1, "water not scooped up");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void fillsAWaterSourceWithoutABucketAndClearsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.DIRT));
+		colony.addBuild(pool(helper, Blocks.WATER.defaultBlockState()));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "reported blocked: " + colony.blockedSteps());
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void reportsLavaItCannotClearAsBlocked(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.addBuild(pool(helper, Blocks.LAVA.defaultBlockState()));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.LAVA, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "blocked step not reported: " + colony.blockedSteps());
+		});
+	}
+
 	@GameTest(maxTicks = 600)
 	public void waitsForAMobToLeaveTheSpot(GameTestHelper helper) {
 		Colony colony = colony(helper);
