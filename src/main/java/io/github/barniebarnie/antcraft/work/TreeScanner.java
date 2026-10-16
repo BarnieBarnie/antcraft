@@ -82,6 +82,26 @@ public final class TreeScanner {
 		return remaining(view, knownLogs).map(rest -> new Tree(base, rest.logs()));
 	}
 
+	/**
+	 * Where saplings go to grow {@code tree} back: the four spots of a 2x2 trunk, else its base. The
+	 * square is looked for in the two lowest layers of logs, as the bottom one may be partly cut, and
+	 * put on the ground at the base's height.
+	 */
+	public static List<BlockPos> replantSpots(Tree tree) {
+		Set<BlockPos> logs = new HashSet<>(tree.logs());
+		int bottom = tree.logs().getFirst().getY();
+		for (BlockPos log : tree.logs()) {
+			if (log.getY() > bottom + 1) {
+				break;
+			}
+			if (logs.contains(log.east()) && logs.contains(log.south()) && logs.contains(log.east().south())) {
+				BlockPos corner = new BlockPos(log.getX(), tree.base().getY(), log.getZ());
+				return List.of(corner, corner.east(), corner.south(), corner.east().south());
+			}
+		}
+		return List.of(tree.base());
+	}
+
 	private static Set<BlockPos> connectedLogs(TreeView view, BlockPos start) {
 		Set<BlockPos> logs = new HashSet<>();
 		Deque<BlockPos> queue = new ArrayDeque<>();

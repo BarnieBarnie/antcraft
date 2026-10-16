@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
@@ -107,6 +108,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private final Set<Integer> unreachableItems = new HashSet<>();
 	/** Where the current tree stood: drops are collected around it and a sapling planted there. */
 	private @Nullable BlockPos site;
+	/** Where saplings go at the site: its base, or all four spots of a 2x2 trunk. */
+	private List<BlockPos> spots = List.of();
+	/** The sapling kind the spots need, or empty when any sapling will do. */
+	private Optional<Item> sapling = Optional.empty();
 	/** Scaffold that cannot be reached without placing more; retried once the rest is down. */
 	private final Set<BlockPos> unreachablePlaced = new HashSet<>();
 	/** Scaffold that could not be reached even by pillaring; left behind. */
@@ -197,7 +202,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			: Optional.empty();
 		if (claimed.isPresent()) {
 			// Scaffolding already up stays in placed(), so cleanup after the tree takes it down too.
-			this.startTree(claimed.get());
+			this.startTree((ServerLevel) this.bot.level(), claimed.get());
 			return;
 		}
 		// Interrupted mid-tree: take the scaffolding down before anything else.
@@ -316,7 +321,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		Optional<TreeScanner.Tree> found = TreeScanner.findAll(new LevelTreeView(level), origin, SEARCH_RADIUS).stream()
 			.filter(tree -> tree.logs().stream().noneMatch(taken::contains))
 			.min(Comparator.comparingDouble(tree -> tree.base().distSqr(origin)));
-		found.ifPresent(this::startTree);
+		found.ifPresent(tree -> this.startTree(level, tree));
 		return found.isPresent();
 	}
 
@@ -335,15 +340,15 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		LevelTreeView view = new LevelTreeView(level);
 		while (true) {
 			Optional<Job> job = colony.get().board().claim(this.bot.getUUID(), JOBS, this.bot.blockPosition(), level.getGameTime(),
-				open -> open.type() != JobType.REPLANT || this.hasSaplingFor(level, colony.get(), open.target()));
+				open -> open.type() != JobType.REPLANT || this.hasSaplingsFor(level, colony.get(), open));
 			if (job.isEmpty()) {
 				return false;
 			}
 			BlockPos target = job.get().target();
 			if (job.get().type() == JobType.REPLANT) {
-				if (Replanting.isPlantable(level, target)) {
+				if (job.get().blocks().stream().anyMatch(spot -> Replanting.isPlantable(level, spot))) {
 					this.jobId = job.get().id();
-					this.startReplant(level, target);
+					this.startReplant(level, job.get());
 					return true;
 				}
 			} else {
@@ -351,7 +356,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, target).or(() -> TreeScanner.remaining(view, target, job.get().area()));
 				if (tree.isPresent()) {
 					this.jobId = job.get().id();
-					this.startTree(tree.get());
+					this.startTree(level, tree.get());
 					return true;
 				}
 			}
@@ -360,8 +365,13 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
-	private void startTree(TreeScanner.Tree found) {
+	private void startTree(ServerLevel level, TreeScanner.Tree found) {
 		this.tree = found;
+		this.spots = TreeScanner.replantSpots(found);
+		// A 2x2 tree only grows back from four saplings of its own kind; a 1x1 tree from any one.
+		this.sapling = this.spots.size() > 1
+			? Replanting.saplingFor(level.getBlockState(found.logs().getFirst()).getBlock())
+			: Optional.empty();
 		this.bot.setTree(found.base(), found.logs());
 		this.unreachableLogs.clear();
 		this.unreachablePlaced.clear();
@@ -370,34 +380,45 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.enter(State.CHOP);
 	}
 
-	/** Replants {@code base} for a replant job, first getting a sapling: one it carries, one lying nearby, or one from the core. */
-	private void startReplant(ServerLevel level, BlockPos base) {
-		this.site = base;
-		if (findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS)) != null) {
+	/**
+	 * Replants the job's spots, first getting the saplings: ones it carries, ones lying nearby, or
+	 * ones from the core. A 2x2 tree is only planted once it has all four, of its own kind.
+	 */
+	private void startReplant(ServerLevel level, Job job) {
+		this.site = job.target();
+		this.spots = job.blocks();
+		this.sapling = job.item();
+		Predicate<ItemStack> wanted = saplingMatcher(this.sapling);
+		if (count(this.bot.getInventory(), wanted) >= this.spots.size()) {
 			this.enter(State.REPLANT);
-		} else if (this.saplingNear(level, base)) {
+		} else if (this.saplingsNear(level, this.site, wanted) > 0) {
 			this.enter(State.COLLECT);
 		} else {
 			this.enter(State.FETCH_SAPLING);
 		}
 	}
 
-	/** Whether this bot could get a sapling to plant at {@code base}. */
-	private boolean hasSaplingFor(ServerLevel level, Colony colony, BlockPos base) {
-		if (findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS)) != null || this.saplingNear(level, base)) {
-			return true;
-		}
+	/** Whether this bot could get the saplings for the replant job, counting those it carries, nearby and in the core. */
+	private boolean hasSaplingsFor(ServerLevel level, Colony colony, Job job) {
+		Predicate<ItemStack> wanted = saplingMatcher(job.item());
 		Container core = Storage.containerAt(level, colony.core());
-		return core != null && findItem(core, stack -> stack.is(ItemTags.SAPLINGS)) != null;
+		int available = count(this.bot.getInventory(), wanted) + this.saplingsNear(level, job.target(), wanted)
+			+ (core == null ? 0 : count(core, wanted));
+		return available >= job.blocks().size();
 	}
 
-	private boolean saplingNear(ServerLevel level, BlockPos base) {
-		return !level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
-			item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && item.getItem().is(ItemTags.SAPLINGS)
-				&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
+	private int saplingsNear(ServerLevel level, BlockPos base, Predicate<ItemStack> wanted) {
+		return level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
+				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && wanted.test(item.getItem())
+					&& this.bot.wantsToPickUp(level, item.getItem()))
+			.stream().mapToInt(item -> item.getItem().getCount()).sum();
 	}
 
-	/** Takes a sapling from the colony core for the replant job. */
+	private static Predicate<ItemStack> saplingMatcher(Optional<Item> kind) {
+		return stack -> kind.map(stack::is).orElseGet(() -> stack.is(ItemTags.SAPLINGS));
+	}
+
+	/** Takes the saplings for the replant job from the colony core. */
 	private void fetchSapling(ServerLevel level) {
 		BlockPos core = this.colony(level).map(Colony::core).orElse(null);
 		Container container = core == null ? null : Storage.containerAt(level, core);
@@ -409,8 +430,9 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		Goal reach = new Goal.Reach(core, REACH);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(core.getX() + 0.5, core.getY() + 0.5, core.getZ() + 0.5);
-			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS), 1);
-			// If another bot took the last sapling first, replanting gives the job back.
+			Predicate<ItemStack> wanted = saplingMatcher(this.sapling);
+			Storage.moveItems(container, this.bot.getInventory(), wanted, this.spots.size() - count(this.bot.getInventory(), wanted));
+			// If another bot took the saplings first, replanting gives the job back.
 			this.enter(State.REPLANT);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.releaseJob(level);
@@ -611,26 +633,34 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
+	/**
+	 * Plants a sapling on every open spot of the site, once it carries enough of the right kind;
+	 * a 2x2 tree is never planted partly, as it would not grow back.
+	 */
 	private void replant(ServerLevel level) {
 		BlockPos base = this.site;
-		if (!Replanting.isPlantable(level, base)) {
+		List<BlockPos> open = this.spots.stream().filter(spot -> Replanting.isPlantable(level, spot)).toList();
+		if (open.isEmpty()) {
 			// Replanted by someone else, or built over.
 			this.revisits().remove(base);
 			this.completeJob(level);
 			this.enter(State.SEARCH);
 			return;
 		}
-		ItemStack sapling = findItem(this.bot.getInventory(), stack -> stack.is(ItemTags.SAPLINGS));
+		Predicate<ItemStack> wanted = saplingMatcher(this.sapling);
+		boolean enough = count(this.bot.getInventory(), wanted) >= open.size();
 		Optional<Colony> colony = this.colony(level);
-		if (sapling == null && colony.isPresent()) {
+		if (!enough && colony.isPresent()) {
 			// The leaves may still drop one as they decay. In a colony, whichever lumberjack is
-			// nearest when a sapling turns up replants it.
+			// nearest when saplings turn up replants it.
 			this.releaseJob(level);
-			colony.get().board().post(JobType.REPLANT, base);
+			colony.get().board().post(JobType.REPLANT, base, this.spots, this.sapling);
 			this.enter(State.SEARCH);
 			return;
 		}
-		if (sapling == null) {
+		if (!enough) {
+			// ponytail: a solo bot remembers only the base, so it comes back to plant one sapling even
+			// where a 2x2 tree stood; remember the spots and kind too if solo 2x2 trees matter.
 			// The leaves may still drop one as they decay.
 			Map<BlockPos, Long> revisits = this.revisits();
 			if (!revisits.containsKey(base)) {
@@ -644,9 +674,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		Goal reach = new Goal.Reach(base, REACH);
 		if (reach.isReached(this.bot.blockPosition())) {
-			if (sapling.getItem() instanceof BlockItem blockItem) {
-				level.setBlockAndUpdate(base, blockItem.getBlock().defaultBlockState());
-				sapling.shrink(1);
+			for (BlockPos spot : open) {
+				ItemStack sapling = findItem(this.bot.getInventory(), wanted);
+				if (sapling != null && sapling.getItem() instanceof BlockItem blockItem) {
+					level.setBlockAndUpdate(spot, blockItem.getBlock().defaultBlockState());
+					sapling.shrink(1);
+				}
 			}
 			this.revisits().remove(base);
 			this.completeJob(level);
@@ -671,6 +704,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 					&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
 			if (dropped) {
 				this.site = base;
+				this.spots = List.of(base);
+				this.sapling = Optional.empty();
 				this.enter(State.COLLECT);
 				return true;
 			}
@@ -714,10 +749,14 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	private static int countLogs(SimpleContainer inventory) {
+		return count(inventory, stack -> stack.is(ItemTags.LOGS));
+	}
+
+	private static int count(Container container, Predicate<ItemStack> predicate) {
 		int count = 0;
-		for (int i = 0; i < inventory.getContainerSize(); i++) {
-			ItemStack stack = inventory.getItem(i);
-			if (stack.is(ItemTags.LOGS)) {
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			ItemStack stack = container.getItem(i);
+			if (predicate.test(stack)) {
 				count += stack.getCount();
 			}
 		}

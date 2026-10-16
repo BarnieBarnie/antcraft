@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
@@ -235,5 +236,33 @@ class TreeScannerTest {
 		Grid grid = new Grid().trunk(5, 0, 40, 43).canopy(5, 43, 0, 'n');
 
 		assertEquals(new BlockPos(5, 40, 0), TreeScanner.treeAt(grid, new BlockPos(5, 41, 0)).orElseThrow().base());
+	}
+
+	@Test
+	void felled1x1TrunkIsReplantedAtItsBase() {
+		Grid grid = new Grid().trunk(5, 0, 1, 4).canopy(5, 4, 0, 'n');
+		TreeScanner.Tree tree = TreeScanner.treeAt(grid, new BlockPos(5, 1, 0)).orElseThrow();
+
+		assertEquals(List.of(new BlockPos(5, 1, 0)), TreeScanner.replantSpots(tree));
+	}
+
+	@Test
+	void felled2x2TrunkIsReplantedOnAllFourSpots() {
+		Grid grid = new Grid().trunk(5, 0, 1, 4).trunk(6, 0, 1, 4).trunk(5, 1, 1, 4).trunk(6, 1, 1, 4).canopy(5, 4, 0, 'n');
+		TreeScanner.Tree tree = TreeScanner.treeAt(grid, new BlockPos(6, 2, 1)).orElseThrow();
+
+		assertEquals(Set.of(new BlockPos(5, 1, 0), new BlockPos(6, 1, 0), new BlockPos(5, 1, 1), new BlockPos(6, 1, 1)),
+			Set.copyOf(TreeScanner.replantSpots(tree)));
+		assertEquals(4, TreeScanner.replantSpots(tree).size());
+	}
+
+	@Test
+	void partlyCut2x2TrunkIsReplantedOnAllFourSpotsOnTheGround() {
+		// The bottom layer is gone and one log of the next layer too: the full layer above shows the square.
+		Grid grid = new Grid().trunk(5, 0, 3, 5).trunk(6, 0, 2, 5).trunk(5, 1, 2, 5).trunk(6, 1, 2, 5).canopy(5, 5, 0, 'n');
+		TreeScanner.Tree tree = TreeScanner.treeAt(grid, new BlockPos(6, 3, 1)).orElseThrow();
+
+		assertEquals(Set.of(new BlockPos(5, 1, 0), new BlockPos(6, 1, 0), new BlockPos(5, 1, 1), new BlockPos(6, 1, 1)),
+			Set.copyOf(TreeScanner.replantSpots(tree)));
 	}
 }

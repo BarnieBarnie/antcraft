@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
 
 /**
  * Shared list of colony jobs. Each job is worked on by at most one bot, and each
@@ -43,10 +44,15 @@ public class JobBoard {
 	 * posted as a second tree.
 	 */
 	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area) {
+		return this.post(type, target, area, Optional.empty());
+	}
+
+	/** Like {@link #post(JobType, BlockPos, Collection)}, for a job that needs {@code item}. */
+	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area, Optional<Item> item) {
 		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {
 			return Optional.empty();
 		}
-		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area));
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -56,7 +62,7 @@ public class JobBoard {
 		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
 			return Optional.empty();
 		}
-		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of());
+		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty());
 		this.jobs.add(job);
 		return Optional.of(job);
 	}

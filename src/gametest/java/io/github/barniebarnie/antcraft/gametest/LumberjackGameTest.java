@@ -975,4 +975,58 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			}
 		});
 	}
+
+	/** A short dark oak: a 2x2 trunk at (4..5, 1..3, 4..5) with a leaf layer on top. */
+	private static void darkOak(GameTestHelper helper) {
+		BlockState leaves = Blocks.DARK_OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1).setValue(LeavesBlock.PERSISTENT, false);
+		for (int x = 3; x <= 6; x++) {
+			for (int z = 3; z <= 6; z++) {
+				helper.setBlock(x, 4, z, leaves);
+			}
+		}
+		for (int y = 1; y <= 3; y++) {
+			for (int x = 4; x <= 5; x++) {
+				for (int z = 4; z <= 5; z++) {
+					helper.setBlock(x, y, z, Blocks.DARK_OAK_LOG);
+				}
+			}
+		}
+	}
+
+	private static void assertDarkOakSaplingSquare(GameTestHelper helper) {
+		helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+		for (int x = 4; x <= 5; x++) {
+			for (int z = 4; z <= 5; z++) {
+				helper.assertBlockPresent(Blocks.DARK_OAK_SAPLING, x, 1, z);
+			}
+		}
+	}
+
+	/** A dark oak only grows back from four saplings in a square, so a felled 2x2 trunk gets four of its own kind. */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void replantsFelled2x2DarkOakWithFourSaplings(GameTestHelper helper) {
+		darkOak(helper);
+		AntBot bot = lumberjack(helper, 1, 6);
+		// An oak sapling first, which would not grow a dark oak back.
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		bot.getInventory().addItem(new ItemStack(Items.DARK_OAK_SAPLING, 4));
+
+		helper.succeedWhen(() -> assertDarkOakSaplingSquare(helper));
+	}
+
+	/** A colony lumberjack without saplings posts a replant job for the whole square, then plants it from the core. */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void colonyReplantsFelled2x2DarkOakFromTheCore(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_SAPLING, 4));
+		core.setItem(1, new ItemStack(Items.DARK_OAK_SAPLING, 4));
+		darkOak(helper);
+		colonyLumberjack(helper, colony, 1, 6);
+
+		helper.succeedWhen(() -> {
+			assertDarkOakSaplingSquare(helper);
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.REPLANT), "replant job left: " + colony.board().jobs());
+		});
+	}
 }

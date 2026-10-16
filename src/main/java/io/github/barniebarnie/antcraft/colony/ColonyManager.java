@@ -323,7 +323,8 @@ public class ColonyManager extends SavedData {
 				colony.board().post(JobType.CHOP_TREE, tree.base(), tree.logs());
 			}
 			// Replanted since, or built over.
-			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT && !Replanting.isPlantable(level, job.target()));
+			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
+				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));
 			this.surveyCrops(level, colony);
 			this.surveyMine(level, colony);
 			Map<Item, Integer> have = held(level, colony);
