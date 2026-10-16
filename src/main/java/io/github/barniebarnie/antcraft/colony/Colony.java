@@ -390,6 +390,12 @@ public class Colony {
 		this.systemOrders.values().forEach(part -> part.remove(item));
 	}
 
+	/** Drops the part of the order for {@code item} a player placed; the parts the colony placed itself stay. */
+	public void cancelPlayerOrder(Item item) {
+		int placed = this.systemOrders.values().stream().mapToInt(part -> part.getOrDefault(item, 0)).sum();
+		setCount(this.orders, item, Math.min(placed, this.orders.getOrDefault(item, 0)));
+	}
+
 	/** Records that {@code count} of an ordered item were made, for the colony's own orders first; finished orders are removed. */
 	public void fulfil(Item item, int count) {
 		this.orders.computeIfPresent(item, (key, left) -> left - count > 0 ? left - count : null);

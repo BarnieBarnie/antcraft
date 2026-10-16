@@ -15,6 +15,14 @@ class AntCraftConfigTest {
 		assertFalse(values.enableOnDedicatedServer());
 		assertEquals(64, values.maxBotsPerLevel());
 		assertEquals(List.of(16, -16, -58), values.mineshaftLevels());
+		assertFalse(values.colonyActionsRequireOp());
+	}
+
+	@Test
+	void readsWhetherColonyActionsRequireOp() {
+		Properties props = new Properties();
+		props.setProperty("colonyActionsRequireOp", " true ");
+		assertTrue(AntCraftConfig.parse(props).colonyActionsRequireOp());
 	}
 
 	@Test

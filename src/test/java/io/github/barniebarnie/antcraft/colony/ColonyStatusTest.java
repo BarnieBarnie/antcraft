@@ -51,9 +51,9 @@ class ColonyStatusTest {
 			new BuildPlan.Step(new BlockPos(10, 65, 10), Blocks.STONE.defaultBlockState()))));
 
 		Map<UUID, ColonyStatus.Bot> bots = Map.of(
-			LUMBERJACK, new ColonyStatus.Bot(BotRole.LUMBERJACK, false),
-			MINER, new ColonyStatus.Bot(BotRole.MINER, false),
-			IDLE_MINER, new ColonyStatus.Bot(BotRole.MINER, true));
+			LUMBERJACK, new ColonyStatus.Bot("Lumberjack", BotRole.LUMBERJACK, false, false),
+			MINER, new ColonyStatus.Bot("Miner", BotRole.MINER, false, true),
+			IDLE_MINER, new ColonyStatus.Bot("Idle miner", BotRole.MINER, true, false));
 		Map<Item, Integer> stock = Map.of(Items.OAK_LOG, 40, Items.TORCH, 2, Items.COBBLESTONE, 10);
 		// The first step is placed already.
 		return ColonyStatus.of(colony, bots, stock, item -> List.of(), Items.OAK_LOG::equals,
@@ -69,6 +69,12 @@ class ColonyStatusTest {
 		assertEquals(20, status.radius());
 		assertEquals(Map.of(JobType.CHOP_TREE, 1, JobType.MINE_BRANCH, 1), status.openJobs());
 		assertEquals(Map.of(JobType.CHOP_TREE, 1), status.claimedJobs());
+	}
+
+	@Test
+	void listsLoadedMembersInOrder() {
+		assertEquals(List.of(LUMBERJACK, MINER, IDLE_MINER), List.copyOf(status().bots().keySet()));
+		assertEquals(new ColonyStatus.Bot("Miner", BotRole.MINER, false, true), status().bots().get(MINER));
 	}
 
 	@Test

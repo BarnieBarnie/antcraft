@@ -1,10 +1,12 @@
 package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.DefaultStock;
 import io.github.barniebarnie.antcraft.colony.Job;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -14,6 +16,7 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -241,5 +244,53 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		ColonyNetworking.StatusReply far = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1000, 4)));
 		helper.assertTrue(far.status().isEmpty(), "answered for a colony far away");
 		helper.succeed();
+	}
+
+	@GameTest
+	public void screenActionsChangeTheColony(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		AntBot bot = member(helper, colony, 2, 2);
+		AntBot stranger = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+
+		helper.assertTrue(edit(helper, near, false, colony, ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4), "order refused");
+		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
+		helper.assertTrue(edit(helper, near, false, colony, ColonyActions.Edit.SET_STOCK, "minecraft:torch", 8), "stock target refused");
+		helper.assertValueEqual(colony.stockTargets(), List.of(StockTarget.of(Items.TORCH, 8)), "stock targets");
+
+		helper.assertTrue(role(helper, near, false, colony, bot, Optional.of(BotRole.MINER)), "role change refused");
+		helper.assertValueEqual(bot.getRole(), BotRole.MINER, "role");
+		helper.assertTrue(bot.isRoleSetByPlayer(), "role not set by player");
+		helper.assertTrue(role(helper, near, false, colony, bot, Optional.empty()), "giving back refused");
+		helper.assertFalse(bot.isRoleSetByPlayer(), "bot not given back to the colony");
+
+		helper.assertFalse(role(helper, near, false, colony, stranger, Optional.of(BotRole.MINER)), "role change for a bot not in the colony");
+		helper.assertValueEqual(stranger.getRole(), BotRole.NONE, "stranger's role");
+		// Far above every test area, so out of range of the colony.
+		BlockPos far = helper.absolutePos(new BlockPos(4, 1000, 4));
+		helper.assertFalse(edit(helper, far, false, colony, ColonyActions.Edit.ORDER, "minecraft:stick", 4), "order from out of range");
+		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders after refused order");
+		helper.succeed();
+	}
+
+	@GameTest
+	public void screenActionsOfNonOperatorsAreIgnoredWhenOnlyOperatorsMayAct(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		ColonyNetworking.EditRequest order = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4);
+
+		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), near, false, true, order), "non-operator's order accepted");
+		helper.assertValueEqual(colony.orders(), Map.of(), "orders");
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, true, true, order), "operator's order refused");
+		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
+		helper.succeed();
+	}
+
+	private static boolean edit(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, ColonyActions.Edit kind, String target, int count) {
+		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
+	}
+
+	private static boolean role(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, AntBot bot, Optional<BotRole> role) {
+		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), role));
 	}
 }

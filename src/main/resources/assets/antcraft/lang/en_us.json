@@ -47,5 +47,16 @@
 	"screen.antcraft.colony_status.missing": "    missing: %s",
 	"screen.antcraft.colony_status.builds": "Builds",
 	"screen.antcraft.colony_status.build": "  at %s: %s of %s steps left",
-	"screen.antcraft.colony_status.build_mineshaft": "  mineshaft at %s: %s of %s steps left"
+	"screen.antcraft.colony_status.build_mineshaft": "  mineshaft at %s: %s of %s steps left",
+	"screen.antcraft.colony_status.bot": "  %s: %s",
+	"screen.antcraft.colony_status.bot_by_player": "  %s: %s (set by player)",
+	"screen.antcraft.colony_status.give_back": "Colony",
+	"screen.antcraft.colony_status.edit": "Edit",
+	"screen.antcraft.colony_status.item": "Item id or #tag",
+	"screen.antcraft.colony_status.count": "Count",
+	"screen.antcraft.colony_status.order": "Order",
+	"screen.antcraft.colony_status.cancel_order": "Cancel order",
+	"screen.antcraft.colony_status.set_stock": "Set stock",
+	"screen.antcraft.colony_status.remove_stock": "Remove stock",
+	"screen.antcraft.colony_status.set_radius": "Set radius"
 }

@@ -8,6 +8,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
@@ -101,19 +102,19 @@ public final class AntCraftCommands {
 					.then(Commands.literal("clear").executes(ctx -> clearBlocked(ctx.getSource()))))
 				.then(Commands.literal("order")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
-						.then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
+						.then(Commands.argument("count", IntegerArgumentType.integer(1, ColonyActions.MAX_COUNT))
 							.executes(ctx -> order(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value(), IntegerArgumentType.getInteger(ctx, "count"))))))
 				.then(Commands.literal("mineshaft")
 					.then(Commands.argument("pos", BlockPosArgument.blockPos())
 						.executes(ctx -> setMineshaft(ctx.getSource(), BlockPosArgument.getBlockPos(ctx, "pos")))))
 				.then(Commands.literal("radius")
-					.then(Commands.argument("blocks", IntegerArgumentType.integer(4, 128))
+					.then(Commands.argument("blocks", IntegerArgumentType.integer(ColonyActions.MIN_RADIUS, ColonyActions.MAX_RADIUS))
 						.executes(ctx -> setRadius(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "blocks")))))
 				.then(Commands.literal("stock")
 					.executes(ctx -> listStock(ctx.getSource()))
 					.then(Commands.literal("set")
 						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
-							.then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
+							.then(Commands.argument("count", IntegerArgumentType.integer(1, ColonyActions.MAX_COUNT))
 								.executes(ctx -> setStock(ctx.getSource(), stockMatch(ctx), IntegerArgumentType.getInteger(ctx, "count"))))))
 					.then(Commands.literal("remove")
 						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
@@ -204,11 +205,7 @@ public final class AntCraftCommands {
 	private static int setStock(CommandSourceStack source, Either<TagKey<Item>, Item> match, int count) {
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
-			// Keep the preferred items of an existing target, such as stone before wooden pickaxes.
-			StockTarget target = c.stockTargets().stream().filter(t -> t.match().equals(match)).findFirst()
-				.map(t -> t.withCount(count))
-				.orElse(new StockTarget(match, count, List.of()));
-			c.setStockTarget(target);
+			StockTarget target = ColonyActions.setStock(c, match, count);
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.set", target.name(), count), false);
 		});
 		return colony.isPresent() ? 1 : 0;

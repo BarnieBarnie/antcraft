@@ -205,6 +205,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.idleTicks = 0;
 	}
 
+	/** Hands the bot back to the colony: it keeps its role until the colony moves it to other work. */
+	public void releaseRole() {
+		this.roleSetByPlayer = false;
+	}
+
 	public boolean isRoleSetByPlayer() {
 		return this.roleSetByPlayer;
 	}

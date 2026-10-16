@@ -25,10 +25,13 @@ public final class AntCraftConfig {
 	/** Iron and copper, gold and lapis, diamonds and redstone. */
 	private static final List<Integer> DEFAULT_MINESHAFT_LEVELS = List.of(16, -16, -58);
 
-	/** {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from. */
-	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels) {
+	/**
+	 * {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from.
+	 * {@code colonyActionsRequireOp} limits changes from the colony screen to operators; otherwise anyone near the colony may make them.
+	 */
+	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp) {
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
-			this(enableOnDedicatedServer, maxBotsPerLevel, DEFAULT_MINESHAFT_LEVELS);
+			this(enableOnDedicatedServer, maxBotsPerLevel, DEFAULT_MINESHAFT_LEVELS, false);
 		}
 	}
 
@@ -53,6 +56,7 @@ public final class AntCraftConfig {
 		props.setProperty("enableOnDedicatedServer", Boolean.toString(values.enableOnDedicatedServer()));
 		props.setProperty("maxBotsPerLevel", Integer.toString(values.maxBotsPerLevel()));
 		props.setProperty("mineshaftLevels", String.join(",", values.mineshaftLevels().stream().map(String::valueOf).toList()));
+		props.setProperty("colonyActionsRequireOp", Boolean.toString(values.colonyActionsRequireOp()));
 		try (Writer writer = Files.newBufferedWriter(path)) {
 			props.store(writer, "AntCraft settings. Bots are disabled on dedicated servers unless enableOnDedicatedServer=true.");
 		} catch (IOException e) {
@@ -74,7 +78,8 @@ public final class AntCraftConfig {
 		} catch (NumberFormatException e) {
 			levels = DEFAULT_MINESHAFT_LEVELS;
 		}
-		return new Values(enableOnDedicatedServer, maxBots, levels);
+		boolean colonyActionsRequireOp = Boolean.parseBoolean(props.getProperty("colonyActionsRequireOp", "false").trim());
+		return new Values(enableOnDedicatedServer, maxBots, levels, colonyActionsRequireOp);
 	}
 
 	public static boolean botsAllowed(boolean dedicatedServer, boolean enableOnDedicatedServer) {
@@ -87,6 +92,10 @@ public final class AntCraftConfig {
 
 	public static List<Integer> mineshaftLevels() {
 		return values.mineshaftLevels();
+	}
+
+	public static boolean colonyActionsRequireOp() {
+		return values.colonyActionsRequireOp();
 	}
 
 	public static int maxBotsPerLevel() {

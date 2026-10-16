@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -30,12 +31,12 @@ import net.minecraft.world.level.block.state.BlockState;
  * A snapshot of what a colony is doing: its bots, jobs, stock, orders and builds. {@code /antcraft colony info}
  * prints it and the colony status screen shows it, so the two cannot disagree.
  */
-public record ColonyStatus(BlockPos core, int members, Map<BotRole, Integer> roles, int idle, int radius,
+public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<BotRole, Integer> roles, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
 		List<Build> builds, List<BlockPos> blocked) {
 
-	/** A loaded member bot. */
-	public record Bot(BotRole role, boolean idle) {
+	/** A loaded member bot; {@code setByPlayer} when a player chose its role, so the colony leaves it. */
+	public record Bot(String name, BotRole role, boolean idle, boolean setByPlayer) {
 	}
 
 	/** A stock target with how many the colony has. */
@@ -68,6 +69,10 @@ public record ColonyStatus(BlockPos core, int members, Map<BotRole, Integer> rol
 			ByteBufCodecs.BOOL, Build::mineshaft, Build::new);
 	}
 
+	// Here, not in Bot: Bot is built before ColonyStatus is loaded, and would see this class's codecs half made.
+	private static final StreamCodec<ByteBuf, Bot> BOT = StreamCodec.composite(
+		ByteBufCodecs.STRING_UTF8, Bot::name, enumCodec(BotRole.values()), Bot::role, ByteBufCodecs.BOOL, Bot::idle,
+		ByteBufCodecs.BOOL, Bot::setByPlayer, Bot::new);
 	private static final StreamCodec<RegistryFriendlyByteBuf, Item> ITEM = ByteBufCodecs.registry(Registries.ITEM);
 	private static final StreamCodec<RegistryFriendlyByteBuf, Map<Item, Integer>> ITEM_COUNTS = ByteBufCodecs.map(LinkedHashMap::new, ITEM, ByteBufCodecs.VAR_INT);
 	private static final StreamCodec<ByteBuf, Map<JobType, Integer>> JOB_COUNTS =
@@ -76,6 +81,7 @@ public record ColonyStatus(BlockPos core, int members, Map<BotRole, Integer> rol
 	public static final StreamCodec<RegistryFriendlyByteBuf, ColonyStatus> STREAM_CODEC = StreamCodec.composite(
 		BlockPos.STREAM_CODEC, ColonyStatus::core,
 		ByteBufCodecs.VAR_INT, ColonyStatus::members,
+		ByteBufCodecs.map(LinkedHashMap::new, UUIDUtil.STREAM_CODEC, BOT), ColonyStatus::bots,
 		ByteBufCodecs.map(n -> new EnumMap<>(BotRole.class), enumCodec(BotRole.values()), ByteBufCodecs.VAR_INT), ColonyStatus::roles,
 		ByteBufCodecs.VAR_INT, ColonyStatus::idle,
 		ByteBufCodecs.VAR_INT, ColonyStatus::radius,
@@ -109,7 +115,8 @@ public record ColonyStatus(BlockPos core, int members, Map<BotRole, Integer> rol
 		Map<UUID, Bot> bots = new HashMap<>();
 		for (UUID member : colony.members()) {
 			if (level.getEntity(member) instanceof AntBot bot) {
-				bots.put(member, new Bot(bot.getRole(), bot.getIdleTicks() >= RoleAssigner.IDLE_TICKS_BEFORE_REASSIGN));
+				bots.put(member, new Bot(bot.getName().getString(), bot.getRole(), bot.getIdleTicks() >= RoleAssigner.IDLE_TICKS_BEFORE_REASSIGN,
+					bot.isRoleSetByPlayer()));
 			}
 		}
 		Map<Item, Integer> stock = Storage.containerAt(level, colony.core()) == null ? Map.of() : Storage.colonyStock(level, colony);
@@ -124,10 +131,12 @@ public record ColonyStatus(BlockPos core, int members, Map<BotRole, Integer> rol
 	public static ColonyStatus of(Colony colony, Map<UUID, Bot> bots, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
 			Predicate<Item> gatherable, Function<BlockPos, BlockState> world) {
 		Map<BotRole, Integer> roles = new EnumMap<>(BotRole.class);
+		Map<UUID, Bot> loaded = new LinkedHashMap<>();
 		int idle = 0;
 		for (UUID member : colony.members()) {
 			Bot bot = bots.get(member);
 			if (bot != null) {
+				loaded.put(member, bot);
 				roles.merge(bot.role(), 1, Integer::sum);
 				idle += bot.idle() ? 1 : 0;
 			}
@@ -168,7 +177,7 @@ public record ColonyStatus(BlockPos core, int members, Map<BotRole, Integer> rol
 			builds.add(new Build(plan.target(), left, plan.steps().size(), mineshaft));
 		}
 
-		return new ColonyStatus(colony.core(), colony.members().size(), roles, idle, colony.radius(), open, claimed, stocks, orders, builds,
+		return new ColonyStatus(colony.core(), colony.members().size(), loaded, roles, idle, colony.radius(), open, claimed, stocks, orders, builds,
 			colony.blockedSteps());
 	}
 }
