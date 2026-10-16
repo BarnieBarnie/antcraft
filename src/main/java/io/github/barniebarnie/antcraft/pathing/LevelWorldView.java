@@ -35,7 +35,9 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean canStandOn(BlockPos pos) {
-		return this.level.getBlockState(pos).isFaceSturdy(this.level, pos, Direction.UP);
+		BlockState state = this.level.getBlockState(pos);
+		// Farmland is a little lower than a full block, but walkable.
+		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.is(Blocks.FARMLAND);
 	}
 
 	@Override

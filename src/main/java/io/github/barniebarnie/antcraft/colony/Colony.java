@@ -17,6 +17,7 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.tags.TagKey;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Quarry;
 import net.minecraft.world.item.Item;
 
@@ -35,7 +36,8 @@ public class Colony {
 		// Colonies saved before stock targets existed get the defaults.
 		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets),
 		BuildPlan.CODEC.listOf().optionalFieldOf("builds", List.of()).forGetter(Colony::builds),
-		BlockPos.CODEC.listOf().optionalFieldOf("protected", List.of()).forGetter(c -> List.copyOf(c.protectedBlocks))
+		BlockPos.CODEC.listOf().optionalFieldOf("protected", List.of()).forGetter(c -> List.copyOf(c.protectedBlocks)),
+		Field.CODEC.optionalFieldOf("field").forGetter(Colony::field)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -49,11 +51,13 @@ public class Colony {
 	private final List<BuildPlan> builds;
 	/** Blocks build plans placed, which bots leave standing. */
 	private final Set<BlockPos> protectedBlocks;
+	private Optional<Field> field;
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Quarry> quarry,
-			List<StockTarget> stock, List<BuildPlan> builds, List<BlockPos> protectedBlocks) {
+			List<StockTarget> stock, List<BuildPlan> builds, List<BlockPos> protectedBlocks, Optional<Field> field) {
+		this.field = field;
 		this.id = id;
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
@@ -107,6 +111,16 @@ public class Colony {
 		this.quarry = Optional.of(quarry);
 		this.board.removeOpenIf(job -> job.type() == JobType.MINE_LAYER);
 		this.lastSurvey = -1;
+	}
+
+	/** The crop field the colony started itself, if it needed one. */
+	public Optional<Field> field() {
+		return this.field;
+	}
+
+	void setField(Field field) {
+		this.field = Optional.of(field);
+		this.board.removeOpenIf(job -> job.type() == JobType.PLANT_CROP);
 	}
 
 	public UUID id() {

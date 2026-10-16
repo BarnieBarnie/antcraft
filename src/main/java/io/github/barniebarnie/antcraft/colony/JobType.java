@@ -14,7 +14,9 @@ public enum JobType implements StringRepresentable {
 	/** Plant a sapling at the job target, where a felled tree stood that had no sapling to replant it. */
 	REPLANT,
 	/** Carry out the colony build plan whose first step is at the job target. */
-	BUILD;
+	BUILD,
+	/** Till the soil under the job target if needed and plant a crop there, in the colony field. */
+	PLANT_CROP;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 

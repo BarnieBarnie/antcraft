@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.Farming;
+import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
@@ -28,6 +29,9 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
@@ -73,7 +77,7 @@ public class ColonyManager extends SavedData {
 			return existing.get();
 		}
 		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS,
-			List.of(), List.of());
+			List.of(), List.of(), Optional.empty());
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -127,11 +131,30 @@ public class ColonyManager extends SavedData {
 		colony.board().removeOpenIf(job -> job.type() == JobType.HARVEST_CROP && !Farming.isRipe(level.getBlockState(job.target())));
 		BlockPos core = colony.core();
 		int r = colony.radius();
+		int crops = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -CROP_SCAN_HEIGHT, -r), core.offset(r, CROP_SCAN_HEIGHT, r))) {
-			if (Farming.isRipe(level.getBlockState(pos))) {
+			BlockState state = level.getBlockState(pos);
+			if (state.getBlock() instanceof CropBlock) {
+				crops++;
+			}
+			if (Farming.isRipe(state)) {
 				colony.board().post(JobType.HARVEST_CROP, pos);
 			}
 		}
+		if (colony.field().isEmpty() && crops == 0 && this.hasFarmer(level, colony)) {
+			List<BoundingBox> avoid = colony.quarry().map(q -> List.of(BoundingBox.fromCorners(q.min(), q.max()))).orElse(List.of());
+			Field.choose(core, r, avoid, pos -> Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
+				.ifPresent(colony::setField);
+		}
+		colony.field().ifPresent(field -> {
+			List<BlockPos> toPlant = field.toPlant(pos -> level.getBlockState(pos).getBlock() instanceof CropBlock);
+			colony.board().removeOpenIf(job -> job.type() == JobType.PLANT_CROP && !toPlant.contains(job.target()));
+			toPlant.forEach(pos -> colony.board().post(JobType.PLANT_CROP, pos));
+		});
+	}
+
+	private boolean hasFarmer(ServerLevel level, Colony colony) {
+		return colony.members().stream().anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getRole() == BotRole.FARMER);
 	}
 
 	/** Orders whatever the colony is short of. */

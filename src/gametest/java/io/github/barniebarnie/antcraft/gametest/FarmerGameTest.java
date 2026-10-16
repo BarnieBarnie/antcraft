@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Field;
 import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -133,6 +134,46 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 3, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
 			helper.assertTrue(carried(bot, Items.WOODEN_HOE) == 1, "farmer stored its hoe");
+		});
+	}
+
+	private static boolean planted(GameTestHelper helper, BlockPos crop) {
+		return helper.getLevel().getBlockState(crop).is(Blocks.WHEAT) && helper.getLevel().getBlockState(crop.below()).is(Blocks.FARMLAND);
+	}
+
+	@GameTest(maxTicks = 600)
+	public void collectsSeedsFromGrassTillsAndPlants(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				if (helper.getBlockState(new BlockPos(x, 1, z)).isAir()) {
+					helper.setBlock(x, 1, z, Blocks.SHORT_GRASS);
+				}
+			}
+		}
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.field().isPresent(), "no field");
+			Field field = colony.field().get();
+			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).size() < 24, "nothing planted");
+		});
+	}
+
+	@GameTest(maxTicks = 800)
+	public void plantsAnEmptyFieldNearTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.field().isPresent(), "no field");
+			Field field = colony.field().get();
+			helper.assertTrue(field.center().distManhattan(colony.core()) <= 8, "field far from core: " + field.center());
+			helper.assertTrue(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "no water in the middle");
+			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).isEmpty(), "unplanted: " + field.toPlant(crop -> planted(helper, crop)));
 		});
 	}
 }
