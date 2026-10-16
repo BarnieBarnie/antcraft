@@ -586,6 +586,51 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A solo lumberjack resuming a saved claim whose bottom log is already gone replants at the
+	 * tree's original base on the ground, not at the lowest log still standing.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void soloLumberjackReplantsResumedTreeAtItsOriginalBase(GameTestHelper helper) {
+		for (int y = 2; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		AntBot bot = lumberjack(helper, 2, 2);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		// Resumed once before: the claim holds only the logs still standing, and the base apart.
+		List<BlockPos> logs = trunk(helper, 5, 5);
+		bot.setTree(logs.getFirst(), logs.subList(1, logs.size()));
+		AntBot copy = reload(helper, bot);
+		bot.discard();
+		helper.assertTrue(logs.getFirst().equals(copy.getTreeBase()), "base not loaded: " + copy.getTreeBase());
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+		});
+	}
+
+	/**
+	 * A colony lumberjack resuming a chop job whose bottom log is already gone replants at the job's
+	 * original base on the ground, not at the lowest log still standing.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void colonyLumberjackReplantsResumedTreeAtItsOriginalBase(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		List<BlockPos> logs = trunk(helper, 5, 5);
+		for (int y = 2; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		colony.board().post(JobType.CHOP_TREE, logs.getFirst(), logs);
+		AntBot bot = colonyLumberjack(helper, colony, 2, 2);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+		});
+	}
+
 	/** A remembered tree is forgotten once it was felled too long ago, counted in game time across a reload. */
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void forgetsTreeFelledTooLongAgoAcrossReload(GameTestHelper helper) {

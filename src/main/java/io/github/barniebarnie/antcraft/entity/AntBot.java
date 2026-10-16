@@ -17,6 +17,7 @@ import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,6 +87,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
 	/** Saved, so after loading a solo lumberjack goes back to its tree and others still leave it alone. */
 	private List<BlockPos> tree = List.of();
+	/** Where that tree stood on the ground, which its bottom log may no longer show; saved with it. */
+	private @Nullable BlockPos treeBase;
 	/** Felled trees the bot could not replant, with the game time they were felled; saved, so it comes back after unloading. */
 	private final Map<BlockPos, Long> revisits = new LinkedHashMap<>();
 
@@ -242,8 +245,23 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.tree;
 	}
 
+	/** Claims {@code logs}, taking the lowest of them as the tree's base. */
 	public void setTree(List<BlockPos> logs) {
+		this.setTree(lowest(logs), logs);
+	}
+
+	public void setTree(@Nullable BlockPos base, List<BlockPos> logs) {
 		this.tree = List.copyOf(logs);
+		this.treeBase = logs.isEmpty() ? null : base;
+	}
+
+	/** Where the claimed tree stood on the ground, or null when not felling one. */
+	public @Nullable BlockPos getTreeBase() {
+		return this.treeBase;
+	}
+
+	private static @Nullable BlockPos lowest(List<BlockPos> logs) {
+		return logs.stream().min(Comparator.comparingInt(BlockPos::getY)).orElse(null);
 	}
 
 	/**
@@ -324,6 +342,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
 		output.store("Tree", BlockPos.CODEC.listOf(), this.tree);
+		output.storeNullable("TreeBase", BlockPos.CODEC, this.treeBase);
 		output.store("Revisits", Revisit.CODEC.listOf(), this.revisits.entrySet().stream()
 			.map(entry -> new Revisit(entry.getKey(), entry.getValue())).toList());
 	}
@@ -340,7 +359,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
-		this.tree = input.read("Tree", BlockPos.CODEC.listOf()).map(List::copyOf).orElse(List.of());
+		List<BlockPos> claim = input.read("Tree", BlockPos.CODEC.listOf()).orElse(List.of());
+		// Claims saved before the base was saved were the whole tree, so its lowest log is the base.
+		this.setTree(input.read("TreeBase", BlockPos.CODEC).orElseGet(() -> lowest(claim)), claim);
 		this.revisits.clear();
 		input.read("Revisits", Revisit.CODEC.listOf())
 			.ifPresent(list -> list.forEach(revisit -> this.revisits.put(revisit.pos(), revisit.felled())));

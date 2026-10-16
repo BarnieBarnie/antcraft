@@ -151,6 +151,18 @@ class TreeScannerTest {
 	}
 
 	@Test
+	void leftoverLogsKeepTheGivenBase() {
+		Grid grid = new Grid().trunk(5, 0, 1, 4).canopy(5, 4, 0, 'n');
+		TreeScanner.Tree felling = TreeScanner.treeAt(grid, new BlockPos(5, 1, 0)).orElseThrow();
+		// The bottom log is chopped: the rest stands in the air above the original base.
+		grid.set(5, 1, 0, 'a');
+
+		TreeScanner.Tree rest = TreeScanner.remaining(grid, felling.base(), felling.logs()).orElseThrow();
+		assertEquals(new BlockPos(5, 1, 0), rest.base());
+		assertEquals(List.of(new BlockPos(5, 2, 0), new BlockPos(5, 3, 0), new BlockPos(5, 4, 0)), rest.logs());
+	}
+
+	@Test
 	void leftoverLogsOnlyCoverTheKnownTree() {
 		Grid grid = new Grid().trunk(5, 0, 1, 4).canopy(5, 4, 0, 'n');
 		TreeScanner.Tree felling = TreeScanner.treeAt(grid, new BlockPos(5, 1, 0)).orElseThrow();

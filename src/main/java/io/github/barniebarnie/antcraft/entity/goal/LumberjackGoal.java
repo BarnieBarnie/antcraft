@@ -193,7 +193,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		// A solo bot loaded mid-tree goes back to the logs it still claims, leaves or not. Colony bots
 		// get trees from the job board instead, and a claim with no logs left is dropped by enter().
 		Optional<TreeScanner.Tree> claimed = this.isLumberjack() && this.bot.getColonyId() == null && this.bot.level() instanceof ServerLevel level
-			? TreeScanner.remaining(new LevelTreeView(level), this.bot.getTree())
+			? TreeScanner.remaining(new LevelTreeView(level), this.bot.getTreeBase(), this.bot.getTree())
 			: Optional.empty();
 		if (claimed.isPresent()) {
 			// Scaffolding already up stays in placed(), so cleanup after the tree takes it down too.
@@ -348,7 +348,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				}
 			} else {
 				// What is left of a tree felled before is found by the logs the job remembers, leaves or not.
-				Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, target).or(() -> TreeScanner.remaining(view, job.get().area()));
+				Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, target).or(() -> TreeScanner.remaining(view, target, job.get().area()));
 				if (tree.isPresent()) {
 					this.jobId = job.get().id();
 					this.startTree(tree.get());
@@ -362,7 +362,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private void startTree(TreeScanner.Tree found) {
 		this.tree = found;
-		this.bot.setTree(found.logs());
+		this.bot.setTree(found.base(), found.logs());
 		this.unreachableLogs.clear();
 		this.unreachablePlaced.clear();
 		this.abandonedPlaced.clear();

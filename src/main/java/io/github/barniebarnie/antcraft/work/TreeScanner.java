@@ -68,6 +68,15 @@ public final class TreeScanner {
 		return standing.isEmpty() ? Optional.empty() : Optional.of(sorted(standing));
 	}
 
+	/**
+	 * Like {@link #remaining(TreeView, Collection)}, but the tree keeps {@code base}, where it stood
+	 * on the ground, even when its bottom log is already gone. Drops are collected and a sapling
+	 * planted there.
+	 */
+	public static Optional<Tree> remaining(TreeView view, BlockPos base, Collection<BlockPos> knownLogs) {
+		return remaining(view, knownLogs).map(rest -> new Tree(base, rest.logs()));
+	}
+
 	private static Set<BlockPos> connectedLogs(TreeView view, BlockPos start) {
 		Set<BlockPos> logs = new HashSet<>();
 		Deque<BlockPos> queue = new ArrayDeque<>();
