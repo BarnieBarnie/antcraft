@@ -198,6 +198,17 @@ class JobBoardTest {
 		assertTrue(board.claim(BOB, CHOP, BlockPos.ZERO, 0).isEmpty());
 	}
 
+	/** A tree whose bottom log was cut is rescanned with its base on the ground, under the cut log. */
+	@Test
+	void rescannedTreeWithItsBottomLogCutIsNotPostedAgain() {
+		JobBoard board = new JobBoard();
+		List<BlockPos> logs = List.of(new BlockPos(5, 1, 5), new BlockPos(5, 2, 5), new BlockPos(5, 3, 5));
+		board.post(JobType.CHOP_TREE, logs.getFirst(), logs);
+
+		assertTrue(board.post(JobType.CHOP_TREE, logs.getFirst(), logs.subList(1, 3)).isEmpty());
+		assertEquals(1, board.jobs().size());
+	}
+
 	@Test
 	void separateTreeIsPosted() {
 		JobBoard board = new JobBoard();

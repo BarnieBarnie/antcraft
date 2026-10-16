@@ -20,4 +20,9 @@ public record LevelTreeView(Level level) implements TreeScanner.TreeView {
 		BlockState state = this.level.getBlockState(pos);
 		return state.is(BlockTags.LEAVES) && state.hasProperty(LeavesBlock.PERSISTENT) && !state.getValue(LeavesBlock.PERSISTENT);
 	}
+
+	@Override
+	public boolean isOpen(BlockPos pos) {
+		return this.level.getBlockState(pos).canBeReplaced();
+	}
 }

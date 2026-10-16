@@ -11,7 +11,10 @@ import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
 class TreeScannerTest {
-	/** 'L' = log, 'n' = natural leaves, 'p' = player-placed (persistent) leaves. */
+	/**
+	 * 'L' = log, 'n' = natural leaves, 'p' = player-placed (persistent) leaves, 'a' = air, 'd' = dirt.
+	 * Unset blocks are air above y=0 and ground at and below it.
+	 */
 	private static final class Grid implements TreeScanner.TreeView {
 		private final Map<BlockPos, Character> blocks = new HashMap<>();
 
@@ -44,6 +47,12 @@ class TreeScannerTest {
 		@Override
 		public boolean isNaturalLeaves(BlockPos pos) {
 			return this.blocks.get(pos) instanceof Character c && c == 'n';
+		}
+
+		@Override
+		public boolean isOpen(BlockPos pos) {
+			Character c = this.blocks.get(pos);
+			return c == null ? pos.getY() > 0 : c == 'a';
 		}
 	}
 
@@ -195,5 +204,36 @@ class TreeScannerTest {
 			grid.set(5, y, 0, 'a');
 		}
 		assertTrue(TreeScanner.remaining(grid, felling.logs()).isEmpty());
+	}
+
+	@Test
+	void treeWithItsBottomLogCutHasItsBaseOnTheGround() {
+		// Someone cut the bottom log; the rest of the trunk stands in the air.
+		Grid grid = new Grid().trunk(5, 0, 2, 4).canopy(5, 4, 0, 'n');
+
+		assertEquals(new BlockPos(5, 1, 0), TreeScanner.treeAt(grid, new BlockPos(5, 3, 0)).orElseThrow().base());
+		assertEquals(new BlockPos(5, 1, 0), TreeScanner.findNearest(grid, BlockPos.ZERO, 10).orElseThrow().base());
+	}
+
+	@Test
+	void treeWithSeveralLowerLogsCutHasItsBaseOnTheGround() {
+		Grid grid = new Grid().trunk(5, 0, 3, 5).canopy(5, 5, 0, 'n');
+
+		assertEquals(new BlockPos(5, 1, 0), TreeScanner.treeAt(grid, new BlockPos(5, 4, 0)).orElseThrow().base());
+	}
+
+	@Test
+	void intactTreeOnRaisedGroundKeepsItsBottomLogAsBase() {
+		Grid grid = new Grid().set(5, 1, 0, 'd').trunk(5, 0, 2, 4).canopy(5, 4, 0, 'n');
+
+		assertEquals(new BlockPos(5, 2, 0), TreeScanner.treeAt(grid, new BlockPos(5, 3, 0)).orElseThrow().base());
+	}
+
+	@Test
+	void treeWithNoGroundInReachKeepsItsBottomLogAsBase() {
+		// Hanging over a deep drop: no spot a sapling could stand on.
+		Grid grid = new Grid().trunk(5, 0, 40, 43).canopy(5, 43, 0, 'n');
+
+		assertEquals(new BlockPos(5, 40, 0), TreeScanner.treeAt(grid, new BlockPos(5, 41, 0)).orElseThrow().base());
 	}
 }

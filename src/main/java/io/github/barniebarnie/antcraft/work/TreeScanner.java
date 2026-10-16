@@ -17,11 +17,16 @@ public final class TreeScanner {
 	private static final int MAX_LOGS = 1024;
 	private static final int SCAN_BELOW = 4;
 	private static final int SCAN_ABOVE = 8;
+	/** How many cut logs under a standing trunk are looked through for the ground it grew on. */
+	private static final int MAX_CUT_BELOW = 8;
 
 	public interface TreeView {
 		boolean isLog(BlockPos pos);
 
 		boolean isNaturalLeaves(BlockPos pos);
+
+		/** Air or a replaceable plant: not ground a tree or sapling stands on. */
+		boolean isOpen(BlockPos pos);
 	}
 
 	/** {@code logs} is sorted bottom-up, so chopping in order works from the trunk base. */
@@ -104,7 +109,24 @@ public final class TreeScanner {
 			}
 			return false;
 		});
-		return hasLeaves ? Optional.of(sorted(logs)) : Optional.empty();
+		if (!hasLeaves) {
+			return Optional.empty();
+		}
+		Tree tree = sorted(logs);
+		return Optional.of(new Tree(groundBase(view, tree.base()), tree.logs()));
+	}
+
+	/**
+	 * Where a tree whose lowest log is {@code lowest} stood: the open spot on the ground under the
+	 * trunk when its bottom logs were cut, else {@code lowest}. With no ground in reach it stays
+	 * {@code lowest}.
+	 */
+	private static BlockPos groundBase(TreeView view, BlockPos lowest) {
+		BlockPos pos = lowest;
+		for (int i = 0; i <= MAX_CUT_BELOW && view.isOpen(pos.below()); i++) {
+			pos = pos.below();
+		}
+		return view.isOpen(pos.below()) ? lowest : pos;
 	}
 
 	private static Tree sorted(Collection<BlockPos> logs) {

@@ -631,6 +631,23 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A solo lumberjack finding a tree whose bottom log someone already cut plants the sapling on the
+	 * ground under the trunk, not at the lowest log still standing.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void soloLumberjackReplantsPartlyCutTreeOnTheGround(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		helper.setBlock(5, 1, 5, Blocks.AIR);
+		AntBot bot = lumberjack(helper, 2, 2);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+		});
+	}
+
 	/** A remembered tree is forgotten once it was felled too long ago, counted in game time across a reload. */
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void forgetsTreeFelledTooLongAgoAcrossReload(GameTestHelper helper) {
