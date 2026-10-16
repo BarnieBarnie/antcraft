@@ -32,5 +32,19 @@
 	"commands.antcraft.colony.build.too_big": "That region holds %s blocks; at most %s can be copied",
 	"commands.antcraft.colony.build.not_found": "The colony has no build %s",
 	"commands.antcraft.colony.build.is_mineshaft": "Build %s is the colony mineshaft; move it with /antcraft colony mineshaft instead",
-	"commands.antcraft.colony.build.cancelled": "Cancelled build %s at %s"
+	"commands.antcraft.colony.build.cancelled": "Cancelled build %s at %s",
+	"key.category.antcraft.main": "AntCraft",
+	"key.antcraft.colony_status": "Colony status",
+	"screen.antcraft.colony_status": "Colony status",
+	"screen.antcraft.colony_status.loading": "Asking the colony...",
+	"screen.antcraft.colony_status.colony": "Colony at %s, radius %s",
+	"screen.antcraft.colony_status.bots": "Bots: %s (%s idle)",
+	"screen.antcraft.colony_status.jobs": "Jobs: %s (%s claimed)",
+	"screen.antcraft.colony_status.stock": "Stock wanted",
+	"screen.antcraft.colony_status.orders": "Orders",
+	"screen.antcraft.colony_status.gather": "    to gather: %s",
+	"screen.antcraft.colony_status.missing": "    missing: %s",
+	"screen.antcraft.colony_status.builds": "Builds",
+	"screen.antcraft.colony_status.build": "  at %s: %s of %s steps left",
+	"screen.antcraft.colony_status.build_mineshaft": "  mineshaft at %s: %s of %s steps left"
 }

@@ -2,11 +2,13 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.DefaultStock;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
@@ -224,5 +226,20 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
 		});
+	}
+
+	@GameTest
+	public void statusRequestAnswersForTheNearestColony(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		colony.addOrder(Items.OAK_PLANKS, 4);
+
+		ColonyNetworking.StatusReply near = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1, 4)));
+		helper.assertValueEqual(near.status().map(ColonyStatus::core), Optional.of(colony.core()), "core of the colony answered for");
+		helper.assertValueEqual(near.status().get().orders().getFirst().item(), Items.OAK_PLANKS, "ordered item");
+
+		// Far above every test area, so out of range of all colonies.
+		ColonyNetworking.StatusReply far = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1000, 4)));
+		helper.assertTrue(far.status().isEmpty(), "answered for a colony far away");
+		helper.succeed();
 	}
 }

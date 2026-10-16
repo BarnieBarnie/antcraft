@@ -1,13 +1,39 @@
 package io.github.barniebarnie.antcraft.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.client.render.AntBotRenderer;
+import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.minecraft.client.KeyMapping;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 
 public class AntCraftClient implements ClientModInitializer {
+	private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(AntCraft.id("main"));
+
 	@Override
 	public void onInitializeClient() {
 		EntityRenderers.register(ModEntities.ANT_BOT, AntBotRenderer::new);
+
+		KeyMapping colonyStatus = KeyMappingHelper.registerKeyMapping(
+			new KeyMapping("key.antcraft.colony_status", InputConstants.Type.KEYBOARD, InputConstants.KEY_K, CATEGORY));
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			while (colonyStatus.consumeClick()) {
+				if (client.gui.screen() == null && ClientPlayNetworking.canSend(ColonyNetworking.StatusRequest.TYPE)) {
+					client.gui.setScreen(new ColonyStatusScreen());
+					ColonyStatusScreen.request();
+				}
+			}
+		});
+		// Replies that arrive after the screen closed are dropped.
+		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.StatusReply.TYPE, (reply, context) -> {
+			if (context.client().gui.screen() instanceof ColonyStatusScreen screen) {
+				screen.update(reply);
+			}
+		});
 	}
 }

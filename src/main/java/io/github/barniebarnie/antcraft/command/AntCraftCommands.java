@@ -9,17 +9,14 @@ import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
-import io.github.barniebarnie.antcraft.colony.RoleAssigner;
+import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
-import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
-import io.github.barniebarnie.antcraft.work.GameRecipeBook;
-import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
@@ -27,11 +24,9 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -64,7 +59,7 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
-	private static final int COLONY_RANGE = 64;
+	public static final int COLONY_RANGE = 64;
 	/** Largest region {@code colony build copy} takes, the same as vanilla /clone. */
 	private static final int MAX_COPY_VOLUME = 32768;
 	private static final DynamicCommandExceptionType UNKNOWN_ITEM = new DynamicCommandExceptionType(
@@ -154,45 +149,24 @@ public final class AntCraftCommands {
 		if (found.isEmpty()) {
 			return 0;
 		}
-		Colony colony = found.get();
-		ServerLevel level = source.getLevel();
-		Map<BotRole, Long> roles = new EnumMap<>(BotRole.class);
-		for (UUID member : colony.members()) {
-			if (level.getEntity(member) instanceof AntBot bot) {
-				roles.merge(bot.getRole(), 1L, Long::sum);
-			}
-		}
-		long claimed = colony.board().jobs().stream().filter(job -> !job.isOpen()).count();
-		long idle = colony.members().stream()
-			.filter(member -> level.getEntity(member) instanceof AntBot bot && bot.getIdleTicks() >= RoleAssigner.IDLE_TICKS_BEFORE_REASSIGN)
-			.count();
+		ColonyStatus status = ColonyStatus.of(source.getLevel(), found.get());
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.info",
-			colony.core().toShortString(), colony.members().size(), roles.toString(), colony.board().jobs().size(), claimed, colony.radius(), idle), false);
+			status.core().toShortString(), status.members(), status.roles().toString(), status.jobs(), status.claimed(), status.radius(), status.idle()), false);
 
-		Container core = Storage.containerAt(level, colony.core());
-		Map<Item, Integer> stock = core == null ? Map.of() : Storage.colonyStock(level, colony);
-		List<String> low = new ArrayList<>();
-		for (StockTarget target : colony.stockTargets()) {
-			int have = StockPlanner.have(target.toPlannerTarget(), stock);
-			if (have < target.count()) {
-				low.add(have + "/" + target.count() + " " + target.name());
-			}
-		}
+		List<String> low = status.stock().stream().filter(ColonyStatus.Stock::isShort)
+			.map(stock -> stock.have() + "/" + stock.want() + " " + stock.name()).toList();
 		if (!low.isEmpty()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.low", String.join(", ", low)), false);
 		}
-		for (Map.Entry<Item, Integer> order : colony.orders().entrySet()) {
-			Map<Item, Integer> available = new java.util.HashMap<>(stock);
-			available.remove(order.getKey());
-			TaskPlanner.Plan<Item> plan = TaskPlanner.plan(order.getKey(), order.getValue(), available, GameRecipeBook.of(source.getServer()), Gatherables::isGatherable);
+		for (ColonyStatus.Order order : status.orders()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.order_line",
-				order.getValue(), itemName(order.getKey()), names(plan.toGather()), names(plan.missing())), false);
+				order.count(), itemName(order.item()), names(order.toGather()), names(order.missing())), false);
 		}
-		if (!colony.blockedSteps().isEmpty()) {
-			String blocked = String.join(", ", colony.blockedSteps().stream().map(BlockPos::toShortString).toList());
+		if (!status.blocked().isEmpty()) {
+			String blocked = String.join(", ", status.blocked().stream().map(BlockPos::toShortString).toList());
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked", blocked), false);
 		}
-		return colony.members().size();
+		return status.members();
 	}
 
 	private static Either<TagKey<Item>, Item> stockMatch(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

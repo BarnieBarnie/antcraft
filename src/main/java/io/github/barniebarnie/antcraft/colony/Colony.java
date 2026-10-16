@@ -194,6 +194,11 @@ public class Colony {
 		}
 	}
 
+	/** The part of {@link #orders} the colony placed itself for {@code purpose}. */
+	public Map<Item, Integer> ordersFor(OrderPurpose purpose) {
+		return Map.copyOf(this.systemOrders.getOrDefault(purpose, Map.of()));
+	}
+
 	private static void setCount(Map<Item, Integer> counts, Item item, int count) {
 		if (count > 0) {
 			counts.put(item, count);
