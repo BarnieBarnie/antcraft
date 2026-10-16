@@ -46,7 +46,8 @@ import org.jspecify.annotations.Nullable;
  * for saplings and apples the leaves dropped. In a colony that is shared work instead: it posts a
  * replant job, which the nearest lumberjack takes once a sapling lies near the base or the colony
  * core holds one. Before a tree it tops up
- * its scaffold blocks from home, so it can pillar up to logs it cannot reach. It only uses
+ * its scaffold blocks from home, so it can pillar up to logs it cannot reach, and when it runs out
+ * on the way up it fetches more and goes back to the same tree. It only uses
  * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast. Between trees
  * it swaps its axe for a better one at home, and in a colony orders the best axe the colony can make.
  */
@@ -113,6 +114,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** The scaffold block cleanup is pillaring up to, or null when not retrying one. */
 	private @Nullable BlockPos retrying;
 	private int retriesLeft = SCAFFOLD_RETRIES;
+	/** How many scaffold blocks it takes from home at a time. */
+	private int scaffoldStock = SCAFFOLD_STOCK;
+	/** Restocking mid-tree: it goes back to the current tree afterwards, which stays its own meanwhile. */
+	private boolean resumeTree;
 	private int cooldown;
 	private int restockCooldown;
 	private @Nullable UUID jobId;
@@ -126,7 +131,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.breaker = new BlockBreaker(bot);
 		this.follower.setScaffold(SCAFFOLD);
 		this.follower.setPlaceListener(pos -> {
-			if (TREE_WORK.contains(this.state) || this.retrying != null) {
+			if (TREE_WORK.contains(this.state) || this.retrying != null || this.resumeTree) {
 				this.placed().add(pos);
 			}
 		});
@@ -157,6 +162,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 */
 	public void adoptScaffold(BlockPos pos) {
 		this.placed().add(pos.immutable());
+	}
+
+	/** Changes how many scaffold blocks it takes from home at a time. Lets game tests run it short of scaffold. */
+	public void setScaffoldStock(int stock) {
+		this.scaffoldStock = stock;
 	}
 
 	/**
@@ -241,7 +251,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private void enter(State next) {
 		this.state = next;
-		if (next != State.CHOP) {
+		if (next != State.RESTOCK) {
+			this.resumeTree = false;
+		}
+		if (next != State.CHOP && !this.resumeTree) {
 			// Done with the tree, or gave it up: other lumberjacks may take what is left of it.
 			this.bot.setTree(List.of());
 		}
@@ -269,7 +282,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (this.checkUpgrade(level) || this.revisit(level)) {
 			return;
 		}
-		if (this.restockCooldown == 0 && PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD) < RESTOCK_BELOW && this.homeScaffold(level) > 0) {
+		if (this.restockCooldown == 0 && this.needsScaffold() && this.homeScaffold(level) > 0) {
 			this.enter(State.RESTOCK);
 			return;
 		}
@@ -324,7 +337,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 					return true;
 				}
 			} else {
-				Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, target);
+				// What is left of a tree felled before is found by the logs the job remembers, leaves or not.
+				Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, target).or(() -> TreeScanner.remaining(view, job.get().area()));
 				if (tree.isPresent()) {
 					this.jobId = job.get().id();
 					this.startTree(tree.get());
@@ -395,6 +409,10 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
+	private boolean needsScaffold() {
+		return PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD) < Math.min(RESTOCK_BELOW, this.scaffoldStock);
+	}
+
 	private int homeScaffold(ServerLevel level) {
 		Container home = this.bot.getHome() == null ? null : Storage.containerAt(level, this.bot.getHome());
 		return home == null ? 0 : PathFollower.scaffoldCount(home, SCAFFOLD);
@@ -410,12 +428,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		Goal reach = new Goal.Reach(home, REACH);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
-			int wanted = SCAFFOLD_STOCK - PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD);
+			int wanted = this.scaffoldStock - PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD);
 			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(SCAFFOLD), wanted);
-			this.enter(State.SEARCH);
+			this.enter(this.resumeTree ? State.CHOP : State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.restockCooldown = RESTOCK_RETRY_TICKS;
-			this.enter(State.SEARCH);
+			this.enter(this.resumeTree ? State.CHOP : State.SEARCH);
 		}
 	}
 
@@ -489,7 +507,13 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			// Straight into the inventory: dropped logs could land on the canopy, out of reach.
 			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
-			this.unreachableLogs.add(next);
+			if (this.restockCooldown == 0 && this.needsScaffold() && this.homeScaffold(level) > 0) {
+				// Ran out of scaffold on the way up: fetch more and come back to this tree.
+				this.resumeTree = true;
+				this.enter(State.RESTOCK);
+			} else {
+				this.unreachableLogs.add(next);
+			}
 		}
 	}
 

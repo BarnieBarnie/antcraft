@@ -25,7 +25,6 @@ import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.BlockTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.Level;
@@ -207,8 +206,11 @@ public class ColonyManager extends SavedData {
 			}
 			colony.lastSurvey = now;
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
-			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !level.getBlockState(job.target()).is(BlockTags.LOGS));
-			for (TreeScanner.Tree tree : TreeScanner.findAll(new LevelTreeView(level), colony.core(), colony.radius())) {
+			LevelTreeView trees = new LevelTreeView(level);
+			// A tree job stays while any of its logs stand, even once the leaves have decayed.
+			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())
+				&& TreeScanner.remaining(trees, job.area()).isEmpty());
+			for (TreeScanner.Tree tree : TreeScanner.findAll(trees, colony.core(), colony.radius())) {
 				// Covering its logs keeps the rest of a tree being felled from being posted as a new tree.
 				colony.board().post(JobType.CHOP_TREE, tree.base(), tree.logs());
 			}

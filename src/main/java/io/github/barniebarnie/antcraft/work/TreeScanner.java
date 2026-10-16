@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Deque;
 import java.util.HashSet;
@@ -12,7 +13,8 @@ import net.minecraft.core.BlockPos;
 
 /** Finds natural trees: connected logs with at least one natural (non player-placed) leaf block touching them. */
 public final class TreeScanner {
-	private static final int MAX_LOGS = 128;
+	/** Room for a giant jungle tree (a 2x2 trunk up to 31 tall plus branches), with a margin. */
+	private static final int MAX_LOGS = 1024;
 	private static final int SCAN_BELOW = 4;
 	private static final int SCAN_ABOVE = 8;
 
@@ -56,6 +58,16 @@ public final class TreeScanner {
 		return toTree(view, connectedLogs(view, log.immutable()));
 	}
 
+	/**
+	 * What still stands of a tree known to be natural, given the logs it had: those of them that are
+	 * still logs. Needs no leaves, so the rest of a tree being felled is still found once its leaves
+	 * decayed. Only ever pass logs of a tree found by this scanner: other logs are not checked.
+	 */
+	public static Optional<Tree> remaining(TreeView view, Collection<BlockPos> knownLogs) {
+		List<BlockPos> standing = knownLogs.stream().filter(view::isLog).toList();
+		return standing.isEmpty() ? Optional.empty() : Optional.of(sorted(standing));
+	}
+
 	private static Set<BlockPos> connectedLogs(TreeView view, BlockPos start) {
 		Set<BlockPos> logs = new HashSet<>();
 		Deque<BlockPos> queue = new ArrayDeque<>();
@@ -83,11 +95,12 @@ public final class TreeScanner {
 			}
 			return false;
 		});
-		if (!hasLeaves) {
-			return Optional.empty();
-		}
+		return hasLeaves ? Optional.of(sorted(logs)) : Optional.empty();
+	}
+
+	private static Tree sorted(Collection<BlockPos> logs) {
 		List<BlockPos> sorted = new ArrayList<>(logs);
 		sorted.sort(Comparator.<BlockPos>comparingInt(p -> p.getY()).thenComparingInt(p -> p.getX()).thenComparingInt(p -> p.getZ()));
-		return Optional.of(new Tree(sorted.getFirst(), List.copyOf(sorted)));
+		return new Tree(sorted.getFirst(), List.copyOf(sorted));
 	}
 }

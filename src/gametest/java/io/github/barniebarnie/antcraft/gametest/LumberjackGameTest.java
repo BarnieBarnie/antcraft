@@ -285,6 +285,64 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A 2x2 jungle trunk 8 logs tall, as the trunk of a giant jungle tree. Its top logs need a two
+	 * block pillar, but the bot only takes one scaffold block at a time from home: it has to come
+	 * back down for more mid-tree and go up again.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 4800)
+	public void restocksScaffoldMidTreeToFellATall2x2Trunk(GameTestHelper helper) {
+		BlockState leaves = Blocks.JUNGLE_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, false);
+		for (int dx = -1; dx <= 2; dx++) {
+			for (int dz = -1; dz <= 2; dz++) {
+				helper.setBlock(4 + dx, 9, 4 + dz, leaves);
+			}
+		}
+		for (int y = 1; y <= 8; y++) {
+			for (BlockPos column : List.of(new BlockPos(4, y, 4), new BlockPos(5, y, 4), new BlockPos(4, y, 5), new BlockPos(5, y, 5))) {
+				helper.setBlock(column, Blocks.JUNGLE_LOG);
+			}
+		}
+		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.DIRT, 16));
+		AntBot bot = lumberjack(helper, 1, 6);
+		goal(bot).setScaffoldStock(1);
+
+		helper.succeedWhen(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 9, 7)) {
+				helper.assertTrue(!helper.getBlockState(pos).is(BlockTags.LOGS), "log left at " + pos.toShortString());
+				helper.assertTrue(!helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos.toShortString());
+			}
+			helper.assertTrue(chest.countItem(Items.JUNGLE_LOG) == 32, "chest has " + chest.countItem(Items.JUNGLE_LOG) + " logs");
+		});
+	}
+
+	/** An oak whose branches are joined to the trunk and to each other only at a corner. */
+	@GameTest(padding = PADDING, maxTicks = 3600)
+	public void fellsBranchingOakIncludingDiagonalBranches(GameTestHelper helper) {
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, false);
+		for (int y = 1; y <= 5; y++) {
+			helper.setBlock(3, y, 3, Blocks.OAK_LOG);
+		}
+		List<BlockPos> branches = List.of(new BlockPos(4, 6, 4), new BlockPos(5, 7, 5), new BlockPos(2, 6, 2), new BlockPos(1, 7, 1));
+		branches.forEach(pos -> helper.setBlock(pos, Blocks.OAK_LOG));
+		for (BlockPos branch : List.of(new BlockPos(5, 7, 5), new BlockPos(1, 7, 1))) {
+			helper.setBlock(branch.above(), leaves);
+		}
+		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
+		lumberjack(helper, 1, 5);
+
+		helper.succeedWhen(() -> {
+			assertAreaCleared(helper);
+			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 9, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void chopsTreeAndStoresLogsInHomeChest(GameTestHelper helper) {
 		tree(helper, 5, 5, false);
@@ -538,6 +596,46 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 
 	private static int carried(AntBot bot, net.minecraft.world.item.Item item) {
 		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
+	}
+
+	/**
+	 * A colony tree whose lower trunk was chopped and whose leaves have decayed since: what is left
+	 * no longer looks like a tree, but its chop job remembers the logs, so a lumberjack fells the rest.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void fellsTheLeaflessRestOfAColonyTree(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		List<BlockPos> logs = new ArrayList<>();
+		for (int y = 1; y <= 4; y++) {
+			logs.add(helper.absolutePos(new BlockPos(5, y, 5)));
+		}
+		for (int y = 2; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		colony.board().post(JobType.CHOP_TREE, logs.getFirst(), logs);
+		colonyLumberjack(helper, colony, 2, 2);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_TREE), "chop job left: " + colony.board().jobs());
+		});
+	}
+
+	/** Leafless logs no tree job covers, like a player's log fence, are left alone. */
+	@GameTest(padding = PADDING, maxTicks = 400)
+	public void leavesLeaflessLogsOfNoKnownTreeAlone(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		AntBot bot = colonyLumberjack(helper, colony, 2, 2);
+
+		helper.runAfterDelay(300, () -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 3, "logs were chopped");
+			helper.assertTrue(colony.board().jobs().isEmpty(), "jobs posted: " + colony.board().jobs());
+			helper.assertTrue(carried(bot, Items.OAK_LOG) == 0, "bot has logs");
+			helper.succeed();
+		});
 	}
 
 	@GameTest(padding = PADDING, maxTicks = 400)

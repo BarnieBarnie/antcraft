@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -122,5 +123,65 @@ class TreeScannerTest {
 	@Test
 	void treeAtIsEmptyWhenNoLog() {
 		assertTrue(TreeScanner.treeAt(new Grid(), new BlockPos(5, 1, 0)).isEmpty());
+	}
+
+	@Test
+	void findsAGiantTreeWhole() {
+		// A 2x2 trunk 40 logs tall, as a giant jungle tree.
+		Grid grid = new Grid().trunk(0, 0, 1, 40).trunk(1, 0, 1, 40).trunk(0, 1, 1, 40).trunk(1, 1, 1, 40).canopy(0, 40, 0, 'n');
+		TreeScanner.Tree tree = TreeScanner.treeAt(grid, new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertEquals(160, tree.logs().size());
+	}
+
+	@Test
+	void leftoverLogsOfAFelledTreeAreStillFoundOnceTheLeavesAreGone() {
+		Grid grid = new Grid().trunk(5, 0, 1, 6).set(6, 7, 1, 'L').canopy(5, 6, 0, 'n');
+		TreeScanner.Tree felling = TreeScanner.treeAt(grid, new BlockPos(5, 1, 0)).orElseThrow();
+		// The lower trunk is chopped and the leaves decay.
+		grid.blocks.replaceAll((pos, c) -> c == 'n' ? 'a' : c);
+		for (int y = 1; y <= 4; y++) {
+			grid.set(5, y, 0, 'a');
+		}
+		assertTrue(TreeScanner.treeAt(grid, new BlockPos(5, 5, 0)).isEmpty());
+
+		TreeScanner.Tree rest = TreeScanner.remaining(grid, felling.logs()).orElseThrow();
+		assertEquals(List.of(new BlockPos(5, 5, 0), new BlockPos(5, 6, 0), new BlockPos(6, 7, 1)), rest.logs());
+		assertEquals(new BlockPos(5, 5, 0), rest.base());
+	}
+
+	@Test
+	void leftoverLogsOnlyCoverTheKnownTree() {
+		Grid grid = new Grid().trunk(5, 0, 1, 4).canopy(5, 4, 0, 'n');
+		TreeScanner.Tree felling = TreeScanner.treeAt(grid, new BlockPos(5, 1, 0)).orElseThrow();
+		// A player builds a leafless log wall against the trunk.
+		grid.trunk(6, 0, 1, 3).trunk(7, 0, 1, 3);
+
+		TreeScanner.Tree rest = TreeScanner.remaining(grid, felling.logs()).orElseThrow();
+		assertEquals(felling.logs(), rest.logs());
+	}
+
+	@Test
+	void leaflessPlayerLogStructureIsNotATree() {
+		// A small log house: walls with no leaves anywhere.
+		Grid grid = new Grid();
+		for (int x = 0; x <= 4; x++) {
+			grid.trunk(x, 0, 1, 3).trunk(x, 4, 1, 3);
+		}
+		grid.trunk(0, 2, 1, 3).trunk(4, 2, 1, 3);
+
+		assertTrue(TreeScanner.findAll(grid, BlockPos.ZERO, 10).isEmpty());
+		assertTrue(TreeScanner.treeAt(grid, new BlockPos(0, 1, 0)).isEmpty());
+		assertTrue(TreeScanner.remaining(grid, List.of()).isEmpty());
+	}
+
+	@Test
+	void nothingRemainsOnceAllLogsAreChopped() {
+		Grid grid = new Grid().trunk(5, 0, 1, 4).canopy(5, 4, 0, 'n');
+		TreeScanner.Tree felling = TreeScanner.treeAt(grid, new BlockPos(5, 1, 0)).orElseThrow();
+		for (int y = 1; y <= 4; y++) {
+			grid.set(5, y, 0, 'a');
+		}
+		assertTrue(TreeScanner.remaining(grid, felling.logs()).isEmpty());
 	}
 }
