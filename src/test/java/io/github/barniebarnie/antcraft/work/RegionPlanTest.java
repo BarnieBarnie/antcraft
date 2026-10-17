@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -46,6 +47,44 @@ class RegionPlanTest {
 			new BuildPlan.Step(new BlockPos(1, 1, 0), cobble),
 			new BuildPlan.Step(new BlockPos(0, 2, 0), stairs),
 			BuildPlan.Step.clear(new BlockPos(1, 2, 0))), plan.steps());
+	}
+
+	@Test
+	void eachLayerIsABatchNeedingTheOneBelow() {
+		BuildPlan plan = RegionPlan.copy(pos -> Blocks.COBBLESTONE.defaultBlockState(), new BlockPos(0, 0, 0), new BlockPos(2, 2, 1), new BlockPos(5, 1, 5)).orElseThrow();
+
+		assertEquals(List.of(
+			new BuildPlan.Batch(0, 6, List.of()),
+			new BuildPlan.Batch(6, 12, List.of(0)),
+			new BuildPlan.Batch(12, 18, List.of(1))), plan.batches());
+		for (int layer = 0; layer < 3; layer++) {
+			int y = 1 + layer;
+			assertEquals(List.of(), plan.batch(layer).steps().stream().filter(step -> step.pos().getY() != y).toList(), "layer " + layer);
+		}
+	}
+
+	@Test
+	void splitsAWideLayerIntoSquaresThatEachNeedTheWholeLayerBelow() {
+		// 8 columns wide: two squares a layer, so two builders can work a layer at once.
+		BuildPlan plan = RegionPlan.copy(pos -> Blocks.COBBLESTONE.defaultBlockState(), new BlockPos(0, 0, 0), new BlockPos(7, 1, 0), BlockPos.ZERO).orElseThrow();
+
+		assertEquals(List.of(
+			new BuildPlan.Batch(0, 4, List.of()),
+			new BuildPlan.Batch(4, 8, List.of()),
+			new BuildPlan.Batch(8, 12, List.of(0, 1)),
+			new BuildPlan.Batch(12, 16, List.of(0, 1))), plan.batches());
+		assertEquals(List.of(0, 1, 2, 3), plan.batch(1).steps().stream().map(step -> step.pos().getX() - 4).toList());
+		assertEquals(List.of(0, 1), plan.ready(Set.of()));
+	}
+
+	@Test
+	void aLayerWithNothingToBuildIsSkipped() {
+		BlockState flowing = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1);
+		// The middle layer is only flowing water, so it has no steps and the top layer needs the bottom one.
+		BuildPlan plan = RegionPlan.copy(pos -> pos.getY() == 1 ? flowing : Blocks.COBBLESTONE.defaultBlockState(),
+			new BlockPos(0, 0, 0), new BlockPos(0, 2, 0), BlockPos.ZERO).orElseThrow();
+
+		assertEquals(List.of(new BuildPlan.Batch(0, 1, List.of()), new BuildPlan.Batch(1, 2, List.of(0))), plan.batches());
 	}
 
 	@Test

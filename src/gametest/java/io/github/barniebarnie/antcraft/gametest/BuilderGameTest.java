@@ -275,6 +275,35 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A copied wall eight wide is two batches a layer, so two builders build it at the same time. */
+	@GameTest(maxTicks = 1200)
+	public void twoBuildersBuildOneCopyTogether(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 16));
+		for (int x = 0; x < 8; x++) {
+			helper.setBlock(x, 1, 7, Blocks.COBBLESTONE);
+			helper.setBlock(x, 2, 7, Blocks.COBBLESTONE);
+		}
+		colony.addBuild(RegionPlan.copy(helper.getLevel()::getBlockState,
+			helper.absolutePos(new BlockPos(0, 1, 7)), helper.absolutePos(new BlockPos(7, 2, 7)), helper.absolutePos(new BlockPos(0, 1, 4))).orElseThrow());
+		List<AntBot> builders = List.of(member(helper, colony, BotRole.BUILDER, 2, 2), member(helper, colony, BotRole.BUILDER, 5, 2));
+
+		boolean[] together = {false};
+		helper.onEachTick(() -> {
+			if (builders.stream().allMatch(builder -> colony.board().jobOf(builder.getUUID()).isPresent())) {
+				together[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (int x = 0; x < 8; x++) {
+				assertState(helper, x, 1, 4, COBBLE);
+				assertState(helper, x, 2, 4, COBBLE);
+			}
+			helper.assertTrue(together[0], "the builders never built at the same time");
+			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
+		});
+	}
+
 	@GameTest(maxTicks = 20)
 	public void buildCommandsAreOperatorOnly(GameTestHelper helper) {
 		Colony colony = colony(helper);
