@@ -362,13 +362,78 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 
 	@GameTest(maxTicks = 2400)
 	public void digsMineshaftAndWalksBackUp(GameTestHelper helper) {
+		digsMineshaftAndWalksBackUp(helper, MinerGameTest.mine(helper));
+	}
+
+	/** A pocket of water around the stairs at y=2: the builder walls it off and fills what is in the way, so the stairs end up dry. */
+	@GameTest(maxTicks = 2400)
+	public void digsMineshaftThroughWaterAndLeavesItDryAndWalkable(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
+		// Held in by the stone around it.
+		for (BlockPos pos : BlockPos.betweenClosed(1, 2, 2, 5, 2, 5)) {
+			helper.setBlock(pos, Blocks.WATER);
+		}
+		digsMineshaftAndWalksBackUp(helper, shaft);
+	}
+
+	/** A cave across the stairs at y=2: the builder bridges the floors and walls in the sides, so the stairs stay one continuous way down. */
+	@GameTest(maxTicks = 2400)
+	public void bridgesAndWallsACaveTheMineshaftCrosses(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		for (BlockPos pos : BlockPos.betweenClosed(0, 2, 0, 7, 2, 7)) {
+			helper.setBlock(pos, Blocks.AIR);
+		}
+		int caveY = helper.absolutePos(new BlockPos(0, 2, 0)).getY();
+		digsMineshaftAndWalksBackUp(helper, shaft, () -> {
+			Set<BlockPos> dug = new HashSet<>();
+			Set<BlockPos> floors = new HashSet<>();
+			Set<BlockPos> open = new HashSet<>();
+			for (BlockPos stair : shaft.stairs()) {
+				IntStream.range(0, 3).forEach(up -> dug.add(stair.above(up)));
+				floors.add(stair.below());
+			}
+			for (int level : shaft.levels()) {
+				List<BlockPos> hall = shaft.hall(level);
+				hall.forEach(cell -> dug.addAll(List.of(cell, cell.above())));
+				hall.forEach(cell -> floors.add(cell.below()));
+				open.add(shaft.landingChest(level));
+				open.add(hall.getLast().offset(hall.getLast().subtract(hall.get(hall.size() - 2))));
+				shaft.branches(level).forEach(branch -> open.addAll(branch.cells()));
+			}
+			for (BlockPos floor : floors) {
+				BlockState state = helper.getLevel().getBlockState(floor);
+				helper.assertTrue(state.isFaceSturdy(helper.getLevel(), floor, Direction.UP),
+					"no floor at " + floor.subtract(helper.absolutePos(BlockPos.ZERO)) + ": " + state);
+			}
+			// The cave is walled off beside every stair and hall, so nothing walks in from it.
+			for (BlockPos cell : dug) {
+				for (Direction side : Direction.Plane.HORIZONTAL) {
+					BlockPos wall = cell.relative(side);
+					if (wall.getY() == caveY && !dug.contains(wall) && !open.contains(wall)) {
+						helper.assertFalse(helper.getLevel().getBlockState(wall).isAir(), "cave open at " + wall.subtract(helper.absolutePos(BlockPos.ZERO)));
+					}
+				}
+			}
+		});
+	}
+
+	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft) {
+		digsMineshaftAndWalksBackUp(helper, shaft, () -> { });
+	}
+
+	/**
+	 * Has a builder dig {@code shaft}, with torches, chests and cobblestone in the core, and then
+	 * walk back up the stairs as they are. Every stair and hall ends up dug, dry, lit and walled in,
+	 * and {@code also} holds.
+	 */
+	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft, Runnable also) {
 		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
 		colony.setStockTargets(List.of());
 		Container core = (Container) helper.getBlockEntity(MinerGameTest.MINE_CORE, BlockEntity.class);
 		core.setItem(0, new ItemStack(Items.TORCH, 8));
 		core.setItem(1, new ItemStack(Items.CHEST, 2));
+		core.setItem(2, new ItemStack(Items.COBBLESTONE, 64));
 		colony.setMineshaft(shaft);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
@@ -394,6 +459,12 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			for (int level : shaft.levels()) {
 				helper.assertTrue(helper.getLevel().getBlockState(shaft.landingChest(level)).is(Blocks.CHEST), "no chest at landing " + level);
 			}
+			for (BuildPlan.Step step : shaft.plan().steps()) {
+				BlockState state = helper.getLevel().getBlockState(step.pos());
+				helper.assertTrue(step.isDone(state) && state.getFluidState().isEmpty(),
+					"not done at " + step.pos().subtract(helper.absolutePos(BlockPos.ZERO)) + ": " + state);
+			}
+			also.run();
 		});
 	}
 

@@ -366,9 +366,19 @@ public class Colony {
 
 	/**
 	 * Records the steps of the batch of build job {@code job} that a builder cannot do; its whole
-	 * plan waits without jobs until a recheck frees it.
+	 * plan waits without jobs until a recheck frees it. The mineshaft does not wait: it drops the
+	 * levels the steps keep builders from (see {@link Mineshaft#reachable}) and goes on without them.
 	 */
 	public void reportBlocked(UUID job, Collection<BlockPos> steps) {
+		BatchRef batch = this.batchJobs.get(job);
+		Optional<Mineshaft> shaft = this.mineshaft
+			.filter(mine -> batch != null && this.builds.get(batch.plan()).equals(mine.plan()))
+			.map(mine -> mine.reachable(steps))
+			.filter(reachable -> !reachable.equals(this.mineshaft.get()));
+		if (shaft.isPresent()) {
+			this.setMineshaft(shaft.get());
+			return;
+		}
 		steps.stream().map(pos -> new Blocked(job, pos.immutable())).filter(b -> !this.blockedSteps.contains(b)).forEach(this.blockedSteps::add);
 	}
 

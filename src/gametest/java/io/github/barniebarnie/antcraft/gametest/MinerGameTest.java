@@ -98,14 +98,16 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	static void dig(GameTestHelper helper, Colony colony, Mineshaft shaft) {
 		colony.setMineshaft(shaft);
 		for (BuildPlan.Step step : shaft.plan().steps()) {
-			helper.getLevel().setBlockAndUpdate(step.pos(), step.state());
+			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {
+				helper.getLevel().setBlockAndUpdate(step.pos(), step.state());
+			}
 		}
 		colony.removeBuild(shaft.plan());
 	}
 
 	/** Every block of the shaft, its halls and its branches that bots walk through. */
 	static List<BlockPos> dugPath(Mineshaft shaft, boolean branches) {
-		List<BlockPos> path = new ArrayList<>(shaft.plan().steps().stream().map(BuildPlan.Step::pos).toList());
+		List<BlockPos> path = new ArrayList<>(shaft.plan().steps().stream().filter(step -> !step.anySolid()).map(BuildPlan.Step::pos).toList());
 		if (branches) {
 			shaft.levels().forEach(y -> shaft.branches(y).forEach(branch -> path.addAll(branch.cells())));
 		}
@@ -618,6 +620,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	/** The starter roster has a builder, who digs the shaft the starter miner picked a site for. */
 	@GameTest(maxTicks = 300)
 	public void starterMinerGetsMineshaftWork(GameTestHelper helper) {
+		// The barrier under the test area cannot be dug through, so the shaft would get no levels.
+		for (BlockPos pos : BlockPos.betweenClosed(0, -1, 0, 7, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
 		Colony colony = colony(helper);
 		newcomers(helper, colony, 3, 1);
 

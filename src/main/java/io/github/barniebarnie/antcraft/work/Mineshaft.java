@@ -2,8 +2,11 @@ package io.github.barniebarnie.antcraft.work;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.github.barniebarnie.antcraft.pathing.WorldView;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -94,13 +97,77 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		this(top, levels, DEFAULT_BRANCHES_PER_SIDE, DEFAULT_BRANCH_LENGTH, DEFAULT_TORCH_SPACING);
 	}
 
-	/** The site the colony picks by itself: on a side of the core clear of the {@code avoid} areas (field, storage). */
-	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid) {
-		// ponytail: four fixed spots, no terrain check; move it with /antcraft colony mineshaft.
-		return Stream.of(core.offset(2, 0, 2), core.offset(-3, 0, -3), core.offset(2, 0, -3), core.offset(-3, 0, 2))
+	/**
+	 * The site the colony picks by itself: on a side of the core clear of the {@code avoid} areas
+	 * (field, storage), where the column runs into no fluid or unbreakable block such as bedrock down
+	 * to the first level. Deeper down the builder walls fluid off. Failing such a spot, the first one
+	 * clear of the areas. Levels the column cannot be dug down to for bedrock are left out.
+	 */
+	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
+		// ponytail: four fixed spots beside the core; move it with /antcraft colony mineshaft.
+		List<Mineshaft> spots = Stream.of(core.offset(2, 0, 2), core.offset(-3, 0, -3), core.offset(2, 0, -3), core.offset(-3, 0, 2))
 			.map(top -> new Mineshaft(top, levels))
 			.filter(shaft -> avoid.stream().noneMatch(shaft.area()::intersects))
-			.findFirst().orElseGet(() -> new Mineshaft(core.offset(2, 0, 2), levels));
+			.toList();
+		Mineshaft site = spots.stream().filter(shaft -> shaft.isDiggable(world)).findFirst()
+			.orElseGet(() -> spots.isEmpty() ? new Mineshaft(core.offset(2, 0, 2), levels) : spots.getFirst());
+		return site.aboveBedrock(world);
+	}
+
+	/** Whether the column runs into no fluid or unbreakable block from the ground down to the first level. */
+	private boolean isDiggable(WorldView world) {
+		int bottom = this.levels.isEmpty() ? this.top.getY() : this.levels.getFirst();
+		return this.column(bottom).noneMatch(pos -> world.isHazard(pos) || world.breakTicks(pos) < 0);
+	}
+
+	/** This shaft without the levels at or below an unbreakable block in its column. */
+	private Mineshaft aboveBedrock(WorldView world) {
+		int bottom = this.levels.isEmpty() ? this.top.getY() : this.levels.getLast();
+		int bedrock = this.column(bottom).filter(pos -> world.breakTicks(pos) < 0).mapToInt(BlockPos::getY).max().orElse(Integer.MIN_VALUE);
+		return this.withLevels(this.levels.stream().filter(y -> y > bedrock).toList());
+	}
+
+	/** The blocks of the column the stairs are dug from, from just below the ground down to {@code bottom}. */
+	private Stream<BlockPos> column(int bottom) {
+		return IntStream.rangeClosed(bottom, this.top.getY() - 1).boxed()
+			.flatMap(y -> CYCLE.stream().map(cell -> this.top.offset(cell).atY(y)));
+	}
+
+	private Mineshaft withLevels(List<Integer> levels) {
+		return new Mineshaft(this.top, levels, this.branchesPerSide, this.branchLength, this.torchSpacing, this.rounds);
+	}
+
+	/**
+	 * This shaft without the levels a builder cannot reach for the {@code blocked} steps of its plan:
+	 * a blocked step on the stairs down to a level drops that level and all below it, one in a
+	 * level's hall drops only that level.
+	 */
+	public Mineshaft reachable(Collection<BlockPos> blocked) {
+		BuildPlan plan = this.plan();
+		Map<BlockPos, Integer> index = new HashMap<>();
+		for (int i = 0; i < plan.steps().size(); i++) {
+			index.put(plan.steps().get(i).pos(), i);
+		}
+		int reached = this.levels.size();
+		Set<Integer> halls = new HashSet<>();
+		for (BlockPos pos : blocked) {
+			Integer step = index.get(pos);
+			if (step == null) {
+				continue;
+			}
+			// Each level has its stairs batch, then its hall batch; see plan().
+			int batch = IntStream.range(0, plan.batches().size()).filter(b -> plan.batches().get(b).to() > step).findFirst().orElseThrow();
+			int level = batch / 2;
+			if (level >= this.levels.size()) {
+				continue;
+			}
+			if (batch % 2 == 0) {
+				reached = Math.min(reached, level);
+			} else {
+				halls.add(level);
+			}
+		}
+		return this.withLevels(IntStream.range(0, reached).filter(k -> !halls.contains(k)).mapToObj(this.levels::get).toList());
 	}
 
 	/** The column the stairs wind down, from the bottom floor to the top of the entrance. */
@@ -175,7 +242,10 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	/**
 	 * Digs the stairs from the top down, each landing's hall as it is reached, with torches. Each
 	 * stretch of stairs down to a landing is a batch, and so is each hall with its chest: once the
-	 * stairs reach a landing, one builder can dig its hall while another digs on down.
+	 * stairs reach a landing, one builder can dig its hall while another digs on down. Before a block
+	 * is dug, the walls, floor and ceiling around it below ground are made solid where they are not,
+	 * so a cave is bridged and walled off and a fluid is held back. Branches, the landing chest and
+	 * the block past a hall's end are left alone.
 	 */
 	// ponytail: one batch per hall; split it per branch pair if a level ever needs more hands.
 	public BuildPlan plan() {
@@ -184,18 +254,19 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		// The stairs batch before the one being dug, if any.
 		List<Integer> above = List.of();
 		Set<BlockPos> torches = Set.copyOf(this.torches());
+		Set<BlockPos> open = this.unwalled();
 		List<BlockPos> stairs = this.stairs();
 		for (int i = 0; i < stairs.size(); i++) {
 			BlockPos stair = stairs.get(i);
 			// From the top, so the builder can reach each block from the stair above.
 			for (int up = 2; up >= 0; up--) {
-				this.dig(steps, stair.above(up), torches);
+				this.dig(steps, stair.above(up), torches, open);
 			}
 			if (i > 0 && this.levels.contains(stair.getY())) {
 				above = this.batch(batches, steps.size(), above);
 				for (BlockPos cell : this.hall(stair.getY())) {
-					this.dig(steps, cell.above(), torches);
-					this.dig(steps, cell, torches);
+					this.dig(steps, cell.above(), torches, open);
+					this.dig(steps, cell, torches, open);
 				}
 				// Facing the landing, where miners and haulers use it.
 				BlockState chest = Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, this.chestSide(stair.getY()).getOpposite());
@@ -215,8 +286,29 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return List.of(batches.size() - 1);
 	}
 
-	private void dig(Map<BlockPos, BuildPlan.Step> steps, BlockPos pos, Set<BlockPos> torches) {
+	/** Keeps the blocks around {@code pos} that are not {@code open} solid, below ground, then digs it out or puts its torch there. */
+	private void dig(Map<BlockPos, BuildPlan.Step> steps, BlockPos pos, Set<BlockPos> torches, Set<BlockPos> open) {
+		for (Direction side : Direction.values()) {
+			BlockPos wall = pos.relative(side);
+			if (wall.getY() < this.top.getY() && !open.contains(wall) && !steps.containsKey(wall)) {
+				steps.put(wall, BuildPlan.Step.solid(wall));
+			}
+		}
 		steps.put(pos, torches.contains(pos) ? new BuildPlan.Step(pos, Blocks.TORCH.defaultBlockState()) : BuildPlan.Step.clear(pos));
+	}
+
+	/** What the plan never walls in: what it digs out, the landing chests, the branches and the block past each hall's end. */
+	private Set<BlockPos> unwalled() {
+		Set<BlockPos> open = new HashSet<>();
+		this.stairs().forEach(stair -> IntStream.range(0, 3).forEach(up -> open.add(stair.above(up))));
+		for (int level : this.levels) {
+			List<BlockPos> hall = this.hall(level);
+			hall.forEach(cell -> open.addAll(List.of(cell, cell.above())));
+			open.add(hall.getLast().relative(this.out(level)));
+			open.add(this.landingChest(level));
+			this.branches(level).forEach(branch -> open.addAll(branch.cells()));
+		}
+		return open;
 	}
 
 	/** What no bot may break: the floors of the stairs and halls, and the builder's torches. */

@@ -20,6 +20,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -51,8 +52,9 @@ import org.jspecify.annotations.Nullable;
  * lacks wait while the rest goes on. It places blocks only where no bot or mob stands, and blocks
  * it places are protected from other bots. It digs with the best pickaxe in the core, such as
  * down a mineshaft, and orders one if it has none and a plan has such digging to do. Fluids in the
- * way it scoops up with a bucket or fills with a cheap block from the core; those it cannot clear
- * are reported as blocked. It pours water and lava from a bucket, as a player would, filling an
+ * way it scoops up with a bucket or fills with a cheap block from the core, and fluid beside a block
+ * it digs that the plan does not clear it walls off with such a block; those it cannot clear are
+ * reported as blocked. It pours water and lava from a bucket, as a player would, filling an
  * empty one at a source in the territory when the core has no full one; a waterlogged block it
  * places dry and fills from a water bucket the same way. A door, bed or tall plant it places whole
  * from one item, clearing the spot for its other half first. Fire it lights on the block below with
@@ -218,7 +220,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		return plan.nextStep(level::getBlockState, step -> {
 			BlockState current = level.getBlockState(step.pos());
 			if (step.needsClearing(current)) {
-				return WORKABLE.contains(this.clearing(level, core, step));
+				return WORKABLE.contains(this.clearing(level, core, step)) || this.fluidToWall(level, core, plan, step) != null;
 			}
 			Item item = step.item(current);
 			if (!isPossible(level, step)) {
@@ -273,7 +275,13 @@ public class BuilderGoal extends ColonyWorkGoal {
 	private void clear(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BuildPlan.Step step) {
 		BlockPos pos = step.pos();
 		SimpleContainer inventory = this.bot.getInventory();
-		switch (this.clearing(level, core, step)) {
+		BuildPlan.Clearing clearing = this.clearing(level, core, step);
+		BlockPos wall = clearing == BuildPlan.Clearing.BLOCKED ? this.fluidToWall(level, core, plan, step) : null;
+		if (wall != null) {
+			this.fillIn(level, colony, core, plan, wall);
+			return;
+		}
+		switch (clearing) {
 			case SCOOP -> {
 				int bucket = findSlot(inventory, BuilderGoal::isBucket);
 				if (bucket < 0) {
@@ -282,24 +290,49 @@ public class BuilderGoal extends ColonyWorkGoal {
 					this.scoop(level, pos, bucket);
 				}
 			}
-			case FILL -> {
-				int filler = findSlot(inventory, BuilderGoal::isFiller);
-				if (filler < 0) {
-					this.fetch(level, colony, core, plan, core.getItem(findSlot(core, BuilderGoal::isFiller)).getItem());
-				} else if (this.reach(pos)) {
-					Item item = inventory.getItem(filler).getItem();
-					BlockState block = Block.byItem(item).defaultBlockState();
-					if (this.isFreeToPlace(level, pos, block)) {
-						this.put(level, pos, block, item);
-					}
-				}
-			}
+			case FILL -> this.fillIn(level, colony, core, plan, pos);
 			default -> {
 				if (this.reach(pos) && this.breaker.tick(level, pos, true)) {
 					colony.unprotect(pos);
 				}
 			}
 		}
+	}
+
+	/** Fills the fluid at {@code pos} with a filler block such as dirt, fetching one from the core first. */
+	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos) {
+		SimpleContainer inventory = this.bot.getInventory();
+		int filler = findSlot(inventory, BuilderGoal::isFiller);
+		if (filler < 0) {
+			this.fetch(level, colony, core, plan, core.getItem(findSlot(core, BuilderGoal::isFiller)).getItem());
+		} else if (this.reach(pos)) {
+			Item item = inventory.getItem(filler).getItem();
+			BlockState block = Block.byItem(item).defaultBlockState();
+			if (this.isFreeToPlace(level, pos, block)) {
+				this.put(level, pos, block, item);
+			}
+		}
+	}
+
+	/**
+	 * A fluid beside or above the block of clear step {@code step} that holds it standing (see
+	 * {@link BuildPlan.Step#clearing}) and that {@code plan} does not clear itself, such as water
+	 * in the rock beside a mineshaft or in a hall that is dug later: the builder walls it off with
+	 * a filler block, so it cannot flow in. Null if there is none, or no filler at hand.
+	 */
+	private @Nullable BlockPos fluidToWall(ServerLevel level, @Nullable Container core, BuildPlan plan, BuildPlan.Step step) {
+		if (!step.isClear() || !level.getFluidState(step.pos()).isEmpty() || !this.has(core, BuilderGoal::isFiller)) {
+			return null;
+		}
+		Set<BlockPos> cleared = plan.steps().stream().filter(BuildPlan.Step::isClear).map(BuildPlan.Step::pos).collect(Collectors.toSet());
+		for (Direction side : new Direction[] {Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
+			BlockPos beside = step.pos().relative(side);
+			BlockState state = level.getBlockState(beside);
+			if (!state.getFluidState().isEmpty() && state.canBeReplaced() && !cleared.contains(beside)) {
+				return beside;
+			}
+		}
+		return null;
 	}
 
 	/** How {@code step}'s block is cleared with what the bot and the core hold; see {@link BuildPlan.Step#clearing}. */

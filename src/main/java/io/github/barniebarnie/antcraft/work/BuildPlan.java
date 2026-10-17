@@ -14,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -119,19 +120,33 @@ public record BuildPlan(List<Step> steps, List<Batch> batches) {
 			|| state.hasProperty(BlockStateProperties.BED_PART) && state.getValue(BlockStateProperties.BED_PART) == BedPart.HEAD;
 	}
 
-	/** Clear the block at {@code pos} when {@code state} is air, otherwise place {@code state} there. */
-	public record Step(BlockPos pos, BlockState state) {
+	/**
+	 * Clear the block at {@code pos} when {@code state} is air, otherwise place {@code state} there.
+	 * With {@code anySolid}, any block a bot can stand on will do, such as the rock a mineshaft's
+	 * walls and floors are; only air, a fluid or the like is replaced with {@code state}.
+	 */
+	public record Step(BlockPos pos, BlockState state, boolean anySolid) {
 		public static final Codec<Step> CODEC = RecordCodecBuilder.create(i -> i.group(
 			BlockPos.CODEC.fieldOf("pos").forGetter(Step::pos),
-			BlockState.CODEC.optionalFieldOf("state", Blocks.AIR.defaultBlockState()).forGetter(Step::state)
+			BlockState.CODEC.optionalFieldOf("state", Blocks.AIR.defaultBlockState()).forGetter(Step::state),
+			Codec.BOOL.optionalFieldOf("any_solid", false).forGetter(Step::anySolid)
 		).apply(i, Step::new));
 
 		public Step {
 			pos = pos.immutable();
 		}
 
+		public Step(BlockPos pos, BlockState state) {
+			this(pos, state, false);
+		}
+
 		public static Step clear(BlockPos pos) {
 			return new Step(pos, Blocks.AIR.defaultBlockState());
+		}
+
+		/** Keeps a solid block at {@code pos}, filling it with cobblestone if it is open, such as a cave or a pocket of water. */
+		public static Step solid(BlockPos pos) {
+			return new Step(pos, Blocks.COBBLESTONE.defaultBlockState(), true);
 		}
 
 		public boolean isClear() {
@@ -185,6 +200,9 @@ public record BuildPlan(List<Step> steps, List<Batch> batches) {
 
 		/** Whether the block is in place, though a waterlogged one may still lack its water. */
 		public boolean isPlaced(BlockState world) {
+			if (this.anySolid) {
+				return world.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, Direction.UP);
+			}
 			return this.isClear() ? world.isAir() : matches(this.dry(), world);
 		}
 

@@ -441,6 +441,34 @@ class ColonyTest {
 		return colony;
 	}
 
+	/** The open build job for batch {@code batch} of {@link #TWO_LEVELS}. */
+	private static Job batchJob(Colony colony, int batch) {
+		return colony.board().jobs().stream().filter(job -> colony.build(job.id()).equals(Optional.of(TWO_LEVELS.plan().batch(batch)))).findFirst().orElseThrow();
+	}
+
+	@Test
+	void aBlockedMineshaftStairDropsTheLevelsItLeadsToInsteadOfStalling() {
+		Colony colony = halfwayDown();
+		// The stairs from y=62 on down to y=60 run into something no builder can clear.
+		colony.reportBlocked(batchJob(colony, 2).id(), List.of(TWO_LEVELS.stairs().get(3)));
+		Mineshaft shallower = new Mineshaft(TWO_LEVELS.top(), List.of(62), 1, 3, 4);
+		assertEquals(Optional.of(shallower), colony.mineshaft());
+		assertEquals(List.of(shallower.plan()), colony.builds());
+		assertEquals(List.of(), colony.blockedSteps());
+	}
+
+	@Test
+	void aBlockedStepOfAnotherPlanLeavesTheMineshaftAlone() {
+		Colony colony = halfwayDown();
+		BuildPlan other = new BuildPlan(List.of(BuildPlan.Step.clear(TWO_LEVELS.stairs().get(3))));
+		colony.addBuild(other);
+		colony.postBuildJobs();
+		Job job = colony.board().jobs().stream().filter(j -> colony.build(j.id()).equals(Optional.of(other))).findFirst().orElseThrow();
+		colony.reportBlocked(job.id(), List.of(TWO_LEVELS.stairs().get(3)));
+		assertEquals(Optional.of(TWO_LEVELS), colony.mineshaft());
+		assertEquals(List.of(TWO_LEVELS.stairs().get(3)), colony.blockedSteps());
+	}
+
 	@Test
 	void movingTheMineshaftClearsTheOpenBatchesOfTheOldOne() {
 		Colony colony = halfwayDown();

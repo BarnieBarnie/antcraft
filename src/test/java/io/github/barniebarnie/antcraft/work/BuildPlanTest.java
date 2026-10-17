@@ -226,6 +226,26 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void aSolidStepKeepsAnyBlockToStandOnAndFillsAirOrFluidWithCobblestone() {
+		BuildPlan.Step floor = BuildPlan.Step.solid(A);
+		for (BlockState rock : List.of(Blocks.STONE.defaultBlockState(), Blocks.DIRT.defaultBlockState(), Blocks.DEEPSLATE.defaultBlockState())) {
+			assertTrue(floor.isDone(rock), "not done on " + rock);
+			assertFalse(floor.needsClearing(rock), "clears " + rock);
+		}
+		for (BlockState gap : List.of(Blocks.AIR.defaultBlockState(), Blocks.WATER.defaultBlockState(), Blocks.LAVA.defaultBlockState())) {
+			assertFalse(floor.isDone(gap), "done on " + gap);
+			// Placed over, as a player would.
+			assertFalse(floor.needsClearing(gap), "clears " + gap);
+		}
+		assertEquals(Items.COBBLESTONE, floor.item());
+		BuildPlan plan = new BuildPlan(List.of(floor));
+		assertEquals(Map.of(Items.COBBLESTONE, 1), plan.materials(at(world())));
+		assertEquals(Map.of(), plan.materials(at(world(A, Blocks.STONE.defaultBlockState()))));
+		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, plan).getOrThrow();
+		assertEquals(plan, BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+	}
+
+	@Test
 	void survivesCodecRoundTrip() {
 		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, plan()).getOrThrow();
 		assertEquals(plan(), BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());

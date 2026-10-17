@@ -13,8 +13,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import io.github.barniebarnie.antcraft.pathing.WorldView;
+import java.util.HashMap;
+import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -50,7 +54,7 @@ class MineshaftTest {
 				BuildPlan.Step step = steps.get(stair.above(up));
 				assertTrue(step != null && (step.isClear() || step.state().is(Blocks.TORCH)), "no headroom at " + stair.above(up));
 			}
-			assertFalse(steps.containsKey(stair.below()), "the plan digs out the floor of " + stair);
+			assertTrue(steps.get(stair.below()).anySolid(), "the floor of " + stair + " is not kept solid");
 		}
 	}
 
@@ -67,7 +71,7 @@ class MineshaftTest {
 		for (int i = 1; i < SHAFT.stairs().size(); i++) {
 			assertTrue(positions.indexOf(SHAFT.stairs().get(i - 1)) < positions.indexOf(SHAFT.stairs().get(i).above(2)));
 		}
-		assertTrue(positions.stream().allMatch(pos -> pos.getY() >= 6), "dug below the deepest level");
+		assertTrue(SHAFT.plan().steps().stream().filter(BuildPlan.Step::isClear).allMatch(step -> step.pos().getY() >= 6), "dug below the deepest level");
 	}
 
 	@Test
@@ -84,7 +88,8 @@ class MineshaftTest {
 	@Test
 	void torchesEveryFewStairsAndAtEachLanding() {
 		assertEquals(List.of(new BlockPos(0, 10, 0), new BlockPos(0, 6, 0)), SHAFT.torches());
-		assertEquals(Map.of(Items.TORCH, 2, Items.CHEST, 1), SHAFT.plan().materials());
+		// In solid rock the walls and floors are there already.
+		assertEquals(Map.of(Items.TORCH, 2, Items.CHEST, 1), SHAFT.plan().materials(pos -> Blocks.STONE.defaultBlockState()));
 		assertTrue(steps().get(new BlockPos(0, 6, 0)).state().is(Blocks.TORCH));
 	}
 
@@ -256,29 +261,25 @@ class MineshaftTest {
 	void siteBesideTheCoreKeepsClearOfStorageAndField() {
 		BlockPos core = new BlockPos(0, 64, 0);
 		List<Integer> levels = List.of(40);
-		Mineshaft first = Mineshaft.nextTo(core, levels, List.of());
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), ROCK);
 		// Storage was chosen first, right where the shaft would go.
 		StorageArea storage = new StorageArea(first.top().offset(-1, 0, 0));
 		Field field = new Field(core.offset(-4, -1, -4));
-		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(storage.area(), field.area()));
+		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(storage.area(), field.area()), ROCK);
 		assertFalse(shaft.area().intersects(storage.area()), "shaft overlaps storage at " + shaft.top());
 		assertFalse(shaft.area().intersects(field.area()), "shaft overlaps the field at " + shaft.top());
 	}
 
-	/** The positions of a batch's steps. */
+	/** The positions of a batch's steps, but for the walls and floors it keeps solid. */
 	private static Set<BlockPos> batch(Mineshaft shaft, int batch) {
-		return shaft.plan().batch(batch).steps().stream().map(BuildPlan.Step::pos).collect(Collectors.toSet());
+		return shaft.plan().batch(batch).steps().stream().filter(step -> !step.anySolid()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
 	}
 
 	@Test
 	void planIsBatchedPerStairSegmentAndPerHall() {
 		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
 		// Stairs down to y=8, its hall, the stairs on down to y=6, its hall.
-		assertEquals(List.of(
-			new BuildPlan.Batch(0, 9, List.of()),
-			new BuildPlan.Batch(9, 16, List.of(0)),
-			new BuildPlan.Batch(16, 22, List.of(0)),
-			new BuildPlan.Batch(22, 29, List.of(2))), shaft.plan().batches());
+		assertEquals(List.of(List.of(), List.of(0), List.of(0), List.of(2)), shaft.plan().batches().stream().map(BuildPlan.Batch::needs).toList());
 
 		Set<BlockPos> firstStairs = new HashSet<>();
 		shaft.stairs().subList(0, 3).forEach(stair -> IntStream.range(0, 3).forEach(up -> firstStairs.add(stair.above(up))));
@@ -297,5 +298,117 @@ class MineshaftTest {
 		// Once the stairs reach y=8, its hall and the stairs on down can be dug at the same time.
 		assertEquals(List.of(1, 2), plan.ready(Set.of(0)));
 		assertEquals(List.of(1, 3), plan.ready(Set.of(0, 2)));
+	}
+
+	/** Solid rock, but for some fluid and some bedrock. */
+	private static WorldView rock(Predicate<BlockPos> fluid, Predicate<BlockPos> bedrock) {
+		return new WorldView() {
+			@Override
+			public boolean isPassable(BlockPos pos) {
+				return false;
+			}
+
+			@Override
+			public boolean canStandOn(BlockPos pos) {
+				return true;
+			}
+
+			@Override
+			public boolean isHazard(BlockPos pos) {
+				return fluid.test(pos);
+			}
+
+			@Override
+			public float breakTicks(BlockPos pos) {
+				return bedrock.test(pos) ? -1 : 30;
+			}
+		};
+	}
+
+	private static final WorldView ROCK = rock(pos -> false, pos -> false);
+
+	@Test
+	void siteSkipsASpotWhoseColumnHitsFluidOrBedrockAboveTheFirstLevel() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 20);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), ROCK);
+		BlockPos water = first.top().offset(1, -10, 0);
+		Mineshaft second = Mineshaft.nextTo(core, levels, List.of(), rock(water::equals, pos -> false));
+		assertFalse(second.area().isInside(water), "shaft at " + second.top() + " runs into water");
+		BlockPos bedrock = second.top().offset(0, -20, 1);
+		Mineshaft third = Mineshaft.nextTo(core, levels, List.of(), rock(water::equals, bedrock::equals));
+		assertFalse(third.area().isInside(water) || third.area().isInside(bedrock), "shaft at " + third.top() + " runs into water or bedrock");
+		assertEquals(levels, third.levels());
+		// Below the first level the builder walls fluid off, so it does not move the site.
+		BlockPos deep = first.top().offset(0, -30, 0);
+		assertEquals(first, Mineshaft.nextTo(core, levels, List.of(), rock(deep::equals, pos -> false)));
+	}
+
+	@Test
+	void levelsAtOrBelowBedrockInTheColumnAreDropped() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 30, 25, 20);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), ROCK);
+		BlockPos bedrock = first.top().atY(25).offset(1, 0, 1);
+		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(), rock(pos -> false, bedrock::equals));
+		assertEquals(first.top(), shaft.top());
+		assertEquals(List.of(40, 30), shaft.levels());
+		// Bedrock everywhere above the first level: no spot is good, so the first one gets no levels.
+		Mineshaft none = Mineshaft.nextTo(core, List.of(40), List.of(), rock(pos -> false, pos -> pos.getY() == 50));
+		assertEquals(first.top(), none.top());
+		assertEquals(List.of(), none.levels());
+	}
+
+	/** Every block the plan digs out, to stand or walk in. */
+	private static Set<BlockPos> dug(Mineshaft shaft) {
+		Set<BlockPos> dug = new HashSet<>();
+		shaft.stairs().forEach(stair -> IntStream.range(0, 3).forEach(up -> dug.add(stair.above(up))));
+		shaft.levels().forEach(level -> shaft.hall(level).forEach(cell -> dug.addAll(List.of(cell, cell.above()))));
+		return dug;
+	}
+
+	@Test
+	void wallsFloorsAndCeilingsOfTheStairsAndHallsAreKeptSolidBeforeTheyAreDug() {
+		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
+		List<BuildPlan.Step> steps = shaft.plan().steps();
+		Map<BlockPos, Integer> index = new HashMap<>();
+		for (int i = 0; i < steps.size(); i++) {
+			index.put(steps.get(i).pos(), i);
+		}
+		Set<BlockPos> dug = dug(shaft);
+		Set<BlockPos> branches = new HashSet<>();
+		Set<BlockPos> open = new HashSet<>();
+		for (int level : shaft.levels()) {
+			shaft.branches(level).forEach(branch -> branches.addAll(branch.cells()));
+			open.add(shaft.landingChest(level));
+			// Past the hall's end, where the hall may be carried on.
+			List<BlockPos> hall = shaft.hall(level);
+			open.add(hall.getLast().offset(hall.getLast().subtract(hall.get(hall.size() - 2))));
+		}
+		for (BlockPos cell : dug) {
+			for (Direction side : Direction.values()) {
+				BlockPos wall = cell.relative(side);
+				if (dug.contains(wall) || branches.contains(wall) || open.contains(wall) || wall.getY() >= TOP.getY()) {
+					continue;
+				}
+				assertTrue(index.containsKey(wall) && steps.get(index.get(wall)).anySolid(), "not kept solid beside " + cell + ": " + wall);
+				assertTrue(index.get(wall) < index.get(cell), "wall " + wall + " goes up after " + cell + " is dug");
+			}
+		}
+		// Miners dig the branches; the entrance stays open.
+		assertTrue(steps.stream().noneMatch(step -> branches.contains(step.pos())), "the plan walls off a branch");
+		assertTrue(steps.stream().filter(BuildPlan.Step::anySolid).allMatch(step -> step.pos().getY() < TOP.getY()), "walls above ground");
+	}
+
+	@Test
+	void aBlockedStairDropsTheLevelsBelowItAndABlockedHallOnlyItsLevel() {
+		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6, 4), 1, 3, 4);
+		// On the way from y=8 down to y=6.
+		BlockPos stair = shaft.stairs().get(3);
+		assertEquals(new Mineshaft(TOP, List.of(8), 1, 3, 4), shaft.reachable(List.of(stair)));
+		assertEquals(List.of(8), shaft.reachable(List.of(stair.below())).levels());
+		assertEquals(List.of(8, 4), shaft.reachable(List.of(shaft.hall(6).get(1))).levels());
+		assertEquals(List.of(), shaft.reachable(List.of(shaft.stairs().get(1))).levels());
+		assertEquals(shaft, shaft.reachable(List.of(new BlockPos(100, 0, 100))));
 	}
 }
