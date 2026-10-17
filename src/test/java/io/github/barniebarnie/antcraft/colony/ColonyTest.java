@@ -243,6 +243,49 @@ class ColonyTest {
 		assertEquals(List.of(PLACED), colony.blockedSteps());
 	}
 
+	/** Four one-step batches: 1 needs 0, 2 needs 1, and 3 needs none. */
+	private static BuildPlan fourBatches() {
+		return new BuildPlan(
+			List.of(BuildPlan.Step.clear(new BlockPos(1, 64, 1)), BuildPlan.Step.clear(new BlockPos(2, 64, 1)),
+				BuildPlan.Step.clear(new BlockPos(3, 64, 1)), BuildPlan.Step.clear(new BlockPos(4, 64, 1))),
+			List.of(new BuildPlan.Batch(0, 1, List.of()), new BuildPlan.Batch(1, 2, List.of(0)),
+				new BuildPlan.Batch(2, 3, List.of(1)), new BuildPlan.Batch(3, 4, List.of())));
+	}
+
+	/** The open build job for batch {@code batch} of {@code plan}. */
+	private static Job batchJob(Colony colony, BuildPlan plan, int batch) {
+		return colony.board().jobs().stream().filter(job -> colony.build(job.id()).equals(Optional.of(plan.batch(batch)))).findFirst().orElseThrow();
+	}
+
+	@Test
+	void aBlockedBatchHoldsUpOnlyTheBatchesThatNeedIt() {
+		Colony colony = colony();
+		BuildPlan plan = fourBatches();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		// Both worked through as far as they go, so batch 2 may start too.
+		colony.batchWaiting(batchJob(colony, plan, 0).id(), Colony.Wait.ITEMS);
+		colony.batchWaiting(batchJob(colony, plan, 1).id(), Colony.Wait.ITEMS);
+		assertEquals(Set.of(0, 1, 2, 3).stream().map(plan::batch).collect(Collectors.toSet()), openBatches(colony));
+
+		Job first = batchJob(colony, plan, 0);
+		colony.board().complete(first.id());
+		colony.reportBlocked(first.id(), List.of(new BlockPos(1, 64, 1)));
+		colony.postBuildJobs();
+		// Batch 1 needs the blocked batch, and batch 2 needs batch 1; batch 3 needs neither.
+		assertEquals(Set.of(plan.batch(3)), openBatches(colony));
+		Job last = claim(colony, ALICE);
+		assertEquals(plan.batch(3), colony.build(last.id()).orElseThrow());
+		assertEquals(List.of(plan), colony.builds(), "plan with a batch still to do left out");
+		colony.finishBatch(last.id());
+		colony.board().complete(last.id());
+		assertTrue(colony.builds().isEmpty(), "plan left with only blocked batches still counted as a build under way");
+
+		colony.recheckBlocked(world(Blocks.STONE), (batch, step) -> true);
+		colony.postBuildJobs();
+		assertEquals(Set.of(0, 1, 2).stream().map(plan::batch).collect(Collectors.toSet()), openBatches(colony));
+	}
+
 	@Test
 	void recheckKeepsStepsThatAreStillBlocked() {
 		Colony colony = colony();

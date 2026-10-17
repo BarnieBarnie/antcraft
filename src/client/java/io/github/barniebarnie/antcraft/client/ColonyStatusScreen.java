@@ -283,6 +283,15 @@ public class ColonyStatusScreen extends Screen {
 			String key = build.mineshaft() ? "screen.antcraft.colony_status.build_mineshaft"
 				: build.terraform() ? "screen.antcraft.colony_status.build_terraform" : "screen.antcraft.colony_status.build";
 			lines.add(new Line(Component.translatable(key, build.target().toShortString(), build.left(), build.steps()), WHITE));
+			// A plan of one batch says it all on its own line.
+			for (int i = 0; build.batches().size() > 1 && i < build.batches().size(); i++) {
+				ColonyStatus.Batch batch = build.batches().get(i);
+				if (batch.blocked()) {
+					lines.add(new Line(Component.translatable("screen.antcraft.colony_status.batch_blocked", i + 1, batch.left(), batch.steps()), RED));
+				} else {
+					lines.add(new Line(Component.translatable("screen.antcraft.colony_status.batch", i + 1, batch.left(), batch.steps()), GREY));
+				}
+			}
 		}
 		if (!status.blocked().isEmpty()) {
 			Component blocked = list(status.blocked().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());

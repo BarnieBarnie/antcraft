@@ -235,14 +235,42 @@ public class Colony {
 		return builds;
 	}
 
-	/** Build plans the colony's builders still have to carry out, in the order they were added; plans waiting on blocked steps are left out. */
+	/**
+	 * Build plans the colony's builders still have to carry out, in the order they were added; plans
+	 * whose batches are all done or wait on blocked steps (see {@link #blockedBatches}) are left out.
+	 */
 	public List<BuildPlan> builds() {
-		return this.builds.entrySet().stream().filter(e -> !this.isBlocked(e.getKey())).map(Map.Entry::getValue).toList();
+		return this.builds.entrySet().stream().filter(e -> this.hasWorkLeft(e.getKey(), e.getValue())).map(Map.Entry::getValue).toList();
 	}
 
-	/** Whether a batch of the plan with id {@code plan} has blocked steps. */
-	private boolean isBlocked(UUID plan) {
-		return this.blockedSteps.stream().anyMatch(blocked -> this.planOf(blocked.plan()).equals(plan));
+	/** Whether a batch of the plan with id {@code id} is neither done nor waiting on blocked steps. */
+	private boolean hasWorkLeft(UUID id, BuildPlan plan) {
+		Set<Integer> held = new HashSet<>(this.blockedBatches(id, plan));
+		held.addAll(this.batches(id, plan, BatchState.DONE));
+		return held.size() < plan.batches().size();
+	}
+
+	/**
+	 * The batches of the plan with id {@code id} that wait on blocked steps, by index: those with
+	 * blocked steps of their own, and those that need such a batch, directly or through others.
+	 */
+	private Set<Integer> blockedBatches(UUID id, BuildPlan plan) {
+		Set<UUID> jobs = new HashSet<>();
+		this.blockedSteps.forEach(blocked -> jobs.add(blocked.plan()));
+		Set<Integer> blocked = new HashSet<>();
+		// A batch needs only batches before it, so one pass in order finds every batch held up.
+		for (int i = 0; i < plan.batches().size(); i++) {
+			if (jobs.contains(batchId(id, i)) || plan.batches().get(i).needs().stream().anyMatch(blocked::contains)) {
+				blocked.add(i);
+			}
+		}
+		return blocked;
+	}
+
+	/** {@link #blockedBatches(UUID, BuildPlan)} of {@code plan}, which the colony builds; none if it does not. */
+	Set<Integer> blockedBatches(BuildPlan plan) {
+		return this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).findFirst()
+			.map(e -> this.blockedBatches(e.getKey(), e.getValue())).orElse(Set.of());
 	}
 
 	/** A batch of a plan, by the plan's id and the batch's index. */
@@ -361,14 +389,13 @@ public class Colony {
 
 	/**
 	 * Posts a build job for each batch whose needed batches are done or waiting, a dig job for a {@link BuildPlan.Batch#dig} batch, and drops open jobs of batches
-	 * that are gone, done, or of a plan that is blocked.
+	 * that are gone, done, or wait on blocked steps (see {@link #blockedBatches}).
 	 */
 	public void postBuildJobs() {
 		Set<UUID> ready = new HashSet<>();
 		this.builds.forEach((id, plan) -> {
-			if (!this.isBlocked(id)) {
-				this.ready(id, plan).forEach(i -> ready.add(batchId(id, i)));
-			}
+			Set<Integer> blocked = this.blockedBatches(id, plan);
+			this.ready(id, plan).stream().filter(i -> !blocked.contains(i)).forEach(i -> ready.add(batchId(id, i)));
 		});
 		this.board.removeOpenIf(job -> isBuildJob(job) && !ready.contains(job.id()));
 		this.builds.forEach((id, plan) -> this.ready(id, plan).stream()
@@ -428,8 +455,9 @@ public class Colony {
 	}
 
 	/**
-	 * Records the steps of the batch of build job {@code job} that a builder cannot do; its whole
-	 * plan waits without jobs until a recheck frees it. The mineshaft does not wait: it drops the
+	 * Records the steps of the batch of build job {@code job} that a builder cannot do; the batch,
+	 * and the batches that need it, wait without jobs until a recheck frees it, while the plan's
+	 * other batches go on. The mineshaft does not wait: it drops the
 	 * levels the steps keep builders from (see {@link Mineshaft#reachable}) and goes on without them.
 	 */
 	public void reportBlocked(UUID job, Collection<BlockPos> steps) {
@@ -447,8 +475,8 @@ public class Colony {
 
 	/**
 	 * Drops blocked steps whose plan is gone, and those that are done or that {@code workable},
-	 * given the step's batch and the step, says a bot could do now. A plan with such a step gets
-	 * all its blocked steps dropped, so it gets jobs again and its bots report whatever is still
+	 * given the step's batch and the step, says a bot could do now. A batch with such a step gets
+	 * all its blocked steps dropped, so it gets a job again and its bot reports whatever is still
 	 * blocked. {@code world} gives null where it cannot tell, such as in unloaded chunks.
 	 */
 	public void recheckBlocked(Function<BlockPos, @Nullable BlockState> world, BiPredicate<BuildPlan, BuildPlan.Step> workable) {
@@ -458,10 +486,10 @@ public class Colony {
 			Optional<BuildPlan.Step> step = batch.flatMap(plan -> plan.steps().stream().filter(s -> s.pos().equals(blocked.pos())).findFirst());
 			BlockState state = world.apply(blocked.pos());
 			if (step.isEmpty() || state != null && (step.get().isDone(state) || workable.test(batch.get(), step.get()))) {
-				freed.add(this.planOf(blocked.plan()));
+				freed.add(blocked.plan());
 			}
 		}
-		if (this.blockedSteps.removeIf(blocked -> freed.contains(this.planOf(blocked.plan())))) {
+		if (this.blockedSteps.removeIf(blocked -> freed.contains(blocked.plan()))) {
 			this.lastSurvey = -1;
 		}
 	}

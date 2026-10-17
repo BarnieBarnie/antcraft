@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -99,11 +100,18 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 			ITEM_COUNTS, Order::toGather, ITEM_COUNTS, Order::missing, Order::new);
 	}
 
-	/** A build plan with how many of its steps are left, and whether it is the mineshaft or an area to level. */
-	public record Build(BlockPos target, int left, int steps, boolean mineshaft, boolean terraform) {
+	/** A batch of a build plan with how many of its steps are left, and whether it waits on blocked steps, its own or those of a batch it needs. */
+	public record Batch(int left, int steps, boolean blocked) {
+		static final StreamCodec<ByteBuf, Batch> STREAM_CODEC = StreamCodec.composite(
+			ByteBufCodecs.VAR_INT, Batch::left, ByteBufCodecs.VAR_INT, Batch::steps, ByteBufCodecs.BOOL, Batch::blocked, Batch::new);
+	}
+
+	/** A build plan with how many of its steps are left, whether it is the mineshaft or an area to level, and its batches in order. */
+	public record Build(BlockPos target, int left, int steps, boolean mineshaft, boolean terraform, List<Batch> batches) {
 		static final StreamCodec<ByteBuf, Build> STREAM_CODEC = StreamCodec.composite(
 			BlockPos.STREAM_CODEC, Build::target, ByteBufCodecs.VAR_INT, Build::left, ByteBufCodecs.VAR_INT, Build::steps,
-			ByteBufCodecs.BOOL, Build::mineshaft, ByteBufCodecs.BOOL, Build::terraform, Build::new);
+			ByteBufCodecs.BOOL, Build::mineshaft, ByteBufCodecs.BOOL, Build::terraform, Batch.STREAM_CODEC.apply(ByteBufCodecs.list()), Build::batches,
+			Build::new);
 	}
 
 	// Here, not in Bot: Bot is built before ColonyStatus is loaded, and would see this class's codecs half made.
@@ -153,6 +161,11 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 	/** Where the jobs of {@code type} that bots gave up on are. */
 	public List<BlockPos> givenUp(JobType type) {
 		return this.givenUp.stream().filter(job -> job.type() == type).map(GivenUp::target).toList();
+	}
+
+	/** How many of {@code steps} the world does not match yet. */
+	private static int left(List<BuildPlan.Step> steps, Function<BlockPos, BlockState> world) {
+		return (int) steps.stream().filter(step -> !step.isDone(world.apply(step.pos()))).count();
 	}
 
 	private static int total(Map<?, Integer> counts) {
@@ -239,9 +252,15 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 
 		List<Build> builds = new ArrayList<>();
 		for (BuildPlan plan : colony.builds()) {
-			int left = (int) plan.steps().stream().filter(step -> !step.isDone(world.apply(step.pos()))).count();
+			Set<Integer> blocked = colony.blockedBatches(plan);
+			List<Batch> batches = new ArrayList<>();
+			for (int i = 0; i < plan.batches().size(); i++) {
+				List<BuildPlan.Step> steps = plan.batch(i).steps();
+				batches.add(new Batch(left(steps, world), steps.size(), blocked.contains(i)));
+			}
 			boolean mineshaft = colony.mineshaft().map(shaft -> shaft.plan().equals(plan)).orElse(false);
-			builds.add(new Build(plan.target(), left, plan.steps().size(), mineshaft, plan.kind() == BuildPlan.Kind.TERRAFORM));
+			builds.add(new Build(plan.target(), left(plan.steps(), world), plan.steps().size(), mineshaft, plan.kind() == BuildPlan.Kind.TERRAFORM,
+				batches));
 		}
 
 		StorageState storage = roles.getOrDefault(BotRole.HAULER, 0) == 0 ? StorageState.NO_HAULER

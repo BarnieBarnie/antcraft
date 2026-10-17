@@ -611,6 +611,36 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * One builder finds its batch blocked by bedrock while the other digs out dirt for a batch that
+	 * does not need it; the batch after the dirt is posted and built all the same, while the one
+	 * after the bedrock waits.
+	 */
+	@GameTest(maxTicks = 600)
+	public void aBlockedBatchLeavesTheBatchesThatDoNotNeedItToBeBuilt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
+		helper.setBlock(5, 1, 3, Blocks.DIRT);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))),
+			step(helper, 6, 1, 6, COBBLE),
+			BuildPlan.Step.clear(helper.absolutePos(new BlockPos(5, 1, 3))),
+			step(helper, 5, 1, 5, COBBLE)),
+			List.of(new BuildPlan.Batch(0, 1, List.of()), new BuildPlan.Batch(1, 2, List.of(0)),
+				new BuildPlan.Batch(2, 3, List.of()), new BuildPlan.Batch(3, 4, List.of(2)))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, BotRole.BUILDER, 1, 5);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(5, 1, 3));
+			assertState(helper, 5, 1, 5, COBBLE);
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(6, 1, 6));
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "blocked step not reported: " + colony.blockedSteps());
+			helper.assertTrue(colony.builds().isEmpty(), "plan left with only blocked batches still listed");
+		});
+	}
+
 	/** A door whose upper half would go into bedrock cannot be placed, so it is reported like a step behind bedrock. */
 	@GameTest(maxTicks = 300)
 	public void reportsADoorWhoseUpperHalfIsBedrock(GameTestHelper helper) {

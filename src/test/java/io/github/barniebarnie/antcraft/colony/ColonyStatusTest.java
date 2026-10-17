@@ -135,9 +135,32 @@ class ColonyStatusTest {
 	void summarisesBuildsAndBlockedSteps() {
 		ColonyStatus status = status();
 		assertEquals(List.of(
-			new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false, false),
-			new ColonyStatus.Build(new BlockPos(12, 64, 12), 1, 1, false, true)), status.builds());
+			new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false, false, List.of(new ColonyStatus.Batch(1, 2, false))),
+			new ColonyStatus.Build(new BlockPos(12, 64, 12), 1, 1, false, true, List.of(new ColonyStatus.Batch(1, 1, false)))), status.builds());
 		assertEquals(List.of(new BlockPos(3, 64, 3)), status.blocked());
+	}
+
+	@Test
+	void reportsProgressPerBatchAndWhichWaitOnBlockedSteps() {
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20, Map.of(), Optional.empty(), List.of(),
+			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		// Batch 0 has its first block placed; batch 2 needs batch 1, which a builder found blocked.
+		BuildPlan plan = new BuildPlan(List.of(
+			new BuildPlan.Step(new BlockPos(10, 64, 10), Blocks.STONE.defaultBlockState()),
+			new BuildPlan.Step(new BlockPos(10, 65, 10), Blocks.STONE.defaultBlockState()),
+			new BuildPlan.Step(new BlockPos(11, 65, 10), Blocks.STONE.defaultBlockState()),
+			new BuildPlan.Step(new BlockPos(12, 65, 10), Blocks.STONE.defaultBlockState())),
+			List.of(new BuildPlan.Batch(0, 2, List.of()), new BuildPlan.Batch(2, 3, List.of()), new BuildPlan.Batch(3, 4, List.of(1))));
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		Job second = colony.board().jobs().stream().filter(job -> colony.build(job.id()).equals(Optional.of(plan.batch(1)))).findFirst().orElseThrow();
+		colony.board().complete(second.id());
+		colony.reportBlocked(second.id(), List.of(new BlockPos(11, 65, 10)));
+
+		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false,
+			pos -> pos.getY() == 64 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), 1, false);
+		assertEquals(List.of(new ColonyStatus.Build(new BlockPos(10, 64, 10), 3, 4, false, false, List.of(
+			new ColonyStatus.Batch(1, 2, false), new ColonyStatus.Batch(1, 1, true), new ColonyStatus.Batch(1, 1, true)))), status.builds());
 	}
 
 	/** Given-up jobs are listed, not counted as open work. */
