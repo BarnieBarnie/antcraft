@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Either;
 import java.nio.charset.StandardCharsets;
@@ -104,27 +105,57 @@ public class Colony {
 		).apply(i, Blocked::new));
 	}
 
+	/*
+	 * The saved fields come in groups, since one RecordCodecBuilder takes at most 16. Each group is a
+	 * MapCodec over the same map, so every field keeps its own top-level key: saves stay flat, and
+	 * saves from before the split load unchanged. A new field goes in the group it belongs with, or
+	 * in a new group.
+	 */
+
+	/** Who and where the colony is, and its jobs. */
+	private record Basics(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius) {
+		static final MapCodec<Basics> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+			UUIDUtil.CODEC.fieldOf("id").forGetter(Basics::id),
+			BlockPos.CODEC.fieldOf("core").forGetter(Basics::core),
+			UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(Basics::members),
+			// Lenient: a new board per colony, never a shared default. Jobs of a type that no longer exists (the quarry's mine_layer) drop the list; the next survey posts them again.
+			JobBoard.CODEC.lenientOptionalFieldOf("jobs").xmap(jobs -> jobs.orElseGet(JobBoard::new), Optional::of).forGetter(Basics::board),
+			Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Basics::radius)
+		).apply(i, Basics::new));
+	}
+
+	/** What the colony wants: orders and stock targets. */
+	private record Wants(Map<Item, Integer> orders, List<StockTarget> stock, Map<Item, Integer> buildOrders,
+			Map<OrderPurpose, Map<Item, Integer>> systemOrders) {
+		static final MapCodec<Wants> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+			ITEM_COUNTS.optionalFieldOf("orders", Map.of()).forGetter(Wants::orders),
+			// Colonies saved before stock targets existed get the defaults.
+			StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Wants::stock),
+			// Saves from before storage orders hold only the build part, under its own key; it is never written.
+			ITEM_COUNTS.optionalFieldOf("build_orders", Map.of()).forGetter(Wants::buildOrders),
+			SYSTEM_ORDERS.optionalFieldOf("system_orders", Map.of()).forGetter(Wants::systemOrders)
+		).apply(i, Wants::new));
+	}
+
+	/** What the colony builds and works: the mineshaft, build plans and their progress, the field and the storage area. */
+	private record Works(Optional<Mineshaft> mineshaft, Map<UUID, BuildPlan> builds, List<Placed> placed, List<Blocked> blockedSteps,
+			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage) {
+		static final MapCodec<Works> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+			// Old saves may still have a "quarry"; it is ignored.
+			Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Works::mineshaft),
+			BUILDS.optionalFieldOf("builds", Map.of()).forGetter(Works::builds),
+			PROTECTED.optionalFieldOf("protected", List.of()).forGetter(Works::placed),
+			BLOCKED.optionalFieldOf("blocked_steps", List.of()).forGetter(Works::blockedSteps),
+			Codec.unboundedMap(UUIDUtil.STRING_CODEC, BatchState.CODEC).optionalFieldOf("batches", Map.of()).forGetter(Works::batchStates),
+			Field.CODEC.optionalFieldOf("field").forGetter(Works::field),
+			StorageArea.CODEC.optionalFieldOf("storage").forGetter(Works::storage)
+		).apply(i, Works::new));
+	}
+
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
-		UUIDUtil.CODEC.fieldOf("id").forGetter(Colony::id),
-		BlockPos.CODEC.fieldOf("core").forGetter(Colony::core),
-		UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(c -> List.copyOf(c.members)),
-		// Lenient: a new board per colony, never a shared default. Jobs of a type that no longer exists (the quarry's mine_layer) drop the list; the next survey posts them again.
-		JobBoard.CODEC.lenientOptionalFieldOf("jobs").xmap(jobs -> jobs.orElseGet(JobBoard::new), Optional::of).forGetter(Colony::board),
-		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
-		ITEM_COUNTS.optionalFieldOf("orders", Map.of()).forGetter(Colony::orders),
-		// Old saves may still have a "quarry"; it is ignored.
-		Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Colony::mineshaft),
-		// Colonies saved before stock targets existed get the defaults.
-		StockTarget.CODEC.listOf().optionalFieldOf("stock", DefaultStock.TARGETS).forGetter(Colony::stockTargets),
-		BUILDS.optionalFieldOf("builds", Map.of()).forGetter(c -> c.builds),
-		PROTECTED.optionalFieldOf("protected", List.of()).forGetter(Colony::placed),
-		Field.CODEC.optionalFieldOf("field").forGetter(Colony::field),
-		StorageArea.CODEC.optionalFieldOf("storage").forGetter(Colony::storage),
-		// Saves from before storage orders hold only the build part, under its own key.
-		ITEM_COUNTS.optionalFieldOf("build_orders", Map.of()).forGetter(c -> Map.of()),
-		BLOCKED.optionalFieldOf("blocked_steps", List.of()).forGetter(c -> c.blockedSteps),
-		SYSTEM_ORDERS.optionalFieldOf("system_orders", Map.of()).forGetter(c -> c.systemOrders),
-		Codec.unboundedMap(UUIDUtil.STRING_CODEC, BatchState.CODEC).optionalFieldOf("batches", Map.of()).forGetter(c -> c.batchStates)
+		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
+		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
+		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -159,6 +190,12 @@ public class Colony {
 	long lastSurvey = -1;
 	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
 	private long lastGivenUpRecheck = -1;
+
+	private Colony(Basics basics, Wants wants, Works works) {
+		this(basics.id(), basics.core(), basics.members(), basics.board(), basics.radius(), wants.orders(), works.mineshaft(), wants.stock(),
+			works.builds(), works.placed(), works.field(), works.storage(), wants.buildOrders(), works.blockedSteps(), wants.systemOrders(),
+			works.batchStates());
+	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
 			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,

@@ -8,8 +8,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.Terraform;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,6 +23,7 @@ import java.util.stream.Collectors;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -552,6 +556,73 @@ class ColonyTest {
 		assertTrue(loaded.hasTerraform());
 		loaded.postBuildJobs();
 		assertEquals(Set.of(JobType.CLEAR_AREA), openTypes(loaded));
+	}
+
+	private static final UUID FIRST_PLAN = new UUID(0, 7);
+	private static final UUID SECOND_PLAN = new UUID(0, 8);
+
+	/** A colony with something in every saved field. */
+	private static Colony everyField() {
+		JobBoard board = new JobBoard();
+		board.post(new UUID(0, 9), JobType.BUILD, new BlockPos(5, 64, 5));
+		board.claim(new UUID(0, 2), Set.of(JobType.BUILD), BlockPos.ZERO, 100);
+		Map<UUID, BuildPlan> builds = new LinkedHashMap<>();
+		builds.put(FIRST_PLAN, plan(Blocks.COBBLESTONE));
+		builds.put(SECOND_PLAN, new BuildPlan(List.of(new BuildPlan.Step(new BlockPos(6, 64, 5), Blocks.OAK_PLANKS.defaultBlockState()))));
+		return new Colony(new UUID(0, 1), new BlockPos(0, 64, 0), List.of(new UUID(0, 2), new UUID(0, 3)), board, 40,
+			Map.of(Items.OAK_STAIRS, 5), Optional.of(SHAFT),
+			List.of(StockTarget.of(Items.TORCH, 16), StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)), builds,
+			List.of(new Colony.Placed(new BlockPos(1, 64, 1), Optional.of(Blocks.OAK_PLANKS))), Optional.of(new Field(new BlockPos(10, 64, 10))),
+			Optional.of(new StorageArea(new BlockPos(-5, 64, -5))), Map.of(Items.TORCH, 1),
+			List.of(new Colony.Blocked(SECOND_PLAN, new BlockPos(6, 64, 5))),
+			Map.of(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_STAIRS, 3), Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 2)),
+			Map.of(FIRST_PLAN, Colony.BatchState.WAITING));
+	}
+
+	/** {@link #everyField} as saved before the codec was split into groups: every field flat at the top level. */
+	private static final String FLAT_SAVE = """
+		{"id":[0,0,0,1],"core":[0,64,0],"members":[[0,0,0,2],[0,0,0,3]],
+		"jobs":[{"id":[0,0,0,9],"type":"build","target":[5,64,5],"claimed_by":[0,0,0,2],"heartbeat":100}],
+		"radius":40,"orders":{"minecraft:oak_stairs":5},
+		"mineshaft":{"top":[2,64,2],"levels":[60],"branches_per_side":1,"branch_length":3,"torch_spacing":4},
+		"stock":[{"match":"minecraft:torch","count":16},{"match":"#minecraft:pickaxes","count":2,"make":["minecraft:stone_pickaxe"]}],
+		"builds":{"00000000-0000-0000-0000-000000000007":{"steps":[{"pos":[5,64,5],"state":"minecraft:cobblestone"}],"batches":[{"from":0,"to":1}]},
+			"00000000-0000-0000-0000-000000000008":{"steps":[{"pos":[6,64,5],"state":"minecraft:oak_planks"}],"batches":[{"from":0,"to":1}]}},
+		"protected":[{"pos":[1,64,1],"block":"minecraft:oak_planks"}],"field":[10,64,10],"storage":[-5,64,-5],
+		"blocked_steps":[{"plan":"00000000-0000-0000-0000-000000000008","pos":[6,64,5]}],
+		"system_orders":{"build":{"minecraft:oak_stairs":3,"minecraft:torch":1},"storage":{"minecraft:chest":2}},
+		"batches":{"00000000-0000-0000-0000-000000000007":"waiting"}}
+		""";
+
+	private static void assertSameAsEveryField(Colony loaded) {
+		Colony expected = everyField();
+		assertEquals(expected.id(), loaded.id());
+		assertEquals(expected.core(), loaded.core());
+		assertEquals(expected.members(), loaded.members());
+		assertEquals(expected.board().jobs(), loaded.board().jobs());
+		assertEquals(expected.radius(), loaded.radius());
+		assertEquals(expected.orders(), loaded.orders());
+		assertEquals(expected.mineshaft(), loaded.mineshaft());
+		assertEquals(expected.stockTargets(), loaded.stockTargets());
+		assertEquals(expected.builds(), loaded.builds());
+		assertEquals(expected.field(), loaded.field());
+		assertEquals(expected.storage(), loaded.storage());
+		// What is left (protected blocks, blocked steps, system orders, batch states) is compared through the save itself.
+		assertEquals(Colony.CODEC.encodeStart(JsonOps.INSTANCE, expected).getOrThrow(), Colony.CODEC.encodeStart(JsonOps.INSTANCE, loaded).getOrThrow());
+	}
+
+	@Test
+	void aFlatSaveFromBeforeTheCodecWasSplitLoadsTheSameColony() {
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(FLAT_SAVE)).getOrThrow();
+		assertSameAsEveryField(loaded);
+		// And it saves in the same flat layout, so older versions of the mod still read it.
+		assertEquals(JsonParser.parseString(FLAT_SAVE), Colony.CODEC.encodeStart(JsonOps.INSTANCE, loaded).getOrThrow());
+	}
+
+	@Test
+	void everyFieldSurvivesSaveAndLoad() {
+		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, everyField()).getOrThrow();
+		assertSameAsEveryField(Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
 	}
 
 	@Test
