@@ -146,7 +146,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		});
 		this.follower.setPlaceListener(pos -> {
 			if (TREE_WORK.contains(this.state) || this.scaffoldCleanup.isRetrying() || this.resumeTree) {
-				this.placed().add(pos);
+				this.bot.addScaffold(pos, BotRole.LUMBERJACK);
 			}
 		});
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
@@ -176,7 +176,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * so it is taken down in the next cleanup. Lets game tests set up leftover scaffolding.
 	 */
 	public void adoptScaffold(BlockPos pos) {
-		this.placed().add(pos.immutable());
+		this.bot.addScaffold(pos, BotRole.LUMBERJACK);
 	}
 
 	/** Changes how many scaffold blocks it takes from home at a time. Lets game tests run it short of scaffold. */
@@ -185,13 +185,14 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	/**
-	 * Also runs for a bot that is no longer a lumberjack but still has scaffolding up, so it takes
-	 * that down before its new role's work. This goal is registered before the other role goals at
-	 * the same priority, so it gets the bot first, and they cannot take over while it runs.
+	 * Also runs for a bot that still has scaffolding up from an earlier role, a lumberjack's or
+	 * another's, so it takes that down before its new role's work. Scaffold the current role placed,
+	 * such as a builder's, is left to that role's goal. This goal is registered before the other role
+	 * goals at the same priority, so it gets the bot first, and they cannot take over while it runs.
 	 */
 	@Override
 	public boolean canUse() {
-		return (this.isLumberjack() || !this.placed().isEmpty()) && this.bot.getWalkTarget() == null;
+		return (this.isLumberjack() || this.bot.hasLeftoverScaffold()) && this.bot.getWalkTarget() == null;
 	}
 
 	private boolean isLumberjack() {

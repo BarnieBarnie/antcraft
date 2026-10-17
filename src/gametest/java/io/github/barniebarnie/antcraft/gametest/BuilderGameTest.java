@@ -850,6 +850,94 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A builder sent to a walk target mid-pillar goes back to its column on its own scaffold: no
+	 * other goal takes the pillar down in between, and it takes it down itself once the column stands.
+	 */
+	@GameTest(maxTicks = 1200)
+	public void interruptedBuilderResumesOnItsOwnScaffold(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
+		colony.addBuild(column(helper, 6, COBBLE));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		Set<BlockPos> pillar = new HashSet<>();
+		helper.onEachTick(() -> {
+			if (pillar.isEmpty() && builder.getScaffold().size() >= 1) {
+				pillar.addAll(builder.getScaffold());
+				// Interrupted: walk to where it stands, which clears the target again right away.
+				builder.setWalkTarget(builder.blockPosition());
+			}
+			assertScaffoldKeptUntilColumnStands(helper, pillar);
+		});
+		helper.succeedWhen(() -> assertColumnBuiltWithoutScaffoldLeft(helper, colony, builder, pillar));
+	}
+
+	/** A builder saved and loaded mid-pillar goes on from its scaffold, and takes it down itself once the column stands. */
+	@GameTest(maxTicks = 1200)
+	public void reloadedBuilderResumesOnItsOwnScaffold(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
+		colony.addBuild(column(helper, 6, COBBLE));
+		AntBot[] builder = {member(helper, colony, BotRole.BUILDER, 1, 4)};
+
+		Set<BlockPos> pillar = new HashSet<>();
+		helper.onEachTick(() -> {
+			if (pillar.isEmpty() && builder[0].getScaffold().size() >= 1) {
+				pillar.addAll(builder[0].getScaffold());
+				builder[0] = reload(helper, builder[0]);
+				helper.assertTrue(builder[0].getScaffold().equals(pillar), "scaffold not loaded: " + builder[0].getScaffold());
+			}
+			assertScaffoldKeptUntilColumnStands(helper, pillar);
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(builder[0].isAlive(), "reloaded bot is gone");
+			assertColumnBuiltWithoutScaffoldLeft(helper, colony, builder[0], pillar);
+		});
+	}
+
+	/** A builder made a farmer with its scaffold still up takes that scaffold down, as a former lumberjack does. */
+	@GameTest(maxTicks = 600)
+	public void takesBuilderScaffoldDownAfterRoleChange(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = member(helper, colony, BotRole.BUILDER, 4, 4);
+		for (int y = 1; y <= 2; y++) {
+			helper.setBlock(5, y, 5, Blocks.DIRT);
+			bot.addScaffold(helper.absolutePos(new BlockPos(5, y, 5)), BotRole.BUILDER);
+		}
+		bot.setRole(BotRole.FARMER);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
+			helper.assertBlockNotPresent(Blocks.DIRT, 5, 1, 5);
+			helper.assertBlockNotPresent(Blocks.DIRT, 5, 2, 5);
+		});
+	}
+
+	/** Fails once a block of {@code pillar} is gone while the column's top block is not in place. */
+	private static void assertScaffoldKeptUntilColumnStands(GameTestHelper helper, Set<BlockPos> pillar) {
+		if (helper.getBlockState(new BlockPos(5, 6, 5)).is(Blocks.COBBLESTONE)) {
+			return;
+		}
+		for (BlockPos pos : pillar) {
+			if (!helper.getLevel().getBlockState(pos).is(Blocks.DIRT)) {
+				helper.fail("scaffold at " + helper.relativePos(pos).toShortString() + " taken down before the column stands");
+			}
+		}
+	}
+
+	private static void assertColumnBuiltWithoutScaffoldLeft(GameTestHelper helper, Colony colony, AntBot builder, Set<BlockPos> pillar) {
+		helper.assertFalse(pillar.isEmpty(), "never placed scaffold");
+		for (int y = 1; y <= 6; y++) {
+			assertState(helper, 5, y, 5, COBBLE);
+		}
+		helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		helper.assertTrue(builder.getScaffold().isEmpty(), "scaffold left: " + builder.getScaffold());
+		helper.assertTrue(strayDirt(helper) == 0, "dirt scaffold left standing");
+	}
+
+	/**
 	 * A dirt column, built from the same dirt the builder pillars with. Its scaffold never stands
 	 * where the column goes, so it never stands in for a column block, and taking the scaffold down
 	 * never takes a column block that is in place.

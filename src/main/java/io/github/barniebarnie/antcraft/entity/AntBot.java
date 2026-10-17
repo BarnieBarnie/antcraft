@@ -81,6 +81,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
 	/**
+	 * The role whose goal placed that scaffold and takes it down while the bot has that role; saved with it.
+	 * Bots saved before this was saved only had a lumberjack's scaffold.
+	 */
+	private BotRole scaffoldRole = BotRole.LUMBERJACK;
+	/**
 	 * Every block the bot placed while following a path, which other bots leave alone until the bot
 	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
 	 */
@@ -125,7 +130,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
 		this.goalSelector.addGoal(2, new ReturnHomeGoal(this));
-		// First of the role goals: it also takes down scaffolding left from being a lumberjack, before any other role's work.
+		// First of the role goals: it also takes down scaffolding left from an earlier role, before the new role's work.
 		this.goalSelector.addGoal(3, new LumberjackGoal(this));
 		this.goalSelector.addGoal(3, new CrafterGoal(this));
 		this.goalSelector.addGoal(3, new MinerGoal(this));
@@ -233,6 +238,22 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Scaffold blocks this bot placed and still has to take down. Saved with the bot; callers change it in place. */
 	public Set<BlockPos> getScaffold() {
 		return this.scaffold;
+	}
+
+	/** Records a scaffold block {@code role}'s goal placed and will take down while the bot has that role. */
+	public void addScaffold(BlockPos pos, BotRole role) {
+		this.scaffold.add(pos.immutable());
+		this.scaffoldRole = role;
+	}
+
+	/** The role whose goal placed the scaffold in {@link #getScaffold}. */
+	public BotRole getScaffoldRole() {
+		return this.scaffoldRole;
+	}
+
+	/** Whether there is scaffold up that the bot's role did not place, such as after a role change, for whichever goal cleans that up. */
+	public boolean hasLeftoverScaffold() {
+		return !this.scaffold.isEmpty() && this.scaffoldRole != this.getRole();
 	}
 
 	/** Records a block placed while following a path, so other bots leave it alone while this bot is near it. */
@@ -356,6 +377,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
+		output.putString("ScaffoldRole", this.scaffoldRole.id());
 		output.store("Tree", BlockPos.CODEC.listOf(), this.tree);
 		output.storeNullable("TreeBase", BlockPos.CODEC, this.treeBase);
 		output.store("Revisits", Revisit.CODEC.listOf(), List.copyOf(this.revisits.values()));
@@ -374,6 +396,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
+		this.scaffoldRole = BotRole.byId(input.getStringOr("ScaffoldRole", BotRole.LUMBERJACK.id()));
 		List<BlockPos> claim = input.read("Tree", BlockPos.CODEC.listOf()).orElse(List.of());
 		// Claims saved before the base was saved were the whole tree, so its lowest log is the base.
 		this.setTree(input.read("TreeBase", BlockPos.CODEC).orElseGet(() -> lowest(claim)), claim);

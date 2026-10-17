@@ -86,7 +86,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		super(bot, BotRole.BUILDER);
 		this.follower.setScaffold(SCAFFOLD);
 		// Every block placed on the way is scaffold, taken down once the plan is done; plans never get scaffold where their own blocks go.
-		this.follower.setPlaceListener(pos -> this.bot.getScaffold().add(pos));
+		this.follower.setPlaceListener(pos -> this.bot.addScaffold(pos, BotRole.BUILDER));
 		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, this::stopTravel);
 	}
 
