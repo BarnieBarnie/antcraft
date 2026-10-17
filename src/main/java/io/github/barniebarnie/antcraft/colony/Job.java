@@ -60,6 +60,10 @@ public record Job(UUID id, JobType type, BlockPos target, Optional<UUID> claimed
 		return new Job(this.id, this.type, this.target, Optional.empty(), 0L, this.area, this.item, this.tries + 1, notBefore, this.posted);
 	}
 
+	Job reopen() {
+		return new Job(this.id, this.type, this.target, this.claimedBy, this.heartbeat, this.area, this.item, this.tries, 0L, this.posted);
+	}
+
 	Job withHeartbeat(long now) {
 		return new Job(this.id, this.type, this.target, this.claimedBy, now, this.area, this.item, this.tries, this.notBefore, this.posted);
 	}

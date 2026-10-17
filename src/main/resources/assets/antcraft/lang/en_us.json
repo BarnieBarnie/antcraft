@@ -17,6 +17,7 @@
 	"commands.antcraft.colony.blocked": "Build steps the colony cannot do: %s",
 	"commands.antcraft.colony.blocked.cleared": "Gave up on %s blocked build steps",
 	"commands.antcraft.colony.given_up": "Trees given up on, logs out of reach: %s",
+	"commands.antcraft.colony.given_up_branches": "Mine branches given up on, out of reach: %s",
 	"commands.antcraft.colony.core_full": "Core full: crafts that do not fit wait. Storage: %s",
 	"commands.antcraft.colony.storage.ready": "has room, a hauler is moving the surplus",
 	"commands.antcraft.colony.storage.no_hauler": "none, the colony has no hauler",

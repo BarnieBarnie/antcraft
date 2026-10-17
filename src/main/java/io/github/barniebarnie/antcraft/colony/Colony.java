@@ -37,6 +37,8 @@ import org.jspecify.annotations.Nullable;
 /** A colony: its core block (storage), member bots, work radius and job board. */
 public class Colony {
 	public static final int DEFAULT_RADIUS = 32;
+	/** How often given-up trees and branches are put back up for one more try: a Minecraft day. */
+	public static final long GIVEN_UP_RECHECK_TICKS = 24000;
 
 	/** Plans by the id of their build job. Saves from before plans had ids hold a list; those get new ids. */
 	private static final Codec<Map<UUID, BuildPlan>> BUILDS = Codec.withAlternative(
@@ -152,6 +154,8 @@ public class Colony {
 	private final TripClaims tripClaims = new TripClaims();
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
+	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
+	private long lastGivenUpRecheck = -1;
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
 			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
@@ -411,6 +415,21 @@ public class Colony {
 		if (this.blockedSteps.removeIf(blocked -> freed.contains(this.planOf(blocked.plan())))) {
 			this.lastSurvey = -1;
 		}
+	}
+
+	/**
+	 * Every {@link #GIVEN_UP_RECHECK_TICKS}, puts the jobs bots gave up on back up, so a tree or branch a player has
+	 * since opened the way to gets done after all. Returns how many were reopened.
+	 */
+	public int recheckGivenUp(long now) {
+		if (this.lastGivenUpRecheck < 0) {
+			this.lastGivenUpRecheck = now;
+		}
+		if (now - this.lastGivenUpRecheck < GIVEN_UP_RECHECK_TICKS) {
+			return 0;
+		}
+		this.lastGivenUpRecheck = now;
+		return this.board.reopenGivenUp();
 	}
 
 	/** Gives up on every blocked step and the plans waiting on them. Returns how many steps there were. */

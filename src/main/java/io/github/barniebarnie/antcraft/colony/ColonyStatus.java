@@ -30,12 +30,12 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * A snapshot of what a colony is doing: its bots, jobs, stock, orders and builds, the build steps that are
- * blocked, the trees given up on with logs out of reach, and the room left in its core. {@code /antcraft colony info}
+ * blocked, the trees and branches given up on as out of reach, and the room left in its core. {@code /antcraft colony info}
  * prints it and the colony status screen shows it, so the two cannot disagree.
  */
 public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<BotRole, Integer> roles, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
-		List<Build> builds, List<BlockPos> blocked, List<BlockPos> givenUp, Room room) {
+		List<Build> builds, List<BlockPos> blocked, List<GivenUp> givenUp, Room room) {
 
 	/** Why the storage area cannot take what the core has no room for, if it cannot. */
 	public enum StorageState {
@@ -64,6 +64,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 
 		static final StreamCodec<ByteBuf, Room> STREAM_CODEC = StreamCodec.composite(
 			ByteBufCodecs.VAR_INT, Room::freeSlots, enumCodec(StorageState.values()), Room::storage, Room::new);
+	}
+
+	/** A job bots gave up on, such as a tree with logs out of reach or a branch with cells out of reach. */
+	public record GivenUp(JobType type, BlockPos target) {
+		static final StreamCodec<ByteBuf, GivenUp> STREAM_CODEC = StreamCodec.composite(
+			enumCodec(JobType.values()), GivenUp::type, BlockPos.STREAM_CODEC, GivenUp::target, GivenUp::new);
 	}
 
 	/** A loaded member bot; {@code setByPlayer} when a player chose its role, so the colony leaves it. */
@@ -122,7 +128,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		Order.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::orders,
 		Build.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::builds,
 		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
-		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
+		GivenUp.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
 		Room.STREAM_CODEC, ColonyStatus::room,
 		ColonyStatus::new);
 
@@ -137,6 +143,16 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 
 	public int claimed() {
 		return total(this.claimedJobs);
+	}
+
+	/** The lang key that lists the given-up jobs of {@code type}: trees, or branches for any other type. */
+	public static String givenUpKey(JobType type) {
+		return type == JobType.CHOP_TREE ? "commands.antcraft.colony.given_up" : "commands.antcraft.colony.given_up_branches";
+	}
+
+	/** Where the jobs of {@code type} that bots gave up on are. */
+	public List<BlockPos> givenUp(JobType type) {
+		return this.givenUp.stream().filter(job -> job.type() == type).map(GivenUp::target).toList();
 	}
 
 	private static int total(Map<?, Integer> counts) {
@@ -190,11 +206,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 
 		Map<JobType, Integer> open = new EnumMap<>(JobType.class);
 		Map<JobType, Integer> claimed = new EnumMap<>(JobType.class);
-		List<BlockPos> givenUp = new ArrayList<>();
+		List<GivenUp> givenUp = new ArrayList<>();
 		for (Job job : colony.board().jobs()) {
-			(job.isOpen() ? open : claimed).merge(job.type(), 1, Integer::sum);
-			if (job.type() == JobType.CHOP_TREE && job.givenUp()) {
-				givenUp.add(job.target());
+			if (job.givenUp()) {
+				givenUp.add(new GivenUp(job.type(), job.target()));
+			} else {
+				(job.isOpen() ? open : claimed).merge(job.type(), 1, Integer::sum);
 			}
 		}
 

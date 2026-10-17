@@ -570,4 +570,21 @@ class ColonyTest {
 		assertTrue(colony.board().jobs().isEmpty(), "jobs left: " + colony.board().jobs());
 		assertFalse(colony.hasTerraform());
 	}
+
+	/** The colony puts given-up jobs back up now and then, so a tree or branch a player opened the way to is done after all. */
+	@Test
+	void givenUpJobsAreRetriedAfterTheRecheck() {
+		Colony colony = colony();
+		colony.board().post(JobType.MINE_BRANCH, new BlockPos(8, 60, 8));
+		Set<JobType> mine = Set.of(JobType.MINE_BRANCH);
+		colony.board().claim(ALICE, mine, BlockPos.ZERO, 0);
+		colony.board().retryLater(ALICE, 100, 1);
+
+		assertEquals(0, colony.recheckGivenUp(1000));
+		assertEquals(0, colony.recheckGivenUp(1000 + Colony.GIVEN_UP_RECHECK_TICKS - 1));
+		assertTrue(colony.board().claim(ALICE, mine, BlockPos.ZERO, 1000 + Colony.GIVEN_UP_RECHECK_TICKS - 1).isEmpty());
+
+		assertEquals(1, colony.recheckGivenUp(1000 + Colony.GIVEN_UP_RECHECK_TICKS));
+		assertTrue(colony.board().claim(ALICE, mine, BlockPos.ZERO, 1000 + Colony.GIVEN_UP_RECHECK_TICKS).isPresent());
+	}
 }

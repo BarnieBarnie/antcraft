@@ -139,6 +139,21 @@ public class JobBoard {
 		return retry;
 	}
 
+	/**
+	 * Puts given-up jobs back up, such as a tree a player has since opened the way to. They keep their tries,
+	 * so a job whose way is still shut is given up again after one more try. Returns how many were reopened.
+	 */
+	public int reopenGivenUp() {
+		int reopened = 0;
+		for (Job job : List.copyOf(this.jobs)) {
+			if (job.givenUp()) {
+				this.replace(job, job.reopen());
+				reopened++;
+			}
+		}
+		return reopened;
+	}
+
 	/** Frees jobs whose bot has not reported for {@code timeout} ticks. Returns how many were freed. */
 	public int releaseStale(long now, long timeout) {
 		int released = 0;

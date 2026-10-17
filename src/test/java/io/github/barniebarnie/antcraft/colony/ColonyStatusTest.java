@@ -50,6 +50,10 @@ class ColonyStatusTest {
 		colony.board().post(JobType.CHOP_TREE, new BlockPos(9, 64, 9));
 		colony.board().claim(MINER, Set.of(JobType.CHOP_TREE), new BlockPos(9, 64, 9), 0L);
 		colony.board().retryLater(MINER, 600L, 1);
+		// A branch given up the same way, its cells out of reach.
+		colony.board().post(JobType.MINE_BRANCH, new BlockPos(8, 60, 8));
+		colony.board().claim(IDLE_MINER, Set.of(JobType.MINE_BRANCH), new BlockPos(8, 60, 8), 0L);
+		colony.board().retryLater(IDLE_MINER, 600L, 1);
 		colony.addOrder(Items.DIAMOND, 2);
 		colony.addOrder(Items.OAK_LOG, 1);
 		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_LOG, 3));
@@ -99,7 +103,7 @@ class ColonyStatusTest {
 		assertEquals(Map.of(BotRole.LUMBERJACK, 1, BotRole.MINER, 2), status.roles());
 		assertEquals(1, status.idle());
 		assertEquals(20, status.radius());
-		assertEquals(Map.of(JobType.CHOP_TREE, 2, JobType.MINE_BRANCH, 1), status.openJobs());
+		assertEquals(Map.of(JobType.CHOP_TREE, 1, JobType.MINE_BRANCH, 1), status.openJobs());
 		assertEquals(Map.of(JobType.CHOP_TREE, 1), status.claimedJobs());
 	}
 
@@ -136,9 +140,21 @@ class ColonyStatusTest {
 		assertEquals(List.of(new BlockPos(3, 64, 3)), status.blocked());
 	}
 
+	/** Given-up jobs are listed, not counted as open work. */
 	@Test
-	void listsTreesGivenUpOn() {
-		assertEquals(List.of(new BlockPos(9, 64, 9)), status().givenUp());
+	void givenUpTreesAreNotOpenJobs() {
+		ColonyStatus status = status();
+		assertEquals(1, status.openJobs().get(JobType.CHOP_TREE));
+		assertEquals(3, status.jobs());
+	}
+
+	@Test
+	void listsTreesAndBranchesGivenUpOn() {
+		ColonyStatus status = status();
+		assertEquals(List.of(new ColonyStatus.GivenUp(JobType.CHOP_TREE, new BlockPos(9, 64, 9)),
+			new ColonyStatus.GivenUp(JobType.MINE_BRANCH, new BlockPos(8, 60, 8))), status.givenUp());
+		assertEquals(List.of(new BlockPos(9, 64, 9)), status.givenUp(JobType.CHOP_TREE));
+		assertEquals(List.of(new BlockPos(8, 60, 8)), status.givenUp(JobType.MINE_BRANCH));
 	}
 
 	@Test

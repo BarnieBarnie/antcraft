@@ -179,7 +179,7 @@ public class ColonyManager extends SavedData {
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
 	 * every dug branch with a dark torch spot gets a job too, so a miner goes back to light it.
 	 * A branch whose job was given up, its cells left out of reach, counts as dug: its job stays
-	 * on the board so it is not posted anew.
+	 * on the board so it is not posted anew, until {@link Colony#recheckGivenUp} puts it back up.
 	 */
 	private void surveyMine(ServerLevel level, Colony colony) {
 		if (colony.mineshaft().isEmpty() && this.hasRole(level, colony, BotRole.MINER)) {
@@ -362,6 +362,8 @@ public class ColonyManager extends SavedData {
 			}
 			colony.lastSurvey = now;
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
+			// A player may have opened the way to a tree or branch given up on since.
+			colony.recheckGivenUp(now);
 			colony.forgetReplaced(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			// ponytail: assumes a bucket and filler at hand; a builder without them just reports the step again.
 			// Without a builder only miners work, on dig jobs, and leave water alone, so a step waits until they can dig it.

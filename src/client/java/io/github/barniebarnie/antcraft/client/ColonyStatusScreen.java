@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.client;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
@@ -17,6 +18,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -286,9 +288,12 @@ public class ColonyStatusScreen extends Screen {
 			Component blocked = list(status.blocked().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.blocked", blocked), RED));
 		}
-		if (!status.givenUp().isEmpty()) {
-			Component givenUp = list(status.givenUp().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
-			lines.add(new Line(Component.translatable("commands.antcraft.colony.given_up", givenUp), RED));
+		for (JobType type : List.of(JobType.CHOP_TREE, JobType.MINE_BRANCH)) {
+			List<BlockPos> givenUp = status.givenUp(type);
+			if (!givenUp.isEmpty()) {
+				Component positions = list(givenUp.stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
+				lines.add(new Line(Component.translatable(ColonyStatus.givenUpKey(type), positions), RED));
+			}
 		}
 		if (status.room().coreFull()) {
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), RED));

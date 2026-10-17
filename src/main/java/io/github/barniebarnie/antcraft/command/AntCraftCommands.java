@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -179,9 +180,12 @@ public final class AntCraftCommands {
 			String blocked = String.join(", ", status.blocked().stream().map(BlockPos::toShortString).toList());
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked", blocked), false);
 		}
-		if (!status.givenUp().isEmpty()) {
-			String givenUp = String.join(", ", status.givenUp().stream().map(BlockPos::toShortString).toList());
-			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.given_up", givenUp), false);
+		for (JobType type : List.of(JobType.CHOP_TREE, JobType.MINE_BRANCH)) {
+			List<BlockPos> givenUp = status.givenUp(type);
+			if (!givenUp.isEmpty()) {
+				String list = String.join(", ", givenUp.stream().map(BlockPos::toShortString).toList());
+				source.sendSuccess(() -> Component.translatable(ColonyStatus.givenUpKey(type), list), false);
+			}
 		}
 		if (status.room().coreFull()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), false);

@@ -295,6 +295,25 @@ class JobBoardTest {
 		assertTrue(board.post(JobType.CHOP_TREE, logs.get(1), List.of(logs.get(1))).isEmpty());
 	}
 
+	/** Reopened, such as after a player opened the way, a given-up job gets one more try before it is given up again. */
+	@Test
+	void reopenedGivenUpJobGetsOneMoreTry() {
+		JobBoard board = new JobBoard();
+		board.post(JobType.CHOP_TREE, new BlockPos(5, 1, 5));
+		board.post(JobType.CHOP_TREE, new BlockPos(9, 1, 9));
+		board.claim(ALICE, CHOP, new BlockPos(5, 1, 5), 0);
+		assertFalse(board.retryLater(ALICE, 100, 1));
+
+		assertEquals(1, board.reopenGivenUp());
+		assertEquals(0, board.reopenGivenUp());
+		assertFalse(board.jobs().getFirst().givenUp());
+		Job retried = board.claim(BOB, CHOP, new BlockPos(5, 1, 5), 0).orElseThrow();
+		assertEquals(new BlockPos(5, 1, 5), retried.target());
+
+		assertFalse(board.retryLater(BOB, 100, 1));
+		assertTrue(board.jobs().getFirst().givenUp());
+	}
+
 	@Test
 	void triesAndRetryTimeSurviveSaveAndLoad() {
 		JobBoard board = new JobBoard();
