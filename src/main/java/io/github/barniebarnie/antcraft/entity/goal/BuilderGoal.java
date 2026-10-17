@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -100,6 +101,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 	private final ScaffoldCleanup scaffoldCleanup;
 	/** Taking its scaffolding down, before putting a plan aside or once it has no job. */
 	private boolean cleaning;
+	/** What the builder found done of the batch of build job {@link #progressJob}, so it does not look at those blocks every tick. */
+	private BuildPlan.Progress progress = new BuildPlan.Progress();
+	private @Nullable UUID progressJob;
 
 	public BuilderGoal(AntBot bot) {
 		super(bot, BotRole.BUILDER);
@@ -149,7 +153,11 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}
 		Optional<BuildPlan> plan = colony.build(job.get().id());
 		boolean dig = isDig(job.get());
-		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig)).map(s -> this.withFiller(level, core, s));
+		if (!job.get().id().equals(this.progressJob)) {
+			this.progressJob = job.get().id();
+			this.progress = new BuildPlan.Progress();
+		}
+		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig, this.progress)).map(s -> this.withFiller(level, core, s));
 		if (next.isEmpty()) {
 			// The scaffolding comes down first, while the job is still this builder's.
 			if (!this.bot.getScaffold().isEmpty()) {
@@ -267,6 +275,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * A {@code dig} job leaves the logs of trees to lumberjacks (see {@link Digging}).
 	 */
 	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
+		return this.nextStep(level, colony, core, plan, dig, new BuildPlan.Progress());
+	}
+
+	/** {@link #nextStep(ServerLevel, Colony, Container, BuildPlan, boolean)}, skipping the steps {@code progress} found done. */
+	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig,
+			BuildPlan.Progress progress) {
 		return plan.nextStep(level::getBlockState, planned -> {
 			BlockState current = level.getBlockState(planned.pos());
 			if (dig && Digging.isForLumberjacks(level, colony, planned.pos()) || leavesAlone(level, plan, planned)) {
@@ -282,7 +296,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			}
 			return this.has(core, stack -> stack.is(item))
 				|| isPoured(item) && this.has(core, BuilderGoal::isBucket) && this.source(level, colony, item) != null;
-		});
+		}, progress);
 	}
 
 	/** Fills an empty bucket to pour {@code bucket}'s fluid with at the nearest source, fetching the empty bucket from the core first. */

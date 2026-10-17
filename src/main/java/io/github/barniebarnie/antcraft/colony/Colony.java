@@ -172,6 +172,8 @@ public class Colony {
 	private final Map<UUID, BuildPlan> builds;
 	/** The plan and batch of each build job, by job id; see {@link #batchId}. Kept up to date with {@link #builds}. */
 	private final Map<UUID, BatchRef> batchJobs = new HashMap<>();
+	/** The batch of each build job as a plan of its own, made once rather than on every builder's tick; cleared with {@link #batchJobs}. */
+	private final Map<UUID, BuildPlan> batchPlans = new HashMap<>();
 	/** How far builders got with the batch of each build job, so the batches that need it get posted; dropped with their plan. */
 	private final Map<UUID, BatchState> batchStates;
 	/** Blocks build plans placed, by position, which bots leave standing while they are there; a null block is adopted on first check. */
@@ -225,6 +227,8 @@ public class Colony {
 		this.shaftBlocks = mineshaft.map(Mineshaft::protectedBlocks).orElse(Set.of());
 		this.stock = new ArrayList<>(stock);
 		this.builds = new LinkedHashMap<>(builds);
+		// A shaft plan saved by an older version, such as before the walls, gets the current one under its id, keeping its progress.
+		mineshaft.ifPresent(shaft -> this.builds.replaceAll((planId, plan) -> shaft.isPlan(plan) ? shaft.plan() : plan));
 		this.indexBatches();
 		protectedBlocks.forEach(placed -> this.protectedBlocks.put(placed.pos(), placed.block().orElse(null)));
 	}
@@ -287,6 +291,7 @@ public class Colony {
 
 	private void indexBatches() {
 		this.batchJobs.clear();
+		this.batchPlans.clear();
 		this.builds.forEach((id, plan) -> {
 			for (int i = 0; i < plan.batches().size(); i++) {
 				this.batchJobs.put(batchId(id, i), new BatchRef(id, i));
@@ -346,7 +351,9 @@ public class Colony {
 
 	/** The batch a build job is for, as a plan of its own. */
 	public Optional<BuildPlan> build(UUID job) {
-		return Optional.ofNullable(this.batchJobs.get(job)).map(batch -> this.builds.get(batch.plan()).batch(batch.index()));
+		BatchRef batch = this.batchJobs.get(job);
+		return batch == null ? Optional.empty()
+			: Optional.of(this.batchPlans.computeIfAbsent(job, id -> this.builds.get(batch.plan()).batch(batch.index())));
 	}
 
 	/**

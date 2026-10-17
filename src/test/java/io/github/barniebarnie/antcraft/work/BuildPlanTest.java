@@ -434,4 +434,82 @@ class BuildPlanTest {
 		var json = BuildPlan.Step.CODEC.listOf().encodeStart(JsonOps.INSTANCE, plan().steps()).getOrThrow();
 		assertEquals(plan(), BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
 	}
+
+	/** The stairs to the first of the default levels of a deep shaft, dug in stone: the biggest batch a builder works through. */
+	private static BuildPlan deepStairs() {
+		return new Mineshaft(new BlockPos(0, 64, 0), List.of(16, -16, -58)).plan().batch(0);
+	}
+
+	/** Stone below y=64, air above, with {@code changed} on top. */
+	private static Function<BlockPos, BlockState> stone(Map<BlockPos, BlockState> changed) {
+		return pos -> changed.getOrDefault(pos, pos.getY() >= 64 ? Blocks.AIR.defaultBlockState() : Blocks.STONE.defaultBlockState());
+	}
+
+	/** Torch steps wait, as for a colony that has no torches yet. */
+	private static boolean noTorches(BuildPlan.Step step) {
+		return step.state().getBlock() != Blocks.TORCH;
+	}
+
+	@Test
+	void nextStepWithProgressFindsWhatAFullScanFindsAsTheBuildGoesOn() {
+		BuildPlan stairs = deepStairs();
+		Map<BlockPos, BlockState> changed = new HashMap<>();
+		BuildPlan.Progress progress = new BuildPlan.Progress();
+		int steps = 0;
+		while (true) {
+			Optional<BuildPlan.Step> full = stairs.nextStep(stone(changed), BuildPlanTest::noTorches);
+			assertEquals(full, stairs.nextStep(stone(changed), BuildPlanTest::noTorches, progress), "after " + steps + " steps");
+			if (full.isEmpty()) {
+				break;
+			}
+			changed.put(full.get().pos(), full.get().state());
+			steps++;
+		}
+		assertTrue(steps > 100, "only " + steps + " steps");
+	}
+
+	@Test
+	void nextStepWithProgressLooksOnlyAtStepsNotFoundDoneBefore() {
+		BuildPlan stairs = deepStairs();
+		Map<BlockPos, BlockState> changed = new HashMap<>();
+		List<BuildPlan.Step> half = stairs.steps().subList(0, stairs.steps().size() / 2);
+		half.forEach(step -> changed.put(step.pos(), noTorches(step) ? step.state() : Blocks.AIR.defaultBlockState()));
+		int[] lookups = {0};
+		Function<BlockPos, BlockState> counted = pos -> {
+			lookups[0]++;
+			return stone(changed).apply(pos);
+		};
+		BuildPlan.Progress progress = new BuildPlan.Progress();
+		Optional<BuildPlan.Step> first = stairs.nextStep(counted, BuildPlanTest::noTorches, progress);
+		assertTrue(lookups[0] > 200, "the first call looked at only " + lookups[0] + " blocks");
+		lookups[0] = 0;
+		assertEquals(first, stairs.nextStep(counted, BuildPlanTest::noTorches, progress));
+		long torches = stairs.steps().subList(0, stairs.steps().indexOf(first.orElseThrow())).stream().filter(step -> !noTorches(step)).count();
+		// The torch steps waiting before it, and the step found.
+		assertEquals(torches + 1, lookups[0]);
+	}
+
+	@Test
+	void aStepUndoneAfterItWasFoundDoneIsFoundAgain() {
+		BuildPlan stairs = deepStairs();
+		Map<BlockPos, BlockState> changed = new HashMap<>();
+		List<BuildPlan.Step> steps = stairs.steps();
+		steps.subList(0, 100).forEach(step -> changed.put(step.pos(), step.state()));
+		BuildPlan.Progress progress = new BuildPlan.Progress();
+		assertEquals(Optional.of(steps.get(100)), stairs.nextStep(stone(changed), step -> true, progress));
+		// A block falls back into what was dug.
+		BuildPlan.Step dug = steps.stream().filter(BuildPlan.Step::isClear).findFirst().orElseThrow();
+		changed.put(dug.pos(), Blocks.STONE.defaultBlockState());
+		Optional<BuildPlan.Step> next = Optional.empty();
+		for (int call = 0; call < BuildPlan.Progress.REFRESH; call++) {
+			next = stairs.nextStep(stone(changed), step -> true, progress);
+		}
+		assertEquals(Optional.of(dug), next, "not found again within " + BuildPlan.Progress.REFRESH + " calls");
+		// Nor is the batch taken for finished while it is undone.
+		BuildPlan.Progress fresh = new BuildPlan.Progress();
+		steps.forEach(step -> changed.put(step.pos(), step.state()));
+		assertEquals(Optional.empty(), stairs.nextStep(stone(changed), step -> true, fresh));
+		changed.put(dug.pos(), Blocks.STONE.defaultBlockState());
+		assertEquals(Optional.of(dug), stairs.nextStep(stone(changed), step -> true, fresh));
+	}
 }

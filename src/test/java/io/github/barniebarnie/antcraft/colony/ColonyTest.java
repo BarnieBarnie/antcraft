@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.Terraform;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -535,6 +536,42 @@ class ColonyTest {
 		assertEquals(Optional.of(shallower), colony.mineshaft());
 		assertEquals(List.of(shallower.plan()), colony.builds());
 		assertEquals(List.of(), colony.blockedSteps());
+	}
+
+	/** {@code plan} as saved before the mineshaft had walls: the same steps and batches, without those any solid block will do. */
+	private static BuildPlan withoutWalls(BuildPlan plan) {
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		List<BuildPlan.Batch> batches = new ArrayList<>();
+		for (BuildPlan.Batch batch : plan.batches()) {
+			int from = steps.size();
+			plan.steps().subList(batch.from(), batch.to()).stream().filter(step -> !step.anySolid()).forEach(steps::add);
+			batches.add(new BuildPlan.Batch(from, steps.size(), batch.needs()));
+		}
+		return new BuildPlan(steps, batches);
+	}
+
+	@Test
+	void aMineshaftPlanSavedBeforeWallsIsUpgradedOnLoadKeepingItsProgress() {
+		UUID id = UUID.randomUUID();
+		BuildPlan old = withoutWalls(TWO_LEVELS.plan());
+		assertNotEquals(TWO_LEVELS.plan(), old);
+		Map<UUID, BuildPlan> builds = new LinkedHashMap<>();
+		builds.put(id, old);
+		// The stairs to the first level were dug; batch 0's job id is the plan's.
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(),
+			Optional.of(TWO_LEVELS), List.of(), builds, List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of(),
+			Map.of(id, Colony.BatchState.DONE));
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		for (Colony c : List.of(colony, loaded)) {
+			assertEquals(List.of(TWO_LEVELS.plan()), c.builds());
+			c.postBuildJobs();
+			assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(c), "progress lost");
+			// So a blocked stair is matched to the shaft, which drops the level it leads to.
+			c.reportBlocked(batchJob(c, 2).id(), List.of(TWO_LEVELS.stairs().get(3)));
+			Mineshaft shallower = new Mineshaft(TWO_LEVELS.top(), List.of(62), 1, 3, 4);
+			assertEquals(Optional.of(shallower), c.mineshaft());
+			assertEquals(List.of(shallower.plan()), c.builds());
+		}
 	}
 
 	@Test

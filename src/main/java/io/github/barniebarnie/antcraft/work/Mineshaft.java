@@ -322,6 +322,21 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return new BuildPlan(List.copyOf(steps.values()), batches);
 	}
 
+	/**
+	 * Whether {@code plan} is this shaft's {@link #plan()} as an older version made it, such as one
+	 * saved before the walls: batch by batch the same steps to dig, light and place the chest, with
+	 * or without the steps any solid block will do.
+	 */
+	public boolean isPlan(BuildPlan plan) {
+		BuildPlan current = this.plan();
+		return plan.equals(current) || plan.batches().size() == current.batches().size()
+			&& IntStream.range(0, current.batches().size()).allMatch(i -> withoutWalls(plan.batch(i)).equals(withoutWalls(current.batch(i))));
+	}
+
+	private static List<BuildPlan.Step> withoutWalls(BuildPlan plan) {
+		return plan.steps().stream().filter(step -> !step.anySolid()).toList();
+	}
+
 	/** Ends a batch at step {@code to}, needing the batches {@code needs}; returns it as what the next batch may need. */
 	private List<Integer> batch(List<BuildPlan.Batch> batches, int to, List<Integer> needs) {
 		batches.add(new BuildPlan.Batch(batches.isEmpty() ? 0 : batches.getLast().to(), to, needs));

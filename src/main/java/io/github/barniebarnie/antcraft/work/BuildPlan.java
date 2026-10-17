@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -349,7 +350,49 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 
 	/** The first step the world does not match yet among those that {@code workable} allows, so a blocked step does not hold up the rest. */
 	public Optional<Step> nextStep(Function<BlockPos, BlockState> world, Predicate<Step> workable) {
-		return this.steps.stream().filter(step -> !step.isDone(world.apply(step.pos())) && workable.test(step)).findFirst();
+		return this.nextStep(world, workable, new BitSet());
+	}
+
+	/**
+	 * What a builder found done of one plan, so it does not look at those blocks again on every
+	 * call, such as the hundreds of dug stairs and walls of a deep mineshaft. Not saved; a builder
+	 * keeps one per batch it works on.
+	 */
+	public static final class Progress {
+		/** Every this many calls the steps found done are looked at again, in case one was undone since, such as by a block falling in. */
+		public static final int REFRESH = 20;
+		private final BitSet done = new BitSet();
+		private int calls;
+	}
+
+	/**
+	 * {@link #nextStep(Function, Predicate)}, skipping the steps {@code progress} found done. A step
+	 * undone since is found again within {@link Progress#REFRESH} calls, and always before the plan
+	 * counts as finished: a call that finds nothing looks at every step again.
+	 */
+	public Optional<Step> nextStep(Function<BlockPos, BlockState> world, Predicate<Step> workable, Progress progress) {
+		if (++progress.calls % Progress.REFRESH == 0) {
+			progress.done.clear();
+		}
+		Optional<Step> next = this.nextStep(world, workable, progress.done);
+		if (next.isEmpty() && !progress.done.isEmpty()) {
+			progress.done.clear();
+			next = this.nextStep(world, workable, progress.done);
+		}
+		return next;
+	}
+
+	/** The first step not in {@code done} that the world does not match and {@code workable} allows; adds the steps found done. */
+	private Optional<Step> nextStep(Function<BlockPos, BlockState> world, Predicate<Step> workable, BitSet done) {
+		for (int i = done.nextClearBit(0); i < this.steps.size(); i = done.nextClearBit(i + 1)) {
+			Step step = this.steps.get(i);
+			if (step.isDone(world.apply(step.pos()))) {
+				done.set(i);
+			} else if (workable.test(step)) {
+				return Optional.of(step);
+			}
+		}
+		return Optional.empty();
 	}
 
 	/**
