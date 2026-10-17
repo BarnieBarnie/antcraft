@@ -86,6 +86,17 @@ public final class ColonyNetworking {
 		}
 	}
 
+	/**
+	 * Who sent a request and what they may do: the player's position, whether they are an operator, whether only
+	 * operators may act on colonies, and whether bots are allowed on the server. Built once per received payload.
+	 */
+	public record Requester(BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed) {
+		static Requester of(ServerPlayer player) {
+			return new Requester(player.blockPosition(), ColonyNetworking.isOp(player), AntCraftConfig.colonyActionsRequireOp(),
+				AntCraftConfig.botsAllowed(player.level().getServer()));
+		}
+	}
+
 	public static void register() {
 		PayloadTypeRegistry.serverboundPlay().register(StatusRequest.TYPE, StatusRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(EditRequest.TYPE, EditRequest.STREAM_CODEC);
@@ -93,19 +104,19 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
-			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
+			context.responseSender().sendPacket(reply(player.level(), Requester.of(player)));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(EditRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
-			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(),
-				AntCraftConfig.botsAllowed(player.level().getServer()), request);
-			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
+			Requester requester = Requester.of(player);
+			handle(player.level(), requester, request);
+			context.responseSender().sendPacket(reply(player.level(), requester));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(RoleRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
-			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(),
-				AntCraftConfig.botsAllowed(player.level().getServer()), request);
-			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
+			Requester requester = Requester.of(player);
+			handle(player.level(), requester, request);
+			context.responseSender().sendPacket(reply(player.level(), requester));
 		});
 	}
 
@@ -114,36 +125,37 @@ public final class ColonyNetworking {
 		return Commands.LEVEL_GAMEMASTERS.check(player.permissions());
 	}
 
-	private static Optional<Colony> colony(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, BlockPos core) {
-		return ColonyManager.get(level).byCore(core).filter(colony -> ColonyActions.mayAct(colony, from, isOp, requireOp));
+	private static Optional<Colony> colony(ServerLevel level, Requester requester, BlockPos core) {
+		return ColonyManager.get(level).byCore(core)
+			.filter(colony -> ColonyActions.mayAct(colony, requester.from(), requester.isOp(), requester.requireOp()));
 	}
 
 	/**
-	 * Runs an edit from a player at {@code from}, unless they may not change the colony, the edit is invalid, or it may
-	 * not be made with bots allowed as {@code botsAllowed} says ({@link ColonyActions#mayEdit}, as for the
+	 * Runs an edit from {@code requester}, unless they may not change the colony, the edit is invalid, or it may
+	 * not be made with bots allowed as {@link Requester#botsAllowed} says ({@link ColonyActions#mayEdit}, as for the
 	 * {@code /antcraft colony} commands).
 	 *
 	 * @return whether the colony changed
 	 */
-	public static boolean handle(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed, EditRequest request) {
-		if (!ColonyActions.mayEdit(request.kind(), botsAllowed)) {
+	public static boolean handle(ServerLevel level, Requester requester, EditRequest request) {
+		if (!ColonyActions.mayEdit(request.kind(), requester.botsAllowed())) {
 			return false;
 		}
-		return colony(level, from, isOp, requireOp, request.core())
+		return colony(level, requester, request.core())
 			.map(colony -> ColonyActions.edit(colony, request.kind(), request.target(), request.count()))
 			.orElse(false);
 	}
 
 	/**
-	 * Sets or releases a member's role for a player at {@code from}, unless they may not change the colony, the bot is not
-	 * its member, or bots are not allowed on the server ({@code botsAllowed}, as for {@code /antcraft role}).
+	 * Sets or releases a member's role for {@code requester}, unless they may not change the colony, the bot is not
+	 * its member, or bots are not allowed on the server ({@link Requester#botsAllowed}, as for {@code /antcraft role}).
 	 *
 	 * @return whether the bot changed
 	 */
-	public static boolean handle(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed, RoleRequest request) {
-		Optional<Colony> colony = colony(level, from, isOp, requireOp, request.core());
+	public static boolean handle(ServerLevel level, Requester requester, RoleRequest request) {
+		Optional<Colony> colony = colony(level, requester, request.core());
 		if (colony.isEmpty() || !(level.getEntity(request.bot()) instanceof AntBot bot)
-				|| !ColonyActions.mayGiveRole(colony.get(), bot.getUUID(), bot.getColonyId(), botsAllowed)) {
+				|| !ColonyActions.mayGiveRole(colony.get(), bot.getUUID(), bot.getColonyId(), requester.botsAllowed())) {
 			return false;
 		}
 		request.role().ifPresentOrElse(bot::setRole, bot::releaseRole);
@@ -151,12 +163,12 @@ public final class ColonyNetworking {
 	}
 
 	/**
-	 * The reply to a status request from a player at {@code from}: the nearest colony in range, or none if the player may
+	 * The reply to a status request from {@code requester}: the nearest colony in range, or none if the player may
 	 * not view it ({@link ColonyActions#mayView}, the same rule as for changes).
 	 */
-	public static StatusReply reply(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp) {
-		return new StatusReply(ColonyManager.get(level).nearest(from, AntCraftCommands.COLONY_RANGE)
-			.filter(colony -> ColonyActions.mayView(colony, from, isOp, requireOp))
+	public static StatusReply reply(ServerLevel level, Requester requester) {
+		return new StatusReply(ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE)
+			.filter(colony -> ColonyActions.mayView(colony, requester.from(), requester.isOp(), requester.requireOp()))
 			.map(colony -> ColonyStatus.of(level, colony)));
 	}
 }

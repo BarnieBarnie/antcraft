@@ -238,12 +238,12 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		Colony colony = placeCore(helper);
 		colony.addOrder(Items.OAK_PLANKS, 4);
 
-		ColonyNetworking.StatusReply near = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1, 4)), false, false);
+		ColonyNetworking.StatusReply near = ColonyNetworking.reply(helper.getLevel(), new ColonyNetworking.Requester(helper.absolutePos(new BlockPos(4, 1, 4)), false, false, true));
 		helper.assertValueEqual(near.status().map(ColonyStatus::core), Optional.of(colony.core()), "core of the colony answered for");
 		helper.assertValueEqual(near.status().get().orders().getFirst().item(), Items.OAK_PLANKS, "ordered item");
 
 		// Far above every test area, so out of range of all colonies.
-		ColonyNetworking.StatusReply far = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1000, 4)), true, false);
+		ColonyNetworking.StatusReply far = ColonyNetworking.reply(helper.getLevel(), new ColonyNetworking.Requester(helper.absolutePos(new BlockPos(4, 1000, 4)), true, false, true));
 		helper.assertTrue(far.status().isEmpty(), "answered for a colony far away");
 		helper.succeed();
 	}
@@ -281,9 +281,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
 		ColonyNetworking.EditRequest order = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4);
 
-		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), near, false, true, true, order), "non-operator's order accepted");
+		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(near, false, true, true), order), "non-operator's order accepted");
 		helper.assertValueEqual(colony.orders(), Map.of(), "orders");
-		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, true, true, true, order), "operator's order refused");
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(near, true, true, true), order), "operator's order refused");
 		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
 		helper.succeed();
 	}
@@ -294,8 +294,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		colony.addOrder(Items.OAK_PLANKS, 4);
 		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
 
-		helper.assertTrue(ColonyNetworking.reply(helper.getLevel(), near, false, true).status().isEmpty(), "non-operator got the colony's status");
-		helper.assertValueEqual(ColonyNetworking.reply(helper.getLevel(), near, true, true).status().map(ColonyStatus::core),
+		helper.assertTrue(ColonyNetworking.reply(helper.getLevel(), new ColonyNetworking.Requester(near, false, true, true)).status().isEmpty(), "non-operator got the colony's status");
+		helper.assertValueEqual(ColonyNetworking.reply(helper.getLevel(), new ColonyNetworking.Requester(near, true, true, true)).status().map(ColonyStatus::core),
 			Optional.of(colony.core()), "core of the colony answered for an operator");
 		helper.succeed();
 	}
@@ -322,7 +322,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
 		ColonyNetworking.RoleRequest request = new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), Optional.of(BotRole.MINER));
 
-		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), near, true, false, false, request), "role change accepted with bots not allowed");
+		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(near, true, false, false), request), "role change accepted with bots not allowed");
 		helper.assertValueEqual(bot.getRole(), BotRole.LUMBERJACK, "role");
 		helper.succeed();
 	}
@@ -334,18 +334,18 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		ColonyNetworking.EditRequest order = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4);
 		ColonyNetworking.EditRequest radius = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.RADIUS, "", 48);
 
-		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, false, false, false, order), "order refused with bots not allowed");
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(near, false, false, false), order), "order refused with bots not allowed");
 		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
-		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, false, false, false, radius), "radius refused with bots not allowed");
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(near, false, false, false), radius), "radius refused with bots not allowed");
 		helper.assertValueEqual(colony.radius(), 48, "radius");
 		helper.succeed();
 	}
 
 	private static boolean edit(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, ColonyActions.Edit kind, String target, int count) {
-		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, true, new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
+		return ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(from, false, requireOp, true), new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
 	}
 
 	private static boolean role(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, AntBot bot, Optional<BotRole> role) {
-		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, true, new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), role));
+		return ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(from, false, requireOp, true), new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), role));
 	}
 }
