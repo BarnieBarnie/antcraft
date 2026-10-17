@@ -59,7 +59,8 @@ import org.jspecify.annotations.Nullable;
  * it digs that the plan does not clear it walls off with such a block; those it cannot clear are
  * reported as blocked. It pours water and lava from a bucket, as a player would, filling an
  * empty one at a source in the territory when the core has no full one; a waterlogged block it
- * places dry and fills from a water bucket the same way. A door, bed or tall plant it places whole
+ * places dry and fills from a water bucket the same way, and one standing waterlogged where the plan
+ * wants it dry it empties with an empty bucket. A door, bed or tall plant it places whole
  * from one item, clearing the spot for its other half first. Fire it lights on the block below with
  * flint and steel from the core, which the colony orders when it has none; fire that cannot stay
  * there, blocks a player cannot place, such as a portal, and a fluid without a bucket or source
@@ -174,7 +175,10 @@ public class BuilderGoal extends ColonyWorkGoal {
 		if (this.restockScaffold(colony, core, step) || !this.reach(step.pos())) {
 			return;
 		}
-		if (step.isPlaced(current)) {
+		if (step.isPlaced(current) && item == Items.BUCKET) {
+			// The block is right but holds water the plan wants out, so it is scooped up rather than broken.
+			this.scoop(level, step.pos(), findSlot(this.bot.getInventory(), BuilderGoal::isBucket));
+		} else if (step.isPlaced(current)) {
 			this.pour(level, step.pos(), current, item);
 		} else if (step.isLit()) {
 			this.light(level, colony, step);

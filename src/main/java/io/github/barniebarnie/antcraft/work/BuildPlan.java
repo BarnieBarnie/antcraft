@@ -235,9 +235,20 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			return this.isClear() ? world.isAir() : matches(this.dry(), world);
 		}
 
-		/** The item used next with {@code world} as it is: the block's item, or a water bucket once a waterlogged block stands dry. */
+		/**
+		 * The item used next with {@code world} as it is: the block's item, a water bucket once a
+		 * waterlogged block stands dry, or an empty bucket to scoop the water out of a block that
+		 * stands waterlogged where the plan wants it dry.
+		 */
 		public Item item(BlockState world) {
-			return this.isWaterlogged() && this.isPlaced(world) ? Items.WATER_BUCKET : this.item();
+			if (this.isPlaced(world) && !this.anySolid && this.isWaterlogged() != isWaterlogged(world)) {
+				return this.isWaterlogged() ? Items.WATER_BUCKET : Items.BUCKET;
+			}
+			return this.item();
+		}
+
+		private static boolean isWaterlogged(BlockState state) {
+			return state.hasProperty(BlockStateProperties.WATERLOGGED) && state.getValue(BlockStateProperties.WATERLOGGED);
 		}
 
 		/** Whether a builder can do this step at all; not when it places a block without an item, such as a portal. */
@@ -245,8 +256,9 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			return this.isClear() || this.item() != Items.AIR;
 		}
 
+		/** Whether the block is in place, holding water just when this step's does. */
 		public boolean isDone(BlockState world) {
-			return this.isPlaced(world) && (!this.isWaterlogged() || world.getValue(BlockStateProperties.WATERLOGGED));
+			return this.isPlaced(world) && (this.anySolid || this.isWaterlogged() == isWaterlogged(world));
 		}
 
 		private static boolean matches(BlockState wanted, BlockState world) {
@@ -354,7 +366,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		return this.materials(pos -> Blocks.AIR.defaultBlockState());
 	}
 
-	/** The items still to place: those of the steps the world does not match yet. */
+	/** The items still to place: those of the steps the world does not match yet, and one empty bucket when a block wanted dry holds water. */
 	public Map<Item, Integer> materials(Function<BlockPos, BlockState> world) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
 		for (Step step : this.steps) {
@@ -367,6 +379,9 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			}
 			if (step.isWaterlogged() && !step.isDone(current)) {
 				materials.merge(Items.WATER_BUCKET, 1, Integer::sum);
+			} else if (step.item(current) == Items.BUCKET) {
+				// A tool, not used up: one bucket scoops the water out of every block.
+				materials.put(Items.BUCKET, 1);
 			}
 		}
 		return materials;

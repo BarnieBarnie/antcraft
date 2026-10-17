@@ -153,6 +153,24 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void dryBlocksAreNotDoneWhileWaterloggedAndHaveTheirWaterScoopedUp() {
+		BlockState wet = stairs(Direction.EAST).setValue(BlockStateProperties.WATERLOGGED, true);
+		BlockState dry = stairs(Direction.EAST);
+		BuildPlan.Step step = new BuildPlan.Step(A, dry);
+		BuildPlan plan = new BuildPlan(List.of(step));
+
+		assertFalse(step.isDone(wet));
+		assertTrue(step.isDone(dry));
+		// The block is right, only its water goes: scooped up with an empty bucket, as a player would.
+		assertTrue(step.isPlaced(wet));
+		assertFalse(step.needsClearing(wet));
+		assertEquals(Items.BUCKET, step.item(wet));
+		assertEquals(Items.OAK_STAIRS, step.item(Blocks.AIR.defaultBlockState()));
+		assertEquals(Map.of(Items.BUCKET, 1), plan.materials(at(world(A, wet))));
+		assertEquals(Map.of(), plan.materials(at(world(A, dry))));
+	}
+
+	@Test
 	void twoBlockBlocksSetTheirOtherHalfWhenPlaced() {
 		BlockState door = Blocks.OAK_DOOR.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
 		BlockState bed = Blocks.BED.red().defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH);

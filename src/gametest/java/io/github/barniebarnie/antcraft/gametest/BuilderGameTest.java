@@ -747,6 +747,45 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(maxTicks = 400)
+	public void fillsAnEmptyBucketAtASourceToWaterlogAStair(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos source = new BlockPos(6, 1, 1);
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(source.relative(side), Blocks.STONE);
+		}
+		helper.setBlock(source, Blocks.WATER);
+		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
+		core(helper).setItem(1, new ItemStack(Items.BUCKET));
+		colony.addBuild(waterloggedStairStep(helper));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
+			helper.assertBlockNotPresent(Blocks.WATER, source);
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void scoopsTheWaterOutOfAStairPlannedDry(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// Only for its stone walls, which keep the water in.
+		waterloggedStairStep(helper);
+		helper.setBlock(new BlockPos(4, 1, 4), STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
+		core(helper).setItem(0, new ItemStack(Items.BUCKET));
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		// The stair stays: only its water goes, scooped up like a player would, not broken out.
+		helper.onEachTick(() -> helper.assertBlockPresent(Blocks.OAK_STAIRS, new BlockPos(4, 1, 4)));
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, STAIRS_EAST);
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(builder.getInventory().countItem(Items.WATER_BUCKET) + core(helper).countItem(Items.WATER_BUCKET) == 1, "water not scooped up");
+		});
+	}
+
 	@GameTest(maxTicks = 300)
 	public void reportsFireThatCannotStayAsBlockedAndKeepsItBlocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
