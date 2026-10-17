@@ -48,6 +48,14 @@ public final class ColonyActions {
 		return (isOp || !requireOp) && colony.core().closerThan(from, AntCraftCommands.COLONY_RANGE);
 	}
 
+	/**
+	 * Whether a player at {@code from} may read {@code colony}'s status on the colony screen. This is the same rule as
+	 * {@link #mayAct}, so a screen that would refuse every change does not show the colony either.
+	 */
+	public static boolean mayView(Colony colony, BlockPos from, boolean isOp, boolean requireOp) {
+		return mayAct(colony, from, isOp, requireOp);
+	}
+
 	/** Whether the bot with id {@code bot}, which says it belongs to {@code botColony}, is a member of {@code colony}. */
 	public static boolean isMember(Colony colony, UUID bot, @Nullable UUID botColony) {
 		return colony.id().equals(botColony) && colony.members().contains(bot);

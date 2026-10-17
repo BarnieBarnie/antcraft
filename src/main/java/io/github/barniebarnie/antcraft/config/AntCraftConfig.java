@@ -27,7 +27,7 @@ public final class AntCraftConfig {
 
 	/**
 	 * {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from.
-	 * {@code colonyActionsRequireOp} limits changes from the colony screen to operators; otherwise anyone near the colony may make them.
+	 * {@code colonyActionsRequireOp} limits the colony screen, both viewing and changes, to operators; otherwise anyone near the colony may use it.
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp) {
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {

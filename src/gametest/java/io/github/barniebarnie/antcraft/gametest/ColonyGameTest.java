@@ -21,9 +21,11 @@ import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -236,12 +238,12 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		Colony colony = placeCore(helper);
 		colony.addOrder(Items.OAK_PLANKS, 4);
 
-		ColonyNetworking.StatusReply near = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1, 4)));
+		ColonyNetworking.StatusReply near = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1, 4)), false, false);
 		helper.assertValueEqual(near.status().map(ColonyStatus::core), Optional.of(colony.core()), "core of the colony answered for");
 		helper.assertValueEqual(near.status().get().orders().getFirst().item(), Items.OAK_PLANKS, "ordered item");
 
 		// Far above every test area, so out of range of all colonies.
-		ColonyNetworking.StatusReply far = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1000, 4)));
+		ColonyNetworking.StatusReply far = ColonyNetworking.reply(helper.getLevel(), helper.absolutePos(new BlockPos(4, 1000, 4)), true, false);
 		helper.assertTrue(far.status().isEmpty(), "answered for a colony far away");
 		helper.succeed();
 	}
@@ -283,6 +285,33 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.assertValueEqual(colony.orders(), Map.of(), "orders");
 		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, true, true, order), "operator's order refused");
 		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
+		helper.succeed();
+	}
+
+	@GameTest
+	public void statusRequestsOfNonOperatorsGetNoDataWhenOnlyOperatorsMayAct(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		colony.addOrder(Items.OAK_PLANKS, 4);
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+
+		helper.assertTrue(ColonyNetworking.reply(helper.getLevel(), near, false, true).status().isEmpty(), "non-operator got the colony's status");
+		helper.assertValueEqual(ColonyNetworking.reply(helper.getLevel(), near, true, true).status().map(ColonyStatus::core),
+			Optional.of(colony.core()), "core of the colony answered for an operator");
+		helper.succeed();
+	}
+
+	@GameTest
+	public void colonyCommandsStayOperatorOnlyWhenTheScreenIsOpenToAll(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		CommandSourceStack player = helper.getLevel().getServer().createCommandSourceStack()
+			.withLevel(helper.getLevel())
+			.withPosition(Vec3.atCenterOf(helper.absolutePos(new BlockPos(4, 1, 4))))
+			.withPermission(PermissionSet.NO_PERMISSIONS)
+			.withSuppressedOutput();
+		helper.assertFalse(helper.getLevel().getServer().getCommands().getDispatcher().getRoot().getChild("antcraft").canUse(player),
+			"non-operator may use /antcraft, including colony info");
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(player, "antcraft colony order minecraft:stick 4");
+		helper.assertValueEqual(colony.orders(), Map.of(), "orders after a non-operator's command");
 		helper.succeed();
 	}
 

@@ -49,6 +49,21 @@ class ColonyActionsTest {
 	}
 
 	@Test
+	void viewingFollowsTheSameRuleAsActing() {
+		Colony colony = colony();
+		BlockPos near = CORE.offset(10, 0, 10);
+		BlockPos far = CORE.offset(100, 0, 0);
+		for (boolean isOp : new boolean[] {false, true}) {
+			for (boolean requireOp : new boolean[] {false, true}) {
+				String which = "isOp=" + isOp + " requireOp=" + requireOp;
+				assertEquals(isOp || !requireOp, ColonyActions.mayView(colony, near, isOp, requireOp), "in range, " + which);
+				assertFalse(ColonyActions.mayView(colony, far, isOp, requireOp), "out of range, " + which);
+				assertEquals(ColonyActions.mayAct(colony, near, isOp, requireOp), ColonyActions.mayView(colony, near, isOp, requireOp), which);
+			}
+		}
+	}
+
+	@Test
 	void onlyMembersOfThisColonyCanBeGivenRoles() {
 		Colony colony = colony();
 		assertTrue(ColonyActions.isMember(colony, MEMBER, colony.id()));

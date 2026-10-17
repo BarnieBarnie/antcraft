@@ -25,7 +25,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Payloads between the colony status screen and the server. Each payload is a record here,
- * registered in {@link #register()}; the server answers for the colony nearest the player.
+ * registered in {@link #register()}; the server answers for the colony nearest the player, if the player may view it.
  * Changes are checked by the server like any client input, and answered with a fresh status.
  */
 public final class ColonyNetworking {
@@ -91,18 +91,20 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(EditRequest.TYPE, EditRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(RoleRequest.TYPE, RoleRequest.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
-		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE,
-			(request, context) -> context.responseSender().sendPacket(reply(context.player().level(), context.player().blockPosition())));
+		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
+			ServerPlayer player = context.player();
+			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
+		});
 		ServerPlayNetworking.registerGlobalReceiver(EditRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(), request);
-			context.responseSender().sendPacket(reply(player.level(), player.blockPosition()));
+			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(RoleRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(),
 				AntCraftConfig.botsAllowed(player.level().getServer()), request);
-			context.responseSender().sendPacket(reply(player.level(), player.blockPosition()));
+			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
 		});
 	}
 
@@ -142,8 +144,13 @@ public final class ColonyNetworking {
 		return true;
 	}
 
-	/** The reply to a status request from {@code pos}. */
-	public static StatusReply reply(ServerLevel level, BlockPos pos) {
-		return new StatusReply(ColonyManager.get(level).nearest(pos, AntCraftCommands.COLONY_RANGE).map(colony -> ColonyStatus.of(level, colony)));
+	/**
+	 * The reply to a status request from a player at {@code from}: the nearest colony in range, or none if the player may
+	 * not view it ({@link ColonyActions#mayView}, the same rule as for changes).
+	 */
+	public static StatusReply reply(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp) {
+		return new StatusReply(ColonyManager.get(level).nearest(from, AntCraftCommands.COLONY_RANGE)
+			.filter(colony -> ColonyActions.mayView(colony, from, isOp, requireOp))
+			.map(colony -> ColonyStatus.of(level, colony)));
 	}
 }

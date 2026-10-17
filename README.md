@@ -68,7 +68,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 | `/antcraft colony build cancel <n>` | Drops build `<n>` from the list (not the mineshaft: move that with `colony mineshaft`) |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
 
-**Colony screen:** press `K` near a colony to see its bots, jobs, stock, orders and builds. The screen can also change the colony without commands: pick a bot's role or hand it back to the colony, order items or cancel your part of an order (orders the colony placed itself stay), set or remove stock targets, and change the radius. The server checks every change; by default anyone within 64 blocks of the colony may make them, or only operators with `colonyActionsRequireOp=true`. Colonies have no owners yet, so there is no owner-only mode.
+**Colony screen:** press `K` near a colony to see its bots, jobs, stock, orders and builds. The screen can also change the colony without commands: pick a bot's role or hand it back to the colony, order items or cancel your part of an order (orders the colony placed itself stay), set or remove stock targets, and change the radius. The server checks every request, reads as well as changes: by default anyone within 64 blocks of the colony may view and change it, or only operators with `colonyActionsRequireOp=true`; anyone else gets "no colony". The `/antcraft` commands, including `colony info`, stay operator-only either way. Colonies have no owners yet, so there is no owner-only mode.
 
 **Config** (`config/antcraft.properties`):
 
@@ -77,7 +77,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 | `enableOnDedicatedServer` | `false` | Must be `true` for bots to work on a dedicated server. When `false`, bots cannot be placed, and any existing bots stand still |
 | `maxBotsPerLevel` | `64` | Maximum number of bots per dimension |
 | `mineshaftLevels` | `16,-16,-58` | Heights of the landings of new mineshafts: iron and copper, gold and lapis, diamonds and redstone |
-| `colonyActionsRequireOp` | `false` | When `true`, only operators can change colonies from the colony screen |
+| `colonyActionsRequireOp` | `false` | When `true`, only operators can view or change colonies from the colony screen |
 
 ## Roadmap
 
