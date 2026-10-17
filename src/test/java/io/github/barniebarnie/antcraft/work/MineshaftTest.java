@@ -423,11 +423,11 @@ class MineshaftTest {
 		// Dug through open air, every wall is to be filled; dirt and cobbled deepslate stand in for the cobblestone.
 		Function<BlockPos, BlockState> air = pos -> Blocks.AIR.defaultBlockState();
 		Map<Item, Integer> materials = plan.materials(air);
-		Map<Item, Integer> fills = plan.fillMaterials(air);
+		Map<Item, Integer> fills = plan.fillMaterials(air, false);
 		int walls = fills.get(Items.COBBLESTONE);
 		assertEquals(walls, materials.get(Items.COBBLESTONE));
 		Map<Item, Integer> has = Map.of(Items.DIRT, walls / 2, Items.COBBLED_DEEPSLATE, walls - walls / 2);
-		assertEquals(Map.of(Items.TORCH, 2, Items.CHEST, 1), BuildPlan.shortfall(materials, fills, has));
+		assertEquals(Map.of(Items.TORCH, 2, Items.CHEST, 1), BuildPlan.shortfall(materials, fills, Map.of(), has));
 	}
 
 	@Test
