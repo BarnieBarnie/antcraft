@@ -31,4 +31,26 @@ class ReplantingTest {
 		assertTrue(Replanting.saplingFor(Blocks.CRIMSON_STEM).isEmpty());
 		assertTrue(Replanting.saplingFor(Blocks.MANGROVE_LOG).isEmpty());
 	}
+
+	@Test
+	void a1x1TreeWaitsForItsOwnKindThenTakesAny() {
+		Optional<net.minecraft.world.item.Item> birch = Optional.of(Items.BIRCH_SAPLING);
+		long felled = 1000;
+
+		assertEquals(birch, Replanting.saplingNeeded(birch, 1, felled, felled));
+		assertEquals(birch, Replanting.saplingNeeded(birch, 1, felled, felled + Replanting.MATCH_WAIT_TICKS - 1));
+		assertEquals(Optional.empty(), Replanting.saplingNeeded(birch, 1, felled, felled + Replanting.MATCH_WAIT_TICKS));
+	}
+
+	@Test
+	void a2x2TreeAlwaysNeedsItsOwnKind() {
+		Optional<net.minecraft.world.item.Item> darkOak = Optional.of(Items.DARK_OAK_SAPLING);
+
+		assertEquals(darkOak, Replanting.saplingNeeded(darkOak, 4, 0, 10 * Replanting.MATCH_WAIT_TICKS));
+	}
+
+	@Test
+	void aTreeOfNoKnownKindTakesAnySaplingRightAway() {
+		assertEquals(Optional.empty(), Replanting.saplingNeeded(Optional.empty(), 1, 0, 0));
+	}
 }

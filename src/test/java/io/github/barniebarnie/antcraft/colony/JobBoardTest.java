@@ -280,4 +280,17 @@ class JobBoardTest {
 		assertEquals(board.jobs(), loaded.jobs());
 		assertTrue(loaded.claim(BOB, CHOP, BlockPos.ZERO, 599).isEmpty());
 	}
+
+	@Test
+	void postedTimeSurvivesSaveAndLoad() {
+		JobBoard board = new JobBoard();
+		BlockPos base = new BlockPos(3, 1, 0);
+		board.post(JobType.REPLANT, base, List.of(base), Optional.empty(), 1234L);
+
+		var json = JobBoard.CODEC.encodeStart(JsonOps.INSTANCE, board).getOrThrow();
+		JobBoard loaded = JobBoard.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+		assertEquals(board.jobs(), loaded.jobs());
+		assertEquals(1234L, loaded.jobs().getFirst().posted());
+	}
 }

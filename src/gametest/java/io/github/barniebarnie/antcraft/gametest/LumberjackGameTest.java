@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Revisit;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -673,10 +674,15 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * gone the leaf is removed, so no sapling can drop by chance: the test decides when one is available.
 	 */
 	private static void bareTree(GameTestHelper helper, int x, int z) {
+		bareTree(helper, x, z, Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+	}
+
+	/** Like {@link #bareTree(GameTestHelper, int, int)}, of another kind of tree. */
+	private static void bareTree(GameTestHelper helper, int x, int z, Block log, Block leaf) {
 		for (int y = 1; y <= 4; y++) {
-			helper.setBlock(x, y, z, Blocks.OAK_LOG);
+			helper.setBlock(x, y, z, log);
 		}
-		helper.setBlock(x, 5, z, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1).setValue(LeavesBlock.PERSISTENT, false));
+		helper.setBlock(x, 5, z, leaf.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1).setValue(LeavesBlock.PERSISTENT, false));
 		helper.onEachTick(() -> {
 			if (countBlocks(helper, BlockTags.LOGS) == 0 && helper.getBlockState(new BlockPos(x, 5, z)).is(BlockTags.LEAVES)) {
 				helper.setBlock(x, 5, z, Blocks.AIR);
@@ -1092,5 +1098,55 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			assertDarkOakSaplingSquare(helper);
 			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.REPLANT), "replant job left: " + colony.board().jobs());
 		});
+	}
+
+	/** A felled birch is replanted with a birch sapling, not the oak sapling the lumberjack carries first, so a birch forest stays birch. */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void replantsFelledBirchWithBirchSapling(GameTestHelper helper) {
+		bareTree(helper, 5, 5, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		AntBot bot = lumberjack(helper, 2, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 5, 1, 5);
+		});
+	}
+
+	/** A colony lumberjack without saplings posts a birch replant job for a felled birch, and takes the birch sapling from the core, not the oak one. */
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void colonyReplantsFelledBirchWithBirchSaplingFromTheCore(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_SAPLING));
+		core.setItem(1, new ItemStack(Items.BIRCH_SAPLING));
+		bareTree(helper, 5, 5, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		colonyLumberjack(helper, colony, 2, 2);
+		Set<Optional<net.minecraft.world.item.Item>> kinds = new HashSet<>();
+		helper.onEachTick(() -> colony.board().jobs().stream()
+			.filter(job -> job.type() == JobType.REPLANT)
+			.forEach(job -> kinds.add(job.item())));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(kinds.equals(Set.of(Optional.of(Items.BIRCH_SAPLING))), "replant jobs needed " + kinds);
+			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 5, 1, 5);
+			helper.assertTrue(core.countItem(Items.OAK_SAPLING) == 1, "oak sapling taken from the core");
+		});
+	}
+
+	/**
+	 * A felled birch no birch sapling turned up for in time is still replanted: a solo lumberjack carrying
+	 * only an oak sapling comes back and plants that once the wait for its own kind is over.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 600)
+	public void replantsWithAnotherSaplingOnceTheWaitForItsOwnKindIsOver(GameTestHelper helper) {
+		AntBot bot = lumberjack(helper, 2, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
+		long felled = helper.getLevel().getGameTime() - Replanting.MATCH_WAIT_TICKS;
+		bot.getRevisits().put(base, new Revisit(base, felled, List.of(base), Optional.of(Items.BIRCH_SAPLING)));
+
+		helper.succeedWhen(() -> helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5));
 	}
 }

@@ -49,10 +49,15 @@ public class JobBoard {
 
 	/** Like {@link #post(JobType, BlockPos, Collection)}, for a job that needs {@code item}. */
 	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area, Optional<Item> item) {
+		return this.post(type, target, area, item, 0L);
+	}
+
+	/** Like {@link #post(JobType, BlockPos, Collection, Optional)}, remembering the game time it was posted. */
+	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area, Optional<Item> item, long now) {
 		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {
 			return Optional.empty();
 		}
-		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item, 0, 0L);
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item, 0, 0L, now);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -62,7 +67,7 @@ public class JobBoard {
 		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
 			return Optional.empty();
 		}
-		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L);
+		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}

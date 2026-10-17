@@ -16,10 +16,11 @@ import net.minecraft.world.item.Item;
  * {@code area} is every block the job covers, such as a tree's logs, so the same work is not posted twice.
  * {@code item} is the item the job needs, if only one kind will do, such as the sapling of a 2x2 tree.
  * {@code tries} is how often a bot gave the job back to retry later, and {@code notBefore} the game time
- * from which it may be claimed again; {@link Long#MAX_VALUE} once it is given up.
+ * from which it may be claimed again; {@link Long#MAX_VALUE} once it is given up. {@code posted} is the
+ * game time it was posted, from when a 1x1 tree's replant job waits for its own sapling kind.
  */
 public record Job(UUID id, JobType type, BlockPos target, Optional<UUID> claimedBy, long heartbeat, List<BlockPos> area, Optional<Item> item,
-		int tries, long notBefore) {
+		int tries, long notBefore, long posted) {
 	public static final Codec<Job> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.CODEC.fieldOf("id").forGetter(Job::id),
 		JobType.CODEC.fieldOf("type").forGetter(Job::type),
@@ -29,7 +30,8 @@ public record Job(UUID id, JobType type, BlockPos target, Optional<UUID> claimed
 		BlockPos.CODEC.listOf().optionalFieldOf("area", List.of()).forGetter(Job::area),
 		BuiltInRegistries.ITEM.byNameCodec().optionalFieldOf("item").forGetter(Job::item),
 		Codec.INT.optionalFieldOf("tries", 0).forGetter(Job::tries),
-		Codec.LONG.optionalFieldOf("not_before", 0L).forGetter(Job::notBefore)
+		Codec.LONG.optionalFieldOf("not_before", 0L).forGetter(Job::notBefore),
+		Codec.LONG.optionalFieldOf("posted", 0L).forGetter(Job::posted)
 	).apply(i, Job::new));
 
 	/** The blocks the job covers, or just its target when it names no area. */
@@ -47,18 +49,18 @@ public record Job(UUID id, JobType type, BlockPos target, Optional<UUID> claimed
 	}
 
 	Job claim(UUID bot, long now) {
-		return new Job(this.id, this.type, this.target, Optional.of(bot), now, this.area, this.item, this.tries, this.notBefore);
+		return new Job(this.id, this.type, this.target, Optional.of(bot), now, this.area, this.item, this.tries, this.notBefore, this.posted);
 	}
 
 	Job release() {
-		return new Job(this.id, this.type, this.target, Optional.empty(), 0L, this.area, this.item, this.tries, this.notBefore);
+		return new Job(this.id, this.type, this.target, Optional.empty(), 0L, this.area, this.item, this.tries, this.notBefore, this.posted);
 	}
 
 	Job retryLater(long notBefore) {
-		return new Job(this.id, this.type, this.target, Optional.empty(), 0L, this.area, this.item, this.tries + 1, notBefore);
+		return new Job(this.id, this.type, this.target, Optional.empty(), 0L, this.area, this.item, this.tries + 1, notBefore, this.posted);
 	}
 
 	Job withHeartbeat(long now) {
-		return new Job(this.id, this.type, this.target, this.claimedBy, now, this.area, this.item, this.tries, this.notBefore);
+		return new Job(this.id, this.type, this.target, this.claimedBy, now, this.area, this.item, this.tries, this.notBefore, this.posted);
 	}
 }
