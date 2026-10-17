@@ -220,6 +220,26 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Dirt to dig walled in with bedrock all round is within reach of the miner, but out of its sight, so it is left and reported blocked. */
+	@GameTest(maxTicks = 600)
+	public void dirtWalledInWithBedrockIsNotDugThroughTheWall(GameTestHelper helper) {
+		Colony colony = colonyWithMiner(helper);
+		BlockPos dirt = new BlockPos(3, 1, 3);
+		helper.setBlock(dirt, Blocks.DIRT);
+		for (Direction dir : Direction.values()) {
+			helper.setBlock(dirt.relative(dir), Blocks.BEDROCK);
+		}
+		miner(helper, colony, 1, 3);
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(4, 2, 4), 0);
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(dirt).is(Blocks.DIRT)) {
+				helper.fail("dug the walled-in dirt through bedrock");
+			}
+		});
+
+		helper.succeedWhen(() -> helper.assertTrue(colony.blockedSteps().contains(helper.absolutePos(dirt)), "the walled-in dirt was never reported blocked"));
+	}
+
 	@GameTest(maxTicks = 800)
 	public void lavaInTheAreaStaysBlocked(GameTestHelper helper) {
 		BlockPos corePos = new BlockPos(0, 2, 0);

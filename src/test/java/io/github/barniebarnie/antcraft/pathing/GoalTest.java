@@ -26,6 +26,32 @@ class GoalTest {
 	}
 
 	@Test
+	void inSightIsNotMetWithinReachWhenTheBlockCannotBeSeen() {
+		assertFalse(new Goal.InSight(LOG, 4.5, (feet, target) -> false).isReached(new BlockPos(1, 1, 0)));
+	}
+
+	@Test
+	void inSightIsMetWithinReachWhenTheBlockCanBeSeen() {
+		assertTrue(new Goal.InSight(LOG, 4.5, (feet, target) -> target.equals(LOG)).isReached(new BlockPos(1, 1, 0)));
+	}
+
+	@Test
+	void inSightIsNotMetOutOfReachEvenWhenTheBlockCanBeSeen() {
+		assertFalse(new Goal.InSight(LOG, 4.5, (feet, target) -> true).isReached(new BlockPos(5, 1, 0)));
+	}
+
+	@Test
+	void pathfinderGoesOnUntilTheBlockIsInSight() {
+		// Only seen from x >= 1, say round a corner: the path passes the spots that are merely within reach.
+		GridWorld world = GridWorld.flat(10);
+		Path path = PathFinder.find(world, new BlockPos(-8, 1, 0), new Goal.InSight(new BlockPos(0, 1, 0), 3.0, (feet, target) -> feet.getX() >= 1),
+			new PathFinder.Options(false, false, 10_000, 3));
+
+		assertTrue(path.complete());
+		assertTrue(path.end().getX() >= 1 && path.end().getX() <= 3);
+	}
+
+	@Test
 	void pathfinderStopsWithinReach() {
 		GridWorld world = GridWorld.flat(10);
 		Path path = PathFinder.find(world, new BlockPos(-8, 1, 0), new Goal.Reach(new BlockPos(0, 1, 0), 3.0),

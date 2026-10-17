@@ -275,6 +275,40 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A branch of the deepest level starts with bedrock, and the cells behind it are walled in
+	 * with bedrock all round. They are within reach of the hall, but a miner cannot see them, so like
+	 * a player it cannot break them: it gives the branch up instead.
+	 */
+	@GameTest(maxTicks = 1500)
+	public void cellBehindAWallIsNotMinedFromTheOtherSide(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Mineshaft.Branch branch = shaft.branches(shaft.levels().getLast()).getFirst();
+		List<BlockPos> walledIn = branch.cells().subList(2, 6);
+		for (BlockPos cell : walledIn) {
+			for (Direction dir : Direction.values()) {
+				BlockPos side = cell.relative(dir);
+				if (!walledIn.contains(side)) {
+					helper.getLevel().setBlockAndUpdate(side, Blocks.BEDROCK.defaultBlockState());
+				}
+			}
+		}
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			for (BlockPos cell : walledIn) {
+				if (!helper.getLevel().getBlockState(cell).is(Blocks.STONE)) {
+					helper.fail("mined the walled-in cell at " + relative(helper, cell).toShortString() + " through bedrock");
+				}
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(colony.board().jobs().stream()
+			.anyMatch(job -> job.target().equals(branch.start()) && job.givenUp()), "walled-in branch not given up yet"));
+	}
+
 	@GameTest(maxTicks = 1200)
 	public void branchesDugWithoutTorchesAreLitOnceTorchesReachTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);

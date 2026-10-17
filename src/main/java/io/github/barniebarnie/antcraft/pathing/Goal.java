@@ -40,9 +40,33 @@ public interface Goal {
 		}
 	}
 
+	/** Whether a bot standing at {@code feet} can see {@code target}: a clear line from its eyes to some part of it. */
+	@FunctionalInterface
+	interface Sight {
+		boolean sees(BlockPos feet, BlockPos target);
+	}
+
+	/**
+	 * Like {@link Reach}, but the bot must also see the block from where it stands, as a player must
+	 * to break it, so it does not break a block through a wall. Goals compare by value, so keep one
+	 * {@code sight} per bot rather than a fresh lambda per call.
+	 */
+	record InSight(BlockPos pos, double reach, Sight sight) implements Goal {
+		@Override
+		public boolean isReached(BlockPos feet) {
+			return new Reach(this.pos, this.reach).isReached(feet) && this.sight.sees(feet, this.pos);
+		}
+
+		@Override
+		public double heuristic(BlockPos feet) {
+			return new Reach(this.pos, this.reach).heuristic(feet);
+		}
+	}
+
 	/** Stand where the bot's eyes are within {@code reach} of the block's centre, e.g. to break or use it. */
 	record Reach(BlockPos pos, double reach) implements Goal {
-		private static final double EYE_HEIGHT = 1.62;
+		/** How high a bot's eyes are above its feet. */
+		public static final double EYE_HEIGHT = 1.62;
 
 		@Override
 		public boolean isReached(BlockPos feet) {

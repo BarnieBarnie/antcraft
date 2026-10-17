@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.Tools;
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
@@ -50,8 +51,9 @@ import org.jspecify.annotations.Nullable;
  * their ingredients included, and what the colony is short of a stock target of. Now and then it
  * looks for a better pickaxe: it swaps to one in the core, leaving the old one there,
  * or orders the best one the colony can make. Before mining a level it makes sure a pickaxe
- * good enough for the ores the colony wants there is in hand or on its way. A branch with cells it
- * cannot get within reach of goes back on the board to retry later, and is given up after a few tries.
+ * good enough for the ores the colony wants there is in hand or on its way. Like a player, it only
+ * breaks a block it can see from within reach, not one behind a wall. A branch with cells it cannot
+ * get within reach and sight of goes back on the board to retry later, and is given up after a few tries.
  * It also digs out dig jobs, such as the ground of a terraform above its height, with the haul going
  * to the core the same way (see {@link Digging}).
  */
@@ -68,6 +70,8 @@ public class MinerGoal extends ColonyWorkGoal {
 	private enum State { TOOL, WORK, DEPOSIT }
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
+	/** What it can see, to break only blocks in sight; one for good, as goals compare by value. */
+	private final Goal.Sight sight;
 	private State state = State.TOOL;
 	/** The job it last checked its pickaxe for, so it checks once per job. */
 	private @Nullable UUID tierChecked;
@@ -78,6 +82,7 @@ public class MinerGoal extends ColonyWorkGoal {
 
 	public MinerGoal(AntBot bot) {
 		super(bot, BotRole.MINER);
+		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
 	}
 
 	@Override
@@ -176,7 +181,7 @@ public class MinerGoal extends ColonyWorkGoal {
 			return;
 		}
 		BlockPos next = blocks.getFirst();
-		Goal reach = new Goal.Reach(next, REACH);
+		Goal reach = new Goal.InSight(next, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
 			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
@@ -197,7 +202,7 @@ public class MinerGoal extends ColonyWorkGoal {
 			return;
 		}
 		BlockPos pos = next.get().pos();
-		Goal reach = new Goal.Reach(pos, REACH);
+		Goal reach = new Goal.InSight(pos, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
 			this.breaker.tick(level, pos, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
