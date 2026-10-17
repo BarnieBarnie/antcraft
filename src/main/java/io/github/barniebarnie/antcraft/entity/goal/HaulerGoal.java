@@ -4,14 +4,18 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
+import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.work.GameRecipeBook;
+import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.StorageCategory;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +40,7 @@ import org.jspecify.annotations.Nullable;
  * category per chest; what the core is short of (stock targets, ingredients for open orders) comes
  * back. Haulers place the storage chests themselves, from chests the colony survey orders. While
  * the core is full and the storage area still waits for a chest, a hauler holds a stack of surplus
- * so the chest has a slot to be crafted into.
+ * so the chest has a slot to be crafted into, and another each time the core fills up again.
  */
 public class HaulerGoal extends ColonyWorkGoal {
 	private static final int MIN_FREE_SLOTS = 1;
@@ -79,8 +83,31 @@ public class HaulerGoal extends ColonyWorkGoal {
 			return Stockkeeping.toFetch(this.inCore, this.stored, this.targets, this.ingredients);
 		}
 
+		/**
+		 * What the core holds above its working stock. A nearly full core with nothing above that keeps
+		 * only what stock targets and open orders need, not a stack of everything, so a core full of
+		 * different items still has surplus to make room with.
+		 */
 		Map<Item, Integer> toStore() {
-			return Stockkeeping.toStore(this.inCore, this.targets, this.ingredients, Item::getDefaultMaxStackSize);
+			Map<Item, Integer> store = Stockkeeping.toStore(this.inCore, this.targets, this.ingredients, Item::getDefaultMaxStackSize);
+			if (store.isEmpty() && freeSlots(this.core) <= NEARLY_FULL_FREE_SLOTS) {
+				return Stockkeeping.toStore(this.inCore, this.targets, this.ingredients, item -> 0);
+			}
+			return store;
+		}
+
+		/** The surplus a hauler may hold to make room for a storage chest: all of it but what crafting the chest uses. */
+		Map<Item, Integer> toHold(ServerLevel level) {
+			TaskPlanner.Plan<Item> chest = TaskPlanner.plan(Items.CHEST, 1, this.inCore, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable);
+			Map<Item, Integer> forChest = Stockkeeping.ingredients(chest.crafts(), this.inCore);
+			Map<Item, Integer> hold = new LinkedHashMap<>();
+			this.toStore().forEach((item, count) -> {
+				int spare = count - forChest.getOrDefault(item, 0);
+				if (spare > 0) {
+					hold.put(item, spare);
+				}
+			});
+			return hold;
 		}
 	}
 
@@ -92,7 +119,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 	/** Surplus the hauler is on its way to take out of a full core, or null. */
 	private @Nullable Item clearing;
 	/** Surplus the hauler took out of a full core, which it keeps out of the core until storage takes it. */
-	private @Nullable Item holding;
+	private final Set<Item> holding = new HashSet<>();
 
 	public HaulerGoal(AntBot bot) {
 		super(bot, BotRole.HAULER);
@@ -117,9 +144,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
 		SimpleContainer inventory = this.bot.getInventory();
-		if (this.holding != null && inventory.countItem(this.holding) == 0) {
-			this.holding = null;
-		}
+		this.holding.removeIf(item -> inventory.countItem(item) == 0);
 		if (this.trip != null) {
 			this.runTrip(level);
 			return;
@@ -131,8 +156,11 @@ public class HaulerGoal extends ColonyWorkGoal {
 				this.cooldown = IDLE_TICKS;
 			} else if (this.reach(colony.core())) {
 				Item surplus = this.clearing;
-				Storage.moveItems(core, inventory, stack -> stack.is(surplus), surplus.getDefaultMaxStackSize());
-				this.holding = surplus;
+				Stocks stocks = Stocks.of(level, colony);
+				// Only the surplus: what the core keeps for orders and the chest stays.
+				int count = Math.min(stocks == null ? 0 : stocks.toHold(level).getOrDefault(surplus, 0), surplus.getDefaultMaxStackSize());
+				Storage.moveItems(core, inventory, stack -> stack.is(surplus), count);
+				this.holding.add(surplus);
 				this.clearing = null;
 			}
 			return;
@@ -186,7 +214,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 
 	/** Whether the hauler puts the stack in the core when it deposits: not the surplus it holds to keep a slot free. */
 	private boolean deposits(ItemStack stack) {
-		return this.holding == null || !stack.is(this.holding);
+		return !this.holding.contains(stack.getItem());
 	}
 
 	private boolean hasRoomForAny(Container core, Container inventory) {
@@ -202,7 +230,9 @@ public class HaulerGoal extends ColonyWorkGoal {
 	/**
 	 * Surplus to take out of the core and hold, so the chest the storage area waits for can be crafted:
 	 * when the core has no free slot, the area has a free chest spot and the core holds no chest. Null
-	 * if there is no need, or the hauler has no room to spare (it keeps a slot for the chest).
+	 * if there is no need, or the hauler has no room to spare (it keeps a slot for the chest). When
+	 * something fills the freed slot before the chest is crafted, the core is full again and the
+	 * hauler takes more.
 	 */
 	private @Nullable Item surplusToHold(ServerLevel level, Colony colony) {
 		Stocks stocks = colony.storage().isEmpty() ? null : Stocks.of(level, colony);
@@ -210,12 +240,12 @@ public class HaulerGoal extends ColonyWorkGoal {
 				|| freeSlots(this.bot.getInventory()) < 2 || freeSpots(level, colony, stocks).findFirst().isEmpty()) {
 			return null;
 		}
-		Map<Item, Integer> surplus = stocks.toStore();
-		if (this.holding != null && surplus.containsKey(this.holding)) {
-			return this.holding;
-		}
-		// Holds one kind at a time, so the rest of its inventory still deposits.
-		return this.holding == null ? surplus.keySet().stream().findFirst().orElse(null) : null;
+		// Rather a kind that frees a slot when taken: all of it may be held, or a stack of it.
+		return stocks.toHold(level).entrySet().stream()
+			.min(Comparator.comparing((Map.Entry<Item, Integer> store) ->
+				store.getValue() < Math.min(stocks.inCore().get(store.getKey()), store.getKey().getDefaultMaxStackSize())))
+			.map(Map.Entry::getKey)
+			.orElse(null);
 	}
 
 	/** A storage chest for something the hauler carries, to take it straight there; null if none has room. */

@@ -19,6 +19,7 @@ import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
@@ -230,6 +231,97 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 			List<ItemEntity> loose = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
 				AABB.encapsulatingFullBlocks(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(7, 7, 7))));
 			helper.assertTrue(loose.isEmpty(), "items dropped: " + loose);
+		});
+	}
+
+	/** Stacks of {@code count} different plain items, none of them planks, sticks or chests. */
+	private static List<ItemStack> distinctStacks(int count) {
+		return BuiltInRegistries.ITEM.stream()
+			.filter(item -> item != Items.AIR && item.getDefaultMaxStackSize() == 64)
+			.filter(item -> BuiltInRegistries.ITEM.getKey(item).getNamespace().equals("minecraft"))
+			.filter(item -> item != Items.OAK_PLANKS && item != Items.STICK && item != Items.CHEST)
+			.limit(count)
+			.map(item -> new ItemStack(item, 64))
+			.toList();
+	}
+
+	/**
+	 * A core full of different items, a stack of each and none above a stock target, so nothing in
+	 * it is surplus. The colony still makes room: storage takes what nothing needs, and the order is
+	 * crafted.
+	 */
+	private static final BlockPos FULL_CORE = new BlockPos(2, 1, 2);
+
+	/**
+	 * A colony whose core at {@link #FULL_CORE} is full of different items, a stack of each and none
+	 * above a stock target, so nothing in it is surplus; planks in the first slot to craft a chest from.
+	 * It has a crafter and a newcomer, who becomes its hauler.
+	 */
+	private static Colony coreFullOfDifferentItems(GameTestHelper helper) {
+		helper.setBlock(FULL_CORE, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(FULL_CORE)).orElseThrow();
+		colony.setRadius(5);
+		colony.setStockTargets(List.of());
+		Container core = fullCore(helper);
+		core.setItem(0, new ItemStack(Items.OAK_PLANKS, 64));
+		List<ItemStack> others = distinctStacks(core.getContainerSize());
+		for (int i = 1; i < core.getContainerSize(); i++) {
+			core.setItem(i, others.get(i - 1));
+		}
+		member(helper, colony, BotRole.CRAFTER);
+		member(helper, colony, BotRole.NONE);
+		return colony;
+	}
+
+	private static Container fullCore(GameTestHelper helper) {
+		return (Container) helper.getBlockEntity(FULL_CORE, BlockEntity.class);
+	}
+
+	/** That the colony made room: a storage chest stands, the core has a free slot and nothing was dropped. */
+	private static void assertMadeRoom(GameTestHelper helper, Colony colony) {
+		helper.assertTrue(!storageChests(helper, colony).isEmpty(), "no storage chest placed");
+		Container core = fullCore(helper);
+		int free = 0;
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			free += core.getItem(i).isEmpty() ? 1 : 0;
+		}
+		helper.assertTrue(free > 0, "core still full");
+		List<ItemEntity> loose = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+			AABB.encapsulatingFullBlocks(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(7, 7, 7))));
+		helper.assertTrue(loose.isEmpty(), "items dropped: " + loose);
+	}
+
+	/** Storage takes what nothing needs, and the order is crafted. */
+	@GameTest(maxTicks = 1500)
+	public void aCoreFullOfDifferentItemsMakesRoom(GameTestHelper helper) {
+		Colony colony = coreFullOfDifferentItems(helper);
+		colony.addOrder(Items.STICK, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.orders().getOrDefault(Items.STICK, 0) == 0, "orders: " + colony.orders());
+			assertMadeRoom(helper, colony);
+		});
+	}
+
+	/** A depositor fills the slot the hauler freed before the chest is crafted; the hauler frees another. */
+	@GameTest(maxTicks = 1500)
+	public void aFreedSlotThatIsRefilledIsFreedAgain(GameTestHelper helper) {
+		Colony colony = coreFullOfDifferentItems(helper);
+		ItemStack deposit = distinctStacks(fullCore(helper).getContainerSize() + 1).getLast();
+		boolean[] refilled = {false};
+		helper.onEachTick(() -> {
+			Container core = fullCore(helper);
+			for (int i = 0; i < core.getContainerSize() && !refilled[0]; i++) {
+				if (core.getItem(i).isEmpty() && core.countItem(Items.CHEST) == 0) {
+					core.setItem(i, deposit.copy());
+					refilled[0] = true;
+				}
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(refilled[0], "the freed slot was never refilled");
+			assertMadeRoom(helper, colony);
 		});
 	}
 

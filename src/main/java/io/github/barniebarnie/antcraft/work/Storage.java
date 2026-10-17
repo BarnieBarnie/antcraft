@@ -17,13 +17,21 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /** Moving items between a bot's inventory and storage blocks. */
 public final class Storage {
+	/** How far from the core a furnace counts as the colony's furnace. */
+	public static final int FURNACE_RANGE = 2;
+	public static final int FURNACE_INPUT = 0;
+	public static final int FURNACE_FUEL = 1;
+	public static final int FURNACE_RESULT = 2;
+
 	private Storage() {
 	}
 
@@ -111,8 +119,8 @@ public final class Storage {
 	}
 
 	/**
-	 * Everything the colony has: the core, its storage chests and the mineshaft landing chests,
-	 * whose haul a hauler brings up. Use this to decide what the colony owns; bots still only take
+	 * Everything the colony has: the core, its storage chests, the mineshaft landing chests,
+	 * whose haul a hauler brings up, and the output waiting in the colony furnace. Use this to decide what the colony owns; bots still only take
 	 * items from the core.
 	 */
 	public static Map<Item, Integer> colonyStock(ServerLevel level, Colony colony) {
@@ -123,7 +131,22 @@ public final class Storage {
 		}
 		storageChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
 		landingChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
+		AbstractFurnaceBlockEntity furnace = colonyFurnace(level, colony.core());
+		ItemStack output = furnace == null ? ItemStack.EMPTY : furnace.getItem(FURNACE_RESULT);
+		if (!output.isEmpty()) {
+			stocks.add(Map.of(output.getItem(), output.getCount()));
+		}
 		return StockPlanner.total(stocks);
+	}
+
+	/** The colony's furnace: the first furnace within {@link #FURNACE_RANGE} of the core, or null. */
+	public static @Nullable AbstractFurnaceBlockEntity colonyFurnace(ServerLevel level, BlockPos core) {
+		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-FURNACE_RANGE, -1, -FURNACE_RANGE), core.offset(FURNACE_RANGE, 1, FURNACE_RANGE))) {
+			if (level.getBlockState(pos).is(Blocks.FURNACE) && level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace) {
+				return furnace;
+			}
+		}
+		return null;
 	}
 
 	/** What the core should hold for work under way: the ingredients open orders use up from {@code stock}, and build materials. */

@@ -43,11 +43,10 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final double REACH = 4.0;
 	private static final int CRAFT_TICKS = 10;
 	private static final int IDLE_TICKS = 20;
-	/** How far from the core a furnace counts as the colony's furnace. */
-	private static final int FURNACE_RANGE = 2;
-	private static final int FURNACE_INPUT = 0;
-	private static final int FURNACE_FUEL = 1;
-	private static final int FURNACE_RESULT = 2;
+	private static final int FURNACE_RANGE = Storage.FURNACE_RANGE;
+	private static final int FURNACE_INPUT = Storage.FURNACE_INPUT;
+	private static final int FURNACE_FUEL = Storage.FURNACE_FUEL;
+	private static final int FURNACE_RESULT = Storage.FURNACE_RESULT;
 
 	private final AntBot bot;
 	private final PathFollower follower;
@@ -130,7 +129,7 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 		}
 
-		AbstractFurnaceBlockEntity furnace = findFurnace(level, colony.core());
+		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
 		// Output the core has no room for waits in the furnace.
 		if (furnace != null && !furnace.getItem(FURNACE_RESULT).isEmpty() && Storage.hasRoomFor(core, furnace.getItem(FURNACE_RESULT))) {
 			return () -> collect(colony, core, furnace);
@@ -140,8 +139,8 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		for (Map.Entry<Item, Integer> order : colony.orders().entrySet()) {
 			Map<Item, Integer> stock = Storage.stock(core);
 			if (furnace != null) {
-				// What is in the furnace is still the colony's.
-				for (int slot : new int[] {FURNACE_INPUT, FURNACE_FUEL}) {
+				// What is in the furnace is still the colony's, output waiting for room in the core too.
+				for (int slot : new int[] {FURNACE_INPUT, FURNACE_FUEL, FURNACE_RESULT}) {
 					ItemStack stack = furnace.getItem(slot);
 					if (!stack.isEmpty()) {
 						stock.merge(stack.getItem(), stack.getCount(), Integer::sum);
@@ -270,15 +269,6 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	private static boolean isLit(AbstractFurnaceBlockEntity furnace) {
 		return furnace.getBlockState().getValue(AbstractFurnaceBlock.LIT);
-	}
-
-	private static @Nullable AbstractFurnaceBlockEntity findFurnace(ServerLevel level, BlockPos core) {
-		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-FURNACE_RANGE, -1, -FURNACE_RANGE), core.offset(FURNACE_RANGE, 1, FURNACE_RANGE))) {
-			if (level.getBlockState(pos).is(Blocks.FURNACE) && level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace) {
-				return furnace;
-			}
-		}
-		return null;
 	}
 
 	/** A free spot next to the core, on solid ground and with nobody standing in it. */

@@ -297,4 +297,35 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(looseItems(helper).isEmpty(), "items dropped: " + looseItems(helper));
 		});
 	}
+
+	@GameTest(maxTicks = 100)
+	public void furnaceOutputCountsAsColonyStock(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(CORE.east(), Blocks.FURNACE);
+		AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) helper.getBlockEntity(CORE.east(), BlockEntity.class);
+		furnace.setItem(2, new ItemStack(Items.IRON_INGOT, 5));
+
+		helper.succeedWhen(() -> {
+			int ingots = Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.IRON_INGOT, 0);
+			helper.assertTrue(ingots == 5, "colony stock has " + ingots + " iron ingots");
+		});
+	}
+
+	/** Ingots waiting in the furnace for room in the core are what the order needs: no more are smelted. */
+	@GameTest(maxTicks = 350)
+	public void doesNotSmeltWhatWaitsInTheFurnace(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(CORE.east(), Blocks.FURNACE);
+		AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) helper.getBlockEntity(CORE.east(), BlockEntity.class);
+		furnace.setItem(2, new ItemStack(Items.IRON_INGOT, 3));
+		fill(helper, new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.COAL, 8), new ItemStack(Items.STICK, 2));
+		colony.addOrder(Items.IRON_PICKAXE, 1);
+		crafter(helper, colony);
+
+		helper.runAtTickTime(300, () -> {
+			helper.assertTrue(core(helper).countItem(Items.RAW_IRON) == 3, "core has " + core(helper).countItem(Items.RAW_IRON) + " raw iron");
+			helper.assertTrue(furnace.getItem(0).isEmpty(), "furnace input: " + furnace.getItem(0));
+			helper.succeed();
+		});
+	}
 }
