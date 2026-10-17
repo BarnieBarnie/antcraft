@@ -244,6 +244,19 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Wool picked up after the fleece pickup ended, by walking over it, still goes to the core while the field waits for seeds. */
+	@GameTest(maxTicks = 200)
+	public void storesWoolItCarriesWhileWaitingForSeeds(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = farmer(helper, colony);
+		// Once the field is planned and its planting waits for seeds the farmer has none of.
+		helper.runAfterDelay(60, () -> {
+			helper.assertTrue(colony.field().isPresent(), "no field to wait for seeds for");
+			bot.getInventory().addItem(new ItemStack(Items.WOOL.white(), 2));
+			helper.succeedWhen(() -> helper.assertTrue(wool(core(helper)) == 2, "core has " + wool(core(helper)) + " wool"));
+		});
+	}
+
 	@GameTest(maxTicks = 300)
 	public void ordersShearsWhenThereIsASheepToShear(GameTestHelper helper) {
 		Colony colony = colony(helper);

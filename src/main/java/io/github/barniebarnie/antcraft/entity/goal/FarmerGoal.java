@@ -268,11 +268,12 @@ public class FarmerGoal extends ColonyWorkGoal {
 				return true;
 			}
 			this.fleece = null;
-			// Straight to the core with it: a farmer waiting for seeds would otherwise keep it.
-			if (findSlot(this.bot.getInventory(), stack -> stack.is(ItemTags.WOOL)) >= 0) {
-				this.depositing = true;
-				return true;
-			}
+		}
+		// Straight to the core with it, also wool walked over after the pickup ended: a farmer
+		// waiting for seeds would otherwise keep it.
+		if (findSlot(this.bot.getInventory(), stack -> stack.is(ItemTags.WOOL)) >= 0) {
+			this.depositing = true;
+			return true;
 		}
 		if (this.sheep == null || !this.sheep.isAlive() || !this.sheep.readyForShearing()) {
 			this.sheep = null;
@@ -354,6 +355,10 @@ public class FarmerGoal extends ColonyWorkGoal {
 			.orElse(null);
 		if (wool == null) {
 			return false;
+		}
+		if (!wool.onGround()) {
+			// Shorn wool pops up into the air: there is no standing in that block, so wait for it to land.
+			return true;
 		}
 		return this.travel(new Goal.Near(wool.blockPosition(), 0)) != PathFollower.Status.FAILED;
 	}
