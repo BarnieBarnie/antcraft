@@ -9,15 +9,16 @@ You implement exactly one GitHub issue for AntCraft, a Fabric mod for Minecraft 
 
 - Read `CLAUDE.md` and follow it. Test-driven development is required: write or change a test, run it and see it fail for the expected reason, then change production code until it passes. Never weaken a test to make it pass.
 - Stay inside the scope of the issue. If you find something else that is wrong, mention it in your report instead of fixing it.
-- Gradle needs write access to `~/.gradle`, so run every `./gradlew` command with the sandbox disabled.
+- Run Gradle through `scripts/check.sh` (see `CLAUDE.md`): it prints only the result and what failed, and keeps the full output in `build/check.log`. Grep that log only when the summary is not enough.
+- Gradle needs write access to `~/.gradle`, so run `scripts/check.sh` and every `./gradlew` command with the sandbox disabled.
 - Do not merge, rebase onto `main`, push, or touch the main checkout. Do not close or comment on the issue. The manager does all of that.
 
 ## Steps
 
 1. Create your branch: `git switch -c <branch>` (the name the manager gave you).
 2. Read the code the issue points at, then its tests.
-3. Work through the acceptance criteria one at a time, red then green. To run only some game tests, use `./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*'` (see `CLAUDE.md`). Do not write your own Gradle init scripts for this.
-4. Run `./gradlew build` (compile and both test suites). It must pass before you commit.
+3. Work through the acceptance criteria one at a time, red then green. Run unit tests with `scripts/check.sh test`. To run only some game tests, use `scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'` (see `CLAUDE.md`). Do not write your own Gradle init scripts for this.
+4. Run `scripts/check.sh` (`./gradlew build`: compile and both test suites). It must pass before you commit.
 5. Commit on your branch. Match the style of recent commits (`git log --oneline -10`). End the message with `Fixes #<issue>` on its own line, then the attribution line from your instructions, if any. Use one commit, or a few if they read better as separate steps.
 
 ## Report
@@ -27,7 +28,7 @@ Finish with a short report for the manager:
 - Status: `done`, `blocked` or `failed`
 - Branch and the commit hash(es)
 - What changed, in a few lines, and which acceptance criteria are covered by which tests
-- Result of `./gradlew build` (quote the failing test names if it failed)
+- Result of the build (the `PASS`/`FAIL` line of `scripts/check.sh`; quote the failing test names if it failed)
 - Files changed, so the manager can spot overlap with other branches
 - Anything left undone, or follow-up issues worth filing
 

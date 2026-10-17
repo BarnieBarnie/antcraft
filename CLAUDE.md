@@ -28,6 +28,14 @@ Game tests run on a dedicated server, so they enable bots with `AntCraftConfig.s
 ./gradlew runClient     # play-test manually
 ```
 
+Agents run builds through `scripts/check.sh` instead of `./gradlew` directly. It takes the same tasks and options (default `build`), saves the full output to `build/check.log` and prints only `PASS`/`FAIL` with test counts, compile errors as `file:line: message`, and each failing test with its message. Its exit code is Gradle's, and it adds `--continue` so one run reports every failing suite. Grep `build/check.log` only when the summary is not enough.
+
+```sh
+scripts/check.sh                                                     # build
+scripts/check.sh test                                                # unit tests
+scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
+```
+
 Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case>`, so `-PgameTest` takes a pattern such as `antcraft-gametest:miner_game_test*` for one class or the full id for one test. Without it, every game test runs.
 
 Gradle needs write access to `~/.gradle`, so in the Claude Code sandbox run it with the sandbox disabled.
