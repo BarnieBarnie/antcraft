@@ -35,7 +35,7 @@ public final class RoleAssigner {
 	 * @param roles how many members already have each role
 	 * @param openJobs unclaimed jobs on the board, by type
 	 * @param hasOrders whether the colony has crafting orders
-	 * @param needsHauler whether the core is nearly full or storage holds items the core needs
+	 * @param needsHauler whether the core is nearly full, storage holds items the core needs, or a mineshaft landing chest holds items
 	 */
 	public static BotRole choose(Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders, boolean needsHauler) {
 		int assigned = roles.entrySet().stream().filter(role -> role.getKey() != BotRole.NONE).mapToInt(Map.Entry::getValue).sum();

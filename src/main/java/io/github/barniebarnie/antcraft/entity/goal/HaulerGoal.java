@@ -92,7 +92,10 @@ public class HaulerGoal extends ColonyWorkGoal {
 		super(bot, BotRole.HAULER);
 	}
 
-	/** Whether the colony needs a hauler: its core is nearly full, or storage holds items the core is short of. */
+	/**
+	 * Whether the colony needs a hauler: its core is nearly full, storage holds items the core is short of,
+	 * or a mineshaft landing chest holds items.
+	 */
 	public static boolean needsHauler(ServerLevel level, Colony colony) {
 		Stocks stocks = Stocks.of(level, colony);
 		return stocks != null && (freeSlots(stocks.core()) <= NEARLY_FULL_FREE_SLOTS || !stocks.toFetch().isEmpty()
