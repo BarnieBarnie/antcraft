@@ -151,6 +151,33 @@ class MineshaftTest {
 	}
 
 	@Test
+	void aMinedOutLevelGetsFurtherBranchesClearOfTheOldOnesAndTheShaft() {
+		Mineshaft wide = new Mineshaft(TOP, List.of(6), 3, 16, 8, 3);
+		Set<BlockPos> taken = new HashSet<>(wide.protectedBlocks());
+		wide.plan().steps().forEach(step -> taken.add(step.pos()));
+		List<Mineshaft.Branch> before = List.of();
+		for (int round = 0; round < wide.rounds(); round++) {
+			List<Mineshaft.Branch> branches = wide.branches(6, round);
+			assertEquals(6, branches.size());
+			for (int i = 0; i < branches.size(); i++) {
+				Mineshaft.Branch branch = branches.get(i);
+				for (BlockPos cell : branch.cells()) {
+					assertTrue(taken.add(cell), "round " + round + " overlaps at " + cell);
+				}
+				assertEquals(Optional.of(branch), wide.branch(branch.start()));
+				if (round > 0) {
+					// Carries on where the branch before ends, so miners walk there through it.
+					List<BlockPos> last = before.get(i).cells();
+					assertEquals(1, branch.start().distManhattan(last.get(last.size() - 2)), "not at the end of the branch before");
+					// The torches keep their spacing across rounds: 4 and 12 blocks in, floor cells being every other cell.
+					assertEquals(List.of(branch.cells().get(6), branch.cells().get(22)), branch.torches());
+				}
+			}
+			before = branches;
+		}
+	}
+
+	@Test
 	void picksTheDeepestLevelWithWantedOres() {
 		List<Integer> levels = List.of(16, -16, -58);
 		assertEquals(Optional.of(-16), Mineshaft.chooseLevel(levels, item -> item == Items.RAW_GOLD));

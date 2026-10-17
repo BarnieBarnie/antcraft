@@ -72,14 +72,19 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * Fills the area with stone up to y=4 and gives the colony a shallow mineshaft in it: its stairs
 	 * wind down from (3,5,3) to a landing at y=3, whose hall heads east (open to the sky), and one at
 	 * y=1, whose hall heads west. One branch each side of each hall, 3 long, and a torch every 4 blocks.
+	 * No further rounds of branches, which would run out of the test area.
 	 */
 	static Mineshaft mine(GameTestHelper helper) {
+		return mine(helper, 3, 1);
+	}
+
+	static Mineshaft mine(GameTestHelper helper, int branchLength, int rounds) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
 		int y3 = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
 		int y1 = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		return new Mineshaft(helper.absolutePos(new BlockPos(3, 5, 3)), List.of(y3, y1), 1, 3, 4);
+		return new Mineshaft(helper.absolutePos(new BlockPos(3, 5, 3)), List.of(y3, y1), 1, branchLength, 4, rounds);
 	}
 
 	/** Digs the stairs and halls as a builder would. */
@@ -196,6 +201,52 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 					}
 				}
 			}
+		});
+	}
+
+	/** Branches 1 long, so three rounds of them fit in the test area. */
+	@GameTest(maxTicks = 1500)
+	public void minedOutLevelGetsFurtherBranches(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper, 1, 3);
+		dig(helper, colony, shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.TORCH, 8));
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		int deepest = shaft.levels().getLast();
+
+		helper.succeedWhen(() -> {
+			for (int round = 0; round < shaft.rounds(); round++) {
+				for (Mineshaft.Branch branch : shaft.branches(deepest, round)) {
+					for (BlockPos cell : branch.cells()) {
+						BlockState state = helper.getLevel().getBlockState(cell);
+						helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "round " + round + " not dug at " + helper.relativePos(cell).toShortString());
+					}
+				}
+			}
+		});
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void branchesDugWithoutTorchesAreLitOnceTorchesReachTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		// Dug while the colony had no torches.
+		List<Mineshaft.Branch> branches = new ArrayList<>();
+		shaft.levels().forEach(y -> branches.addAll(shaft.branches(y)));
+		branches.forEach(branch -> branch.cells().forEach(cell -> helper.getLevel().setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState())));
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		helper.runAfterDelay(100, () -> core(helper, MINE_CORE).setItem(0, new ItemStack(Items.TORCH, 8)));
+
+		helper.succeedWhen(() -> {
+			for (Mineshaft.Branch branch : branches) {
+				for (BlockPos torch : branch.torches()) {
+					helper.assertTrue(helper.getLevel().getBlockState(torch).is(Blocks.TORCH), "dark at " + helper.relativePos(torch).toShortString());
+				}
+			}
+			assertLit(helper, branches.stream().flatMap(branch -> branch.cells().stream()).toList());
 		});
 	}
 

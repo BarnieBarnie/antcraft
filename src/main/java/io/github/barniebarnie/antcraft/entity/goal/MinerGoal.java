@@ -32,7 +32,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import org.jspecify.annotations.Nullable;
 
@@ -170,9 +169,7 @@ public class MinerGoal extends ColonyWorkGoal {
 	 * it has none. Returns true while busy with that.
 	 */
 	private boolean light(ServerLevel level, Colony colony, Mineshaft.Branch branch) {
-		BlockState torch = Blocks.TORCH.defaultBlockState();
-		Optional<BlockPos> dark = branch.torches().stream()
-			.filter(pos -> level.getBlockState(pos).isAir() && torch.canSurvive(level, pos)).findFirst();
+		Optional<BlockPos> dark = branch.darkTorch(level);
 		if (dark.isEmpty()) {
 			return false;
 		}
@@ -186,7 +183,7 @@ public class MinerGoal extends ColonyWorkGoal {
 			return true;
 		}
 		if (this.reach(dark.get())) {
-			level.setBlockAndUpdate(dark.get(), torch);
+			level.setBlockAndUpdate(dark.get(), Blocks.TORCH.defaultBlockState());
 			Storage.take(this.bot.getInventory(), Items.TORCH, 1);
 			colony.protect(dark.get(), Blocks.TORCH);
 		}

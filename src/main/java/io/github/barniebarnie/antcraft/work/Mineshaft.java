@@ -12,10 +12,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -27,13 +29,16 @@ import net.minecraft.world.level.block.state.BlockState;
  * height of the first stair, at ground level), with a landing at each mining level. From each
  * landing a hall leads away from the column, and branches run off both sides of the hall every
  * {@link #BRANCH_SPACING} blocks. Builders dig the stairs and halls; miners dig the branches.
+ * Once every branch at a level is dug, the next round of branches carries each one further out,
+ * up to {@code rounds} rounds, so a level keeps yielding ore without the hall growing.
  * Every stair has three blocks of headroom, so any bot can walk up and down without scaffold.
  */
-public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing) {
+public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing, int rounds) {
 	public static final int BRANCH_SPACING = 3;
 	public static final int DEFAULT_BRANCHES_PER_SIDE = 4;
 	public static final int DEFAULT_BRANCH_LENGTH = 16;
 	public static final int DEFAULT_TORCH_SPACING = 8;
+	public static final int DEFAULT_ROUNDS = 4;
 	/** The stair cells of the column, in the order the staircase winds down. */
 	private static final List<BlockPos> CYCLE = List.of(new BlockPos(0, 0, 0), new BlockPos(1, 0, 0), new BlockPos(1, 0, 1), new BlockPos(0, 0, 1));
 
@@ -42,11 +47,17 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		Codec.INT.listOf().fieldOf("levels").forGetter(Mineshaft::levels),
 		Codec.INT.optionalFieldOf("branches_per_side", DEFAULT_BRANCHES_PER_SIDE).forGetter(Mineshaft::branchesPerSide),
 		Codec.INT.optionalFieldOf("branch_length", DEFAULT_BRANCH_LENGTH).forGetter(Mineshaft::branchLength),
-		Codec.INT.optionalFieldOf("torch_spacing", DEFAULT_TORCH_SPACING).forGetter(Mineshaft::torchSpacing)
+		Codec.INT.optionalFieldOf("torch_spacing", DEFAULT_TORCH_SPACING).forGetter(Mineshaft::torchSpacing),
+		Codec.INT.optionalFieldOf("rounds", DEFAULT_ROUNDS).forGetter(Mineshaft::rounds)
 	).apply(i, Mineshaft::new));
 
 	/** A tunnel a miner digs, 2 high and 1 wide; {@code cells} run from the hall outwards. */
 	public record Branch(BlockPos start, List<BlockPos> cells, List<BlockPos> torches) {
+		/** The first torch spot that is dug out but has no torch yet. */
+		public Optional<BlockPos> darkTorch(LevelReader level) {
+			BlockState torch = Blocks.TORCH.defaultBlockState();
+			return this.torches.stream().filter(pos -> level.getBlockState(pos).isAir() && torch.canSurvive(level, pos)).findFirst();
+		}
 	}
 
 	/** Only levels below the top, deepest last. */
@@ -54,6 +65,10 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		top = top.immutable();
 		int topY = top.getY();
 		levels = levels.stream().filter(y -> y < topY).distinct().sorted(Comparator.reverseOrder()).toList();
+	}
+
+	public Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing) {
+		this(top, levels, branchesPerSide, branchLength, torchSpacing, DEFAULT_ROUNDS);
 	}
 
 	public Mineshaft(BlockPos top, List<Integer> levels) {
@@ -176,8 +191,13 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return blocks;
 	}
 
-	/** The branches off the hall at a mining level. */
+	/** The first round of branches off the hall at a mining level. */
 	public List<Branch> branches(int level) {
+		return this.branches(level, 0);
+	}
+
+	/** A round of branches at a mining level: round {@code n} carries on where round {@code n - 1} ends. */
+	public List<Branch> branches(int level, int round) {
 		List<Branch> branches = new ArrayList<>();
 		List<BlockPos> hall = this.hall(level);
 		Direction out = this.out(level);
@@ -186,7 +206,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			for (Direction side : List.of(out.getClockWise(), out.getCounterClockWise())) {
 				List<BlockPos> cells = new ArrayList<>();
 				List<BlockPos> torches = new ArrayList<>();
-				for (int m = 1; m <= this.branchLength; m++) {
+				for (int m = round * this.branchLength + 1; m <= (round + 1) * this.branchLength; m++) {
 					BlockPos cell = from.relative(side, m);
 					cells.add(cell);
 					cells.add(cell.above());
@@ -203,7 +223,8 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 
 	/** The branch a job points at, by its start. */
 	public Optional<Branch> branch(BlockPos start) {
-		return this.levels.stream().flatMap(level -> this.branches(level).stream()).filter(b -> b.start().equals(start)).findFirst();
+		return this.levels.stream().flatMap(level -> IntStream.range(0, this.rounds).boxed().flatMap(round -> this.branches(level, round).stream()))
+			.filter(b -> b.start().equals(start)).findFirst();
 	}
 
 	/** The ores worth digging for at a height. */

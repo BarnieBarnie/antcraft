@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -169,6 +170,8 @@ public class ColonyManager extends SavedData {
 	/**
 	 * Picks a mineshaft site once the colony has a miner, and posts a job for each branch with
 	 * blocks left to dig at one mining level: the deepest dug one whose ores the colony wants.
+	 * A level whose branches are all dug gets the next round of them. While the core has torches,
+	 * every dug branch with a dark torch spot gets a job too, so a miner goes back to light it.
 	 */
 	private void surveyMine(ServerLevel level, Colony colony) {
 		if (colony.mineshaft().isEmpty() && this.hasRole(level, colony, BotRole.MINER)) {
@@ -176,6 +179,14 @@ public class ColonyManager extends SavedData {
 			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), occupied(colony)));
 		}
 		Set<BlockPos> posted = new HashSet<>();
+		Consumer<Mineshaft.Branch> post = branch -> {
+			posted.add(branch.start());
+			colony.board().post(JobType.MINE_BRANCH, branch.start(), branch.cells());
+		};
+		Container core = Storage.containerAt(level, colony.core());
+		// In the core, or carried by a bot that took them from there.
+		boolean torches = core != null && core.countItem(Items.TORCH) > 0 || colony.members().stream()
+			.anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getInventory().countItem(Items.TORCH) > 0);
 		colony.mineshaft().ifPresent(shaft -> {
 			Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
 			for (int y : shaft.levels()) {
@@ -184,18 +195,23 @@ public class ColonyManager extends SavedData {
 				if (!level.getBlockState(hallEnd).getCollisionShape(level, hallEnd).isEmpty()) {
 					continue;
 				}
-				List<Mineshaft.Branch> left = shaft.branches(y).stream()
-					.filter(branch -> branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
-				if (!left.isEmpty()) {
-					work.put(y, left);
+				// The first round with blocks left to dig; the rounds before it are dug, so may need lighting.
+				for (int round = 0; round < shaft.rounds(); round++) {
+					List<Mineshaft.Branch> branches = shaft.branches(y, round);
+					if (torches) {
+						branches.stream().filter(branch -> branch.darkTorch(level).isPresent()).forEach(post);
+					}
+					List<Mineshaft.Branch> left = branches.stream()
+						.filter(branch -> branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
+					if (!left.isEmpty()) {
+						work.put(y, left);
+						break;
+					}
 				}
 			}
 			Mineshaft.chooseLevel(List.copyOf(work.keySet()), item -> colony.orders().containsKey(item)
 					|| colony.stockTargets().stream().anyMatch(target -> target.matches(item)))
-				.ifPresent(y -> work.get(y).forEach(branch -> {
-					posted.add(branch.start());
-					colony.board().post(JobType.MINE_BRANCH, branch.start(), branch.cells());
-				}));
+				.ifPresent(y -> work.get(y).forEach(post));
 		});
 		colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !posted.contains(job.target()));
 	}
