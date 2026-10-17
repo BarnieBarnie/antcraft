@@ -58,6 +58,14 @@ class ColonyActionsTest {
 	}
 
 	@Test
+	void rolesAreGivenOnlyWhenBotsAreAllowedOnTheServer() {
+		Colony colony = colony();
+		assertTrue(ColonyActions.mayGiveRole(colony, MEMBER, colony.id(), true));
+		assertFalse(ColonyActions.mayGiveRole(colony, MEMBER, colony.id(), false), "bots not allowed");
+		assertFalse(ColonyActions.mayGiveRole(colony, UUID.randomUUID(), colony.id(), true), "not a member");
+	}
+
+	@Test
 	void ordersAnItem() {
 		Colony colony = colony();
 		assertTrue(ColonyActions.edit(colony, ColonyActions.Edit.ORDER, "minecraft:torch", 8));

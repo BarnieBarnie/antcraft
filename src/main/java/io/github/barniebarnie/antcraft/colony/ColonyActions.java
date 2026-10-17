@@ -54,6 +54,15 @@ public final class ColonyActions {
 	}
 
 	/**
+	 * Whether the bot with id {@code bot} may be given a role in {@code colony}: it must be a member, and bots must be
+	 * allowed on the server ({@link io.github.barniebarnie.antcraft.config.AntCraftConfig#botsAllowed}), the same gate as
+	 * {@code /antcraft role}.
+	 */
+	public static boolean mayGiveRole(Colony colony, UUID bot, @Nullable UUID botColony, boolean botsAllowed) {
+		return botsAllowed && isMember(colony, bot, botColony);
+	}
+
+	/**
 	 * Applies an edit from the colony screen. {@code target} is an item id, or for stock targets also a {@code #tag}.
 	 *
 	 * @return false, leaving the colony unchanged, if the target or count is invalid

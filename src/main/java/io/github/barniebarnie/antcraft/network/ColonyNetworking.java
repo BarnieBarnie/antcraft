@@ -100,7 +100,8 @@ public final class ColonyNetworking {
 		});
 		ServerPlayNetworking.registerGlobalReceiver(RoleRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
-			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(), request);
+			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(),
+				AntCraftConfig.botsAllowed(player.level().getServer()), request);
 			context.responseSender().sendPacket(reply(player.level(), player.blockPosition()));
 		});
 	}
@@ -126,14 +127,15 @@ public final class ColonyNetworking {
 	}
 
 	/**
-	 * Sets or releases a member's role for a player at {@code from}, unless they may not change the colony or the bot is not its member.
+	 * Sets or releases a member's role for a player at {@code from}, unless they may not change the colony, the bot is not
+	 * its member, or bots are not allowed on the server ({@code botsAllowed}, as for {@code /antcraft role}).
 	 *
 	 * @return whether the bot changed
 	 */
-	public static boolean handle(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, RoleRequest request) {
+	public static boolean handle(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed, RoleRequest request) {
 		Optional<Colony> colony = colony(level, from, isOp, requireOp, request.core());
 		if (colony.isEmpty() || !(level.getEntity(request.bot()) instanceof AntBot bot)
-				|| !ColonyActions.isMember(colony.get(), bot.getUUID(), bot.getColonyId())) {
+				|| !ColonyActions.mayGiveRole(colony.get(), bot.getUUID(), bot.getColonyId(), botsAllowed)) {
 			return false;
 		}
 		request.role().ifPresentOrElse(bot::setRole, bot::releaseRole);

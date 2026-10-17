@@ -286,11 +286,23 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	@GameTest
+	public void screenRoleChangesAreIgnoredWhenBotsAreNotAllowed(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		AntBot bot = member(helper, colony, 2, 2);
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		ColonyNetworking.RoleRequest request = new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), Optional.of(BotRole.MINER));
+
+		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), near, true, false, false, request), "role change accepted with bots not allowed");
+		helper.assertValueEqual(bot.getRole(), BotRole.LUMBERJACK, "role");
+		helper.succeed();
+	}
+
 	private static boolean edit(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, ColonyActions.Edit kind, String target, int count) {
 		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
 	}
 
 	private static boolean role(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, AntBot bot, Optional<BotRole> role) {
-		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), role));
+		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, true, new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), role));
 	}
 }
