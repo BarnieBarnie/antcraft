@@ -36,6 +36,8 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	protected static final int IDLE_TICKS = 20;
 	/** How often a bot looks for a better tool in the core. */
 	protected static final int UPGRADE_CHECK_TICKS = 100;
+	/** How far above and below the core {@link #nearest} looks. */
+	private static final int SCAN_HEIGHT = 4;
 
 	protected final AntBot bot;
 	protected final PathFollower follower;
@@ -189,6 +191,19 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 			this.bot.getInventory().setItem(slot, filled);
 		}
 		return filled;
+	}
+
+	/** The block in the colony territory nearest {@code from} that is {@code wanted}, or null. */
+	protected static @Nullable BlockPos nearest(ServerLevel level, Colony colony, BlockPos from, Predicate<BlockPos> wanted) {
+		BlockPos core = colony.core();
+		int r = colony.radius();
+		BlockPos nearest = null;
+		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -SCAN_HEIGHT, -r), core.offset(r, SCAN_HEIGHT, r))) {
+			if (wanted.test(pos) && (nearest == null || pos.distSqr(from) < nearest.distSqr(from))) {
+				nearest = pos.immutable();
+			}
+		}
+		return nearest;
 	}
 
 	protected static int findSlot(Container container, Predicate<ItemStack> filter) {

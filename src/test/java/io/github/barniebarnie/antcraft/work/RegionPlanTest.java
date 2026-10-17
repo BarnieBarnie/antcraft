@@ -9,6 +9,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
@@ -39,5 +40,16 @@ class RegionPlanTest {
 			new BuildPlan.Step(new BlockPos(1, 1, 0), cobble),
 			new BuildPlan.Step(new BlockPos(0, 2, 0), stairs),
 			BuildPlan.Step.clear(new BlockPos(1, 2, 0))), plan.steps());
+	}
+
+	@Test
+	void leavesOutFlowingFluidThatFollowsFromItsSource() {
+		BlockState source = Blocks.WATER.defaultBlockState();
+		BlockState flowing = source.setValue(LiquidBlock.LEVEL, 1);
+		Map<BlockPos, BlockState> world = Map.of(new BlockPos(0, 0, 0), source, new BlockPos(1, 0, 0), flowing);
+
+		BuildPlan plan = RegionPlan.copy(world::get, new BlockPos(0, 0, 0), new BlockPos(1, 0, 0), new BlockPos(5, 1, 5));
+
+		assertEquals(List.of(new BuildPlan.Step(new BlockPos(5, 1, 5), source)), plan.steps());
 	}
 }

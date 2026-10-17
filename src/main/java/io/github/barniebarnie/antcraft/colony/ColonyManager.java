@@ -33,6 +33,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -247,6 +248,10 @@ public class ColonyManager extends SavedData {
 		Map<Item, Integer> needed = new HashMap<>(materials);
 		needed.replaceAll((item, count) -> count - have.getOrDefault(item, 0));
 		needed.values().removeIf(count -> count <= 0);
+		// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
+		if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && have.getOrDefault(Items.BUCKET, 0) == 0) {
+			needed.put(Items.BUCKET, 1);
+		}
 		colony.orderFor(Colony.OrderPurpose.BUILD, needed);
 		// What builders will place is not there for anything else.
 		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));
@@ -316,7 +321,7 @@ public class ColonyManager extends SavedData {
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
 			colony.forgetReplaced(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			// ponytail: assumes a bucket and filler at hand; a builder without them just reports the step again.
-			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, step -> BuilderGoal.isWorkable(level, step));
+			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, BuilderGoal.workable(level, colony));
 			LevelTreeView trees = new LevelTreeView(level);
 			// A tree job stays while any of its logs stand, even once the leaves have decayed.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())

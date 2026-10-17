@@ -70,6 +70,20 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void fluidSourcesArePlacedFromABucketAndOtherBlocksWithoutAnItemNotAtAll() {
+		BuildPlan.Step water = new BuildPlan.Step(A, Blocks.WATER.defaultBlockState());
+		BuildPlan.Step lava = new BuildPlan.Step(B, Blocks.LAVA.defaultBlockState());
+		BuildPlan.Step flowing = new BuildPlan.Step(C, Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 2));
+		BuildPlan.Step fire = new BuildPlan.Step(D, Blocks.FIRE.defaultBlockState());
+		assertEquals(Map.of(Items.WATER_BUCKET, 1, Items.LAVA_BUCKET, 1), new BuildPlan(List.of(water, lava, flowing, fire)).materials());
+		assertTrue(water.isPlaceable());
+		assertTrue(BuildPlan.Step.clear(A).isPlaceable());
+		assertFalse(flowing.isPlaceable());
+		assertFalse(fire.isPlaceable());
+		assertFalse(new BuildPlan.Step(A, Blocks.NETHER_PORTAL.defaultBlockState()).isPlaceable());
+	}
+
+	@Test
 	void firstStepIsNextWhileUndone() {
 		assertEquals(Optional.of(BuildPlan.Step.clear(A)), next(world(A, Blocks.DIRT.defaultBlockState())));
 	}

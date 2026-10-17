@@ -13,7 +13,6 @@ import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -43,7 +42,6 @@ public class FarmerGoal extends ColonyWorkGoal {
 	private static final int KEEP_SEEDS = 16;
 	private static final int MIN_FREE_SLOTS = 2;
 
-	private static final int SCAN_HEIGHT = 4;
 	/** How often a farmer with an empty bucket looks for water to fill it at. */
 	private static final int WATER_SCAN_TICKS = 100;
 	private static final Set<JobType> JOBS = EnumSet.of(JobType.HARVEST_CROP, JobType.PLANT_CROP);
@@ -210,7 +208,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 				return false;
 			}
 			this.nextWaterScan = level.getGameTime() + WATER_SCAN_TICKS;
-			this.water = this.nearest(level, colony, FarmerGoal::isWaterSource);
+			this.water = nearest(level, colony, this.bot.blockPosition(), pos -> isWaterSource(level.getBlockState(pos)));
 			if (this.water == null) {
 				return false;
 			}
@@ -255,7 +253,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			return;
 		}
 		if (this.grass == null || !Farming.isSeedGrass(level.getBlockState(this.grass))) {
-			this.grass = this.nearest(level, colony, Farming::isSeedGrass);
+			this.grass = nearest(level, colony, this.bot.blockPosition(), pos -> Farming.isSeedGrass(level.getBlockState(pos)));
 			if (this.grass == null) {
 				this.cooldown = IDLE_TICKS;
 				return;
@@ -264,18 +262,6 @@ public class FarmerGoal extends ColonyWorkGoal {
 		if (this.reach(this.grass) && this.breaker.tick(level, this.grass, true)) {
 			this.grass = null;
 		}
-	}
-
-	private @Nullable BlockPos nearest(ServerLevel level, Colony colony, Predicate<BlockState> wanted) {
-		BlockPos core = colony.core();
-		int r = colony.radius();
-		BlockPos nearest = null;
-		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -SCAN_HEIGHT, -r), core.offset(r, SCAN_HEIGHT, r))) {
-			if (wanted.test(level.getBlockState(pos)) && (nearest == null || pos.distSqr(this.bot.blockPosition()) < nearest.distSqr(this.bot.blockPosition()))) {
-				nearest = pos.immutable();
-			}
-		}
-		return nearest;
 	}
 
 	private void replant(ServerLevel level, BlockPos pos, Block crop) {

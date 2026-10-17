@@ -62,9 +62,20 @@ public record BuildPlan(List<Step> steps) {
 			return this.state.isAir();
 		}
 
-		/** The item placed, or air for a clear step or a block without an item. */
+		/**
+		 * The item placed, as a player would: a fluid source is poured from its bucket, which is
+		 * left empty. Air for a clear step or a block a player cannot place, such as fire.
+		 */
 		public Item item() {
+			if (this.state.getBlock() instanceof LiquidBlock) {
+				return this.state.getFluidState().isSource() ? this.state.getFluidState().getType().getBucket() : Items.AIR;
+			}
 			return this.state.getBlock().asItem();
+		}
+
+		/** Whether a builder can do this step at all; not when it places a block without an item, such as fire or a portal. */
+		public boolean isPlaceable() {
+			return this.isClear() || this.item() != Items.AIR;
 		}
 
 		public boolean isDone(BlockState world) {

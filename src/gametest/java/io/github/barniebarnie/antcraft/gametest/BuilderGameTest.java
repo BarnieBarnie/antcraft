@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -492,6 +493,84 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.LAVA, new BlockPos(4, 1, 4));
 			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
 			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "blocked step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/** A plan to place a water source at (4, 1, 4), walled in by stone so it does not spread. */
+	private static BuildPlan waterStep(GameTestHelper helper) {
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(new BlockPos(4, 1, 4).relative(side), Blocks.STONE);
+		}
+		return new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.WATER.defaultBlockState())));
+	}
+
+	@GameTest(maxTicks = 300)
+	public void doesNotPlaceWaterWithoutABucketOrASourceAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.addBuild(waterStep(helper));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void placesWaterFromABucketInTheCoreAndKeepsTheBucket(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		colony.addBuild(waterStep(helper));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, Blocks.WATER.defaultBlockState());
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(builder.getInventory().countItem(Items.WATER_BUCKET) + core(helper).countItem(Items.WATER_BUCKET) == 0, "water bucket not used");
+			helper.assertTrue(builder.getInventory().countItem(Items.BUCKET) + core(helper).countItem(Items.BUCKET) == 1, "empty bucket not kept");
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void ordersABucketAndFillsItAtASourceToPlaceWater(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos source = new BlockPos(6, 1, 1);
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(source.relative(side), Blocks.STONE);
+		}
+		helper.setBlock(source, Blocks.WATER);
+		colony.addBuild(waterStep(helper));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] stocked = {false};
+		helper.onEachTick(() -> {
+			// A water bucket cannot be made, so only the empty bucket is ordered.
+			helper.assertFalse(colony.orders().containsKey(Items.WATER_BUCKET), "uncraftable water bucket ordered");
+			if (!stocked[0] && colony.orders().containsKey(Items.BUCKET)) {
+				core(helper).setItem(0, new ItemStack(Items.BUCKET));
+				stocked[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(stocked[0], "no bucket ordered: " + colony.orders());
+			assertState(helper, 4, 1, 4, Blocks.WATER.defaultBlockState());
+			helper.assertBlockNotPresent(Blocks.WATER, source);
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void reportsFireAsBlockedAndKeepsItBlocked(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(fire)));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps());
+			// The recheck leaves it reported rather than freeing it every survey.
+			helper.assertFalse(BuilderGoal.workable(helper.getLevel(), colony).test(fire), "fire counted as workable");
 		});
 	}
 
