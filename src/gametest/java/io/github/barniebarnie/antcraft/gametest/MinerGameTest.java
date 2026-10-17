@@ -234,6 +234,43 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * In a 16 long area: one level at y=1, its hall heading east along z=8 to a branch spot at x=4.
+	 * The branch south is bedrock but for its last cell, 4 blocks from the hall, and so is everything
+	 * south of the hall, so no miner can get within reach of that cell. The miner gives it up, so the
+	 * round still ends, and the next round north is dug.
+	 */
+	@GameTest(structure = "antcraft-gametest:long", maxTicks = 2400)
+	public void unreachableBranchCellDoesNotHoldUpTheNextRound(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 15)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 8)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 9, 7, 7, 15)) {
+			helper.setBlock(pos, Blocks.BEDROCK);
+		}
+		BlockPos walledOff = new BlockPos(4, 1, 12);
+		helper.setBlock(walledOff, Blocks.STONE);
+		Colony colony = colony(helper, new BlockPos(6, 3, 2));
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 4, 4, 2);
+		helper.assertTrue(shaft.branches(y).getFirst().cells().contains(helper.absolutePos(walledOff)), "walled-off cell not in the south branch");
+		dig(helper, colony, shaft);
+		AntBot miner = member(helper, colony, BotRole.MINER, 5, 3, 3);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		Mineshaft.Branch north = shaft.branches(y, 1).getLast();
+
+		helper.succeedWhen(() -> {
+			for (BlockPos cell : north.cells()) {
+				BlockState state = helper.getLevel().getBlockState(cell);
+				helper.assertTrue(state.isAir(), "round 1 not dug at " + relative(helper, cell).toShortString());
+			}
+			helper.assertBlockPresent(Blocks.STONE, walledOff);
+		});
+	}
+
 	@GameTest(maxTicks = 1200)
 	public void branchesDugWithoutTorchesAreLitOnceTorchesReachTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);

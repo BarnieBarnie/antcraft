@@ -172,6 +172,8 @@ public class ColonyManager extends SavedData {
 	 * blocks left to dig at one mining level: the deepest dug one whose ores the colony wants.
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
 	 * every dug branch with a dark torch spot gets a job too, so a miner goes back to light it.
+	 * A branch whose job was given up, its cells left out of reach, counts as dug: its job stays
+	 * on the board so it is not posted anew.
 	 */
 	private void surveyMine(ServerLevel level, Colony colony) {
 		if (colony.mineshaft().isEmpty() && this.hasRole(level, colony, BotRole.MINER)) {
@@ -187,6 +189,8 @@ public class ColonyManager extends SavedData {
 		// In the core, or carried by a bot that took them from there.
 		boolean torches = core != null && core.countItem(Items.TORCH) > 0 || colony.members().stream()
 			.anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getInventory().countItem(Items.TORCH) > 0);
+		Set<BlockPos> givenUp = new HashSet<>();
+		colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH && job.givenUp()).forEach(job -> givenUp.add(job.target()));
 		colony.mineshaft().ifPresent(shaft -> {
 			Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
 			for (int y : shaft.levels()) {
@@ -202,7 +206,7 @@ public class ColonyManager extends SavedData {
 						branches.stream().filter(branch -> branch.darkTorch(level).isPresent()).forEach(post);
 					}
 					List<Mineshaft.Branch> left = branches.stream()
-						.filter(branch -> branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
+						.filter(branch -> !givenUp.contains(branch.start()) && branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
 					if (!left.isEmpty()) {
 						work.put(y, left);
 						break;
@@ -213,7 +217,7 @@ public class ColonyManager extends SavedData {
 					|| colony.stockTargets().stream().anyMatch(target -> target.matches(item)))
 				.ifPresent(y -> work.get(y).forEach(post));
 		});
-		colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !posted.contains(job.target()));
+		colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp() && !posted.contains(job.target()));
 	}
 
 	private boolean hasRole(ServerLevel level, Colony colony, BotRole role) {

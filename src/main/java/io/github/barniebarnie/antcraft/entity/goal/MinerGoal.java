@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
@@ -45,7 +46,8 @@ import org.jspecify.annotations.Nullable;
  * with torches from the core as it goes, and bring the haul to the core. Now and then it
  * looks for a better pickaxe: it swaps to one in the core, leaving the old one there,
  * or orders the best one the colony can make. Before mining a level it makes sure a pickaxe
- * good enough for the ores the colony wants there is in hand or on its way.
+ * good enough for the ores the colony wants there is in hand or on its way. A branch with cells it
+ * cannot get within reach of goes back on the board to retry later, and is given up after a few tries.
  */
 public class MinerGoal extends ColonyWorkGoal {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
@@ -53,6 +55,10 @@ public class MinerGoal extends ColonyWorkGoal {
 	private static final int MIN_FREE_SLOTS = 2;
 	/** Torches a miner takes along. */
 	private static final int CARRY_TORCHES = 16;
+	/** A branch with cells it could not get within reach of goes back on the board for this long; say a player opens the way. */
+	private static final int BRANCH_RETRY_TICKS = 200;
+	/** How many tries a branch gets before its unreachable cells are given up, so its level can move on. */
+	private static final int BRANCH_TRIES = 3;
 	private enum State { TOOL, WORK, DEPOSIT }
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
@@ -139,7 +145,15 @@ public class MinerGoal extends ColonyWorkGoal {
 		}
 		List<BlockPos> blocks = branch.map(b -> this.toMine(level, b)).orElse(List.of());
 		if (blocks.isEmpty()) {
-			colony.board().complete(job.get().id());
+			if (branch.isPresent() && branch.get().cells().stream().anyMatch(cell -> Mining.isMinable(level, cell))) {
+				// Cells left that it could not reach: try again later, then give them up.
+				if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + BRANCH_RETRY_TICKS, BRANCH_TRIES)) {
+					AntCraft.LOGGER.info("Colony at {} gave up on the branch at {}: cells out of reach after {} tries",
+						colony.core().toShortString(), branch.get().start().toShortString(), BRANCH_TRIES);
+				}
+			} else {
+				colony.board().complete(job.get().id());
+			}
 			this.hasJob = false;
 			this.unreachable.clear();
 			return;

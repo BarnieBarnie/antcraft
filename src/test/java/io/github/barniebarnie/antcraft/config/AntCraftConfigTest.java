@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import org.junit.jupiter.api.Test;
@@ -23,6 +24,23 @@ class AntCraftConfigTest {
 		Properties props = new Properties();
 		props.setProperty("colonyActionsRequireOp", " true ");
 		assertTrue(AntCraftConfig.parse(props).colonyActionsRequireOp());
+	}
+
+	@Test
+	void mineshaftLevelsTooCloseTogetherAreDroppedWithAWarning() {
+		Properties props = new Properties();
+		props.setProperty("mineshaftLevels", "16,15,-16,-58,-59");
+		List<String> warnings = new ArrayList<>();
+		assertEquals(List.of(16, -16, -58), AntCraftConfig.parse(props, warnings::add).mineshaftLevels());
+		assertEquals(1, warnings.size(), "warnings: " + warnings);
+		// The shallower of two levels too close together stays.
+		String warning = warnings.getFirst();
+		assertTrue(warning.contains("mineshaftLevels") && warning.contains("2 blocks apart") && warning.contains("15") && warning.contains("-59"),
+			warning);
+		props.setProperty("mineshaftLevels", "16,-16,-58");
+		warnings.clear();
+		AntCraftConfig.parse(props, warnings::add);
+		assertEquals(List.of(), warnings);
 	}
 
 	@Test

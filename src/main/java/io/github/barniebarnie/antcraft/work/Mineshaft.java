@@ -39,6 +39,11 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	public static final int DEFAULT_BRANCH_LENGTH = 16;
 	public static final int DEFAULT_TORCH_SPACING = 8;
 	public static final int DEFAULT_ROUNDS = 4;
+	/**
+	 * How far apart mining levels must be. A branch digs its level and the block above, so a level
+	 * 1 below or above another would have branches cutting into that level's hall.
+	 */
+	public static final int MIN_LEVEL_GAP = 2;
 	/** The stair cells of the column, in the order the staircase winds down. */
 	private static final List<BlockPos> CYCLE = List.of(new BlockPos(0, 0, 0), new BlockPos(1, 0, 0), new BlockPos(1, 0, 1), new BlockPos(0, 0, 1));
 
@@ -60,11 +65,25 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		}
 	}
 
-	/** Only levels below the top, deepest last. */
+	/** Only levels below the top, deepest last, each at least {@link #MIN_LEVEL_GAP} below the one above it. */
 	public Mineshaft {
 		top = top.immutable();
 		int topY = top.getY();
-		levels = levels.stream().filter(y -> y < topY).distinct().sorted(Comparator.reverseOrder()).toList();
+		levels = spaced(levels.stream().filter(y -> y < topY).toList());
+	}
+
+	/**
+	 * {@code levels} deepest last, without those closer than {@link #MIN_LEVEL_GAP} below a level
+	 * kept above them.
+	 */
+	public static List<Integer> spaced(List<Integer> levels) {
+		List<Integer> spaced = new ArrayList<>();
+		for (int y : levels.stream().distinct().sorted(Comparator.reverseOrder()).toList()) {
+			if (spaced.isEmpty() || spaced.getLast() - y >= MIN_LEVEL_GAP) {
+				spaced.add(y);
+			}
+		}
+		return List.copyOf(spaced);
 	}
 
 	public Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing) {

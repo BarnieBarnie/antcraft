@@ -97,7 +97,8 @@ class MineshaftTest {
 		// Placed once the landing and its hall are dug, so the builder can stand there.
 		List<BlockPos> positions = steps.stream().map(BuildPlan.Step::pos).toList();
 		assertTrue(positions.indexOf(chest) > positions.indexOf(SHAFT.hall(6).getLast()));
-		Mineshaft wide = new Mineshaft(TOP, List.of(8, 7, 6, 3), 3, 16, 8);
+		// A landing on each side of the column.
+		Mineshaft wide = new Mineshaft(TOP, List.of(9, 7, 4, 2), 3, 16, 8);
 		for (int level : wide.levels()) {
 			BlockPos spot = wide.landingChest(level);
 			assertEquals(1, spot.distManhattan(wide.landing(level)), "not beside the landing at " + level);
@@ -124,6 +125,47 @@ class MineshaftTest {
 	@Test
 	void levelsAtOrAboveTheTopAreDropped() {
 		assertEquals(List.of(6, 2), new Mineshaft(TOP, List.of(2, 12, 10, 6), 1, 3, 4).levels());
+	}
+
+	@Test
+	void levelsTooCloseToTheLevelAboveAreDropped() {
+		assertEquals(List.of(8, 6, 3), new Mineshaft(TOP, List.of(8, 7, 6, 3), 1, 3, 4).levels());
+		assertEquals(List.of(9, 7, 5), Mineshaft.spaced(List.of(5, 9, 8, 7, 6, 5)));
+	}
+
+	@Test
+	void branchesOfEveryRoundKeepClearOfOtherLevelsWhenLevelsAreTwoApart() {
+		List<Integer> levels = IntStream.iterate(48, y -> y > 20, y -> y - Mineshaft.MIN_LEVEL_GAP).boxed().toList();
+		Mineshaft shaft = new Mineshaft(new BlockPos(0, 50, 0), levels, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH,
+			Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS);
+		assertEquals(levels, shaft.levels());
+		// What the stairs and every hall dig out, with the floors under them, and each landing chest.
+		Set<BlockPos> stairs = new HashSet<>();
+		for (BlockPos stair : shaft.stairs()) {
+			for (int up = -1; up <= 2; up++) {
+				stairs.add(stair.above(up));
+			}
+		}
+		for (int level : levels) {
+			Set<BlockPos> keepClear = new HashSet<>(stairs);
+			for (int other : levels) {
+				if (other != level) {
+					for (BlockPos cell : shaft.hall(other)) {
+						keepClear.addAll(List.of(cell.below(), cell, cell.above()));
+					}
+					keepClear.add(shaft.landingChest(other));
+				}
+			}
+			for (int round = 0; round < shaft.rounds(); round++) {
+				for (Mineshaft.Branch branch : shaft.branches(level, round)) {
+					for (BlockPos cell : branch.cells()) {
+						// Nor the floor under it, which would open the branch onto a hall below.
+						assertFalse(keepClear.contains(cell) || keepClear.contains(cell.below()),
+							"round " + round + " at y=" + level + " cuts into another level at " + cell);
+					}
+				}
+			}
+		}
 	}
 
 	@Test
