@@ -2,10 +2,15 @@ package io.github.barniebarnie.antcraft.work;
 
 import com.mojang.serialization.Codec;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /**
@@ -48,6 +53,34 @@ public record StorageArea(BlockPos origin) {
 	public static Optional<StorageArea> choose(BlockPos core, int radius, List<BoundingBox> avoid, Predicate<BlockPos> isFloor, Predicate<BlockPos> isOpen) {
 		return Sites.nearest(core, radius - WIDTH / 2, avoid, pos -> new StorageArea(pos.offset(-WIDTH / 2, 0, -DEPTH / 2)), StorageArea::area,
 			storage -> storage.isFlat(isFloor, isOpen));
+	}
+
+	/** How far from the core the colony looks for a spot to level, which is costlier to search than a flat one. */
+	private static final int LEVEL_REACH = 8;
+
+	/**
+	 * For when {@link #choose} finds no flat spot: the plan that levels the area near the core needing
+	 * the fewest steps, at the core's level (see {@link Terraform}). Its floor becomes solid and its
+	 * chest layer and headroom are cleared. Only areas whose every block {@code workable} allows,
+	 * such as no fluid, unbreakable block or container, are levelled.
+	 */
+	public static Optional<BuildPlan> levelling(BlockPos core, int radius, List<BoundingBox> avoid, Function<BlockPos, BlockState> world,
+			Predicate<BlockPos> workable) {
+		Map<StorageArea, BuildPlan> plans = new HashMap<>();
+		Optional<StorageArea> site = Sites.cheapest(core, Math.min(LEVEL_REACH, radius - WIDTH / 2), avoid,
+			pos -> new StorageArea(pos.offset(-WIDTH / 2, 0, -DEPTH / 2)), StorageArea::area, storage -> {
+				BlockPos from = storage.origin.below();
+				BlockPos to = storage.origin.offset(WIDTH - 1, 1, DEPTH - 1);
+				for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
+					if (!workable.test(pos)) {
+						return OptionalInt.empty();
+					}
+				}
+				Optional<BuildPlan> plan = Terraform.plan(world, from, to, from.getY());
+				plan.ifPresent(p -> plans.put(storage, p));
+				return plan.map(p -> OptionalInt.of(p.steps().size())).orElse(OptionalInt.empty());
+			});
+		return site.map(plans::get);
 	}
 
 	private boolean isFlat(Predicate<BlockPos> isFloor, Predicate<BlockPos> isOpen) {

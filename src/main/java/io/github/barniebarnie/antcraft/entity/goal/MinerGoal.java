@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.PickaxeTier;
@@ -51,6 +52,8 @@ import org.jspecify.annotations.Nullable;
  * or orders the best one the colony can make. Before mining a level it makes sure a pickaxe
  * good enough for the ores the colony wants there is in hand or on its way. A branch with cells it
  * cannot get within reach of goes back on the board to retry later, and is given up after a few tries.
+ * It also digs out dig jobs, such as the ground of a terraform above its height, with the haul going
+ * to the core the same way (see {@link Digging}).
  */
 public class MinerGoal extends ColonyWorkGoal {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
@@ -131,8 +134,9 @@ public class MinerGoal extends ColonyWorkGoal {
 			return;
 		}
 		Optional<Mineshaft> shaft = colony.mineshaft();
-		Optional<Job> job = shaft.isEmpty() ? Optional.empty()
-			: colony.board().claim(this.bot.getUUID(), Set.of(JobType.MINE_BRANCH), this.bot.blockPosition(), level.getGameTime());
+		Set<JobType> types = shaft.isEmpty() ? Set.of(JobType.CLEAR_AREA) : Set.of(JobType.MINE_BRANCH, JobType.CLEAR_AREA);
+		Optional<Job> job = colony.board().claim(this.bot.getUUID(), types, this.bot.blockPosition(), level.getGameTime(),
+			open -> open.type() != JobType.CLEAR_AREA || Digging.isReady(level, colony, open));
 		this.hasJob = job.isPresent();
 		if (job.isEmpty()) {
 			if (this.hasItemsToStore()) {
@@ -140,6 +144,10 @@ public class MinerGoal extends ColonyWorkGoal {
 			} else {
 				this.cooldown = IDLE_TICKS;
 			}
+			return;
+		}
+		if (job.get().type() == JobType.CLEAR_AREA) {
+			this.dig(level, colony, job.get());
 			return;
 		}
 		if (!job.get().id().equals(this.tierChecked)) {
@@ -173,6 +181,27 @@ public class MinerGoal extends ColonyWorkGoal {
 			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.unreachable.add(next);
+		}
+	}
+
+	/** Digs out the batch of dig job {@code job} block by block, from the top, leaving trees to lumberjacks (see {@link Digging}). */
+	private void dig(ServerLevel level, Colony colony, Job job) {
+		Optional<BuildPlan.Step> next = colony.build(job.id())
+			.flatMap(batch -> batch.nextStep(level::getBlockState, step -> !this.unreachable.contains(step.pos()) && Digging.isDiggable(level, colony, step)));
+		if (next.isEmpty()) {
+			Digging.putAside(level, colony, job, this.bot.getUUID());
+			this.hasJob = false;
+			this.unreachable.clear();
+			this.resetMovement();
+			this.cooldown = IDLE_TICKS;
+			return;
+		}
+		BlockPos pos = next.get().pos();
+		Goal reach = new Goal.Reach(pos, REACH);
+		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
+			this.breaker.tick(level, pos, true);
+		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
+			this.unreachable.add(pos);
 		}
 	}
 

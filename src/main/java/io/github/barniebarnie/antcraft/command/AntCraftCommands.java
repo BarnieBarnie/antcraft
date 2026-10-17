@@ -21,6 +21,7 @@ import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
+import io.github.barniebarnie.antcraft.work.Terraform;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,6 +59,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
  * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|cancel &lt;n&gt;
+ * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
@@ -130,6 +132,12 @@ public final class AntCraftCommands {
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
+				.then(Commands.literal("terraform")
+					.then(Commands.argument("from", BlockPosArgument.blockPos())
+						.then(Commands.argument("to", BlockPosArgument.blockPos())
+							.then(Commands.argument("y", IntegerArgumentType.integer())
+								.executes(ctx -> terraform(ctx.getSource(), BlockPosArgument.getLoadedBlockPos(ctx, "from"),
+									BlockPosArgument.getLoadedBlockPos(ctx, "to"), IntegerArgumentType.getInteger(ctx, "y")))))))
 				.then(Commands.literal("cancel")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value())))))
@@ -297,7 +305,8 @@ public final class AntCraftCommands {
 		for (int i = 0; i < builds.size(); i++) {
 			BuildPlan plan = builds.get(i);
 			long left = plan.steps().stream().filter(step -> !step.isDone(source.getLevel().getBlockState(step.pos()))).count();
-			String key = isMineshaft(colony, plan) ? "commands.antcraft.colony.build.line_mineshaft" : "commands.antcraft.colony.build.line";
+			String key = isMineshaft(colony, plan) ? "commands.antcraft.colony.build.line_mineshaft"
+				: plan.kind() == BuildPlan.Kind.TERRAFORM ? "commands.antcraft.colony.build.line_terraform" : "commands.antcraft.colony.build.line";
 			int n = i + 1;
 			source.sendSuccess(() -> Component.translatable(key, n, plan.target().toShortString(), left, plan.steps().size()), false);
 		}
@@ -317,6 +326,34 @@ public final class AntCraftCommands {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.copied", volume, at.toShortString(), c.builds().size()), false);
 		});
 		return colony.isPresent() ? 1 : 0;
+	}
+
+	/**
+	 * Has the colony level the box between {@code from} and {@code to} at height {@code y}: miners dig
+	 * what is above it and builders fill the holes up to it (see {@link Terraform}). Shown and
+	 * cancelled with the other builds.
+	 */
+	private static int terraform(CommandSourceStack source, BlockPos from, BlockPos to, int y) {
+		BlockPos size = BlockPos.max(from, to).subtract(BlockPos.min(from, to)).offset(1, 1, 1);
+		long volume = (long) size.getX() * size.getY() * size.getZ();
+		if (volume > MAX_COPY_VOLUME) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.terraform.too_big", volume, MAX_COPY_VOLUME));
+			return 0;
+		}
+		Optional<Colony> colony = nearestColony(source);
+		if (colony.isEmpty()) {
+			return 0;
+		}
+		Optional<BuildPlan> plan = Terraform.plan(source.getLevel()::getBlockState, from, to, y);
+		if (plan.isEmpty()) {
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.terraform.level", y), false);
+			return 0;
+		}
+		Colony c = colony.get();
+		c.addBuild(plan.get());
+		int columns = size.getX() * size.getZ();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.terraform.started", columns, y, plan.get().steps().size(), c.builds().size()), false);
+		return 1;
 	}
 
 	/** Gives up on the build steps builders reported blocked, and the plans waiting on them. */

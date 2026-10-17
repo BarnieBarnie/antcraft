@@ -16,7 +16,12 @@ public enum JobType implements StringRepresentable {
 	/** Carry out the colony build plan whose first step is at the job target. */
 	BUILD,
 	/** Till the soil under the job target if needed and plant a crop there, in the colony field. */
-	PLANT_CROP;
+	PLANT_CROP,
+	/**
+	 * Dig out a batch of a colony build plan that only clears blocks, such as the ground above a
+	 * terraform's height. Miners take it, and builders while the colony has no miner.
+	 */
+	CLEAR_AREA;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 

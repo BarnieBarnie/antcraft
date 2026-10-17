@@ -93,11 +93,11 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 			ITEM_COUNTS, Order::toGather, ITEM_COUNTS, Order::missing, Order::new);
 	}
 
-	/** A build plan with how many of its steps are left. */
-	public record Build(BlockPos target, int left, int steps, boolean mineshaft) {
+	/** A build plan with how many of its steps are left, and whether it is the mineshaft or an area to level. */
+	public record Build(BlockPos target, int left, int steps, boolean mineshaft, boolean terraform) {
 		static final StreamCodec<ByteBuf, Build> STREAM_CODEC = StreamCodec.composite(
 			BlockPos.STREAM_CODEC, Build::target, ByteBufCodecs.VAR_INT, Build::left, ByteBufCodecs.VAR_INT, Build::steps,
-			ByteBufCodecs.BOOL, Build::mineshaft, Build::new);
+			ByteBufCodecs.BOOL, Build::mineshaft, ByteBufCodecs.BOOL, Build::terraform, Build::new);
 	}
 
 	// Here, not in Bot: Bot is built before ColonyStatus is loaded, and would see this class's codecs half made.
@@ -224,7 +224,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		for (BuildPlan plan : colony.builds()) {
 			int left = (int) plan.steps().stream().filter(step -> !step.isDone(world.apply(step.pos()))).count();
 			boolean mineshaft = colony.mineshaft().map(shaft -> shaft.plan().equals(plan)).orElse(false);
-			builds.add(new Build(plan.target(), left, plan.steps().size(), mineshaft));
+			builds.add(new Build(plan.target(), left, plan.steps().size(), mineshaft, plan.kind() == BuildPlan.Kind.TERRAFORM));
 		}
 
 		StorageState storage = roles.getOrDefault(BotRole.HAULER, 0) == 0 ? StorageState.NO_HAULER

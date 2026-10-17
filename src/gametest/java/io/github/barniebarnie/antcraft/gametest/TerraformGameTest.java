@@ -1,0 +1,196 @@
+package io.github.barniebarnie.antcraft.gametest;
+
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
+import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.Terraform;
+import java.lang.reflect.Method;
+import java.util.List;
+import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
+import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.Container;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+
+/** Colonies levelling an area: miners dig what is above the height, builders fill the holes up to it. */
+public class TerraformGameTest implements CustomTestMethodInvoker {
+	private static final BlockPos CORE = new BlockPos(0, 1, 0);
+
+	@Override
+	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+			}
+		}
+		method.invoke(this, helper);
+	}
+
+	private static Colony colony(GameTestHelper helper, BlockPos core, int radius) {
+		helper.setBlock(core, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(core)).orElseThrow();
+		colony.setRadius(radius);
+		// No default stock targets, so only the test's own work shows up.
+		colony.setStockTargets(List.of());
+		return colony;
+	}
+
+	/** A colony with a mineshaft of no levels in the corner, already dug, so the miner has only the terraform to do. */
+	private static Colony colonyWithMiner(GameTestHelper helper) {
+		Colony colony = colony(helper, CORE, 6);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 1, 6)), List.of());
+		colony.setMineshaft(shaft);
+		colony.removeBuild(shaft.plan());
+		return colony;
+	}
+
+	private static Container core(GameTestHelper helper, BlockPos core) {
+		return (Container) helper.getBlockEntity(core, BlockEntity.class);
+	}
+
+	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role, int x, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.setRole(role);
+		return bot;
+	}
+
+	private static AntBot miner(GameTestHelper helper, Colony colony, int x, int z) {
+		AntBot miner = member(helper, colony, BotRole.MINER, x, z);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		return miner;
+	}
+
+	/** Levels the box from {@code from} to {@code to} (relative) at relative height {@code y}. */
+	private static void terraform(GameTestHelper helper, Colony colony, BlockPos from, BlockPos to, int y) {
+		int height = helper.absolutePos(new BlockPos(0, y, 0)).getY();
+		colony.addBuild(Terraform.plan(helper.getLevel()::getBlockState, helper.absolutePos(from), helper.absolutePos(to), height).orElseThrow());
+	}
+
+	/** Every column of the box from (x1, z1) to (x2, z2) is solid at {@code y} and clear above it up to {@code top}, but for saplings. */
+	private static void assertLevel(GameTestHelper helper, int x1, int z1, int x2, int z2, int y, int top) {
+		for (BlockPos pos : BlockPos.betweenClosed(x1, y, z1, x2, top, z2)) {
+			BlockState state = helper.getBlockState(pos);
+			if (pos.getY() == y) {
+				helper.assertTrue(state.isFaceSturdy(helper.getLevel(), helper.absolutePos(pos), Direction.UP), "not solid at " + pos.toShortString() + ": " + state);
+			} else {
+				helper.assertTrue(state.isAir() || state.is(BlockTags.SAPLINGS), state + " left at " + pos.toShortString());
+			}
+		}
+	}
+
+	@GameTest(maxTicks = 1500)
+	public void aMinerAndABuilderLevelAHillAndAHole(GameTestHelper helper) {
+		Colony colony = colonyWithMiner(helper);
+		// Ground at y=1 over x and z 2..7, a hole in it, and a hill 2 blocks high on it.
+		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 7, 1, 7)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		helper.setBlock(3, 1, 3, Blocks.AIR);
+		for (BlockPos pos : BlockPos.betweenClosed(5, 2, 5, 6, 2, 6)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		helper.setBlock(5, 3, 5, Blocks.DIRT);
+		core(helper, CORE).setItem(0, new ItemStack(Items.DIRT, 4));
+		AntBot miner = miner(helper, colony, 1, 3);
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 5);
+		terraform(helper, colony, new BlockPos(2, 0, 2), new BlockPos(7, 4, 7), 1);
+		boolean[] builderDug = {false};
+		helper.onEachTick(() -> builderDug[0] |= builder.getInventory().countItem(Items.DIRT) > 4);
+
+		helper.succeedWhen(() -> {
+			assertLevel(helper, 2, 2, 7, 7, 1, 4);
+			helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.DIRT), "hole not filled with dirt");
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+			helper.assertTrue(colony.board().jobs().isEmpty(), "jobs left: " + colony.board().jobs());
+			helper.assertTrue(!builderDug[0], "the builder dug, not the miner");
+			helper.assertTrue(miner.isAlive(), "miner gone");
+		});
+	}
+
+	/** A 4-log oak with a small canopy, trunk at (x, 1..4, z). */
+	private static void tree(GameTestHelper helper, int x, int z) {
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1).setValue(LeavesBlock.PERSISTENT, false);
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				helper.setBlock(x + dx, 4, z + dz, leaves);
+			}
+		}
+		helper.setBlock(x, 5, z, leaves);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(x, y, z, Blocks.OAK_LOG);
+		}
+	}
+
+	@GameTest(maxTicks = 2000)
+	public void treesInTheAreaAreFelledByLumberjacksNotDugOut(GameTestHelper helper) {
+		Colony colony = colonyWithMiner(helper);
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 7)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		tree(helper, 4, 4);
+		AntBot miner = miner(helper, colony, 1, 3);
+		AntBot lumberjack = member(helper, colony, BotRole.LUMBERJACK, 1, 5);
+		terraform(helper, colony, new BlockPos(2, 0, 2), new BlockPos(6, 6, 6), 0);
+		boolean[] minerHadLogs = {false};
+		helper.onEachTick(() -> minerHadLogs[0] |= miner.getInventory().countItem(Items.OAK_LOG) > 0);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!minerHadLogs[0], "the miner dug out logs");
+			assertLevel(helper, 2, 2, 6, 6, 0, 6);
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+			int logs = lumberjack.getInventory().countItem(Items.OAK_LOG) + core(helper, CORE).countItem(Items.OAK_LOG);
+			helper.assertTrue(logs == 4, "the lumberjack has " + logs + " logs");
+		});
+	}
+
+	@GameTest(maxTicks = 2000)
+	public void aColonyWithNoFlatSpotLevelsOneForItsStorage(GameTestHelper helper) {
+		// Bedrock walls keep every spot but the rows z=4..6 out; a bump and a hole spoil those.
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				if (x == 0 || x == 7 || z == 0 || z == 7) {
+					for (int y = 0; y < 4; y++) {
+						helper.setBlock(x, y, z, Blocks.BEDROCK);
+					}
+				}
+			}
+		}
+		helper.setBlock(3, 1, 5, Blocks.DIRT);
+		helper.setBlock(4, 0, 5, Blocks.AIR);
+		BlockPos corePos = new BlockPos(2, 1, 2);
+		Colony colony = colony(helper, corePos, 5);
+		Container core = core(helper, corePos);
+		// Chests to place and dirt to fill with; logs in every other slot, for storage.
+		core.setItem(0, new ItemStack(Items.CHEST, 2));
+		core.setItem(1, new ItemStack(Items.DIRT, 4));
+		for (int i = 2; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
+		}
+		member(helper, colony, BotRole.HAULER, 3, 3);
+		member(helper, colony, BotRole.BUILDER, 4, 3);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 5)).isAir(), "bump not dug");
+			helper.assertTrue(helper.getBlockState(new BlockPos(4, 0, 5)).is(Blocks.DIRT), "hole not filled");
+			helper.assertTrue(colony.storage().isPresent(), "no storage area");
+			boolean chest = colony.storage().get().chestSpots().stream().anyMatch(spot -> Storage.containerAt(helper.getLevel(), spot) != null);
+			helper.assertTrue(chest, "no storage chest placed");
+		});
+	}
+}

@@ -56,6 +56,7 @@ class ColonyStatusTest {
 		colony.addBuild(new BuildPlan(List.of(
 			new BuildPlan.Step(new BlockPos(10, 64, 10), Blocks.STONE.defaultBlockState()),
 			new BuildPlan.Step(new BlockPos(10, 65, 10), Blocks.STONE.defaultBlockState()))));
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(new BlockPos(12, 64, 12))), List.of(), BuildPlan.Kind.TERRAFORM));
 
 		Map<UUID, ColonyStatus.Bot> bots = Map.of(
 			LUMBERJACK, new ColonyStatus.Bot("Lumberjack", BotRole.LUMBERJACK, false, false),
@@ -129,7 +130,9 @@ class ColonyStatusTest {
 	@Test
 	void summarisesBuildsAndBlockedSteps() {
 		ColonyStatus status = status();
-		assertEquals(List.of(new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false)), status.builds());
+		assertEquals(List.of(
+			new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false, false),
+			new ColonyStatus.Build(new BlockPos(12, 64, 12), 1, 1, false, true)), status.builds());
 		assertEquals(List.of(new BlockPos(3, 64, 3)), status.blocked());
 	}
 

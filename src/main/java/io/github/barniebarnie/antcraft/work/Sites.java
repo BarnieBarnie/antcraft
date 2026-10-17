@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
@@ -25,26 +26,56 @@ final class Sites {
 	 */
 	static <T> Optional<T> nearest(BlockPos core, int reach, List<BoundingBox> avoid, Function<BlockPos, T> at,
 			Function<T, BoundingBox> area, Predicate<T> fits) {
-		if (reach < 0) {
-			return Optional.empty();
-		}
-		// Keep a ring around the core free so bots can always reach it.
-		BoundingBox coreArea = BoundingBox.fromCorners(core.offset(-1, -1, -1), core.offset(1, 1, 1));
-		List<BlockPos> columns = new ArrayList<>();
-		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-reach, 0, -reach), core.offset(reach, 0, reach))) {
-			columns.add(pos.immutable());
-		}
-		columns.sort(Comparator.comparingInt(pos -> pos.distManhattan(core)));
 		// ponytail: scans up to the whole territory when there is no room; cache failures if surveys get slow.
-		for (BlockPos column : columns) {
+		for (BlockPos column : columns(core, reach)) {
 			for (int dy = 0; dy <= HEIGHT_RANGE; dy = dy > 0 ? -dy : -dy + 1) {
 				T site = at.apply(column.offset(0, dy, 0));
-				BoundingBox box = area.apply(site);
-				if (!box.intersects(coreArea) && avoid.stream().noneMatch(box::intersects) && fits.test(site)) {
+				if (isClear(core, avoid, area.apply(site)) && fits.test(site)) {
 					return Optional.of(site);
 				}
 			}
 		}
 		return Optional.empty();
+	}
+
+	/**
+	 * The site at the core's level, among the columns within {@code reach} of it, clear of the core
+	 * and the {@code avoid} areas, with the lowest {@code cost}, the nearest of those first. Empty
+	 * costs, such as for a site that cannot be made to fit, are left out.
+	 */
+	static <T> Optional<T> cheapest(BlockPos core, int reach, List<BoundingBox> avoid, Function<BlockPos, T> at,
+			Function<T, BoundingBox> area, Function<T, OptionalInt> cost) {
+		T best = null;
+		int bestCost = Integer.MAX_VALUE;
+		for (BlockPos column : columns(core, reach)) {
+			T site = at.apply(column);
+			if (isClear(core, avoid, area.apply(site))) {
+				OptionalInt c = cost.apply(site);
+				if (c.isPresent() && c.getAsInt() < bestCost) {
+					best = site;
+					bestCost = c.getAsInt();
+				}
+			}
+		}
+		return Optional.ofNullable(best);
+	}
+
+	/** The columns within {@code reach} of the core, nearest first. */
+	private static List<BlockPos> columns(BlockPos core, int reach) {
+		List<BlockPos> columns = new ArrayList<>();
+		if (reach < 0) {
+			return columns;
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-reach, 0, -reach), core.offset(reach, 0, reach))) {
+			columns.add(pos.immutable());
+		}
+		columns.sort(Comparator.comparingInt(pos -> pos.distManhattan(core)));
+		return columns;
+	}
+
+	/** Whether {@code box} is clear of the {@code avoid} areas and of a ring around the core kept free so bots can always reach it. */
+	private static boolean isClear(BlockPos core, List<BoundingBox> avoid, BoundingBox box) {
+		BoundingBox coreArea = BoundingBox.fromCorners(core.offset(-1, -1, -1), core.offset(1, 1, 1));
+		return !box.intersects(coreArea) && avoid.stream().noneMatch(box::intersects);
 	}
 }

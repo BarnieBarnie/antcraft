@@ -9,6 +9,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.Terraform;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -508,5 +509,65 @@ class ColonyTest {
 		loaded.finishBatch(other.id());
 		loaded.postBuildJobs();
 		assertEquals(Set.of(TWO_LEVELS.plan().batch(3)), openBatches(loaded));
+	}
+
+	/** An overhang of stone at y=65 on x 0..1 above a hole at y=64, levelled at y=64: a dig batch and a fill batch under it. */
+	private static BuildPlan terraform() {
+		Function<BlockPos, BlockState> world = pos -> pos.getY() < 64 || pos.getY() == 65 && pos.getX() < 2 ? Blocks.STONE.defaultBlockState()
+			: Blocks.AIR.defaultBlockState();
+		return Terraform.plan(world, new BlockPos(0, 62, 0), new BlockPos(3, 66, 1), 64).orElseThrow();
+	}
+
+	private static Set<JobType> openTypes(Colony colony) {
+		return colony.board().jobs().stream().map(Job::type).collect(Collectors.toSet());
+	}
+
+	@Test
+	void aTerraformPostsDigJobsBeforeItsFillJobs() {
+		Colony colony = colony();
+		BuildPlan plan = terraform();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		// Its one fill batch waits for the digging above it.
+		assertEquals(Set.of(JobType.CLEAR_AREA), openTypes(colony));
+		assertTrue(colony.hasTerraform());
+
+		Job dig = colony.board().claim(ALICE, Set.of(JobType.CLEAR_AREA), BlockPos.ZERO, 0).orElseThrow();
+		assertTrue(colony.build(dig.id()).orElseThrow().steps().stream().allMatch(BuildPlan.Step::isClear));
+		colony.finishBatch(dig.id());
+		colony.board().complete(dig.id());
+		assertEquals(Set.of(JobType.BUILD), openTypes(colony));
+	}
+
+	@Test
+	void aTerraformSurvivesSaveAndLoad() {
+		Colony colony = colony();
+		BuildPlan plan = terraform();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+		assertEquals(List.of(plan), loaded.builds());
+		assertTrue(loaded.hasTerraform());
+		loaded.postBuildJobs();
+		assertEquals(Set.of(JobType.CLEAR_AREA), openTypes(loaded));
+	}
+
+	@Test
+	void cancellingATerraformClearsAllItsJobs() {
+		Colony colony = colony();
+		BuildPlan plan = terraform();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		Job dig = colony.board().claim(ALICE, Set.of(JobType.CLEAR_AREA), BlockPos.ZERO, 0).orElseThrow();
+		colony.finishBatch(dig.id());
+		colony.board().complete(dig.id());
+		assertFalse(colony.board().jobs().isEmpty());
+
+		colony.removeBuild(plan);
+		colony.postBuildJobs();
+		assertTrue(colony.board().jobs().isEmpty(), "jobs left: " + colony.board().jobs());
+		assertFalse(colony.hasTerraform());
 	}
 }

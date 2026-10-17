@@ -279,7 +279,8 @@ public class ColonyStatusScreen extends Screen {
 
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.builds"), YELLOW));
 		for (ColonyStatus.Build build : status.builds()) {
-			String key = build.mineshaft() ? "screen.antcraft.colony_status.build_mineshaft" : "screen.antcraft.colony_status.build";
+			String key = build.mineshaft() ? "screen.antcraft.colony_status.build_mineshaft"
+				: build.terraform() ? "screen.antcraft.colony_status.build_terraform" : "screen.antcraft.colony_status.build";
 			lines.add(new Line(Component.translatable(key, build.target().toShortString(), build.left(), build.steps()), WHITE));
 		}
 		if (!status.blocked().isEmpty()) {

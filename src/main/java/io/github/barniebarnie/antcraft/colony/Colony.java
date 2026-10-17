@@ -268,7 +268,7 @@ public class Colony {
 		this.builds.remove(id);
 		this.indexBatches();
 		this.batchStates.keySet().removeAll(jobs);
-		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && jobs.contains(job.id()));
+		this.board.removeOpenIf(job -> isBuildJob(job) && jobs.contains(job.id()));
 		this.lastSurvey = -1;
 	}
 
@@ -307,7 +307,7 @@ public class Colony {
 	}
 
 	/**
-	 * Posts a build job for each batch whose needed batches are done or waiting, and drops open jobs of batches
+	 * Posts a build job for each batch whose needed batches are done or waiting, a dig job for a {@link BuildPlan.Batch#dig} batch, and drops open jobs of batches
 	 * that are gone, done, or of a plan that is blocked.
 	 */
 	public void postBuildJobs() {
@@ -317,10 +317,20 @@ public class Colony {
 				this.ready(id, plan).forEach(i -> ready.add(batchId(id, i)));
 			}
 		});
-		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && !ready.contains(job.id()));
+		this.board.removeOpenIf(job -> isBuildJob(job) && !ready.contains(job.id()));
 		this.builds.forEach((id, plan) -> this.ready(id, plan).stream()
 			.filter(i -> ready.contains(batchId(id, i)))
-			.forEach(i -> this.board.post(batchId(id, i), JobType.BUILD, plan.batch(i).target())));
+			.forEach(i -> this.board.post(batchId(id, i), plan.batches().get(i).dig() ? JobType.CLEAR_AREA : JobType.BUILD, plan.batch(i).target())));
+	}
+
+	/** Whether {@code job} is for a batch of a build plan: a build job, or a dig job of a batch that only clears blocks. */
+	private static boolean isBuildJob(Job job) {
+		return job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA;
+	}
+
+	/** Whether the colony has an area to level (see {@link io.github.barniebarnie.antcraft.work.Terraform}), blocked or not. */
+	public boolean hasTerraform() {
+		return this.builds.values().stream().anyMatch(plan -> plan.kind() == BuildPlan.Kind.TERRAFORM);
 	}
 
 	private Map<Item, Integer> part(OrderPurpose purpose) {

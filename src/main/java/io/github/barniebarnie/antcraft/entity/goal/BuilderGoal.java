@@ -62,6 +62,8 @@ import org.jspecify.annotations.Nullable;
  * there, blocks a player cannot place, such as a portal, and a fluid without a bucket or source
  * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
  * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
+ * While the colony has no miner it also digs out dig jobs (see {@link Digging}), and a step any
+ * solid block will do, such as a terraform's fill, takes whichever filler block there is.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
@@ -113,9 +115,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		Container core = Storage.containerAt(level, colony.core());
-		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.BUILD), this.bot.blockPosition(), level.getGameTime(),
+		// Dig jobs are for miners; a colony without one has its builders dig.
+		Set<JobType> types = Digging.hasMiner(level, colony) ? Set.of(JobType.BUILD) : Set.of(JobType.BUILD, JobType.CLEAR_AREA);
+		Optional<Job> job = colony.board().claim(this.bot.getUUID(), types, this.bot.blockPosition(), level.getGameTime(),
 			// A plan left only with steps it cannot clear is claimed too, to be finished and reported.
-			open -> colony.build(open.id()).filter(plan -> this.nextStep(level, colony, core, plan).isPresent() || !this.isWaiting(level, colony, core, plan)).isPresent(),
+			open -> colony.build(open.id()).filter(plan -> this.nextStep(level, colony, core, plan, isDig(open)).isPresent()
+				|| !this.isWaiting(level, colony, core, plan, isDig(open))).isPresent(),
 			// A plan's batches in order where it can, so a lone builder digs a mineshaft from the top down.
 			open -> colony.batchIndex(open.id()));
 		this.hasJob = job.isPresent();
@@ -128,13 +133,14 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		Optional<BuildPlan> plan = colony.build(job.get().id());
-		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p));
+		boolean dig = isDig(job.get());
+		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig)).map(s -> this.withFiller(core, s));
 		if (next.isEmpty()) {
 			// The scaffolding comes down first, while the job is still this builder's.
 			if (!this.bot.getScaffold().isEmpty()) {
 				this.startCleanup();
 			} else {
-				this.putAside(level, colony, core, job.get(), plan);
+				this.putAside(level, colony, core, job.get(), plan, dig);
 			}
 			return;
 		}
@@ -171,6 +177,28 @@ public class BuilderGoal extends ColonyWorkGoal {
 			&& step.otherHalf().map(half -> this.isFreeToPlace(level, half.pos(), half.state())).orElse(true)) {
 			this.place(level, colony, step);
 		}
+	}
+
+	private static boolean isDig(Job job) {
+		return job.type() == JobType.CLEAR_AREA;
+	}
+
+	/**
+	 * {@code step}, or for a step any solid block will do, such as a terraform's fill, the same step
+	 * with a filler block such as dirt or cobblestone that the bot or the core has, when neither has
+	 * the step's own block.
+	 */
+	private BuildPlan.Step withFiller(@Nullable Container core, BuildPlan.Step step) {
+		if (!step.anySolid() || this.has(core, stack -> stack.is(step.item()))) {
+			return step;
+		}
+		SimpleContainer inventory = this.bot.getInventory();
+		int slot = findSlot(inventory, BuilderGoal::isFiller);
+		Item filler = slot >= 0 ? inventory.getItem(slot).getItem() : null;
+		if (filler == null && core != null && (slot = findSlot(core, BuilderGoal::isFiller)) >= 0) {
+			filler = core.getItem(slot).getItem();
+		}
+		return filler == null ? step : new BuildPlan.Step(step.pos(), Block.byItem(filler).defaultBlockState(), true);
 	}
 
 	/** Every position a plan of the colony puts a block or clears, where scaffold must never go. */
@@ -215,10 +243,15 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * nor waiting for an item that neither the bot nor the core has. Those are left for later, so
 	 * the rest of the plan goes on, such as digging a mineshaft before its torches are made. A
 	 * fluid also goes when a bucket can be filled at a source; a block without an item never does.
+	 * A {@code dig} job leaves the logs of trees to lumberjacks (see {@link Digging}).
 	 */
-	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan) {
-		return plan.nextStep(level::getBlockState, step -> {
-			BlockState current = level.getBlockState(step.pos());
+	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
+		return plan.nextStep(level::getBlockState, planned -> {
+			BlockState current = level.getBlockState(planned.pos());
+			if (dig && Digging.isForLumberjacks(level, colony, planned.pos())) {
+				return false;
+			}
+			BuildPlan.Step step = this.withFiller(core, planned);
 			if (step.needsClearing(current)) {
 				return WORKABLE.contains(this.clearing(level, core, step)) || this.fluidToWall(level, core, plan, step) != null;
 			}
@@ -390,12 +423,16 @@ public class BuilderGoal extends ColonyWorkGoal {
 	}
 
 	/**
-	 * Whether {@code plan} waits for materials or for a fluid to settle, rather than being left only
-	 * with steps it cannot do. A fluid waits for an empty bucket only while there is a source to fill it at.
+	 * Whether {@code plan} waits for materials, for a fluid to settle or, for a {@code dig} job, for
+	 * lumberjacks to fell a tree, rather than being left only with steps it cannot do. A fluid waits
+	 * for an empty bucket only while there is a source to fill it at.
 	 */
-	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan) {
+	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
 		return plan.nextStep(level::getBlockState, step -> {
 			BlockState current = level.getBlockState(step.pos());
+			if (dig && Digging.isForLumberjacks(level, colony, step.pos())) {
+				return true;
+			}
 			Item item = step.item(current);
 			return step.needsClearing(current)
 				? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
@@ -424,8 +461,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * for the colony to find them workable again. While it waits for materials, which the colony
 	 * orders, the job is freed for later, and the batches that need this one may start meanwhile.
 	 */
-	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan) {
-		if (plan.isPresent() && this.isWaiting(level, colony, core, plan.get())) {
+	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan, boolean dig) {
+		if (plan.isPresent() && this.isWaiting(level, colony, core, plan.get(), dig)) {
 			colony.batchWaiting(job.id());
 			colony.board().release(this.bot.getUUID());
 			this.cooldown = IDLE_TICKS;
@@ -511,7 +548,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 */
 	private void fetch(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, Item item) {
 		Map<Item, Integer> needed = plan.materials(level::getBlockState);
-		int count = needed.getOrDefault(item, 1);
+		// Steps any solid block will do take whichever filler there is.
+		int fillers = plan.steps().stream().filter(step -> step.anySolid() && !step.isDone(level.getBlockState(step.pos()))).mapToInt(step -> 1).sum();
+		int count = isFiller(item.getDefaultInstance()) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
 		if (core == null) {
 			this.cooldown = IDLE_TICKS;
 			return;
@@ -519,7 +558,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		if (this.reach(colony.core())) {
 			SimpleContainer inventory = this.bot.getInventory();
 			boolean pillaring = this.hasHighSteps(level, plan);
-			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES);
+			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES) && !(fillers > 0 && isFiller(stack));
 			Storage.moveItems(inventory, core, stack -> spare.test(stack) && !(pillaring && stack.is(SCAFFOLD)));
 			Storage.moveItems(core, inventory, stack -> stack.is(item), count);
 			if (pillaring) {

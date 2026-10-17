@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -12,6 +13,7 @@ import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -33,12 +35,13 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * so it is saved with the colony and can be made from blueprints. The world itself records the
  * progress: a step is done once the world matches it, so a plan resumes wherever it was left.
  */
-public record BuildPlan(List<Step> steps, List<Batch> batches) {
+public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	/** Saves from before batches hold only the steps, as one batch. */
 	public static final Codec<BuildPlan> CODEC = Codec.withAlternative(
 		RecordCodecBuilder.create(i -> i.group(
 			Step.CODEC.listOf().fieldOf("steps").forGetter(BuildPlan::steps),
-			Batch.CODEC.listOf().fieldOf("batches").forGetter(BuildPlan::batches)
+			Batch.CODEC.listOf().fieldOf("batches").forGetter(BuildPlan::batches),
+			Kind.CODEC.optionalFieldOf("kind", Kind.BUILD).forGetter(BuildPlan::kind)
 		).apply(i, BuildPlan::new)),
 		Step.CODEC.listOf().xmap(BuildPlan::new, BuildPlan::steps));
 
@@ -68,25 +71,51 @@ public record BuildPlan(List<Step> steps, List<Batch> batches) {
 		}
 	}
 
+	public BuildPlan(List<Step> steps, List<Batch> batches) {
+		this(steps, batches, Kind.BUILD);
+	}
+
 	/** A plan of one batch. */
 	public BuildPlan(List<Step> steps) {
 		this(steps, List.of());
+	}
+
+	/** What a plan is for, as the colony shows it. */
+	public enum Kind implements StringRepresentable {
+		/** A structure to build, such as one copied from a region. */
+		BUILD,
+		/** An area to level to a height (see {@link Terraform}). */
+		TERRAFORM;
+
+		public static final Codec<Kind> CODEC = StringRepresentable.fromEnum(Kind::values);
+
+		@Override
+		public String getSerializedName() {
+			return this.name().toLowerCase(Locale.ROOT);
+		}
 	}
 
 	/**
 	 * Steps {@code from} (inclusive) to {@code to} of a plan, which one builder works through in
 	 * order. Several builders can work on different batches of a plan at once, each batch once the
 	 * batches it {@code needs}, by index, are done, such as a mineshaft hall once the stairs reach it.
+	 * A {@code dig} batch only clears blocks, such as the ground above a terraform's height, so
+	 * miners can take it too.
 	 */
-	public record Batch(int from, int to, List<Integer> needs) {
+	public record Batch(int from, int to, List<Integer> needs, boolean dig) {
 		public static final Codec<Batch> CODEC = RecordCodecBuilder.create(i -> i.group(
 			Codec.INT.fieldOf("from").forGetter(Batch::from),
 			Codec.INT.fieldOf("to").forGetter(Batch::to),
-			Codec.INT.listOf().optionalFieldOf("needs", List.of()).forGetter(Batch::needs)
+			Codec.INT.listOf().optionalFieldOf("needs", List.of()).forGetter(Batch::needs),
+			Codec.BOOL.optionalFieldOf("dig", false).forGetter(Batch::dig)
 		).apply(i, Batch::new));
 
 		public Batch {
 			needs = List.copyOf(needs);
+		}
+
+		public Batch(int from, int to, List<Integer> needs) {
+			this(from, to, needs, false);
 		}
 	}
 

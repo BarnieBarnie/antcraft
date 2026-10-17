@@ -239,7 +239,8 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Picks the storage area once the colony has a hauler to keep it, and orders the chests it needs
+	 * Picks the storage area once the colony has a hauler to keep it, levelling one first with its
+	 * builders when there is no flat spot, and orders the chests it needs
 	 * beyond the chests in {@code spare}; orders it no longer needs are withdrawn.
 	 */
 	private void surveyStorage(ServerLevel level, Colony colony, Map<Item, Integer> spare) {
@@ -252,10 +253,23 @@ public class ColonyManager extends SavedData {
 			colony.orderFor(Colony.OrderPurpose.STORAGE, chests > 0 ? Map.of(Items.CHEST, chests) : Map.of());
 			return;
 		}
-		StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
-				pos -> level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
-				pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty())
-			.ifPresent(colony::setStorage);
+		Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
+			pos -> level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
+			pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
+		if (site.isPresent()) {
+			colony.setStorage(site.get());
+		} else if (!colony.hasTerraform() && this.hasRole(level, colony, BotRole.BUILDER)) {
+			// No flat spot: the colony levels one, and picks it once it is flat.
+			StorageArea.levelling(colony.core(), colony.radius(), occupied(colony), level::getBlockState, pos -> isWorkable(level, colony, pos))
+				.ifPresent(colony::addBuild);
+		}
+	}
+
+	/** Whether bots can dig or fill the block at {@code pos} for a site the colony levels: no fluid, unbreakable block, container or colony block. */
+	private static boolean isWorkable(ServerLevel level, Colony colony, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		return state.getFluidState().isEmpty() && state.getDestroySpeed(level, pos) >= 0 && !state.hasBlockEntity()
+			&& !colony.isProtected(level::getBlockState, pos);
 	}
 
 	/**
