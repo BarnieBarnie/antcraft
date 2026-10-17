@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
@@ -73,20 +74,41 @@ public record BuildPlan(List<Step> steps) {
 			return this.state.getBlock().asItem();
 		}
 
+		/** Whether this step's block holds water, such as a waterlogged stair. */
+		public boolean isWaterlogged() {
+			return this.state.hasProperty(BlockStateProperties.WATERLOGGED) && this.state.getValue(BlockStateProperties.WATERLOGGED);
+		}
+
+		/** The block state placed first: a waterlogged block goes in dry and is then filled from a water bucket, as a player would. */
+		public BlockState dry() {
+			return this.isWaterlogged() ? this.state.setValue(BlockStateProperties.WATERLOGGED, false) : this.state;
+		}
+
+		/** Whether the block is in place, though a waterlogged one may still lack its water. */
+		public boolean isPlaced(BlockState world) {
+			return this.isClear() ? world.isAir() : matches(this.dry(), world);
+		}
+
+		/** The item used next with {@code world} as it is: the block's item, or a water bucket once a waterlogged block stands dry. */
+		public Item item(BlockState world) {
+			return this.isWaterlogged() && this.isPlaced(world) ? Items.WATER_BUCKET : this.item();
+		}
+
 		/** Whether a builder can do this step at all; not when it places a block without an item, such as fire or a portal. */
 		public boolean isPlaceable() {
 			return this.isClear() || this.item() != Items.AIR;
 		}
 
 		public boolean isDone(BlockState world) {
-			if (this.isClear()) {
-				return world.isAir();
-			}
-			if (!world.is(this.state.getBlock())) {
+			return this.isPlaced(world) && (!this.isWaterlogged() || world.getValue(BlockStateProperties.WATERLOGGED));
+		}
+
+		private static boolean matches(BlockState wanted, BlockState world) {
+			if (!world.is(wanted.getBlock())) {
 				return false;
 			}
-			for (Property<?> property : this.state.getProperties()) {
-				if (PLACEMENT.contains(property.getValueClass()) && !world.getValue(property).equals(this.state.getValue(property))) {
+			for (Property<?> property : wanted.getProperties()) {
+				if (PLACEMENT.contains(property.getValueClass()) && !world.getValue(property).equals(wanted.getValue(property))) {
 					return false;
 				}
 			}
@@ -95,7 +117,7 @@ public record BuildPlan(List<Step> steps) {
 
 		/** Whether {@code world} has to be broken first, including the same block placed the wrong way round. */
 		public boolean needsClearing(BlockState world) {
-			return !world.isAir() && !this.isDone(world) && (this.isClear() || !world.canBeReplaced());
+			return !world.isAir() && !this.isPlaced(world) && (this.isClear() || !world.canBeReplaced());
 		}
 
 		/**
@@ -140,7 +162,7 @@ public record BuildPlan(List<Step> steps) {
 		return this.steps.stream().filter(step -> !step.isDone(world.apply(step.pos())) && workable.test(step)).findFirst();
 	}
 
-	/** Every item the plan places. */
+	/** Every item the plan places, with a water bucket for each waterlogged block. */
 	public Map<Item, Integer> materials() {
 		return this.materials(pos -> Blocks.AIR.defaultBlockState());
 	}
@@ -149,8 +171,12 @@ public record BuildPlan(List<Step> steps) {
 	public Map<Item, Integer> materials(Function<BlockPos, BlockState> world) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
 		for (Step step : this.steps) {
-			if (step.item() != Items.AIR && !step.isDone(world.apply(step.pos()))) {
+			BlockState current = world.apply(step.pos());
+			if (step.item() != Items.AIR && !step.isPlaced(current)) {
 				materials.merge(step.item(), 1, Integer::sum);
+			}
+			if (step.isWaterlogged() && !step.isDone(current)) {
+				materials.merge(Items.WATER_BUCKET, 1, Integer::sum);
 			}
 		}
 		return materials;

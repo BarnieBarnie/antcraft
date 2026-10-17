@@ -18,21 +18,25 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.LiquidBlockContainer;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -43,7 +47,8 @@ import org.jspecify.annotations.Nullable;
  * down a mineshaft, and orders one if it has none and a plan has such digging to do. Fluids in the
  * way it scoops up with a bucket or fills with a cheap block from the core; those it cannot clear
  * are reported as blocked. It pours water and lava from a bucket, as a player would, filling an
- * empty one at a source in the territory when the core has no full one. Blocks a player cannot
+ * empty one at a source in the territory when the core has no full one; a waterlogged block it
+ * places dry and fills from a water bucket the same way. Blocks a player cannot
  * place, such as fire, or a fluid without a bucket or source to get it from, are reported too.
  */
 public class BuilderGoal extends ColonyWorkGoal {
@@ -84,14 +89,15 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		BuildPlan.Step step = next.get();
+		BlockState current = level.getBlockState(step.pos());
 		// Whatever stands in the way goes first.
-		if (step.needsClearing(level.getBlockState(step.pos()))) {
+		if (step.needsClearing(current)) {
 			this.clear(level, colony, core, plan.get(), step);
 			return;
 		}
-		Item item = step.item();
+		Item item = step.item(current);
 		if (item != Items.AIR && this.bot.getInventory().countItem(item) == 0) {
-			if (isPoured(step) && (core == null || core.countItem(item) == 0)) {
+			if (isPoured(item) && (core == null || core.countItem(item) == 0)) {
 				this.fill(level, colony, core, plan.get(), item);
 			} else {
 				this.fetch(level, colony, core, plan.get(), item);
@@ -101,7 +107,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 		if (!this.reach(step.pos())) {
 			return;
 		}
-		if (this.isFreeToPlace(level, step.pos(), step.state())) {
+		if (step.isPlaced(current)) {
+			this.pour(level, step.pos(), current, item);
+		} else if (this.isFreeToPlace(level, step.pos(), step.dry())) {
 			this.place(level, colony, step);
 		}
 	}
@@ -118,12 +126,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 			if (step.needsClearing(current)) {
 				return WORKABLE.contains(this.clearing(level, core, step));
 			}
-			Item item = step.item();
+			Item item = step.item(current);
 			if (item == Items.AIR) {
 				return false;
 			}
 			return this.has(core, stack -> stack.is(item))
-				|| isPoured(step) && this.has(core, BuilderGoal::isBucket) && this.source(level, colony, item) != null;
+				|| isPoured(item) && this.has(core, BuilderGoal::isBucket) && this.source(level, colony, item) != null;
 		});
 	}
 
@@ -159,9 +167,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 		});
 	}
 
-	/** Whether {@code step} pours a fluid from a bucket. */
-	private static boolean isPoured(BuildPlan.Step step) {
-		return step.state().getBlock() instanceof LiquidBlock && step.item() != Items.AIR;
+	/** Whether {@code item} is a full bucket, poured as a fluid source or into a waterlogged block. */
+	private static boolean isPoured(Item item) {
+		return item instanceof BucketItem && item != Items.BUCKET;
 	}
 
 	/**
@@ -214,9 +222,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 		Container core = Storage.containerAt(level, colony.core());
 		// ponytail: looks for a source once per fluid and recheck, from the core rather than per step.
 		Map<Item, Boolean> canPour = new HashMap<>();
-		return step -> step.isPlaceable() && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
-			&& (!isPoured(step) || canPour.computeIfAbsent(step.item(),
-				bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket) != null));
+		return step -> {
+			Item item = step.item(level.getBlockState(step.pos()));
+			return step.isPlaceable() && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
+				&& (!isPoured(item) || canPour.computeIfAbsent(item,
+					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket) != null));
+		};
 	}
 
 	private static BuildPlan.Clearing clearing(ServerLevel level, BuildPlan.Step step, boolean hasBucket, boolean hasFiller) {
@@ -256,9 +267,13 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * with steps it cannot do. A fluid waits for an empty bucket only while there is a source to fill it at.
 	 */
 	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan) {
-		return plan.nextStep(level::getBlockState, step -> step.needsClearing(level.getBlockState(step.pos()))
-			? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
-			: step.isPlaceable() && (!isPoured(step) || this.source(level, colony, step.item()) != null)).isPresent();
+		return plan.nextStep(level::getBlockState, step -> {
+			BlockState current = level.getBlockState(step.pos());
+			Item item = step.item(current);
+			return step.needsClearing(current)
+				? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
+				: step.isPlaceable() && (!isPoured(item) || this.source(level, colony, item) != null);
+		}).isPresent();
 	}
 
 	private static boolean isUnbreakable(ServerLevel level, BlockPos pos) {
@@ -290,9 +305,20 @@ public class BuilderGoal extends ColonyWorkGoal {
 		this.resetMovement();
 	}
 
+	/** Places {@code step}'s block; a waterlogged one dry, to be filled from a bucket next. */
 	private void place(ServerLevel level, Colony colony, BuildPlan.Step step) {
-		this.put(level, step.pos(), step.state(), step.item());
+		this.put(level, step.pos(), step.dry(), step.item());
 		colony.protect(step.pos(), step.state().getBlock());
+	}
+
+	/** Pours the water bucket {@code bucket} into the block {@code current} at {@code pos}, as a player would, leaving the bucket empty. */
+	private void pour(ServerLevel level, BlockPos pos, BlockState current, Item bucket) {
+		if (current.getBlock() instanceof LiquidBlockContainer container && container.placeLiquid(level, pos, current, Fluids.WATER.getSource(false))) {
+			level.playSound(null, pos, SoundEvents.BUCKET_EMPTY, SoundSource.BLOCKS, 1.0F, 1.0F);
+			level.gameEvent(this.bot, GameEvent.FLUID_PLACE, pos);
+			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+			this.bot.getInventory().setItem(findSlot(this.bot.getInventory(), stack -> stack.is(bucket)), new ItemStack(Items.BUCKET));
+		}
 	}
 
 	/** Places {@code state} at {@code pos}, using up one {@code item} unless that is air; a fluid's bucket is left empty. */
@@ -302,7 +328,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		level.playSound(null, pos, state.getSoundType().getPlaceSound(), SoundSource.BLOCKS, 1.0F, 1.0F);
 		level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
 		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
-		if (state.getBlock() instanceof LiquidBlock) {
+		if (isPoured(item)) {
 			this.bot.getInventory().setItem(findSlot(this.bot.getInventory(), stack -> stack.is(item)), new ItemStack(Items.BUCKET));
 		} else if (item != Items.AIR) {
 			Storage.take(this.bot.getInventory(), item, 1);

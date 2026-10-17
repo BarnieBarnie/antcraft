@@ -38,6 +38,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.Vec3;
@@ -556,6 +558,45 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 4, 1, 4, Blocks.WATER.defaultBlockState());
 			helper.assertBlockNotPresent(Blocks.WATER, source);
 			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		});
+	}
+
+	/** A plan to place a waterlogged stair at (4, 1, 4), walled in by stone so its water does not spread. */
+	private static BuildPlan waterloggedStairStep(GameTestHelper helper) {
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(new BlockPos(4, 1, 4).relative(side), Blocks.STONE);
+		}
+		return new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true))));
+	}
+
+	@GameTest(maxTicks = 300)
+	public void placesAWaterloggedStairDryWithoutAWaterBucketAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
+		colony.addBuild(waterloggedStairStep(helper));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.onEachTick(() -> helper.assertFalse(helper.getBlockState(new BlockPos(4, 1, 4)).getFluidState().is(Fluids.WATER),
+			"stair waterlogged without a water bucket"));
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, STAIRS_EAST);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void fillsAWaterloggedStairFromABucketInTheCoreAndKeepsTheBucket(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
+		core(helper).setItem(1, new ItemStack(Items.WATER_BUCKET));
+		colony.addBuild(waterloggedStairStep(helper));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(builder.getInventory().countItem(Items.WATER_BUCKET) + core(helper).countItem(Items.WATER_BUCKET) == 0, "water bucket not used");
+			helper.assertTrue(builder.getInventory().countItem(Items.BUCKET) + core(helper).countItem(Items.BUCKET) == 1, "empty bucket not kept");
 		});
 	}
 

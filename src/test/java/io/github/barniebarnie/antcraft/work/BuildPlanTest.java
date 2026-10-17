@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.StairsShape;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -81,6 +82,26 @@ class BuildPlanTest {
 		assertFalse(flowing.isPlaceable());
 		assertFalse(fire.isPlaceable());
 		assertFalse(new BuildPlan.Step(A, Blocks.NETHER_PORTAL.defaultBlockState()).isPlaceable());
+	}
+
+	@Test
+	void waterloggedBlocksArePlacedDryAndThenFilledFromAWaterBucket() {
+		BlockState wet = stairs(Direction.EAST).setValue(BlockStateProperties.WATERLOGGED, true);
+		BlockState dry = stairs(Direction.EAST);
+		BuildPlan.Step step = new BuildPlan.Step(A, wet);
+		BuildPlan plan = new BuildPlan(List.of(step, new BuildPlan.Step(B, dry)));
+
+		assertEquals(Map.of(Items.OAK_STAIRS, 2, Items.WATER_BUCKET, 1), plan.materials());
+		assertEquals(Map.of(Items.OAK_STAIRS, 1, Items.WATER_BUCKET, 1), plan.materials(at(world(A, dry))));
+		assertEquals(Map.of(Items.OAK_STAIRS, 1), plan.materials(at(world(A, wet))));
+		// First the block goes in dry, then the water is poured into it.
+		assertEquals(Items.OAK_STAIRS, step.item(Blocks.AIR.defaultBlockState()));
+		assertEquals(Items.WATER_BUCKET, step.item(dry));
+		assertEquals(dry, step.dry());
+		assertFalse(step.isDone(dry));
+		assertFalse(step.needsClearing(dry));
+		assertTrue(step.isDone(wet));
+		assertTrue(step.isPlaceable());
 	}
 
 	@Test
