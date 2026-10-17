@@ -41,7 +41,6 @@ public class ColonyStatusScreen extends Screen {
 	private static final int YELLOW = 0xFFFFFF55;
 	private static final String KEY = "screen.antcraft.colony_status";
 	/** Followed by a {@link BotRole#id()}. */
-	private static final String ROLE_KEY = "screen.antcraft.colony_status.role.";
 	/** Followed by an {@link Colony.OrderPurpose#getSerializedName()}. */
 	private static final String PURPOSE_KEY = "screen.antcraft.colony_status.purpose.";
 
@@ -240,7 +239,7 @@ public class ColonyStatusScreen extends Screen {
 				acts.add(new Act(Component.translatable("screen.antcraft.colony_status.give_back"), () -> this.role(id, Optional.empty())));
 			}
 			String key = bot.setByPlayer() ? "screen.antcraft.colony_status.bot_by_player" : "screen.antcraft.colony_status.bot";
-			lines.add(new Line(Component.translatable(key, bot.name(), Component.translatable(ROLE_KEY + bot.role().id())), bot.idle() ? GREY : WHITE, acts));
+			lines.add(new Line(Component.translatable(key, bot.name(), bot.role().displayName()), bot.idle() ? GREY : WHITE, acts));
 		});
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.jobs", status.jobs(), status.claimed()), YELLOW));
 

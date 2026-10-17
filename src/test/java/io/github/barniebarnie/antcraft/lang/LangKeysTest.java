@@ -31,7 +31,7 @@ class LangKeysTest {
 	private static final Pattern KEY = Pattern.compile("\"((?:[a-z0-9_]+\\.)+antcraft(?:\\.[a-z0-9_]+)*\\.?)\"");
 	/** Key families built at runtime from a prefix and an enum value. */
 	private static final Map<String, List<String>> FAMILIES = Map.of(
-		"screen.antcraft.colony_status.role.", Stream.of(BotRole.values()).map(BotRole::id).toList(),
+		BotRole.KEY_PREFIX, Stream.of(BotRole.values()).map(BotRole::id).toList(),
 		"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
 
 	@Test
@@ -49,6 +49,13 @@ class LangKeysTest {
 			}
 		}
 		assertEquals(Set.of(), missing);
+	}
+
+	@Test
+	void everyRoleHasALangKey() throws IOException {
+		Set<String> lang = JsonParser.parseString(Files.readString(LANG)).getAsJsonObject().keySet();
+		List<String> missing = Stream.of(BotRole.values()).map(BotRole::translationKey).filter(key -> !lang.contains(key)).toList();
+		assertEquals(List.of(), missing);
 	}
 
 	@Test

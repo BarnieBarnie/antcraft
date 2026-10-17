@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import java.util.Locale;
+import net.minecraft.network.chat.Component;
 
 /** The job a bot works on when it has no direct order. */
 public enum BotRole {
@@ -19,8 +20,20 @@ public enum BotRole {
 	/** Carries out the colony's build plans with materials from the core. */
 	BUILDER;
 
+	/** Prefix of the lang keys that name the roles, shared by the colony screen and the commands. */
+	public static final String KEY_PREFIX = "role.antcraft.";
+
 	public String id() {
 		return this.name().toLowerCase(Locale.ROOT);
+	}
+
+	public String translationKey() {
+		return KEY_PREFIX + this.id();
+	}
+
+	/** The role's translated name. */
+	public Component displayName() {
+		return Component.translatable(this.translationKey());
 	}
 
 	public static BotRole byId(String id) {

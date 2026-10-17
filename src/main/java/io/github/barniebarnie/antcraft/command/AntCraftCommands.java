@@ -18,7 +18,6 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
-import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.Terraform;
@@ -41,6 +40,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
@@ -162,8 +162,9 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		ColonyStatus status = ColonyStatus.of(source.getLevel(), found.get());
+		Component roles = ComponentUtils.formatList(roleCounts(status.roles()), Component.literal(", "));
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.info",
-			status.core().toShortString(), status.members(), status.roles().toString(), status.jobs(), status.claimed(), status.radius(), status.idle()), false);
+			status.core().toShortString(), status.members(), roles, status.jobs(),status.claimed(), status.radius(), status.idle()), false);
 
 		List<String> low = status.stock().stream().filter(ColonyStatus.Stock::isShort)
 			.map(stock -> stock.have() + "/" + stock.want() + " " + stock.name()).toList();
@@ -408,8 +409,19 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		bots.forEach(bot -> bot.setRole(role));
-		source.sendSuccess(() -> Component.translatable("commands.antcraft.role", bots.size(), role.id()), false);
+		source.sendSuccess(() -> roleReply(bots.size(), role), false);
 		return bots.size();
+	}
+
+	static Component roleReply(int count, BotRole role) {
+		return Component.translatable("commands.antcraft.role", count, role.displayName());
+	}
+
+	/** One "role: count" part per role, with the role's translated name. */
+	static List<Component> roleCounts(Map<BotRole, Integer> roles) {
+		return roles.entrySet().stream()
+			.map(entry -> (Component) Component.translatable("commands.antcraft.colony.role_count", entry.getKey().displayName(), entry.getValue()))
+			.toList();
 	}
 
 	private static int setHome(CommandContext<CommandSourceStack> ctx, List<AntBot> bots) {
