@@ -127,6 +127,8 @@ public class Colony {
 	private final Map<OrderPurpose, Map<Item, Integer>> systemOrders = new EnumMap<>(OrderPurpose.class);
 	/** Steps builders could not do, such as behind bedrock; their plans wait without a job until a recheck finds them workable. */
 	private final List<Blocked> blockedSteps;
+	/** What each hauler is on its way to move; not saved, since trips are short. */
+	private final TripClaims tripClaims = new TripClaims();
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 
@@ -368,6 +370,10 @@ public class Colony {
 
 	public JobBoard board() {
 		return this.board;
+	}
+
+	public TripClaims tripClaims() {
+		return this.tripClaims;
 	}
 
 	/** How far from the core the colony looks for work. */

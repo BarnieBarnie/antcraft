@@ -12,9 +12,11 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.StorageCategory;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -48,6 +50,11 @@ public class HaulerGoal extends ColonyWorkGoal {
 	private record Trip(BlockPos from, BlockPos to, @Nullable Item item, int count) {
 		boolean carries(ItemStack stack) {
 			return this.item == null || stack.is(this.item);
+		}
+
+		/** What two haulers must not both plan a trip for: the chest emptied whole, else the item moved. */
+		Object source() {
+			return this.item == null ? this.from : this.item;
 		}
 	}
 
@@ -120,16 +127,21 @@ public class HaulerGoal extends ColonyWorkGoal {
 			.orElse(null);
 		if (nearest == null) {
 			Container core = Storage.containerAt(level, colony.core());
-			// What does not fit in the core waits in the inventory while the hauler makes room.
 			if (core != null && hasRoomForAny(core, inventory)) {
 				this.depositing = true;
-			} else {
-				this.trip = this.planTrip(level, colony);
-				this.loaded = false;
-				this.tripTicks = 0;
-				if (this.trip == null) {
-					this.cooldown = IDLE_TICKS;
-				}
+				return;
+			}
+			// What does not fit in the core goes to storage; without room there it waits for a chest.
+			Trip leftovers = this.leftoverTrip(level, colony);
+			this.trip = leftovers != null ? leftovers : this.planTrip(level, colony);
+			this.loaded = leftovers != null;
+			this.tripTicks = 0;
+			if (this.trip == null) {
+				colony.tripClaims().release(this.bot.getUUID());
+				this.cooldown = IDLE_TICKS;
+			} else if (leftovers == null) {
+				// Kept until the hauler plans its next trip, so it goes on with this one.
+				colony.tripClaims().claim(this.bot.getUUID(), this.trip.source(), level.getGameTime() + TRIP_TICKS);
 			}
 			return;
 		}
@@ -146,6 +158,25 @@ public class HaulerGoal extends ColonyWorkGoal {
 			}
 		}
 		return false;
+	}
+
+	/** A storage chest for something the hauler carries, to take it straight there; null if none has room. */
+	private @Nullable Trip leftoverTrip(ServerLevel level, Colony colony) {
+		Map<BlockPos, Container> chests = Storage.storageChests(level, colony);
+		SimpleContainer inventory = this.bot.getInventory();
+		for (int i = 0; i < inventory.getContainerSize(); i++) {
+			ItemStack stack = inventory.getItem(i);
+			BlockPos chest = stack.isEmpty() ? null : chestFor(chests, stack);
+			if (chest != null) {
+				return new Trip(chest, chest, stack.getItem(), Integer.MAX_VALUE);
+			}
+		}
+		return null;
+	}
+
+	/** Whether no other hauler is on a trip from the same source. */
+	private boolean isFree(ServerLevel level, Colony colony, Trip trip) {
+		return colony.tripClaims().isFree(this.bot.getUUID(), trip.source(), level.getGameTime());
 	}
 
 	/**
@@ -165,8 +196,9 @@ public class HaulerGoal extends ColonyWorkGoal {
 		// The haul goes to the core; what the core does not need is stored from there.
 		return Storage.landingChests(level, colony).entrySet().stream()
 			.filter(chest -> !chest.getValue().isEmpty())
-			.findFirst()
 			.map(chest -> new Trip(chest.getKey(), colony.core(), null, Integer.MAX_VALUE))
+			.filter(landing -> this.isFree(level, colony, landing))
+			.findFirst()
 			.orElse(null);
 	}
 
@@ -176,20 +208,26 @@ public class HaulerGoal extends ColonyWorkGoal {
 				continue;
 			}
 			for (Map.Entry<BlockPos, Container> chest : stocks.chests().entrySet()) {
-				if (chest.getValue().countItem(fetch.getKey()) > 0) {
-					return new Trip(chest.getKey(), colony.core(), fetch.getKey(), fetch.getValue());
+				Trip trip = new Trip(chest.getKey(), colony.core(), fetch.getKey(), fetch.getValue());
+				if (chest.getValue().countItem(fetch.getKey()) > 0 && this.isFree(level, colony, trip)) {
+					return trip;
 				}
 			}
 		}
 		for (Map.Entry<Item, Integer> store : stocks.toStore().entrySet()) {
 			BlockPos chest = chestFor(stocks.chests(), new ItemStack(store.getKey()));
 			if (chest != null) {
-				return new Trip(colony.core(), chest, store.getKey(), store.getValue());
+				Trip trip = new Trip(colony.core(), chest, store.getKey(), store.getValue());
+				if (this.isFree(level, colony, trip)) {
+					return trip;
+				}
+				continue;
 			}
 			// The colony survey orders the chest if there is none (see chestsToOrder).
 			BlockPos spot = freeSpots(level, colony, stocks).findFirst().orElse(null);
-			if (spot != null && stocks.inCore().getOrDefault(Items.CHEST, 0) > 0) {
-				return new Trip(colony.core(), spot, Items.CHEST, 1);
+			Trip place = spot == null ? null : new Trip(colony.core(), spot, Items.CHEST, 1);
+			if (place != null && stocks.inCore().getOrDefault(Items.CHEST, 0) > 0 && this.isFree(level, colony, place)) {
+				return place;
 			}
 		}
 		return null;
@@ -206,8 +244,21 @@ public class HaulerGoal extends ColonyWorkGoal {
 		if (stocks == null) {
 			return 0;
 		}
+		Set<Item> surplus = new LinkedHashSet<>(stocks.toStore().keySet());
+		// What haulers carry that the core has no room for is surplus too.
+		for (UUID id : colony.members()) {
+			if (level.getEntity(id) instanceof AntBot bot && bot.getRole() == BotRole.HAULER) {
+				SimpleContainer inventory = bot.getInventory();
+				for (int i = 0; i < inventory.getContainerSize(); i++) {
+					ItemStack stack = inventory.getItem(i);
+					if (!stack.isEmpty() && !Storage.hasRoomFor(stocks.core(), stack)) {
+						surplus.add(stack.getItem());
+					}
+				}
+			}
+		}
 		Set<StorageCategory> full = new HashSet<>();
-		for (Item item : stocks.toStore().keySet()) {
+		for (Item item : surplus) {
 			ItemStack stack = new ItemStack(item);
 			StorageCategory category = StorageCategory.of(stack);
 			if (stocks.chests().values().stream().noneMatch(chest -> !chest.isEmpty() && category(chest) == category && Storage.hasRoomFor(chest, stack))) {

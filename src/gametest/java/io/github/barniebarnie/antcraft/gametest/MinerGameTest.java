@@ -15,11 +15,14 @@ import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -27,9 +30,11 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.ChestType;
 
 public class MinerGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CORE = new BlockPos(1, 1, 1);
@@ -324,6 +329,76 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(chest.isEmpty(), "landing chest not emptied");
 			Container core = core(helper, MINE_CORE);
 			helper.assertTrue(core.countItem(Items.COBBLESTONE) == 64 && core.countItem(Items.RAW_IRON) == 3, "haul not in the core");
+		});
+	}
+
+	/** Turns the landing chest at {@code pos} into a double chest, with its other half in the stone beside it. */
+	private static Container doubleChest(GameTestHelper helper, Mineshaft shaft, BlockPos pos) {
+		BlockState state = helper.getLevel().getBlockState(pos);
+		Direction facing = state.getValue(ChestBlock.FACING);
+		List<BlockPos> path = dugPath(shaft, false);
+		// A LEFT half's other half is clockwise of its facing.
+		boolean left = !path.contains(pos.relative(facing.getClockWise()));
+		BlockPos other = pos.relative(left ? facing.getClockWise() : facing.getCounterClockWise());
+		helper.getLevel().setBlockAndUpdate(pos, state.setValue(ChestBlock.TYPE, left ? ChestType.LEFT : ChestType.RIGHT));
+		helper.getLevel().setBlockAndUpdate(other, state.setValue(ChestBlock.TYPE, left ? ChestType.RIGHT : ChestType.LEFT));
+		return Storage.containerAt(helper.getLevel(), pos);
+	}
+
+	private static int count(Container container) {
+		int count = 0;
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			count += container.getItem(i).getCount();
+		}
+		return count;
+	}
+
+	@GameTest(maxTicks = 1500)
+	public void twoHaulersEmptyDifferentLandingChests(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		List<BlockPos> positions = shaft.levels().stream().map(shaft::landingChest).toList();
+		List<Container> chests = new ArrayList<>();
+		for (BlockPos pos : positions) {
+			Container chest = doubleChest(helper, shaft, pos);
+			helper.assertTrue(chest.getContainerSize() == 54, "not a double chest at " + pos);
+			// More than a hauler carries at once, so each chest takes two trips.
+			for (int i = 0; i < 28; i++) {
+				chest.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+			}
+			chests.add(chest);
+		}
+		List<AntBot> haulers = List.of(member(helper, colony, BotRole.HAULER, 1, 5, 1), member(helper, colony, BotRole.HAULER, 1, 5, 1));
+		List<Set<AntBot>> loaders = List.of(new HashSet<>(), new HashSet<>());
+		int[] inChest = chests.stream().mapToInt(MinerGameTest::count).toArray();
+		int[] carried = new int[haulers.size()];
+
+		helper.onEachTick(() -> {
+			// The colony uses up whatever reaches the core, so it never fills.
+			core(helper, MINE_CORE).clearContent();
+			for (int c = 0; c < chests.size(); c++) {
+				int now = count(chests.get(c));
+				if (now < inChest[c]) {
+					BlockPos pos = positions.get(c);
+					// Whoever picked items up this tick, nearest the chest.
+					haulers.stream()
+						.filter(hauler -> count(hauler.getInventory()) > carried[haulers.indexOf(hauler)])
+						.min(Comparator.comparingDouble(hauler -> hauler.distanceToSqr(pos.getX(), pos.getY(), pos.getZ())))
+						.ifPresent(loaders.get(c)::add);
+					if (loaders.get(c).size() > 1) {
+						helper.fail("both haulers loaded from the landing chest at " + pos);
+					}
+				}
+				inChest[c] = now;
+			}
+			for (int h = 0; h < haulers.size(); h++) {
+				carried[h] = count(haulers.get(h).getInventory());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chests.stream().allMatch(Container::isEmpty), "landing chests not emptied");
+			helper.assertTrue(!loaders.get(0).equals(loaders.get(1)), "one hauler emptied both chests");
 		});
 	}
 

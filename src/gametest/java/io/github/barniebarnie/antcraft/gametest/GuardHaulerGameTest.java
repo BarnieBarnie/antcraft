@@ -135,6 +135,42 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A core full of logs it keeps, and a hauler carrying cobblestone that does not fit in it. */
+	private static AntBot haulerWithLeftovers(GameTestHelper helper, Colony colony) {
+		Container core = core(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, core.getContainerSize() * 64, Items.OAK_LOG)));
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
+		}
+		AntBot hauler = member(helper, colony, BotRole.HAULER);
+		hauler.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 64));
+		hauler.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 32));
+		return hauler;
+	}
+
+	@GameTest(maxTicks = 400)
+	public void haulerStoresWhatTheFullCoreCannotTake(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		helper.setBlock(STORAGE, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
+		AntBot hauler = haulerWithLeftovers(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 96, "storage holds " + chest.countItem(Items.COBBLESTONE) + " cobblestone");
+			helper.assertTrue(hauler.getInventory().isEmpty(), "hauler still carries " + hauler.getInventory());
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void storageOrdersAChestForWhatAHaulerCannotStore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		haulerWithLeftovers(helper, colony);
+
+		helper.succeedWhen(() -> helper.assertTrue(colony.orders().containsKey(Items.CHEST), "no chest ordered: " + colony.orders()));
+	}
+
 	@GameTest(maxTicks = 500)
 	public void storageChestOrderIsWithdrawnWhenAPlayerBringsAChest(GameTestHelper helper) {
 		Colony colony = colony(helper);
