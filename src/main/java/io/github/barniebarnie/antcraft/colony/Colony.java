@@ -27,6 +27,7 @@ import net.minecraft.util.StringRepresentable;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.OreRevisit;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -152,6 +153,8 @@ public class Colony {
 	private final List<Blocked> blockedSteps;
 	/** What each hauler is on its way to move; not saved, since trips are short. */
 	private final TripClaims tripClaims = new TripClaims();
+	/** Dug branches sent back to for the ores a better pickaxe can now harvest; not saved, see {@link OreRevisit}. */
+	private final OreRevisit oreRevisit = new OreRevisit();
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
 	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
@@ -545,6 +548,10 @@ public class Colony {
 
 	public TripClaims tripClaims() {
 		return this.tripClaims;
+	}
+
+	public OreRevisit oreRevisit() {
+		return this.oreRevisit;
 	}
 
 	/** How far from the core the colony looks for work. */

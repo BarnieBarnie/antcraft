@@ -5,6 +5,7 @@ import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -559,6 +560,36 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(helper.getLevel().getBlockState(ore).isAir(), "iron ore not mined");
 			helper.assertTrue(Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.RAW_IRON, 0) == 1, "raw iron not stored");
+		});
+	}
+
+	/** A diamond ore its stone pickaxe left in a branch wall is mined once the miner gets an iron pickaxe, after the branch was done. */
+	@GameTest(maxTicks = 2400)
+	public void ironPickaxeSendsTheMinerBackForADiamondItLeft(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		colony.setStockTarget(StockTarget.of(Items.DIAMOND, 1));
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		BlockPos ore = wall(helper, shaft);
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.DIAMOND_ORE.defaultBlockState());
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		BlockPos start = shaft.branches(shaft.levels().getLast()).getFirst().start();
+		boolean[] given = {false};
+
+		helper.onEachTick(() -> {
+			// Its branch is done and off the board: only a new job brings the miner back.
+			if (!given[0] && branchesDug(helper, shaft) && !colony.board().has(JobType.MINE_BRANCH, start)) {
+				helper.assertTrue(helper.getLevel().getBlockState(ore).is(Blocks.DIAMOND_ORE), "diamond ore broken with a stone pickaxe");
+				miner.getInventory().addItem(new ItemStack(Items.IRON_PICKAXE));
+				given[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(given[0], "branch not done yet");
+			helper.assertTrue(helper.getLevel().getBlockState(ore).isAir(), "diamond ore not mined");
+			int diamonds = Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.DIAMOND, 0) + miner.getInventory().countItem(Items.DIAMOND);
+			helper.assertTrue(diamonds == 1, "no diamond");
 		});
 	}
 

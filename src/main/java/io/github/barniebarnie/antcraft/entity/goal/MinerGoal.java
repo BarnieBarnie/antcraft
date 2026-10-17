@@ -30,7 +30,6 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
@@ -246,18 +245,10 @@ public class MinerGoal extends ColonyWorkGoal {
 				blocks.add(cell);
 			}
 		}
-		for (BlockPos cell : branch.cells()) {
-			if (!level.getBlockState(cell).isAir()) {
-				continue;
-			}
-			for (Direction dir : Direction.values()) {
-				BlockPos side = cell.relative(dir);
-				// Not below the floor, which would leave holes to trip over.
-				if (dir != Direction.DOWN && !branch.cells().contains(side) && !blocks.contains(side) && !this.unreachable.contains(side)
-						&& level.getBlockState(side).is(ConventionalBlockTags.ORES) && this.canHarvest(level.getBlockState(side))
-						&& Mining.isMinable(level, side)) {
-					blocks.add(side);
-				}
+		for (BlockPos side : branch.walls(level::getBlockState)) {
+			if (!this.unreachable.contains(side) && level.getBlockState(side).is(ConventionalBlockTags.ORES) && this.canHarvest(level.getBlockState(side))
+					&& Mining.isMinable(level, side)) {
+				blocks.add(side);
 			}
 		}
 		return blocks;

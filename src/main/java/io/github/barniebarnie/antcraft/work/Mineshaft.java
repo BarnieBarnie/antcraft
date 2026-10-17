@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -65,6 +66,27 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		public Optional<BlockPos> darkTorch(LevelReader level) {
 			BlockState torch = Blocks.TORCH.defaultBlockState();
 			return this.torches.stream().filter(pos -> level.getBlockState(pos).isAir() && torch.canSurvive(level, pos)).findFirst();
+		}
+
+		/**
+		 * The walls and ceiling of what is dug of it, where a miner takes ores from: the blocks beside
+		 * and above its cells that are air, from the hall outwards. Not below the floor, which would
+		 * leave holes to trip over.
+		 */
+		public Set<BlockPos> walls(Function<BlockPos, BlockState> world) {
+			Set<BlockPos> walls = new LinkedHashSet<>();
+			for (BlockPos cell : this.cells) {
+				if (!world.apply(cell).isAir()) {
+					continue;
+				}
+				for (Direction dir : Direction.values()) {
+					BlockPos side = cell.relative(dir);
+					if (dir != Direction.DOWN && !this.cells.contains(side)) {
+						walls.add(side);
+					}
+				}
+			}
+			return walls;
 		}
 	}
 

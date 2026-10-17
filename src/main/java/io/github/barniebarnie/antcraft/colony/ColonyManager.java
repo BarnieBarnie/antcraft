@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import com.google.common.base.Suppliers;
 import com.mojang.serialization.Codec;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -17,9 +18,11 @@ import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.work.OreRevisit;
 import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.StorageArea;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,6 +37,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -49,6 +54,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
+import org.jspecify.annotations.Nullable;
 
 /** All colonies in one dimension, saved with the world. */
 public class ColonyManager extends SavedData {
@@ -180,8 +186,10 @@ public class ColonyManager extends SavedData {
 	 * every dug branch with a dark torch spot gets a job too, so a miner goes back to light it.
 	 * A branch whose job was given up, its cells left out of reach, counts as dug: its job stays
 	 * on the board so it is not posted anew, until {@link Colony#recheckGivenUp} puts it back up.
+	 * Once the colony's best pickaxe, among what it {@code holds} and its bots carry, beats the ones it
+	 * had, dug branches whose walls hold wanted ores the new one harvests get a job again (see {@link OreRevisit}).
 	 */
-	private void surveyMine(ServerLevel level, Colony colony) {
+	private void surveyMine(ServerLevel level, Colony colony, Map<Item, Integer> holds) {
 		if (colony.mineshaft().isEmpty() && this.hasRole(level, colony, BotRole.MINER)) {
 			// The colony has no shaft yet, so this avoids the field and storage only.
 			LevelWorldView world = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
@@ -198,14 +206,16 @@ public class ColonyManager extends SavedData {
 			.anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getInventory().countItem(Items.TORCH) > 0);
 		Set<BlockPos> givenUp = new HashSet<>();
 		colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH && job.givenUp()).forEach(job -> givenUp.add(job.target()));
+		// Plans the open orders, so at most once per survey, and only when needed.
+		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> Storage.wanted(level, colony));
 		colony.mineshaft().ifPresent(shaft -> {
 			Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
-			for (int y : shaft.levels()) {
-				// The builder has dug the hall, so miners can walk to the branches.
+			// The builder has dug the hall, so miners can walk to the branches.
+			List<Integer> open = shaft.levels().stream().filter(y -> {
 				BlockPos hallEnd = shaft.hall(y).getLast();
-				if (!level.getBlockState(hallEnd).getCollisionShape(level, hallEnd).isEmpty()) {
-					continue;
-				}
+				return level.getBlockState(hallEnd).getCollisionShape(level, hallEnd).isEmpty();
+			}).toList();
+			for (int y : open) {
 				// The first round with blocks left to dig; the rounds before it are dug, so may need lighting.
 				for (int round = 0; round < shaft.rounds(); round++) {
 					List<Mineshaft.Branch> branches = shaft.branches(y, round);
@@ -221,11 +231,38 @@ public class ColonyManager extends SavedData {
 				}
 			}
 			if (!work.isEmpty()) {
-				// Plans the open orders, so only when there is a level to choose.
-				Mineshaft.chooseLevel(List.copyOf(work.keySet()), Storage.wanted(level, colony)).ifPresent(y -> work.get(y).forEach(post));
+				Mineshaft.chooseLevel(List.copyOf(work.keySet()), wanted.get()).ifPresent(y -> work.get(y).forEach(post));
 			}
+			colony.oreRevisit().update(bestPickaxe(level, colony, holds), start -> colony.board().has(JobType.MINE_BRANCH, start),
+					() -> dugBranches(level, shaft, open, givenUp), level::getBlockState, pos -> Mining.isMinable(level, pos), wanted)
+				.forEach(start -> shaft.branch(start).ifPresent(post));
 		});
 		colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp() && !posted.contains(job.target()));
+	}
+
+	/** The branches of the {@code levels} with nothing left to dig, the {@code givenUp} ones aside. */
+	private static List<Mineshaft.Branch> dugBranches(ServerLevel level, Mineshaft shaft, List<Integer> levels, Set<BlockPos> givenUp) {
+		List<Mineshaft.Branch> dug = new ArrayList<>();
+		for (int y : levels) {
+			for (int round = 0; round < shaft.rounds(); round++) {
+				shaft.branches(y, round).stream()
+					.filter(branch -> !givenUp.contains(branch.start()) && branch.cells().stream().noneMatch(pos -> Mining.isMinable(level, pos)))
+					.forEach(dug::add);
+			}
+		}
+		return dug;
+	}
+
+	/** The best pickaxe in what the colony {@code holds} or in a member's hand, or null if it has none. */
+	private static @Nullable Item bestPickaxe(ServerLevel level, Colony colony, Map<Item, Integer> holds) {
+		ToolKind kind = ToolKind.PICKAXE;
+		Item best = kind.betterIn(holds, null).orElse(null);
+		for (UUID id : colony.members()) {
+			if (level.getEntity(id) instanceof AntBot bot && kind.rank(kind.bestCarried(bot)) > kind.rank(best)) {
+				best = kind.bestCarried(bot);
+			}
+		}
+		return best;
 	}
 
 	private boolean hasRole(ServerLevel level, Colony colony, BotRole role) {
@@ -382,8 +419,8 @@ public class ColonyManager extends SavedData {
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));
 			this.surveyCrops(level, colony);
-			this.surveyMine(level, colony);
 			Map<Item, Integer> have = held(level, colony);
+			this.surveyMine(level, colony, have);
 			this.surveyBuilds(level, colony, have);
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
