@@ -14,6 +14,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -125,6 +126,71 @@ class TerraformTest {
 
 	private static long column(BlockPos pos) {
 		return new BlockPos(pos.getX(), 0, pos.getZ()).asLong();
+	}
+
+	/**
+	 * Stone up to y=2 with a 3x3 pond, 2 deep, in the corner at x and z 0..2 of a 4x4 area, stone
+	 * all round it; the water at (2, 2, 2) flows rather than being a source.
+	 */
+	private static Function<BlockPos, BlockState> pond() {
+		BlockState water = Blocks.WATER.defaultBlockState();
+		BlockState flowing = water.setValue(LiquidBlock.LEVEL, 1);
+		return pos -> {
+			if (pos.getY() > 2) {
+				return AIR;
+			}
+			boolean inPond = pos.getY() >= 1 && pos.getX() >= 0 && pos.getX() <= 2 && pos.getZ() >= 0 && pos.getZ() <= 2;
+			if (!inPond) {
+				return STONE;
+			}
+			return pos.equals(new BlockPos(2, 2, 2)) ? flowing : water;
+		};
+	}
+
+	@Test
+	void waterIsFilledFromTheEdgeInwardsSourcesBeforeFlowingWater() {
+		Function<BlockPos, BlockState> world = pond();
+		BuildPlan plan = Terraform.plan(world, new BlockPos(0, 0, 0), new BlockPos(3, 3, 3), 2).orElseThrow();
+
+		List<BlockPos> order = plan.steps().stream().map(BuildPlan.Step::pos).toList();
+		assertTrue(plan.steps().stream().allMatch(step -> step.anySolid()), "only fill steps: " + plan.steps());
+		assertEquals(18, order.size(), "every water block is filled: " + order);
+		BlockPos flowing = new BlockPos(2, 2, 2);
+		// The middle of the pond is farthest from its edge.
+		int firstMiddle = Math.min(order.indexOf(new BlockPos(1, 1, 1)), order.indexOf(new BlockPos(1, 2, 1)));
+		for (BlockPos pos : order) {
+			boolean middle = pos.getX() == 1 && pos.getZ() == 1;
+			if (!middle) {
+				assertTrue(order.indexOf(pos) < firstMiddle, pos.toShortString() + " at the edge comes after the middle: " + order);
+			}
+			if (!middle && !pos.equals(flowing)) {
+				assertTrue(order.indexOf(pos) < order.indexOf(flowing), "source " + pos.toShortString() + " after the flowing water: " + order);
+			}
+			if (pos.getY() == 2 && !pos.equals(flowing)) {
+				assertTrue(order.indexOf(pos.below()) < order.indexOf(pos), "a column fills from the bottom: " + order);
+			}
+		}
+	}
+
+	@Test
+	void eachBatchIsATerraformToo() {
+		BuildPlan plan = Terraform.plan(slope(), new BlockPos(0, 0, 0), new BlockPos(5, 4, 1), 1).orElseThrow();
+		for (int i = 0; i < plan.batches().size(); i++) {
+			assertEquals(BuildPlan.Kind.TERRAFORM, plan.batch(i).kind(), "batch " + i);
+		}
+	}
+
+	@Test
+	void lavaAndBlocksBesideItAreLeftAlone() {
+		BlockState lava = Blocks.LAVA.defaultBlockState();
+		Map<BlockPos, BlockState> world = new HashMap<>(Map.of(new BlockPos(1, 1, 1), lava));
+		Function<BlockPos, BlockState> at = pos -> world.getOrDefault(pos, AIR);
+		assertTrue(Terraform.touchesLava(at, new BlockPos(1, 1, 1)));
+		assertTrue(Terraform.touchesLava(at, new BlockPos(1, 2, 1)));
+		assertTrue(Terraform.touchesLava(at, new BlockPos(2, 1, 1)));
+		assertFalse(Terraform.touchesLava(at, new BlockPos(2, 2, 1)));
+		world.put(new BlockPos(1, 1, 1), Blocks.WATER.defaultBlockState());
+		assertFalse(Terraform.touchesLava(at, new BlockPos(1, 1, 1)), "water is filled");
 	}
 
 	@Test

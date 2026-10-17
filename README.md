@@ -71,7 +71,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 | `/antcraft colony build copy <from> <to> <at>` | Copies the blocks between `<from>` and `<to>` (air included, so it clears too) into a build whose lowest corner is `<at>`; builders build the copy. Block states only, no chest contents |
 | `/antcraft colony build list` | Numbered list of the colony's builds with the steps left; the mineshaft is labelled |
 | `/antcraft colony build cancel <n>` | Drops build `<n>` from the list (not the mineshaft: move that with `colony mineshaft`) |
-| `/antcraft colony terraform <from> <to> <y>` | Levels the box between `<from>` and `<to>` at height `<y>`: miners dig everything above it (builders when there is no miner), builders fill the holes up to it with dirt or cobblestone from the core, and lumberjacks fell the trees in it. Listed and cancelled as a build |
+| `/antcraft colony terraform <from> <to> <y>` | Levels the box between `<from>` and `<to>` at height `<y>`: miners dig everything above it (builders when there is no miner), builders fill the holes up to it with dirt, cobblestone, sand or gravel from the core, and lumberjacks fell the trees in it. Ponds and the edge of a river in it are filled from the bank inwards; water above the height builders clear, walling off the water outside the box so it does not flow back in. Lava in it is left alone and reported as blocked. Listed and cancelled as a build |
 | `/antcraft colony blocked clear` | Gives up on the build steps builders reported blocked |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
 

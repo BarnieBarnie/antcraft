@@ -193,4 +193,143 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(chest, "no storage chest placed");
 		});
 	}
+
+	@GameTest(maxTicks = 700)
+	public void waterAMinerCannotDigStaysBlockedWithoutABuilder(GameTestHelper helper) {
+		Colony colony = colonyWithMiner(helper);
+		// Dirt and a water source in a stone pocket beside it, both above the height.
+		helper.setBlock(2, 1, 2, Blocks.DIRT);
+		helper.setBlock(3, 1, 2, Blocks.WATER);
+		helper.setBlock(3, 1, 1, Blocks.STONE);
+		helper.setBlock(3, 1, 3, Blocks.STONE);
+		helper.setBlock(4, 1, 2, Blocks.STONE);
+		miner(helper, colony, 1, 4);
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(3, 1, 2), 0);
+		boolean[] reported = {false};
+		boolean[] freed = {false};
+		helper.onEachTick(() -> {
+			boolean blocked = !colony.blockedSteps().isEmpty();
+			freed[0] |= reported[0] && !blocked;
+			reported[0] |= blocked;
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() >= 600, "still watching");
+			helper.assertTrue(reported[0], "the water was never reported blocked");
+			helper.assertTrue(!freed[0], "the blocked water was freed again with no builder to clear it");
+		});
+	}
+
+	@GameTest(maxTicks = 800)
+	public void lavaInTheAreaStaysBlocked(GameTestHelper helper) {
+		BlockPos corePos = new BlockPos(0, 2, 0);
+		// Ground at y=1 with a hole in it and a lava source sunk in it.
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 1, 7)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		helper.setBlock(2, 1, 2, Blocks.AIR);
+		helper.setBlock(4, 1, 4, Blocks.LAVA);
+		Colony colony = colony(helper, corePos, 6);
+		core(helper, corePos).setItem(0, new ItemStack(Items.DIRT, 8));
+		member(helper, colony, BotRole.BUILDER, 1, 2, 3);
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(6, 3, 6), 1);
+		BlockPos lava = helper.absolutePos(new BlockPos(4, 1, 4));
+		boolean[] reported = {false};
+		boolean[] freed = {false};
+		helper.onEachTick(() -> {
+			boolean blocked = colony.blockedSteps().contains(lava);
+			freed[0] |= reported[0] && !blocked;
+			reported[0] |= blocked;
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() >= 700, "still watching");
+			helper.assertTrue(helper.getBlockState(new BlockPos(2, 1, 2)).is(Blocks.DIRT), "the hole is not filled");
+			helper.assertTrue(helper.getBlockState(new BlockPos(4, 1, 4)).is(Blocks.LAVA), "the lava was filled");
+			helper.assertTrue(reported[0], "the lava was never reported blocked");
+			helper.assertTrue(!freed[0], "the blocked lava was freed again");
+			helper.assertTrue(colony.blockedSteps().equals(List.of(lava)), "blocked: " + colony.blockedSteps());
+		});
+	}
+
+	/** A member standing at (x, y, z), such as on ground raised above the floor. */
+	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role, int x, int y, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, y, z);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.setRole(role);
+		return bot;
+	}
+
+	/** There is no fluid left in the box from (x1, y1, z1) to (x2, y2, z2). */
+	private static void assertDry(GameTestHelper helper, int x1, int y1, int z1, int x2, int y2, int z2) {
+		for (BlockPos pos : BlockPos.betweenClosed(x1, y1, z1, x2, y2, z2)) {
+			helper.assertTrue(helper.getBlockState(pos).getFluidState().isEmpty(), "water left at " + pos.toShortString());
+		}
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void aBuilderFillsAPondWithSand(GameTestHelper helper) {
+		// Ground at y=1..2 with a 3x3 pond in it, 2 deep, down to the stone floor.
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
+			boolean pond = pos.getX() >= 3 && pos.getX() <= 5 && pos.getZ() >= 3 && pos.getZ() <= 5;
+			helper.setBlock(pos, pond ? Blocks.WATER : Blocks.DIRT);
+		}
+		BlockPos corePos = new BlockPos(0, 3, 0);
+		Colony colony = colony(helper, corePos, 6);
+		core(helper, corePos).setItem(0, new ItemStack(Items.SAND, 24));
+		member(helper, colony, BotRole.BUILDER, 1, 3, 3);
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(6, 4, 6), 2);
+
+		helper.succeedWhen(() -> {
+			assertDry(helper, 2, 1, 2, 6, 4, 6);
+			assertLevel(helper, 2, 2, 6, 6, 2, 4);
+			helper.assertTrue(helper.getBlockState(new BlockPos(4, 1, 4)).is(Blocks.SAND), "the pond is not filled with sand");
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+		});
+	}
+
+	@GameTest(maxTicks = 1000)
+	public void aRiverEdgeIsFilledAndWalledOff(GameTestHelper helper) {
+		// A bank of ground at y=1..2 along x 0..3, and a river 2 deep at x 4..6 between stone banks.
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {
+			if (pos.getX() <= 3) {
+				helper.setBlock(pos, pos.getY() <= 2 ? Blocks.DIRT : Blocks.AIR);
+			} else if (pos.getX() == 7 || pos.getZ() == 0 || pos.getZ() == 7) {
+				helper.setBlock(pos, Blocks.STONE);
+			} else if (pos.getY() <= 2) {
+				helper.setBlock(pos, Blocks.WATER);
+			}
+		}
+		BlockPos corePos = new BlockPos(0, 3, 1);
+		Colony colony = colony(helper, corePos, 6);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 6)), List.of());
+		colony.setMineshaft(shaft);
+		colony.removeBuild(shaft.plan());
+		core(helper, corePos).setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		// For the builder, to break the cobblestone it fills the water above the height with.
+		core(helper, corePos).setItem(1, new ItemStack(Items.STONE_PICKAXE));
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 3, 3);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		member(helper, colony, BotRole.BUILDER, 2, 3, 4);
+		// Level the bank and the near half of the river at y=1, below the river's surface.
+		terraform(helper, colony, new BlockPos(1, 1, 1), new BlockPos(5, 4, 6), 1);
+		long[] doneAt = {-1};
+
+		helper.succeedWhen(() -> {
+			assertDry(helper, 1, 1, 1, 5, 4, 6);
+			assertLevel(helper, 1, 1, 5, 6, 1, 4);
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "blocked: " + colony.blockedSteps());
+			for (int z = 1; z <= 6; z++) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(6, 1, z)).is(Blocks.WATER), "the river outside the area is gone at z=" + z);
+				helper.assertTrue(helper.getBlockState(new BlockPos(6, 2, z)).isFaceSturdy(helper.getLevel(), helper.absolutePos(new BlockPos(6, 2, z)), Direction.UP),
+					"the river is not walled off at z=" + z);
+			}
+			// It stays dry: no water flows back in.
+			if (doneAt[0] < 0) {
+				doneAt[0] = helper.getTick();
+			}
+			helper.assertTrue(helper.getTick() - doneAt[0] >= 60, "watching for water flowing back since " + doneAt[0]);
+		});
+	}
 }

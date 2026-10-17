@@ -760,7 +760,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 2, 4));
 			helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps());
 			// The recheck leaves it reported rather than freeing it every survey.
-			helper.assertFalse(BuilderGoal.workable(helper.getLevel(), colony).test(fire), "fire counted as workable");
+			helper.assertFalse(BuilderGoal.workable(helper.getLevel(), colony).test(new BuildPlan(List.of(fire)), fire), "fire counted as workable");
 			helper.assertTrue(flintAndSteel(helper, builder).getDamageValue() == 0, "flint and steel used");
 		});
 	}

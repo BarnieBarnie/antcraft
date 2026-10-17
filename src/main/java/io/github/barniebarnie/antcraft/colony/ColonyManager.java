@@ -6,8 +6,10 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
+import io.github.barniebarnie.antcraft.entity.goal.Digging;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -284,9 +287,9 @@ public class ColonyManager extends SavedData {
 			return;
 		}
 		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream().map(plan -> plan.materials(level::getBlockState)).toList());
-		Map<Item, Integer> needed = new HashMap<>(materials);
-		needed.replaceAll((item, count) -> count - have.getOrDefault(item, 0));
-		needed.values().removeIf(count -> count <= 0);
+		// Steps any solid block will do, such as a terraform's fill, take whichever fill block the colony has.
+		Map<Item, Integer> fills = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState)).toList());
+		Map<Item, Integer> needed = new HashMap<>(BuildPlan.shortfall(materials, fills, have));
 		// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
 		if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && have.getOrDefault(Items.BUCKET, 0) == 0) {
 			needed.put(Items.BUCKET, 1);
@@ -361,7 +364,10 @@ public class ColonyManager extends SavedData {
 			colony.board().releaseStale(now, CLAIM_TIMEOUT);
 			colony.forgetReplaced(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			// ponytail: assumes a bucket and filler at hand; a builder without them just reports the step again.
-			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, BuilderGoal.workable(level, colony));
+			// Without a builder only miners work, on dig jobs, and leave water alone, so a step waits until they can dig it.
+			BiPredicate<BuildPlan, BuildPlan.Step> workable = this.hasRole(level, colony, BotRole.BUILDER) ? BuilderGoal.workable(level, colony)
+				: (batch, step) -> Digging.isDiggable(level, colony, step);
+			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, workable);
 			LevelTreeView trees = new LevelTreeView(level);
 			// A tree job stays while any of its logs stand, even once the leaves have decayed.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())

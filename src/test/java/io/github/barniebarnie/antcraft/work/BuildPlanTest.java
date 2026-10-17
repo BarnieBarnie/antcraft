@@ -70,6 +70,27 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void stepsAnySolidBlockWillDoAreListedApart() {
+		BuildPlan plan = new BuildPlan(List.of(Terraform.fill(A), Terraform.fill(B), BuildPlan.Step.solid(C),
+			new BuildPlan.Step(D, Blocks.COBBLESTONE.defaultBlockState())));
+		// One is filled already, with sand.
+		assertEquals(Map.of(Items.DIRT, 1, Items.COBBLESTONE, 1), plan.fillMaterials(at(world(A, Blocks.SAND.defaultBlockState()))));
+	}
+
+	@Test
+	void fillStepsTakeWhicheverFillBlockTheColonyHas() {
+		// Five fill steps of dirt, and two cobblestone a wall needs as such.
+		Map<net.minecraft.world.item.Item, Integer> materials = Map.of(Items.DIRT, 5, Items.COBBLESTONE, 2);
+		Map<net.minecraft.world.item.Item, Integer> fills = Map.of(Items.DIRT, 5);
+		// The cobblestone beyond the wall's and the sand stand in for dirt; the stone is no fill block.
+		Map<net.minecraft.world.item.Item, Integer> have = Map.of(Items.COBBLESTONE, 3, Items.SAND, 2, Items.STONE, 9);
+		assertEquals(Map.of(Items.DIRT, 2), BuildPlan.shortfall(materials, fills, have));
+		assertEquals(Map.of(Items.COBBLESTONE, 1), BuildPlan.shortfall(Map.of(Items.COBBLESTONE, 2), Map.of(), Map.of(Items.COBBLESTONE, 1, Items.SAND, 9)),
+			"a block placed as such takes no other");
+		assertEquals(Map.of(), BuildPlan.shortfall(materials, fills, Map.of(Items.COBBLESTONE, 2, Items.GRAVEL, 64)));
+	}
+
+	@Test
 	void listsMaterialsForEveryPlacement() {
 		assertEquals(Map.of(Items.COBBLESTONE, 2, Items.OAK_STAIRS, 1), plan().materials());
 	}

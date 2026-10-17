@@ -242,7 +242,7 @@ class ColonyTest {
 	void recheckKeepsStepsThatAreStillBlocked() {
 		Colony colony = colony();
 		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
-		colony.recheckBlocked(world(Blocks.BEDROCK), step -> false);
+		colony.recheckBlocked(world(Blocks.BEDROCK), (batch, step) -> false);
 		assertEquals(List.of(PLACED), colony.blockedSteps());
 	}
 
@@ -250,7 +250,7 @@ class ColonyTest {
 	void recheckDropsStepsWhoseTargetBlockIsInPlace() {
 		Colony colony = colony();
 		blockedPlan(colony, new BuildPlan.Step(PLACED, Blocks.COBBLESTONE.defaultBlockState()));
-		colony.recheckBlocked(world(Blocks.COBBLESTONE), step -> false);
+		colony.recheckBlocked(world(Blocks.COBBLESTONE), (batch, step) -> false);
 		assertTrue(colony.blockedSteps().isEmpty(), "done step still reported: " + colony.blockedSteps());
 	}
 
@@ -258,7 +258,7 @@ class ColonyTest {
 	void recheckHandsAWorkableStepBackToItsPlan() {
 		Colony colony = colony();
 		UUID id = blockedPlan(colony, BuildPlan.Step.clear(PLACED));
-		colony.recheckBlocked(world(Blocks.STONE), step -> true);
+		colony.recheckBlocked(world(Blocks.STONE), (batch, step) -> true);
 		colony.postBuildJobs();
 		assertTrue(colony.blockedSteps().isEmpty(), "workable step still reported: " + colony.blockedSteps());
 		assertEquals(List.of(id), colony.board().jobs().stream().map(Job::id).toList());
@@ -270,7 +270,7 @@ class ColonyTest {
 		UUID id = blockedPlan(colony, BuildPlan.Step.clear(PLACED));
 		colony.removeBuild(colony.build(id).orElseThrow());
 		colony.reportBlocked(UUID.randomUUID(), List.of(new BlockPos(1, 2, 3)));
-		colony.recheckBlocked(world(Blocks.BEDROCK), step -> false);
+		colony.recheckBlocked(world(Blocks.BEDROCK), (batch, step) -> false);
 		assertTrue(colony.blockedSteps().isEmpty(), "steps of gone plans still reported: " + colony.blockedSteps());
 	}
 
@@ -278,7 +278,7 @@ class ColonyTest {
 	void recheckLeavesStepsInUnloadedChunks() {
 		Colony colony = colony();
 		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
-		colony.recheckBlocked(pos -> null, step -> true);
+		colony.recheckBlocked(pos -> null, (batch, step) -> true);
 		assertEquals(List.of(PLACED), colony.blockedSteps());
 	}
 
@@ -287,7 +287,7 @@ class ColonyTest {
 		Colony colony = colony();
 		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
 		assertEquals(1, colony.clearBlocked());
-		colony.recheckBlocked(world(Blocks.AIR), step -> true);
+		colony.recheckBlocked(world(Blocks.AIR), (batch, step) -> true);
 		colony.postBuildJobs();
 		assertTrue(colony.blockedSteps().isEmpty());
 		assertTrue(colony.board().jobs().isEmpty(), "given up plan posted again: " + colony.board().jobs());
@@ -300,7 +300,7 @@ class ColonyTest {
 			""");
 		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(List.of(new BlockPos(1, 2, 3)), colony.blockedSteps());
-		colony.recheckBlocked(world(Blocks.BEDROCK), step -> false);
+		colony.recheckBlocked(world(Blocks.BEDROCK), (batch, step) -> false);
 		assertTrue(colony.blockedSteps().isEmpty(), "step of an unknown plan kept");
 	}
 

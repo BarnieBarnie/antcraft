@@ -119,10 +119,10 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		}
 	}
 
-	/** Batch {@code index} as a plan of its own, to be worked through by one builder. */
+	/** Batch {@code index} as a plan of its own, of the same kind, to be worked through by one builder. */
 	public BuildPlan batch(int index) {
 		Batch batch = this.batches.get(index);
-		return new BuildPlan(this.steps.subList(batch.from(), batch.to()));
+		return new BuildPlan(this.steps.subList(batch.from(), batch.to()), List.of(), this.kind);
 	}
 
 	/** The batches not {@code done} yet whose needed batches are all done, by index. */
@@ -306,6 +306,47 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	/** The first step the world does not match yet among those that {@code workable} allows, so a blocked step does not hold up the rest. */
 	public Optional<Step> nextStep(Function<BlockPos, BlockState> world, Predicate<Step> workable) {
 		return this.steps.stream().filter(step -> !step.isDone(world.apply(step.pos())) && workable.test(step)).findFirst();
+	}
+
+	/**
+	 * The blocks a step any solid block will do takes when the colony lacks the step's own, such as
+	 * for a terraform's fill: cheap fillers, and sand and gravel, which sink to the bottom of water.
+	 */
+	public static final Set<Item> FILL_BLOCKS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.SAND, Items.RED_SAND, Items.GRAVEL);
+
+	/** The part of {@link #materials(Function)} for steps any solid block will do, which a fill block of another kind can stand in for. */
+	public Map<Item, Integer> fillMaterials(Function<BlockPos, BlockState> world) {
+		Map<Item, Integer> materials = new LinkedHashMap<>();
+		for (Step step : this.steps) {
+			if (step.anySolid() && !step.isPlaced(world.apply(step.pos()))) {
+				materials.merge(step.item(), 1, Integer::sum);
+			}
+		}
+		return materials;
+	}
+
+	/**
+	 * What to order for {@code materials} beyond what the colony {@code has}. Of those, the steps any
+	 * solid block will do ({@code fills}) take whichever {@link #FILL_BLOCKS} the colony has to spare,
+	 * so only what all fill blocks together lack is ordered, as the step's own block.
+	 */
+	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> fills, Map<Item, Integer> has) {
+		Map<Item, Integer> needed = new LinkedHashMap<>();
+		materials.forEach((item, count) -> {
+			if (count > has.getOrDefault(item, 0)) {
+				needed.put(item, count - has.getOrDefault(item, 0));
+			}
+		});
+		int spare = FILL_BLOCKS.stream().mapToInt(block -> Math.max(0, has.getOrDefault(block, 0) - materials.getOrDefault(block, 0))).sum();
+		for (Map.Entry<Item, Integer> fill : fills.entrySet()) {
+			int cover = Math.min(spare, Math.min(fill.getValue(), needed.getOrDefault(fill.getKey(), 0)));
+			if (cover > 0) {
+				spare -= cover;
+				needed.merge(fill.getKey(), -cover, Integer::sum);
+			}
+		}
+		needed.values().removeIf(count -> count <= 0);
+		return needed;
 	}
 
 	/** Every item the plan places, with a water bucket for each waterlogged block and one flint and steel for all its fire. */

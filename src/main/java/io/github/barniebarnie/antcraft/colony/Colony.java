@@ -18,7 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.function.BiPredicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -393,18 +393,18 @@ public class Colony {
 	}
 
 	/**
-	 * Drops blocked steps whose plan is gone, and those that are done or that {@code workable}
-	 * says a builder could do now. A plan with such a step gets all its blocked steps dropped, so
-	 * it gets jobs again and its builders report whatever is still blocked. {@code world} gives
-	 * null where it cannot tell, such as in unloaded chunks.
+	 * Drops blocked steps whose plan is gone, and those that are done or that {@code workable},
+	 * given the step's batch and the step, says a bot could do now. A plan with such a step gets
+	 * all its blocked steps dropped, so it gets jobs again and its bots report whatever is still
+	 * blocked. {@code world} gives null where it cannot tell, such as in unloaded chunks.
 	 */
-	public void recheckBlocked(Function<BlockPos, @Nullable BlockState> world, Predicate<BuildPlan.Step> workable) {
+	public void recheckBlocked(Function<BlockPos, @Nullable BlockState> world, BiPredicate<BuildPlan, BuildPlan.Step> workable) {
 		Set<UUID> freed = new HashSet<>();
 		for (Blocked blocked : this.blockedSteps) {
-			Optional<BuildPlan.Step> step = this.build(blocked.plan())
-				.flatMap(plan -> plan.steps().stream().filter(s -> s.pos().equals(blocked.pos())).findFirst());
+			Optional<BuildPlan> batch = this.build(blocked.plan());
+			Optional<BuildPlan.Step> step = batch.flatMap(plan -> plan.steps().stream().filter(s -> s.pos().equals(blocked.pos())).findFirst());
 			BlockState state = world.apply(blocked.pos());
-			if (step.isEmpty() || state != null && (step.get().isDone(state) || workable.test(step.get()))) {
+			if (step.isEmpty() || state != null && (step.get().isDone(state) || workable.test(batch.get(), step.get()))) {
 				freed.add(this.planOf(blocked.plan()));
 			}
 		}

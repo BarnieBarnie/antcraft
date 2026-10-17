@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.Terraform;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -25,6 +27,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
@@ -62,8 +65,10 @@ import org.jspecify.annotations.Nullable;
  * there, blocks a player cannot place, such as a portal, and a fluid without a bucket or source
  * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
  * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
- * While the colony has no miner it also digs out dig jobs (see {@link Digging}), and a step any
- * solid block will do, such as a terraform's fill, takes whichever filler block there is.
+ * While the colony has no miner it also digs out dig jobs (see {@link Digging}), and with one it
+ * takes those its miners leave for water. A step any solid block will do, such as a terraform's
+ * fill, takes whichever fill block there is, sand and gravel too. In a terraform it leaves lava and
+ * the blocks holding it back alone, to be reported as blocked.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
@@ -115,12 +120,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		Container core = Storage.containerAt(level, colony.core());
-		// Dig jobs are for miners; a colony without one has its builders dig.
-		Set<JobType> types = Digging.hasMiner(level, colony) ? Set.of(JobType.BUILD) : Set.of(JobType.BUILD, JobType.CLEAR_AREA);
-		Optional<Job> job = colony.board().claim(this.bot.getUUID(), types, this.bot.blockPosition(), level.getGameTime(),
+		// Dig jobs are for miners, but for water they leave to builders; a colony without one has its builders dig.
+		boolean miner = Digging.hasMiner(level, colony);
+		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.BUILD, JobType.CLEAR_AREA), this.bot.blockPosition(), level.getGameTime(),
 			// A plan left only with steps it cannot clear is claimed too, to be finished and reported.
-			open -> colony.build(open.id()).filter(plan -> this.nextStep(level, colony, core, plan, isDig(open)).isPresent()
-				|| !this.isWaiting(level, colony, core, plan, isDig(open))).isPresent(),
+			open -> colony.build(open.id()).filter(plan -> (!isDig(open) || !miner || Digging.needsBuilder(level, colony, plan))
+				&& (this.nextStep(level, colony, core, plan, isDig(open)).isPresent() || !this.isWaiting(level, colony, core, plan, isDig(open)))).isPresent(),
 			// A plan's batches in order where it can, so a lone builder digs a mineshaft from the top down.
 			open -> colony.batchIndex(open.id()));
 		this.hasJob = job.isPresent();
@@ -185,7 +190,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	/**
 	 * {@code step}, or for a step any solid block will do, such as a terraform's fill, the same step
-	 * with a filler block such as dirt or cobblestone that the bot or the core has, when neither has
+	 * with a fill block such as cobblestone or sand that the bot or the core has, when neither has
 	 * the step's own block.
 	 */
 	private BuildPlan.Step withFiller(@Nullable Container core, BuildPlan.Step step) {
@@ -193,9 +198,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return step;
 		}
 		SimpleContainer inventory = this.bot.getInventory();
-		int slot = findSlot(inventory, BuilderGoal::isFiller);
+		int slot = findSlot(inventory, BuilderGoal::isFillBlock);
 		Item filler = slot >= 0 ? inventory.getItem(slot).getItem() : null;
-		if (filler == null && core != null && (slot = findSlot(core, BuilderGoal::isFiller)) >= 0) {
+		if (filler == null && core != null && (slot = findSlot(core, BuilderGoal::isFillBlock)) >= 0) {
 			filler = core.getItem(slot).getItem();
 		}
 		return filler == null ? step : new BuildPlan.Step(step.pos(), Block.byItem(filler).defaultBlockState(), true);
@@ -248,7 +253,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
 		return plan.nextStep(level::getBlockState, planned -> {
 			BlockState current = level.getBlockState(planned.pos());
-			if (dig && Digging.isForLumberjacks(level, colony, planned.pos())) {
+			if (dig && Digging.isForLumberjacks(level, colony, planned.pos()) || leavesAlone(level, plan, planned)) {
 				return false;
 			}
 			BuildPlan.Step step = this.withFiller(core, planned);
@@ -378,13 +383,13 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * a blocking block is gone, or once there is a full bucket in the core or a source to fill one
 	 * at for a fluid. Never for a block a player cannot place, so that step stays reported.
 	 */
-	public static Predicate<BuildPlan.Step> workable(ServerLevel level, Colony colony) {
+	public static BiPredicate<BuildPlan, BuildPlan.Step> workable(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
 		// ponytail: looks for a source once per fluid and recheck, from the core rather than per step.
 		Map<Item, Boolean> canPour = new HashMap<>();
-		return step -> {
+		return (plan, step) -> {
 			Item item = step.item(level.getBlockState(step.pos()));
-			return isPossible(level, step) && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
+			return isPossible(level, step) && !leavesAlone(level, plan, step) && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
 				&& (!isPoured(item) || canPour.computeIfAbsent(item,
 					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket) != null));
 		};
@@ -414,6 +419,11 @@ public class BuilderGoal extends ColonyWorkGoal {
 		return FILLERS.contains(stack.getItem());
 	}
 
+	/** Whether {@code stack} is a block a step any solid block will do takes (see {@link BuildPlan#FILL_BLOCKS}); sand and gravel fall, so they never clear a fluid. */
+	private static boolean isFillBlock(ItemStack stack) {
+		return BuildPlan.FILL_BLOCKS.contains(stack.getItem());
+	}
+
 	/** Whether a plan still has a block in the way that is dug with a pickaxe, such as stone. */
 	private static boolean needsPickaxe(ServerLevel level, Colony colony) {
 		return colony.builds().stream().flatMap(plan -> plan.steps().stream()).anyMatch(step -> {
@@ -433,11 +443,25 @@ public class BuilderGoal extends ColonyWorkGoal {
 			if (dig && Digging.isForLumberjacks(level, colony, step.pos())) {
 				return true;
 			}
+			if (leavesAlone(level, plan, step)) {
+				return false;
+			}
 			Item item = step.item(current);
 			return step.needsClearing(current)
 				? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
 				: isPossible(level, step) && (!isPoured(item) || this.source(level, colony, item) != null);
 		}).isPresent();
+	}
+
+	/**
+	 * Whether a terraform's {@code step} is left alone for lava, to be reported as blocked: a fill
+	 * step where lava is, or a block to clear that is lava or holds it back (see {@link Terraform#touchesLava}).
+	 */
+	private static boolean leavesAlone(ServerLevel level, BuildPlan plan, BuildPlan.Step step) {
+		if (plan.kind() != BuildPlan.Kind.TERRAFORM) {
+			return false;
+		}
+		return step.isClear() ? Terraform.touchesLava(level::getBlockState, step.pos()) : level.getFluidState(step.pos()).is(FluidTags.LAVA);
 	}
 
 	/** Whether a builder can do {@code step} at all, with what it needs at hand: fire only where it can stay, as flint and steel lights it. */
@@ -550,7 +574,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		Map<Item, Integer> needed = plan.materials(level::getBlockState);
 		// Steps any solid block will do take whichever filler there is.
 		int fillers = plan.steps().stream().filter(step -> step.anySolid() && !step.isDone(level.getBlockState(step.pos()))).mapToInt(step -> 1).sum();
-		int count = isFiller(item.getDefaultInstance()) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
+		int count = isFillBlock(item.getDefaultInstance()) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
 		if (core == null) {
 			this.cooldown = IDLE_TICKS;
 			return;
@@ -558,7 +582,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		if (this.reach(colony.core())) {
 			SimpleContainer inventory = this.bot.getInventory();
 			boolean pillaring = this.hasHighSteps(level, plan);
-			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES) && !(fillers > 0 && isFiller(stack));
+			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES) && !(fillers > 0 && isFillBlock(stack));
 			Storage.moveItems(inventory, core, stack -> spare.test(stack) && !(pillaring && stack.is(SCAFFOLD)));
 			Storage.moveItems(core, inventory, stack -> stack.is(item), count);
 			if (pillaring) {
