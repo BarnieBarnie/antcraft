@@ -104,6 +104,11 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 		return this.upgradeTool(level, colony, kind, () -> false);
 	}
 
+	/** Makes the next {@link #upgradeTool} look for a better tool now, instead of when its next check is due. */
+	protected void checkToolNow() {
+		this.nextUpgradeCheck = 0;
+	}
+
 	/** Like {@link #upgradeTool(ServerLevel, Colony, ToolKind)}; a bot without one orders one too while it {@code needs} one. */
 	protected boolean upgradeTool(ServerLevel level, Colony colony, ToolKind kind, BooleanSupplier needs) {
 		Container core = Storage.containerAt(level, colony.core());

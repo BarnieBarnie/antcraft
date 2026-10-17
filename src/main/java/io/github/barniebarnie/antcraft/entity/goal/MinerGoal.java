@@ -8,10 +8,12 @@ import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
@@ -21,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -33,14 +36,16 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Miner work loop: make sure it has a pickaxe (from the core, or by ordering one),
- * claim a mineshaft branch, dig it out with the ores in its walls, light it with torches from
- * the core as it goes, and bring the haul to the core. Now and then it
+ * claim a mineshaft branch, dig it out with the ores in its walls its pickaxe can harvest, light it
+ * with torches from the core as it goes, and bring the haul to the core. Now and then it
  * looks for a better pickaxe: it swaps to one in the core, leaving the old one there,
- * or orders the best one the colony can make.
+ * or orders the best one the colony can make. Before mining a level it makes sure a pickaxe
+ * good enough for the ores the colony wants there is in hand or on its way.
  */
 public class MinerGoal extends ColonyWorkGoal {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
@@ -52,6 +57,8 @@ public class MinerGoal extends ColonyWorkGoal {
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
 	private State state = State.TOOL;
+	/** The job it last checked its pickaxe for, so it checks once per job. */
+	private @Nullable UUID tierChecked;
 
 	public MinerGoal(AntBot bot) {
 		super(bot, BotRole.MINER);
@@ -120,6 +127,12 @@ public class MinerGoal extends ColonyWorkGoal {
 			}
 			return;
 		}
+		if (!job.get().id().equals(this.tierChecked)) {
+			this.tierChecked = job.get().id();
+			if (this.getPickaxeFor(level, colony, job.get().target().getY())) {
+				return;
+			}
+		}
 		Optional<Mineshaft.Branch> branch = shaft.get().branch(job.get().target());
 		if (branch.isPresent() && this.light(level, colony, branch.get())) {
 			return;
@@ -140,7 +153,36 @@ public class MinerGoal extends ColonyWorkGoal {
 		}
 	}
 
-	/** The branch's blocks left to dig, from the hall outwards, then the ores in the walls and ceiling of what is dug. */
+	/**
+	 * Before mining at height {@code y}, makes sure a good enough pickaxe for the ores the colony
+	 * wants there is coming: orders it, or the step towards it its pickaxe can mine the materials
+	 * for, unless one is in stock or on order, and fetches the best one in the core right away.
+	 * Returns true while it goes to fetch one. Without one it still digs the branch, leaving the ores
+	 * it cannot harvest.
+	 */
+	private boolean getPickaxeFor(ServerLevel level, Colony colony, int y) {
+		ToolKind kind = ToolKind.PICKAXE;
+		Item need = PickaxeTier.forLevel(y, item -> colony.orders().containsKey(item)
+			|| colony.stockTargets().stream().anyMatch(target -> target.matches(item)));
+		Item carried = kind.bestCarried(this.bot);
+		if (kind.rank(carried) >= kind.rank(need)) {
+			return false;
+		}
+		int step = kind.rank(PickaxeTier.toOrder(carried, need));
+		Map<Item, Integer> stock = Storage.colonyStock(level, colony);
+		boolean coming = kind.tiers().stream().filter(tier -> kind.rank(tier) >= step)
+			.anyMatch(tier -> stock.getOrDefault(tier, 0) > 0 || colony.orders().getOrDefault(tier, 0) > 0);
+		if (!coming) {
+			colony.addOrder(kind.tiers().get(step), 1);
+		}
+		this.checkToolNow();
+		return this.upgradeTool(level, colony, kind);
+	}
+
+	/**
+	 * The branch's blocks left to dig, from the hall outwards, then the ores in the walls and ceiling
+	 * of what is dug that its pickaxe can harvest.
+	 */
 	private List<BlockPos> toMine(ServerLevel level, Mineshaft.Branch branch) {
 		List<BlockPos> blocks = new ArrayList<>();
 		for (BlockPos cell : branch.cells()) {
@@ -156,7 +198,8 @@ public class MinerGoal extends ColonyWorkGoal {
 				BlockPos side = cell.relative(dir);
 				// Not below the floor, which would leave holes to trip over.
 				if (dir != Direction.DOWN && !branch.cells().contains(side) && !blocks.contains(side) && !this.unreachable.contains(side)
-						&& level.getBlockState(side).is(ConventionalBlockTags.ORES) && Mining.isMinable(level, side)) {
+						&& level.getBlockState(side).is(ConventionalBlockTags.ORES) && this.canHarvest(level.getBlockState(side))
+						&& Mining.isMinable(level, side)) {
 					blocks.add(side);
 				}
 			}
@@ -278,6 +321,11 @@ public class MinerGoal extends ColonyWorkGoal {
 			}
 		}
 		return scaffold > KEEP_SCAFFOLD;
+	}
+
+	/** Whether the best tool it carries for {@code state} gets its drops. */
+	private boolean canHarvest(BlockState state) {
+		return Tools.canHarvest(Tools.bestToolFor(this.bot.getInventory(), this.bot.getMainHandItem(), state), state);
 	}
 
 	private boolean hasPickaxe() {

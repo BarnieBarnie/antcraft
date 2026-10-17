@@ -56,7 +56,10 @@ public class BlockBreaker {
 		if (this.progress >= this.total) {
 			BlockState state = level.getBlockState(pos);
 			ItemStack tool = this.bot.getMainHandItem();
-			if (collect) {
+			if (!Tools.canHarvest(tool, state)) {
+				// Like a player without the right tool: the block goes, but drops nothing.
+				level.destroyBlock(pos, false, this.bot);
+			} else if (collect) {
 				for (ItemStack drop : Block.getDrops(state, level, pos, level.getBlockEntity(pos), this.bot, tool)) {
 					ItemStack rest = this.bot.getInventory().addItem(drop);
 					if (!rest.isEmpty()) {

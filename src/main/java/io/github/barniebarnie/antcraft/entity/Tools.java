@@ -15,8 +15,12 @@ public final class Tools {
 
 	/** Higher is better: being able to harvest the block matters most, then speed. */
 	public static float toolScore(ItemStack stack, BlockState state) {
-		boolean canHarvest = !state.requiresCorrectToolForDrops() || stack.isCorrectToolForDrops(state);
-		return (canHarvest ? 1000.0F : 0.0F) + stack.getDestroySpeed(state);
+		return (canHarvest(stack, state) ? 1000.0F : 0.0F) + stack.getDestroySpeed(state);
+	}
+
+	/** Whether breaking {@code state} with {@code tool} drops anything, as for a player: some blocks need the correct tool. */
+	public static boolean canHarvest(ItemStack tool, BlockState state) {
+		return !state.requiresCorrectToolForDrops() || tool.isCorrectToolForDrops(state);
 	}
 
 	public static float weaponScore(ItemStack stack) {

@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -26,6 +27,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
@@ -409,6 +411,105 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(chests.stream().allMatch(Container::isEmpty), "landing chests not emptied");
 			helper.assertTrue(!loaders.get(0).equals(loaders.get(1)), "one hauler emptied both chests");
+		});
+	}
+
+	/** A stone block in the wall of the deepest level's first branch, beside its second floor cell. */
+	private static BlockPos wall(GameTestHelper helper, Mineshaft shaft) {
+		Mineshaft.Branch branch = shaft.branches(shaft.levels().getLast()).getFirst();
+		List<BlockPos> dug = dugPath(shaft, true);
+		BlockPos cell = branch.cells().get(2);
+		for (Direction dir : Direction.Plane.HORIZONTAL) {
+			BlockPos side = cell.relative(dir);
+			BlockPos rel = relative(helper, side);
+			if (!dug.contains(side) && rel.getX() >= 0 && rel.getX() < 8 && rel.getZ() >= 0 && rel.getZ() < 8) {
+				return side;
+			}
+		}
+		throw new IllegalStateException("no wall beside " + cell);
+	}
+
+	private static boolean branchesDug(GameTestHelper helper, Mineshaft shaft) {
+		return shaft.branches(shaft.levels().getLast()).stream().flatMap(branch -> branch.cells().stream())
+			.allMatch(cell -> helper.getLevel().getBlockState(cell).isAir() || helper.getLevel().getBlockState(cell).is(Blocks.TORCH));
+	}
+
+	/** A wooden pickaxe cannot harvest iron ore, so the miner leaves it in the wall. */
+	@GameTest(maxTicks = 1500)
+	public void woodenPickaxeLeavesIronOreInTheWall(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		BlockPos ore = wall(helper, shaft);
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.IRON_ORE.defaultBlockState());
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (!helper.getLevel().getBlockState(ore).is(Blocks.IRON_ORE)) {
+				helper.fail("broke iron ore with a wooden pickaxe");
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(branchesDug(helper, shaft), "branches not dug"));
+	}
+
+	@GameTest(maxTicks = 1500)
+	public void stonePickaxeMinesIronOreInTheWall(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		BlockPos ore = wall(helper, shaft);
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.IRON_ORE.defaultBlockState());
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getBlockState(ore).isAir(), "iron ore not mined");
+			helper.assertTrue(Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.RAW_IRON, 0) == 1, "raw iron not stored");
+		});
+	}
+
+	/** The pickaxe the deepest level of {@code shaft} needs, the colony wanting no ore in particular. */
+	private static Item need(Mineshaft shaft) {
+		return PickaxeTier.forLevel(shaft.levels().getLast(), item -> false);
+	}
+
+	/** Its wooden pickaxe harvests no ore, so the miner orders a stone one first, the step to any better one. */
+	@GameTest(maxTicks = 300)
+	public void ordersAGoodEnoughPickaxeBeforeMining(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		helper.assertTrue(PickaxeTier.toOrder(Items.WOODEN_PICKAXE, need(shaft)) == Items.STONE_PICKAXE, "not a stone pickaxe first");
+
+		helper.onEachTick(() -> {
+			if (anyBranchDug(helper, shaft) && !colony.orders().containsKey(Items.STONE_PICKAXE)) {
+				helper.fail("mined before ordering a stone pickaxe: " + colony.orders());
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(colony.orders().containsKey(Items.STONE_PICKAXE), "orders: " + colony.orders()));
+	}
+
+	@GameTest(maxTicks = 600)
+	public void takesAGoodEnoughPickaxeFromTheCoreBeforeMining(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Item need = need(shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(need));
+		AntBot miner = member(helper, colony, BotRole.MINER, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (anyBranchDug(helper, shaft) && pickaxes(miner, need) == 0) {
+				helper.fail("mined without a " + need);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(pickaxes(miner, need) == 1, "miner has no " + need);
+			helper.assertTrue(anyBranchDug(helper, shaft), "no branch dug");
 		});
 	}
 
