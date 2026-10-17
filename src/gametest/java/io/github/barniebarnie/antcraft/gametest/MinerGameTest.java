@@ -255,10 +255,20 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * {@code pos} relative to the test, the inverse of {@link GameTestHelper#absolutePos} for these
+	 * unrotated tests. {@link GameTestHelper#relativePos} is not: it mirrors x and z when the test is
+	 * not rotated, which put the miner outside the test area.
+	 */
+	private static BlockPos relative(GameTestHelper helper, BlockPos pos) {
+		return pos.subtract(helper.absolutePos(BlockPos.ZERO));
+	}
+
 	/** A miner at the deepest landing with a pickaxe and every other slot full of {@code haul}. */
 	private static AntBot fullMiner(GameTestHelper helper, Colony colony, Mineshaft shaft, ItemStack... haul) {
-		BlockPos landing = helper.relativePos(shaft.landing(shaft.levels().getLast()));
+		BlockPos landing = relative(helper, shaft.landing(shaft.levels().getLast()));
 		AntBot miner = member(helper, colony, BotRole.MINER, landing.getX(), landing.getY(), landing.getZ());
+		helper.assertTrue(miner.blockPosition().equals(shaft.landing(shaft.levels().getLast())), "miner not spawned on the landing");
 		SimpleContainer inventory = miner.getInventory();
 		inventory.addItem(new ItemStack(Items.STONE_PICKAXE));
 		for (ItemStack stack : haul) {
