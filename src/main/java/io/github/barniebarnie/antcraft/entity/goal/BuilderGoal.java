@@ -21,6 +21,7 @@ import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import net.fabricmc.fabric.api.registry.FlammableBlockRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -41,6 +42,7 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.LiquidBlockContainer;
 import net.minecraft.world.level.block.state.BlockState;
@@ -63,7 +65,7 @@ import org.jspecify.annotations.Nullable;
  * wants it dry it empties with an empty bucket. A door, bed or tall plant it places whole
  * from one item, clearing the spot for its other half first; one whose other half would go into
  * an unbreakable block is reported. Fire it lights on the block below with flint and steel from
- * the core, which the colony orders when it has none; fire that cannot stay there, blocks a
+ * the core, which the colony orders when it has none; fire that would go out or spread to a block that burns, blocks a
  * player cannot place, such as a portal, and a fluid without a bucket or source
  * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
  * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
@@ -75,6 +77,11 @@ import org.jspecify.annotations.Nullable;
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
 	private static final Set<Item> FILLERS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
+	/**
+	 * How far from a fire a block that burns can catch: fire spreads to air one block to the side,
+	 * one below or up to four above (see {@code FireBlock.tick}) that touches such a block.
+	 */
+	private static final int SPREAD_REACH = 2;
 	private static final Set<BuildPlan.Clearing> WORKABLE = EnumSet.of(BuildPlan.Clearing.BREAK, BuildPlan.Clearing.SCOOP, BuildPlan.Clearing.FILL);
 	/** How often the builder looks again for fluid sources to fill a bucket at. */
 	private static final int SOURCE_SCAN_TICKS = 100;
@@ -470,11 +477,11 @@ public class BuilderGoal extends ColonyWorkGoal {
 	}
 
 	/**
-	 * Whether a builder can do {@code step} at all, with what it needs at hand: fire only where it can
-	 * stay, as flint and steel lights it, and a door or bed not while an unbreakable block, such as
-	 * bedrock, stands where its other half goes.
+	 * Whether a builder can do {@code step} at all, with what it needs at hand: fire only where it
+	 * burns forever and cannot spread (see {@link #canLight}), and a door or bed not while an
+	 * unbreakable block, such as bedrock, stands where its other half goes.
 	 */
-	private static boolean isPossible(LevelReader level, BuildPlan.Step step) {
+	public static boolean isPossible(LevelReader level, BuildPlan.Step step) {
 		return step.isPlaceable() && (!step.isLit() || canLight(level, step)) && !isOtherHalfBlocked(level, step);
 	}
 
@@ -484,10 +491,27 @@ public class BuilderGoal extends ColonyWorkGoal {
 			.filter(half -> half.needsClearing(level.getBlockState(half.pos())) && isUnbreakable(level, half.pos())).isPresent();
 	}
 
-	/** Whether flint and steel lights {@code step}'s fire where it goes: on the block below it can stay on, soul fire on soul soil or sand. */
+	/**
+	 * Whether flint and steel lights {@code step}'s fire where it goes and it stays lit without
+	 * burning anything: soul fire on soul soil or sand, which never goes out, and fire only on a
+	 * block that burns forever in this dimension, such as netherrack, since fire on stone goes out
+	 * and would be lit again until the tool breaks. Neither is lit while a block that burns, of the
+	 * plan or not, is within {@link #SPREAD_REACH} of it, so fire does not spread to the build.
+	 */
+	// ponytail: fire that spreads by a chain of flammable blocks from further away, or a flammable block placed after the fire, is not checked.
 	private static boolean canLight(LevelReader level, BuildPlan.Step step) {
-		BlockState fire = BaseFireBlock.getState(level, step.pos());
-		return fire.is(step.state().getBlock()) && fire.canSurvive(level, step.pos());
+		BlockPos pos = step.pos();
+		BlockState fire = BaseFireBlock.getState(level, pos);
+		if (!fire.is(step.state().getBlock()) || !fire.canSurvive(level, pos)
+			|| fire.is(Blocks.FIRE) && !level.getBlockState(pos.below()).is(level.dimensionType().infiniburn())) {
+			return false;
+		}
+		FlammableBlockRegistry flammable = FlammableBlockRegistry.getDefaultInstance();
+		return BlockPos.betweenClosedStream(pos.offset(-SPREAD_REACH, -SPREAD_REACH, -SPREAD_REACH), pos.offset(SPREAD_REACH, SPREAD_REACH + 3, SPREAD_REACH))
+			.noneMatch(near -> {
+				FlammableBlockRegistry.Entry entry = flammable.get(level.getBlockState(near).getBlock());
+				return entry != null && entry.getIgniteOdds() > 0;
+			});
 	}
 
 	private static boolean isUnbreakable(LevelReader level, BlockPos pos) {

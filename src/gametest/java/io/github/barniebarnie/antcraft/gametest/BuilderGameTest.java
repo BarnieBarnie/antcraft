@@ -852,6 +852,54 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(maxTicks = 300)
+	public void reportsFireOnStoneAsBlockedRatherThanRelightingIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+		// Stone does not burn forever: fire on it goes out and would be lit again until the tool breaks.
+		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(fire)));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.onEachTick(() -> helper.assertBlockNotPresent(Blocks.FIRE, new BlockPos(4, 1, 4)));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps());
+			helper.assertTrue(flintAndSteel(helper, builder).getDamageValue() == 0, "flint and steel used");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void ordersNoFlintAndSteelForBlockedFire(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(fire)));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.onEachTick(() -> helper.assertFalse(colony.ordersFor(Colony.OrderPurpose.BUILD).containsKey(Items.FLINT_AND_STEEL),
+			"flint and steel ordered: " + colony.orders()));
+		helper.succeedWhen(() -> helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps()));
+	}
+
+	@GameTest(maxTicks = 300)
+	public void leavesFireThatWouldSpreadToPlanksUnlit(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
+		// Two blocks away: fire spreads into the air beside it, and on to the planks.
+		BuildPlan.Step planks = step(helper, 6, 1, 4, Blocks.OAK_PLANKS.defaultBlockState());
+		helper.setBlock(6, 1, 4, Blocks.OAK_PLANKS);
+		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(planks, fire)));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.onEachTick(() -> helper.assertBlockNotPresent(Blocks.FIRE, new BlockPos(4, 1, 4)));
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_PLANKS, new BlockPos(6, 1, 4));
+			helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps());
+			helper.assertTrue(flintAndSteel(helper, builder).getDamageValue() == 0, "flint and steel used");
+		});
+	}
+
 	@GameTest(maxTicks = 600)
 	public void ordersFlintAndSteelForFireAndWaitsForIt(GameTestHelper helper) {
 		Colony colony = colony(helper);

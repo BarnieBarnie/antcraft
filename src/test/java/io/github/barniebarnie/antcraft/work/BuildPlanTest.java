@@ -133,6 +133,21 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void stepsABuilderCannotDoOrderNothing() {
+		BuildPlan.Step fire = new BuildPlan.Step(A, Blocks.FIRE.defaultBlockState());
+		BuildPlan.Step wet = new BuildPlan.Step(B, stairs(Direction.EAST).setValue(BlockStateProperties.WATERLOGGED, true));
+		BuildPlan.Step cobble = new BuildPlan.Step(C, Blocks.COBBLESTONE.defaultBlockState());
+		Function<BlockPos, BlockState> air = at(world());
+		// A plan whose only step is blocked orders nothing for it.
+		assertEquals(Map.of(), new BuildPlan(List.of(fire)).materials(air, step -> false));
+		assertEquals(Map.of(), new BuildPlan(List.of(wet)).materials(air, step -> false));
+		// The steps that can be done still order theirs.
+		BuildPlan plan = new BuildPlan(List.of(fire, wet, cobble));
+		assertEquals(Map.of(Items.COBBLESTONE, 1), plan.materials(air, step -> step == cobble));
+		assertEquals(plan.materials(air), plan.materials(air, step -> true));
+	}
+
+	@Test
 	void waterloggedBlocksArePlacedDryAndThenFilledFromAWaterBucket() {
 		BlockState wet = stairs(Direction.EAST).setValue(BlockStateProperties.WATERLOGGED, true);
 		BlockState dry = stairs(Direction.EAST);

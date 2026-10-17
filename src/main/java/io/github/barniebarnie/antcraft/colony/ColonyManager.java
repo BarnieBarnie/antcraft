@@ -323,7 +323,9 @@ public class ColonyManager extends SavedData {
 			colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 			return;
 		}
-		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream().map(plan -> plan.materials(level::getBlockState)).toList());
+		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for.
+		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream()
+			.map(plan -> plan.materials(level::getBlockState, step -> BuilderGoal.isPossible(level, step))).toList());
 		// Steps any solid block will do, such as a terraform's fill, take whichever fill block the colony has.
 		Map<Item, Integer> fills = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState)).toList());
 		Map<Item, Integer> needed = new HashMap<>(BuildPlan.shortfall(materials, fills, have));

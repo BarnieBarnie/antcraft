@@ -381,8 +381,19 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 
 	/** The items still to place: those of the steps the world does not match yet, and one empty bucket when a block wanted dry holds water. */
 	public Map<Item, Integer> materials(Function<BlockPos, BlockState> world) {
+		return this.materials(world, step -> true);
+	}
+
+	/**
+	 * {@link #materials(Function)} for just the steps that are {@code possible}, so a step a builder
+	 * cannot do, such as fire that would not stay lit, orders nothing.
+	 */
+	public Map<Item, Integer> materials(Function<BlockPos, BlockState> world, Predicate<Step> possible) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
 		for (Step step : this.steps) {
+			if (!possible.test(step)) {
+				continue;
+			}
 			BlockState current = world.apply(step.pos());
 			if (step.isLit() && !step.isPlaced(current)) {
 				// A tool, not used up: one lights every fire.
