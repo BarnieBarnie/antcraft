@@ -8,8 +8,11 @@ import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class StockkeepingTest {
@@ -19,6 +22,12 @@ class StockkeepingTest {
 		new StockPlanner.Target<>("oak_log"::equals, List.of(), 32));
 	/** Items keep at least one stack of 64 in the core. */
 	private static final int STACK = 64;
+
+	@BeforeAll
+	static void bootstrap() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
 
 	private static Map<String, Integer> toStore(Map<String, Integer> core, Map<String, Integer> ingredients) {
 		return Stockkeeping.toStore(core, TARGETS, ingredients, item -> STACK);
@@ -119,6 +128,23 @@ class StockkeepingTest {
 		assertFalse(Stockkeeping.toCore(Set.of(Items.DIRT, Items.GRAVEL), forOrders, List.of(), stock));
 		// Without the order, cobblestone can stay in the landing chest.
 		assertFalse(Stockkeeping.toCore(Set.of(Items.DIRT, Items.COBBLESTONE), Set.of(), List.of(), stock));
+	}
+
+	@Test
+	void orderIngredientsInALandingChestAreNotWantedAgain() {
+		// Stock as Storage.colonyStock counts it: the core and the mineshaft landing chests.
+		Map<Item, Integer> core = Map.of(Items.STICK, 8);
+		Map<Item, Integer> landingChest = Map.of(Items.COBBLESTONE, 3);
+		Map<Item, Integer> stock = StockPlanner.total(List.of(core, landingChest));
+		Set<Item> forOrders = Stockkeeping.wantedForOrders(Map.of(Items.STONE_PICKAXE, 1), stock, VanillaData.recipeBook(), VanillaData.gatherable());
+		assertFalse(forOrders.contains(Items.COBBLESTONE));
+		assertFalse(forOrders.contains(Items.COBBLED_DEEPSLATE));
+		// So a miner's cobblestone joins the rest in the landing chest instead of going up to the core.
+		assertFalse(Stockkeeping.toCore(Set.of(Items.DIRT, Items.COBBLESTONE), forOrders, List.of(), stock));
+		// Short of what the order needs, it is still wanted.
+		Map<Item, Integer> tooFew = StockPlanner.total(List.of(core, Map.of(Items.COBBLESTONE, 2)));
+		assertTrue(Stockkeeping.wantedForOrders(Map.of(Items.STONE_PICKAXE, 1), tooFew, VanillaData.recipeBook(), VanillaData.gatherable())
+			.contains(Items.COBBLESTONE));
 	}
 
 	@Test
