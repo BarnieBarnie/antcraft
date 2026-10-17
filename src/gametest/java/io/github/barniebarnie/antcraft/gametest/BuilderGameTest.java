@@ -637,17 +637,71 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	@GameTest(maxTicks = 300)
-	public void reportsFireAsBlockedAndKeepsItBlocked(GameTestHelper helper) {
+	public void reportsFireThatCannotStayAsBlockedAndKeepsItBlocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
+		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+		// Over air, with nothing flammable beside it, fire goes out at once.
+		BuildPlan.Step fire = step(helper, 4, 2, 4, Blocks.FIRE.defaultBlockState());
 		colony.addBuild(new BuildPlan(List.of(fire)));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
 
 		helper.succeedWhen(() -> {
-			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 2, 4));
 			helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps());
 			// The recheck leaves it reported rather than freeing it every survey.
 			helper.assertFalse(BuilderGoal.workable(helper.getLevel(), colony).test(fire), "fire counted as workable");
+			helper.assertTrue(flintAndSteel(helper, builder).getDamageValue() == 0, "flint and steel used");
+		});
+	}
+
+	/** The one flint and steel the builder or the core holds. */
+	private static ItemStack flintAndSteel(GameTestHelper helper, AntBot builder) {
+		for (Container container : List.<Container>of(builder.getInventory(), core(helper))) {
+			for (int i = 0; i < container.getContainerSize(); i++) {
+				if (container.getItem(i).is(Items.FLINT_AND_STEEL)) {
+					return container.getItem(i);
+				}
+			}
+		}
+		return ItemStack.EMPTY;
+	}
+
+	@GameTest(maxTicks = 300)
+	public void lightsFireOnNetherrackWithFlintAndSteelFromTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState()))));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.FIRE, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			ItemStack tool = flintAndSteel(helper, builder);
+			helper.assertFalse(tool.isEmpty(), "flint and steel used up");
+			helper.assertTrue(tool.getDamageValue() == 1, "flint and steel not worn: " + tool.getDamageValue());
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void ordersFlintAndSteelForFireAndWaitsForIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState()))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] stocked = {false};
+		helper.onEachTick(() -> {
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "waiting fire reported as blocked: " + colony.blockedSteps());
+			if (!stocked[0] && colony.ordersFor(Colony.OrderPurpose.BUILD).getOrDefault(Items.FLINT_AND_STEEL, 0) == 1) {
+				core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+				stocked[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(stocked[0], "no flint and steel ordered: " + colony.orders());
+			helper.assertBlockPresent(Blocks.FIRE, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
 		});
 	}
 

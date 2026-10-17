@@ -30,6 +30,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.LevelReader;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.LiquidBlockContainer;
@@ -49,8 +51,10 @@ import org.jspecify.annotations.Nullable;
  * are reported as blocked. It pours water and lava from a bucket, as a player would, filling an
  * empty one at a source in the territory when the core has no full one; a waterlogged block it
  * places dry and fills from a water bucket the same way. A door, bed or tall plant it places whole
- * from one item, clearing the spot for its other half first. Blocks a player cannot
- * place, such as fire, or a fluid without a bucket or source to get it from, are reported too.
+ * from one item, clearing the spot for its other half first. Fire it lights on the block below with
+ * flint and steel from the core, which the colony orders when it has none; fire that cannot stay
+ * there, blocks a player cannot place, such as a portal, and a fluid without a bucket or source
+ * to get it from are reported too.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
@@ -116,6 +120,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}
 		if (step.isPlaced(current)) {
 			this.pour(level, step.pos(), current, item);
+		} else if (step.isLit()) {
+			this.light(level, colony, step);
 		} else if (this.isFreeToPlace(level, step.pos(), step.dry())
 			&& step.otherHalf().map(half -> this.isFreeToPlace(level, half.pos(), half.state())).orElse(true)) {
 			this.place(level, colony, step);
@@ -135,7 +141,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 				return WORKABLE.contains(this.clearing(level, core, step));
 			}
 			Item item = step.item(current);
-			if (item == Items.AIR) {
+			if (!isPossible(level, step)) {
 				return false;
 			}
 			return this.has(core, stack -> stack.is(item))
@@ -232,7 +238,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		Map<Item, Boolean> canPour = new HashMap<>();
 		return step -> {
 			Item item = step.item(level.getBlockState(step.pos()));
-			return step.isPlaceable() && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
+			return isPossible(level, step) && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
 				&& (!isPoured(item) || canPour.computeIfAbsent(item,
 					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket) != null));
 		};
@@ -280,8 +286,19 @@ public class BuilderGoal extends ColonyWorkGoal {
 			Item item = step.item(current);
 			return step.needsClearing(current)
 				? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
-				: step.isPlaceable() && (!isPoured(item) || this.source(level, colony, item) != null);
+				: isPossible(level, step) && (!isPoured(item) || this.source(level, colony, item) != null);
 		}).isPresent();
+	}
+
+	/** Whether a builder can do {@code step} at all, with what it needs at hand: fire only where it can stay, as flint and steel lights it. */
+	private static boolean isPossible(LevelReader level, BuildPlan.Step step) {
+		return step.isPlaceable() && (!step.isLit() || canLight(level, step));
+	}
+
+	/** Whether flint and steel lights {@code step}'s fire where it goes: on the block below it can stay on, soul fire on soul soil or sand. */
+	private static boolean canLight(LevelReader level, BuildPlan.Step step) {
+		BlockState fire = BaseFireBlock.getState(level, step.pos());
+		return fire.is(step.state().getBlock()) && fire.canSurvive(level, step.pos());
 	}
 
 	private static boolean isUnbreakable(ServerLevel level, BlockPos pos) {
@@ -325,6 +342,21 @@ public class BuilderGoal extends ColonyWorkGoal {
 		});
 		this.put(level, step.pos(), step.dry(), step.item());
 		colony.protect(step.pos(), step.state().getBlock());
+	}
+
+	/** Lights {@code step}'s fire with the flint and steel the bot carries, as a player would, wearing the tool a little. */
+	private void light(ServerLevel level, Colony colony, BuildPlan.Step step) {
+		BlockPos pos = step.pos();
+		if (!BaseFireBlock.canBePlacedAt(level, pos, this.bot.getDirection())) {
+			return;
+		}
+		level.playSound(null, pos, SoundEvents.FLINTANDSTEEL_USE, SoundSource.BLOCKS, 1.0F, level.getRandom().nextFloat() * 0.4F + 0.8F);
+		level.setBlock(pos, BaseFireBlock.getState(level, pos), Block.UPDATE_ALL_IMMEDIATE);
+		colony.protect(pos, step.state().getBlock());
+		level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
+		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+		ItemStack tool = this.bot.getInventory().getItem(findSlot(this.bot.getInventory(), stack -> stack.is(Items.FLINT_AND_STEEL)));
+		tool.hurtAndBreak(1, level, null, broken -> { });
 	}
 
 	/** Pours the water bucket {@code bucket} into the block {@code current} at {@code pos}, as a player would, leaving the bucket empty. */

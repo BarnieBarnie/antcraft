@@ -77,13 +77,36 @@ class BuildPlanTest {
 		BuildPlan.Step water = new BuildPlan.Step(A, Blocks.WATER.defaultBlockState());
 		BuildPlan.Step lava = new BuildPlan.Step(B, Blocks.LAVA.defaultBlockState());
 		BuildPlan.Step flowing = new BuildPlan.Step(C, Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 2));
-		BuildPlan.Step fire = new BuildPlan.Step(D, Blocks.FIRE.defaultBlockState());
-		assertEquals(Map.of(Items.WATER_BUCKET, 1, Items.LAVA_BUCKET, 1), new BuildPlan(List.of(water, lava, flowing, fire)).materials());
+		BuildPlan.Step portal = new BuildPlan.Step(D, Blocks.NETHER_PORTAL.defaultBlockState());
+		assertEquals(Map.of(Items.WATER_BUCKET, 1, Items.LAVA_BUCKET, 1), new BuildPlan(List.of(water, lava, flowing, portal)).materials());
 		assertTrue(water.isPlaceable());
 		assertTrue(BuildPlan.Step.clear(A).isPlaceable());
 		assertFalse(flowing.isPlaceable());
-		assertFalse(fire.isPlaceable());
-		assertFalse(new BuildPlan.Step(A, Blocks.NETHER_PORTAL.defaultBlockState()).isPlaceable());
+		assertFalse(portal.isPlaceable());
+	}
+
+	@Test
+	void fireIsLitWithOneFlintAndSteelForTheWholePlan() {
+		BuildPlan.Step fire = new BuildPlan.Step(A, Blocks.FIRE.defaultBlockState());
+		BuildPlan.Step soulFire = new BuildPlan.Step(B, Blocks.SOUL_FIRE.defaultBlockState());
+		BuildPlan.Step more = new BuildPlan.Step(C, Blocks.FIRE.defaultBlockState());
+		BuildPlan plan = new BuildPlan(List.of(fire, soulFire, more, new BuildPlan.Step(D, Blocks.COBBLESTONE.defaultBlockState())));
+		assertTrue(fire.isLit());
+		assertTrue(soulFire.isLit());
+		assertFalse(plan.steps().get(3).isLit());
+		assertTrue(fire.isPlaceable());
+		assertEquals(Items.FLINT_AND_STEEL, fire.item());
+		assertEquals(Items.FLINT_AND_STEEL, soulFire.item(Blocks.AIR.defaultBlockState()));
+		// The tool is not used up, so one is ordered however many fires there are.
+		assertEquals(Map.of(Items.FLINT_AND_STEEL, 1, Items.COBBLESTONE, 1), plan.materials());
+		// Until every fire is lit.
+		assertEquals(Map.of(Items.FLINT_AND_STEEL, 1, Items.COBBLESTONE, 1),
+			plan.materials(at(world(A, Blocks.FIRE.defaultBlockState(), B, Blocks.SOUL_FIRE.defaultBlockState()))));
+		assertEquals(Map.of(Items.COBBLESTONE, 1),
+			plan.materials(at(world(A, Blocks.FIRE.defaultBlockState(), B, Blocks.SOUL_FIRE.defaultBlockState(), C, Blocks.FIRE.defaultBlockState()))));
+		// Fire spreads its age and sides by itself; any fire there will do.
+		assertTrue(fire.isDone(Blocks.FIRE.defaultBlockState().setValue(BlockStateProperties.AGE_15, 7).setValue(BlockStateProperties.UP, true)));
+		assertFalse(fire.isDone(Blocks.SOUL_FIRE.defaultBlockState()));
 	}
 
 	@Test

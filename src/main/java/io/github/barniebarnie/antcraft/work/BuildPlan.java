@@ -13,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -75,9 +76,13 @@ public record BuildPlan(List<Step> steps) {
 
 		/**
 		 * The item placed, as a player would: a fluid source is poured from its bucket, which is
-		 * left empty. Air for a clear step or a block a player cannot place, such as fire.
+		 * left empty, and fire is lit with flint and steel, which is kept. Air for a clear step or a
+		 * block a player cannot place, such as a portal.
 		 */
 		public Item item() {
+			if (this.isLit()) {
+				return Items.FLINT_AND_STEEL;
+			}
 			if (this.state.getBlock() instanceof LiquidBlock) {
 				return this.state.getFluidState().isSource() ? this.state.getFluidState().getType().getBucket() : Items.AIR;
 			}
@@ -97,6 +102,11 @@ public record BuildPlan(List<Step> steps) {
 				return Optional.of(new Step(this.pos.relative(facing), this.state.setValue(BlockStateProperties.BED_PART, BedPart.HEAD)));
 			}
 			return Optional.empty();
+		}
+
+		/** Whether this step is fire, lit on the block below with flint and steel rather than placed. */
+		public boolean isLit() {
+			return this.state.getBlock() instanceof BaseFireBlock;
 		}
 
 		/** Whether this step's block holds water, such as a waterlogged stair. */
@@ -119,7 +129,7 @@ public record BuildPlan(List<Step> steps) {
 			return this.isWaterlogged() && this.isPlaced(world) ? Items.WATER_BUCKET : this.item();
 		}
 
-		/** Whether a builder can do this step at all; not when it places a block without an item, such as fire or a portal. */
+		/** Whether a builder can do this step at all; not when it places a block without an item, such as a portal. */
 		public boolean isPlaceable() {
 			return this.isClear() || this.item() != Items.AIR;
 		}
@@ -187,7 +197,7 @@ public record BuildPlan(List<Step> steps) {
 		return this.steps.stream().filter(step -> !step.isDone(world.apply(step.pos())) && workable.test(step)).findFirst();
 	}
 
-	/** Every item the plan places, with a water bucket for each waterlogged block. */
+	/** Every item the plan places, with a water bucket for each waterlogged block and one flint and steel for all its fire. */
 	public Map<Item, Integer> materials() {
 		return this.materials(pos -> Blocks.AIR.defaultBlockState());
 	}
@@ -197,7 +207,10 @@ public record BuildPlan(List<Step> steps) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
 		for (Step step : this.steps) {
 			BlockState current = world.apply(step.pos());
-			if (step.item() != Items.AIR && !step.isPlaced(current)) {
+			if (step.isLit() && !step.isPlaced(current)) {
+				// A tool, not used up: one lights every fire.
+				materials.put(Items.FLINT_AND_STEEL, 1);
+			} else if (step.item() != Items.AIR && !step.isPlaced(current)) {
 				materials.merge(step.item(), 1, Integer::sum);
 			}
 			if (step.isWaterlogged() && !step.isDone(current)) {
