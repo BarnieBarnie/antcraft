@@ -473,6 +473,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 	/**
 	 * Takes as many of {@code item} from the core as the plan still needs, leaving there whatever
 	 * the bot carries that the plan does not need. The colony survey orders what the core lacks.
+	 * While the plan has steps left to pillar up to, it keeps its scaffold blocks and tops them up
+	 * to {@link #SCAFFOLD_STOCK} on the same visit, besides any the plan itself places.
 	 */
 	private void fetch(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, Item item) {
 		Map<Item, Integer> needed = plan.materials(level::getBlockState);
@@ -482,8 +484,27 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		if (this.reach(colony.core())) {
-			Storage.moveItems(this.bot.getInventory(), core, stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES));
-			Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(item), count);
+			SimpleContainer inventory = this.bot.getInventory();
+			boolean pillaring = this.hasHighSteps(level, plan);
+			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES);
+			Storage.moveItems(inventory, core, stack -> spare.test(stack) && !(pillaring && stack.is(SCAFFOLD)));
+			Storage.moveItems(core, inventory, stack -> stack.is(item), count);
+			if (pillaring) {
+				int stock = SCAFFOLD_STOCK + needed.entrySet().stream()
+					.filter(entry -> entry.getKey().getDefaultInstance().is(SCAFFOLD)).mapToInt(Map.Entry::getValue).sum();
+				int carried = PathFollower.scaffoldCount(inventory, SCAFFOLD);
+				if (carried > stock) {
+					Storage.moveItems(inventory, core, stack -> spare.test(stack) && stack.is(SCAFFOLD), carried - stock);
+				} else {
+					Storage.moveItems(core, inventory, stack -> stack.is(SCAFFOLD), stock - carried);
+				}
+			}
 		}
+	}
+
+	/** Whether {@code plan} still has a step too high to reach from where the bot stands, which it pillars up to (see {@link #restockScaffold}). */
+	private boolean hasHighSteps(ServerLevel level, BuildPlan plan) {
+		return plan.steps().stream().anyMatch(step -> step.pos().getY() - this.bot.getBlockY() >= SCAFFOLD_HEIGHT
+			&& !step.isDone(level.getBlockState(step.pos())));
 	}
 }

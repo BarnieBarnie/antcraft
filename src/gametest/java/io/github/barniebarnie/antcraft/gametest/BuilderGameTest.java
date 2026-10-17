@@ -849,6 +849,89 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** How many items the container holds in all. */
+	private static int itemCount(Container container) {
+		int count = 0;
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			count += container.getItem(i).getCount();
+		}
+		return count;
+	}
+
+	/**
+	 * A builder fetching the column's cobblestone also takes the scaffold dirt it will pillar with,
+	 * so it goes to the core once, rather than once for the cobblestone and again for the dirt.
+	 */
+	@GameTest(maxTicks = 1200)
+	public void takesScaffoldWithTheMaterialsInOneTripToTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
+		colony.addBuild(column(helper, 6, COBBLE));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		// A visit is a run of ticks in which the builder takes items from the core.
+		int[] last = {itemCount(core(helper))};
+		boolean[] taking = {false};
+		int[] visits = {0};
+		helper.onEachTick(() -> {
+			int now = itemCount(core(helper));
+			boolean took = now < last[0];
+			if (took && !taking[0]) {
+				visits[0]++;
+			}
+			taking[0] = took;
+			last[0] = now;
+		});
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 6; y++) {
+				assertState(helper, 5, y, 5, COBBLE);
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(builder.getScaffold().isEmpty(), "scaffold left: " + builder.getScaffold());
+			helper.assertTrue(visits[0] == 1, "went to the core " + visits[0] + " times");
+		});
+	}
+
+	/** A builder that already carries scaffold keeps it when it fetches the cobblestone for a column it must pillar up to. */
+	@GameTest(maxTicks = 1200)
+	public void keepsItsScaffoldWhenFetchingForHighSteps(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+		colony.addBuild(column(helper, 6, COBBLE));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		builder.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(5, 6, 5)).is(Blocks.COBBLESTONE) && core(helper).countItem(Items.DIRT) > 0) {
+				helper.fail("scaffold dirt put back in the core before the column stands");
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 6; y++) {
+				assertState(helper, 5, y, 5, COBBLE);
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(builder.getScaffold().isEmpty(), "scaffold left: " + builder.getScaffold());
+		});
+	}
+
+	/** With no step high enough to pillar up to, the scaffold a builder carries goes back to the core when it fetches materials. */
+	@GameTest(maxTicks = 600)
+	public void putsScaffoldBackWhenNoHighStepsAreLeft(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		colony.addBuild(column(helper, 2, COBBLE));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		builder.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 5, COBBLE);
+			assertState(helper, 5, 2, 5, COBBLE);
+			helper.assertTrue(core(helper).countItem(Items.DIRT) == 16, "scaffold dirt not put back: " + core(helper).countItem(Items.DIRT));
+		});
+	}
+
 	/**
 	 * A builder sent to a walk target mid-pillar goes back to its column on its own scaffold: no
 	 * other goal takes the pillar down in between, and it takes it down itself once the column stands.
