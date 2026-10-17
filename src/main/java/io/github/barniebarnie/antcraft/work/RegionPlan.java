@@ -15,7 +15,8 @@ public final class RegionPlan {
 	/**
 	 * A plan that rebuilds the box between the corners {@code from} and {@code to} (inclusive, any
 	 * order) with its lowest corner at {@code at}. Layer by layer from the bottom; air becomes a
-	 * clear step, and flowing fluid is left out. Only block states are copied, not block-entity
+	 * clear step, and flowing fluid is left out. A two-block block, such as
+	 * a door or a bed, is one step for its lower half or foot, which sets the other half. Only block states are copied, not block-entity
 	 * contents.
 	 */
 	public static BuildPlan copy(Function<BlockPos, BlockState> world, BlockPos from, BlockPos to, BlockPos at) {
@@ -27,8 +28,8 @@ public final class RegionPlan {
 				for (int x = min.getX(); x <= max.getX(); x++) {
 					BlockPos source = new BlockPos(x, y, z);
 					BlockState state = world.apply(source);
-					// Flowing fluid cannot be placed; it follows from its source.
-					if (!(state.getBlock() instanceof LiquidBlock) || state.getFluidState().isSource()) {
+					// Flowing fluid cannot be placed; it follows from its source. The second half of a door or bed follows from the first.
+					if ((!(state.getBlock() instanceof LiquidBlock) || state.getFluidState().isSource()) && !BuildPlan.isSecondHalf(state)) {
 						steps.add(new BuildPlan.Step(at.offset(source.subtract(min)), state));
 					}
 				}

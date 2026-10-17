@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -42,6 +43,15 @@ public record BuildPlan(List<Step> steps) {
 
 	public BuildPlan {
 		steps = List.copyOf(steps);
+	}
+
+	/**
+	 * Whether {@code state} is the half of a two-block block that placing the other sets: the upper
+	 * half of a door or tall plant, or a bed's head. A plan has no step for it.
+	 */
+	public static boolean isSecondHalf(BlockState state) {
+		return state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF) && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER
+			|| state.hasProperty(BlockStateProperties.BED_PART) && state.getValue(BlockStateProperties.BED_PART) == BedPart.HEAD;
 	}
 
 	/** Clear the block at {@code pos} when {@code state} is air, otherwise place {@code state} there. */
@@ -72,6 +82,21 @@ public record BuildPlan(List<Step> steps) {
 				return this.state.getFluidState().isSource() ? this.state.getFluidState().getType().getBucket() : Items.AIR;
 			}
 			return this.state.getBlock().asItem();
+		}
+
+		/**
+		 * The other half of a two-block block, set together with this step's as a player's placing
+		 * does: the upper half above a door or tall plant, or a bed's head the way it faces.
+		 */
+		public Optional<Step> otherHalf() {
+			if (this.state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF) && this.state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.LOWER) {
+				return Optional.of(new Step(this.pos.above(), this.state.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER)));
+			}
+			if (this.state.hasProperty(BlockStateProperties.BED_PART) && this.state.getValue(BlockStateProperties.BED_PART) == BedPart.FOOT) {
+				Direction facing = this.state.getValue(BlockStateProperties.HORIZONTAL_FACING);
+				return Optional.of(new Step(this.pos.relative(facing), this.state.setValue(BlockStateProperties.BED_PART, BedPart.HEAD)));
+			}
+			return Optional.empty();
 		}
 
 		/** Whether this step's block holds water, such as a waterlogged stair. */

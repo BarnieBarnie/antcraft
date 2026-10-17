@@ -19,7 +19,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.StairsShape;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -102,6 +104,25 @@ class BuildPlanTest {
 		assertFalse(step.needsClearing(dry));
 		assertTrue(step.isDone(wet));
 		assertTrue(step.isPlaceable());
+	}
+
+	@Test
+	void twoBlockBlocksSetTheirOtherHalfWhenPlaced() {
+		BlockState door = Blocks.OAK_DOOR.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST);
+		BlockState bed = Blocks.BED.red().defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH);
+		BlockState grass = Blocks.TALL_GRASS.defaultBlockState();
+		assertEquals(Optional.of(new BuildPlan.Step(A.above(), door.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER))),
+			new BuildPlan.Step(A, door).otherHalf());
+		assertEquals(Optional.of(new BuildPlan.Step(A.north(), bed.setValue(BlockStateProperties.BED_PART, BedPart.HEAD))),
+			new BuildPlan.Step(A, bed).otherHalf());
+		assertEquals(Optional.of(new BuildPlan.Step(A.above(), grass.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER))),
+			new BuildPlan.Step(A, grass).otherHalf());
+		assertEquals(Optional.empty(), new BuildPlan.Step(A, stairs(Direction.EAST)).otherHalf());
+		// The second half is set by the first, so it is no step of its own.
+		assertTrue(BuildPlan.isSecondHalf(bed.setValue(BlockStateProperties.BED_PART, BedPart.HEAD)));
+		assertTrue(BuildPlan.isSecondHalf(door.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER)));
+		assertFalse(BuildPlan.isSecondHalf(door));
+		assertFalse(BuildPlan.isSecondHalf(bed));
 	}
 
 	@Test

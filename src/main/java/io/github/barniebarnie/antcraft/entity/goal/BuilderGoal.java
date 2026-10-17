@@ -48,7 +48,8 @@ import org.jspecify.annotations.Nullable;
  * way it scoops up with a bucket or fills with a cheap block from the core; those it cannot clear
  * are reported as blocked. It pours water and lava from a bucket, as a player would, filling an
  * empty one at a source in the territory when the core has no full one; a waterlogged block it
- * places dry and fills from a water bucket the same way. Blocks a player cannot
+ * places dry and fills from a water bucket the same way. A door, bed or tall plant it places whole
+ * from one item, clearing the spot for its other half first. Blocks a player cannot
  * place, such as fire, or a fluid without a bucket or source to get it from, are reported too.
  */
 public class BuilderGoal extends ColonyWorkGoal {
@@ -95,6 +96,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 			this.clear(level, colony, core, plan.get(), step);
 			return;
 		}
+		// So does whatever stands where a door's or bed's other half goes, which has no step of its own.
+		Optional<BuildPlan.Step> other = step.otherHalf().filter(half -> !step.isPlaced(current) && half.needsClearing(level.getBlockState(half.pos())));
+		if (other.isPresent()) {
+			this.clear(level, colony, core, plan.get(), other.get());
+			return;
+		}
 		Item item = step.item(current);
 		if (item != Items.AIR && this.bot.getInventory().countItem(item) == 0) {
 			if (isPoured(item) && (core == null || core.countItem(item) == 0)) {
@@ -109,7 +116,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}
 		if (step.isPlaced(current)) {
 			this.pour(level, step.pos(), current, item);
-		} else if (this.isFreeToPlace(level, step.pos(), step.dry())) {
+		} else if (this.isFreeToPlace(level, step.pos(), step.dry())
+			&& step.otherHalf().map(half -> this.isFreeToPlace(level, half.pos(), half.state())).orElse(true)) {
 			this.place(level, colony, step);
 		}
 	}
@@ -305,8 +313,16 @@ public class BuilderGoal extends ColonyWorkGoal {
 		this.resetMovement();
 	}
 
-	/** Places {@code step}'s block; a waterlogged one dry, to be filled from a bucket next. */
+	/**
+	 * Places {@code step}'s block; a waterlogged one dry, to be filled from a bucket next. A door or
+	 * bed goes in whole from its one item, as a player places it, since either half alone breaks.
+	 */
 	private void place(ServerLevel level, Colony colony, BuildPlan.Step step) {
+		step.otherHalf().ifPresent(half -> {
+			level.setBlockAndUpdate(step.pos(), step.dry());
+			level.setBlockAndUpdate(half.pos(), half.state());
+			colony.protect(half.pos(), half.state().getBlock());
+		});
 		this.put(level, step.pos(), step.dry(), step.item());
 		colony.protect(step.pos(), step.state().getBlock());
 	}

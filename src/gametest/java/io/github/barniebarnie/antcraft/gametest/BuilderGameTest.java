@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -38,7 +39,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoorHingeSide;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -199,6 +203,38 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 5, 2, 5, STAIRS_EAST);
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(6, 2, 5));
 			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
+		});
+	}
+
+	/** A door and a bed are one step each, placed whole from one item, as a player would. */
+	@GameTest(maxTicks = 600)
+	public void buildsACopiedDoorAndBedWhole(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_DOOR, 1));
+		core(helper).setItem(1, new ItemStack(Items.BED.red(), 1));
+		BlockState doorLower = Blocks.OAK_DOOR.defaultBlockState()
+			.setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST)
+			.setValue(BlockStateProperties.DOOR_HINGE, DoorHingeSide.RIGHT);
+		BlockState doorUpper = doorLower.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER);
+		BlockState bedFoot = Blocks.BED.red().defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH);
+		BlockState bedHead = bedFoot.setValue(BlockStateProperties.BED_PART, BedPart.HEAD);
+		helper.setBlock(new BlockPos(5, 1, 1), doorLower);
+		helper.setBlock(new BlockPos(5, 2, 1), doorUpper);
+		helper.setBlock(new BlockPos(6, 1, 2), bedFoot);
+		helper.setBlock(new BlockPos(6, 1, 1), bedHead);
+		// Where the copied door's upper half goes, which the plan has no step for.
+		helper.setBlock(4, 2, 4, Blocks.DIRT);
+		colony.addBuild(RegionPlan.copy(helper.getLevel()::getBlockState,
+			helper.absolutePos(new BlockPos(5, 1, 1)), helper.absolutePos(new BlockPos(6, 2, 2)), helper.absolutePos(new BlockPos(4, 1, 4))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, doorLower);
+			assertState(helper, 4, 2, 4, doorUpper);
+			assertState(helper, 5, 1, 5, bedFoot);
+			assertState(helper, 5, 1, 4, bedHead);
+			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
+			helper.assertTrue(core(helper).countItem(Items.OAK_DOOR) == 0 && core(helper).countItem(Items.BED.red()) == 0, "items not taken from the core");
 		});
 	}
 
