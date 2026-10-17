@@ -398,7 +398,7 @@ class ColonyTest {
 		colony.postBuildJobs();
 		Job stairs = claim(colony, ALICE);
 		// Dug, but the colony has no torches yet.
-		colony.batchWaiting(stairs.id());
+		colony.batchWaiting(stairs.id(), Colony.Wait.ITEMS);
 		colony.board().release(ALICE);
 		colony.postBuildJobs();
 		assertEquals(Set.of(TWO_LEVELS.plan().batch(0), TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(colony));
@@ -410,6 +410,19 @@ class ColonyTest {
 		// Finished once its torches came, it is not posted again.
 		loaded.finishBatch(stairs.id());
 		assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(loaded));
+	}
+
+	@Test
+	void stairsWaitingForWaterToSettleDoNotLetTheHallStart() {
+		Colony colony = colony();
+		colony.setMineshaft(TWO_LEVELS);
+		colony.postBuildJobs();
+		Job stairs = claim(colony, ALICE);
+		// Water flows over a stair block still to dig.
+		colony.batchWaiting(stairs.id(), Colony.Wait.FLUID);
+		colony.board().release(ALICE);
+		colony.postBuildJobs();
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(0)), openBatches(colony), "a batch waiting for a fluid opened the batches that need it");
 	}
 
 	@Test

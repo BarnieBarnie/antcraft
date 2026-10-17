@@ -465,6 +465,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}).isPresent();
 	}
 
+	/** Whether a block of {@code plan} is still to clear once a fluid there settles, so the plan is not worked through yet. */
+	private boolean settles(ServerLevel level, @Nullable Container core, BuildPlan plan) {
+		return plan.steps().stream().anyMatch(step -> step.needsClearing(level.getBlockState(step.pos()))
+			&& this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE);
+	}
+
 	/**
 	 * Whether a terraform's {@code step} is left alone for lava, to be reported as blocked: a fill
 	 * step where lava is, or a block to clear that is lava or holds it back (see {@link Terraform#touchesLava}).
@@ -522,11 +528,12 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * Nothing in the batch can be worked on now. With nothing left the batch is done, and the plan with its last batch; with only
 	 * blocks or fluids it cannot clear left in the way those steps are reported, and the plan waits
 	 * for the colony to find them workable again. While it waits for materials, which the colony
-	 * orders, the job is freed for later, and the batches that need this one may start meanwhile.
+	 * orders, or for a fluid to settle, the job is freed for later; only while it waits for nothing
+	 * but materials may the batches that need this one start meanwhile.
 	 */
 	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan, boolean dig) {
 		if (plan.isPresent() && this.isWaiting(level, colony, core, plan.get(), dig)) {
-			colony.batchWaiting(job.id());
+			colony.batchWaiting(job.id(), this.settles(level, core, plan.get()) ? Colony.Wait.FLUID : Colony.Wait.ITEMS);
 			colony.board().release(this.bot.getUUID());
 			this.cooldown = IDLE_TICKS;
 		} else {

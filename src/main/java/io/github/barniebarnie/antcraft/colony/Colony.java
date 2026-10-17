@@ -76,7 +76,7 @@ public class Colony {
 
 	/** How far builders got with a batch of a plan; a batch not started yet has none. */
 	enum BatchState implements StringRepresentable {
-		/** Worked through as far as it goes, it waits for items or a fluid; the batches that need it may start. */
+		/** Worked through as far as it goes, it waits for items; the batches that need it may start. */
 		WAITING,
 		/** Finished: not posted again unless its blocks are broken since (see {@link Colony#recheckDone}). */
 		DONE;
@@ -339,13 +339,22 @@ public class Colony {
 		}
 	}
 
+	/** What a batch set aside waits for. */
+	public enum Wait {
+		/** Items, such as torches or materials, with the rest of the batch worked through. */
+		ITEMS,
+		/** A fluid to settle, with blocks still to clear once it has. */
+		FLUID
+	}
+
 	/**
-	 * Records that the batch of build job {@code job} waits for items or a fluid with the rest of it
-	 * worked through, so the batches that need it may start, such as a hall once the stairs reaching
-	 * it are dug but not lit yet. The batch stays posted to be finished.
+	 * Records that the batch of build job {@code job} waits for {@code reason}. One waiting only for
+	 * items lets the batches that need it start, such as a hall once the stairs reaching it are dug
+	 * but not lit yet; one waiting for a fluid does not, as blocks of it are still to clear. The batch
+	 * stays posted to be finished.
 	 */
-	public void batchWaiting(UUID job) {
-		if (this.batchJobs.containsKey(job) && this.batchStates.putIfAbsent(job, BatchState.WAITING) == null) {
+	public void batchWaiting(UUID job, Wait reason) {
+		if (reason == Wait.ITEMS && this.batchJobs.containsKey(job) && this.batchStates.putIfAbsent(job, BatchState.WAITING) == null) {
 			this.postBuildJobs();
 		}
 	}

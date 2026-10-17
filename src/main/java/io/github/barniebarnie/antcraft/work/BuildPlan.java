@@ -145,7 +145,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 
 	/**
 	 * The batches not {@code done} yet whose needed batches are each done or {@code waiting}: worked
-	 * through as far as they go, they wait for items or a fluid to settle, and are finished later.
+	 * through as far as they go, they wait for items, and are finished later.
 	 */
 	public List<Integer> ready(Set<Integer> done, Set<Integer> waiting) {
 		return IntStream.range(0, this.batches.size())
