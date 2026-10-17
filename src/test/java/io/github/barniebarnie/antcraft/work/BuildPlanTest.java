@@ -190,6 +190,29 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void secondHalvesAreDroppedFromAPlanWithItsBatchesKeptAroundTheRest() {
+		BlockState door = Blocks.OAK_DOOR.defaultBlockState();
+		BlockState bed = Blocks.BED.red().defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH);
+		BuildPlan.Step doorLower = new BuildPlan.Step(A, door);
+		BuildPlan.Step doorUpper = new BuildPlan.Step(A.above(), door.setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER));
+		BuildPlan.Step bedFoot = new BuildPlan.Step(C, bed);
+		BuildPlan.Step bedHead = new BuildPlan.Step(C.north(), bed.setValue(BlockStateProperties.BED_PART, BedPart.HEAD));
+		BuildPlan.Step cobble = new BuildPlan.Step(D, Blocks.COBBLESTONE.defaultBlockState());
+
+		assertEquals(List.of(doorLower, bedFoot), new BuildPlan(List.of(doorLower, doorUpper, bedHead, bedFoot)).steps());
+		// Such as from an old save: each batch keeps the steps it had that remain.
+		BuildPlan batched = new BuildPlan(List.of(doorLower, doorUpper, bedHead, bedFoot, cobble), List.of(
+			new BuildPlan.Batch(0, 2, List.of()),
+			new BuildPlan.Batch(2, 3, List.of(0), true),
+			new BuildPlan.Batch(3, 5, List.of(0))));
+		assertEquals(List.of(doorLower, bedFoot, cobble), batched.steps());
+		assertEquals(List.of(
+			new BuildPlan.Batch(0, 1, List.of()),
+			new BuildPlan.Batch(1, 1, List.of(0), true),
+			new BuildPlan.Batch(1, 3, List.of(0))), batched.batches());
+	}
+
+	@Test
 	void firstStepIsNextWhileUndone() {
 		assertEquals(Optional.of(BuildPlan.Step.clear(A)), next(world(A, Blocks.DIRT.defaultBlockState())));
 	}

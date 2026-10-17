@@ -341,11 +341,18 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		Optional<Colony> colony = nearestColony(source);
-		colony.ifPresent(c -> {
-			c.addBuild(RegionPlan.copy(source.getLevel()::getBlockState, from, to, at));
-			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.copied", volume, at.toShortString(), c.builds().size()), false);
-		});
-		return colony.isPresent() ? 1 : 0;
+		if (colony.isEmpty()) {
+			return 0;
+		}
+		// A box holding only what follows from blocks outside it, such as a door's upper half, has nothing to build.
+		Optional<BuildPlan> plan = RegionPlan.copy(source.getLevel()::getBlockState, from, to, at);
+		if (plan.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.nothing_to_copy"));
+			return 0;
+		}
+		colony.get().addBuild(plan.get());
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.copied", volume, at.toShortString(), colony.get().builds().size()), false);
+		return 1;
 	}
 
 	/**

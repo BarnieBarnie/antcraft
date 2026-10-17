@@ -229,7 +229,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		// Where the copied door's upper half goes, which the plan has no step for.
 		helper.setBlock(4, 2, 4, Blocks.DIRT);
 		colony.addBuild(RegionPlan.copy(helper.getLevel()::getBlockState,
-			helper.absolutePos(new BlockPos(5, 1, 1)), helper.absolutePos(new BlockPos(6, 2, 2)), helper.absolutePos(new BlockPos(4, 1, 4))));
+			helper.absolutePos(new BlockPos(5, 1, 1)), helper.absolutePos(new BlockPos(6, 2, 2)), helper.absolutePos(new BlockPos(4, 1, 4))).orElseThrow());
 		member(helper, colony, BotRole.BUILDER, 1, 4);
 
 		helper.succeedWhen(() -> {
@@ -546,6 +546,25 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 5, 1, 5, COBBLE);
 			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
 			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "blocked step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/** A door whose upper half would go into bedrock cannot be placed, so it is reported like a step behind bedrock. */
+	@GameTest(maxTicks = 300)
+	public void reportsADoorWhoseUpperHalfIsBedrock(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_DOOR, 1));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE, 1));
+		helper.setBlock(4, 2, 4, Blocks.BEDROCK);
+		BuildPlan.Step door = new BuildPlan.Step(helper.absolutePos(new BlockPos(4, 1, 4)), Blocks.OAK_DOOR.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(door, step(helper, 5, 1, 5, COBBLE))));
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 5, COBBLE);
+			helper.assertBlockPresent(Blocks.BEDROCK, new BlockPos(4, 2, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(colony.blockedSteps().equals(List.of(door.pos())), "blocked door not reported: " + colony.blockedSteps());
 		});
 	}
 

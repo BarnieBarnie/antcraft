@@ -42,6 +42,7 @@
 	"commands.antcraft.colony.terraform.level": "That area is level at y %s already",
 	"commands.antcraft.colony.terraform.too_big": "That area holds %s blocks; at most %s can be levelled at once",
 	"commands.antcraft.colony.build.copied": "Copied %s blocks into a build at %s (build %s)",
+	"commands.antcraft.colony.build.nothing_to_copy": "That region holds nothing to build: only the other halves of doors, beds or tall plants outside it, or flowing fluid",
 	"commands.antcraft.colony.build.too_big": "That region holds %s blocks; at most %s can be copied",
 	"commands.antcraft.colony.build.not_found": "The colony has no build %s",
 	"commands.antcraft.colony.build.is_mineshaft": "Build %s is the colony mineshaft; move it with /antcraft colony mineshaft instead",

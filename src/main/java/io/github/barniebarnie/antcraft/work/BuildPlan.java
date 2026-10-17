@@ -53,9 +53,12 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	private static final Set<Class<?>> PLACEMENT = Set.of(Direction.class, Direction.Axis.class, Half.class, SlabType.class,
 		DoubleBlockHalf.class, AttachFace.class, DoorHingeSide.class);
 
-	/** Batches must cover the steps in order, each needing only batches before it. None means one batch of every step. */
+	/**
+	 * Batches must cover the steps in order, each needing only batches before it. None means one
+	 * batch of every step. Steps for a second half (see {@link #isSecondHalf}), such as from an old
+	 * save, are dropped, as placing the first half sets them; each batch keeps the rest of its steps.
+	 */
 	public BuildPlan {
-		steps = List.copyOf(steps);
 		batches = batches.isEmpty() ? List.of(new Batch(0, steps.size(), List.of())) : List.copyOf(batches);
 		int from = 0;
 		for (int i = 0; i < batches.size(); i++) {
@@ -69,6 +72,16 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		if (from != steps.size()) {
 			throw new IllegalArgumentException("batches cover " + from + " of " + steps.size() + " steps");
 		}
+		if (steps.stream().anyMatch(step -> isSecondHalf(step.state()))) {
+			// kept[i] is how many steps before step i remain, so a batch's bounds move down past the dropped ones.
+			int[] kept = new int[steps.size() + 1];
+			for (int i = 0; i < steps.size(); i++) {
+				kept[i + 1] = kept[i] + (isSecondHalf(steps.get(i).state()) ? 0 : 1);
+			}
+			batches = batches.stream().map(batch -> new Batch(kept[batch.from()], kept[batch.to()], batch.needs(), batch.dig())).toList();
+			steps = steps.stream().filter(step -> !isSecondHalf(step.state())).toList();
+		}
+		steps = List.copyOf(steps);
 	}
 
 	public BuildPlan(List<Step> steps, List<Batch> batches) {

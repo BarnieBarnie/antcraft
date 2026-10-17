@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -17,9 +18,9 @@ public final class RegionPlan {
 	 * order) with its lowest corner at {@code at}. Layer by layer from the bottom; air becomes a
 	 * clear step, and flowing fluid is left out. A two-block block, such as
 	 * a door or a bed, is one step for its lower half or foot, which sets the other half. Only block states are copied, not block-entity
-	 * contents.
+	 * contents. Empty when that leaves no step, such as for a box holding only a door's upper half.
 	 */
-	public static BuildPlan copy(Function<BlockPos, BlockState> world, BlockPos from, BlockPos to, BlockPos at) {
+	public static Optional<BuildPlan> copy(Function<BlockPos, BlockState> world, BlockPos from, BlockPos to, BlockPos at) {
 		BlockPos min = BlockPos.min(from, to);
 		BlockPos max = BlockPos.max(from, to);
 		List<BuildPlan.Step> steps = new ArrayList<>();
@@ -35,6 +36,6 @@ public final class RegionPlan {
 				}
 			}
 		}
-		return new BuildPlan(steps);
+		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps));
 	}
 }

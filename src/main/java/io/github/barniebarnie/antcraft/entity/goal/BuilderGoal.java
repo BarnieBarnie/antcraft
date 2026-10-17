@@ -61,9 +61,10 @@ import org.jspecify.annotations.Nullable;
  * empty one at a source in the territory when the core has no full one; a waterlogged block it
  * places dry and fills from a water bucket the same way, and one standing waterlogged where the plan
  * wants it dry it empties with an empty bucket. A door, bed or tall plant it places whole
- * from one item, clearing the spot for its other half first. Fire it lights on the block below with
- * flint and steel from the core, which the colony orders when it has none; fire that cannot stay
- * there, blocks a player cannot place, such as a portal, and a fluid without a bucket or source
+ * from one item, clearing the spot for its other half first; one whose other half would go into
+ * an unbreakable block is reported. Fire it lights on the block below with flint and steel from
+ * the core, which the colony orders when it has none; fire that cannot stay there, blocks a
+ * player cannot place, such as a portal, and a fluid without a bucket or source
  * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
  * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
  * While the colony has no miner it also digs out dig jobs (see {@link Digging}), and with one it
@@ -468,9 +469,19 @@ public class BuilderGoal extends ColonyWorkGoal {
 		return step.isClear() ? Terraform.touchesLava(level::getBlockState, step.pos()) : level.getFluidState(step.pos()).is(FluidTags.LAVA);
 	}
 
-	/** Whether a builder can do {@code step} at all, with what it needs at hand: fire only where it can stay, as flint and steel lights it. */
+	/**
+	 * Whether a builder can do {@code step} at all, with what it needs at hand: fire only where it can
+	 * stay, as flint and steel lights it, and a door or bed not while an unbreakable block, such as
+	 * bedrock, stands where its other half goes.
+	 */
 	private static boolean isPossible(LevelReader level, BuildPlan.Step step) {
-		return step.isPlaceable() && (!step.isLit() || canLight(level, step));
+		return step.isPlaceable() && (!step.isLit() || canLight(level, step)) && !isOtherHalfBlocked(level, step);
+	}
+
+	/** Whether {@code step}'s block is still to place and an unbreakable block stands where its other half goes. */
+	private static boolean isOtherHalfBlocked(LevelReader level, BuildPlan.Step step) {
+		return !step.isPlaced(level.getBlockState(step.pos())) && step.otherHalf()
+			.filter(half -> half.needsClearing(level.getBlockState(half.pos())) && isUnbreakable(level, half.pos())).isPresent();
 	}
 
 	/** Whether flint and steel lights {@code step}'s fire where it goes: on the block below it can stay on, soul fire on soul soil or sand. */
@@ -479,7 +490,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		return fire.is(step.state().getBlock()) && fire.canSurvive(level, step.pos());
 	}
 
-	private static boolean isUnbreakable(ServerLevel level, BlockPos pos) {
+	private static boolean isUnbreakable(LevelReader level, BlockPos pos) {
 		return level.getBlockState(pos).getDestroySpeed(level, pos) < 0;
 	}
 
