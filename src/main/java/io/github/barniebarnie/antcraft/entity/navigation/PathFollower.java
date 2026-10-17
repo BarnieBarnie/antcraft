@@ -47,6 +47,8 @@ public class PathFollower {
 	private static final int MAX_DROP = 3;
 	private static final int MAX_REPLANS_WITHOUT_PROGRESS = 5;
 	private static final int STEP_BASE_BUDGET = 60;
+	/** Extra ticks for a swim step: bots swim slowly, and bob up and down at the surface. */
+	private static final int SWIM_BUDGET = 60;
 	private static final double ARRIVED_DIST_SQR = 0.35 * 0.35;
 	private static final double SPEED = 1.0;
 	/** How far away other bots' scaffolding is looked for, to keep paths from digging through it. */
@@ -150,9 +152,13 @@ public class PathFollower {
 			this.pillar(level, world, step);
 		} else {
 			this.moveTo(step.to());
+			if (step.type() != MoveType.SWIM && this.bot.isInWater()) {
+				this.bot.getJumpControl().jump(); // rise and climb out onto the bank
+			}
 		}
 
-		if (this.bot.blockPosition().equals(step.to()) && this.bot.onGround() && this.centered(step.to())) {
+		boolean landed = step.type() == MoveType.SWIM ? this.bot.isInWater() || this.bot.onGround() : this.bot.onGround();
+		if (this.bot.blockPosition().equals(step.to()) && landed && this.centered(step.to())) {
 			this.stepIndex++;
 			this.stepTicks = 0;
 			this.stepBudget = this.budgetFor(world);
@@ -192,8 +198,9 @@ public class PathFollower {
 		if (this.path == null || this.stepIndex >= this.path.steps().size()) {
 			return STEP_BASE_BUDGET;
 		}
-		int budget = STEP_BASE_BUDGET;
-		for (BlockPos pos : this.path.steps().get(this.stepIndex).breaks()) {
+		Step step = this.path.steps().get(this.stepIndex);
+		int budget = step.type() == MoveType.SWIM ? STEP_BASE_BUDGET + SWIM_BUDGET : STEP_BASE_BUDGET;
+		for (BlockPos pos : step.breaks()) {
 			budget += Math.max(0, (int) world.breakTicks(pos)) + 10;
 		}
 		return budget;

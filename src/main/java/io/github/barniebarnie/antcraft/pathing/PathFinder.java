@@ -19,6 +19,8 @@ public final class PathFinder {
 	public static final double FALL_COST_PER_BLOCK = 1.0;
 	public static final double BREAK_OVERHEAD = 5.0;
 	public static final double PLACE_COST = 20.0;
+	/** Swimming a block at the surface: slow, so routes keep to dry land unless water saves a long way round. */
+	public static final double SWIM_COST = 20.0;
 
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
@@ -34,6 +36,10 @@ public final class PathFinder {
 	private PathFinder() {
 	}
 
+	/**
+	 * Plans a path from {@code start} to {@code goal}. A path never ends in water: a bot swims only to
+	 * get somewhere dry, and a partial path stops on the nearest shore rather than out in the water.
+	 */
 	public static Path find(WorldView world, BlockPos start, Goal goal, Options options) {
 		Planner planner = new Planner(world, options);
 		Map<BlockPos, Double> bestCost = new HashMap<>();
@@ -44,6 +50,7 @@ public final class PathFinder {
 		bestCost.put(start, 0.0);
 		Node closest = startNode;
 		double closestHeuristic = goal.heuristic(start);
+		boolean closestInWater = world.isWater(start);
 		int expanded = 0;
 
 		while (!open.isEmpty() && expanded < options.maxNodes()) {
@@ -51,15 +58,17 @@ public final class PathFinder {
 			if (node.cost > bestCost.getOrDefault(node.pos, BLOCKED)) {
 				continue; // stale queue entry
 			}
-			if (goal.isReached(node.pos)) {
+			boolean inWater = world.isWater(node.pos);
+			if (!inWater && goal.isReached(node.pos)) {
 				return toPath(start, node, true);
 			}
 			expanded++;
 
 			double h = goal.heuristic(node.pos);
-			if (h < closestHeuristic) {
+			if (closestInWater && !inWater || inWater == closestInWater && h < closestHeuristic) {
 				closest = node;
 				closestHeuristic = h;
+				closestInWater = inWater;
 			}
 
 			for (Candidate move : planner.moves(node.pos)) {
@@ -102,7 +111,9 @@ public final class PathFinder {
 				this.add(moves, this.walk(feet, dir));
 				this.add(moves, this.stepUp(feet, dir));
 				this.add(moves, this.drop(feet, dir));
+				this.add(moves, this.swim(feet, dir));
 			}
+			this.add(moves, this.surface(feet));
 			this.add(moves, this.pillar(feet));
 			this.add(moves, this.digDown(feet));
 			return moves;
@@ -135,6 +146,9 @@ public final class PathFinder {
 			}
 			for (int fall = 1; fall <= this.options.maxDrop(); fall++) {
 				BlockPos to = edge.below(fall);
+				if (this.swimmable(to)) {
+					return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST + fall * FALL_COST_PER_BLOCK);
+				}
 				if (!this.open(to)) {
 					return null;
 				}
@@ -143,6 +157,26 @@ public final class PathFinder {
 				}
 			}
 			return null;
+		}
+
+		/** Swims one block sideways at the surface, from water or from the bank. */
+		private Candidate swim(BlockPos feet, Direction dir) {
+			BlockPos to = feet.relative(dir);
+			return this.swimmable(to) ? new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST) : null;
+		}
+
+		/** Rises one block from under water, toward the surface. */
+		private Candidate surface(BlockPos feet) {
+			BlockPos to = feet.above();
+			if (!this.world.isWater(feet) || !this.world.isWater(to) || !this.open(to.above()) && !this.world.isWater(to.above())) {
+				return null;
+			}
+			return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), FALL_COST_PER_BLOCK);
+		}
+
+		/** Water with open air above it, where a bot floats with its head out. Never deeper: bots do not dive. */
+		private boolean swimmable(BlockPos pos) {
+			return this.world.isWater(pos) && this.open(pos.above());
 		}
 
 		private Candidate pillar(BlockPos feet) {

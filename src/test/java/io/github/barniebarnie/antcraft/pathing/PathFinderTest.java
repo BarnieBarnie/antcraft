@@ -175,4 +175,105 @@ class PathFinderTest {
 
 		assertFalse(path.complete());
 	}
+
+	/** Stone ground up to y=1 (feet at y=2) with a pool of {@code depth} water whose surface is at y=1, x and z from -2 to 2. */
+	private static GridWorld pond(int depth) {
+		return new GridWorld().fill(-10, -depth, -10, 10, 1, 10, '#').fill(-2, 2 - depth, -2, 2, 1, 2, 'W');
+	}
+
+	private static List<BlockPos> positions(Path path) {
+		return path.steps().stream().map(Step::to).toList();
+	}
+
+	@Test
+	void swimsToTheShoreFromTheMiddleOfAPoolWithoutScaffold() {
+		GridWorld world = pond(2).forbidAllPlacing();
+		Path path = PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(5, 2, 0)), new PathFinder.Options(true, false, 10_000, 3));
+
+		assertTrue(path.complete(), "no way out of the pool: " + path.steps());
+		assertTrue(types(path).contains(MoveType.SWIM));
+		assertTrue(path.steps().stream().allMatch(s -> s.places().isEmpty() && s.breaks().isEmpty()));
+	}
+
+	@Test
+	void neverDivesBelowTheSurface() {
+		GridWorld world = pond(2);
+		Path path = PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(5, 2, 0)), WALK_ONLY);
+
+		assertTrue(positions(path).stream().noneMatch(p -> p.getY() < 1), "dived: " + path.steps());
+	}
+
+	@Test
+	void risesToTheSurfaceWhenUnderwater() {
+		GridWorld world = pond(2);
+		Path path = PathFinder.find(world, new BlockPos(0, 0, 0), new Goal.Block(new BlockPos(5, 2, 0)), WALK_ONLY);
+
+		assertTrue(path.complete(), "no way up: " + path.steps());
+		assertEquals(new BlockPos(0, 1, 0), path.steps().getFirst().to());
+	}
+
+	@Test
+	void doesNotSwimUnderABlockWithNoAirAbove() {
+		// A bedrock wall across the floor with water under it: crossing means diving.
+		GridWorld world = GridWorld.flat(10).fill(2, 2, -10, 2, 4, 10, 'B').fill(2, 1, -10, 2, 1, 10, 'W');
+		Path path = find(world, new BlockPos(4, 1, 0), WALK_ONLY);
+
+		assertFalse(path.complete(), "dived under the wall: " + path.steps());
+	}
+
+	@Test
+	void entersWaterFromAHigherBankAndClimbsOutOnTheOtherSide() {
+		// A moat 2 wide and 2 deep across the whole ground, its surface a block below the banks.
+		GridWorld world = new GridWorld().fill(-10, -1, -10, 10, 1, 10, '#').fill(2, 0, -10, 3, 1, 10, 'W');
+		Path path = PathFinder.find(world, new BlockPos(0, 2, 0), new Goal.Block(new BlockPos(5, 2, 0)), WALK_ONLY);
+
+		assertTrue(path.complete(), "cannot cross the moat: " + path.steps());
+		assertTrue(types(path).contains(MoveType.SWIM));
+	}
+
+	@Test
+	void crossesAShallowWaterStripWhenThereIsNoWayRound() {
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 1, 10, 'W');
+		Path path = find(world, new BlockPos(4, 1, 0), WALK_ONLY);
+
+		assertTrue(path.complete(), "cannot cross the strip: " + path.steps());
+		assertEquals(List.of(MoveType.WALK, MoveType.SWIM, MoveType.WALK, MoveType.WALK), types(path));
+	}
+
+	@Test
+	void walksRoundWaterRatherThanSwimmingWhenTheDetourIsShort() {
+		GridWorld world = GridWorld.flat(10).set(2, 1, 0, 'W');
+		Path path = find(world, new BlockPos(4, 1, 0), WALK_ONLY);
+
+		assertTrue(path.complete());
+		assertFalse(types(path).contains(MoveType.SWIM), "swam: " + path.steps());
+	}
+
+	@Test
+	void neverGoesThroughLava() {
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 1, 10, 'L');
+		Path path = find(world, new BlockPos(4, 1, 0), new PathFinder.Options(true, false, 10_000, 3));
+
+		assertFalse(path.complete(), "crossed lava: " + path.steps());
+		assertTrue(positions(path).stream().noneMatch(p -> world.at(p) == 'L'));
+	}
+
+	@Test
+	void leavesTheWaterEvenWhenTheGoalIsInReachFromIt() {
+		GridWorld world = pond(2);
+		Path path = PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Near(new BlockPos(0, 1, 0), 4), WALK_ONLY);
+
+		assertTrue(path.complete());
+		assertFalse(world.isWater(path.end()), "ends in the water: " + path.steps());
+	}
+
+	@Test
+	void partialPathTowardAGoalInTheWaterStopsOnTheShore() {
+		GridWorld world = pond(2);
+		Path path = PathFinder.find(world, new BlockPos(6, 2, 0), new Goal.Block(new BlockPos(0, 1, 0)), WALK_ONLY);
+
+		assertFalse(path.complete());
+		assertFalse(world.isWater(path.end()), "ends in the water: " + path.steps());
+		assertEquals(new BlockPos(3, 2, 0), path.end());
+	}
 }

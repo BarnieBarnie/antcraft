@@ -10,5 +10,7 @@ public enum MoveType {
 	/** Jump and place a block underneath. */
 	PILLAR,
 	/** Break the block underneath and drop into the hole. */
-	DIG_DOWN
+	DIG_DOWN,
+	/** Into water with air above it, to float at the surface: sideways, up from under water, or falling in from a bank. */
+	SWIM
 }

@@ -10,8 +10,13 @@ public interface WorldView {
 	/** The block has a solid top a bot can stand on. */
 	boolean canStandOn(BlockPos pos);
 
-	/** Never enter, stand on, or open up next to this block (lava, fire, water for now). */
+	/** Never enter, stand on, or open up next to this block (lava, fire, any fluid), except to swim in it if {@link #isWater}. */
 	boolean isHazard(BlockPos pos);
+
+	/** Water a bot can swim in: at the surface where the block above is open, and up through it from below. */
+	default boolean isWater(BlockPos pos) {
+		return false;
+	}
 
 	/** Ticks needed to break the block, or a negative number if it must not be broken. */
 	float breakTicks(BlockPos pos);

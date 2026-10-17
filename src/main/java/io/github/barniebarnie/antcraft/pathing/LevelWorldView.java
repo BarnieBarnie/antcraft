@@ -7,6 +7,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -65,6 +66,13 @@ public class LevelWorldView implements WorldView {
 			|| state.is(Blocks.CAMPFIRE)
 			|| state.is(Blocks.SOUL_CAMPFIRE)
 			|| state.is(Blocks.WITHER_ROSE);
+	}
+
+	/** Water a bot can swim through: no collision box, and not a bubble column, which drags it along. */
+	@Override
+	public boolean isWater(BlockPos pos) {
+		BlockState state = this.level.getBlockState(pos);
+		return state.getFluidState().is(FluidTags.WATER) && !state.is(Blocks.BUBBLE_COLUMN) && state.getCollisionShape(this.level, pos).isEmpty();
 	}
 
 	@Override

@@ -1175,4 +1175,30 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5));
 	}
+
+	/** A colony lumberjack knocked into a pool 2 deep, with no scaffold anywhere, swims out and fells its tree. */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void swimsOutOfAPoolAndFellsItsTree(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, -1, z, Blocks.DIRT);
+				helper.setBlock(x, -2, z, Blocks.DIRT);
+			}
+		}
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 3; z <= 5; z++) {
+				helper.setBlock(x, -1, z, Blocks.WATER);
+				helper.setBlock(x, 0, z, Blocks.WATER);
+			}
+		}
+		tree(helper, 6, 6, false);
+		AntBot bot = lumberjack(helper, 3, 0, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left; bot at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertFalse(bot.isInWater(), "still in the water");
+		});
+	}
 }

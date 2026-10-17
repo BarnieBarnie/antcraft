@@ -128,4 +128,15 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(other.getWalkTarget() == null, "the other bot is still walking");
 		});
 	}
+
+	/** A bot without scaffold dropped in the middle of a 5x5 pool, 2 deep, swims to the shore and climbs out. */
+	@GameTest(maxTicks = 400)
+	public void swimsOutOfADeepPool(GameTestHelper helper) {
+		room(helper, 2);
+		fill(helper, 1, 1, 1, 5, 2, 5, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 2, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 3, 6)));
+
+		succeedWhenAt(helper, bot, new BlockPos(6, 3, 6));
+	}
 }
