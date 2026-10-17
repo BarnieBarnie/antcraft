@@ -17,6 +17,18 @@ class AntCraftConfigTest {
 		assertEquals(64, values.maxBotsPerLevel());
 		assertEquals(List.of(16, -16, -58), values.mineshaftLevels());
 		assertFalse(values.colonyActionsRequireOp());
+		assertEquals(2400, values.replantMatchWaitTicks());
+	}
+
+	@Test
+	void readsTheReplantMatchWait() {
+		Properties props = new Properties();
+		props.setProperty("replantMatchWaitTicks", " 600 ");
+		assertEquals(600, AntCraftConfig.parse(props).replantMatchWaitTicks());
+		props.setProperty("replantMatchWaitTicks", "forever");
+		assertEquals(2400, AntCraftConfig.parse(props).replantMatchWaitTicks());
+		props.setProperty("replantMatchWaitTicks", "-5");
+		assertEquals(0, AntCraftConfig.parse(props).replantMatchWaitTicks());
 	}
 
 	@Test

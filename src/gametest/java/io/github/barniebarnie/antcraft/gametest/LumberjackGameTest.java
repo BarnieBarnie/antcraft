@@ -1170,10 +1170,53 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		AntBot bot = lumberjack(helper, 2, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
 		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
-		long felled = helper.getLevel().getGameTime() - Replanting.MATCH_WAIT_TICKS;
+		long felled = helper.getLevel().getGameTime() - AntCraftConfig.replantMatchWaitTicks();
 		bot.getRevisits().put(base, new Revisit(base, felled, List.of(base), Optional.of(Items.BIRCH_SAPLING)));
 
 		helper.succeedWhen(() -> helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5));
+	}
+
+	/** The four spots of a 2x2 trunk at (4..5, 1, 4..5), the first of them built over with cobblestone. */
+	private static List<BlockPos> partlyBuiltOverSquare(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.COBBLESTONE);
+		return List.of(helper.absolutePos(new BlockPos(4, 1, 4)), helper.absolutePos(new BlockPos(5, 1, 4)),
+			helper.absolutePos(new BlockPos(4, 1, 5)), helper.absolutePos(new BlockPos(5, 1, 5)));
+	}
+
+	private static void assertOneSpruceSaplingBesideTheCobblestone(GameTestHelper helper) {
+		helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 4);
+		long saplings = BlockPos.betweenClosedStream(4, 1, 4, 5, 1, 5).filter(pos -> helper.getBlockState(pos).is(Blocks.SPRUCE_SAPLING)).count();
+		helper.assertTrue(saplings == 1, saplings + " spruce saplings planted");
+	}
+
+	/**
+	 * A 2x2 spruce site with one spot built over cannot grow a 2x2 tree back, so a solo lumberjack carrying
+	 * one spruce sapling comes back and plants it as a 1x1 tree, rather than waiting for four.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 600)
+	public void soloLumberjackReplantsAPartlyBuiltOver2x2SiteAs1x1(GameTestHelper helper) {
+		AntBot bot = lumberjack(helper, 2, 2);
+		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING));
+		List<BlockPos> spots = partlyBuiltOverSquare(helper);
+		bot.getRevisits().put(spots.getFirst(), new Revisit(spots.getFirst(), helper.getLevel().getGameTime(), spots, Optional.of(Items.SPRUCE_SAPLING)));
+
+		helper.succeedWhen(() -> assertOneSpruceSaplingBesideTheCobblestone(helper));
+	}
+
+	/** A colony replant job for a partly built-over 2x2 spruce site is taken with one spruce sapling in the core. */
+	@GameTest(padding = PADDING, maxTicks = 600)
+	public void colonyReplantsAPartlyBuiltOver2x2SiteAs1x1FromTheCore(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.SPRUCE_SAPLING));
+		List<BlockPos> spots = partlyBuiltOverSquare(helper);
+		colony.board().post(JobType.REPLANT, spots.getFirst(), spots, Optional.of(Items.SPRUCE_SAPLING), helper.getLevel().getGameTime());
+		colonyLumberjack(helper, colony, 2, 2);
+
+		helper.succeedWhen(() -> {
+			assertOneSpruceSaplingBesideTheCobblestone(helper);
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.REPLANT), "replant job left: " + colony.board().jobs());
+		});
 	}
 
 	/** A colony lumberjack knocked into a pool 2 deep, with no scaffold anywhere, swims out and fells its tree. */
