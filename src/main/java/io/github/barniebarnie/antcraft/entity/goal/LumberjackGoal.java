@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Replanting;
+import io.github.barniebarnie.antcraft.work.Revisit;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
@@ -161,11 +162,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	/**
-	 * Felled trees not yet replanted, with the game time they were felled, to come back to for
-	 * saplings. Bots in a colony post replant jobs instead. Kept by the bot and saved with it, so
-	 * it survives unloading; the felled time is game time, so entries still expire after loading.
+	 * Felled trees not yet replanted, by base, to come back to for saplings: with the game time they
+	 * were felled, the spots to plant and the sapling kind. Bots in a colony post replant jobs instead.
+	 * Kept by the bot and saved with it, so it survives unloading; the felled time is game time, so
+	 * entries still expire after loading.
 	 */
-	private Map<BlockPos, Long> revisits() {
+	private Map<BlockPos, Revisit> revisits() {
 		return this.bot.getRevisits();
 	}
 
@@ -689,15 +691,14 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return;
 		}
 		if (!enough) {
-			// ponytail: a solo bot remembers only the base, so it comes back to plant one sapling even
-			// where a 2x2 tree stood; remember the spots and kind too if solo 2x2 trees matter.
-			// The leaves may still drop one as they decay.
-			Map<BlockPos, Long> revisits = this.revisits();
+			// The leaves may still drop one as they decay. It remembers every spot and the kind, so
+			// a 2x2 tree is planted whole when it comes back.
+			Map<BlockPos, Revisit> revisits = this.revisits();
 			if (!revisits.containsKey(base)) {
 				if (revisits.size() >= MAX_REVISITS) {
 					revisits.remove(revisits.keySet().iterator().next());
 				}
-				revisits.put(base, level.getGameTime());
+				revisits.put(base, new Revisit(base, level.getGameTime(), this.spots, this.sapling));
 			}
 			this.enter(State.SEARCH);
 			return;
@@ -727,15 +728,16 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 */
 	private boolean revisit(ServerLevel level) {
 		long now = level.getGameTime();
-		this.revisits().values().removeIf(felled -> now - felled > REVISIT_TICKS);
-		for (BlockPos base : this.revisits().keySet()) {
+		this.revisits().values().removeIf(revisit -> now - revisit.felled() > REVISIT_TICKS);
+		for (Revisit revisit : this.revisits().values()) {
+			BlockPos base = revisit.pos();
 			boolean dropped = !level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
 				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && isLeafDrop(item.getItem())
 					&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
 			if (dropped) {
 				this.site = base;
-				this.spots = List.of(base);
-				this.sapling = Optional.empty();
+				this.spots = revisit.spots();
+				this.sapling = revisit.sapling();
 				this.enter(State.COLLECT);
 				return true;
 			}

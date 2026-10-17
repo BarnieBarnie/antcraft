@@ -10,10 +10,12 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Revisit;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -654,7 +656,8 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		AntBot bot = lumberjack(helper, 2, 4);
 		long now = helper.getLevel().getGameTime();
 		// Felled long enough ago that it is forgotten 50 ticks from now.
-		bot.getRevisits().put(helper.absolutePos(new BlockPos(5, 1, 5)), now - LumberjackGoal.REVISIT_TICKS + 50);
+		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
+		bot.getRevisits().put(base, new Revisit(base, now - LumberjackGoal.REVISIT_TICKS + 50, List.of(base), Optional.empty()));
 		AntBot copy = reload(helper, bot);
 		bot.discard();
 		helper.runAfterDelay(100, () -> helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6)));
@@ -1035,6 +1038,44 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DARK_OAK_SAPLING, 4));
 
 		helper.succeedWhen(() -> assertDarkOakSaplingSquare(helper));
+	}
+
+	/**
+	 * A solo lumberjack felling a dark oak with no dark oak saplings remembers the whole square and its
+	 * sapling kind, and once four dark oak saplings turn up it comes back and plants all four spots, not
+	 * one sapling of any kind.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void soloLumberjackRevisitsFelled2x2DarkOakAndPlantsTheSquare(GameTestHelper helper) {
+		darkOak(helper);
+		// Once the logs are gone the leaves are removed, so no sapling drops by chance.
+		helper.onEachTick(() -> {
+			if (countBlocks(helper, BlockTags.LOGS) == 0) {
+				for (BlockPos pos : BlockPos.betweenClosed(3, 4, 3, 6, 4, 6)) {
+					if (helper.getBlockState(pos).is(BlockTags.LEAVES)) {
+						helper.setBlock(pos, Blocks.AIR);
+					}
+				}
+			}
+		});
+		AntBot bot = lumberjack(helper, 1, 6);
+		// An oak sapling, which would not grow a dark oak back.
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		boolean[] dropped = {false};
+		helper.onEachTick(() -> {
+			if (!dropped[0] && !bot.getRevisits().isEmpty() && countBlocks(helper, BlockTags.LOGS) == 0) {
+				dropped[0] = true;
+				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(6, 1, 3));
+				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(6, 1, 3));
+				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(3, 1, 6));
+				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(3, 1, 6));
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(dropped[0], "no revisit remembered yet");
+			assertDarkOakSaplingSquare(helper);
+		});
 	}
 
 	/** A colony lumberjack without saplings posts a replant job for the whole square, then plants it from the core. */
