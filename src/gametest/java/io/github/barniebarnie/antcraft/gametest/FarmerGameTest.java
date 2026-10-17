@@ -14,7 +14,10 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -206,6 +209,57 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			Field field = colony.field().orElseThrow();
 			helper.assertFalse(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "water without a bucket");
 			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).size() < 24, "nothing planted while the water waits");
+			helper.succeed();
+		});
+	}
+
+	/** A sheep that stays put at x = 5, z = 5, so the test does not depend on where it wanders. */
+	private static Sheep sheep(GameTestHelper helper) {
+		Sheep sheep = helper.spawn(EntityTypes.SHEEP, 5, 1, 5);
+		sheep.setNoAi(true);
+		return sheep;
+	}
+
+	private static int wool(Container container) {
+		int wool = 0;
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			if (container.getItem(i).is(ItemTags.WOOL)) {
+				wool += container.getItem(i).getCount();
+			}
+		}
+		return wool;
+	}
+
+	@GameTest(maxTicks = 400)
+	public void shearsASheepAndStoresTheWool(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.SHEARS));
+		Sheep sheep = sheep(helper);
+		AntBot bot = farmer(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(sheep.isSheared(), "sheep not sheared");
+			helper.assertTrue(wool(core(helper)) > 0, "no wool in the core");
+			helper.assertTrue(carried(bot, Items.SHEARS) == 1, "farmer did not keep the shears");
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void ordersShearsWhenThereIsASheepToShear(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		sheep(helper);
+		farmer(helper, colony);
+
+		helper.succeedWhen(() -> helper.assertTrue(colony.orders().getOrDefault(Items.SHEARS, 0) == 1, "orders: " + colony.orders()));
+	}
+
+	@GameTest(maxTicks = 300)
+	public void ordersNoShearsWithoutSheep(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		farmer(helper, colony);
+
+		helper.runAfterDelay(250, () -> {
+			helper.assertFalse(colony.orders().containsKey(Items.SHEARS), "orders: " + colony.orders());
 			helper.succeed();
 		});
 	}

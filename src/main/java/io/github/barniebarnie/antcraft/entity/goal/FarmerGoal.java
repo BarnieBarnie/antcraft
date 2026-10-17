@@ -5,19 +5,27 @@ import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
+import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Item;
@@ -29,12 +37,15 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Farmer work loop: harvest ripe crops from the job board, replant them, store the produce.
  * It also tills and plants the colony field, breaking grass for seeds when the colony has none, and
- * waters the field's middle with a bucket.
+ * waters the field's middle with a bucket. With nothing else to do it shears sheep in the territory for wool,
+ * fetching shears from the core or ordering a pair.
  * Now and then it swaps its hoe for a better one in the core, or orders the best one the colony can make.
  */
 public class FarmerGoal extends ColonyWorkGoal {
@@ -45,6 +56,15 @@ public class FarmerGoal extends ColonyWorkGoal {
 	/** How often a farmer with an empty bucket looks for water to fill it at. */
 	private static final int WATER_SCAN_TICKS = 100;
 	private static final Set<JobType> JOBS = EnumSet.of(JobType.HARVEST_CROP, JobType.PLANT_CROP);
+	/** How often an idle farmer looks for a sheep to shear. */
+	private static final int SHEEP_SCAN_TICKS = 100;
+	/** Wool the colony keeps in stock; farmers stop shearing at this much. */
+	private static final int KEEP_WOOL = 32;
+	/** How close a farmer gets to a sheep to shear it. */
+	private static final double SHEAR_REACH = 2.0;
+	/** How far from a shorn sheep the farmer picks up the wool, and for how long. */
+	private static final int FLEECE_RADIUS = 4;
+	private static final int FLEECE_TICKS = 60;
 
 	private boolean depositing;
 	/** Grass the farmer is breaking for seeds. */
@@ -52,6 +72,12 @@ public class FarmerGoal extends ColonyWorkGoal {
 	/** Water the farmer is filling its bucket at. */
 	private @Nullable BlockPos water;
 	private long nextWaterScan;
+	/** The sheep the farmer is on its way to shear. */
+	private @Nullable Sheep sheep;
+	private long nextSheepScan;
+	/** Where the farmer last sheared a sheep, to pick up the wool, until {@link #fleeceUntil}. */
+	private @Nullable BlockPos fleece;
+	private long fleeceUntil;
 
 	public FarmerGoal(AntBot bot) {
 		super(bot, BotRole.FARMER);
@@ -84,6 +110,9 @@ public class FarmerGoal extends ColonyWorkGoal {
 			open -> open.type() != JobType.PLANT_CROP || this.canPlant(level, open.target()));
 		this.hasJob = job.isPresent();
 		if (job.isEmpty()) {
+			if (this.shearSheep(level, colony)) {
+				return;
+			}
 			if (this.needsSeeds(colony)) {
 				this.getSeeds(level, colony);
 			} else if (this.hasProduce()) {
@@ -228,6 +257,107 @@ public class FarmerGoal extends ColonyWorkGoal {
 		return stack.is(Items.BUCKET) || stack.is(Items.WATER_BUCKET);
 	}
 
+	/**
+	 * Shears the nearest sheep in the territory while the colony is short of wool, then picks up the
+	 * wool; the farmer stores it with its other produce. Fetches shears from the core, or orders a
+	 * pair when the colony has none. Returns true while busy.
+	 */
+	private boolean shearSheep(ServerLevel level, Colony colony) {
+		if (this.fleece != null) {
+			if (this.collectFleece(level)) {
+				return true;
+			}
+			this.fleece = null;
+			// Straight to the core with it: a farmer waiting for seeds would otherwise keep it.
+			if (findSlot(this.bot.getInventory(), stack -> stack.is(ItemTags.WOOL)) >= 0) {
+				this.depositing = true;
+				return true;
+			}
+		}
+		if (this.sheep == null || !this.sheep.isAlive() || !this.sheep.readyForShearing()) {
+			this.sheep = null;
+			if (level.getGameTime() < this.nextSheepScan) {
+				return false;
+			}
+			this.nextSheepScan = level.getGameTime() + SHEEP_SCAN_TICKS;
+			this.sheep = this.findSheep(level, colony);
+			if (this.sheep == null) {
+				return false;
+			}
+		}
+		SimpleContainer inventory = this.bot.getInventory();
+		int shears = findSlot(inventory, stack -> stack.is(Items.SHEARS));
+		if (shears < 0) {
+			Container core = Storage.containerAt(level, colony.core());
+			if (core != null && findSlot(core, stack -> stack.is(Items.SHEARS)) >= 0) {
+				if (this.reach(colony.core())) {
+					Storage.moveItems(core, inventory, stack -> stack.is(Items.SHEARS), 1);
+				}
+				return true;
+			}
+			// ponytail: like the bucket, shears in a storage chest count as owned but are not fetched.
+			if (Storage.colonyStock(level, colony).getOrDefault(Items.SHEARS, 0) == 0 && !colony.orders().containsKey(Items.SHEARS)) {
+				colony.addOrder(Items.SHEARS, 1);
+			}
+			this.sheep = null;
+			return false;
+		}
+		if (this.bot.distanceToSqr(this.sheep) > SHEAR_REACH * SHEAR_REACH) {
+			if (this.travel(new Goal.Near(this.sheep.blockPosition(), 1)) == PathFollower.Status.FAILED) {
+				this.sheep = null;
+				this.cooldown = IDLE_TICKS;
+			}
+			return true;
+		}
+		this.stopTravel();
+		this.bot.getLookControl().setLookAt(this.sheep);
+		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+		ItemStack tool = inventory.getItem(shears);
+		this.sheep.shear(level, SoundSource.NEUTRAL, tool);
+		this.sheep.gameEvent(GameEvent.SHEAR, this.bot);
+		tool.hurtAndBreak(1, level, null, item -> { });
+		this.fleece = this.sheep.blockPosition();
+		this.fleeceUntil = level.getGameTime() + FLEECE_TICKS;
+		this.sheep = null;
+		return true;
+	}
+
+	/** The nearest sheep in the territory ready for shearing; null without one, or when the colony has wool enough. */
+	private @Nullable Sheep findSheep(ServerLevel level, Colony colony) {
+		AABB territory = new AABB(colony.core()).inflate(colony.radius());
+		List<Sheep> sheep = level.getEntitiesOfClass(Sheep.class, territory, Sheep::readyForShearing);
+		if (sheep.isEmpty() || woolInStock(Storage.colonyStock(level, colony)) >= KEEP_WOOL) {
+			return null;
+		}
+		return sheep.stream().min(Comparator.comparingDouble(this.bot::distanceToSqr)).orElse(null);
+	}
+
+	private static int woolInStock(Map<Item, Integer> stock) {
+		int wool = 0;
+		for (Map.Entry<Item, Integer> entry : stock.entrySet()) {
+			if (entry.getKey().builtInRegistryHolder().is(ItemTags.WOOL)) {
+				wool += entry.getValue();
+			}
+		}
+		return wool;
+	}
+
+	/** Walks over the wool a shorn sheep dropped. Returns false once there is none left to pick up. */
+	private boolean collectFleece(ServerLevel level) {
+		if (level.getGameTime() > this.fleeceUntil) {
+			return false;
+		}
+		ItemEntity wool = level.getEntitiesOfClass(ItemEntity.class, new AABB(this.fleece).inflate(FLEECE_RADIUS),
+				item -> item.isAlive() && item.getItem().is(ItemTags.WOOL) && this.bot.wantsToPickUp(level, item.getItem()))
+			.stream()
+			.min(Comparator.comparingDouble(this.bot::distanceToSqr))
+			.orElse(null);
+		if (wool == null) {
+			return false;
+		}
+		return this.travel(new Goal.Near(wool.blockPosition(), 0)) != PathFollower.Status.FAILED;
+	}
+
 	/** Whether this farmer can plant at {@code crop} now: it carries a seed and the soil is tilled, or it has a hoe. */
 	private boolean canPlant(ServerLevel level, BlockPos crop) {
 		if (findSlot(this.bot.getInventory(), Farming::isSeed) < 0) {
@@ -292,12 +422,12 @@ public class FarmerGoal extends ColonyWorkGoal {
 		return seeds > KEEP_SEEDS;
 	}
 
-	/** Tools a farmer keeps when storing produce. */
+	/** Tools a farmer keeps when storing produce: hoes, buckets and shears. */
 	private static boolean isKept(ItemStack stack) {
-		return ToolKind.HOE.is(stack) || isBucket(stack);
+		return ToolKind.HOE.is(stack) || isBucket(stack) || stack.is(Items.SHEARS);
 	}
 
-	/** Puts everything in the core except hoes, buckets and the seeds needed for replanting. */
+	/** Puts everything in the core except the tools it keeps and the seeds needed for replanting. */
 	private void storeProduce(Container core) {
 		SimpleContainer inventory = this.bot.getInventory();
 		int keptSeeds = 0;

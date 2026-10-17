@@ -321,6 +321,18 @@ class TaskPlannerTest {
 	}
 
 	@Test
+	void plansABedFromGatherableInputsWithEmptyStock() {
+		// Farmers shear sheep for white wool; the dye for a red one comes from beetroot.
+		for (Item bed : List.of(Items.BED.white(), Items.BED.red())) {
+			TaskPlanner.Plan<Item> plan = planVanilla(bed, 1, Map.of());
+
+			assertEquals(bed, plan.crafts().getLast().recipe().output(), "plan: " + plan);
+			assertEquals(Map.of(), plan.missing(), "plan: " + plan);
+			assertEquals(3, plan.toGather().getOrDefault(Items.WOOL.white(), 0), "plan: " + plan);
+		}
+	}
+
+	@Test
 	void plansABedFromWoolAndPlanks() {
 		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of(Items.WOOL.red(), 3, Items.OAK_PLANKS, 3));
 
