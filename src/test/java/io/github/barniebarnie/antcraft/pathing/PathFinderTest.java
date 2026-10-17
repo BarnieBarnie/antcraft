@@ -124,6 +124,55 @@ class PathFinderTest {
 		assertFalse(tooFar.complete());
 	}
 
+	/** A ledge at y=0 for x<=0 (feet at y=1) over water a block deep at x 1..5, its surface {@code fall} blocks down, and a bank at x=6. */
+	private static GridWorld ledgeOverWater(int fall) {
+		int surface = 1 - fall;
+		return new GridWorld().fill(-5, 0, -5, 0, 0, 5, '#')
+			.fill(1, surface - 1, -5, 6, surface - 1, 5, '#')
+			.fill(1, surface, -5, 5, surface, 5, 'W')
+			.fill(6, surface, -5, 6, surface, 5, '#');
+	}
+
+	@Test
+	void dropsFartherThanMaxDropIntoWater() {
+		// Water breaks the fall, so a drop into it may go past maxDrop (3 here).
+		Path path = find(ledgeOverWater(PathFinder.MAX_WATER_DROP), new BlockPos(6, 2 - PathFinder.MAX_WATER_DROP, 0), WALK_ONLY);
+
+		assertTrue(path.complete(), "did not drop into the water: " + path.steps());
+		assertEquals(new Step(MoveType.SWIM, new BlockPos(1, 1 - PathFinder.MAX_WATER_DROP, 0), List.of(), List.of()), path.steps().getFirst());
+	}
+
+	@Test
+	void neverDropsIntoWaterFartherThanMaxWaterDrop() {
+		int fall = PathFinder.MAX_WATER_DROP + 1;
+		Path path = find(ledgeOverWater(fall), new BlockPos(6, 2 - fall, 0), WALK_ONLY);
+
+		assertFalse(path.complete(), "dropped too far: " + path.steps());
+	}
+
+	@Test
+	void swimsUpAWaterfallToTheTopOfACliff() {
+		// A cliff 4 high at x>=3 with a waterfall down its face at x=2, z=0.
+		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 10, 4, 10, '#').fill(2, 1, 0, 2, 4, 0, 'W');
+		Path path = find(world, new BlockPos(4, 5, 0), WALK_ONLY);
+
+		assertTrue(path.complete(), "cannot climb the waterfall: " + path.steps());
+		assertEquals(List.of(new BlockPos(1, 1, 0), new BlockPos(2, 1, 0), new BlockPos(2, 2, 0), new BlockPos(2, 3, 0), new BlockPos(2, 4, 0),
+			new BlockPos(3, 5, 0), new BlockPos(4, 5, 0)), positions(path));
+	}
+
+	@Test
+	void doesNotSwimSidewaysFromOneWaterfallIntoAnother() {
+		// Two water columns side by side in bedrock. The bot is at the foot of one capped at the top; only the other
+		// leads up to air and a ledge, and getting across means swimming under water.
+		GridWorld world = new GridWorld().fill(-2, 0, -3, 6, 7, 4, 'B')
+			.fill(2, 1, 0, 2, 4, 1, 'W')
+			.fill(2, 5, 1, 3, 6, 1, ' ');
+		Path path = PathFinder.find(world, new BlockPos(2, 1, 0), new Goal.Block(new BlockPos(3, 5, 1)), WALK_ONLY);
+
+		assertFalse(path.complete(), "swam under water from one waterfall to the other: " + path.steps());
+	}
+
 	@Test
 	void pillarsUpToHighGoal() {
 		GridWorld world = GridWorld.flat(5);

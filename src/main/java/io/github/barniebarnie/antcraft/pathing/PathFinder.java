@@ -19,8 +19,16 @@ public final class PathFinder {
 	public static final double FALL_COST_PER_BLOCK = 1.0;
 	public static final double BREAK_OVERHEAD = 5.0;
 	public static final double PLACE_COST = 20.0;
-	/** Swimming a block at the surface: slow, so routes keep to dry land unless water saves a long way round. */
-	public static final double SWIM_COST = 20.0;
+	/**
+	 * Swimming a block at the surface: slow, so routes keep to dry land unless water saves a long way round.
+	 * Measured at about 33 ticks a block (see {@code PathingGameTest.swimCostMatchesTheTimeASwimTakes}).
+	 */
+	public static final double SWIM_COST = 33.0;
+	/**
+	 * How far a drop into water may fall, past {@link Options#maxDrop()}: water breaks the fall. Game-tested for 5
+	 * blocks into water a block deep; the limit keeps bots from leaping off cliffs they cannot swim back up.
+	 */
+	public static final int MAX_WATER_DROP = 8;
 
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
@@ -112,6 +120,7 @@ public final class PathFinder {
 				this.add(moves, this.stepUp(feet, dir));
 				this.add(moves, this.drop(feet, dir));
 				this.add(moves, this.swim(feet, dir));
+				this.add(moves, this.enterColumn(feet, dir));
 			}
 			this.add(moves, this.surface(feet));
 			this.add(moves, this.pillar(feet));
@@ -144,7 +153,8 @@ public final class PathFinder {
 			if (!this.open(edge) || !this.open(edge.above()) || this.canStand(edge.below())) {
 				return null;
 			}
-			for (int fall = 1; fall <= this.options.maxDrop(); fall++) {
+			int maxFall = Math.max(this.options.maxDrop(), MAX_WATER_DROP);
+			for (int fall = 1; fall <= maxFall; fall++) {
 				BlockPos to = edge.below(fall);
 				if (this.swimmable(to)) {
 					return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST + fall * FALL_COST_PER_BLOCK);
@@ -152,7 +162,7 @@ public final class PathFinder {
 				if (!this.open(to)) {
 					return null;
 				}
-				if (this.canStand(to.below())) {
+				if (fall <= this.options.maxDrop() && this.canStand(to.below())) {
 					return new Candidate(new Step(MoveType.DROP, to, List.of(), List.of()), WALK_COST + fall * FALL_COST_PER_BLOCK);
 				}
 			}
@@ -165,6 +175,18 @@ public final class PathFinder {
 			return this.swimmable(to) ? new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST) : null;
 		}
 
+		/**
+		 * Swims into the foot of a waterfall or other water column, to swim up it with {@link #surface}. Only with the
+		 * head out of water, on land or at the surface, so bots still never swim sideways under water.
+		 */
+		private Candidate enterColumn(BlockPos feet, Direction dir) {
+			BlockPos to = feet.relative(dir);
+			if (this.world.isWater(feet.above()) || !this.world.isWater(to) || !this.world.isWater(to.above())) {
+				return null;
+			}
+			return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST);
+		}
+
 		/** Rises one block from under water, toward the surface. */
 		private Candidate surface(BlockPos feet) {
 			BlockPos to = feet.above();
@@ -174,7 +196,7 @@ public final class PathFinder {
 			return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), FALL_COST_PER_BLOCK);
 		}
 
-		/** Water with open air above it, where a bot floats with its head out. Never deeper: bots do not dive. */
+		/** Water with open air above it, where a bot floats with its head out. Bots do not dive, but rise up water columns (see {@link #enterColumn}). */
 		private boolean swimmable(BlockPos pos) {
 			return this.world.isWater(pos) && this.open(pos.above());
 		}

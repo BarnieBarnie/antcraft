@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -138,5 +139,75 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 3, 6)));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 3, 6));
+	}
+
+	/**
+	 * Times a bot swimming across a moat 4 wide, 2 deep and as wide as the room, so there is no way round, and
+	 * checks that {@link PathFinder#SWIM_COST} matches the ticks it takes per block. Only the middle of the moat
+	 * counts, after the splash of jumping in has worn off and before the bot climbs out.
+	 */
+	@GameTest(maxTicks = 400)
+	public void swimCostMatchesTheTimeASwimTakes(GameTestHelper helper) {
+		room(helper, 2);
+		fill(helper, 2, 1, 1, 5, 2, 6, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 3, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 3, 3)));
+		double startX = 3.5;
+		double endX = 5.0;
+		long[] crossed = {-1, -1};
+		helper.onEachTick(() -> {
+			double x = bot.getX() - helper.absolutePos(BlockPos.ZERO).getX();
+			if (crossed[0] < 0 && x >= startX) {
+				crossed[0] = helper.getTick();
+			}
+			if (crossed[1] < 0 && x >= endX) {
+				crossed[1] = helper.getTick();
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(crossed[1] >= 0, "not across yet, at " + TestPositions.relative(helper, bot.blockPosition()));
+			double perBlock = (crossed[1] - crossed[0]) / (endX - startX);
+			helper.assertTrue(Math.abs(perBlock - PathFinder.SWIM_COST) <= PathFinder.SWIM_COST / 5,
+				"swimming took " + perBlock + " ticks per block, but SWIM_COST is " + PathFinder.SWIM_COST);
+		});
+	}
+
+	/**
+	 * A waterfall, falling water from a source on top of a cliff 4 high into a still pool a block deep, is the only
+	 * way up. A bot without scaffold swims across the pool into the foot of the waterfall, up it and out on top.
+	 */
+	@GameTest(maxTicks = 400)
+	public void swimsUpAWaterfall(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 6, 4, 6, Blocks.BEDROCK);
+		fill(helper, 1, 1, 1, 3, 1, 6, Blocks.WATER);
+		// Walls either side of the waterfall at (3, 1..4, 3), so it is the only way up, and one beside its source.
+		fill(helper, 2, 1, 2, 3, 4, 2, Blocks.BEDROCK);
+		fill(helper, 2, 1, 4, 3, 4, 4, Blocks.BEDROCK);
+		helper.setBlock(2, 4, 3, Blocks.BEDROCK);
+		helper.setBlock(3, 4, 3, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 5);
+		// Let the waterfall run down before planning.
+		helper.runAfterDelay(40, () -> bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 5, 3))));
+
+		succeedWhenAt(helper, bot, new BlockPos(5, 5, 3));
+	}
+
+	/**
+	 * The only way down from a ledge is a fall of 5 blocks, more than {@code PathFollower}'s usual drop of 3, into
+	 * water a block deep. Water breaks the fall: the bot drops in unhurt and climbs out on the far bank.
+	 */
+	@GameTest(maxTicks = 400)
+	public void dropsFartherThanUsualIntoWaterUnhurt(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 2, 5, 6, Blocks.BEDROCK);
+		fill(helper, 3, 1, 1, 5, 1, 6, Blocks.WATER);
+		fill(helper, 6, 1, 1, 6, 1, 6, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 6, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 2, 3)));
+		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt by the fall"));
+
+		succeedWhenAt(helper, bot, new BlockPos(6, 2, 3));
 	}
 }
