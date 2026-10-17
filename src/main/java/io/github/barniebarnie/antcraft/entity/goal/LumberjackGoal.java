@@ -78,11 +78,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** At most this many felled trees are remembered to come back to; the oldest is forgotten first. */
 	private static final int MAX_REVISITS = 8;
 	/**
-	 * How many times per tree cleanup may pillar up to scaffold it cannot otherwise reach. Each retry
-	 * places new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
-	 */
-	private static final int SCAFFOLD_RETRIES = 8;
-	/**
 	 * A tree with logs it could not reach, even with scaffold, is retried this long after; say once there
 	 * is more scaffold, or a player cleared the way. A colony tree goes back on the job board for that, a
 	 * solo bot remembers the tree itself.
@@ -127,13 +122,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private Optional<Item> sapling = Optional.empty();
 	/** The game time the site's tree was felled, from when a 1x1 tree waits for its own sapling kind. */
 	private long felled;
-	/** Scaffold that cannot be reached without placing more; retried once the rest is down. */
-	private final Set<BlockPos> unreachablePlaced = new HashSet<>();
-	/** Scaffold that could not be reached even by pillaring; left behind. */
-	private final Set<BlockPos> abandonedPlaced = new HashSet<>();
-	/** The scaffold block cleanup is pillaring up to, or null when not retrying one. */
-	private @Nullable BlockPos retrying;
-	private int retriesLeft = SCAFFOLD_RETRIES;
+	/** Takes the scaffolding for the current tree down; its retries are counted per tree. */
+	private final ScaffoldCleanup scaffoldCleanup;
 	/** How many scaffold blocks it takes from home at a time. */
 	private int scaffoldStock = SCAFFOLD_STOCK;
 	/** Restocking mid-tree: it goes back to the current tree afterwards, which stays its own meanwhile. */
@@ -150,8 +140,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
 		this.follower.setScaffold(SCAFFOLD);
+		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, () -> {
+			this.travelGoal = null;
+			this.follower.stop();
+		});
 		this.follower.setPlaceListener(pos -> {
-			if (TREE_WORK.contains(this.state) || this.retrying != null || this.resumeTree) {
+			if (TREE_WORK.contains(this.state) || this.scaffoldCleanup.isRetrying() || this.resumeTree) {
 				this.placed().add(pos);
 			}
 		});
@@ -352,7 +346,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.follower.stop();
 		this.follower.setMayPlace(!NO_PLACING.contains(next));
 		this.breaker.reset();
-		this.retrying = null;
+		this.scaffoldCleanup.cancelRetry();
 	}
 
 	private void search(ServerLevel level) {
@@ -455,9 +449,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.felled = level.getGameTime();
 		this.bot.setTree(found.base(), found.logs());
 		this.unreachableLogs.clear();
-		this.unreachablePlaced.clear();
-		this.abandonedPlaced.clear();
-		this.retriesLeft = SCAFFOLD_RETRIES;
+		this.scaffoldCleanup.reset();
 		this.enter(State.CHOP);
 	}
 
@@ -644,71 +636,14 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
-	/**
-	 * Takes down the scaffold blocks placed for this tree, getting them back. Blocks within reach go
-	 * first, top down, so a pillar the bot stands on comes down under it. Walking to the others never
-	 * places new scaffolding. Blocks that cannot be reached that way are retried once the rest is down:
-	 * the bot pillars up to them, and that pillar is taken down in turn, under it. Retries are limited
-	 * per tree, and a block it cannot reach even by pillaring is left behind.
-	 */
+	/** Takes down the scaffold blocks placed for this tree (see {@link ScaffoldCleanup}), then collects the drops. */
 	private void cleanup(ServerLevel level) {
-		BlockPos feet = this.bot.blockPosition();
-		this.placed().removeIf(pos -> !level.getBlockState(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.SCAFFOLD_BLOCKS));
-		if (this.retrying != null) {
-			this.retry(feet);
+		if (!this.scaffoldCleanup.tick(level, pos -> false)) {
 			return;
 		}
-		BlockPos next = this.placed().stream()
-			.filter(pos -> !this.unreachablePlaced.contains(pos) && !this.abandonedPlaced.contains(pos))
-			.max(Comparator.<BlockPos, Boolean>comparing(pos -> new Goal.Reach(pos, REACH).isReached(feet)).thenComparingInt(BlockPos::getY))
-			.orElse(null);
-		if (next == null) {
-			BlockPos retry = this.retriesLeft <= 0 ? null : this.placed().stream()
-				.filter(pos -> !this.abandonedPlaced.contains(pos))
-				.max(Comparator.comparingInt(BlockPos::getY))
-				.orElse(null);
-			if (retry != null) {
-				this.retriesLeft--;
-				this.retrying = retry;
-				this.travelGoal = null;
-				this.follower.setMayPlace(true);
-				return;
-			}
-			this.placed().clear();
-			this.unreachableItems.clear();
-			this.site = this.tree != null ? this.tree.base() : null;
-			this.enter(this.site != null ? State.COLLECT : State.SEARCH);
-			return;
-		}
-		Goal reach = new Goal.Reach(next, REACH);
-		if (reach.isReached(feet) && this.bot.onGround()) {
-			this.travelGoal = null;
-			if (this.breaker.tick(level, next, true)) {
-				this.placed().remove(next);
-			}
-		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
-			this.unreachablePlaced.add(next);
-		}
-	}
-
-	/** Pillars up to the scaffold block being retried; once there, cleanup looks at every block again from up there. */
-	private void retry(BlockPos feet) {
-		BlockPos target = this.retrying;
-		Goal reach = new Goal.Reach(target, REACH);
-		if (!this.placed().contains(target) || (reach.isReached(feet) && this.bot.onGround())) {
-			this.unreachablePlaced.clear();
-			this.endRetry();
-		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
-			this.abandonedPlaced.add(target);
-			this.endRetry();
-		}
-	}
-
-	private void endRetry() {
-		this.retrying = null;
-		this.travelGoal = null;
-		this.follower.stop();
-		this.follower.setMayPlace(false);
+		this.unreachableItems.clear();
+		this.site = this.tree != null ? this.tree.base() : null;
+		this.enter(this.site != null ? State.COLLECT : State.SEARCH);
 	}
 
 	private void collect(ServerLevel level) {

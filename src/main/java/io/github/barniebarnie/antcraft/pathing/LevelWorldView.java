@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.pathing;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -18,13 +19,25 @@ public class LevelWorldView implements WorldView {
 	private final SimpleContainer inventory;
 	private final ItemStack hand;
 	private final Set<BlockPos> keep;
+	private final Predicate<BlockPos> mayPlace;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
+		this(level, inventory, hand, keep, pos -> true);
+	}
+
+	/** Like {@link #LevelWorldView(Level, SimpleContainer, ItemStack, Set)}; paths place scaffold blocks only where {@code mayPlace} allows. */
+	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep, Predicate<BlockPos> mayPlace) {
 		this.level = level;
 		this.inventory = inventory;
 		this.hand = hand;
 		this.keep = keep;
+		this.mayPlace = mayPlace;
+	}
+
+	@Override
+	public boolean mayPlace(BlockPos pos) {
+		return this.mayPlace.test(pos);
 	}
 
 	@Override

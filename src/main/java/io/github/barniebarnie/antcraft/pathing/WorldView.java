@@ -15,4 +15,9 @@ public interface WorldView {
 
 	/** Ticks needed to break the block, or a negative number if it must not be broken. */
 	float breakTicks(BlockPos pos);
+
+	/** Whether a path may place a scaffold block here; not where a builder's plan puts a block of its own, say. */
+	default boolean mayPlace(BlockPos pos) {
+		return true;
+	}
 }

@@ -19,6 +19,7 @@ import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -765,6 +766,88 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 4, 1, 4, STAIRS_EAST);
 			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
 			helper.assertTrue(colony.orders().isEmpty(), "order not withdrawn: " + colony.orders());
+		});
+	}
+
+	/** A plan for a column at (5, 1..height, 5) of {@code state}. */
+	private static BuildPlan column(GameTestHelper helper, int height, BlockState state) {
+		return new BuildPlan(IntStream.rangeClosed(1, height).mapToObj(y -> step(helper, 5, y, 5, state)).toList());
+	}
+
+	/** How many dirt blocks stand in the area above the floor, leaving out the column at (5, y, 5). */
+	private static int strayDirt(GameTestHelper helper) {
+		int dirt = 0;
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+			if (!(pos.getX() == 5 && pos.getZ() == 5) && helper.getBlockState(pos).is(Blocks.DIRT)) {
+				dirt++;
+			}
+		}
+		return dirt;
+	}
+
+	/**
+	 * The top of a 6-high column is out of reach from the ground: the builder pillars up with dirt
+	 * from the core, and takes the pillar down once the column stands, getting the dirt back.
+	 */
+	@GameTest(maxTicks = 1200)
+	public void pillarsUpToBuildASixHighColumnAndLeavesNoScaffold(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
+		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
+		colony.addBuild(column(helper, 6, COBBLE));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] pillared = {false};
+		helper.onEachTick(() -> pillared[0] |= !builder.getScaffold().isEmpty());
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 6; y++) {
+				assertState(helper, 5, y, 5, COBBLE);
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(pillared[0], "never placed scaffold");
+			helper.assertTrue(builder.getScaffold().isEmpty(), "scaffold left: " + builder.getScaffold());
+			helper.assertTrue(strayDirt(helper) == 0, "dirt scaffold left standing");
+			int dirt = core(helper).countItem(Items.DIRT) + builder.getInventory().countItem(Items.DIRT);
+			helper.assertTrue(dirt == 16, "scaffold dirt not got back: " + dirt);
+		});
+	}
+
+	/**
+	 * A dirt column, built from the same dirt the builder pillars with. Its scaffold never stands
+	 * where the column goes, so it never stands in for a column block, and taking the scaffold down
+	 * never takes a column block that is in place.
+	 */
+	@GameTest(maxTicks = 1200)
+	public void neverMixesUpScaffoldAndPlanBlocksOfTheSameKind(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.DIRT, 22));
+		colony.addBuild(column(helper, 6, Blocks.DIRT.defaultBlockState()));
+		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] placed = new boolean[7];
+		boolean[] pillared = {false};
+		helper.onEachTick(() -> {
+			pillared[0] |= !builder.getScaffold().isEmpty();
+			for (int y = 1; y <= 6; y++) {
+				BlockPos pos = helper.absolutePos(new BlockPos(5, y, 5));
+				if (builder.getScaffold().contains(pos)) {
+					helper.fail("scaffold placed where the column goes, at y=" + y);
+				}
+				boolean there = helper.getBlockState(new BlockPos(5, y, 5)).is(Blocks.DIRT);
+				if (placed[y] && !there) {
+					helper.fail("column block at y=" + y + " taken down");
+				}
+				placed[y] |= there;
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 6; y++) {
+				helper.assertTrue(ColonyManager.isProtected(helper.getLevel(), helper.absolutePos(new BlockPos(5, y, 5))), "column block at y=" + y + " not placed by the builder");
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(pillared[0], "never placed scaffold");
+			helper.assertTrue(builder.getScaffold().isEmpty(), "scaffold left: " + builder.getScaffold());
+			helper.assertTrue(strayDirt(helper) == 0, "dirt scaffold left standing");
 		});
 	}
 }

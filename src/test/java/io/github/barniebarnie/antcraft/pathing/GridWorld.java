@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.pathing;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 
 /**
@@ -10,6 +12,25 @@ import net.minecraft.core.BlockPos;
  */
 final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
+	private final Set<BlockPos> noPlacing = new HashSet<>();
+	private boolean placingForbidden;
+
+	/** Forbids placing blocks at {@code pos}. */
+	GridWorld forbidPlacing(BlockPos pos) {
+		this.noPlacing.add(pos);
+		return this;
+	}
+
+	/** Forbids placing blocks anywhere. */
+	GridWorld forbidAllPlacing() {
+		this.placingForbidden = true;
+		return this;
+	}
+
+	@Override
+	public boolean mayPlace(BlockPos pos) {
+		return !this.placingForbidden && !this.noPlacing.contains(pos);
+	}
 
 	GridWorld set(int x, int y, int z, char block) {
 		this.blocks.put(new BlockPos(x, y, z), block);

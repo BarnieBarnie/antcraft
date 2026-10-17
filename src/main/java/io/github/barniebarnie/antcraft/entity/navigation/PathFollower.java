@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.pathing.Step;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -62,6 +63,7 @@ public class PathFollower {
 	private final BlockBreaker breaker;
 	private boolean mayPlace = true;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
+	private Predicate<BlockPos> mayPlaceAt = pos -> true;
 	private Consumer<BlockPos> placeListener = pos -> {
 	};
 
@@ -78,6 +80,11 @@ public class PathFollower {
 	/** Whether paths may place scaffold blocks; applies from the next path planned. */
 	public void setMayPlace(boolean mayPlace) {
 		this.mayPlace = mayPlace;
+	}
+
+	/** Where paths may place scaffold blocks, such as nowhere a builder's plan puts a block; everywhere unless set. Applies from the next path planned. */
+	public void setMayPlaceAt(Predicate<BlockPos> mayPlaceAt) {
+		this.mayPlaceAt = mayPlaceAt;
 	}
 
 	/** Which blocks paths may place as scaffolding; {@link #SCAFFOLD_BLOCKS} unless set. */
@@ -160,7 +167,7 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level));
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level), this.mayPlaceAt);
 		PathFinder.Options options = new PathFinder.Options(true, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
 		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
 		this.stepIndex = 0;

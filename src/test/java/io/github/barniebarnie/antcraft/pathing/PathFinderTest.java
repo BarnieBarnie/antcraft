@@ -158,4 +158,21 @@ class PathFinderTest {
 		assertFalse(path.complete());
 		assertTrue(path.end().getX() > 0, "partial path should head toward the goal");
 	}
+
+	@Test
+	void pillarsElsewhereWhenPlacingIsForbiddenAtTheStart() {
+		GridWorld world = GridWorld.flat(10).forbidPlacing(START);
+		Path path = find(world, new BlockPos(0, 3, 0), FULL);
+
+		assertTrue(path.complete());
+		assertTrue(path.steps().stream().noneMatch(s -> s.places().contains(START)), "placed at a forbidden spot: " + path.steps());
+	}
+
+	@Test
+	void cannotClimbWhenPlacingIsForbiddenEverywhere() {
+		GridWorld world = GridWorld.flat(10).forbidAllPlacing();
+		Path path = find(world, new BlockPos(0, 3, 0), FULL);
+
+		assertFalse(path.complete());
+	}
 }

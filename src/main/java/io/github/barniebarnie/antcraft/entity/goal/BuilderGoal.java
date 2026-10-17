@@ -1,10 +1,12 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
+import com.google.common.base.Suppliers;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
@@ -15,6 +17,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -22,6 +25,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
@@ -54,7 +58,8 @@ import org.jspecify.annotations.Nullable;
  * from one item, clearing the spot for its other half first. Fire it lights on the block below with
  * flint and steel from the core, which the colony orders when it has none; fire that cannot stay
  * there, blocks a player cannot place, such as a portal, and a fluid without a bucket or source
- * to get it from are reported too.
+ * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
+ * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
@@ -62,20 +67,47 @@ public class BuilderGoal extends ColonyWorkGoal {
 	private static final Set<BuildPlan.Clearing> WORKABLE = EnumSet.of(BuildPlan.Clearing.BREAK, BuildPlan.Clearing.SCOOP, BuildPlan.Clearing.FILL);
 	/** How often the builder looks again for fluid sources to fill a bucket at. */
 	private static final int SOURCE_SCAN_TICKS = 100;
+	/** The scaffold blocks builders pillar with: ones they take down again quickly without a tool. */
+	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
+	/** Takes scaffold blocks from the core for a high step when carrying fewer than this. */
+	private static final int RESTOCK_BELOW = 8;
+	private static final int SCAFFOLD_STOCK = 16;
+	/** A step this many blocks above the bot's feet or more is out of reach from where it stands, so it takes scaffold first. */
+	private static final int SCAFFOLD_HEIGHT = 4;
 
 	/** Fluid sources found per full bucket they fill, cleared every {@link #SOURCE_SCAN_TICKS}. */
 	private final Map<Item, Optional<BlockPos>> sources = new HashMap<>();
 	private long nextSourceScan;
+	private final ScaffoldCleanup scaffoldCleanup;
+	/** Taking its scaffolding down, before putting a plan aside or once it has no job. */
+	private boolean cleaning;
 
 	public BuilderGoal(AntBot bot) {
 		super(bot, BotRole.BUILDER);
-		// ponytail: no scaffolding, so plans are built within reach of the ground; add it with cleanup for tall builds.
-		this.follower.setMayPlace(false);
+		this.follower.setScaffold(SCAFFOLD);
+		// Every block placed on the way is scaffold, taken down once the plan is done; plans never get scaffold where their own blocks go.
+		this.follower.setPlaceListener(pos -> this.bot.getScaffold().add(pos));
+		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, this::stopTravel);
+	}
+
+	@Override
+	public void stop() {
+		super.stop();
+		if (this.cleaning) {
+			this.scaffoldCleanup.cancelRetry();
+			this.follower.setMayPlace(false);
+		}
 	}
 
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
 		if (this.upgradeTool(level, colony, ToolKind.PICKAXE, () -> needsPickaxe(level, colony))) {
+			return;
+		}
+		Supplier<Set<BlockPos>> planned = Suppliers.memoize(() -> planned(colony));
+		this.follower.setMayPlaceAt(pos -> !planned.get().contains(pos));
+		if (this.cleaning) {
+			this.cleanUp(level, colony);
 			return;
 		}
 		Container core = Storage.containerAt(level, colony.core());
@@ -84,13 +116,22 @@ public class BuilderGoal extends ColonyWorkGoal {
 			open -> colony.build(open.id()).filter(plan -> this.nextStep(level, colony, core, plan).isPresent() || !this.isWaiting(level, colony, core, plan)).isPresent());
 		this.hasJob = job.isPresent();
 		if (job.isEmpty()) {
-			this.cooldown = IDLE_TICKS;
+			if (!this.bot.getScaffold().isEmpty()) {
+				this.startCleanup();
+			} else {
+				this.cooldown = IDLE_TICKS;
+			}
 			return;
 		}
 		Optional<BuildPlan> plan = colony.build(job.get().id());
 		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p));
 		if (next.isEmpty()) {
-			this.putAside(level, colony, core, job.get(), plan);
+			// The scaffolding comes down first, while the job is still this builder's.
+			if (!this.bot.getScaffold().isEmpty()) {
+				this.startCleanup();
+			} else {
+				this.putAside(level, colony, core, job.get(), plan);
+			}
 			return;
 		}
 		BuildPlan.Step step = next.get();
@@ -115,7 +156,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			}
 			return;
 		}
-		if (!this.reach(step.pos())) {
+		if (this.restockScaffold(colony, core, step) || !this.reach(step.pos())) {
 			return;
 		}
 		if (step.isPlaced(current)) {
@@ -126,6 +167,43 @@ public class BuilderGoal extends ColonyWorkGoal {
 			&& step.otherHalf().map(half -> this.isFreeToPlace(level, half.pos(), half.state())).orElse(true)) {
 			this.place(level, colony, step);
 		}
+	}
+
+	/** Every position a plan of the colony puts a block or clears, where scaffold must never go. */
+	private static Set<BlockPos> planned(Colony colony) {
+		return colony.builds().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
+	}
+
+	private void startCleanup() {
+		this.cleaning = true;
+		this.scaffoldCleanup.reset();
+		this.resetMovement();
+		this.follower.setMayPlace(false);
+	}
+
+	/** Takes the scaffolding down (see {@link ScaffoldCleanup}); never a block it placed for a plan, which the colony protects. */
+	private void cleanUp(ServerLevel level, Colony colony) {
+		if (this.scaffoldCleanup.tick(level, pos -> colony.isProtected(level::getBlockState, pos))) {
+			this.cleaning = false;
+			this.resetMovement();
+			this.follower.setMayPlace(true);
+		}
+	}
+
+	/**
+	 * Before going for a step too high to reach from where it stands, takes scaffold blocks from the
+	 * core to pillar up with, if it is short of them. Returns true while it is on its way to the core.
+	 */
+	private boolean restockScaffold(Colony colony, @Nullable Container core, BuildPlan.Step step) {
+		int carried = PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD);
+		if (step.pos().getY() - this.bot.getBlockY() < SCAFFOLD_HEIGHT || carried >= RESTOCK_BELOW
+			|| core == null || PathFollower.scaffoldCount(core, SCAFFOLD) == 0) {
+			return false;
+		}
+		if (this.reach(colony.core())) {
+			Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(SCAFFOLD), SCAFFOLD_STOCK - carried);
+		}
+		return true;
 	}
 
 	/**
@@ -174,7 +252,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	/** The fluid source in the territory nearest {@code from} that fills an empty bucket into {@code bucket}; never one a plan places, so a builder does not undo its own work. */
 	private static @Nullable BlockPos source(ServerLevel level, Colony colony, BlockPos from, Item bucket) {
-		Set<BlockPos> planned = colony.builds().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
+		Set<BlockPos> planned = planned(colony);
 		return nearest(level, colony, from, pos -> {
 			FluidState fluid = level.getFluidState(pos);
 			return fluid.isSource() && fluid.getType().getBucket() == bucket && level.getBlockState(pos).getBlock() instanceof LiquidBlock && !planned.contains(pos);
@@ -338,10 +416,16 @@ public class BuilderGoal extends ColonyWorkGoal {
 		step.otherHalf().ifPresent(half -> {
 			level.setBlockAndUpdate(step.pos(), step.dry());
 			level.setBlockAndUpdate(half.pos(), half.state());
-			colony.protect(half.pos(), half.state().getBlock());
+			this.protect(colony, half.pos(), half.state().getBlock());
 		});
 		this.put(level, step.pos(), step.dry(), step.item());
-		colony.protect(step.pos(), step.state().getBlock());
+		this.protect(colony, step.pos(), step.state().getBlock());
+	}
+
+	/** Protects a plan block just placed; it is no scaffold, even where scaffold of a plan added later stood. */
+	private void protect(Colony colony, BlockPos pos, Block block) {
+		colony.protect(pos, block);
+		this.bot.getScaffold().remove(pos);
 	}
 
 	/** Lights {@code step}'s fire with the flint and steel the bot carries, as a player would, wearing the tool a little. */
@@ -352,7 +436,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}
 		level.playSound(null, pos, SoundEvents.FLINTANDSTEEL_USE, SoundSource.BLOCKS, 1.0F, level.getRandom().nextFloat() * 0.4F + 0.8F);
 		level.setBlock(pos, BaseFireBlock.getState(level, pos), Block.UPDATE_ALL_IMMEDIATE);
-		colony.protect(pos, step.state().getBlock());
+		this.protect(colony, pos, step.state().getBlock());
 		level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
 		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 		ItemStack tool = this.bot.getInventory().getItem(findSlot(this.bot.getInventory(), stack -> stack.is(Items.FLINT_AND_STEEL)));

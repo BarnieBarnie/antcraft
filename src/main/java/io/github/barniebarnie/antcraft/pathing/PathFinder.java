@@ -146,7 +146,7 @@ public final class PathFinder {
 		}
 
 		private Candidate pillar(BlockPos feet) {
-			if (!this.options.canPlace()) {
+			if (!this.options.canPlace() || !this.world.mayPlace(feet)) {
 				return null;
 			}
 			BlockPos to = feet.above();
@@ -219,7 +219,7 @@ public final class PathFinder {
 				if (Planner.this.canStand(pos)) {
 					return this;
 				}
-				if (Planner.this.options.canPlace() && Planner.this.open(pos)) {
+				if (Planner.this.options.canPlace() && Planner.this.open(pos) && Planner.this.world.mayPlace(pos)) {
 					this.places.add(pos);
 					this.cost += PLACE_COST;
 				} else {

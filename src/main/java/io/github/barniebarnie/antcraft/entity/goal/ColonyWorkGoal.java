@@ -132,8 +132,13 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	}
 
 	protected void resetMovement() {
-		this.follower.stop();
+		this.stopTravel();
 		this.breaker.reset();
+	}
+
+	/** Stops travelling, leaving a block being broken alone; the next {@link #travel} plans a fresh path. */
+	protected void stopTravel() {
+		this.follower.stop();
 		this.travelGoal = null;
 	}
 
