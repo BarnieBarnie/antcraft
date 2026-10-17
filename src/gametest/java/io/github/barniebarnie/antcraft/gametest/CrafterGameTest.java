@@ -78,6 +78,26 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Planning a bed once searched every wool and dye recipe and hung the server on the first
+	 * survey. Now the colony keeps ticking while the bed waits for wool, and makes it once wool
+	 * and planks arrive.
+	 */
+	@GameTest(maxTicks = 600)
+	public void ordersABedAndMakesItOnceWoolAndPlanksArrive(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.addOrder(Items.BED.red(), 1);
+		crafter(helper, colony);
+
+		// By now the colony has surveyed, and planned the bed, more than once.
+		helper.runAtTickTime(250, () -> store(helper, new ItemStack(Items.WOOL.red(), 3), new ItemStack(Items.OAK_PLANKS, 3)));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() > 250, "the server kept ticking");
+			helper.assertTrue(core(helper).countItem(Items.BED.red()) == 1, "core has " + core(helper).countItem(Items.BED.red()) + " red beds");
+			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
+		});
+	}
+
 	/** The default stock keeps torches for the mineshaft. */
 	@GameTest(maxTicks = 400)
 	public void keepsTorchesInStock(GameTestHelper helper) {

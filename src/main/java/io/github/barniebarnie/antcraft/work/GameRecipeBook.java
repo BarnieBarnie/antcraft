@@ -41,10 +41,15 @@ public final class GameRecipeBook implements TaskPlanner.RecipeBook<Item> {
 	public static synchronized GameRecipeBook of(MinecraftServer server) {
 		RecipeManager manager = server.getRecipeManager();
 		if (manager != cachedFor) {
-			cached = new GameRecipeBook(manager);
+			cached = of(manager);
 			cachedFor = manager;
 		}
 		return cached;
+	}
+
+	/** A fresh book of the given recipes, not cached. */
+	public static GameRecipeBook of(RecipeManager manager) {
+		return new GameRecipeBook(manager);
 	}
 
 	private GameRecipeBook(RecipeManager manager) {

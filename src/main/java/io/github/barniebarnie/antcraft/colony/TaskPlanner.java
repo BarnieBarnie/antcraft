@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,9 +70,16 @@ public final class TaskPlanner {
 	private TaskPlanner() {
 	}
 
+	/**
+	 * Recipes the search expands for one plan before it stops trying alternatives. Plans for
+	 * everyday items need a few hundred; the cap keeps items with many alternative recipes and
+	 * ingredients (beds, wool and dyes of every colour) from searching for ever.
+	 */
+	static final int EXPANSION_BUDGET = 20_000;
+
 	public static <I> Plan<I> plan(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		State<I> state = new State<>(new HashMap<>(stock));
-		new Search<>(book, gatherable).need(state, item, count, new HashSet<>());
+		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0}).need(state, item, count, new HashSet<>(), true);
 		return new Plan<>(List.copyOf(state.crafts), Map.copyOf(state.gather), Map.copyOf(state.missing));
 	}
 
@@ -85,6 +93,13 @@ public final class TaskPlanner {
 		 * without having its ingredient; such a plan is unusable.
 		 */
 		boolean cycle;
+		/**
+		 * A score this plan has to stay under to be worth finishing, because a plan already found
+		 * for the same need scores that much. Scores only grow while a plan is worked out.
+		 */
+		long @Nullable [] bound;
+		/** Set when the plan reached its bound and was abandoned; it loses to any finished plan. */
+		boolean pruned;
 
 		State(Map<I, Integer> stock) {
 			this.stock = stock;
@@ -96,6 +111,8 @@ public final class TaskPlanner {
 			copy.gather.putAll(this.gather);
 			copy.missing.putAll(this.missing);
 			copy.cycle = this.cycle;
+			copy.bound = this.bound;
+			copy.pruned = this.pruned;
 			return copy;
 		}
 
@@ -109,6 +126,23 @@ public final class TaskPlanner {
 			this.missing.clear();
 			this.missing.putAll(other.missing);
 			this.cycle = other.cycle;
+			// The bound belongs to this state's caller, not to the trial that is taken over.
+			this.pruned = other.pruned;
+		}
+
+		/** Abandons this plan once it scores no better than {@code best}. */
+		void boundBy(long[] best) {
+			if (this.bound == null || BY_SCORE.compare(best, this.bound) < 0) {
+				this.bound = best;
+			}
+		}
+
+		/** True when this plan is abandoned: it scores at least its bound already. */
+		boolean prune() {
+			if (!this.pruned && this.bound != null && BY_SCORE.compare(this.score(), this.bound) >= 0) {
+				this.pruned = true;
+			}
+			return this.pruned;
 		}
 
 		/** Lower is better: missing items are worst, then gathering, then crafting effort. */
@@ -146,8 +180,73 @@ public final class TaskPlanner {
 		return 0;
 	};
 
-	private record Search<I>(RecipeBook<I> book, Predicate<I> gatherable) {
-		void need(State<I> state, I item, int count, Set<I> path) {
+	/**
+	 * Everything {@link Search#need} decides depends on: the item, how many, the stock, whether
+	 * conversion recipes may make it and whether the plan is broken already.
+	 */
+	private record NeedKey<I>(I item, int count, Map<I, Integer> stock, boolean conversions, boolean cycle) {
+		static <I> NeedKey<I> of(State<I> state, I item, int count, boolean conversions) {
+			Map<I, Integer> stock = new HashMap<>();
+			state.stock.forEach((stocked, amount) -> {
+				if (amount > 0) {
+					stock.put(stocked, amount);
+				}
+			});
+			return new NeedKey<>(item, count, stock, conversions, state.cycle);
+		}
+	}
+
+	/** What one {@link Search#need} call added to the plan, to replay it when the same need comes up again. */
+	private record NeedResult<I>(Map<I, Integer> stock, List<Craft<I>> crafts, Map<I, Integer> gather, Map<I, Integer> missing, boolean cycle) {
+		static <I> NeedResult<I> between(State<I> before, State<I> after) {
+			return new NeedResult<>(Map.copyOf(after.stock), List.copyOf(after.crafts.subList(before.crafts.size(), after.crafts.size())),
+				difference(before.gather, after.gather), difference(before.missing, after.missing), after.cycle);
+		}
+
+		private static <I> Map<I, Integer> difference(Map<I, Integer> before, Map<I, Integer> after) {
+			Map<I, Integer> added = new LinkedHashMap<>();
+			after.forEach((item, amount) -> {
+				int more = amount - before.getOrDefault(item, 0);
+				if (more != 0) {
+					added.put(item, more);
+				}
+			});
+			return added;
+		}
+
+		void replay(State<I> state) {
+			state.stock.clear();
+			state.stock.putAll(this.stock);
+			state.crafts.addAll(this.crafts);
+			this.gather.forEach((item, amount) -> state.gather.merge(item, amount, Integer::sum));
+			this.missing.forEach((item, amount) -> state.missing.merge(item, amount, Integer::sum));
+			state.cycle = this.cycle;
+		}
+	}
+
+	/**
+	 * Tries the alternatives depth first. Each need is worked out once per stock: the answer is
+	 * remembered and replayed, so recipes that share ingredients do not search them again. A
+	 * remembered plan made while some items were off limits (being made further up) is still a
+	 * valid plan elsewhere; only a dead end caused by that is not remembered.
+	 *
+	 * @param conversionRecipes which recipes {@link #isConversion} found to be conversions
+	 * @param budget recipes still to expand, then the number of times the search ran into an item it is making
+	 */
+	private record Search<I>(RecipeBook<I> book, Predicate<I> gatherable, Map<NeedKey<I>, NeedResult<I>> memo,
+		Map<Recipe<I>, Boolean> conversionRecipes, int[] budget) {
+		private static final int LEFT = 0;
+		private static final int PATH_HITS = 1;
+
+		boolean exhausted() {
+			return this.budget[LEFT] <= 0;
+		}
+
+		/** @param conversions whether {@code item} may be made by a {@linkplain #isConversion conversion recipe} */
+		void need(State<I> state, I item, int count, Set<I> path, boolean conversions) {
+			if (state.prune()) {
+				return;
+			}
 			int remaining = count - state.take(item, count);
 			if (remaining == 0) {
 				return;
@@ -158,20 +257,54 @@ public final class TaskPlanner {
 			}
 			if (path.contains(item)) {
 				state.cycle = true;
+				this.budget[PATH_HITS]++;
 				return;
 			}
+			NeedKey<I> key = NeedKey.of(state, item, remaining, conversions);
+			NeedResult<I> known = this.memo.get(key);
+			if (known != null) {
+				known.replay(state);
+				return;
+			}
+			State<I> before = state.copy();
+			int pathHits = this.budget[PATH_HITS];
+			this.expand(state, item, remaining, path, conversions);
+			// Over the caller's bound, a trial the bound cut short might have been the better one:
+			// such an answer is abandoned, not remembered.
+			if (!state.prune() && (!state.cycle || this.budget[PATH_HITS] == pathHits)) {
+				this.memo.put(key, NeedResult.between(before, state));
+			}
+		}
 
+		void expand(State<I> state, I item, int remaining, Set<I> path, boolean conversions) {
 			// Break the item down when any recipe is usable, so the player sees which ingredients
-			// are missing; only report the item itself when nothing can make it.
+			// are missing; only report the item itself when nothing can make it. Once the budget
+			// is spent, no more recipes are tried and the item counts as missing.
 			State<I> best = null;
+			boolean pruned = false;
 			for (Recipe<I> recipe : this.book.recipesFor(item)) {
+				if (!conversions && this.isConversion(recipe)) {
+					continue;
+				}
+				if (this.exhausted()) {
+					break;
+				}
+				this.budget[LEFT]--;
 				State<I> trial = state.copy();
+				if (best != null) {
+					trial.boundBy(best.score());
+				}
 				this.craft(trial, recipe, remaining, path);
-				if (!trial.cycle && (best == null || BY_SCORE.compare(trial.score(), best.score()) < 0)) {
+				if (trial.pruned) {
+					pruned = true;
+				} else if (!trial.cycle && (best == null || BY_SCORE.compare(trial.score(), best.score()) < 0)) {
 					best = trial;
 				}
 			}
-			if (best == null) {
+			if (best == null && pruned) {
+				// Without a finished trial to bound them, the trials ran into the caller's bound.
+				state.pruned = true;
+			} else if (best == null) {
 				state.missing.merge(item, remaining, Integer::sum);
 			} else {
 				state.assign(best);
@@ -187,8 +320,13 @@ public final class TaskPlanner {
 			int times = (wanted + recipe.count() - 1) / recipe.count();
 			Set<I> innerPath = new HashSet<>(path);
 			innerPath.add(recipe.output());
+			// What a conversion recipe converts is never converted itself: converting it straight from the original is as good.
+			boolean conversions = !this.isConversion(recipe);
 			for (Map.Entry<Set<I>, Integer> ingredient : recipe.ingredients().entrySet()) {
-				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, innerPath);
+				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, innerPath, conversions);
+				if (state.pruned) {
+					return;
+				}
 			}
 			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count(), innerPath) : Map.of();
 			state.crafts.add(new Craft<>(recipe, times, fuel));
@@ -216,7 +354,7 @@ public final class TaskPlanner {
 					for (Recipe<I> recipe : this.book.recipesFor(item)) {
 						State<I> trial = state.copy();
 						Map<I, Integer> used = this.makeFuel(trial, smelts, rank, item, recipe, path);
-						if (used != null && !trial.cycle && BY_SCORE.compare(trial.fuelScore(), best.fuelScore()) < 0) {
+						if (used != null && !trial.cycle && !trial.pruned && BY_SCORE.compare(trial.fuelScore(), best.fuelScore()) < 0) {
 							best = trial;
 							bestUsed = used;
 						}
@@ -310,8 +448,30 @@ public final class TaskPlanner {
 			return false;
 		}
 
+		/**
+		 * A conversion recipe turns an item into one that can be turned back, possibly with other
+		 * ingredients: dyeing wool or a bed another colour, or packing ingots into a block.
+		 */
+		boolean isConversion(Recipe<I> recipe) {
+			return this.conversionRecipes.computeIfAbsent(recipe, r -> {
+				for (Set<I> ingredient : r.ingredients().keySet()) {
+					for (I item : ingredient) {
+						for (Recipe<I> back : this.book.recipesFor(item)) {
+							if (back.ingredients().keySet().stream().anyMatch(options -> options.contains(r.output()))) {
+								return true;
+							}
+						}
+					}
+				}
+				return false;
+			});
+		}
+
 		/** Needs {@code count} items, any mix of {@code options}. */
-		void needAny(State<I> state, Set<I> options, int count, Set<I> path) {
+		void needAny(State<I> state, Set<I> options, int count, Set<I> path, boolean conversions) {
+			if (state.pruned) {
+				return;
+			}
 			int remaining = count;
 			List<I> byStock = new ArrayList<>(options);
 			byStock.sort(Comparator.comparingInt((I option) -> state.stock.getOrDefault(option, 0)).reversed());
@@ -324,9 +484,16 @@ public final class TaskPlanner {
 
 			State<I> best = null;
 			for (I option : byStock) {
+				if (best != null && this.exhausted()) {
+					break;
+				}
 				State<I> trial = state.copy();
-				this.need(trial, option, remaining, path);
-				if (best == null || (best.cycle && !trial.cycle) || (best.cycle == trial.cycle && BY_SCORE.compare(trial.score(), best.score()) < 0)) {
+				if (best != null && !best.cycle && !best.pruned) {
+					trial.boundBy(best.score());
+				}
+				this.need(trial, option, remaining, path, conversions);
+				if (best == null || (best.pruned && !trial.pruned) || (!trial.pruned && ((best.cycle && !trial.cycle)
+					|| (best.cycle == trial.cycle && BY_SCORE.compare(trial.score(), best.score()) < 0)))) {
 					best = trial;
 				}
 			}

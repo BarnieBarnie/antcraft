@@ -1,12 +1,20 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.barniebarnie.antcraft.work.VanillaData;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class TaskPlannerTest {
@@ -280,5 +288,96 @@ class TaskPlannerTest {
 		assertEquals(16, step.times());
 		assertEquals(Map.of("oak_log", 11), step.fuel());
 		assertTrue(plan.isReady());
+	}
+
+	/** Well under a second, and far less than the search took before it was bounded (it never finished). */
+	private static final Duration QUICK = Duration.ofMillis(500);
+
+	@BeforeAll
+	static void loadVanillaData() {
+		// Bootstraps the registries and loads the vanilla recipes and tags, outside any test's time limit.
+		VanillaData.recipeBook();
+	}
+
+	private static TaskPlanner.Plan<Item> planVanilla(Item item, int count, Map<Item, Integer> stock) {
+		TaskPlanner.RecipeBook<Item> book = VanillaData.recipeBook();
+		return assertTimeoutPreemptively(QUICK, () -> TaskPlanner.plan(item, count, new HashMap<>(stock), book, VanillaData.gatherable()));
+	}
+
+	@Test
+	void plansAPickaxeWithTheRealRecipeBook() {
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.WOODEN_PICKAXE, 1, Map.of(Items.OAK_LOG, 2));
+
+		assertEquals(Items.WOODEN_PICKAXE, plan.crafts().getLast().recipe().output());
+		assertTrue(plan.isReady(), "plan: " + plan);
+	}
+
+	@Test
+	void plansABedFromNothingQuickly() {
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of());
+
+		assertEquals(Items.BED.red(), plan.crafts().getLast().recipe().output(), "plan: " + plan);
+		assertTrue(!plan.toGather().isEmpty(), "nothing in stock, so something has to be gathered: " + plan);
+	}
+
+	@Test
+	void plansABedFromWoolAndPlanks() {
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of(Items.WOOL.red(), 3, Items.OAK_PLANKS, 3));
+
+		assertEquals(1, plan.crafts().size(), "plan: " + plan);
+		assertEquals(Items.BED.red(), plan.crafts().getFirst().recipe().output());
+		assertTrue(plan.isReady(), "plan: " + plan);
+	}
+
+	@Test
+	void plansABedWithLotsOfStockQuickly() {
+		// A colony core full of wool, dye and wood gives every alternative recipe something to use.
+		Map<Item, Integer> stock = new HashMap<>();
+		Items.WOOL.forEach(wool -> stock.put(wool, 2));
+		stock.put(Items.STRING, 7);
+		stock.put(Items.POPPY, 1);
+		stock.put(Items.OAK_LOG, 5);
+		stock.put(Items.BIRCH_PLANKS, 1);
+
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, stock);
+
+		assertEquals(Items.BED.red(), plan.crafts().getLast().recipe().output(), "plan: " + plan);
+	}
+
+	/**
+	 * A made-up book that is deep and wide: every item has several recipes, each needing a few
+	 * ingredients that any of several items on the next level can stand in for.
+	 */
+	private static TaskPlanner.RecipeBook<String> wideBook(int depth, int width, int recipes) {
+		Map<String, List<TaskPlanner.Recipe<String>>> byOutput = new HashMap<>();
+		for (int level = 0; level < depth; level++) {
+			for (int i = 0; i < width; i++) {
+				String item = "item_" + level + "_" + i;
+				List<TaskPlanner.Recipe<String>> list = new ArrayList<>();
+				for (int r = 0; r < recipes; r++) {
+					Map<Set<String>, Integer> ingredients = new LinkedHashMap<>();
+					for (int slot = 0; slot < 2; slot++) {
+						Set<String> options = new java.util.HashSet<>();
+						for (int o = 0; o < 4; o++) {
+							options.add("item_" + (level + 1) + "_" + ((i + r + slot * 3 + o) % width));
+						}
+						ingredients.put(options, 1 + slot);
+					}
+					list.add(recipe(item, 1 + r % 3, ingredients));
+				}
+				byOutput.put(item, list);
+			}
+		}
+		return item -> byOutput.getOrDefault(item, List.of());
+	}
+
+	@Test
+	void deepAndWideRecipeBooksPlanQuickly() {
+		TaskPlanner.RecipeBook<String> book = wideBook(8, 8, 4);
+
+		TaskPlanner.Plan<String> plan = assertTimeoutPreemptively(QUICK,
+			() -> TaskPlanner.plan("item_0_0", 2, new HashMap<>(Map.of("item_3_1", 5, "item_5_2", 3)), book, item -> item.startsWith("item_8_")));
+
+		assertTrue(!plan.crafts().isEmpty() || !plan.missing().isEmpty(), "plan: " + plan);
 	}
 }
