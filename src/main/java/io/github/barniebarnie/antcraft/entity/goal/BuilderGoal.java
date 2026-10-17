@@ -71,12 +71,13 @@ import org.jspecify.annotations.Nullable;
  * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
  * While the colony has no miner it also digs out dig jobs (see {@link Digging}), and with one it
  * takes those its miners leave for water. A step any solid block will do, such as a terraform's
- * fill, takes whichever fill block there is, sand and gravel too. In a terraform it leaves lava and
+ * fill, takes whichever fill block there is, sand and gravel only where they rest on the block below
+ * and the step may fall, never for a mineshaft's walls. In a terraform it leaves lava and
  * the blocks holding it back alone, to be reported as blocked.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
-	private static final Set<Item> FILLERS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
+	private static final Set<Item> FILLERS = BuildPlan.HOLDING_FILL_BLOCKS;
 	/**
 	 * How far from a fire a block that burns can catch: fire spreads to air one block to the side,
 	 * one below or up to four above (see {@code FireBlock.tick}) that touches such a block.
@@ -148,7 +149,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}
 		Optional<BuildPlan> plan = colony.build(job.get().id());
 		boolean dig = isDig(job.get());
-		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig)).map(s -> this.withFiller(core, s));
+		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig)).map(s -> this.withFiller(level, core, s));
 		if (next.isEmpty()) {
 			// The scaffolding comes down first, while the job is still this builder's.
 			if (!this.bot.getScaffold().isEmpty()) {
@@ -203,19 +204,22 @@ public class BuilderGoal extends ColonyWorkGoal {
 	/**
 	 * {@code step}, or for a step any solid block will do, such as a terraform's fill, the same step
 	 * with a fill block such as cobblestone or sand that the bot or the core has, when neither has
-	 * the step's own block.
+	 * the step's own block. Sand and gravel only where the step may fall and rests on the block
+	 * below (see {@link BuildPlan.Step#fillBlocks}), so a mineshaft's wall never drops into the shaft.
 	 */
-	private BuildPlan.Step withFiller(@Nullable Container core, BuildPlan.Step step) {
+	private BuildPlan.Step withFiller(ServerLevel level, @Nullable Container core, BuildPlan.Step step) {
 		if (!step.anySolid() || this.has(core, stack -> stack.is(step.item()))) {
 			return step;
 		}
+		Set<Item> fillers = step.fillBlocks(level.getBlockState(step.pos().below()));
+		Predicate<ItemStack> usable = stack -> fillers.contains(stack.getItem());
 		SimpleContainer inventory = this.bot.getInventory();
-		int slot = findSlot(inventory, BuilderGoal::isFillBlock);
+		int slot = findSlot(inventory, usable);
 		Item filler = slot >= 0 ? inventory.getItem(slot).getItem() : null;
-		if (filler == null && core != null && (slot = findSlot(core, BuilderGoal::isFillBlock)) >= 0) {
+		if (filler == null && core != null && (slot = findSlot(core, usable)) >= 0) {
 			filler = core.getItem(slot).getItem();
 		}
-		return filler == null ? step : new BuildPlan.Step(step.pos(), Block.byItem(filler).defaultBlockState(), true);
+		return filler == null ? step : new BuildPlan.Step(step.pos(), Block.byItem(filler).defaultBlockState(), true, step.mayFall());
 	}
 
 	/** Every position a plan of the colony puts a block or clears, where scaffold must never go. */
@@ -268,7 +272,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			if (dig && Digging.isForLumberjacks(level, colony, planned.pos()) || leavesAlone(level, plan, planned)) {
 				return false;
 			}
-			BuildPlan.Step step = this.withFiller(core, planned);
+			BuildPlan.Step step = this.withFiller(level, core, planned);
 			if (step.needsClearing(current)) {
 				return WORKABLE.contains(this.clearing(level, core, step)) || this.fluidToWall(level, core, plan, step) != null;
 			}

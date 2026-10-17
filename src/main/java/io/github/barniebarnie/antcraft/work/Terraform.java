@@ -43,9 +43,13 @@ public final class Terraform {
 		return false;
 	}
 
-	/** A fill step: any block a bot can stand on will do, dirt if there is none (see {@link BuildPlan.Step#anySolid}). */
+	/**
+	 * A fill step: any block a bot can stand on will do, dirt if there is none (see
+	 * {@link BuildPlan.Step#anySolid}). Fills go in from the bottom up, so sand and gravel rest on
+	 * what is below and may stand in (see {@link BuildPlan.Step#mayFall}).
+	 */
 	public static BuildPlan.Step fill(BlockPos pos) {
-		return new BuildPlan.Step(pos, Blocks.DIRT.defaultBlockState(), true);
+		return new BuildPlan.Step(pos, Blocks.DIRT.defaultBlockState(), true, true);
 	}
 
 	/**

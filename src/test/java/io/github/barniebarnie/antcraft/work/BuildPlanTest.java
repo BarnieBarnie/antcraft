@@ -74,7 +74,36 @@ class BuildPlanTest {
 		BuildPlan plan = new BuildPlan(List.of(Terraform.fill(A), Terraform.fill(B), BuildPlan.Step.solid(C),
 			new BuildPlan.Step(D, Blocks.COBBLESTONE.defaultBlockState())));
 		// One is filled already, with sand.
-		assertEquals(Map.of(Items.DIRT, 1, Items.COBBLESTONE, 1), plan.fillMaterials(at(world(A, Blocks.SAND.defaultBlockState()))));
+		var world = at(world(A, Blocks.SAND.defaultBlockState()));
+		assertEquals(Map.of(Items.DIRT, 1), plan.fillMaterials(world, true), "fills that rest on what is below");
+		assertEquals(Map.of(Items.COBBLESTONE, 1), plan.fillMaterials(world, false), "fills that hold on their own");
+	}
+
+	@Test
+	void aBlockThatMustHoldOnItsOwnTakesNoFallingFiller() {
+		Set<net.minecraft.world.item.Item> falling = Set.of(Items.SAND, Items.RED_SAND, Items.GRAVEL);
+		Set<net.minecraft.world.item.Item> holding = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
+		BlockState stone = Blocks.STONE.defaultBlockState();
+		// A mineshaft's wall or ceiling: the cell below may be dug out later, so sand would fall into the shaft.
+		BuildPlan.Step wall = BuildPlan.Step.solid(A);
+		assertFalse(wall.mayFall());
+		assertEquals(holding, wall.fillBlocks(stone));
+		assertEquals(holding, wall.fillBlocks(Blocks.AIR.defaultBlockState()));
+		// A terraform's fill rests on the ground below it, so sand and gravel do there, but not over a gap.
+		BuildPlan.Step fill = Terraform.fill(A);
+		assertTrue(fill.mayFall());
+		assertEquals(BuildPlan.FILL_BLOCKS, fill.fillBlocks(stone));
+		assertTrue(fill.fillBlocks(stone).containsAll(falling));
+		for (BlockState gap : List.of(Blocks.AIR.defaultBlockState(), Blocks.WATER.defaultBlockState())) {
+			assertEquals(holding, fill.fillBlocks(gap), "falls through " + gap);
+		}
+		// Saved and loaded with the step; saves from before keep to the blocks that hold.
+		BuildPlan plan = new BuildPlan(List.of(fill, wall));
+		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, plan).getOrThrow();
+		assertEquals(plan, BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+		var old = BuildPlan.Step.CODEC.encodeStart(JsonOps.INSTANCE, fill).getOrThrow().getAsJsonObject();
+		old.remove("may_fall");
+		assertFalse(BuildPlan.Step.CODEC.parse(JsonOps.INSTANCE, old).getOrThrow().mayFall());
 	}
 
 	@Test
@@ -84,10 +113,26 @@ class BuildPlanTest {
 		Map<net.minecraft.world.item.Item, Integer> fills = Map.of(Items.DIRT, 5);
 		// The cobblestone beyond the wall's and the sand stand in for dirt; the stone is no fill block.
 		Map<net.minecraft.world.item.Item, Integer> have = Map.of(Items.COBBLESTONE, 3, Items.SAND, 2, Items.STONE, 9);
-		assertEquals(Map.of(Items.DIRT, 2), BuildPlan.shortfall(materials, fills, have));
-		assertEquals(Map.of(Items.COBBLESTONE, 1), BuildPlan.shortfall(Map.of(Items.COBBLESTONE, 2), Map.of(), Map.of(Items.COBBLESTONE, 1, Items.SAND, 9)),
+		assertEquals(Map.of(Items.DIRT, 2), BuildPlan.shortfall(materials, Map.of(), fills, have));
+		assertEquals(Map.of(Items.COBBLESTONE, 1), BuildPlan.shortfall(Map.of(Items.COBBLESTONE, 2), Map.of(), Map.of(), Map.of(Items.COBBLESTONE, 1, Items.SAND, 9)),
 			"a block placed as such takes no other");
-		assertEquals(Map.of(), BuildPlan.shortfall(materials, fills, Map.of(Items.COBBLESTONE, 2, Items.GRAVEL, 64)));
+		assertEquals(Map.of(), BuildPlan.shortfall(materials, Map.of(), fills, Map.of(Items.COBBLESTONE, 2, Items.GRAVEL, 64)));
+	}
+
+	@Test
+	void aMineshaftOrdersAFillerThatHoldsWhenTheColonyHasOnlyFallingOnes() {
+		// Three walls of a mineshaft, which must hold on their own.
+		Map<net.minecraft.world.item.Item, Integer> walls = Map.of(Items.COBBLESTONE, 3);
+		assertEquals(walls, BuildPlan.shortfall(walls, walls, Map.of(), Map.of(Items.SAND, 64, Items.GRAVEL, 9, Items.RED_SAND, 9)));
+		assertEquals(Map.of(Items.COBBLESTONE, 1), BuildPlan.shortfall(walls, walls, Map.of(), Map.of(Items.DIRT, 1, Items.COBBLED_DEEPSLATE, 1, Items.SAND, 64)));
+		// With a terraform's fill as well, the blocks that hold go to the walls and the sand to the fill.
+		Map<net.minecraft.world.item.Item, Integer> materials = Map.of(Items.COBBLESTONE, 2, Items.DIRT, 2);
+		Map<net.minecraft.world.item.Item, Integer> holding = Map.of(Items.COBBLESTONE, 2);
+		Map<net.minecraft.world.item.Item, Integer> resting = Map.of(Items.DIRT, 2);
+		assertEquals(Map.of(), BuildPlan.shortfall(materials, holding, resting, Map.of(Items.COBBLED_DEEPSLATE, 2, Items.SAND, 2)));
+		assertEquals(Map.of(Items.COBBLESTONE, 2), BuildPlan.shortfall(materials, holding, resting, Map.of(Items.SAND, 4)));
+		assertEquals(Map.of(Items.DIRT, 1), BuildPlan.shortfall(materials, holding, resting, Map.of(Items.COBBLED_DEEPSLATE, 3)),
+			"what holds is spare for the fill once the walls have theirs");
 	}
 
 	@Test

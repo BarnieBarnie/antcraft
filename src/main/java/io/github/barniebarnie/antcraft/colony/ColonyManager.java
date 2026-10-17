@@ -326,9 +326,10 @@ public class ColonyManager extends SavedData {
 		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for.
 		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream()
 			.map(plan -> plan.materials(level::getBlockState, step -> BuilderGoal.isPossible(level, step))).toList());
-		// Steps any solid block will do, such as a terraform's fill, take whichever fill block the colony has.
-		Map<Item, Integer> fills = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState)).toList());
-		Map<Item, Integer> needed = new HashMap<>(BuildPlan.shortfall(materials, fills, have));
+		// Steps any solid block will do take whichever fill block the colony has: a terraform's fill sand too, a mineshaft's wall only one that holds.
+		Map<Item, Integer> holding = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState, false)).toList());
+		Map<Item, Integer> resting = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState, true)).toList());
+		Map<Item, Integer> needed = new HashMap<>(BuildPlan.shortfall(materials, holding, resting, have));
 		// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
 		if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && have.getOrDefault(Items.BUCKET, 0) == 0) {
 			needed.put(Items.BUCKET, 1);

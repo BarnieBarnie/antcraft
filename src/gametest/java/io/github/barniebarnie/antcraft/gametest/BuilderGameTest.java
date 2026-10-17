@@ -481,28 +481,55 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A cave across the stairs at y=2 in deepslate, a builder carrying sand, and sand and dirt as the
+	 * core's fillers: the walls are dirt or the cobbled deepslate it digs, never sand, which would
+	 * fall into the shaft once the cell below is dug.
+	 */
+	@GameTest(maxTicks = 3600)
+	public void wallsAShaftThroughACaveWithFillersThatDoNotFall(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
+			helper.setBlock(pos, pos.getY() == 2 ? Blocks.AIR : Blocks.DEEPSLATE);
+		}
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 7, 7)) {
+				helper.assertFalse(helper.getBlockState(pos).is(Blocks.SAND), "sand placed at " + pos.immutable());
+			}
+		});
+		digsMineshaftAndWalksBackUp(helper, shaft, List.of(new ItemStack(Items.SAND, 64), new ItemStack(Items.DIRT, 64)),
+			List.of(new ItemStack(Items.SAND, 64)), () -> { });
+	}
+
 	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft) {
 		digsMineshaftAndWalksBackUp(helper, shaft, () -> { });
 	}
 
-	/**
-	 * Has a builder dig {@code shaft}, with torches, chests and cobblestone in the core, and then
-	 * walk back up the stairs as they are. Every stair and hall ends up dug, dry, lit and walled in,
-	 * and {@code also} holds.
-	 */
 	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft, Runnable also) {
+		digsMineshaftAndWalksBackUp(helper, shaft, List.of(new ItemStack(Items.COBBLESTONE, 64)), List.of(), also);
+	}
+
+	/**
+	 * Has a builder carrying {@code carried} dig {@code shaft}, with torches, chests and
+	 * {@code fillers} in the core, and then walk back up the stairs as they are. Every stair and
+	 * hall ends up dug, dry, lit and walled in, and {@code also} holds.
+	 */
+	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft, List<ItemStack> fillers, List<ItemStack> carried, Runnable also) {
 		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
 		colony.setStockTargets(List.of());
 		Container core = (Container) helper.getBlockEntity(MinerGameTest.MINE_CORE, BlockEntity.class);
 		core.setItem(0, new ItemStack(Items.TORCH, 8));
 		core.setItem(1, new ItemStack(Items.CHEST, 2));
-		core.setItem(2, new ItemStack(Items.COBBLESTONE, 64));
+		for (int i = 0; i < fillers.size(); i++) {
+			core.setItem(2 + i, fillers.get(i).copy());
+		}
 		colony.setMineshaft(shaft);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
 		builder.setRole(BotRole.BUILDER);
 		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		carried.forEach(stack -> builder.getInventory().addItem(stack.copy()));
 
 		BlockPos home = new BlockPos(1, 5, 1);
 		Set<?>[] dug = {null};

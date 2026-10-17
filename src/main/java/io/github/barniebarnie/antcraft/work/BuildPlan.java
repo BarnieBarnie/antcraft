@@ -19,6 +19,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
@@ -165,21 +166,39 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	/**
 	 * Clear the block at {@code pos} when {@code state} is air, otherwise place {@code state} there.
 	 * With {@code anySolid}, any block a bot can stand on will do, such as the rock a mineshaft's
-	 * walls and floors are; only air, a fluid or the like is replaced with {@code state}.
+	 * walls and floors are; only air, a fluid or the like is replaced with {@code state}. With
+	 * {@code mayFall} as well, a block that falls, such as sand, may stand in where it rests on
+	 * what is below (see {@link #fillBlocks}); without, the block must hold on its own, such as a
+	 * mineshaft's ceiling, or a wall the shaft is later dug out beside and below.
 	 */
-	public record Step(BlockPos pos, BlockState state, boolean anySolid) {
+	public record Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall) {
+		/** Saves from before {@code may_fall} take only fillers that hold, which is safe for any step. */
 		public static final Codec<Step> CODEC = RecordCodecBuilder.create(i -> i.group(
 			BlockPos.CODEC.fieldOf("pos").forGetter(Step::pos),
 			BlockState.CODEC.optionalFieldOf("state", Blocks.AIR.defaultBlockState()).forGetter(Step::state),
-			Codec.BOOL.optionalFieldOf("any_solid", false).forGetter(Step::anySolid)
+			Codec.BOOL.optionalFieldOf("any_solid", false).forGetter(Step::anySolid),
+			Codec.BOOL.optionalFieldOf("may_fall", false).forGetter(Step::mayFall)
 		).apply(i, Step::new));
 
 		public Step {
 			pos = pos.immutable();
 		}
 
+		public Step(BlockPos pos, BlockState state, boolean anySolid) {
+			this(pos, state, anySolid, false);
+		}
+
 		public Step(BlockPos pos, BlockState state) {
 			this(pos, state, false);
+		}
+
+		/**
+		 * The fill blocks that may stand in for this step's block, any solid block will do, with
+		 * {@code below} the block under it as it is now: {@link #FILL_BLOCKS} when it may fall and
+		 * {@code below} holds it up, otherwise only the {@link #HOLDING_FILL_BLOCKS}.
+		 */
+		public Set<Item> fillBlocks(BlockState below) {
+			return this.mayFall && !FallingBlock.isFree(below) ? FILL_BLOCKS : HOLDING_FILL_BLOCKS;
 		}
 
 		public static Step clear(BlockPos pos) {
@@ -339,11 +358,17 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 */
 	public static final Set<Item> FILL_BLOCKS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.SAND, Items.RED_SAND, Items.GRAVEL);
 
-	/** The part of {@link #materials(Function)} for steps any solid block will do, which a fill block of another kind can stand in for. */
-	public Map<Item, Integer> fillMaterials(Function<BlockPos, BlockState> world) {
+	/** The {@link #FILL_BLOCKS} that hold where they are placed, for a step whose block must not fall (see {@link Step#mayFall}). */
+	public static final Set<Item> HOLDING_FILL_BLOCKS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
+
+	/**
+	 * The part of {@link #materials(Function)} for steps any solid block will do, which a fill block
+	 * of another kind can stand in for: those that {@code mayFall}, or those that must hold.
+	 */
+	public Map<Item, Integer> fillMaterials(Function<BlockPos, BlockState> world, boolean mayFall) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
 		for (Step step : this.steps) {
-			if (step.anySolid() && !step.isPlaced(world.apply(step.pos()))) {
+			if (step.anySolid() && step.mayFall() == mayFall && !step.isPlaced(world.apply(step.pos()))) {
 				materials.merge(step.item(), 1, Integer::sum);
 			}
 		}
@@ -352,26 +377,44 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 
 	/**
 	 * What to order for {@code materials} beyond what the colony {@code has}. Of those, the steps any
-	 * solid block will do ({@code fills}) take whichever {@link #FILL_BLOCKS} the colony has to spare,
-	 * so only what all fill blocks together lack is ordered, as the step's own block.
+	 * solid block will do take the fill blocks the colony has to spare: those that must hold
+	 * ({@code holding}) only the {@link #HOLDING_FILL_BLOCKS}, and those that may fall
+	 * ({@code resting}) any of the {@link #FILL_BLOCKS}, sand and gravel first. Only what the fill
+	 * blocks lack is ordered, as the step's own block.
 	 */
-	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> fills, Map<Item, Integer> has) {
+	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
+			Map<Item, Integer> has) {
 		Map<Item, Integer> needed = new LinkedHashMap<>();
 		materials.forEach((item, count) -> {
 			if (count > has.getOrDefault(item, 0)) {
 				needed.put(item, count - has.getOrDefault(item, 0));
 			}
 		});
-		int spare = FILL_BLOCKS.stream().mapToInt(block -> Math.max(0, has.getOrDefault(block, 0) - materials.getOrDefault(block, 0))).sum();
+		int[] spareHolding = {spare(HOLDING_FILL_BLOCKS, materials, has)};
+		int[] spareFalling = {spare(FILL_BLOCKS, materials, has) - spareHolding[0]};
+		Map<Item, Integer> rest = new LinkedHashMap<>(resting);
+		cover(needed, new LinkedHashMap<>(holding), spareHolding);
+		cover(needed, rest, spareFalling);
+		cover(needed, rest, spareHolding);
+		needed.values().removeIf(count -> count <= 0);
+		return needed;
+	}
+
+	/** How many of {@code blocks} the colony {@code has} beyond what {@code materials} places as such. */
+	private static int spare(Set<Item> blocks, Map<Item, Integer> materials, Map<Item, Integer> has) {
+		return blocks.stream().mapToInt(block -> Math.max(0, has.getOrDefault(block, 0) - materials.getOrDefault(block, 0))).sum();
+	}
+
+	/** Takes what {@code fills} still need off {@code needed} and {@code fills}, using up {@code spare[0]} fill blocks. */
+	private static void cover(Map<Item, Integer> needed, Map<Item, Integer> fills, int[] spare) {
 		for (Map.Entry<Item, Integer> fill : fills.entrySet()) {
-			int cover = Math.min(spare, Math.min(fill.getValue(), needed.getOrDefault(fill.getKey(), 0)));
+			int cover = Math.min(spare[0], Math.min(fill.getValue(), needed.getOrDefault(fill.getKey(), 0)));
 			if (cover > 0) {
-				spare -= cover;
+				spare[0] -= cover;
+				fill.setValue(fill.getValue() - cover);
 				needed.merge(fill.getKey(), -cover, Integer::sum);
 			}
 		}
-		needed.values().removeIf(count -> count <= 0);
-		return needed;
 	}
 
 	/** Every item the plan places, with a water bucket for each waterlogged block and one flint and steel for all its fire. */
