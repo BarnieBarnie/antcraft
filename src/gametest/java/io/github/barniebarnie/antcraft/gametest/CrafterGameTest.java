@@ -19,10 +19,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
 
 public class CrafterGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CORE = new BlockPos(1, 1, 1);
@@ -243,6 +246,55 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
 			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 1, "core has " + core(helper).countItem(Items.OAK_LOG) + " logs");
 			helper.assertTrue(core(helper).countItem(Items.CHARCOAL) == 0, "charcoal left in core: " + core(helper).countItem(Items.CHARCOAL));
+		});
+	}
+
+	/** Fills every core slot not taken by {@code stacks} with full stacks of cobblestone. */
+	private static void fill(GameTestHelper helper, ItemStack... stacks) {
+		Container core = core(helper);
+		store(helper, stacks);
+		for (int i = stacks.length; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+		}
+	}
+
+	private static List<ItemEntity> looseItems(GameTestHelper helper) {
+		return helper.getLevel().getEntitiesOfClass(ItemEntity.class, AABB.encapsulatingFullBlocks(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(7, 7, 7))));
+	}
+
+	@GameTest(maxTicks = 450)
+	public void doesNotCraftIntoAFullCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)));
+		// Neither ingredient stack is used up, so a pickaxe has no slot to go to.
+		fill(helper, new ItemStack(Items.STICK, 64));
+		int cobblestone = core(helper).countItem(Items.COBBLESTONE);
+		AntBot crafter = crafter(helper, colony);
+
+		helper.runAtTickTime(400, () -> {
+			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == cobblestone, "crafter used cobblestone: " + core(helper).countItem(Items.COBBLESTONE));
+			helper.assertTrue(core(helper).countItem(Items.STICK) == 64, "crafter used sticks: " + core(helper).countItem(Items.STICK));
+			helper.assertTrue(crafter.getInventory().countItem(Items.STONE_PICKAXE) == 0, "crafter carries a pickaxe");
+			helper.assertTrue(looseItems(helper).isEmpty(), "items dropped: " + looseItems(helper));
+			helper.succeed();
+		});
+	}
+
+	@GameTest(maxTicks = 500)
+	public void furnaceOutputWaitsWhileTheCrafterCraftsWhatFits(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		helper.setBlock(CORE.east(), Blocks.FURNACE);
+		AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) helper.getBlockEntity(CORE.east(), BlockEntity.class);
+		furnace.setItem(2, new ItemStack(Items.IRON_INGOT, 5));
+		// The log's slot is free for the planks once the log is used; the ingots have nowhere to go.
+		fill(helper, new ItemStack(Items.OAK_LOG, 1));
+		colony.addOrder(Items.OAK_PLANKS, 4);
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.OAK_PLANKS) == 4, "core has " + core(helper).countItem(Items.OAK_PLANKS) + " planks");
+			helper.assertTrue(furnace.getItem(2).is(Items.IRON_INGOT) && furnace.getItem(2).getCount() == 5, "furnace output: " + furnace.getItem(2));
+			helper.assertTrue(looseItems(helper).isEmpty(), "items dropped: " + looseItems(helper));
 		});
 	}
 }

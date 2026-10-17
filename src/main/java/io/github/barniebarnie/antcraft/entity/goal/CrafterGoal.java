@@ -21,7 +21,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -37,7 +36,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Crafter work loop at the colony core: turn stored Bot Cores into new bots, and
  * work through colony orders one craft at a time, ingredients first. Smelting steps
- * run in a furnace next to the core; the crafter places one if there is none.
+ * run in a furnace next to the core; the crafter places one if there is none. A craft whose
+ * result has no room in the core waits, and so does furnace output, while other crafts go on.
  */
 public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final double REACH = 4.0;
@@ -131,7 +131,8 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 
 		AbstractFurnaceBlockEntity furnace = findFurnace(level, colony.core());
-		if (furnace != null && !furnace.getItem(FURNACE_RESULT).isEmpty()) {
+		// Output the core has no room for waits in the furnace.
+		if (furnace != null && !furnace.getItem(FURNACE_RESULT).isEmpty() && Storage.hasRoomFor(core, furnace.getItem(FURNACE_RESULT))) {
 			return () -> collect(colony, core, furnace);
 		}
 
@@ -156,15 +157,10 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 					if (smelt != null) {
 						return smelt;
 					}
-				} else if (Storage.canCraft(core, craft.recipe(), 1)) {
+				} else if (Storage.canCraft(core, craft.recipe(), 1) && Storage.fits(core, craft.recipe())) {
 					return () -> {
-						ItemStack leftover = Storage.craft(core, craft.recipe());
-						if (craft.recipe().output() == order.getKey()) {
+						if (Storage.craft(core, craft.recipe()) && craft.recipe().output() == order.getKey()) {
 							colony.fulfil(order.getKey(), craft.recipe().count());
-						}
-						if (!leftover.isEmpty()) {
-							BlockPos above = colony.core().above();
-							Containers.dropItemStack(level, above.getX() + 0.5, above.getY(), above.getZ() + 0.5, leftover);
 						}
 					};
 				}
@@ -222,14 +218,8 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		TaskPlanner.Plan<Item> plan = TaskPlanner.plan(Items.FURNACE, 1, Storage.stock(core), book, Gatherables::isGatherable);
 		for (TaskPlanner.Craft<Item> craft : plan.crafts()) {
-			if (!craft.recipe().smelting() && Storage.canCraft(core, craft.recipe(), 1)) {
-				return () -> {
-					ItemStack leftover = Storage.craft(core, craft.recipe());
-					if (!leftover.isEmpty()) {
-						BlockPos above = colony.core().above();
-						Containers.dropItemStack(level, above.getX() + 0.5, above.getY(), above.getZ() + 0.5, leftover);
-					}
-				};
+			if (!craft.recipe().smelting() && Storage.canCraft(core, craft.recipe(), 1) && Storage.fits(core, craft.recipe())) {
+				return () -> Storage.craft(core, craft.recipe());
 			}
 		}
 		return null;

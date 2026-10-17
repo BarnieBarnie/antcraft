@@ -290,6 +290,9 @@ public class ColonyStatusScreen extends Screen {
 			Component givenUp = list(status.givenUp().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.given_up", givenUp), RED));
 		}
+		if (status.room().coreFull()) {
+			lines.add(new Line(Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), RED));
+		}
 		return lines;
 	}
 

@@ -91,6 +91,16 @@ class RoleAssignerTest {
 	}
 
 	@Test
+	void aNearlyFullCoreGetsAHaulerBeforeTheStarterRoster() {
+		// A full core stalls every role that deposits, the starter roles included.
+		assertEquals(BotRole.HAULER, RoleAssigner.choose(Map.of(BotRole.CRAFTER, 1), Map.of(JobType.CHOP_TREE, 5), false, true, true));
+		// One is enough; then the roster goes on.
+		assertEquals(BotRole.LUMBERJACK, RoleAssigner.choose(Map.of(BotRole.CRAFTER, 1, BotRole.HAULER, 1), Map.of(JobType.CHOP_TREE, 5), false, true, true));
+		// Needed for other reasons, such as a landing chest to empty, a hauler waits for the roster.
+		assertEquals(BotRole.LUMBERJACK, RoleAssigner.choose(Map.of(BotRole.CRAFTER, 1), Map.of(JobType.CHOP_TREE, 5), false, true, false));
+	}
+
+	@Test
 	void idleWorkerBecomesHaulerWhenOneIsNeeded() {
 		assertEquals(BotRole.HAULER, RoleAssigner.reassign(BotRole.MINER, false, IDLE, Map.of(BotRole.MINER, 2, BotRole.CRAFTER, 4), Map.of(), false, true));
 	}

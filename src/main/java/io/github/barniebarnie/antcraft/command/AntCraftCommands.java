@@ -174,6 +174,9 @@ public final class AntCraftCommands {
 			String givenUp = String.join(", ", status.givenUp().stream().map(BlockPos::toShortString).toList());
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.given_up", givenUp), false);
 		}
+		if (status.room().coreFull()) {
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), false);
+		}
 		return status.members();
 	}
 

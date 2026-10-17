@@ -24,17 +24,47 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * A snapshot of what a colony is doing: its bots, jobs, stock, orders and builds, the build steps that are
- * blocked and the trees given up on with logs out of reach. {@code /antcraft colony info}
+ * blocked, the trees given up on with logs out of reach, and the room left in its core. {@code /antcraft colony info}
  * prints it and the colony status screen shows it, so the two cannot disagree.
  */
 public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<BotRole, Integer> roles, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
-		List<Build> builds, List<BlockPos> blocked, List<BlockPos> givenUp) {
+		List<Build> builds, List<BlockPos> blocked, List<BlockPos> givenUp, Room room) {
+
+	/** Why the storage area cannot take what the core has no room for, if it cannot. */
+	public enum StorageState {
+		READY("commands.antcraft.colony.storage.ready"),
+		NO_HAULER("commands.antcraft.colony.storage.no_hauler"),
+		NO_SITE("commands.antcraft.colony.storage.no_site"),
+		NO_CHEST("commands.antcraft.colony.storage.no_chest");
+
+		private final String key;
+
+		StorageState(String key) {
+			this.key = key;
+		}
+
+		/** The lang key that says it. */
+		public String key() {
+			return this.key;
+		}
+	}
+
+	/** How many slots the core has free, and whether storage can take the overflow. */
+	public record Room(int freeSlots, StorageState storage) {
+		public boolean coreFull() {
+			return this.freeSlots == 0;
+		}
+
+		static final StreamCodec<ByteBuf, Room> STREAM_CODEC = StreamCodec.composite(
+			ByteBufCodecs.VAR_INT, Room::freeSlots, enumCodec(StorageState.values()), Room::storage, Room::new);
+	}
 
 	/** A loaded member bot; {@code setByPlayer} when a player chose its role, so the colony leaves it. */
 	public record Bot(String name, BotRole role, boolean idle, boolean setByPlayer) {
@@ -93,6 +123,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		Build.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::builds,
 		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
 		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
+		Room.STREAM_CODEC, ColonyStatus::room,
 		ColonyStatus::new);
 
 	private static <E extends Enum<E>> StreamCodec<ByteBuf, E> enumCodec(E[] values) {
@@ -121,17 +152,30 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 					bot.isRoleSetByPlayer()));
 			}
 		}
-		Map<Item, Integer> stock = Storage.containerAt(level, colony.core()) == null ? Map.of() : Storage.colonyStock(level, colony);
-		return of(colony, bots, stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable, level::getBlockState);
+		Container core = Storage.containerAt(level, colony.core());
+		Map<Item, Integer> stock = core == null ? Map.of() : Storage.colonyStock(level, colony);
+		int freeSlots = core == null ? 0 : freeSlots(core);
+		boolean chestWithRoom = Storage.storageChests(level, colony).values().stream().anyMatch(chest -> freeSlots(chest) > 0);
+		return of(colony, bots, stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable, level::getBlockState, freeSlots, chestWithRoom);
+	}
+
+	private static int freeSlots(Container container) {
+		int free = 0;
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			free += container.getItem(i).isEmpty() ? 1 : 0;
+		}
+		return free;
 	}
 
 	/**
 	 * @param bots the colony's members that are loaded
 	 * @param stock what the colony holds
 	 * @param world the block at a position, to tell which build steps are done
+	 * @param coreFreeSlots how many slots the core has free
+	 * @param chestWithRoom whether a storage chest has a free slot
 	 */
 	public static ColonyStatus of(Colony colony, Map<UUID, Bot> bots, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
-			Predicate<Item> gatherable, Function<BlockPos, BlockState> world) {
+			Predicate<Item> gatherable, Function<BlockPos, BlockState> world, int coreFreeSlots, boolean chestWithRoom) {
 		Map<BotRole, Integer> roles = new EnumMap<>(BotRole.class);
 		Map<UUID, Bot> loaded = new LinkedHashMap<>();
 		int idle = 0;
@@ -183,7 +227,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 			builds.add(new Build(plan.target(), left, plan.steps().size(), mineshaft));
 		}
 
+		StorageState storage = roles.getOrDefault(BotRole.HAULER, 0) == 0 ? StorageState.NO_HAULER
+			: colony.storage().isEmpty() ? StorageState.NO_SITE
+			: !chestWithRoom ? StorageState.NO_CHEST
+			: StorageState.READY;
+
 		return new ColonyStatus(colony.core(), colony.members().size(), loaded, roles, idle, colony.radius(), open, claimed, stocks, orders, builds,
-			colony.blockedSteps(), givenUp);
+			colony.blockedSteps(), givenUp, new Room(coreFreeSlots, storage));
 	}
 }

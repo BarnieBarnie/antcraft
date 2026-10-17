@@ -38,6 +38,18 @@ public final class RoleAssigner {
 	 * @param needsHauler whether the core is nearly full, storage holds items the core needs, or a mineshaft landing chest holds items
 	 */
 	public static BotRole choose(Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders, boolean needsHauler) {
+		return choose(roles, openJobs, hasOrders, needsHauler, false);
+	}
+
+	/**
+	 * As {@link #choose(Map, Map, boolean, boolean)}, but a nearly full core gets a hauler before the
+	 * starter roster: it stalls every role that deposits.
+	 */
+	public static BotRole choose(Map<BotRole, Integer> roles, Map<JobType, Integer> openJobs, boolean hasOrders, boolean needsHauler,
+			boolean coreNearlyFull) {
+		if (coreNearlyFull && roles.getOrDefault(BotRole.HAULER, 0) == 0) {
+			return BotRole.HAULER;
+		}
 		int assigned = roles.entrySet().stream().filter(role -> role.getKey() != BotRole.NONE).mapToInt(Map.Entry::getValue).sum();
 		if (assigned < STARTER_ROSTER.size()) {
 			Optional<BotRole> starter = STARTER_ROSTER.stream().filter(role -> roles.getOrDefault(role, 0) == 0).findFirst();

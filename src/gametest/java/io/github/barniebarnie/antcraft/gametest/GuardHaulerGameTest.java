@@ -22,10 +22,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.phys.AABB;
 
 public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CORE = new BlockPos(1, 1, 1);
@@ -192,6 +194,42 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(brought[0], "storage never ordered a chest");
 			helper.assertTrue(!colony.orders().containsKey(Items.CHEST), "chest order left: " + colony.orders());
+		});
+	}
+
+	/**
+	 * A colony whose core is full and that has no storage area: it needs a hauler, a site and a chest,
+	 * and the chest has no slot in the core to be crafted into. Inside the walls the only flat site
+	 * clear of the core is the rows z=4 and z=6.
+	 */
+	@GameTest(maxTicks = 1500)
+	public void aFullCoreGetsAHaulerAndAStorageChest(GameTestHelper helper) {
+		BlockPos corePos = new BlockPos(2, 1, 2);
+		helper.setBlock(corePos, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(corePos)).orElseThrow();
+		colony.setRadius(5);
+		colony.setStockTargets(List.of());
+		Container core = (Container) helper.getBlockEntity(corePos, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_PLANKS, 64));
+		for (int i = 1; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+		}
+		member(helper, colony, BotRole.CRAFTER);
+		AntBot newcomer = member(helper, colony, BotRole.NONE);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(newcomer.getRole() == BotRole.HAULER, "newcomer is a " + newcomer.getRole());
+			helper.assertTrue(colony.storage().isPresent(), "no storage area");
+			List<Container> chests = storageChests(helper, colony);
+			helper.assertTrue(!chests.isEmpty(), "no storage chest placed");
+			int free = 0;
+			for (int i = 0; i < core.getContainerSize(); i++) {
+				free += core.getItem(i).isEmpty() ? 1 : 0;
+			}
+			helper.assertTrue(free > 0, "core still full");
+			List<ItemEntity> loose = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+				AABB.encapsulatingFullBlocks(helper.absolutePos(BlockPos.ZERO), helper.absolutePos(new BlockPos(7, 7, 7))));
+			helper.assertTrue(loose.isEmpty(), "items dropped: " + loose);
 		});
 	}
 

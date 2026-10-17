@@ -167,25 +167,56 @@ public final class Storage {
 	}
 
 	/**
-	 * Takes the ingredients for one craft out of the container and puts the result in.
-	 * Whatever does not fit is returned for the caller to carry or drop.
+	 * Whether the result of one craft fits in the container once the ingredients are taken out, so a
+	 * craft that uses up a whole stack has that slot for its result.
 	 */
-	public static ItemStack craft(Container container, TaskPlanner.Recipe<Item> recipe) {
-		if (!canCraft(container, recipe, 1)) {
-			return ItemStack.EMPTY;
+	public static boolean fits(Container container, TaskPlanner.Recipe<Item> recipe) {
+		List<ItemStack> slots = new ArrayList<>();
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			slots.add(container.getItem(i).copy());
 		}
+		takeIngredients(slots, recipe);
+		ItemStack result = new ItemStack(recipe.output(), recipe.count());
+		int room = 0;
+		for (ItemStack slot : slots) {
+			if (slot.isEmpty()) {
+				room += result.getMaxStackSize();
+			} else if (ItemStack.isSameItemSameComponents(slot, result)) {
+				room += Math.max(0, slot.getMaxStackSize() - slot.getCount());
+			}
+		}
+		return room >= result.getCount();
+	}
+
+	/**
+	 * Takes the ingredients for one craft out of the container and puts the result in. Does nothing
+	 * and returns false if the container lacks an ingredient or has no room for the result.
+	 */
+	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe) {
+		if (!canCraft(container, recipe, 1) || !fits(container, recipe)) {
+			return false;
+		}
+		List<ItemStack> slots = new ArrayList<>();
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			slots.add(container.getItem(i));
+		}
+		takeIngredients(slots, recipe);
+		HopperBlockEntity.addItem(null, container, new ItemStack(recipe.output(), recipe.count()), null);
+		container.setChanged();
+		return true;
+	}
+
+	/** Shrinks the stacks by the ingredients of one craft, first slots first. */
+	private static void takeIngredients(List<ItemStack> slots, TaskPlanner.Recipe<Item> recipe) {
 		for (Map.Entry<Set<Item>, Integer> ingredient : recipe.ingredients().entrySet()) {
 			int needed = ingredient.getValue();
-			for (int i = 0; i < container.getContainerSize() && needed > 0; i++) {
-				ItemStack stack = container.getItem(i);
+			for (int i = 0; i < slots.size() && needed > 0; i++) {
+				ItemStack stack = slots.get(i);
 				if (ingredient.getKey().contains(stack.getItem())) {
 					needed -= stack.split(needed).getCount();
 				}
 			}
 		}
-		ItemStack leftover = HopperBlockEntity.addItem(null, container, new ItemStack(recipe.output(), recipe.count()), null);
-		container.setChanged();
-		return leftover;
 	}
 
 	/** Removes up to {@code count} of an item; returns how many were removed. */

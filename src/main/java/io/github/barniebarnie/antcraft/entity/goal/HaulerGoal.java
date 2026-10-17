@@ -34,7 +34,9 @@ import org.jspecify.annotations.Nullable;
  * Hauler work loop: pick up loose items around the colony and store them in the core, and keep
  * the core at its working stock. What the core holds above that goes to the storage chests, one
  * category per chest; what the core is short of (stock targets, ingredients for open orders) comes
- * back. Haulers place the storage chests themselves, from chests the colony survey orders.
+ * back. Haulers place the storage chests themselves, from chests the colony survey orders. While
+ * the core is full and the storage area still waits for a chest, a hauler holds a stack of surplus
+ * so the chest has a slot to be crafted into.
  */
 public class HaulerGoal extends ColonyWorkGoal {
 	private static final int MIN_FREE_SLOTS = 1;
@@ -87,6 +89,10 @@ public class HaulerGoal extends ColonyWorkGoal {
 	private @Nullable Trip trip;
 	private boolean loaded;
 	private int tripTicks;
+	/** Surplus the hauler is on its way to take out of a full core, or null. */
+	private @Nullable Item clearing;
+	/** Surplus the hauler took out of a full core, which it keeps out of the core until storage takes it. */
+	private @Nullable Item holding;
 
 	public HaulerGoal(AntBot bot) {
 		super(bot, BotRole.HAULER);
@@ -102,10 +108,33 @@ public class HaulerGoal extends ColonyWorkGoal {
 			|| Storage.landingChests(level, colony).values().stream().anyMatch(chest -> !chest.isEmpty()));
 	}
 
+	/** Whether the core has so few free slots left that it stalls the roles that deposit. */
+	public static boolean coreNearlyFull(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		return core != null && freeSlots(core) <= NEARLY_FULL_FREE_SLOTS;
+	}
+
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
+		SimpleContainer inventory = this.bot.getInventory();
+		if (this.holding != null && inventory.countItem(this.holding) == 0) {
+			this.holding = null;
+		}
 		if (this.trip != null) {
 			this.runTrip(level);
+			return;
+		}
+		if (this.clearing != null) {
+			Container core = Storage.containerAt(level, colony.core());
+			if (core == null) {
+				this.clearing = null;
+				this.cooldown = IDLE_TICKS;
+			} else if (this.reach(colony.core())) {
+				Item surplus = this.clearing;
+				Storage.moveItems(core, inventory, stack -> stack.is(surplus), surplus.getDefaultMaxStackSize());
+				this.holding = surplus;
+				this.clearing = null;
+			}
 			return;
 		}
 		if (this.depositing) {
@@ -114,14 +143,13 @@ public class HaulerGoal extends ColonyWorkGoal {
 				this.depositing = false;
 				this.cooldown = IDLE_TICKS;
 			} else if (this.reach(colony.core())) {
-				Storage.moveItems(this.bot.getInventory(), core, stack -> true);
+				Storage.moveItems(inventory, core, this::deposits);
 				this.depositing = false;
 				this.unreachableItems.clear();
 			}
 			return;
 		}
 
-		SimpleContainer inventory = this.bot.getInventory();
 		ItemEntity nearest = freeSlots(inventory) < MIN_FREE_SLOTS ? null : level.getEntitiesOfClass(ItemEntity.class,
 				new AABB(colony.core()).inflate(colony.radius()),
 				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && this.bot.wantsToPickUp(level, item.getItem()))
@@ -130,7 +158,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 			.orElse(null);
 		if (nearest == null) {
 			Container core = Storage.containerAt(level, colony.core());
-			if (core != null && hasRoomForAny(core, inventory)) {
+			if (core != null && this.hasRoomForAny(core, inventory)) {
 				this.depositing = true;
 				return;
 			}
@@ -141,7 +169,10 @@ public class HaulerGoal extends ColonyWorkGoal {
 			this.tripTicks = 0;
 			if (this.trip == null) {
 				colony.tripClaims().release(this.bot.getUUID());
-				this.cooldown = IDLE_TICKS;
+				this.clearing = this.surplusToHold(level, colony);
+				if (this.clearing == null) {
+					this.cooldown = IDLE_TICKS;
+				}
 			} else if (leftovers == null) {
 				// Kept until the hauler plans its next trip, so it goes on with this one.
 				colony.tripClaims().claim(this.bot.getUUID(), this.trip.source(), level.getGameTime() + TRIP_TICKS);
@@ -153,14 +184,38 @@ public class HaulerGoal extends ColonyWorkGoal {
 		}
 	}
 
-	private static boolean hasRoomForAny(Container core, Container inventory) {
+	/** Whether the hauler puts the stack in the core when it deposits: not the surplus it holds to keep a slot free. */
+	private boolean deposits(ItemStack stack) {
+		return this.holding == null || !stack.is(this.holding);
+	}
+
+	private boolean hasRoomForAny(Container core, Container inventory) {
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (!stack.isEmpty() && Storage.hasRoomFor(core, stack)) {
+			if (!stack.isEmpty() && this.deposits(stack) && Storage.hasRoomFor(core, stack)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Surplus to take out of the core and hold, so the chest the storage area waits for can be crafted:
+	 * when the core has no free slot, the area has a free chest spot and the core holds no chest. Null
+	 * if there is no need, or the hauler has no room to spare (it keeps a slot for the chest).
+	 */
+	private @Nullable Item surplusToHold(ServerLevel level, Colony colony) {
+		Stocks stocks = colony.storage().isEmpty() ? null : Stocks.of(level, colony);
+		if (stocks == null || freeSlots(stocks.core()) > 0 || stocks.inCore().getOrDefault(Items.CHEST, 0) > 0
+				|| freeSlots(this.bot.getInventory()) < 2 || freeSpots(level, colony, stocks).findFirst().isEmpty()) {
+			return null;
+		}
+		Map<Item, Integer> surplus = stocks.toStore();
+		if (this.holding != null && surplus.containsKey(this.holding)) {
+			return this.holding;
+		}
+		// Holds one kind at a time, so the rest of its inventory still deposits.
+		return this.holding == null ? surplus.keySet().stream().findFirst().orElse(null) : null;
 	}
 
 	/** A storage chest for something the hauler carries, to take it straight there; null if none has room. */

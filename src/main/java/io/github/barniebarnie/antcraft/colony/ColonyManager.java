@@ -313,10 +313,11 @@ public class ColonyManager extends SavedData {
 
 		boolean hasOrders = !colony.orders().isEmpty();
 		boolean needsHauler = HaulerGoal.needsHauler(level, colony);
+		boolean coreNearlyFull = HaulerGoal.coreNearlyFull(level, colony);
 		for (AntBot bot : members) {
 			BotRole current = bot.getRole();
 			BotRole role = current == BotRole.NONE
-				? RoleAssigner.choose(roles, openJobs, hasOrders, needsHauler)
+				? RoleAssigner.choose(roles, openJobs, hasOrders, needsHauler, coreNearlyFull)
 				: RoleAssigner.reassign(current, bot.isRoleSetByPlayer(), bot.getIdleTicks(), roles, openJobs, hasOrders, needsHauler);
 			if (role == current) {
 				continue;
