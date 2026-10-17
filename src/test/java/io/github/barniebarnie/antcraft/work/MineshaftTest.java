@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
@@ -205,5 +206,39 @@ class MineshaftTest {
 		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(storage.area(), field.area()));
 		assertFalse(shaft.area().intersects(storage.area()), "shaft overlaps storage at " + shaft.top());
 		assertFalse(shaft.area().intersects(field.area()), "shaft overlaps the field at " + shaft.top());
+	}
+
+	/** The positions of a batch's steps. */
+	private static Set<BlockPos> batch(Mineshaft shaft, int batch) {
+		return shaft.plan().batch(batch).steps().stream().map(BuildPlan.Step::pos).collect(Collectors.toSet());
+	}
+
+	@Test
+	void planIsBatchedPerStairSegmentAndPerHall() {
+		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
+		// Stairs down to y=8, its hall, the stairs on down to y=6, its hall.
+		assertEquals(List.of(
+			new BuildPlan.Batch(0, 9, List.of()),
+			new BuildPlan.Batch(9, 16, List.of(0)),
+			new BuildPlan.Batch(16, 22, List.of(0)),
+			new BuildPlan.Batch(22, 29, List.of(2))), shaft.plan().batches());
+
+		Set<BlockPos> firstStairs = new HashSet<>();
+		shaft.stairs().subList(0, 3).forEach(stair -> IntStream.range(0, 3).forEach(up -> firstStairs.add(stair.above(up))));
+		assertEquals(firstStairs, batch(shaft, 0));
+		Set<BlockPos> firstHall = new HashSet<>(Set.of(shaft.landingChest(8)));
+		shaft.hall(8).forEach(cell -> firstHall.addAll(List.of(cell, cell.above())));
+		assertEquals(firstHall, batch(shaft, 1));
+		assertTrue(batch(shaft, 2).contains(shaft.landing(6)), "the second stair segment does not reach the landing");
+		assertTrue(batch(shaft, 3).containsAll(shaft.hall(6)) && batch(shaft, 3).contains(shaft.landingChest(6)), "second hall not one batch");
+	}
+
+	@Test
+	void aHallWaitsForTheStairsThatReachIt() {
+		BuildPlan plan = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4).plan();
+		assertEquals(List.of(0), plan.ready(Set.of()));
+		// Once the stairs reach y=8, its hall and the stairs on down can be dug at the same time.
+		assertEquals(List.of(1, 2), plan.ready(Set.of(0)));
+		assertEquals(List.of(1, 3), plan.ready(Set.of(0, 2)));
 	}
 }

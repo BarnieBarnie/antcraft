@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.colony;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.mojang.datafixers.util.Either;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -69,6 +70,21 @@ public class Colony {
 		}
 	}
 
+	/** How far builders got with a batch of a plan; a batch not started yet has none. */
+	enum BatchState implements StringRepresentable {
+		/** Worked through as far as it goes, it waits for items or a fluid; the batches that need it may start. */
+		WAITING,
+		/** Finished: not posted again. */
+		DONE;
+
+		static final Codec<BatchState> CODEC = StringRepresentable.fromEnum(BatchState::values);
+
+		@Override
+		public String getSerializedName() {
+			return this.name().toLowerCase(Locale.ROOT);
+		}
+	}
+
 	/** A block a build plan placed; an empty block is not known yet, from an old save. */
 	record Placed(BlockPos pos, Optional<Block> block) {
 		static final Codec<Placed> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -77,7 +93,7 @@ public class Colony {
 		).apply(i, Placed::new));
 	}
 
-	/** A step of the plan with id {@code plan} that a builder could not do. */
+	/** A step that a builder could not do, of the batch of build job {@code plan} (named so before plans had batches). */
 	record Blocked(UUID plan, BlockPos pos) {
 		static final Codec<Blocked> CODEC = RecordCodecBuilder.create(i -> i.group(
 			UUIDUtil.STRING_CODEC.fieldOf("plan").forGetter(Blocked::plan),
@@ -104,7 +120,8 @@ public class Colony {
 		// Saves from before storage orders hold only the build part, under its own key.
 		ITEM_COUNTS.optionalFieldOf("build_orders", Map.of()).forGetter(c -> Map.of()),
 		BLOCKED.optionalFieldOf("blocked_steps", List.of()).forGetter(c -> c.blockedSteps),
-		SYSTEM_ORDERS.optionalFieldOf("system_orders", Map.of()).forGetter(c -> c.systemOrders)
+		SYSTEM_ORDERS.optionalFieldOf("system_orders", Map.of()).forGetter(c -> c.systemOrders),
+		Codec.unboundedMap(UUIDUtil.STRING_CODEC, BatchState.CODEC).optionalFieldOf("batches", Map.of()).forGetter(c -> c.batchStates)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -117,8 +134,12 @@ public class Colony {
 	/** The mineshaft's stair floors and torches, which bots leave standing. */
 	private Set<BlockPos> shaftBlocks;
 	private final List<StockTarget> stock;
-	/** Build plans by the id of their build job, so plans that start at the same spot get a job each. */
+	/** Build plans by id, so plans that start at the same spot get jobs of their own. */
 	private final Map<UUID, BuildPlan> builds;
+	/** The plan and batch of each build job, by job id; see {@link #batchId}. Kept up to date with {@link #builds}. */
+	private final Map<UUID, BatchRef> batchJobs = new HashMap<>();
+	/** How far builders got with the batch of each build job, so the batches that need it get posted; dropped with their plan. */
+	private final Map<UUID, BatchState> batchStates;
 	/** Blocks build plans placed, by position, which bots leave standing while they are there; a null block is adopted on first check. */
 	private final Map<BlockPos, Block> protectedBlocks = new HashMap<>();
 	private Optional<Field> field;
@@ -136,6 +157,15 @@ public class Colony {
 			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
 			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<Blocked> blockedSteps,
 			Map<OrderPurpose, Map<Item, Integer>> systemOrders) {
+		this(id, core, members, board, radius, orders, mineshaft, stock, builds, protectedBlocks, field, storage, buildOrders, blockedSteps,
+			systemOrders, Map.of());
+	}
+
+	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
+			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
+			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<Blocked> blockedSteps,
+			Map<OrderPurpose, Map<Item, Integer>> systemOrders, Map<UUID, BatchState> batchStates) {
+		this.batchStates = new HashMap<>(batchStates);
 		systemOrders.forEach((purpose, counts) -> this.systemOrders.put(purpose, new LinkedHashMap<>(counts)));
 		buildOrders.forEach((item, count) -> this.part(OrderPurpose.BUILD).merge(item, count, Integer::sum));
 		this.blockedSteps = new ArrayList<>(blockedSteps);
@@ -151,6 +181,7 @@ public class Colony {
 		this.shaftBlocks = mineshaft.map(Mineshaft::protectedBlocks).orElse(Set.of());
 		this.stock = new ArrayList<>(stock);
 		this.builds = new LinkedHashMap<>(builds);
+		this.indexBatches();
 		protectedBlocks.forEach(placed -> this.protectedBlocks.put(placed.pos(), placed.block().orElse(null)));
 	}
 
@@ -165,34 +196,131 @@ public class Colony {
 		return this.builds.entrySet().stream().filter(e -> !this.isBlocked(e.getKey())).map(Map.Entry::getValue).toList();
 	}
 
+	/** Whether a batch of the plan with id {@code plan} has blocked steps. */
 	private boolean isBlocked(UUID plan) {
-		return this.blockedSteps.stream().anyMatch(blocked -> blocked.plan().equals(plan));
+		return this.blockedSteps.stream().anyMatch(blocked -> this.planOf(blocked.plan()).equals(plan));
+	}
+
+	/** A batch of a plan, by the plan's id and the batch's index. */
+	private record BatchRef(UUID plan, int index) {
+	}
+
+	/**
+	 * The id of the build job for a batch of a plan. The first batch's is the plan's own id, so jobs
+	 * and blocked steps saved from before plans had batches still match.
+	 */
+	private static UUID batchId(UUID plan, int index) {
+		return index == 0 ? plan : UUID.nameUUIDFromBytes((plan + "/" + index).getBytes(StandardCharsets.UTF_8));
+	}
+
+	private void indexBatches() {
+		this.batchJobs.clear();
+		this.builds.forEach((id, plan) -> {
+			for (int i = 0; i < plan.batches().size(); i++) {
+				this.batchJobs.put(batchId(id, i), new BatchRef(id, i));
+			}
+		});
+	}
+
+	/** The id of the plan a build job's batch belongs to, or the job's own id if it has no plan. */
+	private UUID planOf(UUID job) {
+		BatchRef batch = this.batchJobs.get(job);
+		return batch == null ? job : batch.plan();
+	}
+
+	/** The batches of the plan with id {@code id} in {@code state}, by index. */
+	private Set<Integer> batches(UUID id, BuildPlan plan, BatchState state) {
+		Set<Integer> batches = new HashSet<>();
+		for (int i = 0; i < plan.batches().size(); i++) {
+			if (this.batchStates.get(batchId(id, i)) == state) {
+				batches.add(i);
+			}
+		}
+		return batches;
+	}
+
+	private List<Integer> ready(UUID id, BuildPlan plan) {
+		return plan.ready(this.batches(id, plan, BatchState.DONE), this.batches(id, plan, BatchState.WAITING));
+	}
+
+	/** Where the batch of build job {@code job} comes in its plan, so builders take a plan's batches in order; 0 for any other job. */
+	public int batchIndex(UUID job) {
+		BatchRef batch = this.batchJobs.get(job);
+		return batch == null ? 0 : batch.index();
 	}
 
 	public void addBuild(BuildPlan plan) {
 		this.builds.put(UUID.randomUUID(), plan);
+		this.indexBatches();
 		this.lastSurvey = -1;
 	}
 
-	/** Drops the plan, finished or cancelled; the next survey withdraws its job and what it ordered. */
+	/** Drops the plan, finished or cancelled, with the open jobs of its batches; the next survey withdraws what it ordered. */
 	public void removeBuild(BuildPlan plan) {
-		this.builds.values().remove(plan);
+		this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst().ifPresent(this::removePlan);
+	}
+
+	private void removePlan(UUID id) {
+		Set<UUID> jobs = new HashSet<>();
+		for (int i = 0; i < this.builds.get(id).batches().size(); i++) {
+			jobs.add(batchId(id, i));
+		}
+		this.builds.remove(id);
+		this.indexBatches();
+		this.batchStates.keySet().removeAll(jobs);
+		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && jobs.contains(job.id()));
 		this.lastSurvey = -1;
 	}
 
-	/** The plan a build job is for. */
+	/** The batch a build job is for, as a plan of its own. */
 	public Optional<BuildPlan> build(UUID job) {
-		return Optional.ofNullable(this.builds.get(job));
+		return Optional.ofNullable(this.batchJobs.get(job)).map(batch -> this.builds.get(batch.plan()).batch(batch.index()));
 	}
 
-	/** Posts a build job for each plan, keyed by the plan, and drops open jobs of plans that are gone or blocked. */
+	/**
+	 * Records that a builder finished the batch of build job {@code job}, and posts the batches that
+	 * were waiting for it. Once every batch of its plan is done, the plan is finished and dropped.
+	 */
+	public void finishBatch(UUID job) {
+		BatchRef batch = this.batchJobs.get(job);
+		if (batch == null) {
+			return;
+		}
+		this.batchStates.put(job, BatchState.DONE);
+		BuildPlan plan = this.builds.get(batch.plan());
+		if (this.batches(batch.plan(), plan, BatchState.DONE).size() == plan.batches().size()) {
+			this.removePlan(batch.plan());
+		} else {
+			this.postBuildJobs();
+		}
+	}
+
+	/**
+	 * Records that the batch of build job {@code job} waits for items or a fluid with the rest of it
+	 * worked through, so the batches that need it may start, such as a hall once the stairs reaching
+	 * it are dug but not lit yet. The batch stays posted to be finished.
+	 */
+	public void batchWaiting(UUID job) {
+		if (this.batchJobs.containsKey(job) && this.batchStates.putIfAbsent(job, BatchState.WAITING) == null) {
+			this.postBuildJobs();
+		}
+	}
+
+	/**
+	 * Posts a build job for each batch whose needed batches are done or waiting, and drops open jobs of batches
+	 * that are gone, done, or of a plan that is blocked.
+	 */
 	public void postBuildJobs() {
-		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && (!this.builds.containsKey(job.id()) || this.isBlocked(job.id())));
+		Set<UUID> ready = new HashSet<>();
 		this.builds.forEach((id, plan) -> {
 			if (!this.isBlocked(id)) {
-				this.board.post(id, JobType.BUILD, plan.target());
+				this.ready(id, plan).forEach(i -> ready.add(batchId(id, i)));
 			}
 		});
+		this.board.removeOpenIf(job -> job.type() == JobType.BUILD && !ready.contains(job.id()));
+		this.builds.forEach((id, plan) -> this.ready(id, plan).stream()
+			.filter(i -> ready.contains(batchId(id, i)))
+			.forEach(i -> this.board.post(batchId(id, i), JobType.BUILD, plan.batch(i).target())));
 	}
 
 	private Map<Item, Integer> part(OrderPurpose purpose) {
@@ -236,28 +364,31 @@ public class Colony {
 		return this.blockedSteps.stream().map(Blocked::pos).toList();
 	}
 
-	/** Records the steps of the plan with id {@code plan} that a builder cannot do; the plan waits without a job until a recheck frees it. */
-	public void reportBlocked(UUID plan, Collection<BlockPos> steps) {
-		steps.stream().map(pos -> new Blocked(plan, pos.immutable())).filter(b -> !this.blockedSteps.contains(b)).forEach(this.blockedSteps::add);
+	/**
+	 * Records the steps of the batch of build job {@code job} that a builder cannot do; its whole
+	 * plan waits without jobs until a recheck frees it.
+	 */
+	public void reportBlocked(UUID job, Collection<BlockPos> steps) {
+		steps.stream().map(pos -> new Blocked(job, pos.immutable())).filter(b -> !this.blockedSteps.contains(b)).forEach(this.blockedSteps::add);
 	}
 
 	/**
 	 * Drops blocked steps whose plan is gone, and those that are done or that {@code workable}
 	 * says a builder could do now. A plan with such a step gets all its blocked steps dropped, so
-	 * it gets a job again and its builder reports whatever is still blocked. {@code world} gives
+	 * it gets jobs again and its builders report whatever is still blocked. {@code world} gives
 	 * null where it cannot tell, such as in unloaded chunks.
 	 */
 	public void recheckBlocked(Function<BlockPos, @Nullable BlockState> world, Predicate<BuildPlan.Step> workable) {
 		Set<UUID> freed = new HashSet<>();
 		for (Blocked blocked : this.blockedSteps) {
-			Optional<BuildPlan.Step> step = Optional.ofNullable(this.builds.get(blocked.plan()))
+			Optional<BuildPlan.Step> step = this.build(blocked.plan())
 				.flatMap(plan -> plan.steps().stream().filter(s -> s.pos().equals(blocked.pos())).findFirst());
 			BlockState state = world.apply(blocked.pos());
 			if (step.isEmpty() || state != null && (step.get().isDone(state) || workable.test(step.get()))) {
-				freed.add(blocked.plan());
+				freed.add(this.planOf(blocked.plan()));
 			}
 		}
-		if (this.blockedSteps.removeIf(blocked -> freed.contains(blocked.plan()))) {
+		if (this.blockedSteps.removeIf(blocked -> freed.contains(this.planOf(blocked.plan())))) {
 			this.lastSurvey = -1;
 		}
 	}
@@ -265,7 +396,8 @@ public class Colony {
 	/** Gives up on every blocked step and the plans waiting on them. Returns how many steps there were. */
 	public int clearBlocked() {
 		int count = this.blockedSteps.size();
-		this.blockedSteps.forEach(blocked -> this.builds.remove(blocked.plan()));
+		this.blockedSteps.stream().map(blocked -> this.planOf(blocked.plan())).distinct().filter(this.builds::containsKey).toList()
+			.forEach(this::removePlan);
 		this.blockedSteps.clear();
 		this.lastSurvey = -1;
 		return count;

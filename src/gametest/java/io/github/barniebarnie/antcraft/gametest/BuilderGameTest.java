@@ -16,6 +16,7 @@ import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -416,6 +417,42 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			}
 			helper.assertFalse(colony.builds().isEmpty(), "plan dropped while torches and chests are still to place");
 			helper.assertTrue(colony.orders().containsKey(Items.TORCH) && colony.orders().containsKey(Items.CHEST), "not ordered: " + colony.orders());
+		});
+	}
+
+	/** Once the stairs reach the first landing, one builder digs its hall while the other digs on down. */
+	@GameTest(maxTicks = 2400)
+	public void twoBuildersDigOneShaftTogether(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
+		colony.setStockTargets(List.of());
+		Container core = (Container) helper.getBlockEntity(MinerGameTest.MINE_CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.TORCH, 8));
+		core.setItem(1, new ItemStack(Items.CHEST, 2));
+		colony.setMineshaft(shaft);
+		List<AntBot> builders = new ArrayList<>();
+		for (BlockPos at : List.of(new BlockPos(1, 5, 1), new BlockPos(1, 5, 5))) {
+			AntBot builder = helper.spawn(ModEntities.ANT_BOT, at.getX(), at.getY(), at.getZ());
+			ColonyManager.get(helper.getLevel()).join(builder, colony);
+			builder.setRole(BotRole.BUILDER);
+			builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+			builders.add(builder);
+		}
+
+		boolean[] together = {false};
+		helper.onEachTick(() -> {
+			if (builders.stream().allMatch(builder -> colony.board().jobOf(builder.getUUID()).isPresent())) {
+				together[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(together[0], "the builders never dug at the same time");
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished, next step " + shaft.plan().nextStep(helper.getLevel()::getBlockState));
+			helper.assertTrue(shaft.plan().nextStep(helper.getLevel()::getBlockState).isEmpty(), "plan dropped before it was done");
+			for (int level : shaft.levels()) {
+				helper.assertTrue(helper.getLevel().getBlockState(shaft.landingChest(level)).is(Blocks.CHEST), "no chest at landing " + level);
+			}
 		});
 	}
 

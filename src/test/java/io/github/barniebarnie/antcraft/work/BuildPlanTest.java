@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
@@ -9,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -226,6 +228,68 @@ class BuildPlanTest {
 	@Test
 	void survivesCodecRoundTrip() {
 		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, plan()).getOrThrow();
+		assertEquals(plan(), BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+	}
+	@Test
+	void aPlanIsOneBatchUnlessSplit() {
+		assertEquals(List.of(new BuildPlan.Batch(0, 4, List.of())), plan().batches());
+		assertEquals(plan(), plan().batch(0));
+		assertEquals(List.of(0), plan().ready(Set.of()));
+		assertEquals(List.of(), plan().ready(Set.of(0)));
+	}
+
+	/** {@link #plan} split in three: A and B first, then C and D each on their own once those are done. */
+	private static BuildPlan batched() {
+		return new BuildPlan(plan().steps(), List.of(
+			new BuildPlan.Batch(0, 2, List.of()),
+			new BuildPlan.Batch(2, 3, List.of(0)),
+			new BuildPlan.Batch(3, 4, List.of(0))));
+	}
+
+	@Test
+	void aBatchIsReadyOnceTheBatchesItNeedsAreDone() {
+		BuildPlan plan = batched();
+		assertEquals(List.of(0), plan.ready(Set.of()));
+		assertEquals(List.of(1, 2), plan.ready(Set.of(0)));
+		assertEquals(List.of(2), plan.ready(Set.of(0, 1)));
+		assertEquals(List.of(), plan.ready(Set.of(0, 1, 2)));
+	}
+
+	@Test
+	void aBatchWaitingForItemsLetsTheBatchesThatNeedItStart() {
+		BuildPlan plan = batched();
+		// Batch 0 is dug, but waits for an item: it stays to be finished, and the rest may start.
+		assertEquals(List.of(0, 1, 2), plan.ready(Set.of(), Set.of(0)));
+		assertEquals(List.of(1, 2), plan.ready(Set.of(0), Set.of()));
+	}
+
+	@Test
+	void aBatchIsAPlanOfItsOwnSteps() {
+		BuildPlan plan = batched();
+		assertEquals(new BuildPlan(plan.steps().subList(0, 2)), plan.batch(0));
+		assertEquals(new BuildPlan(List.of(plan.steps().get(2))), plan.batch(1));
+		assertEquals(C, plan.batch(1).target());
+	}
+
+	@Test
+	void batchesMustCoverEveryStepInOrderAndNeedOnlyEarlierBatches() {
+		List<BuildPlan.Step> steps = plan().steps();
+		assertThrows(IllegalArgumentException.class, () -> new BuildPlan(steps, List.of(new BuildPlan.Batch(0, 3, List.of()))));
+		assertThrows(IllegalArgumentException.class, () -> new BuildPlan(steps,
+			List.of(new BuildPlan.Batch(0, 2, List.of()), new BuildPlan.Batch(3, 4, List.of()))));
+		assertThrows(IllegalArgumentException.class, () -> new BuildPlan(steps,
+			List.of(new BuildPlan.Batch(0, 2, List.of(1)), new BuildPlan.Batch(2, 4, List.of()))));
+	}
+
+	@Test
+	void batchesSurviveCodecRoundTrip() {
+		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, batched()).getOrThrow();
+		assertEquals(batched(), BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+	}
+
+	@Test
+	void plansSavedAsAListOfStepsStillLoad() {
+		var json = BuildPlan.Step.CODEC.listOf().encodeStart(JsonOps.INSTANCE, plan().steps()).getOrThrow();
 		assertEquals(plan(), BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
 	}
 }

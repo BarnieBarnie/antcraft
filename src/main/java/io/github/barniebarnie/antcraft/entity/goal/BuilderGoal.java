@@ -46,8 +46,8 @@ import net.minecraft.world.level.material.Fluids;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Builder work loop: claim a build job and work through its plan step by step. For each block
- * to place it fetches what the plan still needs of it from the core; steps whose item the core
+ * Builder work loop: claim a build job, a batch of a plan (see {@link BuildPlan.Batch}), and work through it step by step. For each block
+ * to place it fetches what the batch still needs of it from the core; steps whose item the core
  * lacks wait while the rest goes on. It places blocks only where no bot or mob stands, and blocks
  * it places are protected from other bots. It digs with the best pickaxe in the core, such as
  * down a mineshaft, and orders one if it has none and a plan has such digging to do. Fluids in the
@@ -113,7 +113,9 @@ public class BuilderGoal extends ColonyWorkGoal {
 		Container core = Storage.containerAt(level, colony.core());
 		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.BUILD), this.bot.blockPosition(), level.getGameTime(),
 			// A plan left only with steps it cannot clear is claimed too, to be finished and reported.
-			open -> colony.build(open.id()).filter(plan -> this.nextStep(level, colony, core, plan).isPresent() || !this.isWaiting(level, colony, core, plan)).isPresent());
+			open -> colony.build(open.id()).filter(plan -> this.nextStep(level, colony, core, plan).isPresent() || !this.isWaiting(level, colony, core, plan)).isPresent(),
+			// A plan's batches in order where it can, so a lone builder digs a mineshaft from the top down.
+			open -> colony.batchIndex(open.id()));
 		this.hasJob = job.isPresent();
 		if (job.isEmpty()) {
 			if (!this.bot.getScaffold().isEmpty()) {
@@ -384,20 +386,21 @@ public class BuilderGoal extends ColonyWorkGoal {
 	}
 
 	/**
-	 * Nothing in the plan can be worked on now. With nothing left the plan is finished; with only
+	 * Nothing in the batch can be worked on now. With nothing left the batch is done, and the plan with its last batch; with only
 	 * blocks or fluids it cannot clear left in the way those steps are reported, and the plan waits
 	 * for the colony to find them workable again. While it waits for materials, which the colony
-	 * orders, the job is freed for later.
+	 * orders, the job is freed for later, and the batches that need this one may start meanwhile.
 	 */
 	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan) {
 		if (plan.isPresent() && this.isWaiting(level, colony, core, plan.get())) {
+			colony.batchWaiting(job.id());
 			colony.board().release(this.bot.getUUID());
 			this.cooldown = IDLE_TICKS;
 		} else {
 			plan.ifPresent(p -> {
 				List<BlockPos> blocked = p.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).map(BuildPlan.Step::pos).toList();
 				if (blocked.isEmpty()) {
-					colony.removeBuild(p);
+					colony.finishBatch(job.id());
 				} else {
 					colony.reportBlocked(job.id(), blocked);
 				}

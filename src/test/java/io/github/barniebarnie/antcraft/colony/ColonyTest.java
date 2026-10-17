@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
@@ -347,5 +348,137 @@ class ColonyTest {
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(Optional.of(SHAFT), loaded.mineshaft());
 		assertTrue(loaded.isProtected(AIR, SHAFT.stairs().getLast().below()));
+	}
+
+	/** Two levels: its stairs to y=62 (batch 0), that hall (1), the stairs on to y=60 (2) and that hall (3). */
+	private static final Mineshaft TWO_LEVELS = new Mineshaft(new BlockPos(2, 64, 2), List.of(62, 60), 1, 3, 4);
+	private static final UUID ALICE = UUID.randomUUID();
+	private static final UUID BOB = UUID.randomUUID();
+
+	/** The plan batches the open build jobs are for. */
+	private static Set<BuildPlan> openBatches(Colony colony) {
+		return colony.board().jobs().stream().filter(job -> job.type() == JobType.BUILD && job.isOpen())
+			.map(job -> colony.build(job.id()).orElseThrow()).collect(Collectors.toSet());
+	}
+
+	private static Job claim(Colony colony, UUID bot) {
+		return colony.board().claim(bot, Set.of(JobType.BUILD), new BlockPos(2, 64, 2), 0).orElseThrow();
+	}
+
+	@Test
+	void aMineshaftPostsABatchOnlyOnceTheBatchesItNeedsAreDone() {
+		Colony colony = colony();
+		colony.setMineshaft(TWO_LEVELS);
+		colony.postBuildJobs();
+		// The halls wait for the stairs to reach them.
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(0)), openBatches(colony));
+		Job stairs = claim(colony, ALICE);
+		assertTrue(colony.board().claim(BOB, Set.of(JobType.BUILD), BlockPos.ZERO, 0).isEmpty(), "a second builder found work");
+
+		colony.finishBatch(stairs.id());
+		colony.board().complete(stairs.id());
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(colony));
+		Job a = claim(colony, ALICE);
+		Job b = claim(colony, BOB);
+		assertNotEquals(a.id(), b.id());
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)),
+			Set.of(colony.build(a.id()).orElseThrow(), colony.build(b.id()).orElseThrow()));
+	}
+
+	@Test
+	void stairsWaitingForTheirTorchesLetTheHallAndTheStairsBelowStart() {
+		Colony colony = colony();
+		colony.setMineshaft(TWO_LEVELS);
+		colony.postBuildJobs();
+		Job stairs = claim(colony, ALICE);
+		// Dug, but the colony has no torches yet.
+		colony.batchWaiting(stairs.id());
+		colony.board().release(ALICE);
+		colony.postBuildJobs();
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(0), TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(colony));
+
+		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		loaded.postBuildJobs();
+		assertEquals(openBatches(colony), openBatches(loaded), "waiting batch not saved as such");
+		// Finished once its torches came, it is not posted again.
+		loaded.finishBatch(stairs.id());
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(loaded));
+	}
+
+	@Test
+	void earlierBatchesRankFirst() {
+		Colony colony = halfwayDown();
+		Set<Integer> ranks = colony.board().jobs().stream().map(job -> colony.batchIndex(job.id())).collect(Collectors.toSet());
+		assertEquals(Set.of(1, 2), ranks);
+		assertEquals(0, colony.batchIndex(UUID.randomUUID()));
+	}
+
+	@Test
+	void thePlanIsFinishedOnlyOnceEveryBatchIsDone() {
+		Colony colony = colony();
+		colony.setMineshaft(TWO_LEVELS);
+		colony.postBuildJobs();
+		for (int left = TWO_LEVELS.plan().batches().size(); left > 0; left--) {
+			assertEquals(List.of(TWO_LEVELS.plan()), colony.builds(), "plan finished with " + left + " batches left");
+			Job job = claim(colony, ALICE);
+			colony.finishBatch(job.id());
+			colony.board().complete(job.id());
+		}
+		assertTrue(colony.builds().isEmpty(), "finished plan still listed");
+		colony.postBuildJobs();
+		assertTrue(colony.board().jobs().isEmpty(), "jobs left: " + colony.board().jobs());
+	}
+
+	/** A colony digging {@link #TWO_LEVELS}, its stairs to the first level done, so two batches are open. */
+	private static Colony halfwayDown() {
+		Colony colony = colony();
+		colony.setMineshaft(TWO_LEVELS);
+		colony.postBuildJobs();
+		Job stairs = claim(colony, ALICE);
+		colony.finishBatch(stairs.id());
+		colony.board().complete(stairs.id());
+		return colony;
+	}
+
+	@Test
+	void movingTheMineshaftClearsTheOpenBatchesOfTheOldOne() {
+		Colony colony = halfwayDown();
+		Mineshaft moved = new Mineshaft(new BlockPos(10, 64, 10), List.of(62, 60), 1, 3, 4);
+		colony.setMineshaft(moved);
+		assertEquals(Set.of(), openBatches(colony), "old batches left open");
+		colony.postBuildJobs();
+		assertEquals(Set.of(moved.plan().batch(0)), openBatches(colony));
+	}
+
+	@Test
+	void cancellingAPlanClearsAllItsOpenBatches() {
+		Colony colony = halfwayDown();
+		colony.removeBuild(TWO_LEVELS.plan());
+		assertTrue(colony.board().jobs().isEmpty(), "batches left: " + colony.board().jobs());
+		// Added again, it starts from the first batch.
+		colony.addBuild(TWO_LEVELS.plan());
+		colony.postBuildJobs();
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(0)), openBatches(colony));
+	}
+
+	@Test
+	void batchProgressAndClaimsSurviveSaveAndLoad() {
+		Colony colony = halfwayDown();
+		Job claimed = claim(colony, BOB);
+		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+
+		assertEquals(colony.build(claimed.id()), loaded.build(claimed.id()));
+		assertEquals(Optional.of(claimed.id()), loaded.board().jobOf(BOB).map(Job::id));
+		loaded.postBuildJobs();
+		// The stairs already dug are not posted again.
+		assertEquals(colony.board().jobs().stream().map(Job::id).collect(Collectors.toSet()),
+			loaded.board().jobs().stream().map(Job::id).collect(Collectors.toSet()));
+		Job other = claim(loaded, ALICE);
+		loaded.finishBatch(claimed.id());
+		loaded.finishBatch(other.id());
+		loaded.postBuildJobs();
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(3)), openBatches(loaded));
 	}
 }

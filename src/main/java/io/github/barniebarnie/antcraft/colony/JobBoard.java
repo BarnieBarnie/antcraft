@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
 
@@ -91,6 +92,14 @@ public class JobBoard {
 	 * The bot's current job is given back whether it is ready or not.
 	 */
 	public Optional<Job> claim(UUID bot, Set<JobType> types, BlockPos from, long now, Predicate<Job> ready) {
+		return this.claim(bot, types, from, now, ready, job -> 0);
+	}
+
+	/**
+	 * Like {@link #claim(UUID, Set, BlockPos, long, Predicate)}, but claims the open job with the
+	 * lowest {@code rank} first, and the nearest of those, such as the first batch of a build plan.
+	 */
+	public Optional<Job> claim(UUID bot, Set<JobType> types, BlockPos from, long now, Predicate<Job> ready, ToIntFunction<Job> rank) {
 		Optional<Job> current = this.jobOf(bot);
 		if (current.isPresent()) {
 			this.heartbeat(bot, now);
@@ -98,7 +107,7 @@ public class JobBoard {
 		}
 		Optional<Job> nearest = this.jobs.stream()
 			.filter(job -> job.isOpen() && job.notBefore() <= now && types.contains(job.type()) && ready.test(job))
-			.min(Comparator.comparingDouble(job -> job.target().distSqr(from)));
+			.min(Comparator.comparingInt(rank).thenComparingDouble(job -> job.target().distSqr(from)));
 		nearest.ifPresent(job -> this.replace(job, job.claim(bot, now)));
 		return nearest.flatMap(job -> this.jobOf(bot));
 	}

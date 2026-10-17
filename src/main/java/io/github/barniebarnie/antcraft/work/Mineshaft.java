@@ -153,9 +153,17 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return List.copyOf(torches);
 	}
 
-	/** Digs the stairs from the top down, each landing's hall as it is reached, with torches. */
+	/**
+	 * Digs the stairs from the top down, each landing's hall as it is reached, with torches. Each
+	 * stretch of stairs down to a landing is a batch, and so is each hall with its chest: once the
+	 * stairs reach a landing, one builder can dig its hall while another digs on down.
+	 */
+	// ponytail: one batch per hall; split it per branch pair if a level ever needs more hands.
 	public BuildPlan plan() {
 		Map<BlockPos, BuildPlan.Step> steps = new LinkedHashMap<>();
+		List<BuildPlan.Batch> batches = new ArrayList<>();
+		// The stairs batch before the one being dug, if any.
+		List<Integer> above = List.of();
 		Set<BlockPos> torches = Set.copyOf(this.torches());
 		List<BlockPos> stairs = this.stairs();
 		for (int i = 0; i < stairs.size(); i++) {
@@ -165,6 +173,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 				this.dig(steps, stair.above(up), torches);
 			}
 			if (i > 0 && this.levels.contains(stair.getY())) {
+				above = this.batch(batches, steps.size(), above);
 				for (BlockPos cell : this.hall(stair.getY())) {
 					this.dig(steps, cell.above(), torches);
 					this.dig(steps, cell, torches);
@@ -172,9 +181,19 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 				// Facing the landing, where miners and haulers use it.
 				BlockState chest = Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, this.chestSide(stair.getY()).getOpposite());
 				steps.put(this.landingChest(stair.getY()), new BuildPlan.Step(this.landingChest(stair.getY()), chest));
+				this.batch(batches, steps.size(), above);
 			}
 		}
-		return new BuildPlan(List.copyOf(steps.values()));
+		if (batches.isEmpty() || batches.getLast().to() < steps.size()) {
+			this.batch(batches, steps.size(), above);
+		}
+		return new BuildPlan(List.copyOf(steps.values()), batches);
+	}
+
+	/** Ends a batch at step {@code to}, needing the batches {@code needs}; returns it as what the next batch may need. */
+	private List<Integer> batch(List<BuildPlan.Batch> batches, int to, List<Integer> needs) {
+		batches.add(new BuildPlan.Batch(batches.isEmpty() ? 0 : batches.getLast().to(), to, needs));
+		return List.of(batches.size() - 1);
 	}
 
 	private void dig(Map<BlockPos, BuildPlan.Step> steps, BlockPos pos, Set<BlockPos> torches) {

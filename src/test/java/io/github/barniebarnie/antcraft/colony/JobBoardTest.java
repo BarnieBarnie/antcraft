@@ -68,6 +68,34 @@ class JobBoardTest {
 	}
 
 	@Test
+	void jobsPostedByIdGoToDifferentBotsEvenAtOneTarget() {
+		// Batches of one build plan, each its own job.
+		JobBoard board = new JobBoard();
+		UUID stairs = UUID.randomUUID();
+		UUID hall = UUID.randomUUID();
+		board.post(stairs, JobType.BUILD, new BlockPos(3, 1, 0));
+		board.post(hall, JobType.BUILD, new BlockPos(3, 1, 0));
+		assertTrue(board.post(hall, JobType.BUILD, new BlockPos(5, 1, 0)).isEmpty(), "same batch posted twice");
+
+		Set<UUID> claimed = Set.of(board.claim(ALICE, Set.of(JobType.BUILD), BlockPos.ZERO, 0).orElseThrow().id(),
+			board.claim(BOB, Set.of(JobType.BUILD), BlockPos.ZERO, 0).orElseThrow().id());
+		assertEquals(Set.of(stairs, hall), claimed);
+	}
+
+	@Test
+	void claimTakesTheBestRankedJobBeforeTheNearest() {
+		JobBoard board = new JobBoard();
+		UUID near = UUID.randomUUID();
+		UUID first = UUID.randomUUID();
+		board.post(near, JobType.BUILD, new BlockPos(1, 1, 0));
+		board.post(first, JobType.BUILD, new BlockPos(9, 1, 0));
+		Job claimed = board.claim(ALICE, Set.of(JobType.BUILD), BlockPos.ZERO, 0, job -> true, job -> job.id().equals(first) ? 0 : 1).orElseThrow();
+		assertEquals(first, claimed.id());
+		// Equally ranked, the nearest goes first.
+		assertEquals(near, board.claim(BOB, Set.of(JobType.BUILD), BlockPos.ZERO, 0, job -> true, job -> 0).orElseThrow().id());
+	}
+
+	@Test
 	void claimingAgainReturnsTheSameJob() {
 		JobBoard board = new JobBoard();
 		board.post(JobType.CHOP_TREE, new BlockPos(3, 1, 0));

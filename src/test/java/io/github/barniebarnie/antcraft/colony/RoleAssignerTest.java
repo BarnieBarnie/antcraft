@@ -154,6 +154,17 @@ class RoleAssignerTest {
 	}
 
 	@Test
+	void idleWorkersBecomeBuildersWhileBuildBatchesAreOpen() {
+		// A mineshaft's stairs and a hall open at once: one builder is busy, so idle bots lend a hand.
+		Map<BotRole, Integer> roles = staffed(BotRole.LUMBERJACK, 3, BotRole.MINER, 2, BotRole.BUILDER, 1);
+		Map<JobType, Integer> batches = Map.of(JobType.BUILD, 2);
+		assertEquals(BotRole.BUILDER, RoleAssigner.reassign(BotRole.LUMBERJACK, false, IDLE, roles, batches, false, false));
+		assertEquals(BotRole.BUILDER, RoleAssigner.reassign(BotRole.MINER, false, IDLE, roles, batches, false, false));
+		// Once every batch is claimed there is nothing more to lend a hand with.
+		assertEquals(BotRole.LUMBERJACK, RoleAssigner.reassign(BotRole.LUMBERJACK, false, IDLE, roles, Map.of(), false, false));
+	}
+
+	@Test
 	void countsItselfAsFreeWhenComparingLoad() {
 		// One farmer has 2 crops; this miner joining makes 1 each, which still beats its own 0.
 		assertEquals(BotRole.FARMER, RoleAssigner.reassign(BotRole.MINER, false, IDLE,

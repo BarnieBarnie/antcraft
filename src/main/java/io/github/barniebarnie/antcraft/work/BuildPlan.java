@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
@@ -31,8 +32,14 @@ import net.minecraft.world.level.block.state.properties.SlabType;
  * so it is saved with the colony and can be made from blueprints. The world itself records the
  * progress: a step is done once the world matches it, so a plan resumes wherever it was left.
  */
-public record BuildPlan(List<Step> steps) {
-	public static final Codec<BuildPlan> CODEC = Step.CODEC.listOf().xmap(BuildPlan::new, BuildPlan::steps);
+public record BuildPlan(List<Step> steps, List<Batch> batches) {
+	/** Saves from before batches hold only the steps, as one batch. */
+	public static final Codec<BuildPlan> CODEC = Codec.withAlternative(
+		RecordCodecBuilder.create(i -> i.group(
+			Step.CODEC.listOf().fieldOf("steps").forGetter(BuildPlan::steps),
+			Batch.CODEC.listOf().fieldOf("batches").forGetter(BuildPlan::batches)
+		).apply(i, BuildPlan::new)),
+		Step.CODEC.listOf().xmap(BuildPlan::new, BuildPlan::steps));
 
 	/**
 	 * Property types set by how a block is placed. Others, such as a stair's shape or a fence's
@@ -42,8 +49,65 @@ public record BuildPlan(List<Step> steps) {
 	private static final Set<Class<?>> PLACEMENT = Set.of(Direction.class, Direction.Axis.class, Half.class, SlabType.class,
 		DoubleBlockHalf.class, AttachFace.class, DoorHingeSide.class);
 
+	/** Batches must cover the steps in order, each needing only batches before it. None means one batch of every step. */
 	public BuildPlan {
 		steps = List.copyOf(steps);
+		batches = batches.isEmpty() ? List.of(new Batch(0, steps.size(), List.of())) : List.copyOf(batches);
+		int from = 0;
+		for (int i = 0; i < batches.size(); i++) {
+			Batch batch = batches.get(i);
+			int index = i;
+			if (batch.from() != from || batch.to() < batch.from() || batch.needs().stream().anyMatch(need -> need < 0 || need >= index)) {
+				throw new IllegalArgumentException("batch " + i + " out of order: " + batch);
+			}
+			from = batch.to();
+		}
+		if (from != steps.size()) {
+			throw new IllegalArgumentException("batches cover " + from + " of " + steps.size() + " steps");
+		}
+	}
+
+	/** A plan of one batch. */
+	public BuildPlan(List<Step> steps) {
+		this(steps, List.of());
+	}
+
+	/**
+	 * Steps {@code from} (inclusive) to {@code to} of a plan, which one builder works through in
+	 * order. Several builders can work on different batches of a plan at once, each batch once the
+	 * batches it {@code needs}, by index, are done, such as a mineshaft hall once the stairs reach it.
+	 */
+	public record Batch(int from, int to, List<Integer> needs) {
+		public static final Codec<Batch> CODEC = RecordCodecBuilder.create(i -> i.group(
+			Codec.INT.fieldOf("from").forGetter(Batch::from),
+			Codec.INT.fieldOf("to").forGetter(Batch::to),
+			Codec.INT.listOf().optionalFieldOf("needs", List.of()).forGetter(Batch::needs)
+		).apply(i, Batch::new));
+
+		public Batch {
+			needs = List.copyOf(needs);
+		}
+	}
+
+	/** Batch {@code index} as a plan of its own, to be worked through by one builder. */
+	public BuildPlan batch(int index) {
+		Batch batch = this.batches.get(index);
+		return new BuildPlan(this.steps.subList(batch.from(), batch.to()));
+	}
+
+	/** The batches not {@code done} yet whose needed batches are all done, by index. */
+	public List<Integer> ready(Set<Integer> done) {
+		return this.ready(done, Set.of());
+	}
+
+	/**
+	 * The batches not {@code done} yet whose needed batches are each done or {@code waiting}: worked
+	 * through as far as they go, they wait for items or a fluid to settle, and are finished later.
+	 */
+	public List<Integer> ready(Set<Integer> done, Set<Integer> waiting) {
+		return IntStream.range(0, this.batches.size())
+			.filter(i -> !done.contains(i) && this.batches.get(i).needs().stream().allMatch(need -> done.contains(need) || waiting.contains(need)))
+			.boxed().toList();
 	}
 
 	/**
