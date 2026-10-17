@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.Terraform;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -433,6 +434,24 @@ class ColonyTest {
 		assertTrue(colony.builds().isEmpty(), "finished plan still listed");
 		colony.postBuildJobs();
 		assertTrue(colony.board().jobs().isEmpty(), "jobs left: " + colony.board().jobs());
+	}
+
+	@Test
+	void aDoneBatchWithABrokenBlockIsPostedAgainWhileTheBatchesAfterItStayOpen() {
+		Colony colony = halfwayDown();
+		BuildPlan stairs = TWO_LEVELS.plan().batch(0);
+		Map<BlockPos, BlockState> built = new HashMap<>();
+		TWO_LEVELS.plan().steps().forEach(step -> built.put(step.pos(), step.state()));
+		colony.recheckDone(pos -> built.getOrDefault(pos, Blocks.AIR.defaultBlockState()));
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(colony), "intact batch posted again");
+
+		BlockPos torch = stairs.steps().stream().filter(step -> step.item() == Items.TORCH).findFirst().orElseThrow().pos();
+		built.remove(torch);
+		// Unloaded blocks tell nothing.
+		colony.recheckDone(pos -> pos.equals(torch) ? null : built.getOrDefault(pos, Blocks.AIR.defaultBlockState()));
+		assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(colony), "posted for an unloaded block");
+		colony.recheckDone(pos -> built.getOrDefault(pos, Blocks.AIR.defaultBlockState()));
+		assertEquals(Set.of(stairs, TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(colony));
 	}
 
 	/** A colony digging {@link #TWO_LEVELS}, its stairs to the first level done, so two batches are open. */

@@ -409,6 +409,8 @@ public class ColonyManager extends SavedData {
 			BiPredicate<BuildPlan, BuildPlan.Step> workable = this.hasRole(level, colony, BotRole.BUILDER) ? BuilderGoal.workable(level, colony)
 				: (batch, step) -> Digging.isDiggable(level, colony, step);
 			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, workable);
+			// A block of a finished batch broken since, such as a torch off the mineshaft stairs, is built again.
+			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			LevelTreeView trees = new LevelTreeView(level);
 			// A tree job stays while any of its logs stand, even once the leaves have decayed.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())

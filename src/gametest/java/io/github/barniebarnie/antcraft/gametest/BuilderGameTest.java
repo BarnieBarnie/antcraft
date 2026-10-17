@@ -21,6 +21,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -117,6 +118,38 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 3, 1, 5, STAIRS_EAST);
 			helper.assertTrue(colony.builds().isEmpty(), "finished plan still listed");
 			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == 0, "cobblestone not taken from the core");
+		});
+	}
+
+	/** A torch broken off a finished batch is put back while the batch after it still waits for its planks. */
+	@GameTest(maxTicks = 600)
+	public void replacesABrokenTorchOfAFinishedBatchWhileLaterBatchesAreOpen(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		core(helper).setItem(1, new ItemStack(Items.TORCH, 2));
+		BlockPos torch = new BlockPos(5, 2, 5);
+		BuildPlan plan = new BuildPlan(List.of(
+			step(helper, 5, 1, 5, COBBLE),
+			step(helper, 5, 2, 5, Blocks.TORCH.defaultBlockState()),
+			step(helper, 3, 1, 5, Blocks.OAK_PLANKS.defaultBlockState())),
+			List.of(new BuildPlan.Batch(0, 2, List.of()), new BuildPlan.Batch(2, 3, List.of(0))));
+		colony.addBuild(plan);
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		boolean[] broken = {false};
+		helper.onEachTick(() -> {
+			boolean firstOpen = colony.board().jobs().stream().anyMatch(job -> colony.build(job.id()).equals(Optional.of(plan.batch(0))));
+			if (!broken[0] && helper.getBlockState(torch).is(Blocks.TORCH) && !firstOpen) {
+				helper.setBlock(torch, Blocks.AIR);
+				broken[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(broken[0], "first batch not finished");
+			helper.assertBlockPresent(Blocks.TORCH, torch);
+			helper.assertTrue(colony.builds().equals(List.of(plan)), "plan dropped while its planks are still to place");
+			helper.assertTrue(colony.board().jobs().stream().anyMatch(job -> colony.build(job.id()).equals(Optional.of(plan.batch(1)))),
+				"later batch not open");
 		});
 	}
 

@@ -78,7 +78,7 @@ public class Colony {
 	enum BatchState implements StringRepresentable {
 		/** Worked through as far as it goes, it waits for items or a fluid; the batches that need it may start. */
 		WAITING,
-		/** Finished: not posted again. */
+		/** Finished: not posted again unless its blocks are broken since (see {@link Colony#recheckDone}). */
 		DONE;
 
 		static final Codec<BatchState> CODEC = StringRepresentable.fromEnum(BatchState::values);
@@ -454,6 +454,28 @@ public class Colony {
 		}
 		if (this.blockedSteps.removeIf(blocked -> freed.contains(this.planOf(blocked.plan())))) {
 			this.lastSurvey = -1;
+		}
+	}
+
+	/**
+	 * Reopens each done batch whose blocks no longer all match the world, such as a torch broken off
+	 * the mineshaft stairs, so it is posted again and rebuilt. It goes back as waiting, so the batches
+	 * that need it stay open meanwhile. {@code world} gives null where it cannot tell, such as in
+	 * unloaded chunks; such blocks are taken as still done.
+	 */
+	public void recheckDone(Function<BlockPos, @Nullable BlockState> world) {
+		boolean reopened = false;
+		for (Map.Entry<UUID, BatchState> entry : this.batchStates.entrySet()) {
+			if (entry.getValue() == BatchState.DONE && this.build(entry.getKey()).filter(batch -> batch.steps().stream().anyMatch(step -> {
+				BlockState state = world.apply(step.pos());
+				return state != null && !step.isDone(state);
+			})).isPresent()) {
+				entry.setValue(BatchState.WAITING);
+				reopened = true;
+			}
+		}
+		if (reopened) {
+			this.postBuildJobs();
 		}
 	}
 
