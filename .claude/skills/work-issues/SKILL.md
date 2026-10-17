@@ -25,7 +25,7 @@ With `--unattended` (the scheduled run from `.claude/autowork/run.sh`), nobody i
 Before planning, check for leftovers from a run that was cut off (usage limit, timeout, crash): `git worktree list` and `git branch --list 'issue-*'`.
 
 - A worktree is stale when its lock names a pid that no longer runs (`git worktree list --porcelain` shows the lock reason). Do not touch a worktree whose pid is alive.
-- A stale branch with a commit that says `Fixes #N`, and a clean worktree: treat it like a worker that reported `done`. Review it, rebase onto `main`, run `./gradlew build`, merge and push if green (step 5).
+- A stale branch with a commit that says `Fixes #N`, and a clean worktree: treat it like a worker that reported `done`. Review it, rebase onto `main`, run `scripts/check.sh`, merge and push if green (step 5).
 - Anything else stale (no commit, uncommitted changes only, or the build fails): `git worktree unlock`, `git worktree remove --force`, `git branch -D`. The issue goes back in the queue.
 - `.claude/autowork/followups.md` from an earlier run: file those follow-ups at Finish too.
 
@@ -69,7 +69,7 @@ When a worker reports back:
 
 1. **Status is not `done`**: do not merge. Note the reason, tell the user, and remove the issue from the queue along with anything blocked on it. If the reason is something the user can answer, ask them, then continue the same worker with `SendMessage`.
 2. **Review**: in the worker's worktree, look at `git log main..<branch>` and `git diff main...<branch>`. Check that the change matches the issue, has tests for the acceptance criteria, follows `CLAUDE.md` (TDD, no weakened tests), and stays in scope. If something is wrong, send it back to the worker with `SendMessage` and specific feedback.
-3. **Bring it up to date**: if `main` has moved since the worker started, rebase the branch onto `main` inside its worktree. On a conflict, resolve it there if it is trivial; otherwise abort the rebase and send it back to the worker. After any rebase, run `./gradlew build` in the worktree again.
+3. **Bring it up to date**: if `main` has moved since the worker started, rebase the branch onto `main` inside its worktree. On a conflict, resolve it there if it is trivial; otherwise abort the rebase and send it back to the worker. After any rebase, run `scripts/check.sh` in the worktree again (it prints one PASS/FAIL line plus any failures; the full log is in `build/check.log`). When several finished branches are waiting, you may rebase them onto each other in merge order and run one `scripts/check.sh` at the top of the stack, then fast-forward `main` through them.
 4. **Merge**: one merge at a time, so `main` stays green. In the main checkout: `git merge --ff-only <branch>` to keep history linear. Then `git push origin main`.
 5. **Clean up**: `git worktree remove <path>` and `git branch -d <branch>`.
 6. **Advance**: tell the user in one line (issue, commit, pushed), then dispatch every issue that just became ready.
