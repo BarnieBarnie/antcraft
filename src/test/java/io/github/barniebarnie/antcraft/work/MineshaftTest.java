@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import io.github.barniebarnie.antcraft.pathing.WorldView;
 import java.util.HashMap;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
@@ -22,6 +23,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -381,9 +384,6 @@ class MineshaftTest {
 		for (int level : shaft.levels()) {
 			shaft.branches(level).forEach(branch -> branches.addAll(branch.cells()));
 			open.add(shaft.landingChest(level));
-			// Past the hall's end, where the hall may be carried on.
-			List<BlockPos> hall = shaft.hall(level);
-			open.add(hall.getLast().offset(hall.getLast().subtract(hall.get(hall.size() - 2))));
 		}
 		for (BlockPos cell : dug) {
 			for (Direction side : Direction.values()) {
@@ -398,6 +398,52 @@ class MineshaftTest {
 		// Miners dig the branches; the entrance stays open.
 		assertTrue(steps.stream().noneMatch(step -> branches.contains(step.pos())), "the plan walls off a branch");
 		assertTrue(steps.stream().filter(BuildPlan.Step::anySolid).allMatch(step -> step.pos().getY() < TOP.getY()), "walls above ground");
+	}
+
+	@Test
+	void theBlockPastEachHallsEndIsWalled() {
+		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
+		Map<BlockPos, BuildPlan.Step> steps = shaft.plan().steps().stream().collect(Collectors.toMap(BuildPlan.Step::pos, step -> step));
+		for (int level : shaft.levels()) {
+			List<BlockPos> hall = shaft.hall(level);
+			BlockPos past = hall.getLast().offset(hall.getLast().subtract(hall.get(hall.size() - 2)));
+			for (BlockPos end : List.of(past, past.above())) {
+				assertTrue(steps.containsKey(end) && steps.get(end).anySolid(), "not walled past the hall at y=" + level + ": " + end);
+			}
+		}
+	}
+
+	@Test
+	void wallStepsAreDoneWithAnyFillerAndOrderOnlyWhatTheFillersLack() {
+		BuildPlan plan = SHAFT.plan();
+		BuildPlan.Step wall = plan.steps().stream().filter(BuildPlan.Step::anySolid).findFirst().orElseThrow();
+		for (BlockState filler : List.of(Blocks.DIRT.defaultBlockState(), Blocks.COBBLED_DEEPSLATE.defaultBlockState())) {
+			assertTrue(wall.isDone(filler), "a wall of " + filler + " is not done");
+		}
+		// Dug through open air, every wall is to be filled; dirt and cobbled deepslate stand in for the cobblestone.
+		Function<BlockPos, BlockState> air = pos -> Blocks.AIR.defaultBlockState();
+		Map<Item, Integer> materials = plan.materials(air);
+		Map<Item, Integer> fills = plan.fillMaterials(air);
+		int walls = fills.get(Items.COBBLESTONE);
+		assertEquals(walls, materials.get(Items.COBBLESTONE));
+		Map<Item, Integer> has = Map.of(Items.DIRT, walls / 2, Items.COBBLED_DEEPSLATE, walls - walls / 2);
+		assertEquals(Map.of(Items.TORCH, 2, Items.CHEST, 1), BuildPlan.shortfall(materials, fills, has));
+	}
+
+	@Test
+	void siteIsFoundFartherOutWhenTheFourSpotsBesideTheCoreAreUnusable() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 20);
+		// Water under every spot within a few blocks of the core.
+		Predicate<BlockPos> nearWater = pos -> pos.getY() == 50 && Math.abs(pos.getX()) <= 4 && Math.abs(pos.getZ()) <= 4;
+		Mineshaft wet = Mineshaft.nextTo(core, levels, List.of(), rock(nearWater, pos -> false));
+		assertFalse(wet.area().intersects(new BoundingBox(-4, 50, -4, 4, 50, 4)), "shaft at " + wet.top() + " runs into water");
+		assertEquals(levels, wet.levels());
+		// Storage and the field all around the core.
+		List<BoundingBox> avoid = List.of(new BoundingBox(-4, 60, -4, 4, 70, 4));
+		Mineshaft clear = Mineshaft.nextTo(core, levels, avoid, ROCK);
+		assertFalse(clear.area().intersects(avoid.getFirst()), "shaft at " + clear.top() + " overlaps the storage");
+		assertTrue(clear.top().distManhattan(core) <= 24, "shaft at " + clear.top() + " is far from the core");
 	}
 
 	@Test
