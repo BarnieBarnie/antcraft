@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
+import io.github.barniebarnie.antcraft.colony.StockPlanner;
+import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -12,9 +14,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -27,8 +28,8 @@ class MineshaftTest {
 
 	@BeforeAll
 	static void bootstrap() {
-		SharedConstants.tryDetectVersion();
-		Bootstrap.bootStrap();
+		// Bootstraps the registries and loads the vanilla recipes and tags.
+		VanillaData.recipeBook();
 	}
 
 	private static Map<BlockPos, BuildPlan.Step> steps() {
@@ -229,6 +230,20 @@ class MineshaftTest {
 		// Nothing in particular wanted: the deepest has the best ores.
 		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(levels, item -> false));
 		assertEquals(Optional.empty(), Mineshaft.chooseLevel(List.of(), item -> true));
+	}
+
+	@Test
+	void anOpenOrderMakesTheLevelOfItsIngredientsChosen() {
+		List<Integer> levels = List.of(16, -16, -58);
+		List<StockPlanner.Target<Item>> coal = List.of(new StockPlanner.Target<>(item -> item == Items.COAL, List.of(), 32));
+		assertEquals(Optional.of(16), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(Set.of(), coal)));
+		Set<Item> diamondPickaxe = Stockkeeping.wantedForOrders(Map.of(Items.DIAMOND_PICKAXE, 1), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
+		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(diamondPickaxe, coal)));
+		// An iron pickaxe wants raw iron, so a level with iron beats the deeper one without.
+		List<StockPlanner.Target<Item>> gold = List.of(new StockPlanner.Target<>(item -> item == Items.RAW_GOLD, List.of(), 8));
+		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(Set.of(), gold)));
+		Set<Item> ironPickaxe = Stockkeeping.wantedForOrders(Map.of(Items.IRON_PICKAXE, 1), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
+		assertEquals(Optional.of(16), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(ironPickaxe, gold)));
 	}
 
 	@Test

@@ -361,6 +361,33 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(core(helper, MINE_CORE).countItem(Items.RAW_IRON) == 1, "raw iron not in the core"));
 	}
 
+	/**
+	 * Cobblestone for an ordered stone pickaxe goes up to the core; the dirt it carries along, which
+	 * nobody wants, stays in the landing chest.
+	 */
+	@GameTest(maxTicks = 1200)
+	public void minerLeavesWhatNobodyWantsInTheLandingChestOnItsWayToTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		colony.addOrder(Items.STONE_PICKAXE, 1);
+		fullMiner(helper, colony, shaft, new ItemStack(Items.COBBLESTONE, 3));
+
+		helper.onEachTick(() -> {
+			if (core(helper, MINE_CORE).countItem(Items.DIRT) > 0) {
+				helper.fail("miner walked the dirt up to the core");
+			}
+			if (landingChest(helper, shaft).countItem(Items.COBBLESTONE) > 0) {
+				helper.fail("cobblestone for the order left in the landing chest");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(landingChest(helper, shaft).countItem(Items.DIRT) > 0, "dirt not in the landing chest");
+			// It may dig more on its way back; what it carried comes up at least.
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.COBBLESTONE) >= 3, "cobblestone not in the core");
+		});
+	}
+
 	@GameTest(maxTicks = 1200)
 	public void haulerEmptiesTheLandingChestIntoTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);

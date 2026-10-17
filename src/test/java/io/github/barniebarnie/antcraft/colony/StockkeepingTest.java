@@ -4,9 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.Test;
 
 class StockkeepingTest {
@@ -84,6 +87,47 @@ class StockkeepingTest {
 		// A stock target the colony is below.
 		assertTrue(Stockkeeping.toCore(Set.of("cobblestone", "wooden_pickaxe"), Set.of(), TARGETS, stock));
 		assertTrue(Stockkeeping.toCore(Set.of("oak_log"), Set.of(), TARGETS, Map.of("oak_log", 31)));
+	}
+
+	@Test
+	void anOpenOrderWantsWhatItsRecipesStillLackAndWhatCouldStandInForIt() {
+		Set<String> stone = Set.of("cobblestone", "cobbled_deepslate");
+		TaskPlanner.RecipeBook<String> book = new TaskPlanner.RecipeBook<>() {
+			@Override
+			public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+				return item.equals("stone_pickaxe") ? List.of(new TaskPlanner.Recipe<>("stone_pickaxe", 1, Map.of(stone, 3, Set.of("stick"), 2))) : List.of();
+			}
+		};
+		Set<String> gatherable = Set.of("cobblestone", "cobbled_deepslate", "stick");
+		// The order itself, and every option for an ingredient it has to gather.
+		assertEquals(Set.of("stone_pickaxe", "cobblestone", "cobbled_deepslate", "stick"),
+			Stockkeeping.wantedForOrders(Map.of("stone_pickaxe", 1), Map.of(), book, gatherable::contains));
+		// What is in stock already is not wanted.
+		assertEquals(Set.of("stone_pickaxe", "stick"),
+			Stockkeeping.wantedForOrders(Map.of("stone_pickaxe", 1), Map.of("cobblestone", 3), book, gatherable::contains));
+		// A stocked pickaxe does not make the order for another one ready.
+		assertEquals(Set.of("stone_pickaxe", "cobblestone", "cobbled_deepslate", "stick"),
+			Stockkeeping.wantedForOrders(Map.of("stone_pickaxe", 1), Map.of("stone_pickaxe", 1), book, gatherable::contains));
+	}
+
+	@Test
+	void anOpenStonePickaxeOrderSendsAMinerWithCobblestoneToTheCore() {
+		Map<Item, Integer> stock = Map.of(Items.STICK, 8);
+		Set<Item> forOrders = Stockkeeping.wantedForOrders(Map.of(Items.STONE_PICKAXE, 1), stock, VanillaData.recipeBook(), VanillaData.gatherable());
+		assertTrue(Stockkeeping.toCore(Set.of(Items.DIRT, Items.COBBLESTONE), forOrders, List.of(), stock));
+		assertTrue(Stockkeeping.toCore(Set.of(Items.COBBLED_DEEPSLATE), forOrders, List.of(), stock));
+		assertFalse(Stockkeeping.toCore(Set.of(Items.DIRT, Items.GRAVEL), forOrders, List.of(), stock));
+		// Without the order, cobblestone can stay in the landing chest.
+		assertFalse(Stockkeeping.toCore(Set.of(Items.DIRT, Items.COBBLESTONE), Set.of(), List.of(), stock));
+	}
+
+	@Test
+	void wantedCountsWhatOrdersNeedAndWhatStockTargetsAskFor() {
+		var wanted = Stockkeeping.wanted(Set.of("raw_iron"), TARGETS);
+		assertTrue(wanted.test("raw_iron"));
+		assertTrue(wanted.test("oak_log"));
+		assertTrue(wanted.test("wooden_pickaxe"));
+		assertFalse(wanted.test("dirt"));
 	}
 
 	@Test

@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import java.util.ArrayList;
@@ -136,6 +137,24 @@ public final class Storage {
 		});
 		colony.builds().forEach(plan -> needs.add(plan.materials(level::getBlockState)));
 		return StockPlanner.total(needs);
+	}
+
+	/** What the colony's open orders want, planned against {@code stock}; see {@link Stockkeeping#wantedForOrders}. */
+	public static Set<Item> wantedForOrders(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
+		return Stockkeeping.wantedForOrders(colony.orders(), stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable);
+	}
+
+	/**
+	 * What the colony wants from mining: what its open orders want, their ingredients included, and
+	 * anything it keeps a stock target of. Plans the orders once, so make one per check.
+	 */
+	public static Predicate<Item> wanted(ServerLevel level, Colony colony) {
+		return Stockkeeping.wanted(wantedForOrders(level, colony, colonyStock(level, colony)), targets(colony));
+	}
+
+	/** The colony's stock targets, for {@link Stockkeeping}. */
+	public static List<StockPlanner.Target<Item>> targets(Colony colony) {
+		return colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
 	}
 
 	/** Whether some of {@code stack} would fit in the container. */

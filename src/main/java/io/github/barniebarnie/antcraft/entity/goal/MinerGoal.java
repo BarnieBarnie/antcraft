@@ -5,7 +5,6 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
-import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -18,6 +17,7 @@ import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -43,7 +44,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * Miner work loop: make sure it has a pickaxe (from the core, or by ordering one),
  * claim a mineshaft branch, dig it out with the ores in its walls its pickaxe can harvest, light it
- * with torches from the core as it goes, and bring the haul to the core. Now and then it
+ * with torches from the core as it goes, and bring the haul to the core. When it is full, it leaves
+ * what the core does not want in a landing chest on the way; the core wants what open orders need,
+ * their ingredients included, and what the colony is short of a stock target of. Now and then it
  * looks for a better pickaxe: it swaps to one in the core, leaving the old one there,
  * or orders the best one the colony can make. Before mining a level it makes sure a pickaxe
  * good enough for the ores the colony wants there is in hand or on its way. A branch with cells it
@@ -65,6 +68,10 @@ public class MinerGoal extends ColonyWorkGoal {
 	private State state = State.TOOL;
 	/** The job it last checked its pickaxe for, so it checks once per job. */
 	private @Nullable UUID tierChecked;
+	/** What the core wants of its haul, worked out once per trip to unload. */
+	private @Nullable Predicate<Item> forCore;
+	/** Whether it left what the core does not want in a landing chest on this trip. */
+	private boolean unloaded;
 
 	public MinerGoal(AntBot bot) {
 		super(bot, BotRole.MINER);
@@ -86,6 +93,8 @@ public class MinerGoal extends ColonyWorkGoal {
 
 	private void enter(State next) {
 		this.state = next;
+		this.forCore = null;
+		this.unloaded = false;
 		this.resetMovement();
 	}
 
@@ -176,8 +185,7 @@ public class MinerGoal extends ColonyWorkGoal {
 	 */
 	private boolean getPickaxeFor(ServerLevel level, Colony colony, int y) {
 		ToolKind kind = ToolKind.PICKAXE;
-		Item need = PickaxeTier.forLevel(y, item -> colony.orders().containsKey(item)
-			|| colony.stockTargets().stream().anyMatch(target -> target.matches(item)));
+		Item need = PickaxeTier.forLevel(y, Storage.wanted(level, colony));
 		Item carried = kind.bestCarried(this.bot);
 		if (kind.rank(carried) >= kind.rank(need)) {
 			return false;
@@ -247,12 +255,29 @@ public class MinerGoal extends ColonyWorkGoal {
 		return true;
 	}
 
+	/**
+	 * Unloads its haul into the core, where it also tops up its torches. When it is full, it first
+	 * leaves what the core does not want in the nearest landing chest with room.
+	 */
 	private void deposit(ServerLevel level, Colony colony) {
-		BlockPos chest = this.landingChest(level, colony);
+		if (this.forCore == null) {
+			Map<Item, Integer> stock = Storage.colonyStock(level, colony);
+			Set<Item> forOrders = Storage.wantedForOrders(level, colony, stock);
+			List<StockPlanner.Target<Item>> targets = Storage.targets(colony);
+			this.forCore = item -> Stockkeeping.toCore(item, forOrders, targets, stock);
+		}
+		Predicate<Item> forCore = this.forCore;
+		BlockPos chest = this.landingChest(level, colony, forCore);
 		if (chest != null) {
 			if (this.reach(chest)) {
-				this.storeHaul(Storage.containerAt(level, chest));
-				this.enter(State.WORK);
+				this.storeHaul(Storage.containerAt(level, chest), forCore, item -> !forCore.test(item));
+				if (this.hasItemsToStore()) {
+					// What the core wants, or what the chest had no room for, goes up to the core.
+					this.unloaded = true;
+					this.resetMovement();
+				} else {
+					this.enter(State.WORK);
+				}
 			}
 			return;
 		}
@@ -263,7 +288,7 @@ public class MinerGoal extends ColonyWorkGoal {
 			return;
 		}
 		if (this.reach(colony.core())) {
-			this.storeHaul(core);
+			this.storeHaul(core, forCore, item -> true);
 			int torches = CARRY_TORCHES - this.bot.getInventory().countItem(Items.TORCH);
 			if (torches > 0) {
 				Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(Items.TORCH), torches);
@@ -273,23 +298,21 @@ public class MinerGoal extends ColonyWorkGoal {
 	}
 
 	/**
-	 * The nearest landing chest with room, when the miner unloads because it is full and carries
-	 * nothing the colony wants in the core; else null, and it walks up to the core.
+	 * The nearest landing chest with room, when it unloads because it is full, carries something
+	 * the core does not want, and has not been to one on this trip yet; else null, and it walks up
+	 * to the core.
 	 */
-	private @Nullable BlockPos landingChest(ServerLevel level, Colony colony) {
+	private @Nullable BlockPos landingChest(ServerLevel level, Colony colony, Predicate<Item> forCore) {
 		SimpleContainer inventory = this.bot.getInventory();
-		if (freeSlots(inventory) >= MIN_FREE_SLOTS) {
+		if (this.unloaded || freeSlots(inventory) >= MIN_FREE_SLOTS) {
 			return null;
 		}
-		Set<Item> carried = new HashSet<>();
-		for (int i = 0; i < inventory.getContainerSize(); i++) {
-			ItemStack stack = inventory.getItem(i);
-			if (!stack.isEmpty() && !stack.is(ItemTags.PICKAXES) && !stack.is(Items.TORCH)) {
-				carried.add(stack.getItem());
-			}
+		int[] store = this.toStore(forCore);
+		boolean unwanted = false;
+		for (int i = 0; i < store.length; i++) {
+			unwanted |= store[i] > 0 && !forCore.test(inventory.getItem(i).getItem());
 		}
-		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
-		if (Stockkeeping.toCore(carried, colony.orders().keySet(), targets, Storage.colonyStock(level, colony))) {
+		if (!unwanted) {
 			return null;
 		}
 		return Storage.landingChests(level, colony).entrySet().stream()
@@ -299,42 +322,50 @@ public class MinerGoal extends ColonyWorkGoal {
 			.orElse(null);
 	}
 
-	/** Puts everything in the container except pickaxes, torches and a few scaffold blocks. */
-	private void storeHaul(Container container) {
+	/**
+	 * How many of each inventory slot to unload: everything except pickaxes, torches and a few
+	 * scaffold blocks, which it keeps of what the core does not want first.
+	 */
+	private int[] toStore(Predicate<Item> forCore) {
 		SimpleContainer inventory = this.bot.getInventory();
-		int keptScaffold = 0;
-		for (int i = 0; i < inventory.getContainerSize(); i++) {
+		int[] store = new int[inventory.getContainerSize()];
+		for (int i = 0; i < store.length; i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty() || stack.is(ItemTags.PICKAXES) || stack.is(Items.TORCH)) {
-				continue;
+			if (!stack.isEmpty() && !stack.is(ItemTags.PICKAXES) && !stack.is(Items.TORCH)) {
+				store[i] = stack.getCount();
 			}
-			int keep = 0;
-			if (stack.is(PathFollower.SCAFFOLD_BLOCKS)) {
-				keep = Math.min(stack.getCount(), KEEP_SCAFFOLD - keptScaffold);
-				keptScaffold += keep;
+		}
+		int keep = KEEP_SCAFFOLD;
+		for (boolean wanted : new boolean[] {false, true}) {
+			for (int i = 0; i < store.length && keep > 0; i++) {
+				ItemStack stack = inventory.getItem(i);
+				if (store[i] > 0 && stack.is(PathFollower.SCAFFOLD_BLOCKS) && forCore.test(stack.getItem()) == wanted) {
+					int kept = Math.min(store[i], keep);
+					store[i] -= kept;
+					keep -= kept;
+				}
 			}
-			ItemStack rest = HopperBlockEntity.addItem(null, container, stack.split(stack.getCount() - keep), null);
-			stack.grow(rest.getCount());
+		}
+		return store;
+	}
+
+	/** Puts its haul (see {@link #toStore}) of the {@code items} given in the container. */
+	private void storeHaul(Container container, Predicate<Item> forCore, Predicate<Item> items) {
+		SimpleContainer inventory = this.bot.getInventory();
+		int[] store = this.toStore(forCore);
+		for (int i = 0; i < store.length; i++) {
+			ItemStack stack = inventory.getItem(i);
+			if (store[i] > 0 && items.test(stack.getItem())) {
+				ItemStack rest = HopperBlockEntity.addItem(null, container, stack.split(store[i]), null);
+				stack.grow(rest.getCount());
+			}
 		}
 		inventory.setChanged();
 		container.setChanged();
 	}
 
 	private boolean hasItemsToStore() {
-		SimpleContainer inventory = this.bot.getInventory();
-		int scaffold = 0;
-		for (int i = 0; i < inventory.getContainerSize(); i++) {
-			ItemStack stack = inventory.getItem(i);
-			if (stack.isEmpty() || stack.is(ItemTags.PICKAXES) || stack.is(Items.TORCH)) {
-				continue;
-			}
-			if (stack.is(PathFollower.SCAFFOLD_BLOCKS)) {
-				scaffold += stack.getCount();
-			} else {
-				return true;
-			}
-		}
-		return scaffold > KEEP_SCAFFOLD;
+		return Arrays.stream(this.toStore(item -> false)).anyMatch(count -> count > 0);
 	}
 
 	/** Whether the best tool it carries for {@code state} gets its drops. */

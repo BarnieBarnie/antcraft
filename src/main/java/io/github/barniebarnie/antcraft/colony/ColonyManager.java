@@ -213,9 +213,10 @@ public class ColonyManager extends SavedData {
 					}
 				}
 			}
-			Mineshaft.chooseLevel(List.copyOf(work.keySet()), item -> colony.orders().containsKey(item)
-					|| colony.stockTargets().stream().anyMatch(target -> target.matches(item)))
-				.ifPresent(y -> work.get(y).forEach(post));
+			if (!work.isEmpty()) {
+				// Plans the open orders, so only when there is a level to choose.
+				Mineshaft.chooseLevel(List.copyOf(work.keySet()), Storage.wanted(level, colony)).ifPresent(y -> work.get(y).forEach(post));
+			}
 		});
 		colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp() && !posted.contains(job.target()));
 	}

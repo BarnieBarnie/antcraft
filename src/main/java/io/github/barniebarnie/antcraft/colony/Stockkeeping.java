@@ -1,10 +1,12 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 
 /**
@@ -65,20 +67,51 @@ public final class Stockkeeping {
 
 	/**
 	 * Whether a miner takes its haul up to the core rather than leaving it in the landing chest: when
-	 * it carries something the colony has an open order for, or is below a stock target of.
+	 * it carries something {@linkplain #toCore(Object, Set, List, Map) the core wants}.
 	 */
-	public static <I> boolean toCore(Set<I> carried, Set<I> ordered, List<StockPlanner.Target<I>> targets, Map<I, Integer> stock) {
-		for (I item : carried) {
-			if (ordered.contains(item)) {
-				return true;
+	public static <I> boolean toCore(Set<I> carried, Set<I> forOrders, List<StockPlanner.Target<I>> targets, Map<I, Integer> stock) {
+		return carried.stream().anyMatch(item -> toCore(item, forOrders, targets, stock));
+	}
+
+	/**
+	 * Whether the core wants {@code item} brought up now: open orders want it (see
+	 * {@link #wantedForOrders}), or the colony is below a stock target of it.
+	 */
+	public static <I> boolean toCore(I item, Set<I> forOrders, List<StockPlanner.Target<I>> targets, Map<I, Integer> stock) {
+		return forOrders.contains(item)
+			|| targets.stream().anyMatch(target -> target.matches().test(item) && StockPlanner.have(target, stock) < target.count());
+	}
+
+	/**
+	 * What the colony wants from mining: what open orders want (see {@link #wantedForOrders}) and
+	 * anything it keeps a stock target of.
+	 */
+	public static <I> Predicate<I> wanted(Set<I> forOrders, List<StockPlanner.Target<I>> targets) {
+		return item -> forOrders.contains(item) || targets.stream().anyMatch(target -> target.matches().test(item));
+	}
+
+	/**
+	 * The items open orders want: the ordered items, what their plans still have to gather or lack
+	 * beyond {@code stock}, and whatever could stand in for those in a recipe (cobbled deepslate for
+	 * cobblestone). Plans once per order, so call it once per check rather than per item.
+	 */
+	public static <I> Set<I> wantedForOrders(Map<I, Integer> orders, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+		Set<I> wanted = new HashSet<>(orders.keySet());
+		orders.forEach((item, count) -> {
+			Map<I, Integer> available = new HashMap<>(stock);
+			// An order is for more than the colony holds, as in what the core keeps for it.
+			available.remove(item);
+			TaskPlanner.Plan<I> plan = TaskPlanner.plan(item, count, available, book, gatherable);
+			Set<I> lacking = new HashSet<>(plan.toGather().keySet());
+			lacking.addAll(plan.missing().keySet());
+			wanted.addAll(lacking);
+			for (TaskPlanner.Craft<I> craft : plan.crafts()) {
+				craft.recipe().ingredients().keySet().stream()
+					.filter(options -> options.stream().anyMatch(lacking::contains))
+					.forEach(wanted::addAll);
 			}
-			for (StockPlanner.Target<I> target : targets) {
-				if (target.matches().test(item) && StockPlanner.have(target, stock) < target.count()) {
-					return true;
-				}
-			}
-		}
-		return false;
+		});
+		return wanted;
 	}
 
 	private static <I> int take(I item, int wanted, Map<I, Integer> left, Map<I, Integer> fetch) {
