@@ -97,7 +97,8 @@ public final class ColonyNetworking {
 		});
 		ServerPlayNetworking.registerGlobalReceiver(EditRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
-			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(), request);
+			handle(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp(),
+				AntCraftConfig.botsAllowed(player.level().getServer()), request);
 			context.responseSender().sendPacket(reply(player.level(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp()));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(RoleRequest.TYPE, (request, context) -> {
@@ -118,11 +119,16 @@ public final class ColonyNetworking {
 	}
 
 	/**
-	 * Runs an edit from a player at {@code from}, unless they may not change the colony or the edit is invalid.
+	 * Runs an edit from a player at {@code from}, unless they may not change the colony, the edit is invalid, or it may
+	 * not be made with bots allowed as {@code botsAllowed} says ({@link ColonyActions#mayEdit}, as for the
+	 * {@code /antcraft colony} commands).
 	 *
 	 * @return whether the colony changed
 	 */
-	public static boolean handle(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, EditRequest request) {
+	public static boolean handle(ServerLevel level, BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed, EditRequest request) {
+		if (!ColonyActions.mayEdit(request.kind(), botsAllowed)) {
+			return false;
+		}
 		return colony(level, from, isOp, requireOp, request.core())
 			.map(colony -> ColonyActions.edit(colony, request.kind(), request.target(), request.count()))
 			.orElse(false);

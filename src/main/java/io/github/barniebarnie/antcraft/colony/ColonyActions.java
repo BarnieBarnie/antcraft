@@ -34,7 +34,17 @@ public final class ColonyActions {
 		SET_STOCK,
 		REMOVE_STOCK,
 		/** Set the radius to {@code count}. */
-		RADIUS
+		RADIUS;
+
+		/**
+		 * Whether this edit commands bots, and so needs bots allowed on the server. Each new edit has to answer this here.
+		 * None does yet: they only change the colony's data, which waits for bots until they are allowed.
+		 */
+		boolean commandsBots() {
+			return switch (this) {
+				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS -> false;
+			};
+		}
 	}
 
 	private ColonyActions() {
@@ -68,6 +78,17 @@ public final class ColonyActions {
 	 */
 	public static boolean mayGiveRole(Colony colony, UUID bot, @Nullable UUID botColony, boolean botsAllowed) {
 		return botsAllowed && isMember(colony, bot, botColony);
+	}
+
+	/**
+	 * Whether {@code edit} may be made, from the colony screen or the matching {@code /antcraft colony} command, given
+	 * whether bots are allowed on the server ({@link io.github.barniebarnie.antcraft.config.AntCraftConfig#botsAllowed}).
+	 * The rule: changes to the colony's data (orders, stock targets, radius) do not need bots allowed, so a colony can be
+	 * planned or tidied while its bots are off; anything that commands bots does ({@link #mayGiveRole}, and
+	 * {@code /antcraft role}, {@code goto} and {@code home}).
+	 */
+	public static boolean mayEdit(Edit edit, boolean botsAllowed) {
+		return botsAllowed || !edit.commandsBots();
 	}
 
 	/**

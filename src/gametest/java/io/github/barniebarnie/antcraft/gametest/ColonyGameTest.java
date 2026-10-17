@@ -281,9 +281,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
 		ColonyNetworking.EditRequest order = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4);
 
-		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), near, false, true, order), "non-operator's order accepted");
+		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), near, false, true, true, order), "non-operator's order accepted");
 		helper.assertValueEqual(colony.orders(), Map.of(), "orders");
-		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, true, true, order), "operator's order refused");
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, true, true, true, order), "operator's order refused");
 		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
 		helper.succeed();
 	}
@@ -327,8 +327,22 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	@GameTest
+	public void screenEditsApplyWhenBotsAreNotAllowed(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		ColonyNetworking.EditRequest order = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4);
+		ColonyNetworking.EditRequest radius = new ColonyNetworking.EditRequest(colony.core(), ColonyActions.Edit.RADIUS, "", 48);
+
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, false, false, false, order), "order refused with bots not allowed");
+		helper.assertValueEqual(colony.orders(), Map.of(Items.OAK_PLANKS, 4), "orders");
+		helper.assertTrue(ColonyNetworking.handle(helper.getLevel(), near, false, false, false, radius), "radius refused with bots not allowed");
+		helper.assertValueEqual(colony.radius(), 48, "radius");
+		helper.succeed();
+	}
+
 	private static boolean edit(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, ColonyActions.Edit kind, String target, int count) {
-		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
+		return ColonyNetworking.handle(helper.getLevel(), from, false, requireOp, true, new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
 	}
 
 	private static boolean role(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, AntBot bot, Optional<BotRole> role) {

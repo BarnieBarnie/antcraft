@@ -81,6 +81,14 @@ class ColonyActionsTest {
 	}
 
 	@Test
+	void editsOnlyChangeColonyDataSoTheyDoNotNeedBotsAllowed() {
+		for (ColonyActions.Edit edit : ColonyActions.Edit.values()) {
+			assertTrue(ColonyActions.mayEdit(edit, true), edit + " with bots allowed");
+			assertTrue(ColonyActions.mayEdit(edit, false), edit + " with bots not allowed");
+		}
+	}
+
+	@Test
 	void ordersAnItem() {
 		Colony colony = colony();
 		assertTrue(ColonyActions.edit(colony, ColonyActions.Edit.ORDER, "minecraft:torch", 8));

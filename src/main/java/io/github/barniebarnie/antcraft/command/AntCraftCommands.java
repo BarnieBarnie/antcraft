@@ -218,6 +218,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int setStock(CommandSourceStack source, Either<TagKey<Item>, Item> match, int count) {
+		if (!checkMayEdit(source, ColonyActions.Edit.SET_STOCK)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
 			StockTarget target = ColonyActions.setStock(c, match, count);
@@ -227,6 +230,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int removeStock(CommandSourceStack source, Either<TagKey<Item>, Item> match) {
+		if (!checkMayEdit(source, ColonyActions.Edit.REMOVE_STOCK)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		if (colony.isEmpty()) {
 			return 0;
@@ -253,6 +259,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int order(CommandSourceStack source, Item item, int count) {
+		if (!checkMayEdit(source, ColonyActions.Edit.ORDER)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
 			c.addOrder(item, count);
@@ -271,6 +280,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int setRadius(CommandSourceStack source, int radius) {
+		if (!checkMayEdit(source, ColonyActions.Edit.RADIUS)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
 			c.setRadius(radius);
@@ -280,6 +292,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int cancel(CommandSourceStack source, Item item) {
+		if (!checkMayEdit(source, ColonyActions.Edit.CANCEL)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
 			c.cancelOrder(item);
@@ -439,6 +454,15 @@ public final class AntCraftCommands {
 
 	private static boolean checkAllowed(CommandSourceStack source) {
 		if (AntCraftConfig.botsAllowed(source.getServer())) {
+			return true;
+		}
+		source.sendFailure(Component.translatable("message.antcraft.disabled"));
+		return false;
+	}
+
+	/** The colony screen's rule for {@code edit} ({@link ColonyActions#mayEdit}), so the matching command follows it too. */
+	private static boolean checkMayEdit(CommandSourceStack source, ColonyActions.Edit edit) {
+		if (ColonyActions.mayEdit(edit, AntCraftConfig.botsAllowed(source.getServer()))) {
 			return true;
 		}
 		source.sendFailure(Component.translatable("message.antcraft.disabled"));
