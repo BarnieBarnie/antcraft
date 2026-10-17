@@ -28,12 +28,13 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * A snapshot of what a colony is doing: its bots, jobs, stock, orders and builds. {@code /antcraft colony info}
+ * A snapshot of what a colony is doing: its bots, jobs, stock, orders and builds, the build steps that are
+ * blocked and the trees given up on with logs out of reach. {@code /antcraft colony info}
  * prints it and the colony status screen shows it, so the two cannot disagree.
  */
 public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<BotRole, Integer> roles, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
-		List<Build> builds, List<BlockPos> blocked) {
+		List<Build> builds, List<BlockPos> blocked, List<BlockPos> givenUp) {
 
 	/** A loaded member bot; {@code setByPlayer} when a player chose its role, so the colony leaves it. */
 	public record Bot(String name, BotRole role, boolean idle, boolean setByPlayer) {
@@ -91,6 +92,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		Order.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::orders,
 		Build.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::builds,
 		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
+		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
 		ColonyStatus::new);
 
 	private static <E extends Enum<E>> StreamCodec<ByteBuf, E> enumCodec(E[] values) {
@@ -144,8 +146,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 
 		Map<JobType, Integer> open = new EnumMap<>(JobType.class);
 		Map<JobType, Integer> claimed = new EnumMap<>(JobType.class);
+		List<BlockPos> givenUp = new ArrayList<>();
 		for (Job job : colony.board().jobs()) {
 			(job.isOpen() ? open : claimed).merge(job.type(), 1, Integer::sum);
+			if (job.type() == JobType.CHOP_TREE && job.givenUp()) {
+				givenUp.add(job.target());
+			}
 		}
 
 		List<Stock> stocks = new ArrayList<>();
@@ -178,6 +184,6 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		}
 
 		return new ColonyStatus(colony.core(), colony.members().size(), loaded, roles, idle, colony.radius(), open, claimed, stocks, orders, builds,
-			colony.blockedSteps());
+			colony.blockedSteps(), givenUp);
 	}
 }

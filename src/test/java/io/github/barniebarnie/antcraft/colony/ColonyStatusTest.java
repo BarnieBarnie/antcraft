@@ -43,6 +43,10 @@ class ColonyStatusTest {
 		colony.board().post(JobType.CHOP_TREE, new BlockPos(6, 64, 6));
 		colony.board().post(JobType.MINE_BRANCH, new BlockPos(7, 64, 7));
 		colony.board().claim(LUMBERJACK, Set.of(JobType.CHOP_TREE), new BlockPos(5, 64, 5), 0L);
+		// A tree given up after its last try, out of reach for good.
+		colony.board().post(JobType.CHOP_TREE, new BlockPos(9, 64, 9));
+		colony.board().claim(MINER, Set.of(JobType.CHOP_TREE), new BlockPos(9, 64, 9), 0L);
+		colony.board().retryLater(MINER, 600L, 1);
 		colony.addOrder(Items.DIAMOND, 2);
 		colony.addOrder(Items.OAK_LOG, 1);
 		colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_LOG, 3));
@@ -67,7 +71,7 @@ class ColonyStatusTest {
 		assertEquals(Map.of(BotRole.LUMBERJACK, 1, BotRole.MINER, 2), status.roles());
 		assertEquals(1, status.idle());
 		assertEquals(20, status.radius());
-		assertEquals(Map.of(JobType.CHOP_TREE, 1, JobType.MINE_BRANCH, 1), status.openJobs());
+		assertEquals(Map.of(JobType.CHOP_TREE, 2, JobType.MINE_BRANCH, 1), status.openJobs());
 		assertEquals(Map.of(JobType.CHOP_TREE, 1), status.claimedJobs());
 	}
 
@@ -100,6 +104,11 @@ class ColonyStatusTest {
 		ColonyStatus status = status();
 		assertEquals(List.of(new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false)), status.builds());
 		assertEquals(List.of(new BlockPos(3, 64, 3)), status.blocked());
+	}
+
+	@Test
+	void listsTreesGivenUpOn() {
+		assertEquals(List.of(new BlockPos(9, 64, 9)), status().givenUp());
 	}
 
 	@Test

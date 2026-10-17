@@ -286,6 +286,10 @@ public class ColonyStatusScreen extends Screen {
 			Component blocked = list(status.blocked().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.blocked", blocked), RED));
 		}
+		if (!status.givenUp().isEmpty()) {
+			Component givenUp = list(status.givenUp().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
+			lines.add(new Line(Component.translatable("commands.antcraft.colony.given_up", givenUp), RED));
+		}
 		return lines;
 	}
 

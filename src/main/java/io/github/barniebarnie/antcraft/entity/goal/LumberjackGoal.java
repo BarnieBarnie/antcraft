@@ -15,6 +15,7 @@ import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Revisit;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import io.github.barniebarnie.antcraft.work.TreeRetry;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -82,12 +83,15 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 */
 	private static final int SCAFFOLD_RETRIES = 8;
 	/**
-	 * A colony tree with logs it could not reach, even with scaffold, goes back on the job board to retry
-	 * this long after; say once the colony has more scaffold, or a player cleared the way.
+	 * A tree with logs it could not reach, even with scaffold, is retried this long after; say once there
+	 * is more scaffold, or a player cleared the way. A colony tree goes back on the job board for that, a
+	 * solo bot remembers the tree itself.
 	 */
 	private static final int TREE_RETRY_TICKS = 600;
-	/** How many visits a colony tree gets before its unreachable logs are given up for good. */
+	/** How many visits a tree gets before its unreachable logs are given up for good. */
 	private static final int TREE_TRIES = 5;
+	/** At most this many trees are remembered to retry or as given up on; the oldest is forgotten first. */
+	private static final int MAX_TREE_RETRIES = 8;
 	/** The scaffold blocks lumberjacks fetch and place: ones they can take down quickly without a tool. */
 	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
 
@@ -279,10 +283,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/**
 	 * Gives the tree back to the board with the logs it could not reach, to be retried later. After its
 	 * last try it is given up: it stays on the board, so it is not posted anew, but no one takes it.
+	 * A solo bot has no board: it remembers the tree itself, with the same bounds.
 	 */
 	private void retryJobLater(ServerLevel level) {
 		if (this.jobId == null) {
-			// ponytail: a solo bot has no board to come back through; give it saved revisits with logs if that matters.
+			this.retryTreeLater(level);
 			return;
 		}
 		this.colony(level).ifPresent(colony -> {
@@ -292,6 +297,45 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 		});
 		this.jobId = null;
+	}
+
+	/** Remembers the current tree, with the logs still standing, to retry later or as given up on. */
+	private void retryTreeLater(ServerLevel level) {
+		if (this.bot.getColonyId() != null) {
+			return;
+		}
+		BlockPos base = this.tree.base();
+		List<BlockPos> left = this.tree.logs().stream().filter(log -> level.getBlockState(log).is(BlockTags.LOGS)).toList();
+		Map<BlockPos, TreeRetry> retries = this.bot.getTreeRetries();
+		TreeRetry retry = TreeRetry.after(retries.remove(base), base, left, level.getGameTime(), TREE_RETRY_TICKS, TREE_TRIES);
+		if (retries.size() >= MAX_TREE_RETRIES) {
+			retries.remove(retries.keySet().iterator().next());
+		}
+		retries.put(base, retry);
+		if (retry.givenUp()) {
+			AntCraft.LOGGER.info("Lumberjack {} gave up on the tree at {}: {} logs out of reach after {} tries",
+				this.bot.getName().getString(), base.toShortString(), this.unreachableLogs.size(), TREE_TRIES);
+		}
+	}
+
+	/**
+	 * Outside a colony: goes back to a remembered tree that is due for another try, if another bot is not
+	 * felling it. Forgets trees with no logs left. Returns whether it started on one.
+	 */
+	private boolean retryTree(ServerLevel level, Set<BlockPos> taken) {
+		LevelTreeView view = new LevelTreeView(level);
+		Map<BlockPos, TreeRetry> retries = this.bot.getTreeRetries();
+		retries.values().removeIf(retry -> TreeScanner.remaining(view, retry.logs()).isEmpty());
+		for (TreeRetry retry : retries.values()) {
+			if (retry.isDue(level.getGameTime()) && retry.logs().stream().noneMatch(taken::contains)) {
+				Optional<TreeScanner.Tree> rest = TreeScanner.remaining(view, retry.base(), retry.logs());
+				if (rest.isPresent()) {
+					this.startTree(level, rest.get());
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	private void enter(State next) {
@@ -342,12 +386,19 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
-	/** Outside a colony: searches around home for a tree. Returns whether it found one. */
+	/**
+	 * Outside a colony: goes back to a tree it left logs of, once due, or searches around home for a
+	 * tree. Trees it remembers, to retry or given up on, are not taken anew. Returns whether it found one.
+	 */
 	private boolean takeNearbyTree(ServerLevel level) {
 		BlockPos origin = this.bot.getHome() != null ? this.bot.getHome() : this.bot.blockPosition();
 		Set<BlockPos> taken = new HashSet<>();
 		level.getEntitiesOfClass(AntBot.class, new AABB(origin).inflate(SEARCH_RADIUS * 2), other -> other != this.bot)
 			.forEach(other -> taken.addAll(other.getTree()));
+		if (this.retryTree(level, taken)) {
+			return true;
+		}
+		this.bot.getTreeRetries().values().forEach(retry -> taken.addAll(retry.logs()));
 		Optional<TreeScanner.Tree> found = TreeScanner.findAll(new LevelTreeView(level), origin, SEARCH_RADIUS).stream()
 			.filter(tree -> tree.logs().stream().noneMatch(taken::contains))
 			.min(Comparator.comparingDouble(tree -> tree.base().distSqr(origin)));
@@ -569,6 +620,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			if (this.unreachableLogs.stream().anyMatch(log -> level.getBlockState(log).is(BlockTags.LOGS))) {
 				this.retryJobLater(level);
 			} else {
+				this.bot.getTreeRetries().remove(this.tree.base());
 				this.completeJob(level);
 			}
 			// The leaves decay by themselves now; take the scaffolding down while still up there.

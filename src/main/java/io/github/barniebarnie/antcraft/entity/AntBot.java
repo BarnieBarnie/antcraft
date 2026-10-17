@@ -14,6 +14,7 @@ import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Revisit;
+import io.github.barniebarnie.antcraft.work.TreeRetry;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Comparator;
@@ -90,6 +91,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable BlockPos treeBase;
 	/** Felled trees the bot could not replant, by base; saved, so it comes back after unloading. */
 	private final Map<BlockPos, Revisit> revisits = new LinkedHashMap<>();
+	/** Trees a solo bot could not fell whole, by base, to come back to; saved, so the retries and their bound survive unloading. */
+	private final Map<BlockPos, TreeRetry> treeRetries = new LinkedHashMap<>();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -276,6 +279,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.revisits;
 	}
 
+	/**
+	 * Trees this bot left logs of out of reach, by base, oldest first, to retry later or given up on.
+	 * Saved with the bot; callers change it in place. Colony bots keep these on the job board instead.
+	 */
+	public Map<BlockPos, TreeRetry> getTreeRetries() {
+		return this.treeRetries;
+	}
+
 	/** The storage block this bot brings its work to, usually a chest. */
 	public @Nullable BlockPos getHome() {
 		return this.home;
@@ -348,6 +359,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.store("Tree", BlockPos.CODEC.listOf(), this.tree);
 		output.storeNullable("TreeBase", BlockPos.CODEC, this.treeBase);
 		output.store("Revisits", Revisit.CODEC.listOf(), List.copyOf(this.revisits.values()));
+		output.store("TreeRetries", TreeRetry.CODEC.listOf(), List.copyOf(this.treeRetries.values()));
 	}
 
 	@Override
@@ -368,5 +380,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.revisits.clear();
 		input.read("Revisits", Revisit.CODEC.listOf())
 			.ifPresent(list -> list.forEach(revisit -> this.revisits.put(revisit.pos(), revisit)));
+		this.treeRetries.clear();
+		input.read("TreeRetries", TreeRetry.CODEC.listOf())
+			.ifPresent(list -> list.forEach(retry -> this.treeRetries.put(retry.base(), retry)));
 	}
 }

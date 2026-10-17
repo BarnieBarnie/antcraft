@@ -170,6 +170,10 @@ public final class AntCraftCommands {
 			String blocked = String.join(", ", status.blocked().stream().map(BlockPos::toShortString).toList());
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked", blocked), false);
 		}
+		if (!status.givenUp().isEmpty()) {
+			String givenUp = String.join(", ", status.givenUp().stream().map(BlockPos::toShortString).toList());
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.given_up", givenUp), false);
+		}
 		return status.members();
 	}
 

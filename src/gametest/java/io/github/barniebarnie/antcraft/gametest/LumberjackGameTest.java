@@ -781,6 +781,32 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A solo lumberjack's tree whose top logs are out of reach, with no scaffold anywhere: it remembers the
+	 * tree to retry later, and that survives a reload. Once home holds scaffold, a later visit fells the rest.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void soloLumberjackComesBackForLogsItCouldNotReach(GameTestHelper helper) {
+		tallTree(helper, 5, 5);
+		AntBot bot = lumberjack(helper, 2, 4);
+		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
+		AntBot[] copy = {null};
+		helper.onEachTick(() -> {
+			if (copy[0] == null && bot.getTreeRetries().containsKey(base) && bot.getTreeRetries().get(base).tries() == 1) {
+				copy[0] = reload(helper, bot);
+				bot.discard();
+				helper.assertTrue(copy[0].getTreeRetries().equals(bot.getTreeRetries()), "retry not loaded: " + copy[0].getTreeRetries());
+				helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(copy[0] != null, "the tree was not remembered to retry");
+			helper.assertTrue(copy[0].isAlive(), "reloaded bot is gone");
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(copy[0].getTreeRetries().isEmpty(), "retry left: " + copy[0].getTreeRetries());
+		});
+	}
+
 	/** Leafless logs no tree job covers, like a player's log fence, are left alone. */
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void leavesLeaflessLogsOfNoKnownTreeAlone(GameTestHelper helper) {
