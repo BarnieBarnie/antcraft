@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.client;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
@@ -38,6 +39,11 @@ public class ColonyStatusScreen extends Screen {
 	private static final int GREY = 0xFFAAAAAA;
 	private static final int RED = 0xFFFF5555;
 	private static final int YELLOW = 0xFFFFFF55;
+	private static final String KEY = "screen.antcraft.colony_status";
+	/** Followed by a {@link BotRole#id()}. */
+	private static final String ROLE_KEY = "screen.antcraft.colony_status.role.";
+	/** Followed by an {@link Colony.OrderPurpose#getSerializedName()}. */
+	private static final String PURPOSE_KEY = "screen.antcraft.colony_status.purpose.";
 
 	/** A button on a row. */
 	private record Act(Component label, Runnable press) {
@@ -62,7 +68,7 @@ public class ColonyStatusScreen extends Screen {
 	private int scroll;
 
 	public ColonyStatusScreen() {
-		super(Component.translatable("screen.antcraft.colony_status"));
+		super(Component.translatable(KEY));
 	}
 
 	public static void request() {
@@ -111,20 +117,20 @@ public class ColonyStatusScreen extends Screen {
 
 		int half = PANEL_WIDTH / 2 - 1;
 		y += 20;
-		this.panelButton("order", x, y, half, () -> this.edit(ColonyActions.Edit.ORDER, this.item.trim(), this.count()));
-		this.panelButton("cancel_order", x + half + 2, y, half, () -> this.edit(ColonyActions.Edit.CANCEL, this.item.trim(), 0));
+		this.panelButton("screen.antcraft.colony_status.order", x, y, half, () -> this.edit(ColonyActions.Edit.ORDER, this.item.trim(), this.count()));
+		this.panelButton("screen.antcraft.colony_status.cancel_order", x + half + 2, y, half, () -> this.edit(ColonyActions.Edit.CANCEL, this.item.trim(), 0));
 		y += BUTTON_HEIGHT + 2;
-		this.panelButton("set_stock", x, y, half, () -> this.edit(ColonyActions.Edit.SET_STOCK, this.item.trim(), this.count()));
-		this.panelButton("remove_stock", x + half + 2, y, half, () -> this.edit(ColonyActions.Edit.REMOVE_STOCK, this.item.trim(), 0));
+		this.panelButton("screen.antcraft.colony_status.set_stock", x, y, half, () -> this.edit(ColonyActions.Edit.SET_STOCK, this.item.trim(), this.count()));
+		this.panelButton("screen.antcraft.colony_status.remove_stock", x + half + 2, y, half, () -> this.edit(ColonyActions.Edit.REMOVE_STOCK, this.item.trim(), 0));
 		y += BUTTON_HEIGHT + 2;
-		this.panelButton("set_radius", x, y, half, () -> this.edit(ColonyActions.Edit.RADIUS, "", this.count()));
+		this.panelButton("screen.antcraft.colony_status.set_radius", x, y, half, () -> this.edit(ColonyActions.Edit.RADIUS, "", this.count()));
 
 		this.refreshSuggestions();
 		this.refreshRows();
 	}
 
 	private void panelButton(String key, int x, int y, int width, Runnable press) {
-		this.addRenderableWidget(Button.builder(Component.translatable("screen.antcraft.colony_status." + key), b -> press.run())
+		this.addRenderableWidget(Button.builder(Component.translatable(key), b -> press.run())
 			.bounds(x, y, width, BUTTON_HEIGHT).build());
 	}
 
@@ -229,12 +235,12 @@ public class ColonyStatusScreen extends Screen {
 		status.bots().forEach((id, bot) -> {
 			List<Act> acts = new ArrayList<>();
 			BotRole next = BotRole.values()[(bot.role().ordinal() + 1) % BotRole.values().length];
-			acts.add(new Act(Component.literal(">"), () -> this.role(id, Optional.of(next))));
+			acts.add(new Act(Component.translatable("screen.antcraft.colony_status.next_role"), () -> this.role(id, Optional.of(next))));
 			if (bot.setByPlayer()) {
 				acts.add(new Act(Component.translatable("screen.antcraft.colony_status.give_back"), () -> this.role(id, Optional.empty())));
 			}
 			String key = bot.setByPlayer() ? "screen.antcraft.colony_status.bot_by_player" : "screen.antcraft.colony_status.bot";
-			lines.add(new Line(Component.translatable(key, bot.name(), bot.role().id()), bot.idle() ? GREY : WHITE, acts));
+			lines.add(new Line(Component.translatable(key, bot.name(), Component.translatable(ROLE_KEY + bot.role().id())), bot.idle() ? GREY : WHITE, acts));
 		});
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.jobs", status.jobs(), status.claimed()), YELLOW));
 
@@ -245,22 +251,23 @@ public class ColonyStatusScreen extends Screen {
 					this.itemBox.setValue(stock.name());
 					this.countBox.setValue(Integer.toString(stock.want()));
 				}),
-				new Act(Component.literal("x"), () -> this.edit(ColonyActions.Edit.REMOVE_STOCK, stock.name(), 0)));
-			lines.add(new Line(Component.literal("  " + stock.have() + "/" + stock.want() + " " + stock.name()), stock.isShort() ? RED : GREY, acts));
+				new Act(Component.translatable("screen.antcraft.colony_status.remove"), () -> this.edit(ColonyActions.Edit.REMOVE_STOCK, stock.name(), 0)));
+			Component text = Component.translatable("screen.antcraft.colony_status.stock_line", stock.have(), stock.want(), stock.name());
+			lines.add(new Line(text, stock.isShort() ? RED : GREY, acts));
 		}
 
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.orders"), YELLOW));
 		for (ColonyStatus.Order order : status.orders()) {
-			MutableComponent text = Component.literal("  " + order.count() + " ").append(name(order.item())).append(" (");
-			List<String> by = new ArrayList<>();
+			List<Component> by = new ArrayList<>();
 			if (order.byPlayer() > 0) {
-				by.add(order.byPlayer() + " player");
+				by.add(Component.translatable("screen.antcraft.colony_status.order_by_player", order.byPlayer()));
 			}
-			order.forColony().forEach((purpose, count) -> by.add(count + " " + purpose.getSerializedName()));
-			text.append(String.join(", ", by) + ")");
+			order.forColony().forEach((purpose, count) ->
+				by.add(Component.translatable("screen.antcraft.colony_status.order_by", count, Component.translatable(PURPOSE_KEY + purpose.getSerializedName()))));
+			Component text = Component.translatable("screen.antcraft.colony_status.order_line", order.count(), name(order.item()), list(by));
 			// Only the player's part can be cancelled; the colony would order its own part again.
 			String id = BuiltInRegistries.ITEM.getKey(order.item()).toString();
-			List<Act> acts = order.byPlayer() > 0 ? List.of(new Act(Component.literal("x"), () -> this.edit(ColonyActions.Edit.CANCEL, id, 0))) : List.of();
+			List<Act> acts = order.byPlayer() > 0 ? List.of(new Act(Component.translatable("screen.antcraft.colony_status.remove"), () -> this.edit(ColonyActions.Edit.CANCEL, id, 0))) : List.of();
 			lines.add(new Line(text, WHITE, acts));
 			if (!order.toGather().isEmpty()) {
 				lines.add(new Line(Component.translatable("screen.antcraft.colony_status.gather", items(order.toGather())), GREY));
@@ -276,7 +283,7 @@ public class ColonyStatusScreen extends Screen {
 			lines.add(new Line(Component.translatable(key, build.target().toShortString(), build.left(), build.steps()), WHITE));
 		}
 		if (!status.blocked().isEmpty()) {
-			String blocked = String.join(", ", status.blocked().stream().map(pos -> pos.toShortString()).toList());
+			Component blocked = list(status.blocked().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.blocked", blocked), RED));
 		}
 		return lines;
@@ -287,13 +294,20 @@ public class ColonyStatusScreen extends Screen {
 	}
 
 	private static Component items(Map<Item, Integer> items) {
+		List<Component> parts = new ArrayList<>();
+		items.forEach((item, count) -> parts.add(Component.translatable("screen.antcraft.colony_status.item_count", count, name(item))));
+		return list(parts);
+	}
+
+	/** The parts with the lang file's separator between them. */
+	private static Component list(List<Component> parts) {
 		MutableComponent text = Component.empty();
-		items.forEach((item, count) -> {
+		for (Component part : parts) {
 			if (!text.getSiblings().isEmpty()) {
-				text.append(", ");
+				text.append(Component.translatable("screen.antcraft.colony_status.separator"));
 			}
-			text.append(count + " ").append(name(item));
-		});
+			text.append(part);
+		}
 		return text;
 	}
 }
