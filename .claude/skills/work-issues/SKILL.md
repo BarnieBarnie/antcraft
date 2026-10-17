@@ -1,7 +1,7 @@
 ---
 name: work-issues
 description: Act as the manager that works through open AntCraft GitHub issues with parallel issue-worker subagents, each in its own git worktree, then reviews, merges and pushes their branches in dependency order and starts newly unblocked issues. Use when the user asks to work on, implement, or burn down the open issues, or names several issues to have done.
-argument-hint: "[issue numbers, or empty for all open issues] [--parallel N]"
+argument-hint: "[issue numbers, or empty for all open issues] [--parallel N] [--unattended] [--wind-down \"YYYY-MM-DD HH:MM\"]"
 ---
 
 # Work through open issues
@@ -9,6 +9,25 @@ argument-hint: "[issue numbers, or empty for all open issues] [--parallel N]"
 You are the manager. You do not implement issues yourself. You plan, dispatch `issue-worker` subagents, review and merge their work, and keep the queue moving. The user stays in this session, so keep them informed with short status lines.
 
 `gh` and `./gradlew` both need the sandbox disabled (keyring token and `~/.gradle`).
+
+## Unattended mode
+
+With `--unattended` (the scheduled run from `.claude/autowork/run.sh`), nobody is watching:
+
+- Never ask the user anything. Where the steps below say to ask or wait for a go-ahead, take the default: show nothing, follow the plan, push after each merge.
+- If a worker comes back not `done` with a question for the user, do not merge it. Add the question as a comment on its issue (`gh issue comment`), add the `needs-input` label, and skip it. Skip issues already labelled `needs-input` when gathering.
+- Preflight not clean (tracked files modified in the main checkout): stop at once and write why to `.claude/autowork/stopped.md`. Never stash, commit or discard the user's work.
+- `--wind-down "<time>"`: do not dispatch new workers after that time. Finish reviewing and merging the workers already running, then go to Finish.
+- Keep follow-ups the workers suggest in `.claude/autowork/followups.md` as you go (issue they came from, one line each), so a run cut off by the usage limit does not lose them.
+
+## 0. Resume
+
+Before planning, check for leftovers from a run that was cut off (usage limit, timeout, crash): `git worktree list` and `git branch --list 'issue-*'`.
+
+- A worktree is stale when its lock names a pid that no longer runs (`git worktree list --porcelain` shows the lock reason). Do not touch a worktree whose pid is alive.
+- A stale branch with a commit that says `Fixes #N`, and a clean worktree: treat it like a worker that reported `done`. Review it, rebase onto `main`, run `./gradlew build`, merge and push if green (step 5).
+- Anything else stale (no commit, uncommitted changes only, or the build fails): `git worktree unlock`, `git worktree remove --force`, `git branch -D`. The issue goes back in the queue.
+- `.claude/autowork/followups.md` from an earlier run: file those follow-ups at Finish too.
 
 ## 1. Preflight
 
@@ -31,7 +50,9 @@ Work out an order:
 - Within those limits, bugs go first, then lower issue numbers.
 - Parallel limit: 3 workers by default (`--parallel N` overrides). Each runs a full Gradle build with game tests, which is heavy.
 
-Show the user the plan as waves: what starts now, what waits and why. Also ask whether to push `main` to `origin` after each merge. Pushing closes the issue through `Fixes #N` and runs CI. Wait for their go-ahead before dispatching.
+Show the user the plan as waves: what starts now, what waits and why. Wait for their go-ahead before dispatching.
+
+Always push `main` to `origin` after each merge; the user has standing approval for this, so do not ask. Pushing closes the issue through `Fixes #N` and runs CI.
 
 ## 4. Dispatch
 
@@ -49,12 +70,14 @@ When a worker reports back:
 1. **Status is not `done`**: do not merge. Note the reason, tell the user, and remove the issue from the queue along with anything blocked on it. If the reason is something the user can answer, ask them, then continue the same worker with `SendMessage`.
 2. **Review**: in the worker's worktree, look at `git log main..<branch>` and `git diff main...<branch>`. Check that the change matches the issue, has tests for the acceptance criteria, follows `CLAUDE.md` (TDD, no weakened tests), and stays in scope. If something is wrong, send it back to the worker with `SendMessage` and specific feedback.
 3. **Bring it up to date**: if `main` has moved since the worker started, rebase the branch onto `main` inside its worktree. On a conflict, resolve it there if it is trivial; otherwise abort the rebase and send it back to the worker. After any rebase, run `./gradlew build` in the worktree again.
-4. **Merge**: one merge at a time, so `main` stays green. In the main checkout: `git merge --ff-only <branch>` to keep history linear. Push if the user agreed.
+4. **Merge**: one merge at a time, so `main` stays green. In the main checkout: `git merge --ff-only <branch>` to keep history linear. Then `git push origin main`.
 5. **Clean up**: `git worktree remove <path>` and `git branch -d <branch>`.
-6. **Advance**: tell the user in one line (issue, commit, pushed or not), then dispatch every issue that just became ready.
+6. **Advance**: tell the user in one line (issue, commit, pushed), then dispatch every issue that just became ready.
 
 If two workers finish around the same time, merge them one after the other, rebasing the second onto the first.
 
 ## 6. Finish
 
 When the queue is empty, or only blocked or failed issues are left, give the user a summary: merged issues with commits, issues left open and why, and any follow-ups the workers suggested. Offer to file those follow-ups with the `new-issue` skill.
+
+In unattended mode, file the follow-ups yourself with the `new-issue` skill. The user has given standing approval for this, so skip its "Confirm, then file" wait, and where it would ask about a duplicate, skip that follow-up instead. Then clear `.claude/autowork/followups.md`. Append the summary to `.claude/autowork/summary.md` with the date, so the user can read what happened overnight.
