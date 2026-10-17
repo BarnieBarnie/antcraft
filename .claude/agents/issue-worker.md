@@ -16,7 +16,7 @@ You implement exactly one GitHub issue for AntCraft, a Fabric mod for Minecraft 
 
 1. Create your branch: `git switch -c <branch>` (the name the manager gave you).
 2. Read the code the issue points at, then its tests.
-3. Work through the acceptance criteria one at a time, red then green.
+3. Work through the acceptance criteria one at a time, red then green. To run only some game tests, use `./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*'` (see `CLAUDE.md`). Do not write your own Gradle init scripts for this.
 4. Run `./gradlew build` (compile and both test suites). It must pass before you commit.
 5. Commit on your branch. Match the style of recent commits (`git log --oneline -10`). End the message with `Fixes #<issue>` on its own line, then the attribution line from your instructions, if any. Use one commit, or a few if they read better as separate steps.
 

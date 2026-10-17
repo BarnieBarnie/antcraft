@@ -48,6 +48,15 @@ fabricApi {
 	}
 }
 
+// Run a subset of game tests: ./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
+// Without the property every game test runs.
+def gameTestFilter = providers.gradleProperty("gameTest")
+tasks.matching { it.name == "runGameTest" }.configureEach {
+	if (gameTestFilter.isPresent()) {
+		jvmArgs "-Dfabric-api.gametest.filter=${gameTestFilter.get()}"
+	}
+}
+
 processResources {
 	def version = project.version
 	inputs.property "version", version
