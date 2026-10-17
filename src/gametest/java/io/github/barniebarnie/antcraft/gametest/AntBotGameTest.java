@@ -86,4 +86,13 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(3, 1, 3), 2.0));
 	}
+
+	@GameTest(maxTicks = 20)
+	public void relativeInvertsAbsolutePos(GameTestHelper helper) {
+		for (BlockPos pos : new BlockPos[] {BlockPos.ZERO, new BlockPos(1, 2, 5), new BlockPos(6, 1, 0), new BlockPos(-3, -2, 7)}) {
+			BlockPos back = TestPositions.relative(helper, helper.absolutePos(pos));
+			helper.assertTrue(back.equals(pos), pos.toShortString() + " came back as " + back.toShortString());
+		}
+		helper.succeed();
+	}
 }

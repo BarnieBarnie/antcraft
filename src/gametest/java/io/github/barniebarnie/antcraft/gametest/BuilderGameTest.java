@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
+
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -445,14 +447,14 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			if (dug[0] == null && colony.builds().isEmpty()) {
 				helper.assertTrue(shaft.plan().nextStep(helper.getLevel()::getBlockState).isEmpty(), "plan dropped before it was done");
-				helper.assertTrue(helper.relativePos(builder.blockPosition()).getY() < 3, "builder not down the shaft");
+				helper.assertTrue(relative(helper, builder.blockPosition()).getY() < 3, "builder not down the shaft");
 				dug[0] = solid(helper);
 				builder.setWalkTarget(helper.absolutePos(home));
 			}
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(dug[0] != null, "shaft not dug, next step " + shaft.plan().nextStep(helper.getLevel()::getBlockState));
-			helper.assertTrue(builder.blockPosition().distManhattan(helper.absolutePos(home)) <= 2, "builder at " + helper.relativePos(builder.blockPosition()));
+			helper.assertTrue(builder.blockPosition().distManhattan(helper.absolutePos(home)) <= 2, "builder at " + relative(helper, builder.blockPosition()));
 			// It walked up the stairs as they are, without digging or building its own way.
 			helper.assertTrue(solid(helper).equals(dug[0]), "blocks changed on the way up");
 			MinerGameTest.assertLit(helper, MinerGameTest.dugPath(shaft, false));
@@ -484,7 +486,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			for (BuildPlan.Step step : shaft.plan().steps()) {
 				BlockState state = helper.getLevel().getBlockState(step.pos());
-				helper.assertTrue(step.isDone(state) || state.isAir(), "not dug at " + helper.relativePos(step.pos()) + ": " + state);
+				helper.assertTrue(step.isDone(state) || state.isAir(), "not dug at " + relative(helper, step.pos()) + ": " + state);
 			}
 			helper.assertFalse(colony.builds().isEmpty(), "plan dropped while torches and chests are still to place");
 			helper.assertTrue(colony.orders().containsKey(Items.TORCH) && colony.orders().containsKey(Items.CHEST), "not ordered: " + colony.orders());
@@ -1076,7 +1078,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		}
 		for (BlockPos pos : pillar) {
 			if (!helper.getLevel().getBlockState(pos).is(Blocks.DIRT)) {
-				helper.fail("scaffold at " + helper.relativePos(pos).toShortString() + " taken down before the column stands");
+				helper.fail("scaffold at " + relative(helper, pos).toShortString() + " taken down before the column stands");
 			}
 		}
 	}

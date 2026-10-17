@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
+
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.JobType;
@@ -117,7 +119,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	static void assertLit(GameTestHelper helper, List<BlockPos> path) {
 		for (BlockPos pos : path) {
 			int light = helper.getLevel().getBrightness(LightLayer.BLOCK, pos);
-			helper.assertTrue(light > 0, "dark at " + helper.relativePos(pos).toShortString());
+			helper.assertTrue(light > 0, "dark at " + relative(helper, pos).toShortString());
 		}
 	}
 
@@ -125,10 +127,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		for (Mineshaft.Branch branch : shaft.branches(level)) {
 			for (BlockPos cell : branch.cells()) {
 				BlockState state = helper.getLevel().getBlockState(cell);
-				helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "branch not dug at " + helper.relativePos(cell).toShortString());
+				helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "branch not dug at " + relative(helper, cell).toShortString());
 			}
 			for (BlockPos torch : branch.torches()) {
-				helper.assertTrue(helper.getLevel().getBlockState(torch).is(Blocks.TORCH), "no torch at " + helper.relativePos(torch).toShortString());
+				helper.assertTrue(helper.getLevel().getBlockState(torch).is(Blocks.TORCH), "no torch at " + relative(helper, torch).toShortString());
 			}
 		}
 	}
@@ -182,18 +184,18 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		Set<BlockPos> kept = shaft.protectedBlocks();
 		LevelWorldView view = new LevelWorldView(helper.getLevel(), new SimpleContainer(1), ItemStack.EMPTY, Set.of());
 		for (BlockPos pos : kept) {
-			helper.assertTrue(view.breakTicks(pos) < 0, "pathing may break " + helper.relativePos(pos).toShortString());
+			helper.assertTrue(view.breakTicks(pos) < 0, "pathing may break " + relative(helper, pos).toShortString());
 		}
 
 		helper.onEachTick(() -> {
 			for (BlockPos pos : kept) {
 				if (helper.getLevel().getBlockState(pos).isAir()) {
-					helper.fail("broke " + helper.relativePos(pos).toShortString());
+					helper.fail("broke " + relative(helper, pos).toShortString());
 				}
 			}
 			for (BlockPos torch : shaft.torches()) {
 				if (!helper.getLevel().getBlockState(torch).is(Blocks.TORCH)) {
-					helper.fail("torch gone at " + helper.relativePos(torch).toShortString());
+					helper.fail("torch gone at " + relative(helper, torch).toShortString());
 				}
 			}
 			if (!helper.getLevel().getBlockState(planks).is(Blocks.OAK_PLANKS)) {
@@ -206,7 +208,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 					for (BlockPos cell : branch.cells()) {
 						BlockState state = helper.getLevel().getBlockState(cell);
 						helper.assertTrue(state.isAir() || state.is(Blocks.TORCH) || cell.equals(planks),
-							"branch not dug at " + helper.relativePos(cell).toShortString());
+							"branch not dug at " + relative(helper, cell).toShortString());
 					}
 				}
 			}
@@ -229,7 +231,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 				for (Mineshaft.Branch branch : shaft.branches(deepest, round)) {
 					for (BlockPos cell : branch.cells()) {
 						BlockState state = helper.getLevel().getBlockState(cell);
-						helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "round " + round + " not dug at " + helper.relativePos(cell).toShortString());
+						helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "round " + round + " not dug at " + relative(helper, cell).toShortString());
 					}
 				}
 			}
@@ -289,20 +291,11 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			for (Mineshaft.Branch branch : branches) {
 				for (BlockPos torch : branch.torches()) {
-					helper.assertTrue(helper.getLevel().getBlockState(torch).is(Blocks.TORCH), "dark at " + helper.relativePos(torch).toShortString());
+					helper.assertTrue(helper.getLevel().getBlockState(torch).is(Blocks.TORCH), "dark at " + relative(helper, torch).toShortString());
 				}
 			}
 			assertLit(helper, branches.stream().flatMap(branch -> branch.cells().stream()).toList());
 		});
-	}
-
-	/**
-	 * {@code pos} relative to the test, the inverse of {@link GameTestHelper#absolutePos} for these
-	 * unrotated tests. {@link GameTestHelper#relativePos} is not: it mirrors x and z when the test is
-	 * not rotated, which put the miner outside the test area.
-	 */
-	private static BlockPos relative(GameTestHelper helper, BlockPos pos) {
-		return pos.subtract(helper.absolutePos(BlockPos.ZERO));
 	}
 
 	/** A miner at the deepest landing with a pickaxe and every other slot full of {@code haul}. */
