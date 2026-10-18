@@ -25,6 +25,11 @@ public enum JobType implements StringRepresentable {
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 
+	/** Whether the work fills the bot's inventory, such as digging, chopping and harvesting. */
+	public boolean yieldsItems() {
+		return this == CHOP_TREE || this == MINE_BRANCH || this == HARVEST_CROP || this == CLEAR_AREA;
+	}
+
 	@Override
 	public String getSerializedName() {
 		return this.name().toLowerCase(Locale.ROOT);

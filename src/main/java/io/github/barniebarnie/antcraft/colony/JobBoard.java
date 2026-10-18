@@ -58,7 +58,7 @@ public class JobBoard {
 		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {
 			return Optional.empty();
 		}
-		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item, 0, 0L, now);
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.copyOf(area), item, 0, 0L, now, Optional.empty(), 0);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -68,7 +68,7 @@ public class JobBoard {
 		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
 			return Optional.empty();
 		}
-		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L);
+		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L, Optional.empty(), 0);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -110,6 +110,23 @@ public class JobBoard {
 			.min(Comparator.comparingInt(rank).thenComparingDouble(job -> job.target().distSqr(from)));
 		nearest.ifPresent(job -> this.replace(job, job.claim(bot, now)));
 		return nearest.flatMap(job -> this.jobOf(bot));
+	}
+
+	/**
+	 * Gives the bot its current job, or claims the {@code ready} open job {@code score} rates lowest,
+	 * skipping jobs it cannot take. Jobs to retry later are not claimed before their time.
+	 */
+	public Optional<Job> claim(UUID bot, long now, Predicate<Job> ready, JobScore score) {
+		Optional<Job> current = this.jobOf(bot);
+		if (current.isPresent()) {
+			this.heartbeat(bot, now);
+			return this.jobOf(bot);
+		}
+		Optional<Job> best = this.jobs.stream()
+			.filter(job -> job.isOpen() && job.notBefore() <= now && ready.test(job) && score.score(job).isPresent())
+			.min(Comparator.comparingDouble(job -> score.score(job).orElseThrow()));
+		best.ifPresent(job -> this.replace(job, job.claim(bot, now)));
+		return best.flatMap(job -> this.jobOf(bot));
 	}
 
 	public Optional<Job> jobOf(UUID bot) {
