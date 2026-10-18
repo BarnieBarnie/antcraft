@@ -1288,4 +1288,72 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			helper.assertFalse(bot.isInWater(), "still in the water");
 		});
 	}
+
+	/** A colony bot with another role, kept by a player so the colony does not make it a lumberjack. */
+	private static AntBot colonyGuard(GameTestHelper helper, Colony colony, int x, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		bot.setHome(helper.absolutePos(CHEST));
+		bot.setRole(BotRole.GUARD);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		return bot;
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void colonyBotOfAnotherRoleFellsATreeFromItsJob(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		bareTree(helper, 5, 5);
+		AntBot bot = colonyGuard(helper, colony, 2, 2);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_TREE), "chop job left: " + colony.board().jobs());
+			// Done with the job, it brings the logs home rather than keep them from the colony.
+			Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
+			helper.assertTrue(carried(bot, Items.OAK_LOG) == 0, "guard kept " + carried(bot, Items.OAK_LOG) + " logs");
+			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void twoColonyBotsEachTakeTheTreeNearerToThem(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		bareTree(helper, 2, 5);
+		bareTree(helper, 5, 2);
+		AntBot west = colonyGuard(helper, colony, 1, 6);
+		AntBot east = colonyGuard(helper, colony, 6, 1);
+		BlockPos westTree = helper.absolutePos(new BlockPos(2, 1, 5));
+		BlockPos eastTree = helper.absolutePos(new BlockPos(5, 1, 2));
+		Set<BlockPos> felled = new HashSet<>();
+		helper.onEachTick(() -> {
+			for (AntBot bot : List.of(west, east)) {
+				BlockPos nearer = bot == west ? westTree : eastTree;
+				colony.board().jobOf(bot.getUUID()).filter(job -> job.type() == JobType.CHOP_TREE).ifPresent(job -> {
+					if (!job.target().equals(nearer)) {
+						helper.fail("a bot took the tree further from it, at " + job.target().subtract(helper.absolutePos(BlockPos.ZERO)));
+					}
+					felled.add(job.target());
+				});
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			helper.assertTrue(felled.equals(Set.of(westTree, eastTree)), "trees claimed: " + felled);
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 800)
+	public void replantJobIsTakenByABotThatIsNotALumberjack(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
+		colony.board().post(JobType.REPLANT, base, List.of(base), Optional.of(Items.OAK_SAPLING), helper.getLevel().getGameTime());
+		AntBot bot = colonyGuard(helper, colony, 2, 2);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
+			helper.assertTrue(!colony.board().has(JobType.REPLANT, base), "replant job still on the board");
+		});
+	}
 }

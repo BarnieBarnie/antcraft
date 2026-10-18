@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
+import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Revisit;
 import io.github.barniebarnie.antcraft.work.TreeRetry;
@@ -132,14 +133,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
 		this.goalSelector.addGoal(2, new ReturnHomeGoal(this));
+		// Colony jobs that have moved off the role goals; it takes the bot from its role goal while that has no work.
+		LumberjackGoal lumberjack = new LumberjackGoal(this);
+		this.goalSelector.addGoal(3, new WorkerGoal(this, lumberjack));
 		// First of the role goals: it also takes down scaffolding left from an earlier role, before the new role's work.
-		this.goalSelector.addGoal(3, new LumberjackGoal(this));
-		this.goalSelector.addGoal(3, new CrafterGoal(this));
-		this.goalSelector.addGoal(3, new MinerGoal(this));
-		this.goalSelector.addGoal(3, new FarmerGoal(this));
-		this.goalSelector.addGoal(3, new GuardGoal(this));
-		this.goalSelector.addGoal(3, new HaulerGoal(this));
-		this.goalSelector.addGoal(3, new BuilderGoal(this));
+		this.goalSelector.addGoal(4, lumberjack);
+		this.goalSelector.addGoal(4, new CrafterGoal(this));
+		this.goalSelector.addGoal(4, new MinerGoal(this));
+		this.goalSelector.addGoal(4, new FarmerGoal(this));
+		this.goalSelector.addGoal(4, new GuardGoal(this));
+		this.goalSelector.addGoal(4, new HaulerGoal(this));
+		this.goalSelector.addGoal(4, new BuilderGoal(this));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));

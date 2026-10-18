@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.ToDoubleFunction;
 import net.minecraft.SharedConstants;
@@ -97,6 +98,26 @@ class JobScoreTest {
 		JobScore full = bot(BlockPos.ZERO, List.of(), 0, Optional.empty(), NO_FETCH);
 
 		assertEquals(build.id(), board.claim(bot, 0L, job -> true, full).orElseThrow().id());
+	}
+
+	@Test
+	void preferredTypeBeatsANearerJobByUpToTheRoleBonus() {
+		JobScore miner = new JobScore(BlockPos.ZERO, List.of(), 10, Optional.empty(), NO_FETCH, Set.of(JobType.MINE_BRANCH));
+		double tree = miner.score(job(JobType.CHOP_TREE, new BlockPos(2, 0, 0))).orElseThrow();
+		double ownNear = miner.score(job(JobType.MINE_BRANCH, new BlockPos(2 + (int) JobScore.ROLE_BONUS - 1, 0, 0))).orElseThrow();
+		double ownFar = miner.score(job(JobType.MINE_BRANCH, new BlockPos(2 + (int) JobScore.ROLE_BONUS + 1, 0, 0))).orElseThrow();
+		assertTrue(ownNear < tree);
+		assertTrue(ownFar > tree);
+	}
+
+	@Test
+	void boardShowsTheBestJobWithoutClaimingIt() {
+		JobBoard board = new JobBoard();
+		Job near = board.post(JobType.CHOP_TREE, new BlockPos(2, 0, 0)).orElseThrow();
+		board.post(JobType.CHOP_TREE, new BlockPos(9, 0, 0));
+
+		assertEquals(near.id(), board.best(0L, job -> true, bot(BlockPos.ZERO)).orElseThrow().id());
+		assertTrue(board.jobs().stream().allMatch(Job::isOpen));
 	}
 
 	@Test

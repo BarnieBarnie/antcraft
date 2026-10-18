@@ -122,11 +122,16 @@ public class JobBoard {
 			this.heartbeat(bot, now);
 			return this.jobOf(bot);
 		}
-		Optional<Job> best = this.jobs.stream()
-			.filter(job -> job.isOpen() && job.notBefore() <= now && ready.test(job) && score.score(job).isPresent())
-			.min(Comparator.comparingDouble(job -> score.score(job).orElseThrow()));
+		Optional<Job> best = this.best(now, ready, score);
 		best.ifPresent(job -> this.replace(job, job.claim(bot, now)));
 		return best.flatMap(job -> this.jobOf(bot));
+	}
+
+	/** The {@code ready} open job {@code score} rates lowest, left open; see {@link #claim(UUID, long, Predicate, JobScore)}. */
+	public Optional<Job> best(long now, Predicate<Job> ready, JobScore score) {
+		return this.jobs.stream()
+			.filter(job -> job.isOpen() && job.notBefore() <= now && ready.test(job) && score.score(job).isPresent())
+			.min(Comparator.comparingDouble(job -> score.score(job).orElseThrow()));
 	}
 
 	public Optional<Job> jobOf(UUID bot) {
