@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -84,6 +86,42 @@ class ReplantingTest {
 		assertEquals(List.of(square.get(1)), toPlant);
 		// One spot to plant, so a 1x1 tree's rule: its own kind for a while, then any.
 		assertEquals(Optional.empty(), Replanting.saplingNeeded(Optional.of(Items.SPRUCE_SAPLING), toPlant.size(), 0, WAIT, WAIT));
+	}
+
+	@Test
+	void aPartlyBuiltOver2x2SiteNeverTakesASaplingThatOnlyGrowsAs2x2() {
+		Optional<net.minecraft.world.item.Item> darkOak = Optional.of(Items.DARK_OAK_SAPLING);
+
+		for (long now : new long[] {0, WAIT, 10 * WAIT}) {
+			assertFalse(Replanting.wanted(darkOak, 4, 1, 0, now, WAIT).test(new ItemStack(Items.DARK_OAK_SAPLING)));
+			assertFalse(Replanting.wanted(darkOak, 4, 1, 0, now, WAIT).test(new ItemStack(Items.PALE_OAK_SAPLING)));
+		}
+	}
+
+	@Test
+	void aPartlyBuiltOver2x2SiteTakesAnyOtherSaplingRightAway() {
+		Optional<net.minecraft.world.item.Item> darkOak = Optional.of(Items.DARK_OAK_SAPLING);
+
+		assertTrue(Replanting.wanted(darkOak, 4, 1, 0, 0, WAIT).test(new ItemStack(Items.BIRCH_SAPLING)));
+		assertTrue(Replanting.wanted(Optional.of(Items.SPRUCE_SAPLING), 4, 1, 0, 0, WAIT).test(new ItemStack(Items.OAK_SAPLING)));
+		assertFalse(Replanting.wanted(darkOak, 4, 1, 0, 0, WAIT).test(new ItemStack(Items.APPLE)));
+	}
+
+	@Test
+	void aWhole2x2SiteStillTakesOnlyItsOwnKind() {
+		Optional<net.minecraft.world.item.Item> darkOak = Optional.of(Items.DARK_OAK_SAPLING);
+
+		assertTrue(Replanting.wanted(darkOak, 4, 4, 0, 10 * WAIT, WAIT).test(new ItemStack(Items.DARK_OAK_SAPLING)));
+		assertFalse(Replanting.wanted(darkOak, 4, 4, 0, 10 * WAIT, WAIT).test(new ItemStack(Items.BIRCH_SAPLING)));
+	}
+
+	@Test
+	void a1x1SiteTakesItsOwnKindThenAnySaplingThatGrowsAlone() {
+		Optional<net.minecraft.world.item.Item> birch = Optional.of(Items.BIRCH_SAPLING);
+
+		assertFalse(Replanting.wanted(birch, 1, 1, 0, 0, WAIT).test(new ItemStack(Items.OAK_SAPLING)));
+		assertTrue(Replanting.wanted(birch, 1, 1, 0, WAIT, WAIT).test(new ItemStack(Items.OAK_SAPLING)));
+		assertFalse(Replanting.wanted(birch, 1, 1, 0, WAIT, WAIT).test(new ItemStack(Items.DARK_OAK_SAPLING)));
 	}
 
 	@Test

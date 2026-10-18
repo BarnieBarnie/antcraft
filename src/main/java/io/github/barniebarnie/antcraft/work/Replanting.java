@@ -7,7 +7,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 
@@ -24,6 +27,22 @@ public final class Replanting {
 	 */
 	public static Optional<Item> saplingNeeded(Optional<Item> kind, int spots, long felled, long now, int waitTicks) {
 		return spots > 1 || now - felled < waitTicks ? kind : Optional.empty();
+	}
+
+	/**
+	 * The saplings a felled tree's site of {@code siteSpots} spots takes now for {@code toPlant} of them.
+	 * Its own kind while {@link #saplingNeeded} says so, else any sapling that grows a tree on its own.
+	 * A 2x2 site partly built over (see {@link #spotsToPlant}) cannot grow its tree back, so it takes
+	 * any such sapling right away rather than waiting for its own kind.
+	 */
+	public static Predicate<ItemStack> wanted(Optional<Item> kind, int siteSpots, int toPlant, long felled, long now, int waitTicks) {
+		Optional<Item> needed = siteSpots > 1 && toPlant == 1 ? Optional.empty() : saplingNeeded(kind, toPlant, felled, now, waitTicks);
+		return stack -> needed.map(stack::is).orElseGet(() -> stack.is(ItemTags.SAPLINGS) && growsAlone(stack.getItem()));
+	}
+
+	/** Whether one {@code sapling} grows a tree: dark and pale oak only grow from four in a square. */
+	private static boolean growsAlone(Item sapling) {
+		return sapling != Items.DARK_OAK_SAPLING && sapling != Items.PALE_OAK_SAPLING;
 	}
 
 	/**

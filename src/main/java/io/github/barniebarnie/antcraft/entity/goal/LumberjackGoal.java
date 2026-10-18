@@ -481,7 +481,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** Whether this bot could get the saplings for the replant job, counting those it carries, nearby and in the core. */
 	private boolean hasSaplingsFor(ServerLevel level, Colony colony, Job job) {
 		int needed = this.toPlant(level, job.blocks()).size();
-		Predicate<ItemStack> wanted = wanted(level, job.item(), needed, job.posted());
+		Predicate<ItemStack> wanted = this.wanted(level, job.item(), job.blocks(), job.posted());
 		Container core = Storage.containerAt(level, colony.core());
 		int available = count(this.bot.getInventory(), wanted) + this.saplingsNear(level, job.target(), wanted)
 			+ (core == null ? 0 : count(core, wanted));
@@ -495,14 +495,15 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			.stream().mapToInt(item -> item.getItem().getCount()).sum();
 	}
 
-	/** The saplings the site's spots take now: its own kind, or any once a 1x1 tree has waited long enough for that. */
+	/** The saplings the site's spots take now (see Replanting.wanted). */
 	private Predicate<ItemStack> wanted(ServerLevel level) {
-		return wanted(level, this.sapling, this.toPlant(level, this.spots).size(), this.felled);
+		return this.wanted(level, this.sapling, this.spots, this.felled);
 	}
 
-	/** The saplings a site of {@code kind}, felled at {@code felled}, takes now for {@code toPlant} spots. */
-	private static Predicate<ItemStack> wanted(ServerLevel level, Optional<Item> kind, int toPlant, long felled) {
-		return saplingMatcher(Replanting.saplingNeeded(kind, toPlant, felled, level.getGameTime(), AntCraftConfig.replantMatchWaitTicks()));
+	/** The saplings a site of {@code kind} on {@code spots}, felled at {@code felled}, takes now. */
+	private Predicate<ItemStack> wanted(ServerLevel level, Optional<Item> kind, List<BlockPos> spots, long felled) {
+		return Replanting.wanted(kind, spots.size(), this.toPlant(level, spots).size(), felled, level.getGameTime(),
+			AntCraftConfig.replantMatchWaitTicks());
 	}
 
 	/** The site's spots to plant now: all of them, or one when a 2x2 site is partly built over (see Replanting.spotsToPlant). */
@@ -529,7 +530,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			Predicate<ItemStack> wanted = this.wanted(level);
 			// Its own kind first, should any sapling do by now.
 			int toPlant = this.toPlant(level, this.spots).size();
-			Storage.moveItems(container, this.bot.getInventory(), saplingMatcher(this.sapling), toPlant - count(this.bot.getInventory(), wanted));
+			Storage.moveItems(container, this.bot.getInventory(), saplingMatcher(this.sapling).and(wanted), toPlant - count(this.bot.getInventory(), wanted));
 			Storage.moveItems(container, this.bot.getInventory(), wanted, toPlant - count(this.bot.getInventory(), wanted));
 			// If another bot took the saplings first, replanting gives the job back.
 			this.enter(State.REPLANT);
@@ -727,7 +728,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (reach.isReached(this.bot.blockPosition())) {
 			for (BlockPos spot : open) {
 				// Its own kind first, should any sapling do by now.
-				ItemStack sapling = Optional.ofNullable(findItem(this.bot.getInventory(), saplingMatcher(this.sapling)))
+				ItemStack sapling = Optional.ofNullable(findItem(this.bot.getInventory(), saplingMatcher(this.sapling).and(wanted)))
 					.orElseGet(() -> findItem(this.bot.getInventory(), wanted));
 				if (sapling != null && sapling.getItem() instanceof BlockItem blockItem) {
 					level.setBlockAndUpdate(spot, blockItem.getBlock().defaultBlockState());
@@ -759,7 +760,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && isLeafDrop(item.getItem())
 					&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
 			int toPlant = this.toPlant(level, revisit.spots()).size();
-			Predicate<ItemStack> wanted = wanted(level, revisit.sapling(), toPlant, revisit.felled());
+			Predicate<ItemStack> wanted = this.wanted(level, revisit.sapling(), revisit.spots(), revisit.felled());
 			if (dropped || count(this.bot.getInventory(), wanted) >= toPlant) {
 				this.site = base;
 				this.spots = revisit.spots();
