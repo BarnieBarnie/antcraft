@@ -88,6 +88,33 @@ class ColonyActionsTest {
 		}
 	}
 
+	private static final List<ColonyActions.Edit> COMMAND_EDITS = List.of(ColonyActions.Edit.MINESHAFT, ColonyActions.Edit.BUILD_COPY,
+		ColonyActions.Edit.BUILD_CANCEL, ColonyActions.Edit.TERRAFORM, ColonyActions.Edit.CLEAR_BLOCKED);
+
+	@Test
+	void mineshaftBuildTerraformAndBlockedEditsOnlyChangeColonyData() {
+		for (ColonyActions.Edit edit : COMMAND_EDITS) {
+			assertFalse(edit.commandsBots(), edit.toString());
+			assertTrue(ColonyActions.mayEdit(edit, true), edit + " with bots allowed");
+			assertTrue(ColonyActions.mayEdit(edit, false), edit + " with bots not allowed");
+		}
+	}
+
+	@Test
+	void theScreenCannotMakeEditsThatOnlyTheCommandsHave() {
+		for (ColonyActions.Edit edit : COMMAND_EDITS) {
+			Colony colony = colony();
+			assertFalse(edit.fromScreen(), edit.toString());
+			assertFalse(ColonyActions.edit(colony, edit, "minecraft:torch", 8), edit.toString());
+			assertEquals(Map.of(), colony.orders(), edit.toString());
+			assertEquals(List.of(), colony.builds(), edit.toString());
+			assertEquals(20, colony.radius(), edit.toString());
+		}
+		for (ColonyActions.Edit edit : ColonyActions.Edit.values()) {
+			assertEquals(!COMMAND_EDITS.contains(edit), edit.fromScreen(), edit.toString());
+		}
+	}
+
 	@Test
 	void ordersAnItem() {
 		Colony colony = colony();
@@ -119,6 +146,28 @@ class ColonyActionsTest {
 		assertEquals(Map.of(Items.OAK_LOG, 3), colony.orders());
 		assertEquals(Map.of(Items.OAK_LOG, 3), colony.ordersFor(Colony.OrderPurpose.BUILD));
 		assertFalse(ColonyActions.edit(colony, ColonyActions.Edit.CANCEL, "minecraft:no_such_item", 0));
+	}
+
+	@Test
+	void theCancelCommandAndTheScreenLeaveTheSameOrders() {
+		Colony byCommand = colony();
+		Colony byScreen = colony();
+		for (Colony colony : List.of(byCommand, byScreen)) {
+			colony.addOrder(Items.OAK_LOG, 1);
+			colony.orderFor(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_LOG, 3));
+			colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 2));
+		}
+
+		ColonyActions.cancelOrder(byCommand, Items.OAK_LOG);
+		ColonyActions.cancelOrder(byCommand, Items.CHEST);
+		assertTrue(ColonyActions.edit(byScreen, ColonyActions.Edit.CANCEL, "minecraft:oak_log", 0));
+		assertTrue(ColonyActions.edit(byScreen, ColonyActions.Edit.CANCEL, "minecraft:chest", 0));
+
+		assertEquals(byScreen.orders(), byCommand.orders());
+		assertEquals(Map.of(Items.OAK_LOG, 3, Items.CHEST, 2), byCommand.orders());
+		for (Colony.OrderPurpose purpose : Colony.OrderPurpose.values()) {
+			assertEquals(byScreen.ordersFor(purpose), byCommand.ordersFor(purpose), purpose.toString());
+		}
 	}
 
 	@Test

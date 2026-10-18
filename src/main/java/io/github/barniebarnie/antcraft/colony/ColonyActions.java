@@ -24,7 +24,11 @@ public final class ColonyActions {
 	public static final int MIN_RADIUS = 4;
 	public static final int MAX_RADIUS = 128;
 
-	/** What the colony screen can change, besides roles. */
+	/**
+	 * What a player can change in a colony, besides roles. The colony screen makes the first few; the rest only come from
+	 * {@code /antcraft colony} commands, which need positions in the world ({@link #fromScreen}). Every colony-editing
+	 * command checks its edit with {@link #mayEdit}, the same as the screen.
+	 */
 	public enum Edit {
 		/** Order {@code count} of an item. */
 		ORDER,
@@ -34,7 +38,17 @@ public final class ColonyActions {
 		SET_STOCK,
 		REMOVE_STOCK,
 		/** Set the radius to {@code count}. */
-		RADIUS;
+		RADIUS,
+		/** Plan the mineshaft ({@code colony mineshaft}). */
+		MINESHAFT,
+		/** Add a build copied from a region ({@code colony build copy}). */
+		BUILD_COPY,
+		/** Drop a build ({@code colony build cancel}). */
+		BUILD_CANCEL,
+		/** Add a terraform plan ({@code colony terraform}). */
+		TERRAFORM,
+		/** Give up on the blocked build steps ({@code colony blocked clear}). */
+		CLEAR_BLOCKED;
 
 		/**
 		 * Whether this edit commands bots, and so needs bots allowed on the server. Each new edit has to answer this here.
@@ -42,7 +56,15 @@ public final class ColonyActions {
 		 */
 		boolean commandsBots() {
 			return switch (this) {
-				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS -> false;
+				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS, MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED -> false;
+			};
+		}
+
+		/** Whether the colony screen can make this edit through {@link ColonyActions#edit}; the others are commands only. */
+		public boolean fromScreen() {
+			return switch (this) {
+				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS -> true;
+				case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED -> false;
 			};
 		}
 	}
@@ -83,7 +105,8 @@ public final class ColonyActions {
 	/**
 	 * Whether {@code edit} may be made, from the colony screen or the matching {@code /antcraft colony} command, given
 	 * whether bots are allowed on the server ({@link io.github.barniebarnie.antcraft.config.AntCraftConfig#botsAllowed}).
-	 * The rule: changes to the colony's data (orders, stock targets, radius) do not need bots allowed, so a colony can be
+	 * The rule: changes to the colony's data (orders, stock targets, radius, the mineshaft, builds, terraform plans and
+	 * blocked steps) do not need bots allowed, so a colony can be
 	 * planned or tidied while its bots are off; anything that commands bots does ({@link #mayGiveRole}, and
 	 * {@code /antcraft role}, {@code goto} and {@code home}).
 	 */
@@ -94,7 +117,8 @@ public final class ColonyActions {
 	/**
 	 * Applies an edit from the colony screen. {@code target} is an item id, or for stock targets also a {@code #tag}.
 	 *
-	 * @return false, leaving the colony unchanged, if the target or count is invalid
+	 * @return false, leaving the colony unchanged, if the target or count is invalid, or the edit is not one the screen
+	 *     makes ({@link Edit#fromScreen})
 	 */
 	public static boolean edit(Colony colony, Edit edit, String target, int count) {
 		boolean countOk = count >= 1 && count <= MAX_COUNT;
@@ -104,7 +128,7 @@ public final class ColonyActions {
 				return true;
 			}).orElse(false);
 			case CANCEL -> item(target).map(item -> {
-				colony.cancelPlayerOrder(item);
+				cancelOrder(colony, item);
 				return true;
 			}).orElse(false);
 			case SET_STOCK -> countOk && match(target).map(match -> {
@@ -119,7 +143,16 @@ public final class ColonyActions {
 				colony.setRadius(count);
 				yield true;
 			}
+			case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED -> false;
 		};
+	}
+
+	/**
+	 * Cancels the player's part of the order for {@code item}; the parts the colony placed itself, such as materials for
+	 * its builds, stay. Both the colony screen and {@code /antcraft colony cancel} cancel this way.
+	 */
+	public static void cancelOrder(Colony colony, Item item) {
+		colony.cancelPlayerOrder(item);
 	}
 
 	/** Sets the stock target for {@code match}, keeping what an existing target prefers to make, such as stone before wooden pickaxes. */

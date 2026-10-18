@@ -276,6 +276,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int setMineshaft(CommandSourceStack source, BlockPos top) {
+		if (!checkMayEdit(source, ColonyActions.Edit.MINESHAFT)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
 			c.setMineshaft(new Mineshaft(top, AntCraftConfig.mineshaftLevels()));
@@ -302,7 +305,7 @@ public final class AntCraftCommands {
 		}
 		Optional<Colony> colony = nearestColony(source);
 		colony.ifPresent(c -> {
-			c.cancelOrder(item);
+			ColonyActions.cancelOrder(c, item);
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.cancelled", itemName(item)), false);
 		});
 		return colony.isPresent() ? 1 : 0;
@@ -334,6 +337,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int copyBuild(CommandSourceStack source, BlockPos from, BlockPos to, BlockPos at) {
+		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_COPY)) {
+			return 0;
+		}
 		BlockPos size = BlockPos.max(from, to).subtract(BlockPos.min(from, to)).offset(1, 1, 1);
 		long volume = (long) size.getX() * size.getY() * size.getZ();
 		if (volume > MAX_COPY_VOLUME) {
@@ -361,6 +367,9 @@ public final class AntCraftCommands {
 	 * cancelled with the other builds.
 	 */
 	private static int terraform(CommandSourceStack source, BlockPos from, BlockPos to, int y) {
+		if (!checkMayEdit(source, ColonyActions.Edit.TERRAFORM)) {
+			return 0;
+		}
 		BlockPos size = BlockPos.max(from, to).subtract(BlockPos.min(from, to)).offset(1, 1, 1);
 		long volume = (long) size.getX() * size.getY() * size.getZ();
 		if (volume > MAX_COPY_VOLUME) {
@@ -385,6 +394,9 @@ public final class AntCraftCommands {
 
 	/** Gives up on the build steps builders reported blocked, and the plans waiting on them. */
 	private static int clearBlocked(CommandSourceStack source) {
+		if (!checkMayEdit(source, ColonyActions.Edit.CLEAR_BLOCKED)) {
+			return 0;
+		}
 		Optional<Colony> colony = nearestColony(source);
 		if (colony.isEmpty()) {
 			return 0;
@@ -395,6 +407,9 @@ public final class AntCraftCommands {
 	}
 
 	private static int cancelBuild(CommandSourceStack source, int n) {
+		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_CANCEL)) {
+			return 0;
+		}
 		Optional<Colony> found = nearestColony(source);
 		if (found.isEmpty()) {
 			return 0;
