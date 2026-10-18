@@ -80,7 +80,7 @@ public final class Digging {
 	/**
 	 * The bot {@code bot} has nothing left to dig in the batch of {@code job}. While lumberjacks still
 	 * have trees to fell in it, or builders water to clear, the batch waits and the job is freed for
-	 * them; the batches that need it may start only while it waits for trees alone. Otherwise the
+	 * them; the batches that need it wait too, as what they build could bury a tree. Otherwise the
 	 * batch is done, or the steps left are reported as blocked, such as water with no builder to
 	 * clear it, or blocks out of reach.
 	 */
@@ -88,8 +88,7 @@ public final class Digging {
 		Optional<BuildPlan> batch = colony.build(job.id());
 		boolean water = batch.isPresent() && needsBuilder(level, colony, batch.get());
 		if (water || batch.isPresent() && waitsForLumberjacks(level, colony, batch.get())) {
-			// ponytail: a batch waiting only for lumberjacks still lets the batches that need it start, as before #82.
-			colony.batchWaiting(job.id(), water ? Colony.Wait.FLUID : Colony.Wait.ITEMS);
+			colony.batchWaiting(job.id(), water ? Colony.Wait.FLUID : Colony.Wait.TREES);
 			colony.board().release(bot);
 			return;
 		}

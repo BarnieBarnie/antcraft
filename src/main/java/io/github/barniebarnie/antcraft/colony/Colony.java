@@ -332,10 +332,42 @@ public class Colony {
 		return batch == null ? 0 : batch.index();
 	}
 
+	/**
+	 * Adds {@code plan} to build, with only the last step at each position it has more than one for
+	 * (see {@link #withoutOverlaps}).
+	 */
 	public void addBuild(BuildPlan plan) {
-		this.builds.put(UUID.randomUUID(), plan);
+		this.builds.put(UUID.randomUUID(), withoutOverlaps(plan));
 		this.indexBatches();
 		this.lastSurvey = -1;
+	}
+
+	/**
+	 * {@code plan} without the steps that a later step at the same position overrides, such as a block
+	 * a later batch replaces: the finished plan holds what the later step wants, so the earlier one
+	 * would look undone and its batch be reopened, undoing the later one, for good. Batches keep their
+	 * other steps, emptied ones included, so the batches that need them still match.
+	 */
+	static BuildPlan withoutOverlaps(BuildPlan plan) {
+		Map<BlockPos, BuildPlan.Step> last = lastSteps(plan);
+		if (plan.steps().stream().allMatch(step -> last.get(step.pos()).equals(step))) {
+			return plan;
+		}
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		List<BuildPlan.Batch> batches = new ArrayList<>();
+		for (BuildPlan.Batch batch : plan.batches()) {
+			int from = steps.size();
+			plan.steps().subList(batch.from(), batch.to()).stream().filter(step -> last.get(step.pos()).equals(step)).forEach(steps::add);
+			batches.add(new BuildPlan.Batch(from, steps.size(), batch.needs(), batch.dig()));
+		}
+		return new BuildPlan(steps, batches, plan.kind());
+	}
+
+	/** The last step of {@code plan} at each position it has a step for. */
+	private static Map<BlockPos, BuildPlan.Step> lastSteps(BuildPlan plan) {
+		Map<BlockPos, BuildPlan.Step> last = new HashMap<>();
+		plan.steps().forEach(step -> last.put(step.pos(), step));
+		return last;
 	}
 
 	/** Drops the plan, finished or cancelled, with the open jobs of its batches; the next survey withdraws what it ordered. */
@@ -385,13 +417,15 @@ public class Colony {
 		/** Items, such as torches or materials, with the rest of the batch worked through. */
 		ITEMS,
 		/** A fluid to settle, with blocks still to clear once it has. */
-		FLUID
+		FLUID,
+		/** Lumberjacks to fell a tree standing in a dig batch, which what is built on it would bury. */
+		TREES
 	}
 
 	/**
 	 * Records that the batch of build job {@code job} waits for {@code reason}. One waiting only for
 	 * items lets the batches that need it start, such as a hall once the stairs reaching it are dug
-	 * but not lit yet; one waiting for a fluid does not, as blocks of it are still to clear. The batch
+	 * but not lit yet; one waiting for a fluid or for trees does not, as blocks of it are still to clear. The batch
 	 * stays posted to be finished.
 	 */
 	public void batchWaiting(UUID job, Wait reason) {
@@ -526,14 +560,22 @@ public class Colony {
 	 * Reopens each done batch whose blocks no longer all match the world, such as a torch broken off
 	 * the mineshaft stairs, so it is posted again and rebuilt. It goes back as waiting, so the batches
 	 * that need it stay open meanwhile. {@code world} gives null where it cannot tell, such as in
-	 * unloaded chunks; such blocks are taken as still done.
+	 * unloaded chunks; such blocks are taken as still done. A step that a later step of the plan
+	 * overrides, as in a plan saved before {@link #withoutOverlaps}, is not checked: the block is the
+	 * later step's to keep.
 	 */
 	public void recheckDone(Function<BlockPos, @Nullable BlockState> world) {
 		boolean reopened = false;
+		Map<UUID, Map<BlockPos, BuildPlan.Step>> lastSteps = new HashMap<>();
 		for (Map.Entry<UUID, BatchState> entry : this.batchStates.entrySet()) {
-			if (entry.getValue() == BatchState.DONE && this.build(entry.getKey()).filter(batch -> batch.steps().stream().anyMatch(step -> {
+			BatchRef ref = this.batchJobs.get(entry.getKey());
+			if (entry.getValue() != BatchState.DONE || ref == null) {
+				continue;
+			}
+			Map<BlockPos, BuildPlan.Step> last = lastSteps.computeIfAbsent(ref.plan(), id -> lastSteps(this.builds.get(id)));
+			if (this.build(entry.getKey()).filter(batch -> batch.steps().stream().anyMatch(step -> {
 				BlockState state = world.apply(step.pos());
-				return state != null && !step.isDone(state);
+				return last.get(step.pos()).equals(step) && state != null && !step.isDone(state);
 			})).isPresent()) {
 				entry.setValue(BatchState.WAITING);
 				reopened = true;

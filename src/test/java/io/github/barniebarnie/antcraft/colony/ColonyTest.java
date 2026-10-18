@@ -536,6 +536,67 @@ class ColonyTest {
 	}
 
 	@Test
+	void aDigBatchWaitingForALumberjackKeepsTheBatchesThatNeedItClosed() {
+		Colony colony = colony();
+		BuildPlan plan = fourBatches();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		// Dug as far as it goes, but a tree still stands in it; a fill on top would bury it.
+		colony.batchWaiting(batchJob(colony, plan, 0).id(), Colony.Wait.TREES);
+		colony.postBuildJobs();
+		assertEquals(Set.of(plan.batch(0), plan.batch(3)), openBatches(colony), "a batch waiting for a lumberjack opened the batches that need it");
+	}
+
+	private static final BlockPos SHARED = new BlockPos(5, 64, 5);
+
+	/** Two batches, the second needing the first, that want different blocks at {@link #SHARED}. */
+	private static BuildPlan overlapping() {
+		return new BuildPlan(
+			List.of(new BuildPlan.Step(SHARED, Blocks.COBBLESTONE.defaultBlockState()), new BuildPlan.Step(new BlockPos(6, 64, 5), Blocks.COBBLESTONE.defaultBlockState()),
+				new BuildPlan.Step(SHARED, Blocks.OAK_PLANKS.defaultBlockState())),
+			List.of(new BuildPlan.Batch(0, 2, List.of()), new BuildPlan.Batch(2, 3, List.of(0))));
+	}
+
+	/** Where {@code plan} built, as finished: each position holds what its last step wants. */
+	private static Function<BlockPos, BlockState> built(BuildPlan plan) {
+		Map<BlockPos, BlockState> built = new HashMap<>();
+		plan.steps().forEach(step -> built.put(step.pos(), step.state()));
+		return pos -> built.getOrDefault(pos, Blocks.AIR.defaultBlockState());
+	}
+
+	@Test
+	void aPlanWhoseBatchesWantDifferentBlocksAtOneSpotKeepsOnlyTheLaterStep() {
+		Colony colony = colony();
+		colony.addBuild(overlapping());
+		BuildPlan added = colony.builds().getFirst();
+		assertEquals(List.of(Blocks.OAK_PLANKS.defaultBlockState()),
+			added.steps().stream().filter(step -> step.pos().equals(SHARED)).map(BuildPlan.Step::state).toList());
+		assertEquals(2, added.batches().size());
+		assertEquals(List.of(0), added.batches().get(1).needs());
+
+		colony.postBuildJobs();
+		Job first = claim(colony, ALICE);
+		colony.finishBatch(first.id());
+		colony.board().complete(first.id());
+		colony.recheckDone(built(overlapping()));
+		assertEquals(Set.of(added.batch(1)), openBatches(colony), "the batches undo each other");
+	}
+
+	@Test
+	void aDoneBatchIsNotReopenedForAnotherBatchsStep() {
+		// As an old save may hold it: the overlap was never taken out.
+		BuildPlan plan = overlapping();
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(),
+			Optional.empty(), List.of(), Map.of(UUID.randomUUID(), plan), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		colony.postBuildJobs();
+		Job first = claim(colony, ALICE);
+		colony.finishBatch(first.id());
+		colony.board().complete(first.id());
+		colony.recheckDone(built(plan));
+		assertEquals(Set.of(plan.batch(1)), openBatches(colony), "done batch reopened for the later batch's block");
+	}
+
+	@Test
 	void earlierBatchesRankFirst() {
 		Colony colony = halfwayDown();
 		Set<Integer> ranks = colony.board().jobs().stream().map(job -> colony.batchIndex(job.id())).collect(Collectors.toSet());
