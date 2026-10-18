@@ -51,6 +51,18 @@ class StockkeepingTest {
 	}
 
 	@Test
+	void makesRoomWithWhatOrdersDoNotNeed() {
+		// Everything is wanted; the smallest kind that orders do not use goes, all of it, so a slot frees.
+		assertEquals(Map.of("dirt", 10), Stockkeeping.toMakeRoom(Map.of("oak_log", 64, "dirt", 10, "stick", 5), Map.of("stick", 5)));
+	}
+
+	@Test
+	void makesRoomWithTheSmallestKindWhenOrdersNeedEverything() {
+		assertEquals(Map.of("stick", 5), Stockkeeping.toMakeRoom(Map.of("oak_log", 64, "stick", 5), Map.of("oak_log", 64, "stick", 5)));
+		assertTrue(Stockkeeping.toMakeRoom(Map.<String, Integer>of(), Map.of()).isEmpty());
+	}
+
+	@Test
 	void fetchesWhatTheCoreIsShortOf() {
 		// No pickaxe in the core and one in storage: bring it back.
 		assertEquals(Map.of("wooden_pickaxe", 1), Stockkeeping.toFetch(Map.of(), Map.of("wooden_pickaxe", 1, "dirt", 500), TARGETS, Map.of()));

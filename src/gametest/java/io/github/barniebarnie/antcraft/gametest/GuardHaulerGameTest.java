@@ -325,6 +325,89 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	private static int freeSlots(Container container) {
+		int free = 0;
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			free += container.getItem(i).isEmpty() ? 1 : 0;
+		}
+		return free;
+	}
+
+	/**
+	 * A core full of different items, each exactly at its stock target, so none is surplus. The core
+	 * still frees a slot, and the hauler does not fetch what it stored straight back.
+	 */
+	@GameTest(maxTicks = 600)
+	public void aCoreFullOfWantedItemsMakesRoomWithoutFetchingItBack(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		helper.setBlock(STORAGE, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
+		Container core = core(helper);
+		List<ItemStack> stacks = distinctStacks(core.getContainerSize());
+		List<StockTarget> targets = new ArrayList<>();
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			core.setItem(i, stacks.get(i).copy());
+			targets.add(StockTarget.of(stacks.get(i).getItem(), stacks.get(i).getCount()));
+		}
+		colony.setStockTargets(targets);
+		member(helper, colony, BotRole.HAULER);
+		int[] stored = {0};
+		boolean[] fetchedBack = {false};
+
+		helper.onEachTick(() -> {
+			int now = 0;
+			for (int i = 0; i < chest.getContainerSize(); i++) {
+				now += chest.getItem(i).getCount();
+			}
+			fetchedBack[0] |= now < stored[0];
+			stored[0] = now;
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!fetchedBack[0], "the hauler fetched stored items back");
+			helper.assertTrue(stored[0] > 0, "nothing stored");
+			helper.assertTrue(freeSlots(core) > 0, "core still full");
+			// Long enough for a hauler that fetches the items back to do so.
+			helper.assertTrue(helper.getTick() >= 400, "still watching");
+		});
+	}
+
+	/** A hauler holds surplus out of a full core to make room for a chest; once the core has room, it puts it back. */
+	@GameTest(maxTicks = 900)
+	public void haulerPutsHeldItemsIntoTheCoreOnceItHasRoom(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// A storage area waiting for a chest, and no crafter to make one.
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		Container core = core(helper);
+		List<ItemStack> stacks = distinctStacks(core.getContainerSize());
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			core.setItem(i, stacks.get(i).copy());
+		}
+		AntBot hauler = member(helper, colony, BotRole.HAULER);
+		ItemStack[] held = {ItemStack.EMPTY};
+
+		helper.onEachTick(() -> {
+			if (held[0].isEmpty() && !hauler.getInventory().isEmpty()) {
+				for (int i = 0; i < hauler.getInventory().getContainerSize(); i++) {
+					if (!hauler.getInventory().getItem(i).isEmpty()) {
+						held[0] = hauler.getInventory().getItem(i).copy();
+					}
+				}
+				// The colony uses up ten stacks: the core has room again.
+				for (int i = 0; i < core.getContainerSize() && freeSlots(core) < 10; i++) {
+					if (!core.getItem(i).isEmpty()) {
+						core.setItem(i, ItemStack.EMPTY);
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!held[0].isEmpty(), "the hauler never held anything");
+			helper.assertTrue(hauler.getInventory().isEmpty(), "hauler still holds " + hauler.getInventory());
+			helper.assertTrue(core.countItem(held[0].getItem()) >= held[0].getCount(), "core lacks the held " + held[0]);
+		});
+	}
+
 	@GameTest(maxTicks = 400)
 	public void haulerBringsAMissingPickaxeBackFromStorage(GameTestHelper helper) {
 		Colony colony = colony(helper);

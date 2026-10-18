@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -43,6 +44,19 @@ public final class Stockkeeping {
 			}
 		});
 		return store;
+	}
+
+	/**
+	 * What to move out of a full core when nothing in it is above its working stock: all of one kind,
+	 * so its slot frees. Rather a kind open orders do not use, and of those the fewest. Empty if the
+	 * core is empty.
+	 */
+	public static <I> Map<I, Integer> toMakeRoom(Map<I, Integer> core, Map<I, Integer> ingredients) {
+		return core.entrySet().stream()
+			.min(Comparator.comparing((Map.Entry<I, Integer> entry) -> ingredients.getOrDefault(entry.getKey(), 0) > 0)
+				.thenComparing(Map.Entry::getValue))
+			.map(entry -> Map.of(entry.getKey(), entry.getValue()))
+			.orElse(Map.of());
 	}
 
 	/**

@@ -31,6 +31,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
@@ -40,12 +41,19 @@ import org.jspecify.annotations.Nullable;
  * category per chest; what the core is short of (stock targets, ingredients for open orders) comes
  * back. Haulers place the storage chests themselves, from chests the colony survey orders. While
  * the core is full and the storage area still waits for a chest, a hauler holds a stack of surplus
- * so the chest has a slot to be crafted into, and another each time the core fills up again.
+ * so the chest has a slot to be crafted into, and another each time the core fills up again; it
+ * puts that back once the core has room. A full core where everything is wanted still frees a slot,
+ * and haulers keep a reserve slot free so what they stored does not come straight back.
  */
 public class HaulerGoal extends ColonyWorkGoal {
 	private static final int MIN_FREE_SLOTS = 1;
 	/** A core with this few free slots left needs a hauler. */
 	private static final int NEARLY_FULL_FREE_SLOTS = 4;
+	/**
+	 * Free slots a hauler leaves in the core: it fetches nothing from storage and puts back no held
+	 * surplus that would take them, so what it stored to make room does not come straight back.
+	 */
+	private static final int RESERVE_SLOTS = 1;
 	/** A trip that takes longer than this is given up, for example when a chest cannot be reached. */
 	private static final int TRIP_TICKS = 1200;
 
@@ -86,14 +94,26 @@ public class HaulerGoal extends ColonyWorkGoal {
 		/**
 		 * What the core holds above its working stock. A nearly full core with nothing above that keeps
 		 * only what stock targets and open orders need, not a stack of everything, so a core full of
-		 * different items still has surplus to make room with.
+		 * different items still has surplus to make room with. A full core where all of that is wanted
+		 * gives up one kind (see {@link Stockkeeping#toMakeRoom}), but never its chests, which storage
+		 * needs placed.
 		 */
 		Map<Item, Integer> toStore() {
 			Map<Item, Integer> store = Stockkeeping.toStore(this.inCore, this.targets, this.ingredients, Item::getDefaultMaxStackSize);
 			if (store.isEmpty() && freeSlots(this.core) <= NEARLY_FULL_FREE_SLOTS) {
-				return Stockkeeping.toStore(this.inCore, this.targets, this.ingredients, item -> 0);
+				store = Stockkeeping.toStore(this.inCore, this.targets, this.ingredients, item -> 0);
+			}
+			if (store.isEmpty() && freeSlots(this.core) == 0) {
+				Map<Item, Integer> kinds = new LinkedHashMap<>(this.inCore);
+				kinds.remove(Items.CHEST);
+				store = Stockkeeping.toMakeRoom(kinds, this.ingredients);
 			}
 			return store;
+		}
+
+		/** Whether some of the item fits in the core without taking its reserve slots. */
+		boolean hasRoomBeyondReserve(Item item) {
+			return freeSlots(this.core) > RESERVE_SLOTS || hasPartialStack(this.core, new ItemStack(item));
 		}
 
 		/** The surplus a hauler may hold to make room for a storage chest: all of it but what crafting the chest uses. */
@@ -172,6 +192,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 				this.cooldown = IDLE_TICKS;
 			} else if (this.reach(colony.core())) {
 				Storage.moveItems(inventory, core, this::deposits);
+				this.returnHeld(core);
 				this.depositing = false;
 				this.unreachableItems.clear();
 			}
@@ -220,7 +241,33 @@ public class HaulerGoal extends ColonyWorkGoal {
 	private boolean hasRoomForAny(Container core, Container inventory) {
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (!stack.isEmpty() && this.deposits(stack) && Storage.hasRoomFor(core, stack)) {
+			if (!stack.isEmpty() && (this.deposits(stack) ? Storage.hasRoomFor(core, stack) : freeSlots(core) > RESERVE_SLOTS)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Puts held surplus back into a core that has room again, a stack at a time while that leaves its
+	 * reserve slots free, so the hauler does not take it straight out again.
+	 */
+	private void returnHeld(Container core) {
+		SimpleContainer inventory = this.bot.getInventory();
+		for (int i = 0; i < inventory.getContainerSize() && freeSlots(core) > RESERVE_SLOTS; i++) {
+			ItemStack stack = inventory.getItem(i);
+			if (!stack.isEmpty() && !this.deposits(stack)) {
+				inventory.setItem(i, HopperBlockEntity.addItem(null, core, stack, null));
+			}
+		}
+		inventory.setChanged();
+		core.setChanged();
+	}
+
+	private static boolean hasPartialStack(Container container, ItemStack stack) {
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			ItemStack slot = container.getItem(i);
+			if (ItemStack.isSameItemSameComponents(slot, stack) && slot.getCount() < slot.getMaxStackSize()) {
 				return true;
 			}
 		}
@@ -292,7 +339,8 @@ public class HaulerGoal extends ColonyWorkGoal {
 
 	private @Nullable Trip planStorageTrip(ServerLevel level, Colony colony, Stocks stocks) {
 		for (Map.Entry<Item, Integer> fetch : stocks.toFetch().entrySet()) {
-			if (!Storage.hasRoomFor(stocks.core(), new ItemStack(fetch.getKey()))) {
+			// Not into the reserve: what was stored to make room stays stored.
+			if (!stocks.hasRoomBeyondReserve(fetch.getKey())) {
 				continue;
 			}
 			for (Map.Entry<BlockPos, Container> chest : stocks.chests().entrySet()) {
