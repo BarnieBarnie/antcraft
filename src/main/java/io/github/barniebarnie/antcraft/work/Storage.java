@@ -191,6 +191,31 @@ public final class Storage {
 		return false;
 	}
 
+	/** The storage chest for {@code stack}: one of its category with room for it, else an empty one; null if none. */
+	public static @Nullable BlockPos chestFor(Map<BlockPos, Container> chests, ItemStack stack) {
+		StorageCategory category = StorageCategory.of(stack);
+		BlockPos empty = null;
+		for (Map.Entry<BlockPos, Container> chest : chests.entrySet()) {
+			Container container = chest.getValue();
+			if (container.isEmpty()) {
+				empty = empty == null ? chest.getKey() : empty;
+			} else if (category(container) == category && hasRoomFor(container, stack)) {
+				return chest.getKey();
+			}
+		}
+		return empty;
+	}
+
+	/** A storage chest holds the category of whatever is in it first. */
+	public static StorageCategory category(Container chest) {
+		for (int i = 0; i < chest.getContainerSize(); i++) {
+			if (!chest.getItem(i).isEmpty()) {
+				return StorageCategory.of(chest.getItem(i));
+			}
+		}
+		return StorageCategory.MISC;
+	}
+
 	/** Whether the container holds every ingredient for {@code times} crafts of the recipe. */
 	public static boolean canCraft(Container container, TaskPlanner.Recipe<Item> recipe, int times) {
 		Map<Item, Integer> stock = stock(container);

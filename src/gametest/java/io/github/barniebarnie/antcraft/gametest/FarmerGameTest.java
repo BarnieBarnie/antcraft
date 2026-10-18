@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Field;
+import io.github.barniebarnie.antcraft.work.StorageArea;
 import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -275,5 +276,70 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertFalse(colony.orders().containsKey(Items.SHEARS), "orders: " + colony.orders());
 			helper.succeed();
 		});
+	}
+
+	private static final BlockPos STORAGE = new BlockPos(2, 1, 4);
+
+	/** Fills every slot of the core with cobblestone, so nothing else fits. */
+	private static void fillCore(GameTestHelper helper) {
+		Container core = core(helper);
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+		}
+	}
+
+	/** A farmer carrying wheat, and seeds enough that it does not go looking for more. */
+	private static AntBot farmerWithWheat(GameTestHelper helper, Colony colony, int x, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.setRole(BotRole.FARMER);
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT, 5));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 4));
+		return bot;
+	}
+
+	@GameTest(maxTicks = 300)
+	public void storesWheatInAStorageChestWhenTheCoreIsFull(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		fillCore(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		helper.setBlock(STORAGE, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
+		AntBot bot = farmerWithWheat(helper, colony, 2, 3);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chest.countItem(Items.WHEAT) == 5, "storage holds " + chest.countItem(Items.WHEAT) + " wheat");
+			helper.assertTrue(carried(bot, Items.WHEAT) == 0, "farmer still carries wheat");
+			helper.assertTrue(carried(bot, Items.WHEAT_SEEDS) == 4, "farmer stored its seeds");
+		});
+	}
+
+	/** With no room for its wheat anywhere the farmer does not go and stand at the core. */
+	@GameTest(maxTicks = 200)
+	public void staysAwayFromAFullCoreWithNoRoomForItsWheat(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		fillCore(helper);
+		AntBot bot = farmerWithWheat(helper, colony, 6, 6);
+
+		helper.runAfterDelay(150, () -> {
+			// The core is 7 blocks off and reached from 4: a farmer heading there has moved 3.
+			double moved = Math.sqrt(helper.absolutePos(new BlockPos(6, 1, 6)).distToCenterSqr(bot.position()));
+			helper.assertTrue(moved < 1.5, "farmer walked " + moved + " blocks towards the full core");
+			helper.assertTrue(carried(bot, Items.WHEAT) == 5, "farmer lost its wheat");
+			helper.succeed();
+		});
+	}
+
+	/** Wool it has no room for does not keep the farmer from shearing. */
+	@GameTest(maxTicks = 400)
+	public void keepsShearingWithNoRoomForTheWool(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		fillCore(helper);
+		Sheep sheep = sheep(helper);
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.SHEARS));
+		bot.getInventory().addItem(new ItemStack(Items.WOOL.white(), 2));
+
+		helper.succeedWhen(() -> helper.assertTrue(sheep.isSheared(), "sheep not sheared"));
 	}
 }

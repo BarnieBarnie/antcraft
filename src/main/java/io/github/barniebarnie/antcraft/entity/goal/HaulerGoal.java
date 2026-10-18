@@ -301,7 +301,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 		SimpleContainer inventory = this.bot.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			BlockPos chest = stack.isEmpty() ? null : chestFor(chests, stack);
+			BlockPos chest = stack.isEmpty() ? null : Storage.chestFor(chests, stack);
 			if (chest != null) {
 				return new Trip(chest, chest, stack.getItem(), Integer.MAX_VALUE);
 			}
@@ -351,7 +351,7 @@ public class HaulerGoal extends ColonyWorkGoal {
 			}
 		}
 		for (Map.Entry<Item, Integer> store : stocks.toStore().entrySet()) {
-			BlockPos chest = chestFor(stocks.chests(), new ItemStack(store.getKey()));
+			BlockPos chest = Storage.chestFor(stocks.chests(), new ItemStack(store.getKey()));
 			if (chest != null) {
 				Trip trip = new Trip(colony.core(), chest, store.getKey(), store.getValue());
 				if (this.isFree(level, colony, trip)) {
@@ -397,37 +397,12 @@ public class HaulerGoal extends ColonyWorkGoal {
 		for (Item item : surplus) {
 			ItemStack stack = new ItemStack(item);
 			StorageCategory category = StorageCategory.of(stack);
-			if (stocks.chests().values().stream().noneMatch(chest -> !chest.isEmpty() && category(chest) == category && Storage.hasRoomFor(chest, stack))) {
+			if (stocks.chests().values().stream().noneMatch(chest -> !chest.isEmpty() && Storage.category(chest) == category && Storage.hasRoomFor(chest, stack))) {
 				full.add(category);
 			}
 		}
 		int empty = (int) stocks.chests().values().stream().filter(Container::isEmpty).count();
 		return Stockkeeping.chestsToOrder(full.size(), empty, (int) freeSpots(level, colony, stocks).count(), held);
-	}
-
-	/** A chest of the item's category with room for it, else an empty chest. */
-	private static @Nullable BlockPos chestFor(Map<BlockPos, Container> chests, ItemStack stack) {
-		StorageCategory category = StorageCategory.of(stack);
-		BlockPos empty = null;
-		for (Map.Entry<BlockPos, Container> chest : chests.entrySet()) {
-			Container container = chest.getValue();
-			if (container.isEmpty()) {
-				empty = empty == null ? chest.getKey() : empty;
-			} else if (category(container) == category && Storage.hasRoomFor(container, stack)) {
-				return chest.getKey();
-			}
-		}
-		return empty;
-	}
-
-	/** A storage chest holds the category of whatever is in it first. */
-	private static StorageCategory category(Container chest) {
-		for (int i = 0; i < chest.getContainerSize(); i++) {
-			if (!chest.getItem(i).isEmpty()) {
-				return StorageCategory.of(chest.getItem(i));
-			}
-		}
-		return StorageCategory.MISC;
 	}
 
 	private void runTrip(ServerLevel level) {

@@ -11,12 +11,15 @@ import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
@@ -65,8 +68,12 @@ public class FarmerGoal extends ColonyWorkGoal {
 	/** How far from a shorn sheep the farmer picks up the wool, and for how long. */
 	private static final int FLEECE_RADIUS = 4;
 	private static final int FLEECE_TICKS = 60;
+	/** How long a farmer with produce and no room for it in the core or a storage chest farms on before it looks again. */
+	private static final int NO_ROOM_TICKS = 200;
 
 	private boolean depositing;
+	/** When the farmer may look for room for its produce again, after it found none. */
+	private long nextDeposit;
 	/** Grass the farmer is breaking for seeds. */
 	private @Nullable BlockPos grass;
 	/** Water the farmer is filling its bucket at. */
@@ -86,19 +93,13 @@ public class FarmerGoal extends ColonyWorkGoal {
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
 		if (this.depositing) {
-			Container core = Storage.containerAt(level, colony.core());
-			if (core == null) {
-				this.depositing = false;
-			} else if (this.reach(colony.core())) {
-				this.storeProduce(core);
-				this.depositing = false;
-			}
+			this.deposit(level, colony);
 			return;
 		}
 		if (this.upgradeTool(level, colony, ToolKind.HOE)) {
 			return;
 		}
-		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS) {
+		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS && this.mayDeposit(level)) {
 			this.depositing = true;
 			return;
 		}
@@ -115,7 +116,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			}
 			if (this.needsSeeds(colony)) {
 				this.getSeeds(level, colony);
-			} else if (this.hasProduce()) {
+			} else if (!this.produce().isEmpty() && this.mayDeposit(level)) {
 				this.depositing = true;
 			} else {
 				this.cooldown = IDLE_TICKS;
@@ -271,7 +272,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 		}
 		// Straight to the core with it, also wool walked over after the pickup ended: a farmer
 		// waiting for seeds would otherwise keep it.
-		if (findSlot(this.bot.getInventory(), stack -> stack.is(ItemTags.WOOL)) >= 0) {
+		if (findSlot(this.bot.getInventory(), stack -> stack.is(ItemTags.WOOL)) >= 0 && this.mayDeposit(level)) {
 			this.depositing = true;
 			return true;
 		}
@@ -410,21 +411,60 @@ public class FarmerGoal extends ColonyWorkGoal {
 		}
 	}
 
-	private boolean hasProduce() {
+	/** Whether the farmer may look for room for its produce: not while waiting after finding none. */
+	private boolean mayDeposit(ServerLevel level) {
+		return level.getGameTime() >= this.nextDeposit;
+	}
+
+	/**
+	 * Takes the produce to the core, or to a storage chest when the core has no room for any of it.
+	 * With no room anywhere the farmer gives up for {@link #NO_ROOM_TICKS} and farms on.
+	 */
+	private void deposit(ServerLevel level, Colony colony) {
+		List<ItemStack> produce = this.produce();
+		Container core = Storage.containerAt(level, colony.core());
+		if (core != null && produce.stream().anyMatch(stack -> Storage.hasRoomFor(core, stack))) {
+			if (this.reach(colony.core())) {
+				this.storeProduce(core, stack -> true);
+				this.depositing = false;
+			}
+			return;
+		}
+		Map<BlockPos, Container> chests = Storage.storageChests(level, colony);
+		BlockPos chest = produce.stream().map(stack -> Storage.chestFor(chests, stack)).filter(Objects::nonNull).findFirst().orElse(null);
+		if (chest == null) {
+			this.depositing = false;
+			this.nextDeposit = level.getGameTime() + NO_ROOM_TICKS;
+			return;
+		}
+		if (this.reach(chest)) {
+			// Re-checked per stack: an empty chest takes the category of the first stack put in.
+			Map<BlockPos, Container> target = Map.of(chest, chests.get(chest));
+			this.storeProduce(chests.get(chest), stack -> Storage.chestFor(target, stack) != null);
+			this.depositing = false;
+		}
+	}
+
+	/** What the farmer stores, as it would split off its inventory: all but its tools and the seeds it keeps for replanting. */
+	private List<ItemStack> produce() {
 		SimpleContainer inventory = this.bot.getInventory();
-		int seeds = 0;
+		List<ItemStack> produce = new ArrayList<>();
+		int keptSeeds = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
 			if (stack.isEmpty() || isKept(stack)) {
 				continue;
 			}
+			int keep = 0;
 			if (Farming.isSeed(stack)) {
-				seeds += stack.getCount();
-			} else {
-				return true;
+				keep = Math.min(stack.getCount(), KEEP_SEEDS - keptSeeds);
+				keptSeeds += keep;
+			}
+			if (stack.getCount() > keep) {
+				produce.add(stack.copyWithCount(stack.getCount() - keep));
 			}
 		}
-		return seeds > KEEP_SEEDS;
+		return produce;
 	}
 
 	/** Tools a farmer keeps when storing produce: hoes, buckets and shears. */
@@ -432,8 +472,8 @@ public class FarmerGoal extends ColonyWorkGoal {
 		return ToolKind.HOE.is(stack) || isBucket(stack) || stack.is(Items.SHEARS);
 	}
 
-	/** Puts everything in the core except the tools it keeps and the seeds needed for replanting. */
-	private void storeProduce(Container core) {
+	/** Puts what {@code takes} accepts in {@code to}, except the tools it keeps and the seeds needed for replanting. */
+	private void storeProduce(Container to, Predicate<ItemStack> takes) {
 		SimpleContainer inventory = this.bot.getInventory();
 		int keptSeeds = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
@@ -446,10 +486,13 @@ public class FarmerGoal extends ColonyWorkGoal {
 				keep = Math.min(stack.getCount(), KEEP_SEEDS - keptSeeds);
 				keptSeeds += keep;
 			}
-			ItemStack rest = HopperBlockEntity.addItem(null, core, stack.split(stack.getCount() - keep), null);
+			if (stack.getCount() == keep || !takes.test(stack)) {
+				continue;
+			}
+			ItemStack rest = HopperBlockEntity.addItem(null, to, stack.split(stack.getCount() - keep), null);
 			stack.grow(rest.getCount());
 		}
 		inventory.setChanged();
-		core.setChanged();
+		to.setChanged();
 	}
 }
