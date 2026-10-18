@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import java.util.Comparator;
@@ -19,7 +20,8 @@ import org.jspecify.annotations.Nullable;
  * it. Walking to the others never places new scaffolding. Blocks that cannot be reached that way are
  * retried once the rest is down: the bot pillars up to them, and that pillar is taken down in turn,
  * under it. Retries are limited per {@link #reset}, and a block it cannot reach even by pillaring is
- * left behind. Shared by the roles that pillar up, such as lumberjacks and builders.
+ * left behind, and so is one it cannot see from anywhere in reach, since like a player it breaks
+ * only blocks in sight. Shared by the roles that pillar up, such as lumberjacks and builders.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -36,6 +38,8 @@ final class ScaffoldCleanup {
 	private final Function<Goal, PathFollower.Status> travel;
 	/** Stops travelling, so the next travel plans a fresh path. */
 	private final Runnable stopTravel;
+	/** What the bot can see, to break only scaffold in sight; one for good, as goals compare by value. */
+	private final Goal.Sight sight;
 
 	/** Scaffold that cannot be reached without placing more; retried once the rest is down. */
 	private final Set<BlockPos> unreachable = new HashSet<>();
@@ -51,6 +55,12 @@ final class ScaffoldCleanup {
 		this.breaker = breaker;
 		this.travel = travel;
 		this.stopTravel = stopTravel;
+		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
+	}
+
+	/** Where the bot can take the block at {@code pos} down: within reach, and in sight of it. */
+	private Goal inSight(BlockPos pos) {
+		return new Goal.InSight(pos, REACH, this.sight);
 	}
 
 	/** Starts afresh, such as for a new tree: every block is tried again, with all retries. */
@@ -87,7 +97,7 @@ final class ScaffoldCleanup {
 		}
 		BlockPos next = placed.stream()
 			.filter(pos -> !this.unreachable.contains(pos) && !this.abandoned.contains(pos))
-			.max(Comparator.<BlockPos, Boolean>comparing(pos -> new Goal.Reach(pos, REACH).isReached(feet)).thenComparingInt(BlockPos::getY))
+			.max(Comparator.<BlockPos, Boolean>comparing(pos -> this.inSight(pos).isReached(feet)).thenComparingInt(BlockPos::getY))
 			.orElse(null);
 		if (next == null) {
 			BlockPos retry = this.retriesLeft <= 0 ? null : placed.stream()
@@ -104,7 +114,7 @@ final class ScaffoldCleanup {
 			placed.clear();
 			return true;
 		}
-		Goal reach = new Goal.Reach(next, REACH);
+		Goal reach = this.inSight(next);
 		if (reach.isReached(feet) && this.bot.onGround()) {
 			this.stopTravel.run();
 			if (this.breaker.tick(level, next, true)) {
@@ -119,7 +129,7 @@ final class ScaffoldCleanup {
 	/** Pillars up to the scaffold block being retried; once there, cleanup looks at every block again from up there. */
 	private void retry(BlockPos feet) {
 		BlockPos target = this.retrying;
-		Goal reach = new Goal.Reach(target, REACH);
+		Goal reach = this.inSight(target);
 		if (!this.bot.getScaffold().contains(target) || (reach.isReached(feet) && this.bot.onGround())) {
 			this.unreachable.clear();
 			this.endRetry();

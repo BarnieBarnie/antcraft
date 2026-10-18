@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Storage;
@@ -42,6 +43,8 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	protected final AntBot bot;
 	protected final PathFollower follower;
 	protected final BlockBreaker breaker;
+	/** What the bot can see, to break only blocks in sight; one for good, as goals compare by value. */
+	protected final Goal.Sight sight;
 	private final BotRole role;
 	private @Nullable Goal travelGoal;
 	protected boolean hasJob;
@@ -55,6 +58,7 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 		this.role = role;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
+		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
@@ -164,16 +168,29 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	 * If no path can be found, waits a while before trying again.
 	 */
 	protected boolean reach(BlockPos pos) {
-		Goal reach = new Goal.Reach(pos, REACH);
-		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
-			this.travelGoal = null;
-			this.bot.getLookControl().setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
-			return true;
-		}
-		if (this.travel(reach) == PathFollower.Status.FAILED) {
+		PathFollower.Status status = this.approach(new Goal.Reach(pos, REACH), pos);
+		if (status == PathFollower.Status.FAILED) {
 			this.cooldown = IDLE_TICKS;
 		}
-		return false;
+		return status == PathFollower.Status.ARRIVED;
+	}
+
+	/**
+	 * Moves toward a spot where {@code goal} is reached, then looks at {@code pos}: ARRIVED once
+	 * there, FAILED when no path can be found, and RUNNING meanwhile.
+	 */
+	protected PathFollower.Status approach(Goal goal, BlockPos pos) {
+		if (goal.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
+			this.travelGoal = null;
+			this.bot.getLookControl().setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
+			return PathFollower.Status.ARRIVED;
+		}
+		return this.travel(goal) == PathFollower.Status.FAILED ? PathFollower.Status.FAILED : PathFollower.Status.RUNNING;
+	}
+
+	/** Where the bot can break the block at {@code pos}: within reach, and in sight of it, as a player must be. */
+	protected Goal inSight(BlockPos pos) {
+		return new Goal.InSight(pos, REACH, this.sight);
 	}
 
 	/**

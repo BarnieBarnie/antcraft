@@ -7,12 +7,14 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
+import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -74,7 +76,9 @@ import org.jspecify.annotations.Nullable;
  * takes those its miners leave for water. A step any solid block will do, such as a terraform's
  * fill, takes whichever fill block there is, sand and gravel only where they rest on the block below
  * and the step may fall, never for a mineshaft's walls. In a terraform it leaves lava and
- * the blocks holding it back alone, to be reported as blocked.
+ * the blocks holding it back alone, to be reported as blocked. Like a player it breaks only blocks
+ * it can see; a step it finds no way to, in sight or within reach, it gives up on for the job and
+ * reports as blocked once the rest is done.
  */
 public class BuilderGoal extends ColonyWorkGoal {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
@@ -94,6 +98,10 @@ public class BuilderGoal extends ColonyWorkGoal {
 	private static final int SCAFFOLD_STOCK = 16;
 	/** A step this many blocks above the bot's feet or more is out of reach from where it stands, so it takes scaffold first. */
 	private static final int SCAFFOLD_HEIGHT = 4;
+	/** How long a builder keeps trying to get to a step before giving it up, should its path never fail outright. */
+	private static final int STEP_REACH_TICKS = 1200;
+	/** How many times a builder finds no path to a step, a while apart, before giving it up; a path may fail for a moment, such as just after loading. */
+	private static final int STEP_TRIES = 3;
 
 	/** Fluid sources found per full bucket they fill, cleared every {@link #SOURCE_SCAN_TICKS}. */
 	private final Map<Item, Optional<BlockPos>> sources = new HashMap<>();
@@ -104,6 +112,14 @@ public class BuilderGoal extends ColonyWorkGoal {
 	/** What the builder found done of the batch of build job {@link #progressJob}, so it does not look at those blocks every tick. */
 	private BuildPlan.Progress progress = new BuildPlan.Progress();
 	private @Nullable UUID progressJob;
+	/** Steps of job {@link #progressJob} it found no way to, left for the colony to recheck once the rest is done. */
+	private final Set<BlockPos> unreachable = new HashSet<>();
+	/** How often it found no path to each step of the job so far. */
+	private final Map<BlockPos, Integer> failures = new HashMap<>();
+	/** The step it is on its way to, since when, and when it last went for it, to give it up after {@link #STEP_REACH_TICKS}. */
+	private @Nullable BlockPos reaching;
+	private long reachingSince;
+	private long reachingLast;
 
 	public BuilderGoal(AntBot bot) {
 		super(bot, BotRole.BUILDER);
@@ -156,6 +172,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		if (!job.get().id().equals(this.progressJob)) {
 			this.progressJob = job.get().id();
 			this.progress = new BuildPlan.Progress();
+			this.forgetUnreachable();
 		}
 		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig, this.progress)).map(s -> this.withFiller(level, core, s));
 		if (next.isEmpty()) {
@@ -189,7 +206,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			}
 			return;
 		}
-		if (this.restockScaffold(colony, core, step) || !this.reach(step.pos())) {
+		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos(), false)) {
 			return;
 		}
 		if (step.isPlaced(current) && item == Items.BUCKET) {
@@ -203,6 +220,45 @@ public class BuilderGoal extends ColonyWorkGoal {
 			&& step.otherHalf().map(half -> this.isFreeToPlace(level, half.pos(), half.state())).orElse(true)) {
 			this.place(level, colony, step);
 		}
+	}
+
+	/**
+	 * Moves toward the block of a step at {@code pos} until it is within reach, and for {@code sight}
+	 * also in sight of it, as to break it. Returns true once there. With no way there, or none found
+	 * after {@link #STEP_TRIES} tries or {@link #STEP_REACH_TICKS}, it gives the step up for this job (see {@link #unreachable}).
+	 */
+	private boolean reachStep(ServerLevel level, BlockPos pos, boolean sight) {
+		long now = level.getGameTime();
+		if (!pos.equals(this.reaching) || now - this.reachingLast > IDLE_TICKS + 1) {
+			this.reaching = pos;
+			this.reachingSince = now;
+		}
+		this.reachingLast = now;
+		PathFollower.Status status = this.approach(sight ? this.inSight(pos) : new Goal.Reach(pos, REACH), pos);
+		if (status == PathFollower.Status.ARRIVED) {
+			this.reachingSince = now;
+			return true;
+		}
+		boolean failed = status == PathFollower.Status.FAILED;
+		if (failed) {
+			this.cooldown = IDLE_TICKS;
+		}
+		if (failed && this.failures.merge(pos, 1, Integer::sum) >= STEP_TRIES || now - this.reachingSince > STEP_REACH_TICKS) {
+			this.unreachable.add(pos);
+			this.reaching = null;
+			this.stopTravel();
+		}
+		return false;
+	}
+
+	private void forgetUnreachable() {
+		this.unreachable.clear();
+		this.failures.clear();
+	}
+
+	/** Whether the builder gave {@code step} up for this job, or the spot of its other half. */
+	private boolean isGivenUp(BuildPlan.Step step) {
+		return this.unreachable.contains(step.pos()) || step.otherHalf().filter(half -> this.unreachable.contains(half.pos())).isPresent();
 	}
 
 	private static boolean isDig(Job job) {
@@ -283,7 +339,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			BuildPlan.Progress progress) {
 		return plan.nextStep(level::getBlockState, planned -> {
 			BlockState current = level.getBlockState(planned.pos());
-			if (dig && Digging.isForLumberjacks(level, colony, planned.pos()) || leavesAlone(level, plan, planned)) {
+			if (dig && Digging.isForLumberjacks(level, colony, planned.pos()) || leavesAlone(level, plan, planned) || this.isGivenUp(planned)) {
 				return false;
 			}
 			BuildPlan.Step step = this.withFiller(level, core, planned);
@@ -354,13 +410,13 @@ public class BuilderGoal extends ColonyWorkGoal {
 				int bucket = findSlot(inventory, BuilderGoal::isBucket);
 				if (bucket < 0) {
 					this.fetch(level, colony, core, plan, Items.BUCKET);
-				} else if (this.reach(pos)) {
+				} else if (this.reachStep(level, pos, false)) {
 					this.scoop(level, pos, bucket);
 				}
 			}
 			case FILL -> this.fillIn(level, colony, core, plan, pos);
 			default -> {
-				if (this.reach(pos) && this.breaker.tick(level, pos, true)) {
+				if (this.reachStep(level, pos, true) && this.breaker.tick(level, pos, true)) {
 					colony.unprotect(pos);
 				}
 			}
@@ -473,7 +529,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			if (dig && Digging.isForLumberjacks(level, colony, step.pos())) {
 				return true;
 			}
-			if (leavesAlone(level, plan, step)) {
+			if (leavesAlone(level, plan, step) || this.isGivenUp(step)) {
 				return false;
 			}
 			Item item = step.item(current);
@@ -563,6 +619,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 					colony.reportBlocked(job.id(), blocked);
 				}
 			});
+			// Once the colony finds the steps workable again, say a player opened the way, they are tried afresh.
+			this.forgetUnreachable();
 			colony.board().complete(job.id());
 		}
 		this.hasJob = false;

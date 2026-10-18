@@ -639,6 +639,53 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Dirt to clear walled in with bedrock on every side, within reach of where the builder stands:
+	 * like a player it cannot break what it cannot see, so it leaves the dirt and reports the step.
+	 */
+	@GameTest(maxTicks = 600)
+	public void doesNotClearABlockBehindAWallAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		BlockPos dirt = new BlockPos(4, 1, 4);
+		helper.setBlock(dirt, Blocks.DIRT);
+		for (Direction side : Direction.values()) {
+			helper.setBlock(dirt.relative(side), Blocks.BEDROCK);
+		}
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.clear(helper.absolutePos(dirt)),
+			step(helper, 6, 1, 6, COBBLE))));
+		member(helper, colony, BotRole.BUILDER, 2, 4);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(dirt).is(Blocks.DIRT)) {
+				helper.fail("cleared the dirt through the bedrock wall");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 6, 1, 6, COBBLE);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(dirt))), "walled-in step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/**
+	 * A block to place high in the air, with no scaffold to pillar up with: the builder cannot get
+	 * within reach of it, so it gives the step up and reports it, rather than trying forever.
+	 */
+	@GameTest(maxTicks = 600)
+	public void givesUpOnAStepItCannotReachAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		BuildPlan.Step high = step(helper, 4, 7, 4, COBBLE);
+		colony.addBuild(new BuildPlan(List.of(high, step(helper, 6, 1, 6, COBBLE))));
+		member(helper, colony, BotRole.BUILDER, 2, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 6, 1, 6, COBBLE);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(high.pos())), "unreachable step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/**
 	 * One builder finds its batch blocked by bedrock while the other digs out dirt for a batch that
 	 * does not need it; the batch after the dirt is posted and built all the same, while the one
 	 * after the bedrock waits.

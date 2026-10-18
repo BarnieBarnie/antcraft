@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
@@ -115,6 +116,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private @Nullable Goal travelGoal;
 	private final Set<BlockPos> unreachableLogs = new HashSet<>();
 	private final Set<Integer> unreachableItems = new HashSet<>();
+	/** What it can see, to break only logs in sight; one for good, as goals compare by value. */
+	private final Goal.Sight sight;
 	/** Where the current tree stood: drops are collected around it and a sapling planted there. */
 	private @Nullable BlockPos site;
 	/** Where saplings go at the site: its base, or all four spots of a 2x2 trunk. */
@@ -140,6 +143,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
+		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
 		this.follower.setScaffold(SCAFFOLD);
 		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, () -> {
 			this.travelGoal = null;
@@ -633,11 +637,15 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return;
 		}
 
-		Goal reach = new Goal.Reach(next, REACH);
+		// Like a player, it breaks only a log it can see, never one behind a wall or the canopy.
+		Goal reach = new Goal.InSight(next, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
 			this.travelGoal = null;
 			// Straight into the inventory: dropped logs could land on the canopy, out of reach.
-			this.breaker.tick(level, next, true);
+			if (this.breaker.tick(level, next, true)) {
+				// With the log gone, the bot may see logs it could not before.
+				this.unreachableLogs.clear();
+			}
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			if (this.restockCooldown == 0 && this.needsScaffold() && this.homeScaffold(level) > 0) {
 				// Ran out of scaffold on the way up: fetch more and come back to this tree.

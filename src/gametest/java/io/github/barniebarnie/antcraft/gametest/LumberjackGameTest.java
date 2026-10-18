@@ -940,6 +940,50 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The bottom log of a tree is walled in with bedrock on every side, within reach from the ground:
+	 * like a player it cannot break the log through the wall, so it fells it only once the log above
+	 * is gone and it can see it from above.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void fellsALogBehindAWallOnlyOnceItSeesIt(GameTestHelper helper) {
+		tree(helper, 5, 5, false);
+		for (BlockPos wall : List.of(new BlockPos(4, 1, 5), new BlockPos(6, 1, 5), new BlockPos(5, 1, 4), new BlockPos(5, 1, 6))) {
+			helper.setBlock(wall, Blocks.BEDROCK);
+		}
+		lumberjack(helper, 2, 5);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.OAK_LOG) && helper.getBlockState(new BlockPos(5, 2, 5)).is(Blocks.OAK_LOG)) {
+				helper.fail("chopped the walled-in log through the bedrock");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
+			assertTreeStored(helper);
+		});
+	}
+
+	/** A scaffold block walled in with bedrock on every side: cleanup cannot see it, so it leaves it rather than breaking through. */
+	@GameTest(padding = PADDING, maxTicks = 1200)
+	public void cleanupLeavesScaffoldItCannotSee(GameTestHelper helper) {
+		tree(helper, 2, 6, false);
+		AntBot bot = lumberjack(helper, 6, 2);
+		BlockPos hidden = new BlockPos(5, 1, 5);
+		helper.setBlock(hidden, Blocks.DIRT);
+		for (BlockPos wall : List.of(hidden.west(), hidden.east(), hidden.north(), hidden.south(), hidden.above())) {
+			helper.setBlock(wall, Blocks.BEDROCK);
+		}
+		goal(bot).adoptScaffold(helper.absolutePos(hidden));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(hidden).is(Blocks.DIRT)) {
+				helper.fail("took the walled-in scaffold down through the bedrock");
+			}
+		});
+		helper.succeedWhen(() -> assertTreeStored(helper));
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 2400)
 	public void onlyOneColonyLumberjackWorksOnATree(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
