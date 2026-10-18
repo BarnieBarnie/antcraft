@@ -505,11 +505,6 @@ public class BuilderGoal extends ColonyWorkGoal {
 		return FILLERS.contains(stack.getItem());
 	}
 
-	/** Whether {@code stack} is a block a step any solid block will do takes (see {@link BuildPlan#FILL_BLOCKS}); sand and gravel fall, so they never clear a fluid. */
-	private static boolean isFillBlock(ItemStack stack) {
-		return BuildPlan.FILL_BLOCKS.contains(stack.getItem());
-	}
-
 	/** Whether a plan still has a block in the way that is dug with a pickaxe, such as stone. */
 	private static boolean needsPickaxe(ServerLevel level, Colony colony) {
 		return colony.builds().stream().flatMap(plan -> plan.steps().stream()).anyMatch(step -> {
@@ -690,15 +685,18 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	/**
 	 * Takes as many of {@code item} from the core as the plan still needs, leaving there whatever
-	 * the bot carries that the plan does not need. The colony survey orders what the core lacks.
+	 * the bot carries that the plan does not need, such as sand when only steps that must hold are
+	 * left to fill (see {@link BuildPlan#wantedFillBlocks}). The colony survey orders what the core lacks.
 	 * While the plan has steps left to pillar up to, it keeps its scaffold blocks and tops them up
 	 * to {@link #SCAFFOLD_STOCK} on the same visit, besides any the plan itself places.
 	 */
 	private void fetch(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, Item item) {
 		Map<Item, Integer> needed = plan.materials(level::getBlockState);
-		// Steps any solid block will do take whichever filler there is.
-		int fillers = plan.steps().stream().filter(step -> step.anySolid() && !step.isDone(level.getBlockState(step.pos()))).mapToInt(step -> 1).sum();
-		int count = isFillBlock(item.getDefaultInstance()) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
+		// Steps any solid block will do take whichever filler there is that they can use.
+		Set<Item> fills = plan.wantedFillBlocks(level::getBlockState);
+		int fillers = plan.steps().stream().filter(step -> step.anySolid() && !step.isDone(level.getBlockState(step.pos()))
+			&& (step.mayFall() || BuildPlan.HOLDING_FILL_BLOCKS.contains(item))).mapToInt(step -> 1).sum();
+		int count = fills.contains(item) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
 		if (core == null) {
 			this.cooldown = IDLE_TICKS;
 			return;
@@ -706,7 +704,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 		if (this.reach(colony.core())) {
 			SimpleContainer inventory = this.bot.getInventory();
 			boolean pillaring = this.hasHighSteps(level, plan);
-			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES) && !(fillers > 0 && isFillBlock(stack));
+			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES) && !fills.contains(stack.getItem());
 			Storage.moveItems(inventory, core, stack -> spare.test(stack) && !(pillaring && stack.is(SCAFFOLD)));
 			Storage.moveItems(core, inventory, stack -> stack.is(item), count);
 			if (pillaring) {

@@ -38,6 +38,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.pig.Pig;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -501,6 +502,30 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			List.of(new ItemStack(Items.SAND, 64)), () -> { });
 	}
 
+	/**
+	 * A cave across the stairs at y=2 in tuff, which yields no filler, a builder carrying a little
+	 * sand, and sand and dirt in the core: the walls cannot use sand, so it never takes any from the core, and puts what it carries
+	 * back once it fetches dirt for them.
+	 */
+	@GameTest(maxTicks = 3600)
+	public void fetchesNoSandForAShaftsWalls(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
+			helper.setBlock(pos, pos.getY() == 2 ? Blocks.AIR : Blocks.TUFF);
+		}
+		AntBot builder = digsMineshaftAndWalksBackUp(helper, shaft, List.of(new ItemStack(Items.SAND, 64), new ItemStack(Items.DIRT, 64)),
+			List.of(new ItemStack(Items.SAND, 8)), () -> { });
+		helper.onEachTick(() -> {
+			int sand = carried(builder, Items.SAND);
+			helper.assertTrue(sand <= 8, "builder picked up sand, carries " + sand);
+			helper.assertTrue(sand == 0 || carried(builder, Items.DIRT) == 0, "builder kept " + sand + " sand while fetching dirt");
+		});
+	}
+
+	private static int carried(AntBot bot, Item item) {
+		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
+	}
+
 	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft) {
 		digsMineshaftAndWalksBackUp(helper, shaft, () -> { });
 	}
@@ -514,7 +539,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * {@code fillers} in the core, and then walk back up the stairs as they are. Every stair and
 	 * hall ends up dug, dry, lit and walled in, and {@code also} holds.
 	 */
-	private static void digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft, List<ItemStack> fillers, List<ItemStack> carried, Runnable also) {
+	private static AntBot digsMineshaftAndWalksBackUp(GameTestHelper helper, Mineshaft shaft, List<ItemStack> fillers, List<ItemStack> carried, Runnable also) {
 		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
 		colony.setStockTargets(List.of());
@@ -557,6 +582,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			}
 			also.run();
 		});
+		return builder;
 	}
 
 	/** A new colony has no torches or chests yet: the builder digs the shaft anyway and places them once they come. */

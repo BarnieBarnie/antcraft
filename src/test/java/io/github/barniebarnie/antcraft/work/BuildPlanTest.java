@@ -80,6 +80,18 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void wantedFillBlocksAreThoseTheOpenStepsCanUse() {
+		BuildPlan fill = new BuildPlan(List.of(Terraform.fill(A), BuildPlan.Step.solid(B)));
+		BuildPlan walls = new BuildPlan(List.of(BuildPlan.Step.solid(B)));
+		BlockState stone = Blocks.STONE.defaultBlockState();
+		assertEquals(BuildPlan.FILL_BLOCKS, fill.wantedFillBlocks(at(world())), "a terraform's fill takes sand and gravel too");
+		assertEquals(BuildPlan.HOLDING_FILL_BLOCKS, fill.wantedFillBlocks(at(world(A, stone))), "only walls left");
+		assertEquals(BuildPlan.HOLDING_FILL_BLOCKS, walls.wantedFillBlocks(at(world())));
+		assertEquals(Set.of(), fill.wantedFillBlocks(at(world(A, stone, B, stone))), "nothing left to fill");
+		assertEquals(Set.of(), new BuildPlan(List.of(new BuildPlan.Step(C, stone))).wantedFillBlocks(at(world())), "no step any solid block will do");
+	}
+
+	@Test
 	void aBlockThatMustHoldOnItsOwnTakesNoFallingFiller() {
 		Set<net.minecraft.world.item.Item> falling = Set.of(Items.SAND, Items.RED_SAND, Items.GRAVEL);
 		Set<net.minecraft.world.item.Item> holding = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);

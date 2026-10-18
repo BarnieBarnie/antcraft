@@ -419,6 +419,18 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	}
 
 	/**
+	 * The fill blocks the steps still open with {@code world} as it is can use: the
+	 * {@link #FILL_BLOCKS} while a step that may fall is open, else the {@link #HOLDING_FILL_BLOCKS}
+	 * while one that must hold is, else none. A mineshaft's walls never want sand or gravel.
+	 */
+	public Set<Item> wantedFillBlocks(Function<BlockPos, BlockState> world) {
+		if (!this.fillMaterials(world, true).isEmpty()) {
+			return FILL_BLOCKS;
+		}
+		return this.fillMaterials(world, false).isEmpty() ? Set.of() : HOLDING_FILL_BLOCKS;
+	}
+
+	/**
 	 * What to order for {@code materials} beyond what the colony {@code has}. Of those, the steps any
 	 * solid block will do take the fill blocks the colony has to spare: those that must hold
 	 * ({@code holding}) only the {@link #HOLDING_FILL_BLOCKS}, and those that may fall

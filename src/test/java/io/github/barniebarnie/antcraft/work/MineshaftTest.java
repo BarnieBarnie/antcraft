@@ -431,6 +431,16 @@ class MineshaftTest {
 	}
 
 	@Test
+	void wantedFillBlocksForAMineshaftExcludeSandAndGravel() {
+		Function<BlockPos, BlockState> air = pos -> Blocks.AIR.defaultBlockState();
+		Set<Item> wanted = SHAFT.plan().wantedFillBlocks(air);
+		assertEquals(BuildPlan.HOLDING_FILL_BLOCKS, wanted);
+		for (Item falling : List.of(Items.SAND, Items.RED_SAND, Items.GRAVEL)) {
+			assertFalse(wanted.contains(falling), falling + " is wanted for the walls");
+		}
+	}
+
+	@Test
 	void siteIsFoundFartherOutWhenTheFourSpotsBesideTheCoreAreUnusable() {
 		BlockPos core = new BlockPos(0, 64, 0);
 		List<Integer> levels = List.of(40, 20);
