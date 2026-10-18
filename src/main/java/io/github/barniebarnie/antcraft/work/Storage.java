@@ -5,12 +5,14 @@ import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
+import io.github.barniebarnie.antcraft.entity.AntBot;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -139,6 +141,17 @@ public final class Storage {
 		return StockPlanner.total(stocks);
 	}
 
+	/** What the colony holds: its {@linkplain #colonyStock stock} and its bots' inventories. Count stock with this. */
+	public static Map<Item, Integer> held(ServerLevel level, Colony colony) {
+		List<Map<Item, Integer>> held = new ArrayList<>(List.of(colonyStock(level, colony)));
+		for (UUID id : colony.members()) {
+			if (level.getEntity(id) instanceof AntBot bot) {
+				held.add(stock(bot.getInventory()));
+			}
+		}
+		return StockPlanner.total(held);
+	}
+
 	/** The colony's furnace: the first furnace within {@link #FURNACE_RANGE} of the core, or null. */
 	public static @Nullable AbstractFurnaceBlockEntity colonyFurnace(ServerLevel level, BlockPos core) {
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-FURNACE_RANGE, -1, -FURNACE_RANGE), core.offset(FURNACE_RANGE, 1, FURNACE_RANGE))) {
@@ -168,11 +181,19 @@ public final class Storage {
 	}
 
 	/**
-	 * What the colony wants from mining: what its open orders want, their ingredients included, and
-	 * anything it keeps a stock target of. Plans the orders once, so make one per check.
+	 * What the colony wants brought in: what its open orders want, their ingredients included, and
+	 * anything below a stock target, counted in what it {@linkplain #held holds}. Plans the orders once,
+	 * so make one per check.
 	 */
 	public static Predicate<Item> wanted(ServerLevel level, Colony colony) {
-		return Stockkeeping.wanted(wantedForOrders(level, colony, colonyStock(level, colony)), targets(colony));
+		return wanted(level, colony, Map.of());
+	}
+
+	/** {@link #wanted(ServerLevel, Colony)}, leaving {@code haul} out of what the colony holds: the haul being decided on. */
+	public static Predicate<Item> wanted(ServerLevel level, Colony colony, Map<Item, Integer> haul) {
+		Map<Item, Integer> stock = new HashMap<>(held(level, colony));
+		haul.forEach((item, count) -> stock.merge(item, -count, Integer::sum));
+		return Stockkeeping.wanted(wantedForOrders(level, colony, stock), targets(colony), stock);
 	}
 
 	/** The colony's stock targets, for {@link Stockkeeping}. */

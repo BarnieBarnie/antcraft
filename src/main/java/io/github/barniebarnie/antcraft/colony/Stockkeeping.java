@@ -98,24 +98,27 @@ public final class Stockkeeping {
 
 	/**
 	 * What the colony wants from mining: what open orders want (see {@link #wantedForOrders}) and
-	 * anything it keeps a stock target of.
+	 * anything below a stock target in {@code stock}; the same as {@link #toCore(Object, Set, List, Map)}.
 	 */
-	public static <I> Predicate<I> wanted(Set<I> forOrders, List<StockPlanner.Target<I>> targets) {
-		return item -> forOrders.contains(item) || targets.stream().anyMatch(target -> target.matches().test(item));
+	public static <I> Predicate<I> wanted(Set<I> forOrders, List<StockPlanner.Target<I>> targets, Map<I, Integer> stock) {
+		return item -> toCore(item, forOrders, targets, stock);
 	}
 
 	/**
 	 * The items open orders want: the ordered items, what their plans still have to gather or lack
 	 * beyond {@code stock}, and whatever could stand in for those in a recipe (cobbled deepslate for
-	 * cobblestone). Plans once per order, so call it once per check rather than per item.
+	 * cobblestone). Orders reserve stock in turn: what one uses up is not there for the next. Plans
+	 * once per order, so call it once per check rather than per item.
 	 */
 	public static <I> Set<I> wantedForOrders(Map<I, Integer> orders, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
 		Set<I> wanted = new HashSet<>(orders.keySet());
+		Map<I, Integer> left = new HashMap<>(stock);
 		orders.forEach((item, count) -> {
-			Map<I, Integer> available = new HashMap<>(stock);
+			Map<I, Integer> available = new HashMap<>(left);
 			// An order is for more than the colony holds, as in what the core keeps for it.
 			available.remove(item);
 			TaskPlanner.Plan<I> plan = TaskPlanner.plan(item, count, available, book, gatherable);
+			ingredients(plan.crafts(), available).forEach((used, n) -> left.merge(used, -n, Integer::sum));
 			Set<I> lacking = new HashSet<>(plan.toGather().keySet());
 			lacking.addAll(plan.missing().keySet());
 			wanted.addAll(lacking);

@@ -4,8 +4,6 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
-import io.github.barniebarnie.antcraft.colony.StockPlanner;
-import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.Tools;
@@ -286,10 +284,7 @@ public class MinerGoal extends ColonyWorkGoal {
 	 */
 	private void deposit(ServerLevel level, Colony colony) {
 		if (this.forCore == null) {
-			Map<Item, Integer> stock = Storage.colonyStock(level, colony);
-			Set<Item> forOrders = Storage.wantedForOrders(level, colony, stock);
-			List<StockPlanner.Target<Item>> targets = Storage.targets(colony);
-			this.forCore = item -> Stockkeeping.toCore(item, forOrders, targets, stock);
+			this.forCore = Storage.wanted(level, colony, Storage.stock(this.bot.getInventory()));
 		}
 		Predicate<Item> forCore = this.forCore;
 		BlockPos chest = this.landingChest(level, colony, forCore);

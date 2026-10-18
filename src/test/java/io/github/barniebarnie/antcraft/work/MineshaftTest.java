@@ -244,14 +244,14 @@ class MineshaftTest {
 	void anOpenOrderMakesTheLevelOfItsIngredientsChosen() {
 		List<Integer> levels = List.of(16, -16, -58);
 		List<StockPlanner.Target<Item>> coal = List.of(new StockPlanner.Target<>(item -> item == Items.COAL, List.of(), 32));
-		assertEquals(Optional.of(16), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(Set.of(), coal)));
+		assertEquals(Optional.of(16), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(Set.of(), coal, Map.of())));
 		Set<Item> diamondPickaxe = Stockkeeping.wantedForOrders(Map.of(Items.DIAMOND_PICKAXE, 1), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
-		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(diamondPickaxe, coal)));
+		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(diamondPickaxe, coal, Map.of())));
 		// An iron pickaxe wants raw iron, so a level with iron beats the deeper one without.
 		List<StockPlanner.Target<Item>> gold = List.of(new StockPlanner.Target<>(item -> item == Items.RAW_GOLD, List.of(), 8));
-		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(Set.of(), gold)));
+		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(Set.of(), gold, Map.of())));
 		Set<Item> ironPickaxe = Stockkeeping.wantedForOrders(Map.of(Items.IRON_PICKAXE, 1), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
-		assertEquals(Optional.of(16), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(ironPickaxe, gold)));
+		assertEquals(Optional.of(16), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(ironPickaxe, gold, Map.of())));
 	}
 
 	@Test

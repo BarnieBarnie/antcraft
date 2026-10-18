@@ -339,17 +339,6 @@ public class ColonyManager extends SavedData {
 		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));
 	}
 
-	/** What the colony holds: its stock and its bots' inventories. */
-	private static Map<Item, Integer> held(ServerLevel level, Colony colony) {
-		List<Map<Item, Integer>> held = new ArrayList<>(List.of(Storage.colonyStock(level, colony)));
-		for (UUID id : colony.members()) {
-			if (level.getEntity(id) instanceof AntBot bot) {
-				held.add(Storage.stock(bot.getInventory()));
-			}
-		}
-		return new HashMap<>(StockPlanner.total(held));
-	}
-
 	/** Orders whatever the colony is short of. */
 	private void surveyStock(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
@@ -424,7 +413,7 @@ public class ColonyManager extends SavedData {
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));
 			this.surveyCrops(level, colony);
-			Map<Item, Integer> have = held(level, colony);
+			Map<Item, Integer> have = new HashMap<>(Storage.held(level, colony));
 			this.surveyMine(level, colony, have);
 			this.surveyBuilds(level, colony, have);
 			this.surveyStorage(level, colony, have);

@@ -147,6 +147,23 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		return member(helper, colony, role, x, 1, z);
 	}
 
+	@GameTest
+	public void whatTheCoreWantsCountsWhatBotsCarry(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.STICK, 8));
+		colony.addOrder(Items.STONE_PICKAXE, 1);
+		// Cobblestone a member carries is the colony's, as in Storage.held.
+		AntBot carrier = member(helper, colony, BotRole.MINER, 4, 4);
+		carrier.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		helper.assertTrue(Storage.held(helper.getLevel(), colony).getOrDefault(Items.COBBLESTONE, 0) == 3, "held leaves out what bots carry");
+		// So a miner depositing its haul, which goes by Storage.wanted, leaves more cobblestone in the landing chest.
+		helper.assertFalse(Storage.wanted(helper.getLevel(), colony).test(Items.COBBLESTONE), "the order still wants cobblestone a bot carries");
+		// Unless that cobblestone is the haul being deposited.
+		helper.assertTrue(Storage.wanted(helper.getLevel(), colony, Storage.stock(carrier.getInventory())).test(Items.COBBLESTONE),
+			"a miner's own haul counts as already held");
+		helper.succeed();
+	}
+
 	@GameTest(maxTicks = 1500)
 	public void digsBranchFromLandingAndLightsIt(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);

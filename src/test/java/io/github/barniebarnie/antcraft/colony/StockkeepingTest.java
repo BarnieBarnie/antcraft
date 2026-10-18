@@ -160,12 +160,41 @@ class StockkeepingTest {
 	}
 
 	@Test
-	void wantedCountsWhatOrdersNeedAndWhatStockTargetsAskFor() {
-		var wanted = Stockkeeping.wanted(Set.of("raw_iron"), TARGETS);
+	void ordersSharingAnIngredientReserveTheStockInTurn() {
+		Set<String> iron = Set.of("iron_ingot");
+		TaskPlanner.RecipeBook<String> book = new TaskPlanner.RecipeBook<>() {
+			@Override
+			public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+				return switch (item) {
+					case "iron_pickaxe" -> List.of(new TaskPlanner.Recipe<>("iron_pickaxe", 1, Map.of(iron, 3, Set.of("stick"), 2)));
+					case "bucket" -> List.of(new TaskPlanner.Recipe<>("bucket", 1, Map.of(iron, 3)));
+					default -> List.of();
+				};
+			}
+		};
+		Set<String> gatherable = Set.of("iron_ingot", "stick");
+		Map<String, Integer> stock = Map.of("iron_ingot", 3, "stick", 2);
+		// The 3 ingots make one of them, so the other still wants iron.
+		assertTrue(Stockkeeping.wantedForOrders(Map.of("iron_pickaxe", 1, "bucket", 1), stock, book, gatherable::contains).contains("iron_ingot"));
+		// One order alone has all it needs.
+		assertFalse(Stockkeeping.wantedForOrders(Map.of("bucket", 1), stock, book, gatherable::contains).contains("iron_ingot"));
+	}
+
+	@Test
+	void wantedCountsWhatOrdersNeedAndWhatStockTargetsAreShortOf() {
+		var wanted = Stockkeeping.wanted(Set.of("raw_iron"), TARGETS, Map.of("oak_log", 31));
 		assertTrue(wanted.test("raw_iron"));
 		assertTrue(wanted.test("oak_log"));
 		assertTrue(wanted.test("wooden_pickaxe"));
 		assertFalse(wanted.test("dirt"));
+	}
+
+	@Test
+	void anItemWhoseStockTargetIsMetIsNotWanted() {
+		var wanted = Stockkeeping.wanted(Set.of(), TARGETS, Map.of("oak_log", 32, "stone_pickaxe", 2));
+		assertFalse(wanted.test("oak_log"));
+		// A tag target counts every matching item.
+		assertFalse(wanted.test("wooden_pickaxe"));
 	}
 
 	@Test
