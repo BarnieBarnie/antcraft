@@ -78,6 +78,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Set by the role goals while they have a job; not saved, they set it again after loading. */
 	private boolean working;
 	private int idleTicks;
+	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
+	private int holdAgainstCurrentUntil = -1;
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
 	/**
@@ -170,6 +172,19 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		BlockPos feet = this.blockPosition();
 		this.pathScaffold.removeIf(pos -> Math.max(Math.abs(pos.getX() - feet.getX()), Math.abs(pos.getZ() - feet.getZ())) > PATH_SCAFFOLD_RANGE);
 		this.idleTicks = this.working ? 0 : this.idleTicks + 1;
+	}
+
+	/**
+	 * Swims against the current this tick and the next: flowing water does not push the bot while it follows a
+	 * path through it. A mob's swim stroke is weaker than a current, which would otherwise wash it into a corner.
+	 */
+	public void holdAgainstCurrent() {
+		this.holdAgainstCurrentUntil = this.tickCount + 1;
+	}
+
+	@Override
+	public boolean isPushedByFluid() {
+		return super.isPushedByFluid() && this.tickCount > this.holdAgainstCurrentUntil;
 	}
 
 	@Override

@@ -148,6 +148,9 @@ public class PathFollower {
 			}
 		}
 
+		if (this.bot.isInWater()) {
+			this.bot.holdAgainstCurrent();
+		}
 		if (step.type() == MoveType.PILLAR) {
 			this.pillar(level, world, step);
 		} else {

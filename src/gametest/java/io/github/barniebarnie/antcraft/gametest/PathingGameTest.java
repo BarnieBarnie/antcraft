@@ -29,10 +29,15 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 
 	/** Bedrock walls on the border of the 8x8 area (y 0..7) and a floor at {@code floorY}. */
 	private static void room(GameTestHelper helper, int floorY) {
+		room(helper, floorY, 8);
+	}
+
+	/** Bedrock walls on the border of the 8x8 area, {@code height} blocks high, and a floor at {@code floorY}. */
+	private static void room(GameTestHelper helper, int floorY, int height) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				boolean border = x == 0 || x == 7 || z == 0 || z == 7;
-				for (int y = 0; y < 8; y++) {
+				for (int y = 0; y < height; y++) {
 					if (border) {
 						helper.setBlock(x, y, z, Blocks.BEDROCK);
 					} else if (y <= floorY) {
@@ -195,16 +200,73 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The only way down from a ledge is a fall of 5 blocks, more than {@code PathFollower}'s usual drop of 3, into
-	 * water a block deep. Water breaks the fall: the bot drops in unhurt and climbs out on the far bank.
+	 * A waterfall 10 high, from a source on top of a cliff into a still pool, is the only way up, as in
+	 * {@link #swimsUpAWaterfall}. Times the bot rising through the middle of it and checks that
+	 * {@link PathFinder#SWIM_UP_COST} matches the ticks it takes per block.
 	 */
-	@GameTest(maxTicks = 400)
-	public void dropsFartherThanUsualIntoWaterUnhurt(GameTestHelper helper) {
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 600)
+	public void swimUpCostMatchesTheTimeARiseTakes(GameTestHelper helper) {
+		room(helper, 0, 16);
+		fill(helper, 4, 1, 1, 6, 10, 6, Blocks.BEDROCK);
+		fill(helper, 1, 1, 1, 3, 1, 6, Blocks.WATER);
+		fill(helper, 2, 1, 2, 3, 10, 2, Blocks.BEDROCK);
+		fill(helper, 2, 1, 4, 3, 10, 4, Blocks.BEDROCK);
+		helper.setBlock(2, 10, 3, Blocks.BEDROCK);
+		helper.setBlock(3, 10, 3, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 5);
+		helper.runAfterDelay(60, () -> bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 11, 3))));
+		double startY = 3.0;
+		double endY = 8.0;
+		long[] crossed = {-1, -1};
+		helper.onEachTick(() -> {
+			double y = bot.getY() - helper.absolutePos(BlockPos.ZERO).getY();
+			if (crossed[0] < 0 && y >= startY) {
+				crossed[0] = helper.getTick();
+			}
+			if (crossed[1] < 0 && y >= endY) {
+				crossed[1] = helper.getTick();
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(crossed[1] >= 0, "not up yet, at " + TestPositions.relative(helper, bot.blockPosition()));
+			double perBlock = (crossed[1] - crossed[0]) / (endY - startY);
+			helper.assertTrue(Math.abs(perBlock - PathFinder.SWIM_UP_COST) <= PathFinder.SWIM_UP_COST / 4,
+				"rising took " + perBlock + " ticks per block, but SWIM_UP_COST is " + PathFinder.SWIM_UP_COST);
+		});
+	}
+
+	/**
+	 * A channel a block wide with a water source at its upper end, so water flows down it the whole way. A bot at
+	 * the lower end swims against the current to the bank beside the source.
+	 */
+	@GameTest(maxTicks = 600)
+	public void swimsUpstreamThroughFlowingWater(GameTestHelper helper) {
 		room(helper, 0);
-		fill(helper, 1, 1, 1, 2, 5, 6, Blocks.BEDROCK);
+		fill(helper, 1, 1, 2, 6, 2, 2, Blocks.BEDROCK);
+		fill(helper, 1, 1, 4, 6, 2, 4, Blocks.BEDROCK);
+		helper.setBlock(6, 1, 3, Blocks.BEDROCK);
+		helper.setBlock(5, 1, 3, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		// Let the water flow down the channel before planning.
+		helper.runAfterDelay(40, () -> bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 2, 3))));
+
+		succeedWhenAt(helper, bot, new BlockPos(6, 2, 3));
+	}
+
+	/**
+	 * The only way down from a ledge is a fall of {@link PathFinder#MAX_WATER_DROP} blocks, far more than
+	 * {@code PathFollower}'s usual drop of 3, into water a block deep. Water breaks the fall: the bot drops in unhurt
+	 * and climbs out on the far bank.
+	 */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 400)
+	public void dropsFarIntoWaterUnhurt(GameTestHelper helper) {
+		int fall = PathFinder.MAX_WATER_DROP;
+		room(helper, 0, 16);
+		fill(helper, 1, 1, 1, 2, fall, 6, Blocks.BEDROCK);
 		fill(helper, 3, 1, 1, 5, 1, 6, Blocks.WATER);
 		fill(helper, 6, 1, 1, 6, 1, 6, Blocks.BEDROCK);
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 6, 3);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, fall + 1, 3);
 		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 2, 3)));
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt by the fall"));
 

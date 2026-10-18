@@ -25,10 +25,17 @@ public final class PathFinder {
 	 */
 	public static final double SWIM_COST = 33.0;
 	/**
-	 * How far a drop into water may fall, past {@link Options#maxDrop()}: water breaks the fall. Game-tested for 5
-	 * blocks into water a block deep; the limit keeps bots from leaping off cliffs they cannot swim back up.
+	 * How far a drop into water may fall, past {@link Options#maxDrop()}: water breaks the fall. Game-tested for the
+	 * full drop into water a block deep ({@code PathingGameTest.dropsFarIntoWaterUnhurt}); the limit keeps bots from
+	 * leaping off cliffs they cannot swim back up.
 	 */
 	public static final int MAX_WATER_DROP = 8;
+	/**
+	 * Swimming one block up a water column, such as a waterfall. Measured at about 8 ticks a block (see
+	 * {@code PathingGameTest.swimUpCostMatchesTheTimeARiseTakes}), so a climb up a long waterfall is not mistaken for
+	 * a shortcut.
+	 */
+	public static final double SWIM_UP_COST = 8.0;
 
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
@@ -97,7 +104,7 @@ public final class PathFinder {
 			steps.add(n.step);
 		}
 		Collections.reverse(steps);
-		return new Path(start, List.copyOf(steps), complete);
+		return new Path(start, List.copyOf(steps), complete, end.cost);
 	}
 
 	private record Candidate(Step step, double cost) {
@@ -193,7 +200,7 @@ public final class PathFinder {
 			if (!this.world.isWater(feet) || !this.world.isWater(to) || !this.open(to.above()) && !this.world.isWater(to.above())) {
 				return null;
 			}
-			return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), FALL_COST_PER_BLOCK);
+			return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_UP_COST);
 		}
 
 		/** Water with open air above it, where a bot floats with its head out. Bots do not dive, but rise up water columns (see {@link #enterColumn}). */

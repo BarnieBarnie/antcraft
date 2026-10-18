@@ -162,6 +162,30 @@ class PathFinderTest {
 	}
 
 	@Test
+	void swimmingUpABlockCostsTheTicksItTakes() {
+		// A water column 4 deep in a pool: the bot at the bottom rises 3 blocks to the surface, then climbs out.
+		GridWorld world = GridWorld.flat(10).fill(-1, 1, -10, 10, 4, 10, '#').fill(0, 1, 0, 0, 4, 0, 'W');
+		Path path = PathFinder.find(world, START, new Goal.Block(new BlockPos(1, 5, 0)), WALK_ONLY);
+
+		assertTrue(path.complete(), "cannot rise: " + path.steps());
+		assertEquals(3 * PathFinder.SWIM_UP_COST + PathFinder.WALK_COST + PathFinder.JUMP_COST, path.cost(), 1e-9);
+		// Measured at about 8 ticks a block (see PathingGameTest.swimUpCostMatchesTheTimeARiseTakes).
+		assertTrue(PathFinder.SWIM_UP_COST >= 6 && PathFinder.SWIM_UP_COST <= 10, "SWIM_UP_COST " + PathFinder.SWIM_UP_COST);
+	}
+
+	@Test
+	void takesStairsRatherThanAWaterfallThatIsSlowerToSwimUp() {
+		// The waterfall of swimsUpAWaterfallToTheTopOfACliff, and stairs up the cliff 4 blocks along it. Swimming up the
+		// waterfall is a few blocks shorter, but rising 3 blocks in water takes longer than walking round to the stairs.
+		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 10, 4, 10, '#').fill(2, 1, 0, 2, 4, 0, 'W')
+			.fill(0, 1, 4, 0, 1, 4, '#').fill(1, 1, 4, 1, 2, 4, '#').fill(2, 1, 4, 2, 3, 4, '#');
+		Path path = find(world, new BlockPos(4, 5, 0), WALK_ONLY);
+
+		assertTrue(path.complete(), "no way up: " + path.steps());
+		assertFalse(types(path).contains(MoveType.SWIM), "swam up the waterfall: " + path.steps());
+	}
+
+	@Test
 	void doesNotSwimSidewaysFromOneWaterfallIntoAnother() {
 		// Two water columns side by side in bedrock. The bot is at the foot of one capped at the top; only the other
 		// leads up to air and a ledge, and getting across means swimming under water.
