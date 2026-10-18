@@ -236,6 +236,7 @@ public class Colony {
 		// A shaft plan saved by an older version, such as before the walls, gets the current one under its id, keeping its progress.
 		mineshaft.ifPresent(shaft -> this.builds.replaceAll((planId, plan) -> shaft.isPlan(plan) ? shaft.plan() : plan));
 		this.indexBatches();
+		List.copyOf(this.builds.keySet()).forEach(this::settleEmpty);
 		protectedBlocks.forEach(placed -> this.protectedBlocks.put(placed.pos(), placed.block().orElse(null)));
 	}
 
@@ -337,9 +338,30 @@ public class Colony {
 	 * (see {@link #withoutOverlaps}).
 	 */
 	public void addBuild(BuildPlan plan) {
-		this.builds.put(UUID.randomUUID(), withoutOverlaps(plan));
+		UUID id = UUID.randomUUID();
+		this.builds.put(id, withoutOverlaps(plan));
 		this.indexBatches();
+		this.settleEmpty(id);
 		this.lastSurvey = -1;
+	}
+
+	/**
+	 * Drops the plan with id {@code id} if it has no steps, and marks its empty batches done, as
+	 * there is nothing to build there: an old save's plan or batch of only second halves (see
+	 * {@link BuildPlan}), or a batch {@link #withoutOverlaps} emptied. Marked done rather than
+	 * removed, empty batches keep the indexes that jobs, states and the batches needing them go by.
+	 */
+	private void settleEmpty(UUID id) {
+		BuildPlan plan = this.builds.get(id);
+		if (plan.steps().isEmpty()) {
+			this.removePlan(id);
+			return;
+		}
+		for (int i = 0; i < plan.batches().size(); i++) {
+			if (plan.batches().get(i).from() == plan.batches().get(i).to()) {
+				this.batchStates.put(batchId(id, i), BatchState.DONE);
+			}
+		}
 	}
 
 	/**

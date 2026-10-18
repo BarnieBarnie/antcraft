@@ -30,6 +30,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -427,6 +429,27 @@ class ColonyTest {
 		json.add("builds", BuildPlan.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(plan(Blocks.COBBLESTONE))).getOrThrow());
 		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 		assertEquals(List.of(plan(Blocks.COBBLESTONE)), colony.builds());
+	}
+
+	@Test
+	void oldSaveWithEmptyPlansAndBatchesLoads() {
+		// Saved before second halves were dropped (#75): one plan holds only a door's upper half, another a batch of one.
+		BuildPlan.Step upper = new BuildPlan.Step(new BlockPos(5, 65, 5),
+			Blocks.OAK_DOOR.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER));
+		BuildPlan.Step wall = new BuildPlan.Step(new BlockPos(6, 64, 5), Blocks.COBBLESTONE.defaultBlockState());
+		var json = JsonParser.parseString("""
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0], "builds": [
+			 {"steps": [], "batches": [{"from": 0, "to": 1}]},
+			 {"steps": [], "batches": [{"from": 0, "to": 1}, {"from": 1, "to": 2, "needs": [0]}]}]}
+			""").getAsJsonObject();
+		var builds = json.getAsJsonArray("builds");
+		builds.get(0).getAsJsonObject().add("steps", BuildPlan.Step.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(upper)).getOrThrow());
+		builds.get(1).getAsJsonObject().add("steps", BuildPlan.Step.CODEC.listOf().encodeStart(JsonOps.INSTANCE, List.of(upper, wall)).getOrThrow());
+		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		colony.postBuildJobs();
+		assertEquals(1, colony.builds().size(), "empty plan kept: " + colony.builds());
+		assertEquals(List.of(wall), colony.builds().getFirst().steps());
+		assertEquals(List.of(wall.pos()), colony.board().jobs().stream().map(Job::target).toList());
 	}
 
 	@Test
