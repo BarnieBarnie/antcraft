@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -55,7 +56,7 @@ public class Colony {
 	/** Saves from before blocked steps kept their plan hold only positions; their plans are gone, so the next recheck drops them. */
 	private static final Codec<List<Blocked>> BLOCKED = Codec.withAlternative(
 		Blocked.CODEC.listOf(),
-		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Blocked(new UUID(0, 0), pos)).toList(),
+		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Blocked(new UUID(0, 0), pos, false)).toList(),
 			blocked -> blocked.stream().map(Blocked::pos).toList()));
 	private static final Codec<Map<OrderPurpose, Map<Item, Integer>>> SYSTEM_ORDERS = Codec.unboundedMap(OrderPurpose.CODEC, ITEM_COUNTS);
 
@@ -97,11 +98,16 @@ public class Colony {
 		).apply(i, Placed::new));
 	}
 
-	/** A step that a builder could not do, of the batch of build job {@code plan} (named so before plans had batches). */
-	record Blocked(UUID plan, BlockPos pos) {
+	/**
+	 * A step that a builder could not do, of the batch of build job {@code plan} (named so before
+	 * plans had batches); {@code unreachable} if it found no way to the step, rather than the step
+	 * itself being impossible.
+	 */
+	record Blocked(UUID plan, BlockPos pos, boolean unreachable) {
 		static final Codec<Blocked> CODEC = RecordCodecBuilder.create(i -> i.group(
 			UUIDUtil.STRING_CODEC.fieldOf("plan").forGetter(Blocked::plan),
-			BlockPos.CODEC.fieldOf("pos").forGetter(Blocked::pos)
+			BlockPos.CODEC.fieldOf("pos").forGetter(Blocked::pos),
+			Codec.BOOL.optionalFieldOf("unreachable", false).forGetter(Blocked::unreachable)
 		).apply(i, Blocked::new));
 	}
 
@@ -461,13 +467,24 @@ public class Colony {
 		return this.blockedSteps.stream().map(Blocked::pos).toList();
 	}
 
+	/** Where builders found no way to a step; see {@link #reportBlocked(UUID, Collection, Collection)}. */
+	public List<BlockPos> unreachableSteps() {
+		return this.blockedSteps.stream().filter(Blocked::unreachable).map(Blocked::pos).toList();
+	}
+
+	/** {@link #reportBlocked(UUID, Collection, Collection)} with every step reachable. */
+	public void reportBlocked(UUID job, Collection<BlockPos> steps) {
+		this.reportBlocked(job, steps, List.of());
+	}
+
 	/**
 	 * Records the steps of the batch of build job {@code job} that a builder cannot do; the batch,
 	 * and the batches that need it, wait without jobs until a recheck frees it, while the plan's
 	 * other batches go on. The mineshaft does not wait: it drops the
 	 * levels the steps keep builders from (see {@link Mineshaft#reachable}) and goes on without them.
+	 * Of those, the steps in {@code unreachable} are ones the builder found no way to.
 	 */
-	public void reportBlocked(UUID job, Collection<BlockPos> steps) {
+	public void reportBlocked(UUID job, Collection<BlockPos> steps, Collection<BlockPos> unreachable) {
 		BatchRef batch = this.batchJobs.get(job);
 		Optional<Mineshaft> shaft = this.mineshaft
 			.filter(mine -> batch != null && this.builds.get(batch.plan()).equals(mine.plan()))
@@ -477,12 +494,16 @@ public class Colony {
 			this.setMineshaft(shaft.get());
 			return;
 		}
-		steps.stream().map(pos -> new Blocked(job, pos.immutable())).filter(b -> !this.blockedSteps.contains(b)).forEach(this.blockedSteps::add);
+		steps.stream().map(pos -> new Blocked(job, pos.immutable(), unreachable.contains(pos)))
+			.filter(b -> this.blockedSteps.stream().noneMatch(old -> old.plan().equals(b.plan()) && old.pos().equals(b.pos())))
+			.forEach(this.blockedSteps::add);
 	}
 
 	/**
 	 * Drops blocked steps whose plan is gone, and those that are done or that {@code workable},
-	 * given the step's batch and the step, says a bot could do now. A batch with such a step gets
+	 * given the step's batch and the step, says a bot could do now. A step no builder could get to
+	 * is dropped only once done: {@code workable} cannot tell whether there is a way to it now, and
+	 * trying it each survey would only fail again, so {@link #recheckGivenUp} retries it now and then. A batch with such a step gets
 	 * all its blocked steps dropped, so it gets a job again and its bot reports whatever is still
 	 * blocked. {@code world} gives null where it cannot tell, such as in unloaded chunks.
 	 */
@@ -492,7 +513,7 @@ public class Colony {
 			Optional<BuildPlan> batch = this.build(blocked.plan());
 			Optional<BuildPlan.Step> step = batch.flatMap(plan -> plan.steps().stream().filter(s -> s.pos().equals(blocked.pos())).findFirst());
 			BlockState state = world.apply(blocked.pos());
-			if (step.isEmpty() || state != null && (step.get().isDone(state) || workable.test(batch.get(), step.get()))) {
+			if (step.isEmpty() || state != null && (step.get().isDone(state) || !blocked.unreachable() && workable.test(batch.get(), step.get()))) {
 				freed.add(blocked.plan());
 			}
 		}
@@ -524,8 +545,9 @@ public class Colony {
 	}
 
 	/**
-	 * Every {@link #GIVEN_UP_RECHECK_TICKS}, puts the jobs bots gave up on back up, so a tree or branch a player has
-	 * since opened the way to gets done after all. Returns how many were reopened.
+	 * Every {@link #GIVEN_UP_RECHECK_TICKS}, puts the jobs bots gave up on back up, and frees the
+	 * batches with steps builders found no way to, so a tree, branch or step a player has since
+	 * opened the way to gets done after all. Returns how many jobs and batches were reopened.
 	 */
 	public int recheckGivenUp(long now) {
 		if (this.lastGivenUpRecheck < 0) {
@@ -535,7 +557,11 @@ public class Colony {
 			return 0;
 		}
 		this.lastGivenUpRecheck = now;
-		return this.board.reopenGivenUp();
+		Set<UUID> freed = this.blockedSteps.stream().filter(Blocked::unreachable).map(Blocked::plan).collect(Collectors.toCollection(HashSet::new));
+		if (this.blockedSteps.removeIf(blocked -> freed.contains(blocked.plan()))) {
+			this.lastSurvey = -1;
+		}
+		return this.board.reopenGivenUp() + freed.size();
 	}
 
 	/** Gives up on every blocked step and the plans waiting on them. Returns how many steps there were. */

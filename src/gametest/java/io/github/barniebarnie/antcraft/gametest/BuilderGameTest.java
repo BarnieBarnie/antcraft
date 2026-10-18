@@ -682,6 +682,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			assertState(helper, 6, 1, 6, COBBLE);
 			helper.assertTrue(colony.blockedSteps().equals(List.of(high.pos())), "unreachable step not reported: " + colony.blockedSteps());
+			helper.assertTrue(colony.unreachableSteps().equals(List.of(high.pos())), "step not reported as unreachable: " + colony.unreachableSteps());
 		});
 	}
 

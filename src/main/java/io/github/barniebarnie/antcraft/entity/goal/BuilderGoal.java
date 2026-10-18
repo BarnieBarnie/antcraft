@@ -612,11 +612,13 @@ public class BuilderGoal extends ColonyWorkGoal {
 			this.cooldown = IDLE_TICKS;
 		} else {
 			plan.ifPresent(p -> {
-				List<BlockPos> blocked = p.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).map(BuildPlan.Step::pos).toList();
+				List<BuildPlan.Step> blocked = p.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).toList();
 				if (blocked.isEmpty()) {
 					colony.finishBatch(job.id());
 				} else {
-					colony.reportBlocked(job.id(), blocked);
+					// Those it found no way to are not retried every survey, only now and then (see Colony#recheckBlocked).
+					colony.reportBlocked(job.id(), blocked.stream().map(BuildPlan.Step::pos).toList(),
+						blocked.stream().filter(this::isGivenUp).map(BuildPlan.Step::pos).toList());
 				}
 			});
 			// Once the colony finds the steps workable again, say a player opened the way, they are tried afresh.

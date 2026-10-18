@@ -313,6 +313,72 @@ class ColonyTest {
 		assertEquals(List.of(id), colony.board().jobs().stream().map(Job::id).toList());
 	}
 
+	/** A plan with one step at (5, 64, 5) that a builder found no way to, and the id of its job. */
+	private static UUID unreachablePlan(Colony colony, BuildPlan.Step step) {
+		colony.addBuild(new BuildPlan(List.of(step)));
+		colony.postBuildJobs();
+		UUID id = colony.board().jobs().getFirst().id();
+		colony.board().complete(id);
+		colony.reportBlocked(id, List.of(step.pos()), List.of(step.pos()));
+		return id;
+	}
+
+	/** A step no builder could get to is workable as far as the recheck can tell, but trying it again each survey would only fail again. */
+	@Test
+	void recheckKeepsAStepNoBuilderCouldReach() {
+		Colony colony = colony();
+		unreachablePlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.recheckBlocked(world(Blocks.STONE), (batch, step) -> true);
+		colony.postBuildJobs();
+		assertEquals(List.of(PLACED), colony.blockedSteps());
+		assertEquals(List.of(PLACED), colony.unreachableSteps());
+		assertTrue(colony.board().jobs().isEmpty(), "unreachable step posted again: " + colony.board().jobs());
+	}
+
+	@Test
+	void recheckDropsAnUnreachableStepThatIsDone() {
+		Colony colony = colony();
+		unreachablePlan(colony, new BuildPlan.Step(PLACED, Blocks.COBBLESTONE.defaultBlockState()));
+		colony.recheckBlocked(world(Blocks.COBBLESTONE), (batch, step) -> true);
+		assertTrue(colony.blockedSteps().isEmpty(), "done step still reported: " + colony.blockedSteps());
+	}
+
+	/** Now and then the colony tries an unreachable step again, in case a player has since opened the way to it. */
+	@Test
+	void anUnreachableStepIsRetriedAtTheGivenUpRecheck() {
+		Colony colony = colony();
+		UUID id = unreachablePlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.recheckGivenUp(1000);
+		colony.recheckGivenUp(1000 + Colony.GIVEN_UP_RECHECK_TICKS - 1);
+		assertEquals(List.of(PLACED), colony.blockedSteps());
+
+		colony.recheckGivenUp(1000 + Colony.GIVEN_UP_RECHECK_TICKS);
+		colony.postBuildJobs();
+		assertTrue(colony.blockedSteps().isEmpty(), "unreachable step never retried: " + colony.blockedSteps());
+		assertEquals(List.of(id), colony.board().jobs().stream().map(Job::id).toList());
+	}
+
+	/** A step blocked by something else, such as bedrock, is not freed by the timer: the recheck looks at it every survey anyway. */
+	@Test
+	void theGivenUpRecheckLeavesOtherBlockedSteps() {
+		Colony colony = colony();
+		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
+		colony.recheckGivenUp(1000);
+		colony.recheckGivenUp(1000 + Colony.GIVEN_UP_RECHECK_TICKS);
+		assertEquals(List.of(PLACED), colony.blockedSteps());
+	}
+
+	@Test
+	void unreachableStepsAreSaved() {
+		Colony colony = colony();
+		unreachablePlan(colony, BuildPlan.Step.clear(PLACED));
+		blockedPlan(colony, BuildPlan.Step.clear(new BlockPos(1, 2, 3)));
+		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(List.of(PLACED, new BlockPos(1, 2, 3)), loaded.blockedSteps());
+		assertEquals(List.of(PLACED), loaded.unreachableSteps());
+	}
+
 	@Test
 	void recheckDropsStepsOfPlansThatAreGone() {
 		Colony colony = colony();
@@ -686,7 +752,7 @@ class ColonyTest {
 			List.of(StockTarget.of(Items.TORCH, 16), StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)), builds,
 			List.of(new Colony.Placed(new BlockPos(1, 64, 1), Optional.of(Blocks.OAK_PLANKS))), Optional.of(new Field(new BlockPos(10, 64, 10))),
 			Optional.of(new StorageArea(new BlockPos(-5, 64, -5))), Map.of(Items.TORCH, 1),
-			List.of(new Colony.Blocked(SECOND_PLAN, new BlockPos(6, 64, 5))),
+			List.of(new Colony.Blocked(SECOND_PLAN, new BlockPos(6, 64, 5), false)),
 			Map.of(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_STAIRS, 3), Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 2)),
 			Map.of(FIRST_PLAN, Colony.BatchState.WAITING));
 	}
