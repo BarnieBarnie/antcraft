@@ -28,9 +28,9 @@ import org.jspecify.annotations.Nullable;
 /**
  * The work loop of every colony bot: claims the job that {@link JobScore} rates best for the bot, of any
  * type it has an executor for, and runs it there. It heartbeats the job while the executor works on it,
- * and completes, releases or retries it as the executor reports. So far only tree and replant jobs
- * ({@link LumberjackGoal}) are taken this way, by a bot of any role; the other job types stay with their
- * role goals until they move here. Until then a bot's role is a bonus in the score: a job of its own role
+ * and completes, releases or retries it as the executor reports. So far tree and replant jobs
+ * ({@link LumberjackGoal}) and crop jobs ({@link FarmerGoal}) are taken this way, by a bot of any role; the
+ * other job types stay with their role goals until they move here. Until then a bot's role is a bonus in the score: a job of its own role
  * that scores better is left to the role's goal. Runs ahead of the role goals, and takes the bot from one
  * only while that reports no work.
  */
@@ -38,8 +38,23 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** What became of a job, as its executor reports it. */
 	enum Outcome { COMPLETE, RELEASE, RETRY }
 
-	/** The job types claimed here. */
-	private static final Set<JobType> TYPES = EnumSet.of(JobType.CHOP_TREE, JobType.REPLANT);
+	/** Runs the jobs of some types for the worker goal. */
+	interface Executor {
+		/** Whether this bot could start on the job now. */
+		boolean isReady(ServerLevel level, Colony colony, Job job);
+
+		/** Starts on a claimed job. Returns false when there is nothing left to do for it. */
+		boolean begin(ServerLevel level, Job job);
+
+		/** Works one tick on the job begun, and on what follows it. Returns false once ready for the next job. */
+		boolean work(ServerLevel level);
+
+		/** What became of the job begun, once that is known; reported once. */
+		Optional<Outcome> takeOutcome();
+
+		/** Drops the job begun and what follows it, as the worker goal stops. */
+		void reset();
+	}
 	/** The job types each role's goal does, preferred by bots of that role. */
 	private static final Map<BotRole, Set<JobType>> ROLE_JOBS = Map.of(
 		BotRole.LUMBERJACK, EnumSet.of(JobType.CHOP_TREE, JobType.REPLANT),
@@ -51,7 +66,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final int CHECK_TICKS = 10;
 
 	private final AntBot bot;
-	private final LumberjackGoal lumberjack;
+	/** The executor of each job type claimed here. */
+	private final Map<JobType, Executor> executors;
+	/** The executor of the job begun last, at work on it or on what follows it. */
+	private @Nullable Executor active;
 	/** The job claimed, until its executor reports what became of it. */
 	private @Nullable Job job;
 	private Optional<Job> last = Optional.empty();
@@ -59,9 +77,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private boolean busy;
 	private long nextCheck;
 
-	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack) {
+	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer) {
 		this.bot = bot;
-		this.lumberjack = lumberjack;
+		this.executors = Map.of(JobType.CHOP_TREE, lumberjack, JobType.REPLANT, lumberjack,
+			JobType.HARVEST_CROP, farmer, JobType.PLANT_CROP, farmer);
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
@@ -93,7 +112,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		this.job = null;
 		this.busy = false;
-		this.lumberjack.stop();
+		if (this.active != null) {
+			this.active.reset();
+			this.active = null;
+		}
 		this.bot.setWorking(false);
 	}
 
@@ -111,8 +133,12 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (this.job != null && level.getGameTime() % 20 == 0) {
 			board.heartbeat(this.bot.getUUID(), level.getGameTime());
 		}
-		this.busy = this.lumberjack.work(level);
-		this.lumberjack.takeOutcome().ifPresent(outcome -> this.report(level, colony.get(), outcome));
+		if (this.active != null) {
+			this.busy = this.active.work(level);
+			this.active.takeOutcome().ifPresent(outcome -> this.report(level, colony.get(), outcome));
+		} else {
+			this.busy = false;
+		}
 		if (!this.busy) {
 			this.busy = this.next(level, colony.get());
 		}
@@ -152,18 +178,23 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			Optional<Job> held = board.jobOf(id);
 			if (held.isEmpty()) {
 				JobScore score = this.score(level, colony, own);
-				Optional<Job> best = board.best(now, open -> TYPES.contains(open.type())
-					? this.lumberjack.isReady(level, colony, open) : own.contains(open.type()), score);
+				Optional<Job> best = board.best(now, open -> this.executors.containsKey(open.type())
+					? this.executors.get(open.type()).isReady(level, colony, open) : own.contains(open.type()), score);
 				// A job of the bot's own role is left to the role's goal, which claims it itself.
-				if (best.isEmpty() || !TYPES.contains(best.get().type())) {
+				if (best.isEmpty() || !this.executors.containsKey(best.get().type())) {
 					return false;
 				}
 				held = board.claim(id, now, open -> open.id().equals(best.get().id()), score);
 			}
-			if (held.isEmpty() || !TYPES.contains(held.get().type())) {
+			if (held.isEmpty() || !this.executors.containsKey(held.get().type())) {
 				return false;
 			}
-			if (this.lumberjack.begin(level, held.get())) {
+			Executor executor = this.executors.get(held.get().type());
+			if (executor.begin(level, held.get())) {
+				if (this.active != null && this.active != executor) {
+					this.active.reset();
+				}
+				this.active = executor;
 				this.job = held.get();
 				return true;
 			}

@@ -709,7 +709,7 @@ public class Colony {
 		return this.field;
 	}
 
-	void setField(Field field) {
+	public void setField(Field field) {
 		this.field = Optional.of(field);
 		this.board.removeOpenIf(job -> job.type() == JobType.PLANT_CROP);
 	}

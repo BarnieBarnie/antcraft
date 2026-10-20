@@ -102,8 +102,12 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(4, 1, 4, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, CropBlock.MAX_AGE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		// No trees here, so the lumberjack the colony picked has nothing to do.
+		// No trees here, so the lumberjack the colony picked has nothing to do; with a full pack it
+		// cannot take the harvest job itself either.
 		bot.assignRole(BotRole.LUMBERJACK);
+		for (int i = 0; i < bot.getInventory().getContainerSize(); i++) {
+			bot.getInventory().setItem(i, new ItemStack(Items.COBBLESTONE, 64));
+		}
 
 		helper.succeedWhen(() -> helper.assertValueEqual(bot.getRole(), BotRole.FARMER, "role"));
 	}

@@ -177,7 +177,7 @@ public class ColonyManager extends SavedData {
 		colony.field().ifPresent(field -> {
 			List<BlockPos> toPlant = field.toPlant(pos -> level.getBlockState(pos).getBlock() instanceof CropBlock);
 			colony.board().removeOpenIf(job -> job.type() == JobType.PLANT_CROP && !toPlant.contains(job.target()));
-			toPlant.forEach(pos -> colony.board().post(JobType.PLANT_CROP, pos));
+			toPlant.forEach(pos -> colony.board().post(JobType.PLANT_CROP, pos, Farming.plantTool(level.getBlockState(pos.below()))));
 		});
 	}
 

@@ -59,7 +59,7 @@ import org.jspecify.annotations.Nullable;
  * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast. Between trees
  * it swaps its axe for a better one at home, and in a colony orders the best axe the colony can make.
  */
-public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
+public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal implements WorkerGoal.Executor {
 	private static final int SEARCH_RADIUS = 24;
 	private static final double REACH = 4.0;
 	private static final int DEPOSIT_AT_LOGS = 32;
@@ -242,6 +242,11 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	@Override
+	public void reset() {
+		this.stop();
+	}
+
+	@Override
 	public void tick() {
 		if (!(this.bot.level() instanceof ServerLevel level)) {
 			return;
@@ -272,7 +277,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * For {@link WorkerGoal}: starts on a claimed tree or replant job. Returns false when there is nothing
 	 * left to do for it: the tree is gone, or the base was replanted or built over.
 	 */
-	boolean begin(ServerLevel level, Job job) {
+	@Override
+	public boolean begin(ServerLevel level, Job job) {
 		this.outcome = null;
 		this.depositAfterJob = true;
 		if (job.type() == JobType.REPLANT) {
@@ -300,7 +306,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * trees. A bot of another role takes all its logs home after each job. Returns false once it is ready
 	 * for the next job.
 	 */
-	boolean work(ServerLevel level) {
+	@Override
+	public boolean work(ServerLevel level) {
 		if (this.state == State.SEARCH) {
 			if (this.restockCooldown > 0) {
 				this.restockCooldown--;
@@ -326,14 +333,16 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	/** What became of the job begun, once that is known; reported once. */
-	Optional<WorkerGoal.Outcome> takeOutcome() {
+	@Override
+	public Optional<WorkerGoal.Outcome> takeOutcome() {
 		Optional<WorkerGoal.Outcome> taken = Optional.ofNullable(this.outcome);
 		this.outcome = null;
 		return taken;
 	}
 
 	/** Whether this bot could start on the job now: a replant job once it could get the saplings. */
-	boolean isReady(ServerLevel level, Colony colony, Job job) {
+	@Override
+	public boolean isReady(ServerLevel level, Colony colony, Job job) {
 		return job.type() != JobType.REPLANT || this.hasSaplingsFor(level, colony, job);
 	}
 

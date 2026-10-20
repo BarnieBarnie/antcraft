@@ -12,12 +12,22 @@ import java.util.Set;
 import java.util.UUID;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Items;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class JobBoardTest {
 	private static final UUID ALICE = UUID.randomUUID();
 	private static final UUID BOB = UUID.randomUUID();
 	private static final Set<JobType> CHOP = Set.of(JobType.CHOP_TREE);
+
+	@BeforeAll
+	static void bootstrap() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
 
 	@Test
 	void postedJobIsOpen() {
@@ -35,6 +45,14 @@ class JobBoardTest {
 
 		assertTrue(board.post(JobType.CHOP_TREE, new BlockPos(5, 1, 5)).isEmpty());
 		assertEquals(1, board.jobs().size());
+	}
+
+	@Test
+	void postedJobDeclaresTheToolItNeeds() {
+		JobBoard board = new JobBoard();
+		Job job = board.post(JobType.PLANT_CROP, new BlockPos(5, 1, 5), Optional.of(Items.WOODEN_HOE)).orElseThrow();
+
+		assertEquals(Optional.of(Items.WOODEN_HOE), job.tool());
 	}
 
 	private static TreeScanner.Tree tree(int x) {

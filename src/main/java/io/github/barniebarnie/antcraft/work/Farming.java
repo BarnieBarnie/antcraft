@@ -1,7 +1,10 @@
 package io.github.barniebarnie.antcraft.work;
 
+import java.util.Optional;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
@@ -28,6 +31,11 @@ public final class Farming {
 	/** Ground a hoe turns into farmland. */
 	public static boolean isTillable(BlockState state) {
 		return state.is(Blocks.DIRT) || state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT_PATH);
+	}
+
+	/** The tool planting above {@code soil} needs: a hoe to till it, unless it is farmland already. */
+	public static Optional<Item> plantTool(BlockState soil) {
+		return soil.is(Blocks.FARMLAND) ? Optional.empty() : Optional.of(Items.WOODEN_HOE);
 	}
 
 	/** Whether a crop can grow above this block once it is tilled. */

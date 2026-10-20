@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -13,12 +14,10 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -45,20 +44,23 @@ import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Farmer work loop: harvest ripe crops from the job board, replant them, store the produce.
- * It also tills and plants the colony field, breaking grass for seeds when the colony has none, and
- * waters the field's middle with a bucket. With nothing else to do it shears sheep in the territory for wool,
- * fetching shears from the core or ordering a pair.
+ * Farm work. As the executor of crop jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work}, it
+ * gets any colony bot to harvest a ripe crop and replant it, or to till and plant a spot in the colony field,
+ * fetching seeds and a hoe from the core or breaking grass for seeds, and watering the field's middle with a
+ * bucket first. A bot of another role stores the produce after each harvest.
+ * As the farmer's role goal it stores the produce, and with nothing else to do shears sheep in the territory
+ * for wool, fetching shears from the core or ordering a pair.
  * Now and then it swaps its hoe for a better one in the core, or orders the best one the colony can make.
  */
-public class FarmerGoal extends ColonyWorkGoal {
+public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Seeds a farmer keeps for replanting. */
 	private static final int KEEP_SEEDS = 16;
 	private static final int MIN_FREE_SLOTS = 2;
 
 	/** How often a farmer with an empty bucket looks for water to fill it at. */
 	private static final int WATER_SCAN_TICKS = 100;
-	private static final Set<JobType> JOBS = EnumSet.of(JobType.HARVEST_CROP, JobType.PLANT_CROP);
+	/** How long a bot that found no seeds anywhere leaves plant jobs alone. */
+	private static final int NO_SEEDS_TICKS = 200;
 	/** How often an idle farmer looks for a sheep to shear. */
 	private static final int SHEEP_SCAN_TICKS = 100;
 	/** Wool the colony keeps in stock; farmers stop shearing at this much. */
@@ -74,6 +76,12 @@ public class FarmerGoal extends ColonyWorkGoal {
 	private boolean depositing;
 	/** When the farmer may look for room for its produce again, after it found none. */
 	private long nextDeposit;
+	/** The crop job begun through {@link #begin}, until it is done. */
+	private @Nullable Job job;
+	/** What became of the job begun, for {@link WorkerGoal} to report to the board. */
+	private WorkerGoal.@Nullable Outcome outcome;
+	/** Until when the bot leaves plant jobs alone, having found no seeds. */
+	private long noSeedsUntil;
 	/** Grass the farmer is breaking for seeds. */
 	private @Nullable BlockPos grass;
 	/** Water the farmer is filling its bucket at. */
@@ -90,6 +98,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 		super(bot, BotRole.FARMER);
 	}
 
+	/** The farmer's own work between crop jobs: storing produce, a better hoe, and shearing. */
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
 		if (this.depositing) {
@@ -103,57 +112,132 @@ public class FarmerGoal extends ColonyWorkGoal {
 			this.depositing = true;
 			return;
 		}
-		if (this.waterField(level, colony)) {
+		if (this.shearSheep(level, colony)) {
 			return;
 		}
+		if (!this.produce().isEmpty() && this.mayDeposit(level)) {
+			this.depositing = true;
+		} else {
+			this.cooldown = IDLE_TICKS;
+		}
+	}
 
-		Optional<Job> job = colony.board().claim(this.bot.getUUID(), JOBS, this.bot.blockPosition(), level.getGameTime(),
-			open -> open.type() != JobType.PLANT_CROP || this.canPlant(level, open.target()));
-		this.hasJob = job.isPresent();
-		if (job.isEmpty()) {
-			if (this.shearSheep(level, colony)) {
-				return;
-			}
-			if (this.needsSeeds(colony)) {
-				this.getSeeds(level, colony);
-			} else if (!this.produce().isEmpty() && this.mayDeposit(level)) {
-				this.depositing = true;
+	@Override
+	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		return job.type() != JobType.PLANT_CROP || level.getGameTime() >= this.noSeedsUntil
+			|| findSlot(this.bot.getInventory(), Farming::isSeed) >= 0;
+	}
+
+	@Override
+	public boolean begin(ServerLevel level, Job job) {
+		this.outcome = null;
+		BlockPos crop = job.target();
+		BlockState state = level.getBlockState(crop);
+		boolean todo = job.type() == JobType.HARVEST_CROP ? Farming.isRipe(state)
+			// Not planted already, nor built over.
+			: !(state.getBlock() instanceof CropBlock) && Farming.isOpen(state) && Farming.isSoil(level.getBlockState(crop.below()));
+		if (!todo) {
+			return false;
+		}
+		this.job = job;
+		this.depositing = false;
+		this.resetMovement();
+		return true;
+	}
+
+	@Override
+	public boolean work(ServerLevel level) {
+		Optional<Colony> colony = Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
+		if (colony.isEmpty()) {
+			return false;
+		}
+		this.bot.setWorking(this.job != null);
+		if (this.cooldown > 0) {
+			this.cooldown--;
+			return true;
+		}
+		if (this.job != null) {
+			if (this.job.type() == JobType.PLANT_CROP) {
+				this.plant(level, colony.get(), this.job);
 			} else {
-				this.cooldown = IDLE_TICKS;
+				this.harvest(level, this.job);
 			}
-			return;
+			return true;
 		}
+		if (this.depositing) {
+			this.deposit(level, colony.get());
+			return true;
+		}
+		return false;
+	}
 
-		BlockPos crop = job.get().target();
-		if (job.get().type() == JobType.PLANT_CROP) {
-			this.plant(level, colony, job.get());
-			return;
-		}
+	@Override
+	public Optional<WorkerGoal.Outcome> takeOutcome() {
+		Optional<WorkerGoal.Outcome> taken = Optional.ofNullable(this.outcome);
+		this.outcome = null;
+		return taken;
+	}
+
+	@Override
+	public void reset() {
+		this.job = null;
+		this.outcome = null;
+		this.depositing = false;
+		this.resetMovement();
+	}
+
+	private void endJob(WorkerGoal.Outcome how) {
+		this.outcome = how;
+		this.job = null;
+		this.bot.setWorking(false);
+	}
+
+	/** Harvests the ripe crop and replants it. A bot of another role then stores the produce, which it would keep from the colony. */
+	private void harvest(ServerLevel level, Job job) {
+		BlockPos crop = job.target();
 		BlockState state = level.getBlockState(crop);
 		if (!Farming.isRipe(state)) {
-			colony.board().complete(job.get().id());
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
 		if (this.reach(crop) && this.breaker.tick(level, crop, true)) {
 			this.replant(level, crop, state.getBlock());
-			colony.board().complete(job.get().id());
-			this.hasJob = false;
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
+			this.depositing = this.bot.getRole() != BotRole.FARMER && !this.produce().isEmpty() && this.mayDeposit(level);
 		}
 	}
 
-	/** Clears the spot, tills the soil if needed and plants a seed, for a job in the colony field. */
+	/**
+	 * Waters the field, gets seeds and a hoe if it needs them, then clears the spot, tills the soil if
+	 * needed and plants a seed, for a job in the colony field. Gives the job back when it finds no seeds or hoe.
+	 */
 	private void plant(ServerLevel level, Colony colony, Job job) {
 		BlockPos crop = job.target();
 		BlockState state = level.getBlockState(crop);
 		if (state.getBlock() instanceof CropBlock || !Farming.isOpen(state) || !Farming.isSoil(level.getBlockState(crop.below()))) {
 			// Planted already, or built over.
-			colony.board().complete(job.id());
-			this.hasJob = false;
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
-		if (!this.canPlant(level, crop)) {
-			colony.board().release(this.bot.getUUID());
-			this.hasJob = false;
+		if (this.waterField(level, colony)) {
+			return;
+		}
+		if (findSlot(this.bot.getInventory(), Farming::isSeed) < 0) {
+			if (!this.getSeeds(level, colony)) {
+				this.noSeedsUntil = level.getGameTime() + NO_SEEDS_TICKS;
+				this.endJob(WorkerGoal.Outcome.RELEASE);
+			}
+			return;
+		}
+		boolean tilled = level.getBlockState(crop.below()).is(Blocks.FARMLAND);
+		if (!tilled && !ToolKind.HOE.is(this.bot.getMainHandItem()) && findSlot(this.bot.getInventory(), ToolKind.HOE::is) < 0) {
+			Container core = Storage.containerAt(level, colony.core());
+			if (core == null || findSlot(core, ToolKind.HOE::is) < 0) {
+				this.cooldown = IDLE_TICKS;
+				this.endJob(WorkerGoal.Outcome.RELEASE);
+			} else if (this.reach(colony.core())) {
+				Storage.moveItems(core, this.bot.getInventory(), ToolKind.HOE::is, 1);
+			}
 			return;
 		}
 		if (!this.reach(crop)) {
@@ -164,7 +248,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			this.breaker.tick(level, crop, true);
 			return;
 		}
-		if (!level.getBlockState(crop.below()).is(Blocks.FARMLAND)) {
+		if (!tilled) {
 			this.till(level, crop.below());
 		}
 		int slot = findSlot(this.bot.getInventory(), Farming::isSeed);
@@ -173,8 +257,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 			level.setBlockAndUpdate(crop, seed.defaultBlockState());
 			this.bot.getInventory().getItem(slot).shrink(1);
 		}
-		colony.board().complete(job.id());
-		this.hasJob = false;
+		this.endJob(WorkerGoal.Outcome.COMPLETE);
 	}
 
 	private void till(ServerLevel level, BlockPos soil) {
@@ -373,40 +456,25 @@ public class FarmerGoal extends ColonyWorkGoal {
 		return this.travel(new Goal.Near(wool.blockPosition(), 0)) != PathFollower.Status.FAILED;
 	}
 
-	/** Whether this farmer can plant at {@code crop} now: it carries a seed and the soil is tilled, or it has a hoe. */
-	private boolean canPlant(ServerLevel level, BlockPos crop) {
-		if (findSlot(this.bot.getInventory(), Farming::isSeed) < 0) {
-			return false;
-		}
-		BlockState soil = level.getBlockState(crop.below());
-		return soil.is(Blocks.FARMLAND) || Farming.isTillable(soil)
-			&& (ToolKind.HOE.is(this.bot.getMainHandItem()) || findSlot(this.bot.getInventory(), ToolKind.HOE::is) >= 0);
-	}
-
-	private boolean needsSeeds(Colony colony) {
-		return findSlot(this.bot.getInventory(), Farming::isSeed) < 0
-			&& colony.board().jobs().stream().anyMatch(job -> job.isOpen() && job.type() == JobType.PLANT_CROP);
-	}
-
-	/** Takes seeds from the core, or breaks grass in the territory until some drop. */
-	private void getSeeds(ServerLevel level, Colony colony) {
+	/** Takes seeds from the core, or breaks grass in the territory until some drop. Returns false when there are none to get. */
+	private boolean getSeeds(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
 		if (core != null && findSlot(core, Farming::isSeed) >= 0) {
 			if (this.reach(colony.core())) {
 				Storage.moveItems(core, this.bot.getInventory(), Farming::isSeed, KEEP_SEEDS);
 			}
-			return;
+			return true;
 		}
 		if (this.grass == null || !Farming.isSeedGrass(level.getBlockState(this.grass))) {
 			this.grass = nearest(level, colony, this.bot.blockPosition(), pos -> Farming.isSeedGrass(level.getBlockState(pos)));
 			if (this.grass == null) {
-				this.cooldown = IDLE_TICKS;
-				return;
+				return false;
 			}
 		}
 		if (this.reach(this.grass) && this.breaker.tick(level, this.grass, true)) {
 			this.grass = null;
 		}
+		return true;
 	}
 
 	private void replant(ServerLevel level, BlockPos pos, Block crop) {

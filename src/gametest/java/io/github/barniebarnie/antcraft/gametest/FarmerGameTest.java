@@ -342,4 +342,49 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> helper.assertTrue(sheep.isSheared(), "sheep not sheared"));
 	}
+
+	/** A colony bot with another role, kept by a player so the colony does not make it a farmer. */
+	private static AntBot colonyGuard(GameTestHelper helper, Colony colony, int x, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.setRole(BotRole.GUARD);
+		return bot;
+	}
+
+	@GameTest(maxTicks = 800)
+	public void colonyBotOfAnotherRoleHarvestsAndReplantsARipeCrop(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		wheatRow(helper, 7);
+		AntBot bot = colonyGuard(helper, colony, 2, 3);
+
+		helper.succeedWhen(() -> {
+			for (int x = 3; x <= 5; x++) {
+				BlockState crop = helper.getBlockState(new BlockPos(x, 1, 5));
+				helper.assertTrue(crop.is(Blocks.WHEAT) && crop.getValue(CropBlock.AGE) < 7, "not replanted at x=" + x);
+			}
+			// Done with the job, it brings the wheat home rather than keep it from the colony.
+			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 3, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
+			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
+		});
+	}
+
+	@GameTest(maxTicks = 1200)
+	public void colonyBotOfAnotherRoleTillsPlantsAndWatersTheField(GameTestHelper helper) {
+		BlockPos source = new BlockPos(7, 0, 7);
+		helper.setBlock(source, Blocks.WATER);
+		Colony colony = colony(helper);
+		Field field = new Field(helper.absolutePos(new BlockPos(4, 0, 4)));
+		colony.setField(field);
+		AntBot bot = colonyGuard(helper, colony, 0, 6);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
+		bot.getInventory().addItem(new ItemStack(Items.BUCKET));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).isEmpty(), "unplanted: " + field.toPlant(crop -> planted(helper, crop)));
+			helper.assertTrue(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "no water in the middle");
+			helper.assertBlockNotPresent(Blocks.WATER, source);
+			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
+		});
+	}
 }
