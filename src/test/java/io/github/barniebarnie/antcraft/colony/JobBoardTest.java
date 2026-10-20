@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import io.github.barniebarnie.antcraft.work.TreeScanner;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
@@ -34,6 +35,32 @@ class JobBoardTest {
 
 		assertTrue(board.post(JobType.CHOP_TREE, new BlockPos(5, 1, 5)).isEmpty());
 		assertEquals(1, board.jobs().size());
+	}
+
+	private static TreeScanner.Tree tree(int x) {
+		List<BlockPos> logs = new java.util.ArrayList<>();
+		for (int y = 1; y <= 6; y++) {
+			logs.add(new BlockPos(x, y, 0));
+		}
+		return new TreeScanner.Tree(logs.getFirst(), logs);
+	}
+
+	@Test
+	void noTreeJobsWithoutLogsWanted() {
+		JobBoard board = new JobBoard();
+		board.postTrees(List.of(tree(3), tree(6)), BlockPos.ZERO, 0);
+		assertTrue(board.jobs().isEmpty());
+	}
+
+	@Test
+	void postsTheNearestTreesThatCoverTheLogsWantedCountingThoseOnTheBoard() {
+		JobBoard board = new JobBoard();
+		// Already posted, and claimed: its 6 logs count.
+		board.post(JobType.CHOP_TREE, tree(9).base(), tree(9).logs());
+		board.claim(ALICE, CHOP, new BlockPos(9, 1, 0), 0);
+		// 20 logs wanted from trees of 6: 4 trees, the nearest ones.
+		board.postTrees(List.of(tree(30), tree(15), tree(3), tree(6), tree(9), tree(20)), BlockPos.ZERO, 20);
+		assertEquals(Set.of(3, 6, 9, 15), board.jobs().stream().map(job -> job.target().getX()).collect(java.util.stream.Collectors.toSet()));
 	}
 
 	@Test

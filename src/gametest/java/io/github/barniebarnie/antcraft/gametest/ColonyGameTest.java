@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.DefaultStock;
 import io.github.barniebarnie.antcraft.colony.Job;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -29,6 +30,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -219,6 +221,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 1600)
 	public void lumberjacksSplitTreesAndStoreLogsInCore(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
 		tree(helper, 2, 5);
 		tree(helper, 5, 2);
 		AntBot alice = member(helper, colony, 1, 3);
@@ -239,6 +242,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 200)
 	public void jobIsFreedWhenItsBotDies(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
 		tree(helper, 5, 5);
 		AntBot bot = member(helper, colony, 2, 2);
 
@@ -253,9 +257,28 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(maxTicks = 200)
+	public void colonyWithItsWoodStockMetLeavesTreesStanding(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 4)));
+		Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_LOG, 4));
+		tree(helper, 5, 5);
+		member(helper, colony, 2, 2);
+
+		helper.runAfterDelay(150, () -> {
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_TREE), "tree job posted");
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockPresent(Blocks.OAK_LOG, 5, y, 5);
+			}
+			helper.succeed();
+		});
+	}
+
 	@GameTest(maxTicks = 1200)
 	public void unassignedMemberTakesUpWorkTheColonyNeeds(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
 		tree(helper, 5, 5);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);

@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -25,6 +26,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
@@ -690,12 +692,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** Turns the home chest into a colony core, with no stock targets so the colony orders no crafting. */
+	/** Turns the home chest into a colony core that wants only logs, so it posts its trees and orders no crafting. */
 	private static Colony colonyAtHome(GameTestHelper helper) {
 		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CHEST)).orElseThrow();
 		colony.setRadius(6);
-		colony.setStockTargets(List.of());
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
 		return colony;
 	}
 

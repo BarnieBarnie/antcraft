@@ -149,6 +149,44 @@ public final class Stockkeeping {
 		return needed;
 	}
 
+	/**
+	 * How many logs the colony is short of: what open orders (build materials among them) and stock
+	 * targets still have to gather of logs, planks and sticks planned back to logs, against what it
+	 * {@code held}. Orders reserve stock in turn, as in {@link #neededForOrders}, then each target keeps
+	 * what it matches and plans its last option, the plainest, for the rest that is not ordered.
+	 */
+	public static <I> int logsShort(List<StockPlanner.Target<I>> targets, Map<I, Integer> orders, Map<I, Integer> held,
+			TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable, Predicate<I> isLog) {
+		Map<I, Integer> left = new HashMap<>(held);
+		int logs = 0;
+		for (Map.Entry<I, Integer> order : orders.entrySet()) {
+			Map<I, Integer> available = new HashMap<>(left);
+			available.remove(order.getKey());
+			logs += logsToGather(order.getKey(), order.getValue(), available, left, book, gatherable, isLog);
+		}
+		for (StockPlanner.Target<I> target : targets) {
+			// What is ordered is on its way, as in StockPlanner.ordersToAdd.
+			int missing = target.count() - StockPlanner.have(target, orders);
+			for (I item : List.copyOf(left.keySet())) {
+				if (target.matches().test(item)) {
+					missing -= take(item, missing, left, new HashMap<>());
+				}
+			}
+			if (missing > 0 && !target.make().isEmpty()) {
+				logs += logsToGather(target.make().getLast(), missing, new HashMap<>(left), left, book, gatherable, isLog);
+			}
+		}
+		return logs;
+	}
+
+	/** The logs a plan for {@code count} of {@code item} from {@code available} gathers; what it uses is taken from {@code left}. */
+	private static <I> int logsToGather(I item, int count, Map<I, Integer> available, Map<I, Integer> left,
+			TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable, Predicate<I> isLog) {
+		TaskPlanner.Plan<I> plan = TaskPlanner.plan(item, count, available, book, gatherable);
+		ingredients(plan.crafts(), available).forEach((used, n) -> left.merge(used, -n, Integer::sum));
+		return plan.toGather().entrySet().stream().filter(entry -> isLog.test(entry.getKey())).mapToInt(Map.Entry::getValue).sum();
+	}
+
 	private static <I> int take(I item, int wanted, Map<I, Integer> left, Map<I, Integer> fetch) {
 		int taken = Math.min(wanted, left.getOrDefault(item, 0));
 		if (taken > 0) {

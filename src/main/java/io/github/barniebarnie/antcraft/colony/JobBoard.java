@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.serialization.Codec;
+import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -71,6 +72,23 @@ public class JobBoard {
 		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L, Optional.empty(), 0);
 		this.jobs.add(job);
 		return Optional.of(job);
+	}
+
+	/**
+	 * Posts tree jobs for the {@code trees} nearest to {@code from} until they and the tree jobs on the
+	 * board, claimed or not, cover {@code logs} logs. Given-up jobs bring no logs, so they do not count.
+	 */
+	public void postTrees(List<TreeScanner.Tree> trees, BlockPos from, int logs) {
+		int covered = this.jobs.stream().filter(job -> job.type() == JobType.CHOP_TREE && !job.givenUp()).mapToInt(job -> job.blocks().size()).sum();
+		for (TreeScanner.Tree tree : trees.stream().sorted(Comparator.comparingDouble(tree -> tree.base().distSqr(from))).toList()) {
+			if (covered >= logs) {
+				return;
+			}
+			// Covering its logs keeps the rest of a tree being felled from being posted as a new tree.
+			if (this.post(JobType.CHOP_TREE, tree.base(), tree.logs()).isPresent()) {
+				covered += tree.logs().size();
+			}
+		}
 	}
 
 	public boolean has(JobType type, BlockPos target) {

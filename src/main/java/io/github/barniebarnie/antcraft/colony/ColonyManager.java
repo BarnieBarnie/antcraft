@@ -39,9 +39,11 @@ import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.BucketItem;
@@ -351,6 +353,23 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
+	 * Posts jobs for the trees in a build's way, so miners leave their logs to lumberjacks, and for the trees
+	 * nearest the core while the colony is short of logs; orders include what builds need.
+	 */
+	private void surveyTrees(ServerLevel level, Colony colony, LevelTreeView trees) {
+		List<TreeScanner.Tree> all = TreeScanner.findAll(trees, colony.core(), colony.radius());
+		Set<BlockPos> building = colony.builds().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
+		all.stream().filter(tree -> tree.logs().stream().anyMatch(building::contains))
+			.forEach(tree -> colony.board().post(JobType.CHOP_TREE, tree.base(), tree.logs()));
+		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
+		int logs = Stockkeeping.logsShort(targets, colony.orders(), Storage.held(level, colony), GameRecipeBook.of(level.getServer()),
+			Gatherables::isGatherable, item -> item.builtInRegistryHolder().is(ItemTags.LOGS));
+		if (logs > 0) {
+			colony.board().postTrees(all, colony.core(), logs);
+		}
+	}
+
+	/**
 	 * Gives unassigned members (such as freshly built bots) whatever work the colony needs
 	 * most, and moves idle members the colony assigned to roles that have work.
 	 */
@@ -405,10 +424,6 @@ public class ColonyManager extends SavedData {
 			// A tree job stays while any of its logs stand, even once the leaves have decayed.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())
 				&& TreeScanner.remaining(trees, job.area()).isEmpty());
-			for (TreeScanner.Tree tree : TreeScanner.findAll(trees, colony.core(), colony.radius())) {
-				// Covering its logs keeps the rest of a tree being felled from being posted as a new tree.
-				colony.board().post(JobType.CHOP_TREE, tree.base(), tree.logs());
-			}
 			// Replanted since, or built over.
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));
@@ -418,6 +433,7 @@ public class ColonyManager extends SavedData {
 			this.surveyBuilds(level, colony, have);
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
+			this.surveyTrees(level, colony, trees);
 			this.assignRoles(level, colony);
 		}
 	}

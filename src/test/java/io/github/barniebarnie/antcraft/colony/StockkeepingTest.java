@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -205,6 +206,38 @@ class StockkeepingTest {
 		assertFalse(wanted.test("oak_log"));
 		// A tag target counts every matching item.
 		assertFalse(wanted.test("wooden_pickaxe"));
+	}
+
+	private static int logsShort(List<StockPlanner.Target<Item>> targets, Map<Item, Integer> orders, Map<Item, Integer> held) {
+		return Stockkeeping.logsShort(targets, orders, held, VanillaData.recipeBook(), VanillaData.gatherable(),
+			// Like #minecraft:logs, which wood blocks are in too.
+			item -> BuiltInRegistries.ITEM.getKey(item).getPath().matches(".*_(log|wood|stem|hyphae)|bamboo_block"));
+	}
+
+	private static StockPlanner.Target<Item> target(Item item, int count) {
+		return new StockPlanner.Target<>(item::equals, List.of(item), count);
+	}
+
+	@Test
+	void noWoodWantedLeavesNoLogsShort() {
+		assertEquals(0, logsShort(List.of(), Map.of(), Map.of()));
+		// Targets that need no wood, or wood targets that are met.
+		assertEquals(0, logsShort(List.of(target(Items.COBBLESTONE, 64), target(Items.OAK_LOG, 32)), Map.of(), Map.of(Items.OAK_LOG, 40)));
+	}
+
+	@Test
+	void logsShortCountsPlanksAndSticksBackToLogsLessWhatIsHeld() {
+		// 32 logs wanted, 12 held.
+		assertEquals(20, logsShort(List.of(target(Items.OAK_LOG, 32)), Map.of(), Map.of(Items.OAK_LOG, 12)));
+		// 16 planks are 4 logs; 4 of them held leave 3.
+		assertEquals(3, logsShort(List.of(target(Items.OAK_PLANKS, 16)), Map.of(), Map.of(Items.OAK_PLANKS, 4)));
+		// An order for 8 sticks needs 4 planks, so one log; a held log covers it.
+		assertEquals(1, logsShort(List.of(), Map.of(Items.STICK, 8), Map.of()));
+		assertEquals(0, logsShort(List.of(), Map.of(Items.STICK, 8), Map.of(Items.OAK_LOG, 1)));
+		// The log target keeps its logs: they are not there for the order as well.
+		assertEquals(1, logsShort(List.of(target(Items.OAK_LOG, 1)), Map.of(Items.STICK, 8), Map.of(Items.OAK_LOG, 1)));
+		// Sticks ordered count towards their target, as in StockPlanner.ordersToAdd: not wanted twice.
+		assertEquals(1, logsShort(List.of(target(Items.STICK, 8)), Map.of(Items.STICK, 8), Map.of()));
 	}
 
 	@Test
