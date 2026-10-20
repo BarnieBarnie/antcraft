@@ -37,7 +37,9 @@ public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional
 	/** The job's cost for this bot, or empty if it cannot take it: a full bot for a job that yields items, or a need nothing satisfies. */
 	public OptionalDouble score(Job job) {
 		double cost = Math.sqrt(job.target().distSqr(this.pos));
-		for (Item need : Stream.concat(job.item().stream(), job.tool().stream()).toList()) {
+		// A craft job's item is what it makes, not what it needs.
+		Stream<Item> item = job.type() == JobType.CRAFT ? Stream.empty() : job.item().stream();
+		for (Item need : Stream.concat(item, job.tool().stream()).toList()) {
 			if (!this.carries(need)) {
 				cost += this.fetch.applyAsDouble(need);
 			}

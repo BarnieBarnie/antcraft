@@ -385,4 +385,19 @@ class JobBoardTest {
 		assertEquals(board.jobs(), loaded.jobs());
 		assertEquals(1234L, loaded.jobs().getFirst().posted());
 	}
+
+	@Test
+	void craftJobsAtOnePlaceAreOnePerProduct() {
+		JobBoard board = new JobBoard();
+		BlockPos core = new BlockPos(0, 1, 0);
+
+		assertTrue(board.postFor(JobType.CRAFT, core, Items.OAK_PLANKS, Optional.empty()).isPresent());
+		assertTrue(board.postFor(JobType.CRAFT, core, Items.STICK, Optional.empty()).isPresent());
+		assertTrue(board.postFor(JobType.CRAFT, core, Items.STICK, Optional.empty()).isEmpty());
+		Job stairs = board.postFor(JobType.CRAFT, new BlockPos(9, 1, 0), Items.COBBLESTONE_STAIRS, Optional.of(Items.CRAFTING_TABLE)).orElseThrow();
+
+		assertEquals(3, board.jobs().size());
+		assertEquals(Optional.of(Items.COBBLESTONE_STAIRS), stairs.item());
+		assertEquals(Optional.of(Items.CRAFTING_TABLE), stairs.tool());
+	}
 }

@@ -64,6 +64,19 @@ public class JobBoard {
 		return this.post(type, target, List.of(), Optional.empty(), 0L, tool);
 	}
 
+	/**
+	 * Adds a job for {@code item} at {@code target} unless one of the same type is posted for that item there
+	 * already. Unlike other jobs, several share a target, such as the crafts of an order at the core.
+	 */
+	public Optional<Job> postFor(JobType type, BlockPos target, Item item, Optional<Item> tool) {
+		if (this.jobs.stream().anyMatch(job -> job.type() == type && job.target().equals(target) && job.item().filter(item::equals).isPresent())) {
+			return Optional.empty();
+		}
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.of(item), 0, 0L, 0L, tool, 0);
+		this.jobs.add(job);
+		return Optional.of(job);
+	}
+
 	/** Like {@link #post(JobType, BlockPos, Collection, Optional, long)}, for a job that needs {@code tool}, such as a branch a pickaxe. */
 	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area, Optional<Item> item, long now, Optional<Item> tool) {
 		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {

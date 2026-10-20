@@ -128,4 +128,13 @@ class JobScoreTest {
 		assertEquals(Optional.empty(), loaded.tool());
 		assertEquals(0, loaded.priority());
 	}
+
+	/** A craft job's item is what it makes, which nobody has yet: it costs no fetch. Its station is fetched like a tool. */
+	@Test
+	void aCraftJobsItemIsItsProductNotANeed() {
+		Job craft = new Job(UUID.randomUUID(), JobType.CRAFT, new BlockPos(4, 0, 0), Optional.empty(), 0L, List.of(), Optional.of(Items.COBBLESTONE_STAIRS),
+			0, 0L, 0L, Optional.of(Items.CRAFTING_TABLE), 0);
+		assertEquals(4.0, bot(BlockPos.ZERO, List.of(Items.CRAFTING_TABLE), 10, Optional.empty(), NO_FETCH).score(craft).orElseThrow(), 1e-9);
+		assertTrue(bot(BlockPos.ZERO).score(craft).isEmpty());
+	}
 }

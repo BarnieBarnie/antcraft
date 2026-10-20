@@ -3,143 +3,222 @@ package io.github.barniebarnie.antcraft.entity.goal;
 import io.github.barniebarnie.antcraft.colony.BotActivation;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.Job;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
-import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
-import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModItems;
-import io.github.barniebarnie.antcraft.work.Gatherables;
+import io.github.barniebarnie.antcraft.work.Crafting;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
+import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Storage;
-import java.util.EnumSet;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Crafter work loop at the colony core: turn stored Bot Cores into new bots, and
- * work through colony orders one craft at a time, ingredients first. Smelting steps
- * run in a furnace next to the core; the crafter places one if there is none. A craft whose
+ * Crafting work, as the executor of craft and Bot Core jobs for {@link WorkerGoal}, so any colony bot crafts.
+ * <p>
+ * A craft job at the core works the steps of the colony's orders that make its item, from the core's stock and
+ * into the core, ingredients first. The core serves as a crafting table. Smelting steps run in a furnace next
+ * to the core, which the bot places if there is none, and it waits by the furnace for its item. A craft whose
  * result has no room in the core waits, and so does furnace output, while other crafts go on.
+ * <p>
+ * A craft job elsewhere is worked from the bot's own inventory, and the bot keeps what it makes unless the job's
+ * target is a container to deliver to. A 3x3 recipe needs a crafting table standing there, or one the bot carries:
+ * it places it next to itself, crafts and picks it back up. Smelting works the same way with a furnace, by which
+ * the bot waits until its input is smelted.
+ * <p>
+ * A Bot Core job turns the Bot Cores stored in the core into new bots.
  */
-public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
-	private static final double REACH = 4.0;
+public class CrafterGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int CRAFT_TICKS = 10;
-	private static final int IDLE_TICKS = 20;
 	private static final int FURNACE_RANGE = Storage.FURNACE_RANGE;
 	private static final int FURNACE_INPUT = Storage.FURNACE_INPUT;
 	private static final int FURNACE_FUEL = Storage.FURNACE_FUEL;
 	private static final int FURNACE_RESULT = Storage.FURNACE_RESULT;
+	/** Ticks a bot waits by its furnace beyond the smelting time, in case the fire went out. */
+	private static final int SMELT_SLACK_TICKS = 200;
 
-	private final AntBot bot;
-	private final PathFollower follower;
-	private @Nullable Goal travelGoal;
-	private int cooldown;
+	/** The job begun through {@link #begin}, until it is done. */
+	private @Nullable Job job;
+	private WorkerGoal.@Nullable Outcome outcome;
+	/** The recipe a craft job away from the core works, chosen when it began. */
+	private TaskPlanner.@Nullable Recipe<Item> recipe;
+	/** The station the bot placed for the job, to pick back up. */
+	private @Nullable BlockPos placed;
+	/** Whether the bot loaded the furnace of a smelting job away from the core. */
+	private boolean loaded;
+	/** Game time until which the bot waits by that furnace. */
+	private long smeltUntil;
 
 	public CrafterGoal(AntBot bot) {
-		this.bot = bot;
-		this.follower = new PathFollower(bot);
-		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+		super(bot, BotRole.CRAFTER);
+	}
+
+	/** The crafter's role has no work of its own: its jobs are taken through {@link WorkerGoal}. */
+	@Override
+	protected void work(ServerLevel level, Colony colony) {
+		this.cooldown = IDLE_TICKS;
 	}
 
 	@Override
-	public boolean canUse() {
-		return this.bot.getRole() == BotRole.CRAFTER && this.bot.getWalkTarget() == null && this.bot.getColonyId() != null;
+	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		return switch (job.type()) {
+			case ACTIVATE_BOT -> this.activationSpot(level, colony).isPresent();
+			case CRAFT -> this.isAtCore(colony, job) ? this.coreStep(level, colony, job) != null : this.fieldRecipe(level, job).isPresent();
+			default -> false;
+		};
 	}
 
 	@Override
-	public boolean requiresUpdateEveryTick() {
+	public boolean begin(ServerLevel level, Job job) {
+		this.outcome = null;
+		Optional<Colony> colony = this.colony(level);
+		if (colony.isEmpty() || job.item().isEmpty() && job.type() == JobType.CRAFT) {
+			return false;
+		}
+		boolean todo;
+		if (job.type() == JobType.CRAFT && !this.isAtCore(colony.get(), job)) {
+			this.recipe = this.fieldRecipe(level, job).orElse(null);
+			todo = this.recipe != null;
+		} else {
+			todo = this.isReady(level, colony.get(), job) || job.type() == JobType.CRAFT && this.furnaceBusy(level, colony.get(), job.item().get());
+		}
+		if (!todo) {
+			return false;
+		}
+		this.job = job;
+		this.loaded = false;
+		this.resetMovement();
 		return true;
 	}
 
 	@Override
-	public void stop() {
-		this.follower.stop();
-		this.travelGoal = null;
+	public boolean work(ServerLevel level) {
+		Optional<Colony> colony = this.colony(level);
+		if (colony.isEmpty() || this.job == null) {
+			return false;
+		}
+		this.bot.setWorking(true);
+		if (this.cooldown > 0) {
+			this.cooldown--;
+			return true;
+		}
+		if (this.job.type() == JobType.ACTIVATE_BOT) {
+			this.activate(level, colony.get());
+		} else if (this.isAtCore(colony.get(), this.job)) {
+			this.craftAtCore(level, colony.get(), this.job);
+		} else {
+			this.craftInField(level, this.job);
+		}
+		return true;
 	}
 
 	@Override
-	public void tick() {
-		if (this.cooldown > 0) {
-			this.cooldown--;
-			return;
-		}
-		if (!(this.bot.level() instanceof ServerLevel level)) {
-			return;
-		}
-		Optional<Colony> colony = this.colony(level);
-		Container core = colony.map(c -> Storage.containerAt(level, c.core())).orElse(null);
-		if (core == null) {
-			this.cooldown = IDLE_TICKS;
-			return;
-		}
+	public Optional<WorkerGoal.Outcome> takeOutcome() {
+		Optional<WorkerGoal.Outcome> taken = Optional.ofNullable(this.outcome);
+		this.outcome = null;
+		return taken;
+	}
 
-		Runnable work = this.nextWork(level, colony.get(), core);
-		if (work == null) {
-			this.cooldown = IDLE_TICKS;
+	@Override
+	public void reset() {
+		if (this.placed != null && this.bot.level() instanceof ServerLevel level) {
+			this.takeBack(level);
+		}
+		this.job = null;
+		this.outcome = null;
+		this.recipe = null;
+		this.loaded = false;
+		this.resetMovement();
+	}
+
+	private void endJob(WorkerGoal.Outcome how) {
+		this.outcome = how;
+		this.job = null;
+		this.recipe = null;
+		this.bot.setWorking(false);
+	}
+
+	private boolean isAtCore(Colony colony, Job job) {
+		return job.target().equals(colony.core());
+	}
+
+	private Optional<Colony> colony(ServerLevel level) {
+		return Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
+	}
+
+	private void swingAt(BlockPos at) {
+		this.bot.getLookControl().setLookAt(at.getX() + 0.5, at.getY() + 0.5, at.getZ() + 0.5);
+		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+		this.cooldown = CRAFT_TICKS;
+	}
+
+	// Bot Cores
+
+	private Optional<BlockPos> activationSpot(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null || core.countItem(ModItems.BOT_CORE) == 0 || !BotActivation.canActivate(level)) {
+			return Optional.empty();
+		}
+		return BotActivation.freeSpotNear(level, colony.core().above());
+	}
+
+	/** Turns the stored Bot Cores into bots, one at a time. */
+	private void activate(ServerLevel level, Colony colony) {
+		Optional<BlockPos> spot = this.activationSpot(level, colony);
+		if (spot.isEmpty()) {
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
-		BlockPos corePos = colony.get().core();
-		Goal reach = new Goal.Reach(corePos, REACH);
-		if (reach.isReached(this.bot.blockPosition())) {
-			this.travelGoal = null;
-			this.bot.getLookControl().setLookAt(corePos.getX() + 0.5, corePos.getY() + 0.5, corePos.getZ() + 0.5);
-			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
-			work.run();
-			this.cooldown = CRAFT_TICKS;
-		} else {
-			if (!reach.equals(this.travelGoal)) {
-				this.travelGoal = reach;
-				this.follower.start(reach);
-			}
-			if (this.follower.tick() != PathFollower.Status.RUNNING) {
-				this.travelGoal = null;
-				this.cooldown = IDLE_TICKS;
+		if (this.reach(colony.core())) {
+			this.swingAt(colony.core());
+			Container core = Storage.containerAt(level, colony.core());
+			if (core != null && BotActivation.activate(level, spot.get()) != null) {
+				Storage.take(core, ModItems.BOT_CORE, 1);
 			}
 		}
 	}
 
-	/** The next thing to do at the core, or null if there is nothing. */
-	private @Nullable Runnable nextWork(ServerLevel level, Colony colony, Container core) {
-		if (core.countItem(ModItems.BOT_CORE) > 0 && BotActivation.canActivate(level)) {
-			Optional<BlockPos> spot = BotActivation.freeSpotNear(level, colony.core().above());
-			if (spot.isPresent()) {
-				return () -> {
-					if (BotActivation.activate(level, spot.get()) != null) {
-						Storage.take(core, ModItems.BOT_CORE, 1);
-					}
-				};
-			}
-		}
+	// Crafting at the core
 
-		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
-		// Output the core has no room for waits in the furnace.
-		if (furnace != null && !furnace.getItem(FURNACE_RESULT).isEmpty() && Storage.hasRoomFor(core, furnace.getItem(FURNACE_RESULT))) {
-			return () -> collect(colony, core, furnace);
-		}
-
+	/**
+	 * The plan of each open order against the core's stock, and what waits in the colony furnace, which is
+	 * still the colony's. An order asks for new items, so what is stored of the ordered item does not count toward it.
+	 */
+	public static Map<Item, TaskPlanner.Plan<Item>> orderPlans(ServerLevel level, Colony colony, Container core) {
 		GameRecipeBook book = GameRecipeBook.of(level.getServer());
+		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
+		Map<Item, TaskPlanner.Plan<Item>> plans = new LinkedHashMap<>();
 		for (Map.Entry<Item, Integer> order : colony.orders().entrySet()) {
 			Map<Item, Integer> stock = Storage.stock(core);
 			if (furnace != null) {
-				// What is in the furnace is still the colony's, output waiting for room in the core too.
 				for (int slot : new int[] {FURNACE_INPUT, FURNACE_FUEL, FURNACE_RESULT}) {
 					ItemStack stack = furnace.getItem(slot);
 					if (!stack.isEmpty()) {
@@ -147,25 +226,94 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 					}
 				}
 			}
-			// An order asks for new items, so what is already stored does not count toward it.
 			stock.remove(order.getKey());
-			TaskPlanner.Plan<Item> plan = TaskPlanner.plan(order.getKey(), order.getValue(), stock, book, Gatherables::isGatherable);
-			for (TaskPlanner.Craft<Item> craft : plan.crafts()) {
+			plans.put(order.getKey(), TaskPlanner.plan(order.getKey(), order.getValue(), stock, book, Gatherables::isGatherable));
+		}
+		return plans;
+	}
+
+	/**
+	 * What the colony crafts at its core: each item a step of an open order's plan makes, and the colony
+	 * furnace's output waiting to be taken into the core. One craft job is posted for each.
+	 */
+	public static Set<Item> coreCrafts(ServerLevel level, Colony colony, Container core) {
+		Set<Item> crafts = new LinkedHashSet<>();
+		orderPlans(level, colony, core).values().forEach(plan -> plan.crafts().forEach(craft -> crafts.add(craft.recipe().output())));
+		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
+		if (furnace != null && !furnace.getItem(FURNACE_RESULT).isEmpty()) {
+			crafts.add(furnace.getItem(FURNACE_RESULT).getItem());
+		}
+		return crafts;
+	}
+
+	private void craftAtCore(ServerLevel level, Colony colony, Job job) {
+		Item item = job.item().orElseThrow();
+		if (!this.reach(colony.core())) {
+			return;
+		}
+		Runnable step = this.coreStep(level, colony, job);
+		if (step != null) {
+			this.swingAt(colony.core());
+			step.run();
+		} else if (this.furnaceBusy(level, colony, item)) {
+			// Waits by the core for the furnace to smelt its item.
+			this.cooldown = IDLE_TICKS;
+		} else {
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
+		}
+	}
+
+	/**
+	 * The next thing to do at the core for the job's item, or null if there is nothing now. That is taking the
+	 * item out of the colony furnace, or the first step of an order's plan that can be worked now, when it makes
+	 * the item: steps go in the plan's order, ingredients first.
+	 */
+	private @Nullable Runnable coreStep(ServerLevel level, Colony colony, Job job) {
+		Container core = Storage.containerAt(level, colony.core());
+		Item item = job.item().orElse(null);
+		if (core == null || item == null) {
+			return null;
+		}
+		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
+		// Output the core has no room for waits in the furnace.
+		if (furnace != null && furnace.getItem(FURNACE_RESULT).is(item) && Storage.hasRoomFor(core, furnace.getItem(FURNACE_RESULT))) {
+			return () -> collect(colony, core, furnace);
+		}
+		GameRecipeBook book = GameRecipeBook.of(level.getServer());
+		for (Map.Entry<Item, TaskPlanner.Plan<Item>> order : orderPlans(level, colony, core).entrySet()) {
+			for (TaskPlanner.Craft<Item> craft : order.getValue().crafts()) {
+				Runnable step = null;
 				if (craft.recipe().smelting()) {
-					Runnable smelt = this.smeltWork(level, colony, core, furnace, craft, book);
-					if (smelt != null) {
-						return smelt;
-					}
+					step = this.smeltWork(level, colony, core, furnace, craft, book);
 				} else if (Storage.canCraft(core, craft.recipe(), 1) && Storage.fits(core, craft.recipe())) {
-					return () -> {
+					step = () -> {
 						if (Storage.craft(core, craft.recipe()) && craft.recipe().output() == order.getKey()) {
 							colony.fulfil(order.getKey(), craft.recipe().count());
 						}
 					};
 				}
+				if (step != null) {
+					if (craft.recipe().output() == item) {
+						return step;
+					}
+					// An earlier step of this order comes first.
+					break;
+				}
 			}
 		}
 		return null;
+	}
+
+	/** Whether the colony furnace is smelting something into {@code item}. */
+	private boolean furnaceBusy(ServerLevel level, Colony colony, Item item) {
+		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
+		if (furnace == null) {
+			return false;
+		}
+		ItemStack input = furnace.getItem(FURNACE_INPUT);
+		return !input.isEmpty() && (isLit(furnace) || !furnace.getItem(FURNACE_FUEL).isEmpty())
+			&& GameRecipeBook.of(level.getServer()).recipesFor(item).stream()
+				.anyMatch(recipe -> recipe.smelting() && recipe.ingredients().keySet().stream().anyMatch(options -> options.contains(input.getItem())));
 	}
 
 	/** The next step of a smelting craft, or null if it has to wait. */
@@ -174,7 +322,7 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		Set<Item> inputs = craft.recipe().ingredients().keySet().iterator().next();
 		Item input = inputs.stream().filter(item -> core.countItem(item) > 0).findFirst().orElse(null);
 		if (furnace == null) {
-			return input == null ? null : this.furnaceWork(level, colony, core, book);
+			return input == null ? null : furnaceWork(level, colony, core, book);
 		}
 
 		ItemStack loaded = furnace.getItem(FURNACE_INPUT);
@@ -202,7 +350,7 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	/** Places a stored furnace next to the core, or takes the next step toward crafting one. */
-	private @Nullable Runnable furnaceWork(ServerLevel level, Colony colony, Container core, GameRecipeBook book) {
+	private static @Nullable Runnable furnaceWork(ServerLevel level, Colony colony, Container core, GameRecipeBook book) {
 		if (core.countItem(Items.FURNACE) > 0) {
 			BlockPos spot = furnaceSpot(level, colony.core());
 			if (spot == null) {
@@ -238,12 +386,12 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 	}
 
-	/** The first fuel, in the book's order, that the core holds and the furnace's fuel slot can take. */
-	private static TaskPlanner.@Nullable Fuel<Item> fuelFor(Container core, AbstractFurnaceBlockEntity furnace, GameRecipeBook book) {
+	/** The first fuel, in the book's order, that {@code source} holds and the furnace's fuel slot can take. */
+	private static TaskPlanner.@Nullable Fuel<Item> fuelFor(Container source, AbstractFurnaceBlockEntity furnace, GameRecipeBook book) {
 		ItemStack inSlot = furnace.getItem(FURNACE_FUEL);
 		for (TaskPlanner.Fuel<Item> fuel : book.fuels()) {
 			for (Item item : fuel.items()) {
-				if (core.countItem(item) > 0 && (inSlot.isEmpty() || inSlot.is(item))) {
+				if (source.countItem(item) > 0 && (inSlot.isEmpty() || inSlot.is(item))) {
 					return new TaskPlanner.Fuel<>(Set.of(item), fuel.burnTicks());
 				}
 			}
@@ -251,9 +399,9 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		return null;
 	}
 
-	/** Tops up the fuel slot from the core so it can smelt {@code smelts} items. */
-	private static void refuel(Container core, AbstractFurnaceBlockEntity furnace, GameRecipeBook book, int smelts) {
-		TaskPlanner.Fuel<Item> fuel = fuelFor(core, furnace, book);
+	/** Tops up the fuel slot from {@code source} so it can smelt {@code smelts} items. */
+	private static void refuel(Container source, AbstractFurnaceBlockEntity furnace, GameRecipeBook book, int smelts) {
+		TaskPlanner.Fuel<Item> fuel = fuelFor(source, furnace, book);
 		if (fuel == null) {
 			return;
 		}
@@ -261,7 +409,7 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		int inSlot = furnace.getItem(FURNACE_FUEL).getCount();
 		int wanted = fuel.itemsFor(smelts) - inSlot;
 		if (wanted > 0) {
-			int taken = Storage.take(core, item, wanted);
+			int taken = Storage.take(source, item, wanted);
 			furnace.setItem(FURNACE_FUEL, new ItemStack(item, inSlot + taken));
 		}
 		furnace.setChanged();
@@ -286,8 +434,184 @@ public class CrafterGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		return null;
 	}
 
-	private Optional<Colony> colony(ServerLevel level) {
-		UUID id = this.bot.getColonyId();
-		return id == null ? Optional.empty() : ColonyManager.get(level).byId(id);
+	// Crafting away from the core
+
+	private List<Item> carried() {
+		List<Item> carried = new ArrayList<>();
+		Stream.concat(this.bot.getInventory().getItems().stream(), Stream.of(this.bot.getMainHandItem()))
+			.filter(stack -> !stack.isEmpty()).forEach(stack -> carried.add(stack.getItem()));
+		return carried;
+	}
+
+	/**
+	 * The recipe for the job's item the bot can work from its own inventory: smelting for a job whose station is
+	 * a furnace, crafting otherwise. Empty if it lacks the ingredients, or the station the recipe needs (see
+	 * {@link Crafting#canClaim}).
+	 */
+	private Optional<TaskPlanner.Recipe<Item>> fieldRecipe(ServerLevel level, Job job) {
+		if (job.item().isEmpty()) {
+			return Optional.empty();
+		}
+		boolean smelting = job.tool().filter(Items.FURNACE::equals).isPresent();
+		SimpleContainer inventory = this.bot.getInventory();
+		List<Item> carried = this.carried();
+		return GameRecipeBook.of(level.getServer()).recipesFor(job.item().get()).stream()
+			.filter(recipe -> recipe.smelting() == smelting)
+			.filter(recipe -> smelting ? smeltInput(recipe, inventory) != null : Storage.canCraft(inventory, recipe, 1) && Storage.fits(inventory, recipe))
+			.filter(recipe -> Crafting.canClaim(recipe, carried, standingStation(level, Crafting.station(recipe), job.target()) != null))
+			.findFirst();
+	}
+
+	private static @Nullable Item smeltInput(TaskPlanner.Recipe<Item> recipe, Container inventory) {
+		return recipe.ingredients().keySet().iterator().next().stream().filter(item -> inventory.countItem(item) > 0).findFirst().orElse(null);
+	}
+
+	/** A station of the kind standing within reach of {@code near}: a crafting table or the colony core for a table, a furnace for smelting. */
+	private static @Nullable BlockPos standingStation(ServerLevel level, Crafting.Station station, BlockPos near) {
+		if (station == Crafting.Station.HAND) {
+			return near;
+		}
+		int r = (int) REACH;
+		for (BlockPos pos : BlockPos.betweenClosed(near.offset(-r, -r, -r), near.offset(r, r, r))) {
+			if (!pos.closerThan(near, REACH)) {
+				continue;
+			}
+			BlockState state = level.getBlockState(pos);
+			boolean fits = station == Crafting.Station.TABLE ? state.is(Blocks.CRAFTING_TABLE) || state.is(ModBlocks.COLONY_CORE) : state.is(Blocks.FURNACE);
+			if (fits) {
+				return pos.immutable();
+			}
+		}
+		return null;
+	}
+
+	private void craftInField(ServerLevel level, Job job) {
+		TaskPlanner.Recipe<Item> recipe = this.recipe;
+		if (recipe == null) {
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
+			return;
+		}
+		if (this.placed == null && !this.loaded && !this.reach(job.target())) {
+			return;
+		}
+		Crafting.Station station = Crafting.station(recipe);
+		BlockPos at = this.placed != null ? this.placed : standingStation(level, station, this.bot.blockPosition());
+		if (at == null) {
+			this.placeStation(level, station);
+			return;
+		}
+		if (station == Crafting.Station.FURNACE) {
+			this.smeltInField(level, job, recipe, at);
+			return;
+		}
+		this.swingAt(at);
+		boolean crafted = Storage.craft(this.bot.getInventory(), recipe);
+		this.finish(level, job, crafted);
+	}
+
+	/** Places the station the bot carries next to it, or gives the job back if there is no room or it has none. */
+	private void placeStation(ServerLevel level, Crafting.Station station) {
+		Item item = station.item().orElseThrow();
+		Block block = item == Items.FURNACE ? Blocks.FURNACE : Blocks.CRAFTING_TABLE;
+		int slot = findSlot(this.bot.getInventory(), stack -> stack.is(item));
+		BlockPos feet = this.bot.blockPosition();
+		for (Direction direction : Direction.Plane.HORIZONTAL) {
+			BlockPos spot = feet.relative(direction);
+			BlockState state = block.defaultBlockState();
+			if (block == Blocks.FURNACE) {
+				state = state.setValue(AbstractFurnaceBlock.FACING, direction.getOpposite());
+			}
+			if (slot >= 0 && level.getBlockState(spot).canBeReplaced() && level.getBlockState(spot).getFluidState().isEmpty()
+					&& level.getBlockState(spot.below()).isFaceSturdy(level, spot.below(), Direction.UP)
+					&& level.isUnobstructed(state, spot, net.minecraft.world.phys.shapes.CollisionContext.empty())) {
+				this.bot.getInventory().getItem(slot).shrink(1);
+				level.setBlockAndUpdate(spot, state);
+				this.placed = spot.immutable();
+				this.swingAt(spot);
+				return;
+			}
+		}
+		this.endJob(WorkerGoal.Outcome.RELEASE);
+	}
+
+	/** Loads the furnace with the input the bot carries and fuel for it, waits, and takes the output. */
+	private void smeltInField(ServerLevel level, Job job, TaskPlanner.Recipe<Item> recipe, BlockPos at) {
+		if (!(level.getBlockEntity(at) instanceof AbstractFurnaceBlockEntity furnace)) {
+			this.placed = null;
+			this.endJob(WorkerGoal.Outcome.RELEASE);
+			return;
+		}
+		SimpleContainer inventory = this.bot.getInventory();
+		if (!this.loaded) {
+			Item input = smeltInput(recipe, inventory);
+			if (input == null || !furnace.getItem(FURNACE_INPUT).isEmpty()) {
+				// Its input is gone, or someone else's furnace is busy.
+				this.finish(level, job, false);
+				return;
+			}
+			int smelts = Storage.take(inventory, input, input.getDefaultMaxStackSize());
+			furnace.setItem(FURNACE_INPUT, new ItemStack(input, smelts));
+			refuel(inventory, furnace, GameRecipeBook.of(level.getServer()), smelts);
+			this.loaded = true;
+			this.smeltUntil = level.getGameTime() + (long) smelts * TaskPlanner.SMELT_TICKS + SMELT_SLACK_TICKS;
+			this.swingAt(at);
+			return;
+		}
+		boolean stalled = !isLit(furnace) && furnace.getItem(FURNACE_FUEL).isEmpty();
+		if (!furnace.getItem(FURNACE_INPUT).isEmpty() && !stalled && level.getGameTime() < this.smeltUntil) {
+			this.cooldown = IDLE_TICKS;
+			return;
+		}
+		this.swingAt(at);
+		boolean smelted = !furnace.getItem(FURNACE_RESULT).isEmpty();
+		for (int slot : new int[] {FURNACE_RESULT, FURNACE_INPUT, FURNACE_FUEL}) {
+			this.keep(level, furnace.removeItemNoUpdate(slot));
+		}
+		furnace.setChanged();
+		this.finish(level, job, smelted);
+	}
+
+	/** Picks up the station it placed, delivers what it made if the job's target is a container, and ends the job. */
+	private void finish(ServerLevel level, Job job, boolean made) {
+		this.takeBack(level);
+		Container to = Storage.containerAt(level, job.target());
+		Item product = job.item().orElse(null);
+		if (made && to != null && product != null) {
+			Storage.moveItems(this.bot.getInventory(), to, stack -> stack.is(product));
+		}
+		this.loaded = false;
+		this.endJob(made ? WorkerGoal.Outcome.COMPLETE : WorkerGoal.Outcome.RELEASE);
+	}
+
+	/** Breaks the station the bot placed and puts it back in its inventory, with anything left in it. */
+	private void takeBack(ServerLevel level) {
+		BlockPos at = this.placed;
+		this.placed = null;
+		if (at == null) {
+			return;
+		}
+		BlockState state = level.getBlockState(at);
+		Item item = state.is(Blocks.FURNACE) ? Items.FURNACE : state.is(Blocks.CRAFTING_TABLE) ? Items.CRAFTING_TABLE : null;
+		if (item == null) {
+			return;
+		}
+		if (level.getBlockEntity(at) instanceof Container container) {
+			for (int slot = 0; slot < container.getContainerSize(); slot++) {
+				this.keep(level, container.removeItemNoUpdate(slot));
+			}
+		}
+		level.removeBlock(at, false);
+		this.keep(level, new ItemStack(item));
+	}
+
+	/** Puts {@code stack} in the bot's inventory, dropping what does not fit. */
+	private void keep(ServerLevel level, ItemStack stack) {
+		if (stack.isEmpty()) {
+			return;
+		}
+		ItemStack rest = this.bot.getInventory().addItem(stack);
+		if (!rest.isEmpty()) {
+			this.bot.spawnAtLocation(level, rest);
+		}
 	}
 }

@@ -24,10 +24,15 @@ public final class TaskPlanner {
 	 * Each ingredient is a set of interchangeable items (any planks) and how many are needed.
 	 *
 	 * @param smelting made in a furnace, one ingredient at a time and with fuel, instead of at a crafting table
+	 * @param large needs the 3x3 grid of a crafting table, not the 2x2 one a bot can craft in anywhere
 	 */
-	public record Recipe<I>(I output, int count, Map<Set<I>, Integer> ingredients, boolean smelting) {
+	public record Recipe<I>(I output, int count, Map<Set<I>, Integer> ingredients, boolean smelting, boolean large) {
 		public Recipe(I output, int count, Map<Set<I>, Integer> ingredients) {
 			this(output, count, ingredients, false);
+		}
+
+		public Recipe(I output, int count, Map<Set<I>, Integer> ingredients, boolean smelting) {
+			this(output, count, ingredients, smelting, false);
 		}
 	}
 

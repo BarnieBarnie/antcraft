@@ -21,7 +21,16 @@ public enum JobType implements StringRepresentable {
 	 * Dig out a batch of a colony build plan that only clears blocks, such as the ground above a
 	 * terraform's height. Miners take it, and builders while the colony has no miner.
 	 */
-	CLEAR_AREA;
+	CLEAR_AREA,
+	/**
+	 * Craft or smelt the job's item. At the core, a step of an order's plan from the core's stock; elsewhere, from
+	 * the bot's own inventory at a station it carries (the job's tool) or one standing there.
+	 */
+	CRAFT,
+	/** Carry what the colony wants from the container at the job target, such as a mineshaft landing chest, to the core. */
+	HAUL,
+	/** Turn the Bot Cores stored in the core at the job target into new bots. */
+	ACTIVATE_BOT;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 

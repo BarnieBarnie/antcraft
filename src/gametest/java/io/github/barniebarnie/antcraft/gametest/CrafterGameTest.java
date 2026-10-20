@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.DefaultStock;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -13,6 +14,7 @@ import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Optional;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -22,6 +24,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -326,6 +329,85 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(core(helper).countItem(Items.RAW_IRON) == 3, "core has " + core(helper).countItem(Items.RAW_IRON) + " raw iron");
 			helper.assertTrue(furnace.getItem(0).isEmpty(), "furnace input: " + furnace.getItem(0));
 			helper.succeed();
+		});
+	}
+
+	/** A colony bot with another role, kept by a player so the colony does not make it a crafter. */
+	private static AntBot colonyGuard(GameTestHelper helper, Colony colony, int x, int z) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.setRole(BotRole.GUARD);
+		return bot;
+	}
+
+	@GameTest(maxTicks = 400)
+	public void colonyBotOfAnotherRoleCraftsAnOrderAtTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		store(helper, new ItemStack(Items.OAK_LOG, 2));
+		colony.addOrder(Items.STICK, 4);
+		AntBot bot = colonyGuard(helper, colony, 4, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.STICK) >= 4, "core has " + core(helper).countItem(Items.STICK) + " sticks");
+			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
+			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
+		});
+	}
+
+	private static int blocksInArea(GameTestHelper helper, Block block) {
+		int found = 0;
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {
+			if (helper.getBlockState(pos).is(block)) {
+				found++;
+			}
+		}
+		return found;
+	}
+
+	/** Remembers whether {@code block} ever stood in the test area. */
+	private static boolean[] watchFor(GameTestHelper helper, Block block) {
+		boolean[] seen = {false};
+		helper.onEachTick(() -> seen[0] |= blocksInArea(helper, block) > 0);
+		return seen;
+	}
+
+	@GameTest(maxTicks = 300)
+	public void botCarryingACraftingTablePlacesItCraftsStairsAndTakesItBack(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// Far from the core, which a bot could craft at.
+		AntBot bot = colonyGuard(helper, colony, 6, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 6));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE));
+		colony.board().postFor(JobType.CRAFT, bot.blockPosition(), Items.COBBLESTONE_STAIRS, Optional.of(Items.CRAFTING_TABLE));
+		boolean[] placed = watchFor(helper, Blocks.CRAFTING_TABLE);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(placed[0], "crafting table never placed");
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE_STAIRS) == 4, "bot has " + bot.getInventory().countItem(Items.COBBLESTONE_STAIRS) + " stairs");
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 0, "cobblestone left");
+			helper.assertTrue(bot.getInventory().countItem(Items.CRAFTING_TABLE) == 1, "crafting table not taken back");
+			helper.assertTrue(blocksInArea(helper, Blocks.CRAFTING_TABLE) == 0, "crafting table left standing");
+			helper.assertTrue(looseItems(helper).isEmpty(), "items dropped: " + looseItems(helper));
+		});
+	}
+
+	@GameTest(maxTicks = 800)
+	public void botCarryingAFurnacePlacesItSmeltsRawIronAndTakesItBack(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = colonyGuard(helper, colony, 6, 6);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		colony.board().postFor(JobType.CRAFT, bot.blockPosition(), Items.IRON_INGOT, Optional.of(Items.FURNACE));
+		boolean[] placed = watchFor(helper, Blocks.FURNACE);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(placed[0], "furnace never placed");
+			helper.assertTrue(bot.getInventory().countItem(Items.IRON_INGOT) == 2, "bot has " + bot.getInventory().countItem(Items.IRON_INGOT) + " iron ingots");
+			helper.assertTrue(bot.getInventory().countItem(Items.RAW_IRON) == 0, "raw iron left");
+			helper.assertTrue(bot.getInventory().countItem(Items.FURNACE) == 1, "furnace not taken back");
+			helper.assertTrue(blocksInArea(helper, Blocks.FURNACE) == 0, "furnace left standing");
+			helper.assertTrue(looseItems(helper).isEmpty(), "items dropped: " + looseItems(helper));
 		});
 	}
 }

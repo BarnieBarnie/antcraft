@@ -469,6 +469,24 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Any colony bot hauls up what the colony wants; a guard set by a player keeps its role. */
+	@GameTest(maxTicks = 1200)
+	public void colonyBotOfAnotherRoleEmptiesTheLandingChestIntoTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = landingChest(helper, shaft);
+		chest.setItem(0, new ItemStack(Items.RAW_IRON, 3));
+		colony.addOrder(Items.RAW_IRON, 3);
+		AntBot guard = member(helper, colony, BotRole.GUARD, 1, 5, 1);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chest.isEmpty(), "landing chest not emptied");
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.RAW_IRON) == 3, "raw iron not in the core");
+			helper.assertTrue(guard.getRole() == BotRole.GUARD, "role changed to " + guard.getRole());
+		});
+	}
+
 	/** Turns the landing chest at {@code pos} into a double chest, with its other half in the stone beside it. */
 	private static Container doubleChest(GameTestHelper helper, Mineshaft shaft, BlockPos pos) {
 		BlockState state = helper.getLevel().getBlockState(pos);

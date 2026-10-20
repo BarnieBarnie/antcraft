@@ -67,7 +67,7 @@ public final class GameRecipeBook implements TaskPlanner.RecipeBook<Item> {
 					counts.merge(options, 1, Integer::sum);
 				}
 				this.byOutput.computeIfAbsent(result.getItem(), item -> new ArrayList<>())
-					.add(new TaskPlanner.Recipe<>(result.getItem(), result.getCount(), Map.copyOf(counts)));
+					.add(new TaskPlanner.Recipe<>(result.getItem(), result.getCount(), Map.copyOf(counts), false, isLarge(recipe, ingredients.size())));
 			} else if (holder.value() instanceof SmeltingRecipe recipe) {
 				// Like crafting results, furnace results do not depend on the input.
 				ItemStack result = recipe.assemble(ANY_SINGLE_INPUT);
@@ -81,6 +81,11 @@ public final class GameRecipeBook implements TaskPlanner.RecipeBook<Item> {
 		}
 		this.fuels = Fuels.order(StreamSupport.stream(BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).spliterator(), false)
 			.map(Holder::value).collect(Collectors.toUnmodifiableSet()));
+	}
+
+	/** Whether the recipe needs a crafting table's 3x3 grid: a shape wider or taller than 2, or more than 4 ingredients. */
+	private static boolean isLarge(CraftingRecipe recipe, int ingredients) {
+		return recipe instanceof ShapedRecipe shaped ? shaped.getWidth() > 2 || shaped.getHeight() > 2 : ingredients > 4;
 	}
 
 	@Override

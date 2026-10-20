@@ -7,9 +7,11 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
+import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.Digging;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
+import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
@@ -363,6 +365,31 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
+	 * Posts a craft job at the core for each item the colony crafts there (see {@link CrafterGoal#coreCrafts}),
+	 * a job to activate the Bot Cores stored in the core, and a haul job for each mineshaft landing chest that
+	 * holds something to bring up. Such jobs no longer needed are taken down unless a bot works on them.
+	 */
+	private void surveyCoreJobs(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null) {
+			return;
+		}
+		BlockPos at = colony.core();
+		JobBoard board = colony.board();
+		Set<Item> crafts = CrafterGoal.coreCrafts(level, colony, core);
+		board.removeOpenIf(job -> job.type() == JobType.CRAFT && job.target().equals(at) && job.item().filter(crafts::contains).isEmpty());
+		crafts.forEach(item -> board.postFor(JobType.CRAFT, at, item, Optional.empty()));
+		if (core.countItem(ModItems.BOT_CORE) > 0) {
+			board.post(JobType.ACTIVATE_BOT, at);
+		} else {
+			board.removeOpenIf(job -> job.type() == JobType.ACTIVATE_BOT);
+		}
+		List<BlockPos> chests = HaulerGoal.chestsToHaul(level, colony);
+		board.removeOpenIf(job -> job.type() == JobType.HAUL && !chests.contains(job.target()));
+		chests.forEach(chest -> board.post(JobType.HAUL, chest));
+	}
+
+	/**
 	 * Posts jobs for the trees in a build's way, so miners leave their logs to lumberjacks, and for the trees
 	 * nearest the core while the colony is short of logs; orders include what builds need.
 	 */
@@ -443,6 +470,7 @@ public class ColonyManager extends SavedData {
 			this.surveyBuilds(level, colony, have);
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
+			this.surveyCoreJobs(level, colony);
 			this.surveyTrees(level, colony, trees);
 			this.assignRoles(level, colony);
 		}

@@ -1,6 +1,9 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.Job;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
@@ -19,8 +22,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -44,8 +49,11 @@ import org.jspecify.annotations.Nullable;
  * so the chest has a slot to be crafted into, and another each time the core fills up again; it
  * puts that back once the core has room. A full core where everything is wanted still frees a slot,
  * and haulers keep a reserve slot free so what they stored does not come straight back.
+ * <p>
+ * As the executor of haul jobs for {@link WorkerGoal}, it gets any colony bot to empty a mineshaft landing
+ * chest into the core, a load at a time (see {@link #haulsFrom} for what it takes).
  */
-public class HaulerGoal extends ColonyWorkGoal {
+public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int MIN_FREE_SLOTS = 1;
 	/** A core with this few free slots left needs a hauler. */
 	private static final int NEARLY_FULL_FREE_SLOTS = 4;
@@ -141,8 +149,136 @@ public class HaulerGoal extends ColonyWorkGoal {
 	/** Surplus the hauler took out of a full core, which it keeps out of the core until storage takes it. */
 	private final Set<Item> holding = new HashSet<>();
 
+	/** The haul job begun through {@link #begin}, until it is done. */
+	private @Nullable Job haul;
+	private WorkerGoal.@Nullable Outcome haulOutcome;
+	/** Whether the bot carries a load of the haul job to the core. */
+	private boolean haulLoaded;
+	/** What the bot took out of the haul job's container, to put in the core. */
+	private final Set<Item> hauled = new HashSet<>();
+
 	public HaulerGoal(AntBot bot) {
 		super(bot, BotRole.HAULER);
+	}
+
+	/**
+	 * What a haul job takes out of {@code chest}: everything while the colony has a hauler, who stores what the
+	 * core does not need; else only what the colony wants, so other bots do not carry up what a miner left below.
+	 */
+	public static Predicate<ItemStack> haulsFrom(ServerLevel level, Colony colony, Container chest) {
+		boolean hauler = colony.members().stream().anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getRole() == BotRole.HAULER);
+		if (hauler) {
+			return stack -> true;
+		}
+		Predicate<Item> wanted = Storage.wanted(level, colony, Storage.stock(chest));
+		return stack -> wanted.test(stack.getItem());
+	}
+
+	/** The mineshaft landing chests a haul job should empty into the core, by position. */
+	public static List<BlockPos> chestsToHaul(ServerLevel level, Colony colony) {
+		return Storage.landingChests(level, colony).entrySet().stream()
+			.filter(chest -> !chest.getValue().isEmpty() && holds(chest.getValue(), haulsFrom(level, colony, chest.getValue())))
+			.map(Map.Entry::getKey)
+			.toList();
+	}
+
+	private static boolean holds(Container container, Predicate<ItemStack> filter) {
+		return findSlot(container, filter) >= 0;
+	}
+
+	@Override
+	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		Container chest = Storage.containerAt(level, job.target());
+		Container core = Storage.containerAt(level, colony.core());
+		return job.type() == JobType.HAUL && chest != null && core != null && freeSlots(core) > 0 && freeSlots(this.bot.getInventory()) > 0
+			&& holds(chest, haulsFrom(level, colony, chest));
+	}
+
+	@Override
+	public boolean begin(ServerLevel level, Job job) {
+		this.haulOutcome = null;
+		Container chest = Storage.containerAt(level, job.target());
+		if (chest == null || chest.isEmpty()) {
+			return false;
+		}
+		this.haul = job;
+		this.haulLoaded = false;
+		this.hauled.clear();
+		this.resetMovement();
+		return true;
+	}
+
+	/** Carries loads from the job's container to the core until it holds nothing more to haul, or the core is full. */
+	@Override
+	public boolean work(ServerLevel level) {
+		Optional<Colony> colony = Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
+		Job job = this.haul;
+		if (colony.isEmpty() || job == null) {
+			return false;
+		}
+		this.bot.setWorking(true);
+		if (this.cooldown > 0) {
+			this.cooldown--;
+			return true;
+		}
+		Container chest = Storage.containerAt(level, job.target());
+		Container core = Storage.containerAt(level, colony.get().core());
+		if (core == null) {
+			this.endHaul(WorkerGoal.Outcome.RELEASE);
+			return true;
+		}
+		SimpleContainer inventory = this.bot.getInventory();
+		if (!this.haulLoaded) {
+			if (chest == null) {
+				this.endHaul(WorkerGoal.Outcome.COMPLETE);
+			} else if (this.reach(job.target())) {
+				Predicate<ItemStack> filter = haulsFrom(level, colony.get(), chest);
+				Storage.moveItems(chest, inventory, stack -> {
+					boolean take = filter.test(stack);
+					if (take) {
+						this.hauled.add(stack.getItem());
+					}
+					return take;
+				});
+				this.haulLoaded = true;
+				if (this.hauled.isEmpty()) {
+					this.endHaul(WorkerGoal.Outcome.COMPLETE);
+				}
+			}
+			return true;
+		}
+		if (this.reach(colony.get().core())) {
+			Storage.moveItems(inventory, core, stack -> this.hauled.contains(stack.getItem()));
+			this.haulLoaded = false;
+			this.hauled.clear();
+			// Another trip while there is more and room for it.
+			if (chest == null || !holds(chest, haulsFrom(level, colony.get(), chest)) || freeSlots(core) == 0 || freeSlots(inventory) == 0) {
+				this.endHaul(WorkerGoal.Outcome.COMPLETE);
+			}
+		}
+		return true;
+	}
+
+	@Override
+	public Optional<WorkerGoal.Outcome> takeOutcome() {
+		Optional<WorkerGoal.Outcome> taken = Optional.ofNullable(this.haulOutcome);
+		this.haulOutcome = null;
+		return taken;
+	}
+
+	@Override
+	public void reset() {
+		this.haul = null;
+		this.haulOutcome = null;
+		this.haulLoaded = false;
+		this.hauled.clear();
+		this.resetMovement();
+	}
+
+	private void endHaul(WorkerGoal.Outcome how) {
+		this.haulOutcome = how;
+		this.haul = null;
+		this.bot.setWorking(false);
 	}
 
 	/**
@@ -314,27 +450,15 @@ public class HaulerGoal extends ColonyWorkGoal {
 		return colony.tripClaims().isFree(this.bot.getUUID(), trip.source(), level.getGameTime());
 	}
 
-	/**
-	 * The next item to bring back into the core, else the next to store, else a mineshaft landing
-	 * chest to empty into the core, or null if there is nothing to do.
-	 */
+	/** The next item to bring back into the core, else the next to store, or null if there is nothing to do. */
 	private @Nullable Trip planTrip(ServerLevel level, Colony colony) {
 		Stocks stocks = colony.storage().isEmpty() ? null : Stocks.of(level, colony);
 		Trip trip = stocks == null ? null : this.planStorageTrip(level, colony, stocks);
 		if (trip != null) {
 			return trip;
 		}
-		Container core = Storage.containerAt(level, colony.core());
-		if (core == null || freeSlots(core) == 0) {
-			return null;
-		}
-		// The haul goes to the core; what the core does not need is stored from there.
-		return Storage.landingChests(level, colony).entrySet().stream()
-			.filter(chest -> !chest.getValue().isEmpty())
-			.map(chest -> new Trip(chest.getKey(), colony.core(), null, Integer.MAX_VALUE))
-			.filter(landing -> this.isFree(level, colony, landing))
-			.findFirst()
-			.orElse(null);
+		// Mineshaft landing chests are emptied through haul jobs (see haulsFrom).
+		return null;
 	}
 
 	private @Nullable Trip planStorageTrip(ServerLevel level, Colony colony, Stocks stocks) {
