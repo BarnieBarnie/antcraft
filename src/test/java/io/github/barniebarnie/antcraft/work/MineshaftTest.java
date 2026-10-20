@@ -255,6 +255,30 @@ class MineshaftTest {
 	}
 
 	@Test
+	void minesOnlyWhileTheColonyWantsWhatMiningYields() {
+		assertFalse(Mineshaft.yieldsWanted(item -> false));
+		assertFalse(Mineshaft.yieldsWanted(item -> item == Items.OAK_LOG || item == Items.WHEAT));
+		assertTrue(Mineshaft.yieldsWanted(item -> item == Items.COBBLESTONE));
+		assertTrue(Mineshaft.yieldsWanted(item -> item == Items.COBBLED_DEEPSLATE));
+		assertTrue(Mineshaft.yieldsWanted(item -> item == Items.RAW_IRON));
+		assertTrue(Mineshaft.yieldsWanted(item -> item == Items.DIAMOND));
+	}
+
+	@Test
+	void noBranchJobsWithNothingMinedWantedAndWantingRawIronPostsTheIronLevel() {
+		Mineshaft shaft = new Mineshaft(new BlockPos(0, 40, 0), List.of(16, -16, -58));
+		Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
+		shaft.levels().forEach(y -> work.put(y, shaft.branches(y)));
+
+		assertEquals(List.of(), Mineshaft.branchesToPost(work, item -> false));
+		assertEquals(List.of(), Mineshaft.branchesToPost(work, item -> item == Items.OAK_LOG));
+		// Iron is found at 16 and -16; the deepest of those.
+		assertEquals(shaft.branches(-16), Mineshaft.branchesToPost(work, item -> item == Items.RAW_IRON));
+		// Stone is everywhere: the deepest level.
+		assertEquals(shaft.branches(-58), Mineshaft.branchesToPost(work, item -> item == Items.COBBLESTONE));
+	}
+
+	@Test
 	void survivesCodecRoundTrip() {
 		var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, SHAFT).getOrThrow();
 		assertEquals(SHAFT, Mineshaft.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());

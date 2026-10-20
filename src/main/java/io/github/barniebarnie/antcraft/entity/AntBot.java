@@ -136,11 +136,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		// Colony jobs that have moved off the role goals; it takes the bot from its role goal while that has no work.
 		LumberjackGoal lumberjack = new LumberjackGoal(this);
 		FarmerGoal farmer = new FarmerGoal(this);
-		this.goalSelector.addGoal(3, new WorkerGoal(this, lumberjack, farmer));
+		MinerGoal miner = new MinerGoal(this);
+		this.goalSelector.addGoal(3, new WorkerGoal(this, lumberjack, farmer, miner));
 		// First of the role goals: it also takes down scaffolding left from an earlier role, before the new role's work.
 		this.goalSelector.addGoal(4, lumberjack);
 		this.goalSelector.addGoal(4, new CrafterGoal(this));
-		this.goalSelector.addGoal(4, new MinerGoal(this));
+		this.goalSelector.addGoal(4, miner);
 		this.goalSelector.addGoal(4, farmer);
 		this.goalSelector.addGoal(4, new GuardGoal(this));
 		this.goalSelector.addGoal(4, new HaulerGoal(this));

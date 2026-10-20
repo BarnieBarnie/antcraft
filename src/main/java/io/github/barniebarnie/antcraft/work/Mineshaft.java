@@ -421,6 +421,26 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return y >= -32 ? List.of(Items.RAW_GOLD, Items.LAPIS_LAZULI, Items.RAW_IRON) : List.of(Items.DIAMOND, Items.REDSTONE);
 	}
 
+	/** What digging a branch yields: the stone it is dug through and the ores of every level. */
+	private static final Set<Item> YIELDS = Set.of(Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.GRANITE, Items.DIORITE, Items.ANDESITE,
+		Items.TUFF, Items.COAL, Items.RAW_COPPER, Items.RAW_IRON, Items.LAPIS_LAZULI, Items.RAW_GOLD, Items.REDSTONE, Items.DIAMOND, Items.EMERALD);
+
+	/** Whether the colony wants anything mining yields, so the mine is worked at all. */
+	public static boolean yieldsWanted(Predicate<Item> wanted) {
+		return YIELDS.stream().anyMatch(wanted);
+	}
+
+	/**
+	 * The branches to post of the levels with branches left to dig ({@code work}): those of the level
+	 * {@link #chooseLevel} picks, or none while the colony wants nothing mining yields.
+	 */
+	public static List<Branch> branchesToPost(Map<Integer, List<Branch>> work, Predicate<Item> wanted) {
+		if (!yieldsWanted(wanted)) {
+			return List.of();
+		}
+		return chooseLevel(List.copyOf(work.keySet()), wanted).map(work::get).orElse(List.of());
+	}
+
 	/** The deepest of {@code levels} whose ores are {@code wanted}, else the deepest. */
 	public static Optional<Integer> chooseLevel(List<Integer> levels, Predicate<Item> wanted) {
 		Comparator<Integer> deepest = Comparator.reverseOrder();

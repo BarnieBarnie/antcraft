@@ -64,7 +64,8 @@ public class JobBoard {
 		return this.post(type, target, List.of(), Optional.empty(), 0L, tool);
 	}
 
-	private Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area, Optional<Item> item, long now, Optional<Item> tool) {
+	/** Like {@link #post(JobType, BlockPos, Collection, Optional, long)}, for a job that needs {@code tool}, such as a branch a pickaxe. */
+	public Optional<Job> post(JobType type, BlockPos target, Collection<BlockPos> area, Optional<Item> item, long now, Optional<Item> tool) {
 		if (this.has(type, target) || this.jobs.stream().anyMatch(job -> job.type() == type && area.stream().anyMatch(job.area()::contains))) {
 			return Optional.empty();
 		}

@@ -19,6 +19,7 @@ import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.OreRevisit;
+import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.StorageArea;
@@ -182,8 +183,11 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Picks a mineshaft site once the colony has a miner, and posts a job for each branch with
-	 * blocks left to dig at one mining level: the deepest dug one whose ores the colony wants.
+	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}),
+	 * for stock targets or orders, does it pick a mineshaft site, once it has a miner, and post branch jobs;
+	 * otherwise the open ones come off the board. It posts a job for each branch with
+	 * blocks left to dig at one mining level: the deepest dug one whose ores the colony wants. Each job
+	 * needs the pickaxe its level does (see {@link PickaxeTier#forBranch}).
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
 	 * every dug branch with a dark torch spot gets a job too, so a miner goes back to light it.
 	 * A branch whose job was given up, its cells left out of reach, counts as dug: its job stays
@@ -192,15 +196,25 @@ public class ColonyManager extends SavedData {
 	 * had, dug branches whose walls hold wanted ores the new one harvests get a job again (see {@link OreRevisit}).
 	 */
 	private void surveyMine(ServerLevel level, Colony colony, Map<Item, Integer> holds) {
-		if (colony.mineshaft().isEmpty() && this.hasRole(level, colony, BotRole.MINER)) {
+		// Plans the open orders, so at most once per survey, and only when needed.
+		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> Storage.wanted(level, colony));
+		Set<BlockPos> posted = new HashSet<>();
+		// With nothing mining yields wanted, no site is picked and no branch posted, so bots do other work.
+		boolean mining = (colony.mineshaft().isPresent() || this.hasRole(level, colony, BotRole.MINER)) && Mineshaft.yieldsWanted(wanted.get());
+		if (!mining) {
+			colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp());
+			return;
+		}
+		if (colony.mineshaft().isEmpty()) {
 			// The colony has no shaft yet, so this avoids the field and storage only.
 			LevelWorldView world = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
 			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), occupied(colony), world));
 		}
-		Set<BlockPos> posted = new HashSet<>();
+		// The pickaxe the job needs, so a bot carrying one takes it (see JobScore).
 		Consumer<Mineshaft.Branch> post = branch -> {
 			posted.add(branch.start());
-			colony.board().post(JobType.MINE_BRANCH, branch.start(), branch.cells());
+			colony.board().post(JobType.MINE_BRANCH, branch.start(), branch.cells(), Optional.empty(), level.getGameTime(),
+				Optional.of(PickaxeTier.forBranch(branch.start().getY(), wanted.get())));
 		};
 		Container core = Storage.containerAt(level, colony.core());
 		// In the core, or carried by a bot that took them from there.
@@ -208,8 +222,6 @@ public class ColonyManager extends SavedData {
 			.anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getInventory().countItem(Items.TORCH) > 0);
 		Set<BlockPos> givenUp = new HashSet<>();
 		colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH && job.givenUp()).forEach(job -> givenUp.add(job.target()));
-		// Plans the open orders, so at most once per survey, and only when needed.
-		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> Storage.wanted(level, colony));
 		colony.mineshaft().ifPresent(shaft -> {
 			Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
 			// The builder has dug the hall, so miners can walk to the branches.
@@ -232,9 +244,7 @@ public class ColonyManager extends SavedData {
 					}
 				}
 			}
-			if (!work.isEmpty()) {
-				Mineshaft.chooseLevel(List.copyOf(work.keySet()), wanted.get()).ifPresent(y -> work.get(y).forEach(post));
-			}
+			Mineshaft.branchesToPost(work, wanted.get()).forEach(post);
 			colony.oreRevisit().update(bestPickaxe(level, colony, holds), start -> colony.board().has(JobType.MINE_BRANCH, start),
 					() -> dugBranches(level, shaft, open, givenUp), level::getBlockState, pos -> Mining.isMinable(level, pos), wanted)
 				.forEach(start -> shaft.branch(start).ifPresent(post));

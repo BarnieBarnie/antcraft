@@ -28,7 +28,7 @@ public final class PickaxeTier {
 	private static final Map<Item, Block> MADE_FROM = Map.of(Items.STONE_PICKAXE, Blocks.STONE, Items.COPPER_PICKAXE, Blocks.COPPER_ORE,
 		Items.IRON_PICKAXE, Blocks.IRON_ORE, Items.DIAMOND_PICKAXE, Blocks.DIAMOND_ORE, Items.NETHERITE_PICKAXE, Blocks.ANCIENT_DEBRIS);
 
-	/** What each ore block drops, deepslate ores included: the items of {@link Mineshaft#ores}, and emeralds. */
+	/** What each ore block drops, deepslate ores included: the items of {@link Mineshaft#ores}, emeralds and the nether ores. */
 	private static final Map<Block, Item> ORE_ITEMS = Map.ofEntries(
 		Map.entry(Blocks.COAL_ORE, Items.COAL), Map.entry(Blocks.DEEPSLATE_COAL_ORE, Items.COAL),
 		Map.entry(Blocks.COPPER_ORE, Items.RAW_COPPER), Map.entry(Blocks.DEEPSLATE_COPPER_ORE, Items.RAW_COPPER),
@@ -37,12 +37,14 @@ public final class PickaxeTier {
 		Map.entry(Blocks.GOLD_ORE, Items.RAW_GOLD), Map.entry(Blocks.DEEPSLATE_GOLD_ORE, Items.RAW_GOLD),
 		Map.entry(Blocks.REDSTONE_ORE, Items.REDSTONE), Map.entry(Blocks.DEEPSLATE_REDSTONE_ORE, Items.REDSTONE),
 		Map.entry(Blocks.DIAMOND_ORE, Items.DIAMOND), Map.entry(Blocks.DEEPSLATE_DIAMOND_ORE, Items.DIAMOND),
-		Map.entry(Blocks.EMERALD_ORE, Items.EMERALD), Map.entry(Blocks.DEEPSLATE_EMERALD_ORE, Items.EMERALD));
+		Map.entry(Blocks.EMERALD_ORE, Items.EMERALD), Map.entry(Blocks.DEEPSLATE_EMERALD_ORE, Items.EMERALD),
+		Map.entry(Blocks.NETHER_GOLD_ORE, Items.GOLD_NUGGET), Map.entry(Blocks.NETHER_QUARTZ_ORE, Items.QUARTZ),
+		Map.entry(Blocks.ANCIENT_DEBRIS, Items.ANCIENT_DEBRIS));
 
 	private PickaxeTier() {
 	}
 
-	/** What the ore {@code block} drops, or empty if it is no overworld ore. */
+	/** What the ore {@code block} drops, or empty if it is no vanilla ore. */
 	public static Optional<Item> oreItem(Block block) {
 		return Optional.ofNullable(ORE_ITEMS.get(block));
 	}
@@ -65,6 +67,14 @@ public final class PickaxeTier {
 		List<Item> tiers = ToolKind.PICKAXE.tiers();
 		return (want.isEmpty() ? ores : want).stream().map(ore -> lowestFor(ORE_BLOCKS.get(ore)))
 			.max(Comparator.comparingInt(tiers::indexOf)).orElse(tiers.getFirst());
+	}
+
+	/**
+	 * The pickaxe a branch job at height {@code y} needs: the lowest that harvests the ores the colony
+	 * wants there, or any pickaxe when it wants none of them, only stone.
+	 */
+	public static Item forBranch(int y, Predicate<Item> wanted) {
+		return Mineshaft.ores(y).stream().anyMatch(wanted) ? forLevel(y, wanted) : ToolKind.PICKAXE.tiers().getFirst();
 	}
 
 	/**

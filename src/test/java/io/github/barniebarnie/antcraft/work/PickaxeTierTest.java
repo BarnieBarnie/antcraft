@@ -50,4 +50,14 @@ class PickaxeTierTest {
 		assertEquals(Items.STONE_PICKAXE, PickaxeTier.toOrder(Items.WOODEN_PICKAXE, Items.STONE_PICKAXE));
 		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.toOrder(null, Items.IRON_PICKAXE));
 	}
+
+	@Test
+	void branchJobNeedsThePickaxeOfTheWantedOresThereOrAnyForStone() {
+		// The iron level, for raw iron.
+		assertEquals(Items.STONE_PICKAXE, PickaxeTier.forBranch(16, item -> item == Items.RAW_IRON));
+		assertEquals(Items.IRON_PICKAXE, PickaxeTier.forBranch(-58, item -> item == Items.DIAMOND));
+		// Only stone wanted, or ores that are not found there: any pickaxe digs it.
+		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.forBranch(16, item -> item == Items.COBBLESTONE));
+		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.forBranch(-58, item -> item == Items.RAW_IRON));
+	}
 }

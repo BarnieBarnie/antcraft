@@ -100,4 +100,24 @@ class OreRevisitTest {
 		assertEquals(Set.of(), revisit.update(Items.IRON_PICKAXE, pos -> false, () -> List.of(BRANCH), world(wall, Blocks.DIAMOND_ORE),
 			pos -> !pos.equals(wall), () -> ANY));
 	}
+
+	/** Every ore of {@code c:ores} counts, not only the overworld ones: the tag is not loaded here, so it stands in. */
+	@Test
+	void anyOreOfTheConventionalTagIsRevisited() {
+		Predicate<BlockState> ores = state -> state.is(Blocks.NETHER_QUARTZ_ORE) || state.is(Blocks.ANCIENT_DEBRIS) || state.is(Blocks.GILDED_BLACKSTONE);
+		BlockPos wall = wall();
+		assertEquals(Set.of(BRANCH.start()), new OreRevisit(ores).update(Items.IRON_PICKAXE, pos -> false, () -> List.of(BRANCH),
+			world(wall, Blocks.NETHER_QUARTZ_ORE), pos -> true, () -> item -> item == Items.QUARTZ));
+		// Ancient debris needs a diamond pickaxe.
+		assertEquals(Set.of(), new OreRevisit(ores).update(Items.IRON_PICKAXE, pos -> false, () -> List.of(BRANCH),
+			world(wall, Blocks.ANCIENT_DEBRIS), pos -> true, () -> ANY));
+		assertEquals(Set.of(BRANCH.start()), new OreRevisit(ores).update(Items.DIAMOND_PICKAXE, pos -> false, () -> List.of(BRANCH),
+			world(wall, Blocks.ANCIENT_DEBRIS), pos -> true, () -> item -> item == Items.ANCIENT_DEBRIS));
+		// An ore it knows no drop of, such as a modded one, is wanted for its own item.
+		assertEquals(Set.of(BRANCH.start()), new OreRevisit(ores).update(Items.IRON_PICKAXE, pos -> false, () -> List.of(BRANCH),
+			world(wall, Blocks.GILDED_BLACKSTONE), pos -> true, () -> item -> item == Items.GILDED_BLACKSTONE));
+		// Not in the tag: no ore.
+		assertEquals(Set.of(), new OreRevisit(ores).update(Items.IRON_PICKAXE, pos -> false, () -> List.of(BRANCH),
+			world(wall, Blocks.IRON_ORE), pos -> true, () -> ANY));
+	}
 }

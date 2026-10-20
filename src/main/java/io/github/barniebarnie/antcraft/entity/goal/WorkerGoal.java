@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,7 @@ import org.jspecify.annotations.Nullable;
  * The work loop of every colony bot: claims the job that {@link JobScore} rates best for the bot, of any
  * type it has an executor for, and runs it there. It heartbeats the job while the executor works on it,
  * and completes, releases or retries it as the executor reports. So far tree and replant jobs
- * ({@link LumberjackGoal}) and crop jobs ({@link FarmerGoal}) are taken this way, by a bot of any role; the
+ * ({@link LumberjackGoal}), crop jobs ({@link FarmerGoal}) and branch jobs ({@link MinerGoal}) are taken this way, by a bot of any role; the
  * other job types stay with their role goals until they move here. Until then a bot's role is a bonus in the score: a job of its own role
  * that scores better is left to the role's goal. Runs ahead of the role goals, and takes the bot from one
  * only while that reports no work.
@@ -54,6 +55,16 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 		/** Drops the job begun and what follows it, as the worker goal stops. */
 		void reset();
+
+		/** How long a job given back to retry later waits. */
+		default int retryTicks() {
+			return LumberjackGoal.TREE_RETRY_TICKS;
+		}
+
+		/** How many tries a job gets before it is given up. */
+		default int tries() {
+			return LumberjackGoal.TREE_TRIES;
+		}
 	}
 	/** The job types each role's goal does, preferred by bots of that role. */
 	private static final Map<BotRole, Set<JobType>> ROLE_JOBS = Map.of(
@@ -64,6 +75,12 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	);
 	/** How often an idle bot looks at the board. */
 	private static final int CHECK_TICKS = 10;
+	/**
+	 * What a tool the colony has no good enough one of costs a bot that carries a weaker one of its kind: it can
+	 * still do the job, such as a branch with a pickaxe that leaves the ores it cannot harvest.
+	 */
+	// ponytail: naive weight, tune from game tests.
+	static final double WEAK_TOOL_COST = 48;
 
 	private final AntBot bot;
 	/** The executor of each job type claimed here. */
@@ -77,10 +94,11 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private boolean busy;
 	private long nextCheck;
 
-	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer) {
+	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer, MinerGoal miner) {
 		this.bot = bot;
 		this.executors = Map.of(JobType.CHOP_TREE, lumberjack, JobType.REPLANT, lumberjack,
-			JobType.HARVEST_CROP, farmer, JobType.PLANT_CROP, farmer);
+			JobType.HARVEST_CROP, farmer, JobType.PLANT_CROP, farmer,
+			JobType.MINE_BRANCH, miner);
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
@@ -157,9 +175,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 			case RELEASE -> colony.board().release(this.bot.getUUID());
 			case RETRY -> {
-				if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + LumberjackGoal.TREE_RETRY_TICKS, LumberjackGoal.TREE_TRIES)) {
+				Executor executor = this.executors.get(done.type());
+				if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + executor.retryTicks(), executor.tries())) {
 					AntCraft.LOGGER.info("Colony at {} gave up on the {} job at {} after {} tries",
-						colony.core().toShortString(), done.type().getSerializedName(), done.target().toShortString(), LumberjackGoal.TREE_TRIES);
+						colony.core().toShortString(), done.type().getSerializedName(), done.target().toShortString(), executor.tries());
 				}
 			}
 		}
@@ -204,7 +223,9 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	/**
 	 * How well jobs suit this bot. An item it does not carry costs the walk to the core if the core holds
-	 * it; a sapling not there costs nothing, as the job's ready check found one lying near the site.
+	 * it, or for a tool one at least as good; a sapling not there costs nothing, as the job's ready check
+	 * found one lying near the site. A tool the colony has no good enough one of costs a bot that carries
+	 * a weaker one {@link #WEAK_TOOL_COST}.
 	 */
 	private JobScore score(ServerLevel level, Colony colony, Set<JobType> own) {
 		List<Item> carried = Stream.concat(this.bot.getInventory().getItems().stream(), Stream.of(this.bot.getMainHandItem()))
@@ -212,8 +233,16 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		// ponytail: only the core counts as a source; storage chests join when a job type needs them.
 		Container core = Storage.containerAt(level, colony.core());
 		double toCore = Math.sqrt(this.bot.blockPosition().distSqr(colony.core()));
-		ToDoubleFunction<Item> fetch = item -> core != null && core.countItem(item) > 0 ? toCore
-			: new ItemStack(item).is(ItemTags.SAPLINGS) ? 0 : Double.POSITIVE_INFINITY;
+		ToDoubleFunction<Item> fetch = item -> {
+			Optional<ToolKind> kind = ToolKind.of(item);
+			if (core != null && (core.countItem(item) > 0 || kind.filter(k -> k.betterIn(Storage.stock(core), item).isPresent()).isPresent())) {
+				return toCore;
+			}
+			if (kind.filter(k -> k.bestCarried(this.bot) != null).isPresent()) {
+				return WEAK_TOOL_COST;
+			}
+			return new ItemStack(item).is(ItemTags.SAPLINGS) ? 0 : Double.POSITIVE_INFINITY;
+		};
 		return new JobScore(this.bot.blockPosition(), carried, ColonyWorkGoal.freeSlots(this.bot.getInventory()), this.last, fetch, own);
 	}
 

@@ -1,7 +1,7 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
-import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -41,20 +41,23 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Miner work loop: make sure it has a pickaxe (from the core, or by ordering one),
- * claim a mineshaft branch, dig it out with the ores in its walls its pickaxe can harvest, light it
- * with torches from the core as it goes, and bring the haul to the core. When it is full, it leaves
- * what the core does not want in a landing chest on the way; the core wants what open orders need,
- * their ingredients included, and what the colony is short of a stock target of. Now and then it
- * looks for a better pickaxe: it swaps to one in the core, leaving the old one there,
- * or orders the best one the colony can make. Before mining a level it makes sure a pickaxe
- * good enough for the ores the colony wants there is in hand or on its way. Like a player, it only
- * breaks a block it can see from within reach, not one behind a wall. A branch with cells it cannot
- * get within reach and sight of goes back on the board to retry later, and is given up after a few tries.
- * It also digs out dig jobs, such as the ground of a terraform above its height, with the haul going
- * to the core the same way (see {@link Digging}).
+ * Mine work. As the executor of branch jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work},
+ * it gets any colony bot to dig a mineshaft branch out with the ores in its walls its pickaxe can harvest,
+ * light it with torches from the core as it goes, and bring the haul to the core; a bot without a pickaxe
+ * first takes the best one in the core. Before mining a level it makes sure a pickaxe good enough for the
+ * ores the colony wants there is in hand or on its way. When it is full, it leaves what the core does not
+ * want in a landing chest on the way; the core wants what open orders need, their ingredients included,
+ * and what the colony is short of a stock target of. A bot of another role stores its haul after each
+ * branch. Like a player, it only breaks a block it can see from within reach, not one behind a wall. A
+ * branch with cells it cannot get within reach and sight of goes back on the board to retry later, and
+ * is given up after a few tries. A bot whose pickaxe is not good enough for a branch leaves it a while to
+ * a free member that carries one.
+ * As the miner's role goal it makes sure it has a pickaxe (from the core, or by ordering one), now and
+ * then looks for a better one (it swaps to one in the core, leaving the old one there, or orders the best
+ * one the colony can make), stores its haul, and digs out dig jobs, such as the ground of a terraform
+ * above its height, with the haul going to the core the same way (see {@link Digging}).
  */
-public class MinerGoal extends ColonyWorkGoal {
+public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
 	private static final int KEEP_SCAFFOLD = 8;
 	private static final int MIN_FREE_SLOTS = 2;
@@ -64,6 +67,8 @@ public class MinerGoal extends ColonyWorkGoal {
 	private static final int BRANCH_RETRY_TICKS = 200;
 	/** How many tries a branch gets before its unreachable cells are given up, so its level can move on. */
 	private static final int BRANCH_TRIES = 3;
+	/** How long after it is posted a branch waits for a free member with a good enough pickaxe, before a bot with a weaker one takes it. */
+	private static final int BETTER_PICKAXE_TICKS = 200;
 	private enum State { TOOL, WORK, DEPOSIT }
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
@@ -76,6 +81,10 @@ public class MinerGoal extends ColonyWorkGoal {
 	private @Nullable Predicate<Item> forCore;
 	/** Whether it left what the core does not want in a landing chest on this trip. */
 	private boolean unloaded;
+	/** The branch job begun through {@link #begin}, until it is done. */
+	private @Nullable Job job;
+	/** What became of the job begun, for {@link WorkerGoal} to report to the board. */
+	private WorkerGoal.@Nullable Outcome outcome;
 
 	public MinerGoal(AntBot bot) {
 		super(bot, BotRole.MINER);
@@ -87,13 +96,112 @@ public class MinerGoal extends ColonyWorkGoal {
 		this.state = State.TOOL;
 	}
 
+	/** The miner's own work between branch jobs: a pickaxe, a better one, storing its haul and dig jobs. */
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
 		switch (this.state) {
 			case TOOL -> this.getTool(level, colony);
-			case WORK -> this.mine(level, colony);
+			case WORK -> this.roleWork(level, colony);
 			case DEPOSIT -> this.deposit(level, colony);
 		}
+	}
+
+	@Override
+	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		return colony.mineshaft().flatMap(shaft -> shaft.branch(job.target())).isPresent() && !this.betterPickaxeFree(level, colony, job);
+	}
+
+	/**
+	 * Whether the job needs a better pickaxe than this bot carries, was posted a short while ago, and a
+	 * member with a good enough one is free to take it: holding no job and with room for the haul.
+	 */
+	private boolean betterPickaxeFree(ServerLevel level, Colony colony, Job job) {
+		ToolKind kind = ToolKind.PICKAXE;
+		if (job.tool().isEmpty() || kind.rank(kind.bestCarried(this.bot)) >= kind.rank(job.tool().get())
+				|| level.getGameTime() - job.posted() > BETTER_PICKAXE_TICKS) {
+			return false;
+		}
+		return colony.members().stream().anyMatch(id -> !id.equals(this.bot.getUUID()) && level.getEntity(id) instanceof AntBot other
+			&& kind.rank(kind.bestCarried(other)) >= kind.rank(job.tool().get()) && colony.board().jobOf(id).isEmpty()
+			&& freeSlots(other.getInventory()) > 0);
+	}
+
+	@Override
+	public boolean begin(ServerLevel level, Job job) {
+		this.outcome = null;
+		Optional<Colony> colony = this.colony(level);
+		if (colony.isEmpty() || colony.get().mineshaft().flatMap(shaft -> shaft.branch(job.target())).isEmpty()) {
+			return false;
+		}
+		this.job = job;
+		this.tierChecked = null;
+		this.unreachable.clear();
+		this.cooldown = 0;
+		this.enter(State.TOOL);
+		return true;
+	}
+
+	@Override
+	public boolean work(ServerLevel level) {
+		Optional<Colony> colony = this.colony(level);
+		if (colony.isEmpty()) {
+			return false;
+		}
+		this.bot.setWorking(this.job != null);
+		if (this.cooldown > 0) {
+			this.cooldown--;
+			return true;
+		}
+		if (this.job != null) {
+			switch (this.state) {
+				case TOOL -> this.fetchPickaxe(level, colony.get());
+				case WORK -> this.mine(level, colony.get(), this.job);
+				case DEPOSIT -> this.deposit(level, colony.get());
+			}
+			return true;
+		}
+		if (this.state == State.DEPOSIT) {
+			this.deposit(level, colony.get());
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public Optional<WorkerGoal.Outcome> takeOutcome() {
+		Optional<WorkerGoal.Outcome> taken = Optional.ofNullable(this.outcome);
+		this.outcome = null;
+		return taken;
+	}
+
+	@Override
+	public void reset() {
+		this.job = null;
+		this.outcome = null;
+		this.enter(State.TOOL);
+	}
+
+	@Override
+	public int retryTicks() {
+		return BRANCH_RETRY_TICKS;
+	}
+
+	@Override
+	public int tries() {
+		return BRANCH_TRIES;
+	}
+
+	/** Ends the job begun; a bot of another role then stores its haul, which it would keep from the colony. */
+	private void endJob(WorkerGoal.Outcome how) {
+		this.outcome = how;
+		this.job = null;
+		this.unreachable.clear();
+		this.bot.setWorking(false);
+		this.enter(this.bot.getRole() != BotRole.MINER && this.hasItemsToStore() ? State.DEPOSIT : State.WORK);
+	}
+
+	private Optional<Colony> colony(ServerLevel level) {
+		return Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
 	}
 
 	private void enter(State next) {
@@ -103,27 +211,45 @@ public class MinerGoal extends ColonyWorkGoal {
 		this.resetMovement();
 	}
 
+	/** For the miner's role: takes the best pickaxe in the core, or orders one. */
 	private void getTool(ServerLevel level, Colony colony) {
 		if (this.hasPickaxe()) {
 			this.enter(State.WORK);
 			return;
 		}
+		if (!this.takePickaxe(level, colony)) {
+			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
+			this.cooldown = IDLE_TICKS;
+		}
+	}
+
+	/** For a branch job: takes the best pickaxe in the core, or gives the job back when there is none. */
+	private void fetchPickaxe(ServerLevel level, Colony colony) {
+		if (this.hasPickaxe()) {
+			this.enter(State.WORK);
+		} else if (!this.takePickaxe(level, colony)) {
+			this.endJob(WorkerGoal.Outcome.RELEASE);
+		}
+	}
+
+	/** Walks to the core for its best pickaxe and takes it, then gets to work. Returns false when the core has none. */
+	private boolean takePickaxe(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
 		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);
 		Optional<Item> best = ToolKind.PICKAXE.betterIn(stock, null);
 		int slot = core == null ? -1 : findSlot(core, stack -> best.isPresent() ? stack.is(best.get()) : stack.is(ItemTags.PICKAXES));
 		if (slot < 0) {
-			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
-			this.cooldown = IDLE_TICKS;
-			return;
+			return false;
 		}
 		if (this.reach(colony.core())) {
 			this.bot.getInventory().addItem(core.removeItem(slot, 1));
 			this.enter(State.WORK);
 		}
+		return true;
 	}
 
-	private void mine(ServerLevel level, Colony colony) {
+	/** The miner's role work: a better pickaxe, unloading when full, then dig jobs; branch jobs come through {@link WorkerGoal}. */
+	private void roleWork(ServerLevel level, Colony colony) {
 		if (!this.hasPickaxe()) {
 			this.enter(State.TOOL);
 			return;
@@ -135,46 +261,54 @@ public class MinerGoal extends ColonyWorkGoal {
 			this.enter(State.DEPOSIT);
 			return;
 		}
-		Optional<Mineshaft> shaft = colony.mineshaft();
-		Set<JobType> types = shaft.isEmpty() ? Set.of(JobType.CLEAR_AREA) : Set.of(JobType.MINE_BRANCH, JobType.CLEAR_AREA);
-		Optional<Job> job = colony.board().claim(this.bot.getUUID(), types, this.bot.blockPosition(), level.getGameTime(),
-			open -> open.type() != JobType.CLEAR_AREA || Digging.isReady(level, colony, open));
-		this.hasJob = job.isPresent();
-		if (job.isEmpty()) {
-			if (this.hasItemsToStore()) {
+		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.CLEAR_AREA), this.bot.blockPosition(), level.getGameTime(),
+			open -> Digging.isReady(level, colony, open));
+		// A job held of another type, such as a branch, is the worker goal's.
+		this.hasJob = job.filter(held -> held.type() == JobType.CLEAR_AREA).isPresent();
+		if (!this.hasJob) {
+			if (job.isEmpty() && this.hasItemsToStore()) {
 				this.enter(State.DEPOSIT);
 			} else {
 				this.cooldown = IDLE_TICKS;
 			}
 			return;
 		}
-		if (job.get().type() == JobType.CLEAR_AREA) {
-			this.dig(level, colony, job.get());
+		this.dig(level, colony, job.get());
+	}
+
+	/** Digs out the branch of the job begun, lighting it, then completes the job, or gives it back to retry when cells are out of reach. */
+	private void mine(ServerLevel level, Colony colony, Job job) {
+		if (!this.hasPickaxe()) {
+			this.enter(State.TOOL);
 			return;
 		}
-		if (!job.get().id().equals(this.tierChecked)) {
-			this.tierChecked = job.get().id();
-			if (this.getPickaxeFor(level, colony, job.get().target().getY())) {
+		if (this.upgradeTool(level, colony, ToolKind.PICKAXE)) {
+			return;
+		}
+		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS) {
+			this.enter(State.DEPOSIT);
+			return;
+		}
+		Optional<Mineshaft.Branch> branch = colony.mineshaft().flatMap(shaft -> shaft.branch(job.target()));
+		if (branch.isEmpty()) {
+			// The mine moved.
+			this.endJob(WorkerGoal.Outcome.COMPLETE);
+			return;
+		}
+		if (!job.id().equals(this.tierChecked)) {
+			this.tierChecked = job.id();
+			if (this.getPickaxeFor(level, colony, job.target().getY())) {
 				return;
 			}
 		}
-		Optional<Mineshaft.Branch> branch = shaft.get().branch(job.get().target());
-		if (branch.isPresent() && this.light(level, colony, branch.get())) {
+		if (this.light(level, colony, branch.get())) {
 			return;
 		}
-		List<BlockPos> blocks = branch.map(b -> this.toMine(level, b)).orElse(List.of());
+		List<BlockPos> blocks = this.toMine(level, branch.get());
 		if (blocks.isEmpty()) {
-			if (branch.isPresent() && branch.get().cells().stream().anyMatch(cell -> Mining.isMinable(level, cell))) {
-				// Cells left that it could not reach: try again later, then give them up.
-				if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + BRANCH_RETRY_TICKS, BRANCH_TRIES)) {
-					AntCraft.LOGGER.info("Colony at {} gave up on the branch at {}: cells out of reach after {} tries",
-						colony.core().toShortString(), branch.get().start().toShortString(), BRANCH_TRIES);
-				}
-			} else {
-				colony.board().complete(job.get().id());
-			}
-			this.hasJob = false;
-			this.unreachable.clear();
+			// Cells left that it could not reach: try again later, then give them up.
+			boolean left = branch.get().cells().stream().anyMatch(cell -> Mining.isMinable(level, cell));
+			this.endJob(left ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
 		BlockPos next = blocks.getFirst();

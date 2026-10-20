@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
@@ -33,6 +34,11 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 		Items.IRON_AXE, Items.DIAMOND_AXE, Items.NETHERITE_AXE));
 	public static final ToolKind HOE = new ToolKind(ItemTags.HOES, List.of(Items.WOODEN_HOE, Items.STONE_HOE, Items.COPPER_HOE,
 		Items.IRON_HOE, Items.DIAMOND_HOE, Items.NETHERITE_HOE));
+
+	/** The kind {@code item} is a tier of, if any. */
+	public static Optional<ToolKind> of(Item item) {
+		return Stream.of(PICKAXE, AXE, HOE).filter(kind -> kind.tiers().contains(item)).findFirst();
+	}
 
 	public boolean is(ItemStack stack) {
 		return stack.is(this.tag);
