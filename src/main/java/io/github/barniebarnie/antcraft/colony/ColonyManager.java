@@ -346,7 +346,7 @@ public class ColonyManager extends SavedData {
 			return;
 		}
 		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
-		StockPlanner.ordersToAdd(targets, Storage.colonyStock(level, colony), colony.orders(), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable)
+		StockPlanner.ordersToAdd(targets, Storage.held(level, colony), colony.orders(), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable)
 			.forEach(colony::addOrder);
 	}
 

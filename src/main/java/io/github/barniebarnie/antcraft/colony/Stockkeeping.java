@@ -131,6 +131,24 @@ public final class Stockkeeping {
 		return wanted;
 	}
 
+	/**
+	 * The ingredients open orders use up from {@code stock}: what the core keeps for them. Orders
+	 * reserve stock in turn, as in {@link #wantedForOrders}.
+	 */
+	public static <I> Map<I, Integer> neededForOrders(Map<I, Integer> orders, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+		Map<I, Integer> left = new HashMap<>(stock);
+		Map<I, Integer> needed = new HashMap<>();
+		orders.forEach((item, count) -> {
+			Map<I, Integer> available = new HashMap<>(left);
+			available.remove(item);
+			ingredients(TaskPlanner.plan(item, count, available, book, gatherable).crafts(), available).forEach((used, n) -> {
+				left.merge(used, -n, Integer::sum);
+				needed.merge(used, n, Integer::sum);
+			});
+		});
+		return needed;
+	}
+
 	private static <I> int take(I item, int wanted, Map<I, Integer> left, Map<I, Integer> fetch) {
 		int taken = Math.min(wanted, left.getOrDefault(item, 0));
 		if (taken > 0) {

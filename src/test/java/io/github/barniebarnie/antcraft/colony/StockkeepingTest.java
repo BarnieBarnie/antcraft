@@ -181,6 +181,16 @@ class StockkeepingTest {
 	}
 
 	@Test
+	void ordersSharingAnIngredientKeepOnlyWhatTheyNeedTogetherInTheCore() {
+		Map<Item, Integer> stock = Map.of(Items.COBBLESTONE, 3, Items.STICK, 4);
+		Map<Item, Integer> orders = new java.util.LinkedHashMap<>(Map.of(Items.STONE_PICKAXE, 1));
+		orders.put(Items.STONE_AXE, 1);
+		// The 3 cobblestone go to one of them; the core does not keep 6 for the two.
+		assertEquals(Map.of(Items.COBBLESTONE, 3, Items.STICK, 4),
+			Stockkeeping.neededForOrders(orders, stock, VanillaData.recipeBook(), VanillaData.gatherable()));
+	}
+
+	@Test
 	void wantedCountsWhatOrdersNeedAndWhatStockTargetsAreShortOf() {
 		var wanted = Stockkeeping.wanted(Set.of("raw_iron"), TARGETS, Map.of("oak_log", 31));
 		assertTrue(wanted.test("raw_iron"));

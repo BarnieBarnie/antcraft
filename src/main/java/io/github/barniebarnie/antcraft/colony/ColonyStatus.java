@@ -172,7 +172,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		return counts.values().stream().mapToInt(Integer::intValue).sum();
 	}
 
-	/** The status of a colony in the world, counting the stock in its core and storage. */
+	/** The status of a colony in the world, counting the stock it {@linkplain Storage#held holds}, what its bots carry included. */
 	public static ColonyStatus of(ServerLevel level, Colony colony) {
 		Map<UUID, Bot> bots = new HashMap<>();
 		for (UUID member : colony.members()) {
@@ -182,7 +182,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 			}
 		}
 		Container core = Storage.containerAt(level, colony.core());
-		Map<Item, Integer> stock = core == null ? Map.of() : Storage.colonyStock(level, colony);
+		Map<Item, Integer> stock = core == null ? Map.of() : Storage.held(level, colony);
 		int freeSlots = core == null ? 0 : freeSlots(core);
 		boolean chestWithRoom = Storage.storageChests(level, colony).values().stream().anyMatch(chest -> freeSlots(chest) > 0);
 		return of(colony, bots, stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable, level::getBlockState, freeSlots, chestWithRoom);

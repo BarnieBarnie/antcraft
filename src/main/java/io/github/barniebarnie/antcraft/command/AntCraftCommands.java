@@ -211,7 +211,8 @@ public final class AntCraftCommands {
 		}
 		Colony colony = found.get();
 		Container core = Storage.containerAt(source.getLevel(), colony.core());
-		Map<Item, Integer> stock = core == null ? Map.of() : Storage.colonyStock(source.getLevel(), colony);
+		// What the colony holds, its bots' packs included, as stock targets count it.
+		Map<Item, Integer> stock = core == null ? Map.of() : Storage.held(source.getLevel(), colony);
 		if (colony.stockTargets().isEmpty()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.empty"), false);
 		}

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -122,8 +123,8 @@ public final class Storage {
 
 	/**
 	 * Everything the colony has: the core, its storage chests, the mineshaft landing chests,
-	 * whose haul a hauler brings up, and the output waiting in the colony furnace. Use this to decide what the colony owns; bots still only take
-	 * items from the core.
+	 * whose haul a hauler brings up, and the output waiting in the colony furnace. Bots only take items
+	 * from the core. To decide what to order or gather, count {@link #held} instead, which adds what bots carry.
 	 */
 	public static Map<Item, Integer> colonyStock(ServerLevel level, Colony colony) {
 		List<Map<Item, Integer>> stocks = new ArrayList<>();
@@ -141,15 +142,39 @@ public final class Storage {
 		return StockPlanner.total(stocks);
 	}
 
-	/** What the colony holds: its {@linkplain #colonyStock stock} and its bots' inventories. Count stock with this. */
+	/**
+	 * What the colony holds: its {@linkplain #colonyStock stock} and what its bots carry, in hand or
+	 * inventory. Count stock with this, or with {@link #spare} for a tool one bot needs.
+	 */
 	public static Map<Item, Integer> held(ServerLevel level, Colony colony) {
 		List<Map<Item, Integer>> held = new ArrayList<>(List.of(colonyStock(level, colony)));
 		for (UUID id : colony.members()) {
 			if (level.getEntity(id) instanceof AntBot bot) {
 				held.add(stock(bot.getInventory()));
+				ItemStack hand = bot.getMainHandItem();
+				if (!hand.isEmpty()) {
+					held.add(Map.of(hand.getItem(), hand.getCount()));
+				}
 			}
 		}
 		return StockPlanner.total(held);
+	}
+
+	/**
+	 * What the colony {@linkplain #held holds} less the tool each member works with, {@code inUse}
+	 * (null for none): what a bot short of a tool could still get.
+	 */
+	public static Map<Item, Integer> spare(ServerLevel level, Colony colony, Function<AntBot, @Nullable Item> inUse) {
+		Map<Item, Integer> spare = new HashMap<>(held(level, colony));
+		for (UUID id : colony.members()) {
+			if (level.getEntity(id) instanceof AntBot bot) {
+				Item tool = inUse.apply(bot);
+				if (tool != null) {
+					spare.computeIfPresent(tool, (item, count) -> count > 1 ? count - 1 : null);
+				}
+			}
+		}
+		return spare;
 	}
 
 	/** The colony's furnace: the first furnace within {@link #FURNACE_RANGE} of the core, or null. */
@@ -164,13 +189,8 @@ public final class Storage {
 
 	/** What the core should hold for work under way: the ingredients open orders use up from {@code stock}, and build materials. */
 	public static Map<Item, Integer> neededInCore(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
-		TaskPlanner.RecipeBook<Item> book = GameRecipeBook.of(level.getServer());
 		List<Map<Item, Integer>> needs = new ArrayList<>();
-		colony.orders().forEach((item, count) -> {
-			Map<Item, Integer> available = new HashMap<>(stock);
-			available.remove(item);
-			needs.add(Stockkeeping.ingredients(TaskPlanner.plan(item, count, available, book, Gatherables::isGatherable).crafts(), available));
-		});
+		needs.add(Stockkeeping.neededForOrders(colony.orders(), stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
 		colony.builds().forEach(plan -> needs.add(plan.materials(level::getBlockState)));
 		return StockPlanner.total(needs);
 	}

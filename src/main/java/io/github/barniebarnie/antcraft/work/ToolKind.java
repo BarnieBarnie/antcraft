@@ -75,9 +75,14 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 		Map<Item, Integer> stock = Storage.stock(storage);
 		Optional<Item> better = this.betterIn(stock, current);
 		if (better.isEmpty() && (current != null || needs.getAsBoolean()) && colony != null) {
-			this.order(level, colony, current, Storage.colonyStock(level, colony));
+			this.order(level, colony, current, this.spare(level, colony));
 		}
 		return better;
+	}
+
+	/** What the colony {@linkplain Storage#spare holds} beyond the tool of this kind each member works with. */
+	public Map<Item, Integer> spare(ServerLevel level, Colony colony) {
+		return Storage.spare(level, colony, this::bestCarried);
 	}
 
 	/** Orders the best tier above {@code current} the colony can make, unless a better one is already in stock or on order. */

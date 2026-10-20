@@ -222,8 +222,8 @@ public class FarmerGoal extends ColonyWorkGoal {
 			}
 			return true;
 		}
-		// ponytail: a bucket in a storage chest counts as owned but is not fetched; the hauler keeps a stack of anything in the core, so one only ends up there by hand.
-		Map<Item, Integer> stock = Storage.colonyStock(level, colony);
+		// ponytail: a spare bucket in a storage chest or another bot's pack counts as owned but is not fetched; the hauler keeps a stack of anything in the core, so one only ends up there by hand.
+		Map<Item, Integer> stock = Storage.spare(level, colony, bot -> carried(bot, FarmerGoal::isBucket));
 		if (stock.getOrDefault(Items.BUCKET, 0) + stock.getOrDefault(Items.WATER_BUCKET, 0) == 0 && !colony.orders().containsKey(Items.BUCKET)) {
 			colony.addOrder(Items.BUCKET, 1);
 		}
@@ -252,6 +252,15 @@ public class FarmerGoal extends ColonyWorkGoal {
 
 	private static boolean isWaterSource(BlockState state) {
 		return state.is(Blocks.WATER) && state.getFluidState().isSource();
+	}
+
+	/** The item of the first stack {@code bot} carries, hand first, that {@code matches}; null without one: the one it works with. */
+	private static @Nullable Item carried(AntBot bot, Predicate<ItemStack> matches) {
+		if (matches.test(bot.getMainHandItem())) {
+			return bot.getMainHandItem().getItem();
+		}
+		int slot = findSlot(bot.getInventory(), matches);
+		return slot < 0 ? null : bot.getInventory().getItem(slot).getItem();
 	}
 
 	private static boolean isBucket(ItemStack stack) {
@@ -297,8 +306,8 @@ public class FarmerGoal extends ColonyWorkGoal {
 				}
 				return true;
 			}
-			// ponytail: like the bucket, shears in a storage chest count as owned but are not fetched.
-			if (Storage.colonyStock(level, colony).getOrDefault(Items.SHEARS, 0) == 0 && !colony.orders().containsKey(Items.SHEARS)) {
+			// ponytail: like the bucket, spare shears outside the core count as owned but are not fetched.
+			if (Storage.spare(level, colony, bot -> carried(bot, stack -> stack.is(Items.SHEARS))).getOrDefault(Items.SHEARS, 0) == 0 && !colony.orders().containsKey(Items.SHEARS)) {
 				colony.addOrder(Items.SHEARS, 1);
 			}
 			this.sheep = null;
@@ -328,7 +337,7 @@ public class FarmerGoal extends ColonyWorkGoal {
 	private @Nullable Sheep findSheep(ServerLevel level, Colony colony) {
 		AABB territory = new AABB(colony.core()).inflate(colony.radius());
 		List<Sheep> sheep = level.getEntitiesOfClass(Sheep.class, territory, Sheep::readyForShearing);
-		if (sheep.isEmpty() || woolInStock(Storage.colonyStock(level, colony)) >= KEEP_WOOL) {
+		if (sheep.isEmpty() || woolInStock(Storage.held(level, colony)) >= KEEP_WOOL) {
 			return null;
 		}
 		return sheep.stream().min(Comparator.comparingDouble(this.bot::distanceToSqr)).orElse(null);

@@ -14,6 +14,8 @@ import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +31,7 @@ import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -153,6 +156,37 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(CORE, ModBlocks.COLONY_CORE);
 		Colony colony = colonyAt(helper).orElseThrow(() -> new AssertionError("no colony founded"));
 		helper.assertValueEqual(colony.stockTargets(), DefaultStock.TARGETS, "stock targets");
+		helper.succeed();
+	}
+
+	@GameTest(maxTicks = 200)
+	public void aStockTargetMetByAPickaxeABotCarriesOrdersNoOther(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(Items.STONE_PICKAXE, 1)));
+		// Enough to make another, so the colony would order one if it were short.
+		Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+		core.setItem(1, new ItemStack(Items.STICK, 2));
+		AntBot bot = member(helper, colony, 4, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+		// Past a survey of the colony's stock.
+		helper.runAfterDelay(120, () -> {
+			helper.assertFalse(colony.orders().containsKey(Items.STONE_PICKAXE), "ordered a pickaxe a bot carries: " + colony.orders());
+			helper.succeed();
+		});
+	}
+
+	@GameTest
+	public void aSparePickaxeIsOneNoMemberWorksWith(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		AntBot iron = member(helper, colony, 4, 4);
+		iron.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_PICKAXE));
+		AntBot carrier = member(helper, colony, 5, 5);
+		carrier.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.WOODEN_PICKAXE));
+		carrier.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		// Each member works with its best pickaxe, so only the wooden one is spare.
+		helper.assertValueEqual(Storage.spare(helper.getLevel(), colony, ToolKind.PICKAXE::bestCarried),
+			Map.of(Items.WOODEN_PICKAXE, 1), "spare");
 		helper.succeed();
 	}
 

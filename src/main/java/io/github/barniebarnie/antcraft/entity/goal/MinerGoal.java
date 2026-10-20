@@ -113,7 +113,7 @@ public class MinerGoal extends ColonyWorkGoal {
 		Optional<Item> best = ToolKind.PICKAXE.betterIn(stock, null);
 		int slot = core == null ? -1 : findSlot(core, stack -> best.isPresent() ? stack.is(best.get()) : stack.is(ItemTags.PICKAXES));
 		if (slot < 0) {
-			ToolKind.PICKAXE.order(level, colony, null, Storage.colonyStock(level, colony));
+			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
 			this.cooldown = IDLE_TICKS;
 			return;
 		}
@@ -222,7 +222,7 @@ public class MinerGoal extends ColonyWorkGoal {
 			return false;
 		}
 		int step = kind.rank(PickaxeTier.toOrder(carried, need));
-		Map<Item, Integer> stock = Storage.colonyStock(level, colony);
+		Map<Item, Integer> stock = kind.spare(level, colony);
 		boolean coming = kind.tiers().stream().filter(tier -> kind.rank(tier) >= step)
 			.anyMatch(tier -> stock.getOrDefault(tier, 0) > 0 || colony.orders().getOrDefault(tier, 0) > 0);
 		if (!coming) {
