@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
@@ -123,6 +124,25 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A dig batch is open to every colony bot, so a colony with neither miners nor builders levels a hill. */
+	@GameTest(maxTicks = 1200)
+	public void botsWithoutTheMinerOrBuilderRoleDigATerraform(GameTestHelper helper) {
+		Colony colony = colony(helper, CORE, 6);
+		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 2, 6)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		AntBot farmer = member(helper, colony, BotRole.FARMER, 1, 3);
+		AntBot lumberjack = member(helper, colony, BotRole.LUMBERJACK, 1, 5);
+		terraform(helper, colony, new BlockPos(2, 0, 2), new BlockPos(6, 3, 6), 0);
+
+		helper.succeedWhen(() -> {
+			assertLevel(helper, 2, 2, 6, 6, 0, 3);
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CLEAR_AREA), "dig jobs left: " + colony.board().jobs());
+			helper.assertTrue(farmer.getRole() == BotRole.FARMER && lumberjack.getRole() == BotRole.LUMBERJACK, "a bot changed roles");
+		});
+	}
+
 	/** A 4-log oak with a small canopy, trunk at (x, 1..4, z). */
 	private static void tree(GameTestHelper helper, int x, int z) {
 		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1).setValue(LeavesBlock.PERSISTENT, false);
@@ -194,8 +214,9 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Any bot can clear water, but only with a bucket or a filler block, and the colony has neither. */
 	@GameTest(maxTicks = 700)
-	public void waterAMinerCannotDigStaysBlockedWithoutABuilder(GameTestHelper helper) {
+	public void waterStaysBlockedWithoutABucketOrFillerToClearIt(GameTestHelper helper) {
 		Colony colony = colonyWithMiner(helper);
 		// Dirt and a water source in a stone pocket beside it, both above the height.
 		helper.setBlock(2, 1, 2, Blocks.DIRT);
@@ -216,7 +237,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(helper.getTick() >= 600, "still watching");
 			helper.assertTrue(reported[0], "the water was never reported blocked");
-			helper.assertTrue(!freed[0], "the blocked water was freed again with no builder to clear it");
+			helper.assertTrue(!freed[0], "the blocked water was freed again with nothing to clear it with");
 		});
 	}
 

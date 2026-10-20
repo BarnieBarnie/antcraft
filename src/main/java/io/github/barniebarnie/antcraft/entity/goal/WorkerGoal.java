@@ -31,7 +31,8 @@ import org.jspecify.annotations.Nullable;
  * type it has an executor for, and runs it there. It heartbeats the job while the executor works on it,
  * and completes, releases or retries it as the executor reports. So far tree and replant jobs
  * ({@link LumberjackGoal}), crop jobs ({@link FarmerGoal}), branch jobs ({@link MinerGoal}), craft and Bot Core jobs
- * ({@link CrafterGoal}) and haul jobs ({@link HaulerGoal}) are taken this way, by a bot of any role; the
+ * ({@link CrafterGoal}), haul jobs ({@link HaulerGoal}) and build and dig jobs ({@link BuilderGoal}) are taken this
+ * way, by a bot of any role; the
  * other job types stay with their role goals until they move here. Until then a bot's role is a bonus in the score: a job of its own role
  * that scores better is left to the role's goal. Runs ahead of the role goals, and takes the bot from one
  * only while that reports no work.
@@ -72,7 +73,8 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		BotRole.LUMBERJACK, EnumSet.of(JobType.CHOP_TREE, JobType.REPLANT),
 		BotRole.MINER, EnumSet.of(JobType.MINE_BRANCH, JobType.CLEAR_AREA),
 		BotRole.FARMER, EnumSet.of(JobType.HARVEST_CROP, JobType.PLANT_CROP),
-		BotRole.BUILDER, EnumSet.of(JobType.BUILD, JobType.CLEAR_AREA),
+		// Dig jobs are the miners' own; any bot takes them too, builders included, without the bonus.
+		BotRole.BUILDER, EnumSet.of(JobType.BUILD),
 		BotRole.CRAFTER, EnumSet.of(JobType.CRAFT, JobType.ACTIVATE_BOT),
 		BotRole.HAULER, EnumSet.of(JobType.HAUL)
 	);
@@ -97,13 +99,15 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private boolean busy;
 	private long nextCheck;
 
-	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer, MinerGoal miner, CrafterGoal crafter, HaulerGoal hauler) {
+	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer, MinerGoal miner, CrafterGoal crafter, HaulerGoal hauler,
+			BuilderGoal builder) {
 		this.bot = bot;
 		this.executors = Map.of(JobType.CHOP_TREE, lumberjack, JobType.REPLANT, lumberjack,
 			JobType.HARVEST_CROP, farmer, JobType.PLANT_CROP, farmer,
 			JobType.MINE_BRANCH, miner,
 			JobType.CRAFT, crafter, JobType.ACTIVATE_BOT, crafter,
-			JobType.HAUL, hauler);
+			JobType.HAUL, hauler,
+			JobType.BUILD, builder, JobType.CLEAR_AREA, builder);
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 

@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -440,7 +441,7 @@ public class Colony {
 		ITEMS,
 		/** A fluid to settle, with blocks still to clear once it has. */
 		FLUID,
-		/** Lumberjacks to fell a tree standing in a dig batch, which what is built on it would bury. */
+		/** A tree standing in a dig batch to be felled, by any bot that takes its tree job, which what is built on it would bury. */
 		TREES
 	}
 
@@ -469,7 +470,26 @@ public class Colony {
 		this.board.removeOpenIf(job -> isBuildJob(job) && !ready.contains(job.id()));
 		this.builds.forEach((id, plan) -> this.ready(id, plan).stream()
 			.filter(i -> ready.contains(batchId(id, i)))
-			.forEach(i -> this.board.post(batchId(id, i), plan.batches().get(i).dig() ? JobType.CLEAR_AREA : JobType.BUILD, plan.batch(i).target())));
+			// A plan's batches in order where they can: the first one first, such as a mineshaft's from the top down.
+			.forEach(i -> this.board.post(batchId(id, i), plan.batches().get(i).dig() ? JobType.CLEAR_AREA : JobType.BUILD, plan.batch(i).target(), -i)));
+	}
+
+	/** Declares on each build job what its batch still needs with {@code world} as it is (see {@link BuildPlan#needs}), for the job score. */
+	public void declareBuildNeeds(Function<BlockPos, BlockState> world) {
+		this.declareBuildNeeds(world, step -> true, tool -> true);
+	}
+
+	/**
+	 * {@link #declareBuildNeeds(Function)} for just the steps that are {@code possible}. A pickaxe the colony does not
+	 * {@code have} is not declared: no bot could take the job, while one can dig by hand until a pickaxe is made.
+	 */
+	public void declareBuildNeeds(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Predicate<Item> have) {
+		for (Job job : this.board.jobs()) {
+			if (isBuildJob(job)) {
+				this.build(job.id()).map(batch -> batch.needs(world, possible))
+					.ifPresent(needs -> this.board.declare(job.id(), needs.item(), needs.tool().filter(have)));
+			}
+		}
 	}
 
 	/** Whether {@code job} is for a batch of a build plan: a build job, or a dig job of a batch that only clears blocks. */

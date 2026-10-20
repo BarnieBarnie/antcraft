@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.work;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.BitSet;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -14,7 +15,9 @@ import java.util.function.Predicate;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.StringRepresentable;
+import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -312,6 +315,15 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		}
 
 		/**
+		 * The lowest pickaxe tier that gets the drops of {@code world}, the block in this step's way,
+		 * if it is to be broken and is dug with a pickaxe, such as stone or an ore.
+		 */
+		public Optional<Item> pickaxe(BlockState world) {
+			return this.needsClearing(world) && world.is(BlockTags.MINEABLE_WITH_PICKAXE)
+				? Optional.of(PickaxeTier.lowestFor(world.getBlock())) : Optional.empty();
+		}
+
+		/**
 		 * How a clear step gets its block out of the way, as a player would. A fluid source is
 		 * scooped up with an empty bucket, or else filled with a block that is broken next. Flowing
 		 * fluid is left to dry up while it is {@code settling}; fed from outside the plan, it cannot
@@ -470,6 +482,45 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 				needed.merge(fill.getKey(), -cover, Integer::sum);
 			}
 		}
+	}
+
+	/**
+	 * What a bot needs for the steps left with {@code world} as it is, for the job score: {@code tool} is the
+	 * best pickaxe tier a block in the way needs, and {@code item} the one item every step left places, if
+	 * that is all there is left to do. While there is anything else, such as blocks to dig, a step any solid
+	 * block will do or a fluid poured from a bucket filled at a source, a bot can go on without the item.
+	 */
+	public record Needs(Optional<Item> item, Optional<Item> tool) {
+	}
+
+	/** See {@link Needs}. */
+	public Needs needs(Function<BlockPos, BlockState> world) {
+		return this.needs(world, step -> true);
+	}
+
+	/** {@link #needs(Function)} of just the steps that are {@code possible}, so a step no bot can do declares nothing. */
+	public Needs needs(Function<BlockPos, BlockState> world, Predicate<Step> possible) {
+		Set<Item> items = new HashSet<>();
+		boolean other = false;
+		Optional<Item> tool = Optional.empty();
+		List<Item> tiers = ToolKind.PICKAXE.tiers();
+		for (Step step : this.steps) {
+			BlockState current = world.apply(step.pos());
+			if (step.isDone(current) || !possible.test(step)) {
+				continue;
+			}
+			Item item = step.item(current);
+			if (step.anySolid() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem) {
+				other = true;
+			} else {
+				items.add(item);
+			}
+			Optional<Item> pickaxe = step.pickaxe(current);
+			if (pickaxe.isPresent() && (tool.isEmpty() || tiers.indexOf(pickaxe.get()) > tiers.indexOf(tool.get()))) {
+				tool = pickaxe;
+			}
+		}
+		return new Needs(!other && items.size() == 1 ? items.stream().findFirst() : Optional.empty(), tool);
 	}
 
 	/** Every item the plan places, with a water bucket for each waterlogged block and one flint and steel for all its fire. */

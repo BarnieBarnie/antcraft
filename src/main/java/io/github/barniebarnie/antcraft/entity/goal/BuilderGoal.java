@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.entity.goal;
 
 import com.google.common.base.Suppliers;
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -55,7 +56,8 @@ import net.minecraft.world.level.material.Fluids;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Builder work loop: claim a build job, a batch of a plan (see {@link BuildPlan.Batch}), and work through it step by step. For each block
+ * Build work. As the executor of build and dig jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work},
+ * it gets any colony bot to work through a batch of a plan (see {@link BuildPlan.Batch}) step by step. For each block
  * to place it fetches what the batch still needs of it from the core; steps whose item the core
  * lacks wait while the rest goes on. It places blocks only where no bot or mob stands, and blocks
  * it places are protected from other bots. It digs with the best pickaxe in the core, such as
@@ -72,15 +74,16 @@ import org.jspecify.annotations.Nullable;
  * player cannot place, such as a portal, and a fluid without a bucket or source
  * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
  * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
- * While the colony has no miner it also digs out dig jobs (see {@link Digging}), and with one it
- * takes those its miners leave for water. A step any solid block will do, such as a terraform's
+ * Dig jobs, batches that only clear blocks, it digs out the same way, leaving the logs of trees on the
+ * board to whoever takes their tree jobs (see {@link Digging}). A step any solid block will do, such as a terraform's
  * fill, takes whichever fill block there is, sand and gravel only where they rest on the block below
  * and the step may fall, never for a mineshaft's walls. In a terraform it leaves lava and
  * the blocks holding it back alone, to be reported as blocked. Like a player it breaks only blocks
  * it can see; a step it finds no way to, in sight or within reach, it gives up on for the job and
- * reports as blocked once the rest is done.
+ * reports as blocked once the rest is done. A bot of another role than builder or miner takes home what it
+ * dug or has left over after each job. As the builder's role goal it takes down scaffolding left from a job.
  */
-public class BuilderGoal extends ColonyWorkGoal {
+public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
 	private static final Set<Item> FILLERS = BuildPlan.HOLDING_FILL_BLOCKS;
 	/**
@@ -120,6 +123,14 @@ public class BuilderGoal extends ColonyWorkGoal {
 	private @Nullable BlockPos reaching;
 	private long reachingSince;
 	private long reachingLast;
+	/** The build or dig job begun through {@link #begin}, until it is done. */
+	private @Nullable Job job;
+	/** What became of the job begun, for {@link WorkerGoal} to report to the board. */
+	private WorkerGoal.@Nullable Outcome outcome;
+	/** What the bot carried when it began the job, so it takes home only what the job left it with. */
+	private Map<Item, Integer> carriedBefore = Map.of();
+	/** Taking what the job left it with to the core. */
+	private boolean storing;
 
 	public BuilderGoal(AntBot bot) {
 		super(bot, BotRole.BUILDER);
@@ -138,8 +149,135 @@ public class BuilderGoal extends ColonyWorkGoal {
 		}
 	}
 
+	/** The builder's own work between jobs: taking down scaffolding a job left up, such as one it was called away from. */
 	@Override
 	protected void work(ServerLevel level, Colony colony) {
+		Supplier<Set<BlockPos>> planned = Suppliers.memoize(() -> planned(colony));
+		this.follower.setMayPlaceAt(pos -> !planned.get().contains(pos));
+		if (this.cleaning) {
+			this.cleanUp(level, colony);
+		} else if (!this.bot.getScaffold().isEmpty() && this.bot.getScaffoldRole() == BotRole.BUILDER) {
+			this.startCleanup();
+		} else {
+			this.cooldown = IDLE_TICKS;
+		}
+	}
+
+	/** Whether this bot has something to do in the job's batch, or can finish it or report it blocked. */
+	@Override
+	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		Container core = Storage.containerAt(level, colony.core());
+		// A plan left only with steps it cannot clear is taken too, to be finished and reported.
+		return colony.build(job.id()).filter(plan -> this.nextStep(level, colony, core, plan, isDig(job)).isPresent()
+			|| !this.isWaiting(level, colony, core, plan, isDig(job))).isPresent();
+	}
+
+	@Override
+	public boolean begin(ServerLevel level, Job job) {
+		Optional<Colony> colony = this.colonyOf(level);
+		if (colony.isEmpty() || colony.get().build(job.id()).isEmpty()) {
+			return false;
+		}
+		this.outcome = null;
+		this.job = job;
+		this.storing = false;
+		this.carriedBefore = Storage.stock(this.bot.getInventory());
+		if (!job.id().equals(this.progressJob)) {
+			this.progressJob = job.id();
+			this.progress = new BuildPlan.Progress();
+			this.forgetUnreachable();
+		}
+		if (this.cleaning) {
+			// Scaffolding still up from before comes down at the end of this job.
+			this.cleaning = false;
+			this.scaffoldCleanup.cancelRetry();
+			this.follower.setMayPlace(true);
+		}
+		this.resetMovement();
+		return true;
+	}
+
+	@Override
+	public boolean work(ServerLevel level) {
+		Optional<Colony> colony = this.colonyOf(level);
+		if (colony.isEmpty()) {
+			return false;
+		}
+		this.bot.setWorking(this.job != null);
+		if (this.cooldown > 0) {
+			this.cooldown--;
+			return true;
+		}
+		if (this.job != null) {
+			this.work(level, colony.get(), this.job);
+			return true;
+		}
+		if (this.storing) {
+			this.store(level, colony.get());
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public Optional<WorkerGoal.Outcome> takeOutcome() {
+		Optional<WorkerGoal.Outcome> taken = Optional.ofNullable(this.outcome);
+		this.outcome = null;
+		return taken;
+	}
+
+	@Override
+	public void reset() {
+		this.job = null;
+		this.outcome = null;
+		this.storing = false;
+		this.stop();
+	}
+
+	private Optional<Colony> colonyOf(ServerLevel level) {
+		return Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
+	}
+
+	/** Ends the job begun; a bot of another role then takes home what the job left it with (see {@link #store}). */
+	private void endJob(ServerLevel level, WorkerGoal.Outcome how) {
+		this.outcome = how;
+		this.job = null;
+		this.bot.setWorking(false);
+		this.resetMovement();
+		this.storing = this.bot.getRole() != BotRole.BUILDER && this.bot.getRole() != BotRole.MINER && !this.leftOver().isEmpty();
+	}
+
+	/**
+	 * What the bot carries beyond what it did when it began the job, such as the blocks it dug or materials
+	 * it did not use; never a tool. A miner unloads its haul itself, and a builder keeps it for the next job.
+	 */
+	private Map<Item, Integer> leftOver() {
+		Map<Item, Integer> left = new HashMap<>();
+		Storage.stock(this.bot.getInventory()).forEach((item, count) -> {
+			int more = count - this.carriedBefore.getOrDefault(item, 0);
+			if (more > 0 && !item.getDefaultInstance().isDamageableItem()) {
+				left.put(item, more);
+			}
+		});
+		return left;
+	}
+
+	/** Takes what the job left the bot with to the core, once; what the core has no room for it keeps. */
+	private void store(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null) {
+			this.storing = false;
+			return;
+		}
+		if (this.reach(colony.core())) {
+			this.leftOver().forEach((item, count) -> Storage.moveItems(this.bot.getInventory(), core, stack -> stack.is(item), count));
+			this.storing = false;
+			this.resetMovement();
+		}
+	}
+
+	/** Works one tick on the batch of build or dig job {@code job}. */
+	private void work(ServerLevel level, Colony colony, Job job) {
 		if (this.upgradeTool(level, colony, ToolKind.PICKAXE, () -> needsPickaxe(level, colony))) {
 			return;
 		}
@@ -150,37 +288,15 @@ public class BuilderGoal extends ColonyWorkGoal {
 			return;
 		}
 		Container core = Storage.containerAt(level, colony.core());
-		// Dig jobs are for miners, but for water they leave to builders; a colony without one has its builders dig.
-		boolean miner = Digging.hasMiner(level, colony);
-		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.BUILD, JobType.CLEAR_AREA), this.bot.blockPosition(), level.getGameTime(),
-			// A plan left only with steps it cannot clear is claimed too, to be finished and reported.
-			open -> colony.build(open.id()).filter(plan -> (!isDig(open) || !miner || Digging.needsBuilder(level, colony, plan))
-				&& (this.nextStep(level, colony, core, plan, isDig(open)).isPresent() || !this.isWaiting(level, colony, core, plan, isDig(open)))).isPresent(),
-			// A plan's batches in order where it can, so a lone builder digs a mineshaft from the top down.
-			open -> colony.batchIndex(open.id()));
-		this.hasJob = job.isPresent();
-		if (job.isEmpty()) {
-			if (!this.bot.getScaffold().isEmpty()) {
-				this.startCleanup();
-			} else {
-				this.cooldown = IDLE_TICKS;
-			}
-			return;
-		}
-		Optional<BuildPlan> plan = colony.build(job.get().id());
-		boolean dig = isDig(job.get());
-		if (!job.get().id().equals(this.progressJob)) {
-			this.progressJob = job.get().id();
-			this.progress = new BuildPlan.Progress();
-			this.forgetUnreachable();
-		}
+		Optional<BuildPlan> plan = colony.build(job.id());
+		boolean dig = isDig(job);
 		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig, this.progress)).map(s -> this.withFiller(level, core, s));
 		if (next.isEmpty()) {
-			// The scaffolding comes down first, while the job is still this builder's.
+			// The scaffolding comes down first, while the job is still this bot's.
 			if (!this.bot.getScaffold().isEmpty()) {
 				this.startCleanup();
 			} else {
-				this.putAside(level, colony, core, job.get(), plan, dig);
+				this.putAside(level, colony, core, job, plan, dig);
 			}
 			return;
 		}
@@ -328,7 +444,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * nor waiting for an item that neither the bot nor the core has. Those are left for later, so
 	 * the rest of the plan goes on, such as digging a mineshaft before its torches are made. A
 	 * fluid also goes when a bucket can be filled at a source; a block without an item never does.
-	 * A {@code dig} job leaves the logs of trees to lumberjacks (see {@link Digging}).
+	 * A {@code dig} job leaves the logs of trees with a tree job to that job (see {@link Digging}).
 	 */
 	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
 		return this.nextStep(level, colony, core, plan, dig, new BuildPlan.Progress());
@@ -339,7 +455,7 @@ public class BuilderGoal extends ColonyWorkGoal {
 			BuildPlan.Progress progress) {
 		return plan.nextStep(level::getBlockState, planned -> {
 			BlockState current = level.getBlockState(planned.pos());
-			if (dig && Digging.isForLumberjacks(level, colony, planned.pos()) || leavesAlone(level, plan, planned) || this.isGivenUp(planned)) {
+			if (dig && Digging.isForTreeJob(level, colony, planned.pos()) || leavesAlone(level, plan, planned) || this.isGivenUp(planned)) {
 				return false;
 			}
 			BuildPlan.Step step = this.withFiller(level, core, planned);
@@ -465,17 +581,20 @@ public class BuilderGoal extends ColonyWorkGoal {
 	}
 
 	/**
-	 * Whether a builder with a bucket and a filler block at hand could do a step now, such as once
-	 * a blocking block is gone, or once there is a full bucket in the core or a source to fill one
-	 * at for a fluid. Never for a block a player cannot place, so that step stays reported.
+	 * Whether a bot could do a step now, with the buckets and filler blocks the colony holds, its bots'
+	 * included: such as once a blocking block is gone, or once there is a full bucket in the core or a
+	 * source to fill one at for a fluid. Never for a block a player cannot place, so that step stays reported.
 	 */
 	public static BiPredicate<BuildPlan, BuildPlan.Step> workable(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
+		Map<Item, Integer> held = Storage.held(level, colony);
+		boolean hasBucket = held.getOrDefault(Items.BUCKET, 0) > 0;
+		boolean hasFiller = FILLERS.stream().anyMatch(item -> held.getOrDefault(item, 0) > 0);
 		// ponytail: looks for a source once per fluid and recheck, from the core rather than per step.
 		Map<Item, Boolean> canPour = new HashMap<>();
 		return (plan, step) -> {
 			Item item = step.item(level.getBlockState(step.pos()));
-			return isPossible(level, step) && !leavesAlone(level, plan, step) && clearing(level, step, true, true) != BuildPlan.Clearing.BLOCKED
+			return isPossible(level, step) && !leavesAlone(level, plan, step) && clearing(level, step, hasBucket, hasFiller) != BuildPlan.Clearing.BLOCKED
 				&& (!isPoured(item) || canPour.computeIfAbsent(item,
 					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket) != null));
 		};
@@ -515,13 +634,13 @@ public class BuilderGoal extends ColonyWorkGoal {
 
 	/**
 	 * Whether {@code plan} waits for materials, for a fluid to settle or, for a {@code dig} job, for
-	 * lumberjacks to fell a tree, rather than being left only with steps it cannot do. A fluid waits
+	 * a tree in it to be felled, rather than being left only with steps it cannot do. A fluid waits
 	 * for an empty bucket only while there is a source to fill it at.
 	 */
 	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
 		return plan.nextStep(level::getBlockState, step -> {
 			BlockState current = level.getBlockState(step.pos());
-			if (dig && Digging.isForLumberjacks(level, colony, step.pos())) {
+			if (dig && Digging.isForTreeJob(level, colony, step.pos())) {
 				return true;
 			}
 			if (leavesAlone(level, plan, step) || this.isGivenUp(step)) {
@@ -597,14 +716,17 @@ public class BuilderGoal extends ColonyWorkGoal {
 	 * Nothing in the batch can be worked on now. With nothing left the batch is done, and the plan with its last batch; with only
 	 * blocks or fluids it cannot clear left in the way those steps are reported, and the plan waits
 	 * for the colony to find them workable again. While it waits for materials, which the colony
-	 * orders, or for a fluid to settle, the job is freed for later; only while it waits for nothing
-	 * but materials may the batches that need this one start meanwhile.
+	 * orders, for a fluid to settle or for a tree in a dig batch to be felled, the job is freed for later; only
+	 * while it waits for nothing but materials may the batches that need this one start meanwhile.
 	 */
 	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan, boolean dig) {
 		if (plan.isPresent() && this.isWaiting(level, colony, core, plan.get(), dig)) {
-			colony.batchWaiting(job.id(), this.settles(level, core, plan.get()) ? Colony.Wait.FLUID : Colony.Wait.ITEMS);
-			colony.board().release(this.bot.getUUID());
-			this.cooldown = IDLE_TICKS;
+			Colony.Wait reason = this.settles(level, core, plan.get()) ? Colony.Wait.FLUID
+				: dig && Digging.waitsForTrees(level, colony, plan.get()) ? Colony.Wait.TREES : Colony.Wait.ITEMS;
+			colony.batchWaiting(job.id(), reason);
+			// Steps out of reach now may not be once it is back, such as leaves above a tree felled meanwhile.
+			this.forgetUnreachable();
+			this.endJob(level, WorkerGoal.Outcome.RELEASE);
 		} else {
 			plan.ifPresent(p -> {
 				List<BuildPlan.Step> blocked = p.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).toList();
@@ -618,10 +740,8 @@ public class BuilderGoal extends ColonyWorkGoal {
 			});
 			// Once the colony finds the steps workable again, say a player opened the way, they are tried afresh.
 			this.forgetUnreachable();
-			colony.board().complete(job.id());
+			this.endJob(level, WorkerGoal.Outcome.COMPLETE);
 		}
-		this.hasJob = false;
-		this.resetMovement();
 	}
 
 	/**

@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.Terraform;
+import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -42,6 +43,8 @@ class ColonyTest {
 	static void bootstrap() {
 		SharedConstants.tryDetectVersion();
 		Bootstrap.bootStrap();
+		// The vanilla tags, such as which blocks are dug with a pickaxe.
+		VanillaData.recipeBook();
 	}
 
 	private static Colony colony() {
@@ -803,6 +806,33 @@ class ColonyTest {
 		colony.finishBatch(dig.id());
 		colony.board().complete(dig.id());
 		assertEquals(Set.of(JobType.BUILD), openTypes(colony));
+	}
+
+	@Test
+	void aPlansBatchOrderIsItsJobsPriority() {
+		Colony colony = colony();
+		colony.setMineshaft(TWO_LEVELS);
+		colony.postBuildJobs();
+		Job stairs = claim(colony, ALICE);
+		assertEquals(0, stairs.priority());
+		colony.finishBatch(stairs.id());
+		colony.board().complete(stairs.id());
+		// The hall (batch 1) comes before the stairs on down (batch 2).
+		Map<Integer, Integer> priorities = colony.board().jobs().stream().collect(Collectors.toMap(job -> colony.batchIndex(job.id()), Job::priority));
+		assertEquals(Map.of(1, -1, 2, -2), priorities);
+	}
+
+	@Test
+	void buildJobsDeclareThePickaxeAndItemTheirBatchNeeds() {
+		Colony colony = colony();
+		colony.addBuild(terraform());
+		colony.postBuildJobs();
+		Function<BlockPos, BlockState> world = pos -> pos.getY() < 64 || pos.getY() == 65 && pos.getX() < 2 ? Blocks.STONE.defaultBlockState()
+			: Blocks.AIR.defaultBlockState();
+		colony.declareBuildNeeds(world);
+		Job dig = colony.board().jobs().getFirst();
+		assertEquals(Optional.of(Items.WOODEN_PICKAXE), dig.tool(), "the overhang is stone");
+		assertEquals(Optional.empty(), dig.item());
 	}
 
 	@Test

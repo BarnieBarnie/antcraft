@@ -8,7 +8,6 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
-import io.github.barniebarnie.antcraft.entity.goal.Digging;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModItems;
@@ -38,7 +37,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -327,12 +325,16 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Posts a job per build plan, and orders what the plans still have to place beyond what the
-	 * colony holds, its bots' inventories included, while it has a builder to place them. Orders
-	 * plans no longer need are withdrawn.
+	 * Posts a job per batch of each build plan, declaring what each still needs (see {@link Colony#declareBuildNeeds}),
+	 * and orders what the plans still have to place beyond what the colony holds, its bots' inventories included,
+	 * while it has a builder. Orders plans no longer need are withdrawn.
 	 */
 	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have) {
 		colony.postBuildJobs();
+		Item pickaxe = bestPickaxe(level, colony, have);
+		colony.declareBuildNeeds(level::getBlockState, step -> BuilderGoal.isPossible(level, step),
+			tool -> ToolKind.PICKAXE.rank(pickaxe) >= ToolKind.PICKAXE.rank(tool));
+		// ponytail: any bot builds now, but only a colony with a builder orders for its plans.
 		if (!this.hasRole(level, colony, BotRole.BUILDER)) {
 			colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
 			return;
@@ -450,11 +452,7 @@ public class ColonyManager extends SavedData {
 			// A player may have opened the way to a tree or branch given up on since.
 			colony.recheckGivenUp(now);
 			colony.forgetReplaced(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
-			// ponytail: assumes a bucket and filler at hand; a builder without them just reports the step again.
-			// Without a builder only miners work, on dig jobs, and leave water alone, so a step waits until they can dig it.
-			BiPredicate<BuildPlan, BuildPlan.Step> workable = this.hasRole(level, colony, BotRole.BUILDER) ? BuilderGoal.workable(level, colony)
-				: (batch, step) -> Digging.isDiggable(level, colony, step);
-			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, workable);
+			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, BuilderGoal.workable(level, colony));
 			// A block of a finished batch broken since, such as a torch off the mineshaft stairs, is built again.
 			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			LevelTreeView trees = new LevelTreeView(level);

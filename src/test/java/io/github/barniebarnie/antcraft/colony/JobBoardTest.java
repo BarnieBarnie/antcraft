@@ -55,6 +55,21 @@ class JobBoardTest {
 		assertEquals(Optional.of(Items.WOODEN_HOE), job.tool());
 	}
 
+	@Test
+	void aBuildJobIsPostedWithItsPriorityAndDeclaresWhatItNeedsLater() {
+		JobBoard board = new JobBoard();
+		UUID batch = UUID.randomUUID();
+		Job job = board.post(batch, JobType.BUILD, new BlockPos(5, 1, 5), -2).orElseThrow();
+		assertEquals(-2, job.priority());
+		board.claim(ALICE, Set.of(JobType.BUILD), BlockPos.ZERO, 0);
+
+		board.declare(batch, Optional.of(Items.COBBLESTONE), Optional.of(Items.WOODEN_PICKAXE));
+		Job declared = board.jobOf(ALICE).orElseThrow();
+		assertEquals(Optional.of(Items.COBBLESTONE), declared.item());
+		assertEquals(Optional.of(Items.WOODEN_PICKAXE), declared.tool());
+		assertEquals(-2, declared.priority());
+	}
+
 	private static TreeScanner.Tree tree(int x) {
 		List<BlockPos> logs = new java.util.ArrayList<>();
 		for (int y = 1; y <= 6; y++) {

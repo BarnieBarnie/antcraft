@@ -54,8 +54,8 @@ import org.jspecify.annotations.Nullable;
  * a free member that carries one.
  * As the miner's role goal it makes sure it has a pickaxe (from the core, or by ordering one), now and
  * then looks for a better one (it swaps to one in the core, leaving the old one there, or orders the best
- * one the colony can make), stores its haul, and digs out dig jobs, such as the ground of a terraform
- * above its height, with the haul going to the core the same way (see {@link Digging}).
+ * one the colony can make), and stores its haul, of dig jobs too, such as the ground of a terraform above its
+ * height, which it takes through {@link WorkerGoal} like any bot.
  */
 public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
@@ -248,7 +248,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return true;
 	}
 
-	/** The miner's role work: a better pickaxe, unloading when full, then dig jobs; branch jobs come through {@link WorkerGoal}. */
+	/** The miner's role work: a better pickaxe and unloading its haul; branch and dig jobs come through {@link WorkerGoal}. */
 	private void roleWork(ServerLevel level, Colony colony) {
 		if (!this.hasPickaxe()) {
 			this.enter(State.TOOL);
@@ -261,19 +261,11 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.DEPOSIT);
 			return;
 		}
-		Optional<Job> job = colony.board().claim(this.bot.getUUID(), Set.of(JobType.CLEAR_AREA), this.bot.blockPosition(), level.getGameTime(),
-			open -> Digging.isReady(level, colony, open));
-		// A job held of another type, such as a branch, is the worker goal's.
-		this.hasJob = job.filter(held -> held.type() == JobType.CLEAR_AREA).isPresent();
-		if (!this.hasJob) {
-			if (job.isEmpty() && this.hasItemsToStore()) {
-				this.enter(State.DEPOSIT);
-			} else {
-				this.cooldown = IDLE_TICKS;
-			}
-			return;
+		if (this.hasItemsToStore()) {
+			this.enter(State.DEPOSIT);
+		} else {
+			this.cooldown = IDLE_TICKS;
 		}
-		this.dig(level, colony, job.get());
 	}
 
 	/** Digs out the branch of the job begun, lighting it, then completes the job, or gives it back to retry when cells are out of reach. */
@@ -317,27 +309,6 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.unreachable.add(next);
-		}
-	}
-
-	/** Digs out the batch of dig job {@code job} block by block, from the top, leaving trees to lumberjacks (see {@link Digging}). */
-	private void dig(ServerLevel level, Colony colony, Job job) {
-		Optional<BuildPlan.Step> next = colony.build(job.id())
-			.flatMap(batch -> batch.nextStep(level::getBlockState, step -> !this.unreachable.contains(step.pos()) && Digging.isDiggable(level, colony, step)));
-		if (next.isEmpty()) {
-			Digging.putAside(level, colony, job, this.bot.getUUID());
-			this.hasJob = false;
-			this.unreachable.clear();
-			this.resetMovement();
-			this.cooldown = IDLE_TICKS;
-			return;
-		}
-		BlockPos pos = next.get().pos();
-		Goal reach = new Goal.InSight(pos, REACH, this.sight);
-		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
-			this.breaker.tick(level, pos, true);
-		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
-			this.unreachable.add(pos);
 		}
 	}
 

@@ -89,10 +89,15 @@ public class JobBoard {
 
 	/** Adds a job with a given id, such as a build plan's, unless a job with that id is posted already. */
 	public Optional<Job> post(UUID id, JobType type, BlockPos target) {
+		return this.post(id, type, target, 0);
+	}
+
+	/** Like {@link #post(UUID, JobType, BlockPos)}, with a {@code priority}, such as a later batch of a plan's lower one. */
+	public Optional<Job> post(UUID id, JobType type, BlockPos target, int priority) {
 		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
 			return Optional.empty();
 		}
-		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L, Optional.empty(), 0);
+		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L, Optional.empty(), priority);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -112,6 +117,12 @@ public class JobBoard {
 				covered += tree.logs().size();
 			}
 		}
+	}
+
+	/** Sets what the job with id {@code id} needs, claimed or not, such as once a build survey finds what its batch still needs. */
+	public void declare(UUID id, Optional<Item> item, Optional<Item> tool) {
+		this.jobs.stream().filter(job -> job.id().equals(id) && !(job.item().equals(item) && job.tool().equals(tool))).findFirst()
+			.ifPresent(job -> this.replace(job, job.withNeeds(item, tool)));
 	}
 
 	public boolean has(JobType type, BlockPos target) {

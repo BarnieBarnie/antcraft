@@ -174,27 +174,27 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** The miner takes the core's only pickaxe; the builder orders its own instead of digging by hand for good. */
+	/**
+	 * Stone to dig declares a pickaxe, which no bot carries and the core lacks: the bot takes the job anyway and
+	 * orders one, and fetches it once it comes instead of digging by hand for good.
+	 */
 	@GameTest(maxTicks = 600)
-	public void ordersAPickaxeWhenTheMinerTookTheLastOne(GameTestHelper helper) {
+	public void ordersAPickaxeForStoneNoBotHasOneFor(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		core(helper).setItem(0, new ItemStack(Items.STONE_PICKAXE));
 		helper.setBlock(5, 1, 5, Blocks.STONE);
 		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(5, 1, 5))))));
-		// The miner stands at the core, so it gets there first.
-		AntBot miner = member(helper, colony, BotRole.MINER, 2, 1);
 		AntBot builder = member(helper, colony, BotRole.BUILDER, 6, 6);
 
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
 			if (!stocked[0] && colony.orders().containsKey(Items.WOODEN_PICKAXE)) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.STONE), "stone dug without a pickaxe");
 				// What a crafter would bring.
 				core(helper).setItem(1, new ItemStack(Items.WOODEN_PICKAXE));
 				stocked[0] = true;
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(ToolKind.PICKAXE.bestCarried(miner) == Items.STONE_PICKAXE, "miner did not take the core's pickaxe");
 			helper.assertTrue(stocked[0], "no pickaxe ordered: " + colony.orders());
 			helper.assertTrue(ToolKind.PICKAXE.bestCarried(builder) == Items.WOODEN_PICKAXE, "builder has no pickaxe");
 			helper.assertBlockNotPresent(Blocks.STONE, new BlockPos(5, 1, 5));
@@ -241,6 +241,60 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 5, 2, 5, STAIRS_EAST);
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(6, 2, 5));
 			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
+		});
+	}
+
+	/** Any colony bot takes build jobs through the worker goal, not only builders. */
+	@GameTest(maxTicks = 600)
+	public void aColonyBotWithoutTheBuilderRoleBuildsACopy(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		core(helper).setItem(1, new ItemStack(Items.OAK_STAIRS, 1));
+		helper.setBlock(5, 1, 1, Blocks.COBBLESTONE);
+		helper.setBlock(6, 1, 1, Blocks.COBBLESTONE);
+		helper.setBlock(new BlockPos(5, 2, 1), STAIRS_EAST);
+		// In the way of the copy, where the original has air.
+		helper.setBlock(6, 2, 5, Blocks.DIRT);
+
+		command(helper, PermissionSet.ALL_PERMISSIONS, copy(helper));
+		AntBot farmer = member(helper, colony, BotRole.FARMER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 5, COBBLE);
+			assertState(helper, 6, 1, 5, COBBLE);
+			assertState(helper, 5, 2, 5, STAIRS_EAST);
+			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(6, 2, 5));
+			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
+			helper.assertTrue(farmer.getRole() == BotRole.FARMER, "the farmer was made a builder");
+		});
+	}
+
+	/** Three batches of one plan that need none of the others are three jobs, taken by three bots of different roles at once. */
+	@GameTest(maxTicks = 800)
+	public void threeBotsWorkOnThreeOpenBatchesOfOnePlanAtOnce(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 9));
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		for (int x : new int[] {1, 4, 7}) {
+			for (int y = 1; y <= 3; y++) {
+				steps.add(step(helper, x, y, 6, COBBLE));
+			}
+		}
+		colony.addBuild(new BuildPlan(steps, List.of(new BuildPlan.Batch(0, 3, List.of()), new BuildPlan.Batch(3, 6, List.of()),
+			new BuildPlan.Batch(6, 9, List.of()))));
+		List<AntBot> bots = List.of(member(helper, colony, BotRole.BUILDER, 2, 2), member(helper, colony, BotRole.FARMER, 4, 2),
+			member(helper, colony, BotRole.LUMBERJACK, 6, 2));
+
+		boolean[] together = {false};
+		helper.onEachTick(() -> together[0] |= bots.stream().allMatch(bot -> colony.board().jobOf(bot.getUUID()).isPresent()));
+		helper.succeedWhen(() -> {
+			for (int x : new int[] {1, 4, 7}) {
+				for (int y = 1; y <= 3; y++) {
+					assertState(helper, x, y, 6, COBBLE);
+				}
+			}
+			helper.assertTrue(together[0], "the three bots never worked on the plan at the same time");
+			helper.assertTrue(colony.builds().isEmpty(), "finished plan still listed");
 		});
 	}
 

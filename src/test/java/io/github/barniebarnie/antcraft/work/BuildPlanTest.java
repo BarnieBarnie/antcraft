@@ -67,6 +67,8 @@ class BuildPlanTest {
 	static void bootstrap() {
 		SharedConstants.tryDetectVersion();
 		Bootstrap.bootStrap();
+		// The vanilla tags, such as which blocks are dug with a pickaxe.
+		VanillaData.recipeBook();
 	}
 
 	@Test
@@ -523,5 +525,38 @@ class BuildPlanTest {
 		assertEquals(Optional.empty(), stairs.nextStep(stone(changed), step -> true, fresh));
 		changed.put(dug.pos(), Blocks.STONE.defaultBlockState());
 		assertEquals(Optional.of(dug), stairs.nextStep(stone(changed), step -> true, fresh));
+	}
+
+	@Test
+	void placingStepsDeclareTheOneItemTheyNeedOnceNothingElseIsLeft() {
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		BuildPlan walls = new BuildPlan(List.of(new BuildPlan.Step(B, cobble), new BuildPlan.Step(C, cobble), Terraform.fill(D)));
+		assertEquals(Optional.empty(), walls.needs(at(world())).item(), "a fill step takes any fill block, so it can go on without cobblestone");
+		assertEquals(Optional.of(Items.COBBLESTONE), walls.needs(at(world(D, Blocks.DIRT.defaultBlockState()))).item(), "only cobblestone is left to place");
+		assertEquals(Optional.empty(), walls.needs(at(world(B, cobble, C, cobble, D, Blocks.DIRT.defaultBlockState()))).item(), "nothing left to place");
+
+		assertEquals(Optional.empty(), plan().needs(at(world())).item(), "two kinds of items");
+		assertEquals(Optional.of(Items.COBBLESTONE), plan().needs(at(world(D, stairs(Direction.EAST)))).item(), "the stairs are in place");
+		assertEquals(Optional.empty(), plan().needs(at(world(A, Blocks.DIRT.defaultBlockState(), D, stairs(Direction.EAST)))).item(),
+			"dirt to dig first, which needs no cobblestone");
+		assertEquals(Optional.empty(), plan().needs(at(world(D, stairs(Direction.EAST))), step -> step.pos() != B && step.pos() != C).item(),
+			"what is not possible is not declared");
+
+		BuildPlan pond = new BuildPlan(List.of(new BuildPlan.Step(B, Blocks.WATER.defaultBlockState())));
+		assertEquals(Optional.empty(), pond.needs(at(world())).item(), "a bucket is filled at a source, so it is not declared");
+	}
+
+	@Test
+	void diggingStepsDeclareThePickaxeTierOfWhatIsInTheWay() {
+		assertEquals(Optional.empty(), BuildPlan.Step.clear(A).pickaxe(Blocks.DIRT.defaultBlockState()));
+		assertEquals(Optional.of(Items.WOODEN_PICKAXE), BuildPlan.Step.clear(A).pickaxe(Blocks.STONE.defaultBlockState()));
+		assertEquals(Optional.of(Items.STONE_PICKAXE), BuildPlan.Step.clear(A).pickaxe(Blocks.IRON_ORE.defaultBlockState()));
+		assertEquals(Optional.empty(), BuildPlan.Step.clear(A).pickaxe(Blocks.AIR.defaultBlockState()), "nothing in the way");
+		// Stone where cobblestone goes is in the way too.
+		assertEquals(Optional.of(Items.WOODEN_PICKAXE), new BuildPlan.Step(B, Blocks.COBBLESTONE.defaultBlockState()).pickaxe(Blocks.STONE.defaultBlockState()));
+
+		// A batch needs the best tier any of its steps does.
+		assertEquals(Optional.of(Items.STONE_PICKAXE), plan().needs(at(world(A, Blocks.IRON_ORE.defaultBlockState(), B, Blocks.STONE.defaultBlockState()))).tool());
+		assertEquals(Optional.empty(), plan().needs(at(world(A, Blocks.DIRT.defaultBlockState()))).tool());
 	}
 }
