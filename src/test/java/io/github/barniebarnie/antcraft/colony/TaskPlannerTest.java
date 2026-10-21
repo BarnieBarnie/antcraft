@@ -1,17 +1,17 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import io.github.barniebarnie.antcraft.work.VanillaData;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -290,18 +290,43 @@ class TaskPlannerTest {
 		assertTrue(plan.isReady());
 	}
 
-	/** Well under a second, and far less than the search took before it was bounded (it never finished). */
-	private static final Duration QUICK = Duration.ofMillis(500);
+	/**
+	 * Recipe lookups a plan may make. Counting search steps instead of timing them keeps the check
+	 * independent of how busy the machine is. Plans take up to about 6,000; without pruning a bed
+	 * takes over 30,000, and without the expansion budget the deep and wide book never finishes.
+	 */
+	private static final int QUICK = 20_000;
+
+	/** Plans while counting recipe lookups, and fails as soon as the search takes more than {@link #QUICK}. */
+	private static <I> TaskPlanner.Plan<I> planQuickly(I item, int count, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+		int[] lookups = {0};
+		TaskPlanner.RecipeBook<I> counting = new TaskPlanner.RecipeBook<>() {
+			@Override
+			public List<TaskPlanner.Recipe<I>> recipesFor(I wanted) {
+				if (++lookups[0] > QUICK) {
+					// Fails right away, so a search that never ends cannot hang the test.
+					fail("the search took more than " + QUICK + " recipe lookups");
+				}
+				return book.recipesFor(wanted);
+			}
+
+			@Override
+			public List<TaskPlanner.Fuel<I>> fuels() {
+				return book.fuels();
+			}
+		};
+		return TaskPlanner.plan(item, count, new HashMap<>(stock), counting, gatherable);
+	}
 
 	@BeforeAll
 	static void loadVanillaData() {
-		// Bootstraps the registries and loads the vanilla recipes and tags, outside any test's time limit.
+		// Bootstraps the registries and loads the vanilla recipes and tags once for all tests.
 		VanillaData.recipeBook();
 	}
 
 	private static TaskPlanner.Plan<Item> planVanilla(Item item, int count, Map<Item, Integer> stock) {
 		TaskPlanner.RecipeBook<Item> book = VanillaData.recipeBook();
-		return assertTimeoutPreemptively(QUICK, () -> TaskPlanner.plan(item, count, new HashMap<>(stock), book, VanillaData.gatherable()));
+		return planQuickly(item, count, stock, book, VanillaData.gatherable());
 	}
 
 	@Test
@@ -387,8 +412,7 @@ class TaskPlannerTest {
 	void deepAndWideRecipeBooksPlanQuickly() {
 		TaskPlanner.RecipeBook<String> book = wideBook(8, 8, 4);
 
-		TaskPlanner.Plan<String> plan = assertTimeoutPreemptively(QUICK,
-			() -> TaskPlanner.plan("item_0_0", 2, new HashMap<>(Map.of("item_3_1", 5, "item_5_2", 3)), book, item -> item.startsWith("item_8_")));
+		TaskPlanner.Plan<String> plan = planQuickly("item_0_0", 2, Map.of("item_3_1", 5, "item_5_2", 3), book, item -> item.startsWith("item_8_"));
 
 		assertTrue(!plan.crafts().isEmpty() || !plan.missing().isEmpty(), "plan: " + plan);
 	}
