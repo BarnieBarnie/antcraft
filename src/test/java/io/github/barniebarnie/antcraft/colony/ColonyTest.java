@@ -403,6 +403,20 @@ class ColonyTest {
 	}
 
 	@Test
+	void removingAPlanDropsItsBlockedStepsOnly() {
+		Colony colony = colony();
+		BuildPlan kept = new BuildPlan(List.of(BuildPlan.Step.clear(new BlockPos(1, 64, 1))));
+		BuildPlan removed = new BuildPlan(List.of(BuildPlan.Step.clear(PLACED)));
+		colony.addBuild(kept);
+		colony.addBuild(removed);
+		colony.postBuildJobs();
+		colony.reportBlocked(batchJob(colony, kept, 0).id(), List.of(new BlockPos(1, 64, 1)));
+		colony.reportBlocked(batchJob(colony, removed, 0).id(), List.of(PLACED));
+		colony.removeBuild(removed);
+		assertEquals(List.of(new BlockPos(1, 64, 1)), colony.blockedSteps());
+	}
+
+	@Test
 	void clearingBlockedStepsGivesUpTheirPlans() {
 		Colony colony = colony();
 		blockedPlan(colony, BuildPlan.Step.clear(PLACED));

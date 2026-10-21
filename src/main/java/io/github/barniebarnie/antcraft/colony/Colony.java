@@ -406,6 +406,7 @@ public class Colony {
 		this.builds.remove(id);
 		this.indexBatches();
 		this.batchStates.keySet().removeAll(jobs);
+		this.blockedSteps.removeIf(blocked -> jobs.contains(blocked.plan()));
 		this.board.removeOpenIf(job -> isBuildJob(job) && jobs.contains(job.id()));
 		this.lastSurvey = -1;
 	}
