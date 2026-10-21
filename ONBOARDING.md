@@ -46,7 +46,7 @@ All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
   - `ColonyStatus`: one snapshot used by both `/antcraft colony info` and the screen, so the two never disagree.
 - **`work/`**: world logic and plain-data plans.
   - `BuildPlan`: ordered clear and place steps, split into batches. Progress lives in the world: a step is done once the world matches it.
-  - `Mineshaft`, `Terraform`, `RegionPlan` (`build copy`), `StorageArea`, `Field`: generators for plans and sites.
+  - `Mineshaft`, `Terraform`, `RegionPlan` (`build copy`, `build load`), `StorageArea`, `Field`: generators for plans and sites.
   - `TreeScanner`, `Replanting`, `TreeRetry`, `OreRevisit`, `Revisit`: tree and ore logic and retry bookkeeping.
   - `Storage` (moving items between inventories), `GameRecipeBook` (the real recipes behind the `TaskPlanner` interface), `ToolKind`, `PickaxeTier`, `Fuels`.
 - **`command/`**: `AntCraftCommands`, the whole `/antcraft` Brigadier tree.
@@ -99,5 +99,5 @@ Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case
 ## Good first places to start
 
 - **Add a job type**: implement `WorkerGoal.Executor` and register it in `WorkerGoal`, following the existing executors.
-- **M5 leftovers**: importing `.nbt` and Litematica files into a `BuildPlan`. `RegionPlan` is the closest example, and it can be unit-tested.
+- **M5 leftovers**: importing Litematica files into a `BuildPlan`, and material lists for imported structures. `RegionPlan.load` (`.nbt`) is the closest example, and it can be unit-tested.
 - **Small, isolated logic** in `work/` or the colony planners, covered by unit tests, for fast feedback.
