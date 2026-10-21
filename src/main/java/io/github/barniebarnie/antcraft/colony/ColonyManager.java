@@ -147,13 +147,12 @@ public class ColonyManager extends SavedData {
 	}
 
 	/** Where no path may place scaffold, for every colony (see {@link Colony#keepOpen}). */
-	public static Set<BlockPos> keepOpen(Level level) {
+	public static Predicate<BlockPos> keepOpen(Level level) {
 		if (!(level instanceof ServerLevel server)) {
-			return Set.of();
+			return pos -> false;
 		}
-		Set<BlockPos> open = new HashSet<>();
-		get(server).colonies.values().forEach(colony -> open.addAll(colony.keepOpen()));
-		return open;
+		List<Predicate<BlockPos>> open = get(server).colonies.values().stream().map(Colony::keepOpen).toList();
+		return pos -> open.stream().anyMatch(colony -> colony.test(pos));
 	}
 
 	public List<Colony> all() {
@@ -203,9 +202,9 @@ public class ColonyManager extends SavedData {
 		}
 		colony.field().ifPresent(field -> {
 			// Not while a plan, such as the farm's, still has to ready the spot.
-			Set<BlockPos> open = colony.keepOpen();
+			Predicate<BlockPos> open = colony.keepOpen();
 			List<BlockPos> toPlant = field.toPlant(pos -> level.getBlockState(pos).getBlock() instanceof CropBlock).stream()
-				.filter(pos -> !open.contains(pos) && !open.contains(pos.below())).toList();
+				.filter(pos -> !open.test(pos) && !open.test(pos.below())).toList();
 			colony.board().removeOpenIf(job -> job.type() == JobType.PLANT_CROP && !toPlant.contains(job.target()));
 			toPlant.forEach(pos -> colony.board().post(JobType.PLANT_CROP, pos, Farming.plantTool(level.getBlockState(pos.below()))));
 		});

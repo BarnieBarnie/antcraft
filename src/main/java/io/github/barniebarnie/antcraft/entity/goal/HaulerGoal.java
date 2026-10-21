@@ -504,9 +504,9 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	private static Stream<BlockPos> freeSpots(ServerLevel level, Colony colony, Stocks stocks) {
 		// Not where a plan, such as the storage area's own, is still at work.
-		Set<BlockPos> open = colony.keepOpen();
+		Predicate<BlockPos> open = colony.keepOpen();
 		return colony.storage().orElseThrow().chestSpots().stream()
-			.filter(pos -> !stocks.chests().containsKey(pos) && level.getBlockState(pos).canBeReplaced() && !open.contains(pos));
+			.filter(pos -> !stocks.chests().containsKey(pos) && level.getBlockState(pos).canBeReplaced() && !open.test(pos));
 	}
 
 	/** How many chests the storage area still needs ordered, beyond the {@code held} chests the colony has to place. */

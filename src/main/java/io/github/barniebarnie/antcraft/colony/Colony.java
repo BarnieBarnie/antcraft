@@ -195,6 +195,12 @@ public class Colony {
 	private final Map<UUID, BuildPlan> builds;
 	/** The plan and batch of each build job, by job id; see {@link #batchId}. Kept up to date with {@link #builds}. */
 	private final Map<UUID, BatchRef> batchJobs = new HashMap<>();
+	/** The job id of each batch of each plan, by plan id, made once since hashing them on every {@link #keepOpen} was most of its cost; dropped with the plan. */
+	private final Map<UUID, List<UUID>> batchIds = new HashMap<>();
+	/** Where each plan has steps, by plan id, collected once for {@link #keepOpen}; dropped with the plan. A plan's steps never change under its id. */
+	private final Map<UUID, Set<BlockPos>> stepSets = new HashMap<>();
+	/** How many plans' steps {@link #keepOpen} collected, for tests. */
+	int stepSetsCollected;
 	/** The batch of each build job as a plan of its own, made once rather than on every builder's tick; cleared with {@link #batchJobs}. */
 	private final Map<UUID, BuildPlan> batchPlans = new HashMap<>();
 	/** How far builders got with the batch of each build job, so the batches that need it get posted; dropped with their plan. */
@@ -312,7 +318,7 @@ public class Colony {
 		Set<Integer> blocked = new HashSet<>();
 		// A batch needs only batches before it, so one pass in order finds every batch held up.
 		for (int i = 0; i < plan.batches().size(); i++) {
-			if (jobs.contains(batchId(id, i)) || plan.batches().get(i).needs().stream().anyMatch(blocked::contains)) {
+			if (jobs.contains(this.batchId(id, plan, i)) || !blocked.isEmpty() && plan.batches().get(i).needs().stream().anyMatch(blocked::contains)) {
 				blocked.add(i);
 			}
 		}
@@ -337,6 +343,11 @@ public class Colony {
 		return index == 0 ? plan : UUID.nameUUIDFromBytes((plan + "/" + index).getBytes(StandardCharsets.UTF_8));
 	}
 
+	/** {@link #batchId(UUID, int)}, made once per plan. */
+	private UUID batchId(UUID id, BuildPlan plan, int index) {
+		return this.batchIds.computeIfAbsent(id, planId -> IntStream.range(0, plan.batches().size()).mapToObj(i -> batchId(planId, i)).toList()).get(index);
+	}
+
 	private void indexBatches() {
 		this.batchJobs.clear();
 		this.batchPlans.clear();
@@ -357,7 +368,7 @@ public class Colony {
 	private Set<Integer> batches(UUID id, BuildPlan plan, BatchState state) {
 		Set<Integer> batches = new HashSet<>();
 		for (int i = 0; i < plan.batches().size(); i++) {
-			if (this.batchStates.get(batchId(id, i)) == state) {
+			if (this.batchStates.get(this.batchId(id, plan, i)) == state) {
 				batches.add(i);
 			}
 		}
@@ -618,6 +629,8 @@ public class Colony {
 		Set<BlockPos> targets = batchTargets(this.builds.get(id)).collect(Collectors.toSet());
 		this.board.removeOpenIf(job -> isStairCraft(job) && targets.contains(job.target()));
 		this.builds.remove(id);
+		this.batchIds.remove(id);
+		this.stepSets.remove(id);
 		this.projects.replaceAll(project -> project.without(id));
 		this.projects.stream().filter(Project::isEmpty).forEach(project -> this.waiting.remove(project.id()));
 		this.projects.removeIf(Project::isEmpty);
@@ -907,12 +920,22 @@ public class Colony {
 	}
 
 	/** Where paths must not place scaffold: the mineshaft's stairs, halls and branches, every build plan's step, which the plan wants as it says, and the ore veins posted. */
-	public Set<BlockPos> keepOpen() {
-		Set<BlockPos> open = new HashSet<>(this.shaftOpen);
-		this.builds().forEach(plan -> plan.steps().forEach(step -> open.add(step.pos())));
+	public Predicate<BlockPos> keepOpen() {
+		List<Set<BlockPos>> open = new ArrayList<>();
+		open.add(this.shaftOpen);
+		this.builds.forEach((id, plan) -> {
+			if (this.hasWorkLeft(id, plan)) {
+				open.add(this.stepSets.computeIfAbsent(id, planId -> {
+					this.stepSetsCollected++;
+					return plan.steps().stream().map(BuildPlan.Step::pos).collect(Collectors.toUnmodifiableSet());
+				}));
+			}
+		});
 		// The holes a miner digs out a vein through.
-		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).forEach(job -> open.addAll(job.area()));
-		return open;
+		Set<BlockPos> veins = new HashSet<>();
+		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).forEach(job -> veins.addAll(job.area()));
+		open.add(veins);
+		return pos -> open.stream().anyMatch(set -> set.contains(pos));
 	}
 
 	/** Forgets placed blocks that are gone or replaced, so the set does not grow for good. {@code world} gives null where it cannot tell. */

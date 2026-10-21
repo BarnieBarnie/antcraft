@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.pathing;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -26,7 +27,7 @@ public class LevelWorldView implements WorldView {
 	private final ItemStack hand;
 	private final Set<BlockPos> keep;
 	/** Where colonies want no scaffold, looked up once per view, the first time a path asks. */
-	private @Nullable Set<BlockPos> keepOpen;
+	private @Nullable Predicate<BlockPos> keepOpen;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
@@ -42,7 +43,7 @@ public class LevelWorldView implements WorldView {
 		if (this.keepOpen == null) {
 			this.keepOpen = ColonyManager.keepOpen(this.level);
 		}
-		return !this.keepOpen.contains(pos);
+		return !this.keepOpen.test(pos);
 	}
 
 	@Override

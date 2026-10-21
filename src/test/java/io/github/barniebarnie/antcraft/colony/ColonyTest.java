@@ -10,6 +10,7 @@ import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import io.github.barniebarnie.antcraft.work.VanillaData;
@@ -22,6 +23,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -972,5 +974,52 @@ class ColonyTest {
 
 		assertEquals(1, colony.recheckGivenUp(1000 + Colony.GIVEN_UP_RECHECK_TICKS));
 		assertTrue(colony.board().claim(ALICE, mine, BlockPos.ZERO, 1000 + Colony.GIVEN_UP_RECHECK_TICKS).isPresent());
+	}
+
+	/** A 32x32x16 box of stone copied to {@code at}: 16,384 steps in 1,024 cells. */
+	private static BuildPlan bigCopy(BlockPos at) {
+		return RegionPlan.copy(world(Blocks.STONE), BlockPos.ZERO, new BlockPos(31, 15, 31), at).orElseThrow();
+	}
+
+	/**
+	 * Paths ask where to keep open each time one is planned. Three 32x32x16 copies are ~49,000 steps in 3,072 cells, and
+	 * each call took ~3 ms: collecting the steps, hashing every cell's job id and scanning every cell's needs for blocked
+	 * ones. Now it takes ~0.1 ms. Counted rather than timed, so a loaded machine cannot fail it.
+	 */
+	@Test
+	void keepOpenCollectsEachPlansStepsOnce() {
+		Colony colony = colony();
+		for (int i = 0; i < 3; i++) {
+			colony.addBuild(bigCopy(new BlockPos(40 * i, 64, 0)));
+		}
+		for (int call = 0; call < 1000; call++) {
+			Predicate<BlockPos> open = colony.keepOpen();
+			assertTrue(open.test(new BlockPos(80 + call % 32, 70, 31)));
+			assertFalse(open.test(new BlockPos(35, 70, 0)));
+		}
+		assertEquals(3, colony.stepSetsCollected);
+	}
+
+	@Test
+	void keepOpenFollowsAddedRemovedAndFinishedBuilds() {
+		Colony colony = colony();
+		BuildPlan first = bigCopy(BlockPos.ZERO);
+		BlockPos inFirst = new BlockPos(3, 2, 3);
+		BlockPos inSecond = new BlockPos(5, 64, 5);
+		colony.addBuild(first);
+		assertTrue(colony.keepOpen().test(inFirst));
+		assertFalse(colony.keepOpen().test(inSecond));
+
+		colony.addBuild(plan(Blocks.COBBLESTONE));
+		assertTrue(colony.keepOpen().test(inSecond));
+
+		colony.removeBuild(first);
+		assertFalse(colony.keepOpen().test(inFirst));
+		assertTrue(colony.keepOpen().test(inSecond));
+
+		colony.postBuildJobs();
+		Job build = colony.board().claim(ALICE, Set.of(JobType.BUILD), BlockPos.ZERO, 0).orElseThrow();
+		colony.finishBatch(build.id());
+		assertFalse(colony.keepOpen().test(inSecond));
 	}
 }
