@@ -1,6 +1,5 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
-import com.google.common.base.Suppliers;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
@@ -22,7 +21,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.registry.FlammableBlockRegistry;
 import net.minecraft.core.BlockPos;
@@ -154,8 +152,6 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 */
 	@Override
 	protected boolean betweenJobs(ServerLevel level, Colony colony) {
-		Supplier<Set<BlockPos>> planned = Suppliers.memoize(() -> planned(colony));
-		this.follower.setMayPlaceAt(pos -> !planned.get().contains(pos));
 		if (this.cleaning) {
 			this.cleanUp(level, colony);
 			return true;
@@ -285,8 +281,6 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (this.upgradeTool(level, colony, ToolKind.PICKAXE, () -> needsPickaxe(level, colony))) {
 			return;
 		}
-		Supplier<Set<BlockPos>> planned = Suppliers.memoize(() -> planned(colony));
-		this.follower.setMayPlaceAt(pos -> !planned.get().contains(pos));
 		if (this.cleaning) {
 			this.cleanUp(level, colony);
 			return;

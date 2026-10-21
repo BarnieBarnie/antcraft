@@ -138,6 +138,16 @@ public class ColonyManager extends SavedData {
 		return false;
 	}
 
+	/** Where no path may place scaffold, for every colony (see {@link Colony#keepOpen}). */
+	public static Set<BlockPos> keepOpen(Level level) {
+		if (!(level instanceof ServerLevel server)) {
+			return Set.of();
+		}
+		Set<BlockPos> open = new HashSet<>();
+		get(server).colonies.values().forEach(colony -> open.addAll(colony.keepOpen()));
+		return open;
+	}
+
 	public List<Colony> all() {
 		return new ArrayList<>(this.colonies.values());
 	}

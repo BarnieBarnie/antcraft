@@ -174,6 +174,7 @@ public class Colony {
 	private Optional<Mineshaft> mineshaft;
 	/** The mineshaft's stair floors and torches, which bots leave standing. */
 	private Set<BlockPos> shaftBlocks;
+	private Set<BlockPos> shaftOpen;
 	private final List<StockTarget> stock;
 	/** Build plans by id, so plans that start at the same spot get jobs of their own. */
 	private final Map<UUID, BuildPlan> builds;
@@ -232,6 +233,7 @@ public class Colony {
 		this.orders = new LinkedHashMap<>(orders);
 		this.mineshaft = mineshaft;
 		this.shaftBlocks = mineshaft.map(Mineshaft::protectedBlocks).orElse(Set.of());
+		this.shaftOpen = mineshaft.map(Mineshaft::keepOpen).orElse(Set.of());
 		this.stock = new ArrayList<>(stock);
 		this.builds = new LinkedHashMap<>(builds);
 		// A shaft plan saved by an older version, such as before the walls, gets the current one under its id, keeping its progress.
@@ -688,6 +690,13 @@ public class Colony {
 		return false;
 	}
 
+	/** Where paths must not place scaffold: the mineshaft's stairs, halls and branches, and every build plan's step, which the plan wants as it says. */
+	public Set<BlockPos> keepOpen() {
+		Set<BlockPos> open = new HashSet<>(this.shaftOpen);
+		this.builds().forEach(plan -> plan.steps().forEach(step -> open.add(step.pos())));
+		return open;
+	}
+
 	/** Forgets placed blocks that are gone or replaced, so the set does not grow for good. {@code world} gives null where it cannot tell. */
 	void forgetReplaced(Function<BlockPos, @Nullable BlockState> world) {
 		for (BlockPos pos : List.copyOf(this.protectedBlocks.keySet())) {
@@ -721,6 +730,7 @@ public class Colony {
 		this.mineshaft.ifPresent(old -> this.removeBuild(old.plan()));
 		this.mineshaft = Optional.of(shaft);
 		this.shaftBlocks = shaft.protectedBlocks();
+		this.shaftOpen = shaft.keepOpen();
 		this.board.removeOpenIf(job -> job.type() == JobType.MINE_BRANCH);
 		this.addBuild(shaft.plan());
 	}

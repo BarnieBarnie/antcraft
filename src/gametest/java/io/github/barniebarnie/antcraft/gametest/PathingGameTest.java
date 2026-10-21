@@ -1,11 +1,16 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
 import java.lang.reflect.Method;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -96,6 +101,41 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 16));
 		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 4, 3)));
 
+		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
+	}
+
+	/**
+	 * As {@link #pillarsUpToLedge}, but a colony's mineshaft hall runs along z=3 at the bot's feet and a branch
+	 * leaves it at x=4, right where the bot would pillar. It gets onto the ledge without placing a block in them.
+	 */
+	@GameTest(maxTicks = 600)
+	public void pillarsAroundMineshaftHallsAndBranches(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 5, 1, 1, 6, 3, 6, Blocks.BEDROCK);
+		helper.setBlock(6, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(6, 1, 6))).orElseThrow();
+		colony.setStockTargets(List.of());
+		// An old shaft whose level at y=1 lands at (7, 1, 3), with its hall running west along z=3.
+		int level = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(7, 5, 3)), List.of(level), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+		colony.setMineshaft(shaft);
+		colony.removeBuild(shaft.plan());
+		Set<BlockPos> open = new HashSet<>();
+		shaft.hall(level).forEach(cell -> open.addAll(List.of(cell, cell.above())));
+		shaft.branches(level).forEach(branch -> open.addAll(branch.cells()));
+		helper.assertTrue(open.contains(helper.absolutePos(new BlockPos(4, 1, 3))), "the hall does not run through the pillar spot");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 16));
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 4, 3)));
+
+		helper.onEachTick(() -> {
+			for (BlockPos pos : open) {
+				if (helper.getLevel().getBlockState(pos).is(Blocks.COBBLESTONE)) {
+					helper.fail("placed a block in the mineshaft at " + TestPositions.relative(helper, pos).toShortString());
+				}
+			}
+		});
 		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
 	}
 

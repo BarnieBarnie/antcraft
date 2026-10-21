@@ -77,6 +77,17 @@ class MineshaftTest {
 	}
 
 	@Test
+	void pathsKeepTheStairsHallsAndEveryRoundOfBranchesOpen() {
+		Set<BlockPos> open = SPIRAL.keepOpen();
+		SPIRAL.stairs().forEach(stair -> assertTrue(open.contains(stair.above()), "stair headroom " + stair.above()));
+		SPIRAL.hallWork(6).orElseThrow().cells().forEach(cell -> assertTrue(open.contains(cell), "hall " + cell));
+		for (int round = 0; round < SPIRAL.rounds(); round++) {
+			SPIRAL.branches(6, round).forEach(branch -> branch.cells().forEach(cell -> assertTrue(open.contains(cell), "branch " + cell)));
+		}
+		assertFalse(open.contains(SPIRAL.landing(6).below()), "the landing's floor");
+	}
+
+	@Test
 	void eachPositionHasOneStep() {
 		List<BlockPos> positions = SHAFT.plan().steps().stream().map(BuildPlan.Step::pos).toList();
 		assertEquals(positions.size(), new HashSet<>(positions).size());

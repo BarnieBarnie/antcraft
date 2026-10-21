@@ -487,6 +487,15 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return open;
 	}
 
+	/** What no path may put a scaffold block in: what the plan never walls in, and every round of branches still to dig. */
+	public Set<BlockPos> keepOpen() {
+		Set<BlockPos> open = this.unwalled();
+		for (int level : this.levels) {
+			IntStream.range(1, this.rounds).forEach(round -> this.branches(level, round).forEach(branch -> open.addAll(branch.cells())));
+		}
+		return open;
+	}
+
 	/** What no bot may break: the floors of the stairs and halls, and the builder's torches. */
 	public Set<BlockPos> protectedBlocks() {
 		Set<BlockPos> blocks = new HashSet<>(this.torches());

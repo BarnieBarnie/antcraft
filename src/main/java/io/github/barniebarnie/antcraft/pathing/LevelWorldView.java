@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.pathing;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
-import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -18,6 +17,7 @@ import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import org.jspecify.annotations.Nullable;
 
 /** {@link WorldView} backed by a live level. Break times assume the bot uses its best tool for each block. */
 public class LevelWorldView implements WorldView {
@@ -25,25 +25,24 @@ public class LevelWorldView implements WorldView {
 	private final SimpleContainer inventory;
 	private final ItemStack hand;
 	private final Set<BlockPos> keep;
-	private final Predicate<BlockPos> mayPlace;
+	/** Where colonies want no scaffold, looked up once per view, the first time a path asks. */
+	private @Nullable Set<BlockPos> keepOpen;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
-		this(level, inventory, hand, keep, pos -> true);
-	}
-
-	/** Like {@link #LevelWorldView(Level, SimpleContainer, ItemStack, Set)}; paths place scaffold blocks only where {@code mayPlace} allows. */
-	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep, Predicate<BlockPos> mayPlace) {
 		this.level = level;
 		this.inventory = inventory;
 		this.hand = hand;
 		this.keep = keep;
-		this.mayPlace = mayPlace;
 	}
 
+	/** Paths place scaffold anywhere but where a colony keeps blocks open (see {@link ColonyManager#keepOpen}), whatever work the bot is on. */
 	@Override
 	public boolean mayPlace(BlockPos pos) {
-		return this.mayPlace.test(pos);
+		if (this.keepOpen == null) {
+			this.keepOpen = ColonyManager.keepOpen(this.level);
+		}
+		return !this.keepOpen.contains(pos);
 	}
 
 	@Override
