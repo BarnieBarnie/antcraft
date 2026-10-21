@@ -4,6 +4,7 @@ import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -42,8 +43,12 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static Colony colony(GameTestHelper helper) {
-		helper.setBlock(CORE, ModBlocks.COLONY_CORE);
-		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CORE)).orElseThrow();
+		return colony(helper, CORE);
+	}
+
+	private static Colony colony(GameTestHelper helper, BlockPos core) {
+		helper.setBlock(core, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(core)).orElseThrow();
 		colony.setStockTargets(List.of());
 		return colony;
 	}
@@ -159,6 +164,52 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(step.isDone(state), "not done at " + relative(helper, step.pos()) + ": " + state);
 			}
 			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
+		});
+	}
+
+	/**
+	 * In a 16x16 area of stone up to y=5, no ores: a dug spiral down to a landing at y=3, whose hall heads west
+	 * under a stone roof, with one branch each side of it. A miner digs the hall the colony posts once the landing
+	 * is dug, and only then the branches off it. The level is at y=3 because the halls of the 8x8 tests' shafts
+	 * run out of their areas, and their floors, at y=2 and y=0, are protected blocks no bot breaks.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2400)
+	public void aMinerDigsTheHallOfASpiralLevelThenTheBranchesOffIt(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 5, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(0, 6, 0));
+		// The colony mines only while it wants something mining yields.
+		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
+		int y = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(5, 6, 1)), List.of(y), 1, 3, 4, 1);
+		colony.setMineshaft(shaft);
+		for (BuildPlan.Step step : shaft.plan().steps()) {
+			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {
+				helper.getLevel().setBlockAndUpdate(step.pos(), step.state());
+			}
+		}
+		colony.removeBuild(shaft.plan());
+		List<BlockPos> hall = shaft.hallWork(y).orElseThrow().cells();
+		List<Mineshaft.Branch> branches = shaft.branches(y);
+		AntBot miner = member(helper, colony, new BlockPos(12, 6, 12));
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		// The scaffold blocks a miner keeps.
+		miner.getInventory().addItem(new ItemStack(Items.DIRT, 8));
+		helper.onEachTick(() -> {
+			if (hall.stream().anyMatch(cell -> !helper.getLevel().getBlockState(cell).isAir())
+					&& branches.stream().flatMap(branch -> branch.cells().stream()).anyMatch(cell -> helper.getLevel().getBlockState(cell).isAir())) {
+				helper.fail("a branch dug before the hall");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			for (Mineshaft.Branch branch : branches) {
+				for (BlockPos cell : branch.cells()) {
+					BlockState state = helper.getLevel().getBlockState(cell);
+					helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "branch not dug at " + relative(helper, cell).toShortString());
+				}
+			}
 		});
 	}
 
