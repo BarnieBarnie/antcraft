@@ -416,4 +416,26 @@ class TaskPlannerTest {
 
 		assertTrue(!plan.crafts().isEmpty() || !plan.missing().isEmpty(), "plan: " + plan);
 	}
+
+	@Test
+	void recipesSharingDeepIngredientsPlanQuickly() {
+		// A diamond lattice: both items on a level are made from one of each item on the next, so
+		// every need below the top is shared. With the need memo each item is worked out once, about
+		// 30 lookups; without it the search repeats every shared need, 2^depth lookups, while the
+		// expansions stay at half the lookups and so under the expansion budget.
+		int depth = 16;
+		Map<String, List<TaskPlanner.Recipe<String>>> byOutput = new HashMap<>();
+		for (int level = 0; level < depth; level++) {
+			Map<Set<String>, Integer> next = Map.of(Set.of("item_" + (level + 1) + "_0"), 1, Set.of("item_" + (level + 1) + "_1"), 1);
+			for (int i = 0; i < 2; i++) {
+				byOutput.put("item_" + level + "_" + i, List.of(recipe("item_" + level + "_" + i, 1, next)));
+			}
+		}
+
+		TaskPlanner.Plan<String> plan = planQuickly("item_0_0", 1, Map.of(), item -> byOutput.getOrDefault(item, List.of()), item -> item.startsWith("item_" + depth + "_"));
+
+		assertEquals("item_0_0", plan.crafts().getLast().recipe().output());
+		assertEquals(Map.of("item_16_0", 1 << (depth - 1), "item_16_1", 1 << (depth - 1)), plan.toGather(), "plan: " + plan);
+		assertEquals(Map.of(), plan.missing());
+	}
 }
