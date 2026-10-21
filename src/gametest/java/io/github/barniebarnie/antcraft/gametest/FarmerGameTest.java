@@ -379,6 +379,42 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Ripe wheat on a ledge too high to reach from the ground: the bot pillars up with dirt to harvest it, and
+	 * takes its pillar down once done, though harvesting is no build or tree job.
+	 */
+	@GameTest(maxTicks = 800)
+	public void takesDownThePillarItPlacedToReachACrop(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// A 5x5 ledge, four high, with the wheat in the middle: out of reach from the ground around it.
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(5, 4, 5, Blocks.FARMLAND);
+		helper.setBlock(5, 5, 5, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		boolean[] pillared = {false};
+		helper.onEachTick(() -> pillared[0] |= dirtAboveFloor(helper) > 0);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 1, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
+			helper.assertTrue(pillared[0], "never pillared up");
+			helper.assertTrue(dirtAboveFloor(helper) == 0, dirtAboveFloor(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+		});
+	}
+
+	private static int dirtAboveFloor(GameTestHelper helper) {
+		int found = 0;
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+			if (helper.getBlockState(pos).is(Blocks.DIRT)) {
+				found++;
+			}
+		}
+		return found;
+	}
+
 	@GameTest(maxTicks = 1200)
 	public void colonyBotOfAnotherRoleTillsPlantsAndWatersTheField(GameTestHelper helper) {
 		BlockPos source = new BlockPos(7, 0, 7);

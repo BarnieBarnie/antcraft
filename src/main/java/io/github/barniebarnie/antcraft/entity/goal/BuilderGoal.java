@@ -132,8 +132,6 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	public BuilderGoal(AntBot bot) {
 		super(bot);
 		this.follower.setScaffold(SCAFFOLD);
-		// Every block placed on the way is scaffold, taken down once the plan is done; plans never get scaffold where their own blocks go.
-		this.follower.setPlaceListener(pos -> this.bot.addScaffold(pos));
 		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, this::stopTravel);
 	}
 
@@ -148,7 +146,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/**
 	 * Work between jobs, for any bot: taking down scaffolding a job left up, such as one it was called away from,
-	 * a tree's as well as a build's. Never a block a plan placed, which the colony protects.
+	 * from any job, as every block a path places is scaffold. Never a block a plan placed, which the colony protects.
 	 */
 	@Override
 	protected boolean betweenJobs(ServerLevel level, Colony colony) {

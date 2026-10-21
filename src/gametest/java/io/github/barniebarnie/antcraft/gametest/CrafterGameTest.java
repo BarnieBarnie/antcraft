@@ -355,6 +355,36 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A core on a ledge too high to reach from the ground: the bot pillars up with dirt to craft the order there,
+	 * and takes its pillar down once done, though crafting is no build or tree job.
+	 */
+	@GameTest(maxTicks = 600)
+	public void takesDownThePillarItPlacedToReachTheCore(GameTestHelper helper) {
+		// A 5x5 ledge, four high, with the core in the middle: out of reach from the ground around it.
+		BlockPos ledge = new BlockPos(5, 5, 5);
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(ledge, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(ledge)).orElseThrow();
+		colony.setRadius(6);
+		colony.setStockTargets(List.of());
+		Container core = (Container) helper.getBlockEntity(ledge, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_LOG, 2));
+		colony.addOrder(Items.STICK, 4);
+		AntBot bot = colonyGuard(helper, colony, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		boolean[] pillared = watchFor(helper, Blocks.DIRT);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core.countItem(Items.STICK) >= 4, "core has " + core.countItem(Items.STICK) + " sticks");
+			helper.assertTrue(pillared[0], "never pillared up");
+			helper.assertTrue(blocksInArea(helper, Blocks.DIRT) == 0, blocksInArea(helper, Blocks.DIRT) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+		});
+	}
+
 	private static int blocksInArea(GameTestHelper helper, Block block) {
 		int found = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {

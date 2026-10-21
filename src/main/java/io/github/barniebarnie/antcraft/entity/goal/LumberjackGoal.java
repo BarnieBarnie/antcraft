@@ -73,11 +73,6 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	private enum State { SEARCH, RESTOCK, UPGRADE, CHOP, CLEANUP, COLLECT, FETCH_SAPLING, REPLANT, DEPOSIT }
 
 	/**
-	 * States in which placed blocks are scaffolding for the current tree, to be removed afterwards.
-	 * Not {@link State#CLEANUP}: cleanup never places blocks, or it would have to remove them again.
-	 */
-	private static final Set<State> TREE_WORK = EnumSet.of(State.CHOP);
-	/**
 	 * States that never place blocks. Collecting comes after cleanup, so blocks placed then would be
 	 * left behind; drops it cannot walk to (say, on a canopy left to decay) fall down later.
 	 */
@@ -134,11 +129,6 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, () -> {
 			this.travelGoal = null;
 			this.follower.stop();
-		});
-		this.follower.setPlaceListener(pos -> {
-			if (TREE_WORK.contains(this.state) || this.scaffoldCleanup.isRetrying() || this.resumeTree) {
-				this.bot.addScaffold(pos);
-			}
 		});
 	}
 

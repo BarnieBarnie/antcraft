@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
  * retried once the rest is down: the bot pillars up to them, and that pillar is taken down in turn,
  * under it. Retries are limited per {@link #reset}, and a block it cannot reach even by pillaring is
  * left behind, and so is one it cannot see from anywhere in reach, since like a player it breaks
- * only blocks in sight. Shared by the work that pillars up: trees and builds.
+ * only blocks in sight, and one it stands on with a drop below further than a path may take. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -76,11 +76,6 @@ final class ScaffoldCleanup {
 		this.retrying = null;
 	}
 
-	/** Whether it is pillaring up to a block it could not reach otherwise; the blocks placed for that are scaffold too. */
-	boolean isRetrying() {
-		return this.retrying != null;
-	}
-
 	/**
 	 * Works on the cleanup for a tick, with the follower not placing blocks except while retrying.
 	 * Blocks that {@code keep} holds, such as ones a builder placed for its plan, are never taken
@@ -117,6 +112,11 @@ final class ScaffoldCleanup {
 		Goal reach = this.inSight(next);
 		if (reach.isReached(feet) && this.bot.onGround()) {
 			this.stopTravel.run();
+			if (next.equals(feet.below()) && fallUnder(level, next) > PathFollower.MAX_DROP) {
+				// Taking it down from under itself would drop the bot further than a path may: it leaves it up.
+				this.abandoned.add(next);
+				return false;
+			}
 			if (this.breaker.tick(level, next, true)) {
 				placed.remove(next);
 			}
@@ -124,6 +124,16 @@ final class ScaffoldCleanup {
 			this.unreachable.add(next);
 		}
 		return false;
+	}
+
+	/** How far the bot standing on {@code pos} falls once that block is gone. */
+	private static int fallUnder(ServerLevel level, BlockPos pos) {
+		BlockPos.MutableBlockPos below = pos.below().mutable();
+		while (below.getY() > level.getMinY() && level.getBlockState(below).getCollisionShape(level, below).isEmpty()
+				&& level.getFluidState(below).isEmpty()) {
+			below.move(0, -1, 0);
+		}
+		return pos.getY() - below.getY();
 	}
 
 	/** Pillars up to the scaffold block being retried; once there, cleanup looks at every block again from up there. */

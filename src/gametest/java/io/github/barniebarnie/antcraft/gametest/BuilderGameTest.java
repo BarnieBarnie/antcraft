@@ -1695,4 +1695,26 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(strayDirt(helper) == 0, "dirt scaffold left standing");
 		});
 	}
+
+	/**
+	 * A bot standing on a lone scaffold block five blocks up, with nothing else under it, does not take that block
+	 * down from under itself: it would fall further than a path may drop and get hurt. It leaves the block up.
+	 */
+	@GameTest(maxTicks = 200)
+	public void doesNotTakeDownScaffoldItWouldFallFarFrom(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos floating = new BlockPos(4, 5, 4);
+		helper.setBlock(floating, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.addScaffold(helper.absolutePos(floating));
+		bot.setHealth(bot.getMaxHealth());
+
+		helper.runAfterDelay(150, () -> {
+			helper.assertBlockPresent(Blocks.DIRT, floating);
+			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
+			helper.assertTrue(bot.getScaffold().isEmpty(), "still taking it down: " + bot.getScaffold());
+			helper.succeed();
+		});
+	}
 }

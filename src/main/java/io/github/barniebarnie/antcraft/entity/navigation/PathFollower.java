@@ -10,7 +10,6 @@ import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.pathing.Step;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -43,7 +42,8 @@ public class PathFollower {
 	public enum Status { RUNNING, ARRIVED, FAILED }
 
 	private static final int MAX_NODES = 4000;
-	private static final int MAX_DROP = 3;
+	/** How far a path may drop the bot, and so how far it may fall unhurt. */
+	public static final int MAX_DROP = 3;
 	private static final int MAX_REPLANS_WITHOUT_PROGRESS = 5;
 	private static final int STEP_BASE_BUDGET = 60;
 	/** Extra ticks for a swim step: bots swim slowly, and bob up and down at the surface. */
@@ -64,17 +64,10 @@ public class PathFollower {
 	private final BlockBreaker breaker;
 	private boolean mayPlace = true;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
-	private Consumer<BlockPos> placeListener = pos -> {
-	};
 
 	public PathFollower(AntBot bot) {
 		this.bot = bot;
 		this.breaker = new BlockBreaker(bot);
-	}
-
-	/** Called with every block this follower places, so callers can clean up their scaffolding. */
-	public void setPlaceListener(Consumer<BlockPos> listener) {
-		this.placeListener = listener;
 	}
 
 	/** Whether paths may place scaffold blocks; applies from the next path planned. */
@@ -240,8 +233,9 @@ public class PathFollower {
 				level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
 				this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 				stack.shrink(1);
+				// Placed only to get somewhere, whatever the job: the bot takes it down again once done (see BuilderGoal).
 				this.bot.addPathScaffold(pos);
-				this.placeListener.accept(pos.immutable());
+				this.bot.addScaffold(pos);
 				return true;
 			}
 		}
