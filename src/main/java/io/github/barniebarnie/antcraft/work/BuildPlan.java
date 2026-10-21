@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -10,6 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.IntStream;
@@ -141,6 +143,50 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	public BuildPlan batch(int index) {
 		Batch batch = this.batches.get(index);
 		return new BuildPlan(this.steps.subList(batch.from(), batch.to()), List.of(), this.kind);
+	}
+
+	/** Columns per side of a cell at most (see {@link #inCells}). */
+	public static final int CELL = 4;
+
+	/**
+	 * This plan with each batch that spreads over more than a square of {@link #CELL} columns split into cells, so
+	 * several bots work it at once: squares of columns of about the same size, each of every height. A cell keeps
+	 * the order of its steps, so in each column what a block rests on is still placed, and what is in its way dug,
+	 * first. Each cell needs every cell of the batches its batch needs, so one on top of another waits for the one
+	 * below. A batch that fits one square stays one batch, so a small plan stays as it is.
+	 */
+	public BuildPlan inCells() {
+		List<Step> steps = new ArrayList<>();
+		List<Batch> batches = new ArrayList<>();
+		// The cells each batch became, by index.
+		List<List<Integer>> cellsOf = new ArrayList<>();
+		for (Batch batch : this.batches) {
+			List<Step> of = this.steps.subList(batch.from(), batch.to());
+			List<Integer> needs = batch.needs().stream().flatMap(need -> cellsOf.get(need).stream()).toList();
+			int minX = of.stream().mapToInt(step -> step.pos().getX()).min().orElse(0);
+			int minZ = of.stream().mapToInt(step -> step.pos().getZ()).min().orElse(0);
+			int width = of.stream().mapToInt(step -> step.pos().getX()).max().orElse(0) - minX + 1;
+			int depth = of.stream().mapToInt(step -> step.pos().getZ()).max().orElse(0) - minZ + 1;
+			int across = Math.ceilDiv(width, CELL);
+			int down = Math.ceilDiv(depth, CELL);
+			Map<Integer, List<Step>> cells = new TreeMap<>();
+			for (Step step : of) {
+				int cell = (step.pos().getZ() - minZ) * down / depth * across + (step.pos().getX() - minX) * across / width;
+				cells.computeIfAbsent(cell, c -> new ArrayList<>()).add(step);
+			}
+			if (cells.isEmpty()) {
+				// Kept, empty, so the batches after it keep their place.
+				cells.put(0, List.of());
+			}
+			List<Integer> made = new ArrayList<>();
+			for (List<Step> cell : cells.values()) {
+				made.add(batches.size());
+				batches.add(new Batch(steps.size(), steps.size() + cell.size(), needs, batch.dig()));
+				steps.addAll(cell);
+			}
+			cellsOf.add(made);
+		}
+		return new BuildPlan(steps, batches, this.kind);
 	}
 
 	/** The batches not {@code done} yet whose needed batches are all done, by index. */

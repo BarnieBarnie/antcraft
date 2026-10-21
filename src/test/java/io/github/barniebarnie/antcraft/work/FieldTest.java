@@ -10,10 +10,20 @@ import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.block.Blocks;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class FieldTest {
 	private static final BlockPos CORE = new BlockPos(0, 1, 0);
+
+	@BeforeAll
+	static void bootstrap() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
 
 	/** Flat soil at y=0 over the square of {@code size} around the core; everything above is open. */
 	private static Set<BlockPos> flatSoil(int size) {
@@ -99,5 +109,18 @@ class FieldTest {
 	@Test
 	void fullyPlantedFieldNeedsNothing() {
 		assertTrue(new Field(new BlockPos(5, 0, 5)).toPlant(pos -> true).isEmpty());
+	}
+
+	@Test
+	void readyingAFieldIsSplitInCellsSeveralBotsCanTakeAtOnce() {
+		Field field = new Field(new BlockPos(5, 0, 5));
+		// Rock where the soil goes, and rock over it.
+		BuildPlan plan = field.plan(pos -> Blocks.STONE.defaultBlockState()).orElseThrow();
+
+		assertEquals(8, plan.batches().size(), "batches: " + plan.batches());
+		assertEquals(List.of(0, 1, 2, 3), plan.ready(Set.of()));
+		assertTrue(plan.batches().subList(0, 4).stream().allMatch(BuildPlan.Batch::dig));
+		// The soil once the crop layer above it is clear.
+		assertEquals(List.of(4, 5, 6, 7), plan.ready(Set.of(0, 1, 2, 3)));
 	}
 }

@@ -60,7 +60,7 @@ public record Field(BlockPos center) {
 
 	/**
 	 * The plan that readies the field for planting: what would keep a crop out of the crop layer cleared, and dirt
-	 * where the soil cannot be tilled, such as rock. The middle is left for the water. Empty if it is ready.
+	 * where the soil cannot be tilled, such as rock, in cells (see {@link BuildPlan#inCells}). The middle is left for the water. Empty if it is ready.
 	 */
 	public Optional<BuildPlan> plan(Function<BlockPos, BlockState> world) {
 		List<BuildPlan.Step> clear = new ArrayList<>();
@@ -82,7 +82,7 @@ public record Field(BlockPos center) {
 		if (!soil.isEmpty()) {
 			batches.add(new BuildPlan.Batch(clear.size(), steps.size(), batches.isEmpty() ? List.of() : List.of(0)));
 		}
-		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM));
+		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM).inCells());
 	}
 
 	/**

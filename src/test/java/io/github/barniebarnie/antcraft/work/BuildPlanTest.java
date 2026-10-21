@@ -577,4 +577,50 @@ class BuildPlanTest {
 		assertEquals(Optional.of(Items.STONE_PICKAXE), plan().needs(at(world(A, Blocks.IRON_ORE.defaultBlockState(), B, Blocks.STONE.defaultBlockState()))).tool());
 		assertEquals(Optional.empty(), plan().needs(at(world(A, Blocks.DIRT.defaultBlockState()))).tool());
 	}
+
+	/** The steps of a floor 6 by 6 at height {@code y}, row by row. */
+	private static List<BuildPlan.Step> floor(int y) {
+		List<BuildPlan.Step> steps = new java.util.ArrayList<>();
+		for (BlockPos pos : BlockPos.betweenClosed(0, y, 0, 5, y, 5)) {
+			steps.add(new BuildPlan.Step(pos, Blocks.COBBLESTONE.defaultBlockState()));
+		}
+		return steps;
+	}
+
+	@Test
+	void splitsA6x1x6FloorBatchIntoCellsAndACellOnTopWaitsForTheOnesBelow() {
+		List<BuildPlan.Step> steps = new java.util.ArrayList<>(floor(1));
+		steps.addAll(floor(2));
+		BuildPlan plan = new BuildPlan(steps, List.of(new BuildPlan.Batch(0, 36, List.of()), new BuildPlan.Batch(36, 72, List.of(0), true))).inCells();
+
+		// Each floor in four cells of 3x3 columns.
+		assertEquals(8, plan.batches().size());
+		for (int i = 0; i < 8; i++) {
+			List<BuildPlan.Step> cell = plan.batch(i).steps();
+			assertEquals(9, cell.size(), "cell " + i);
+			int y = i < 4 ? 1 : 2;
+			int x = cell.getFirst().pos().getX();
+			int z = cell.getFirst().pos().getZ();
+			assertTrue(cell.stream().allMatch(step -> step.pos().getY() == y && step.pos().getX() - x < 3 && step.pos().getZ() - z < 3), "cell " + i + ": " + cell);
+			assertEquals(i >= 4, plan.batches().get(i).dig(), "cell " + i);
+		}
+		assertEquals(Set.copyOf(steps), Set.copyOf(plan.steps()));
+		// The floor's cells at once; one on top only once the floor below is placed.
+		assertEquals(List.of(0, 1, 2, 3), plan.ready(Set.of()));
+		assertEquals(List.of(3), plan.ready(Set.of(0, 1, 2)));
+		assertEquals(List.of(4, 5, 6, 7), plan.ready(Set.of(0, 1, 2, 3)));
+	}
+
+	@Test
+	void aBatchThatFitsOneCellStaysOneBatch() {
+		// A pillar 4 high in a square of 4x4 columns: one cell, so one job.
+		List<BuildPlan.Step> steps = new java.util.ArrayList<>();
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 3, 4, 3)) {
+			steps.add(new BuildPlan.Step(pos, Blocks.COBBLESTONE.defaultBlockState()));
+		}
+		BuildPlan plan = new BuildPlan(steps);
+
+		assertEquals(plan, plan.inCells());
+		assertEquals(plan(), plan().inCells());
+	}
 }

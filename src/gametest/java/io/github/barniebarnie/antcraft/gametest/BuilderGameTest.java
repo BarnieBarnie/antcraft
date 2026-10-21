@@ -491,6 +491,57 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * In a 16x16 area with room all round, a copied floor 8 by 8 and two layers high is four cells a layer. One bot
+	 * builds it alone; then it is taken down and three bots build it again, together, in well under the time the one took.
+	 */
+	// Measured: one bot about 1070 ticks, three about 490.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2400)
+	public void threeBotsBuildACopyFasterThanOneAlone(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper);
+		// Enough for both builds, so nothing is ordered.
+		for (int slot = 0; slot < 4; slot++) {
+			core(helper).setItem(slot, new ItemStack(Items.COBBLESTONE, 64));
+		}
+		BlockPos from = helper.absolutePos(new BlockPos(4, 1, 4));
+		BlockPos to = helper.absolutePos(new BlockPos(11, 2, 11));
+		Runnable build = () -> colony.addBuild(RegionPlan.copy(pos -> COBBLE, from, to, from).orElseThrow());
+		build.run();
+		member(helper, colony, 2, 3);
+
+		// The ticks the one bot took, then the three.
+		long[] took = {-1, -1};
+		long[] started = {helper.getTick()};
+		helper.onEachTick(() -> {
+			if (took[1] >= 0 || !colony.builds().isEmpty()) {
+				return;
+			}
+			if (took[0] < 0) {
+				took[0] = helper.getTick() - started[0];
+				for (BlockPos pos : BlockPos.betweenClosed(4, 1, 4, 11, 2, 11)) {
+					helper.setBlock(pos, Blocks.AIR);
+				}
+				build.run();
+				member(helper, colony, 3, 2);
+				member(helper, colony, 2, 2);
+				started[0] = helper.getTick();
+			} else {
+				took[1] = helper.getTick() - started[0];
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(took[1] >= 0, "not built twice yet; the one bot took " + took[0]);
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "blocked steps: " + colony.blockedSteps());
+			for (BlockPos pos : BlockPos.betweenClosed(4, 1, 4, 11, 2, 11)) {
+				assertState(helper, pos.getX(), pos.getY(), pos.getZ(), COBBLE);
+			}
+			helper.assertTrue(took[1] * 3 < took[0] * 2, "three bots took " + took[1] + " ticks, one alone " + took[0]);
+		});
+	}
+
 	@GameTest(maxTicks = 20)
 	public void buildCommandsAreOperatorOnly(GameTestHelper helper) {
 		Colony colony = colony(helper);
