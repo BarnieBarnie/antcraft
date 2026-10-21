@@ -5,7 +5,6 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
@@ -47,15 +46,12 @@ import org.jspecify.annotations.Nullable;
  * first takes the best one in the core. Before mining a level it makes sure a pickaxe good enough for the
  * ores the colony wants there is in hand or on its way. When it is full, it leaves what the core does not
  * want in a landing chest on the way; the core wants what open orders need, their ingredients included,
- * and what the colony is short of a stock target of. A bot of another role stores its haul after each
- * branch. Like a player, it only breaks a block it can see from within reach, not one behind a wall. A
- * branch with cells it cannot get within reach and sight of goes back on the board to retry later, and
- * is given up after a few tries. A bot whose pickaxe is not good enough for a branch leaves it a while to
- * a free member that carries one.
- * As the miner's role goal it makes sure it has a pickaxe (from the core, or by ordering one), now and
- * then looks for a better one (it swaps to one in the core, leaving the old one there, or orders the best
- * one the colony can make), and stores its haul, of dig jobs too, such as the ground of a terraform above its
- * height, which it takes through {@link WorkerGoal} like any bot.
+ * and what the colony is short of a stock target of. It stores its haul after each branch. Like a player,
+ * it only breaks a block it can see from within reach, not one behind a wall. A branch with cells it cannot
+ * get within reach and sight of goes back on the board to retry later, and is given up after a few tries. A
+ * bot whose pickaxe is not good enough for a branch leaves it a while to a free member that carries one.
+ * While mining it now and then looks for a better pickaxe: it swaps to one in the core, leaving the old one
+ * there, or orders the best one the colony can make.
  */
 public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Scaffold blocks a miner keeps to climb out of its pit. */
@@ -87,23 +83,26 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private WorkerGoal.@Nullable Outcome outcome;
 
 	public MinerGoal(AntBot bot) {
-		super(bot, BotRole.MINER);
+		super(bot);
 		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
 	}
 
+	/**
+	 * Between jobs, for any bot too full to take on more digging: unloads, leaving what the core does not want in
+	 * a landing chest on the way (see {@link #deposit}).
+	 */
 	@Override
-	public void start() {
-		this.state = State.TOOL;
-	}
-
-	/** The miner's own work between branch jobs: a pickaxe, a better one, storing its haul and dig jobs. */
-	@Override
-	protected void work(ServerLevel level, Colony colony) {
-		switch (this.state) {
-			case TOOL -> this.getTool(level, colony);
-			case WORK -> this.roleWork(level, colony);
-			case DEPOSIT -> this.deposit(level, colony);
+	protected boolean betweenJobs(ServerLevel level, Colony colony) {
+		if (this.state != State.DEPOSIT) {
+			Container core = Storage.containerAt(level, colony.core());
+			// ponytail: a full core is taken as no room anywhere, landing chests included; check those too if bots idle full by a mine.
+			if (freeSlots(this.bot.getInventory()) >= MIN_FREE_SLOTS || !this.hasItemsToStore() || core == null || freeSlots(core) == 0) {
+				return false;
+			}
+			this.enter(State.DEPOSIT);
 		}
+		this.deposit(level, colony);
+		return true;
 	}
 
 	@Override
@@ -191,13 +190,13 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return BRANCH_TRIES;
 	}
 
-	/** Ends the job begun; a bot of another role then stores its haul, which it would keep from the colony. */
+	/** Ends the job begun, then stores its haul, which it would otherwise keep from the colony. */
 	private void endJob(WorkerGoal.Outcome how) {
 		this.outcome = how;
 		this.job = null;
 		this.unreachable.clear();
 		this.bot.setWorking(false);
-		this.enter(this.bot.getRole() != BotRole.MINER && this.hasItemsToStore() ? State.DEPOSIT : State.WORK);
+		this.enter(this.hasItemsToStore() ? State.DEPOSIT : State.WORK);
 	}
 
 	private Optional<Colony> colony(ServerLevel level) {
@@ -209,18 +208,6 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		this.forCore = null;
 		this.unloaded = false;
 		this.resetMovement();
-	}
-
-	/** For the miner's role: takes the best pickaxe in the core, or orders one. */
-	private void getTool(ServerLevel level, Colony colony) {
-		if (this.hasPickaxe()) {
-			this.enter(State.WORK);
-			return;
-		}
-		if (!this.takePickaxe(level, colony)) {
-			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
-			this.cooldown = IDLE_TICKS;
-		}
 	}
 
 	/** For a branch job: takes the best pickaxe in the core, or gives the job back when there is none. */
@@ -246,26 +233,6 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.WORK);
 		}
 		return true;
-	}
-
-	/** The miner's role work: a better pickaxe and unloading its haul; branch and dig jobs come through {@link WorkerGoal}. */
-	private void roleWork(ServerLevel level, Colony colony) {
-		if (!this.hasPickaxe()) {
-			this.enter(State.TOOL);
-			return;
-		}
-		if (this.upgradeTool(level, colony, ToolKind.PICKAXE)) {
-			return;
-		}
-		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS) {
-			this.enter(State.DEPOSIT);
-			return;
-		}
-		if (this.hasItemsToStore()) {
-			this.enter(State.DEPOSIT);
-		} else {
-			this.cooldown = IDLE_TICKS;
-		}
 	}
 
 	/** Digs out the branch of the job begun, lighting it, then completes the job, or gives it back to retry when cells are out of reach. */

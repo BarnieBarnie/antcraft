@@ -8,9 +8,9 @@ import io.github.barniebarnie.antcraft.colony.JobBoard;
 import io.github.barniebarnie.antcraft.colony.JobScore;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -27,22 +27,23 @@ import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The work loop of every colony bot: claims the job that {@link JobScore} rates best for the bot, of any
- * type it has an executor for, and runs it there. It heartbeats the job while the executor works on it,
- * and completes, releases or retries it as the executor reports. So far tree and replant jobs
- * ({@link LumberjackGoal}), crop jobs ({@link FarmerGoal}), branch jobs ({@link MinerGoal}), craft and Bot Core jobs
- * ({@link CrafterGoal}), haul jobs ({@link HaulerGoal}) and build and dig jobs ({@link BuilderGoal}) are taken this
- * way, by a bot of any role; the
- * other job types stay with their role goals until they move here. Until then a bot's role is a bonus in the score: a job of its own role
- * that scores better is left to the role's goal. Runs ahead of the role goals, and takes the bot from one
- * only while that reports no work.
+ * The work loop of every colony bot, all alike: claims the job that {@link JobScore} rates best for the bot and
+ * runs it on the executor of its type: tree and replant jobs on {@link LumberjackGoal}, crop jobs on
+ * {@link FarmerGoal}, branch jobs on {@link MinerGoal}, craft and Bot Core jobs on {@link CrafterGoal}, haul jobs
+ * on {@link HaulerGoal} and build and dig jobs on {@link BuilderGoal}. It heartbeats the job while the executor
+ * works on it, and completes, releases or retries it as the executor reports.
+ * <p>
+ * With no job to take it does the work between jobs (see {@link ColonyWorkGoal#upkeep}): it arms itself from the
+ * core, swaps a tool it carries for a better one, takes down scaffolding left up, unloads a full pack, stores
+ * produce and shears sheep, and keeps the core and storage, picking up loose items. While scaffolding is up it
+ * takes only jobs that take it down when done. A job that turns up meanwhile takes the bot from that. Only with none of it to do is the bot idle.
  */
 public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** What became of a job, as its executor reports it. */
 	enum Outcome { COMPLETE, RELEASE, RETRY }
 
 	/** Runs the jobs of some types for the worker goal. */
-	interface Executor {
+	public interface Executor {
 		/** Whether this bot could start on the job now. */
 		boolean isReady(ServerLevel level, Colony colony, Job job);
 
@@ -68,16 +69,8 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return LumberjackGoal.TREE_TRIES;
 		}
 	}
-	/** The job types each role's goal does, preferred by bots of that role. */
-	private static final Map<BotRole, Set<JobType>> ROLE_JOBS = Map.of(
-		BotRole.LUMBERJACK, EnumSet.of(JobType.CHOP_TREE, JobType.REPLANT),
-		BotRole.MINER, EnumSet.of(JobType.MINE_BRANCH, JobType.CLEAR_AREA),
-		BotRole.FARMER, EnumSet.of(JobType.HARVEST_CROP, JobType.PLANT_CROP),
-		// Dig jobs are the miners' own; any bot takes them too, builders included, without the bonus.
-		BotRole.BUILDER, EnumSet.of(JobType.BUILD),
-		BotRole.CRAFTER, EnumSet.of(JobType.CRAFT, JobType.ACTIVATE_BOT),
-		BotRole.HAULER, EnumSet.of(JobType.HAUL)
-	);
+	/** Jobs whose executor takes down all the bot's scaffolding when done, so a bot with some up may take them. */
+	private static final Set<JobType> CLEARS_SCAFFOLD = EnumSet.of(JobType.CHOP_TREE, JobType.BUILD, JobType.CLEAR_AREA);
 	/** How often an idle bot looks at the board. */
 	private static final int CHECK_TICKS = 10;
 	/**
@@ -90,12 +83,16 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private final AntBot bot;
 	/** The executor of each job type claimed here. */
 	private final Map<JobType, Executor> executors;
+	/** The work between jobs, in the order it is looked for. */
+	private final List<ColonyWorkGoal> upkeeps;
+	/** The work between jobs the bot is at, or null. */
+	private @Nullable ColonyWorkGoal upkeep;
 	/** The executor of the job begun last, at work on it or on what follows it. */
 	private @Nullable Executor active;
 	/** The job claimed, until its executor reports what became of it. */
 	private @Nullable Job job;
 	private Optional<Job> last = Optional.empty();
-	/** Whether the executor is still at work, on the job or on what follows it. */
+	/** Whether the executor is still at work, on the job or on what follows it, or the bot on work between jobs. */
 	private boolean busy;
 	private long nextCheck;
 
@@ -108,7 +105,31 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			JobType.CRAFT, crafter, JobType.ACTIVATE_BOT, crafter,
 			JobType.HAUL, hauler,
 			JobType.BUILD, builder, JobType.CLEAR_AREA, builder);
+		// Arming and better tools are the same for every bot; the shared plumbing does them.
+		List<ColonyWorkGoal> upkeeps = new ArrayList<>();
+		upkeeps.add(new ColonyWorkGoal(bot) {
+			@Override
+			protected boolean betweenJobs(ServerLevel level, Colony colony) {
+				return this.armFromCore(level, colony);
+			}
+		});
+		// One each, as each looks for an upgrade only now and then.
+		for (ToolKind kind : List.of(ToolKind.PICKAXE, ToolKind.AXE, ToolKind.HOE)) {
+			upkeeps.add(new ColonyWorkGoal(bot) {
+				@Override
+				protected boolean betweenJobs(ServerLevel level, Colony colony) {
+					return kind.bestCarried(this.bot) != null && this.upgradeTool(level, colony, kind);
+				}
+			});
+		}
+		upkeeps.addAll(List.of(builder, miner, farmer, hauler));
+		this.upkeeps = List.copyOf(upkeeps);
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+	}
+
+	/** The executor of jobs of {@code type}, such as for a game test to set it up. */
+	public Executor executor(JobType type) {
+		return this.executors.get(type);
 	}
 
 	@Override
@@ -118,7 +139,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return false;
 		}
 		this.nextCheck = level.getGameTime() + CHECK_TICKS;
-		this.busy = this.colony(level).map(colony -> this.next(level, colony)).orElse(false);
+		this.busy = this.colony(level).map(colony -> this.next(level, colony) || this.startUpkeep(level, colony)).orElse(false);
 		return this.busy;
 	}
 
@@ -143,6 +164,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.active.reset();
 			this.active = null;
 		}
+		this.stopUpkeep();
 		this.bot.setWorking(false);
 	}
 
@@ -160,6 +182,18 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (this.job != null && level.getGameTime() % 20 == 0) {
 			board.heartbeat(this.bot.getUUID(), level.getGameTime());
 		}
+		if (this.upkeep != null) {
+			// A job that turns up takes the bot from work between jobs.
+			if (level.getGameTime() >= this.nextCheck) {
+				this.nextCheck = level.getGameTime() + CHECK_TICKS;
+				if (this.next(level, colony.get())) {
+					this.busy = true;
+					return;
+				}
+			}
+			this.busy = this.upkeep.upkeep(level, colony.get()) || this.startUpkeep(level, colony.get());
+			return;
+		}
 		if (this.active != null) {
 			this.busy = this.active.work(level);
 			this.active.takeOutcome().ifPresent(outcome -> this.report(level, colony.get(), outcome));
@@ -167,7 +201,32 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.busy = false;
 		}
 		if (!this.busy) {
-			this.busy = this.next(level, colony.get());
+			this.busy = this.next(level, colony.get()) || this.startUpkeep(level, colony.get());
+		}
+	}
+
+	/**
+	 * Starts on the first work between jobs there is, other than the one the bot was just at, so one that
+	 * keeps finding a little to do does not keep the others waiting. Returns false when there is none.
+	 */
+	private boolean startUpkeep(ServerLevel level, Colony colony) {
+		ColonyWorkGoal done = this.upkeep;
+		this.stopUpkeep();
+		for (ColonyWorkGoal next : this.upkeeps) {
+			if (next != done && next.upkeep(level, colony)) {
+				this.upkeep = next;
+				this.bot.setWorking(true);
+				return true;
+			}
+		}
+		this.bot.setWorking(false);
+		return false;
+	}
+
+	private void stopUpkeep() {
+		if (this.upkeep != null) {
+			this.upkeep.resetMovement();
+			this.upkeep = null;
 		}
 	}
 
@@ -201,20 +260,21 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		JobBoard board = colony.board();
 		UUID id = this.bot.getUUID();
 		long now = level.getGameTime();
-		Set<JobType> own = ROLE_JOBS.getOrDefault(this.bot.getRole(), Set.of());
 		while (true) {
 			Optional<Job> held = board.jobOf(id);
 			if (held.isEmpty()) {
-				JobScore score = this.score(level, colony, own);
-				Optional<Job> best = board.best(now, open -> this.executors.containsKey(open.type())
-					? this.executors.get(open.type()).isReady(level, colony, open) : own.contains(open.type()), score);
-				// A job of the bot's own role is left to the role's goal, which claims it itself.
-				if (best.isEmpty() || !this.executors.containsKey(best.get().type())) {
+				// Scaffolding left up, such as from a job the bot was called away from, comes down before other work
+				// (see BuilderGoal); only jobs that take scaffolding down at their end may come first.
+				boolean scaffoldUp = !this.bot.getScaffold().isEmpty();
+				JobScore score = this.score(level, colony);
+				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()))
+					&& this.executors.get(open.type()).isReady(level, colony, open), score);
+				if (best.isEmpty()) {
 					return false;
 				}
 				held = board.claim(id, now, open -> open.id().equals(best.get().id()), score);
 			}
-			if (held.isEmpty() || !this.executors.containsKey(held.get().type())) {
+			if (held.isEmpty()) {
 				return false;
 			}
 			Executor executor = this.executors.get(held.get().type());
@@ -222,8 +282,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				if (this.active != null && this.active != executor) {
 					this.active.reset();
 				}
+				this.stopUpkeep();
 				this.active = executor;
 				this.job = held.get();
+				this.bot.setJobType(this.job.type());
 				return true;
 			}
 			board.complete(held.get().id());
@@ -236,7 +298,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	 * found one lying near the site. A tool the colony has no good enough one of costs a bot that carries
 	 * a weaker one {@link #WEAK_TOOL_COST}.
 	 */
-	private JobScore score(ServerLevel level, Colony colony, Set<JobType> own) {
+	private JobScore score(ServerLevel level, Colony colony) {
 		List<Item> carried = Stream.concat(this.bot.getInventory().getItems().stream(), Stream.of(this.bot.getMainHandItem()))
 			.filter(stack -> !stack.isEmpty()).map(ItemStack::getItem).toList();
 		// ponytail: only the core counts as a source; storage chests join when a job type needs them.
@@ -252,7 +314,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 			return new ItemStack(item).is(ItemTags.SAPLINGS) ? 0 : Double.POSITIVE_INFINITY;
 		};
-		return new JobScore(this.bot.blockPosition(), carried, ColonyWorkGoal.freeSlots(this.bot.getInventory()), this.last, fetch, own);
+		return new JobScore(this.bot.blockPosition(), carried, ColonyWorkGoal.freeSlots(this.bot.getInventory()), this.last, fetch);
 	}
 
 	private Optional<Colony> colony(ServerLevel level) {

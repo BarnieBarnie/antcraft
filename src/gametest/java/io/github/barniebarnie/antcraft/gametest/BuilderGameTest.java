@@ -6,7 +6,6 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -83,11 +82,18 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return (Container) helper.getBlockEntity(CORE, BlockEntity.class);
 	}
 
-	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role, int x, int z) {
+	private static AntBot member(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(role);
 		return bot;
+	}
+
+	/**
+	 * Whether the only plan left, if any, is the mineshaft: an order for a bucket or flint and steel wants iron,
+	 * so the colony starts a mine for it.
+	 */
+	private static boolean onlyTheMineshaftLeft(Colony colony) {
+		return colony.builds().stream().allMatch(plan -> colony.mineshaft().filter(shaft -> shaft.plan().equals(plan)).isPresent());
 	}
 
 	private static BuildPlan.Step step(GameTestHelper helper, int x, int y, int z, BlockState state) {
@@ -110,7 +116,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			step(helper, 5, 1, 5, COBBLE),
 			step(helper, 5, 2, 5, COBBLE),
 			step(helper, 3, 1, 5, STAIRS_EAST))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(4, 1, 4));
@@ -135,7 +141,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			step(helper, 3, 1, 5, Blocks.OAK_PLANKS.defaultBlockState())),
 			List.of(new BuildPlan.Batch(0, 2, List.of()), new BuildPlan.Batch(2, 3, List.of(0))));
 		colony.addBuild(plan);
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] broken = {false};
 		helper.onEachTick(() -> {
@@ -158,7 +164,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	public void ordersMissingMaterialsAndBuildsOnceStocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
@@ -183,7 +189,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		helper.setBlock(5, 1, 5, Blocks.STONE);
 		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(5, 1, 5))))));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 6, 6);
+		AntBot builder = member(helper, colony, 6, 6);
 
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
@@ -233,7 +239,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 
 		command(helper, PermissionSet.ALL_PERMISSIONS, copy(helper));
 		helper.assertTrue(colony.builds().size() == 1, "copy not added: " + colony.builds());
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 5, 1, 5, COBBLE);
@@ -255,7 +261,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 
 		command(helper, PermissionSet.ALL_PERMISSIONS, "antcraft colony build load antcraft:cobble_step " + coords(helper, 5, 1, 4) + " clockwise_90");
 		helper.assertTrue(colony.builds().size() == 1, "structure not added: " + colony.builds());
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 5, 1, 4, COBBLE);
@@ -279,7 +285,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(6, 2, 5, Blocks.DIRT);
 
 		command(helper, PermissionSet.ALL_PERMISSIONS, copy(helper));
-		AntBot farmer = member(helper, colony, BotRole.FARMER, 1, 4);
+		AntBot farmer = member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 5, 1, 5, COBBLE);
@@ -287,11 +293,10 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 5, 2, 5, STAIRS_EAST);
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(6, 2, 5));
 			helper.assertTrue(colony.builds().isEmpty(), "finished copy still listed");
-			helper.assertTrue(farmer.getRole() == BotRole.FARMER, "the farmer was made a builder");
 		});
 	}
 
-	/** Three batches of one plan that need none of the others are three jobs, taken by three bots of different roles at once. */
+	/** Three batches of one plan that need none of the others are three jobs, taken by three bots at once. */
 	@GameTest(maxTicks = 800)
 	public void threeBotsWorkOnThreeOpenBatchesOfOnePlanAtOnce(GameTestHelper helper) {
 		Colony colony = colony(helper);
@@ -304,8 +309,8 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		}
 		colony.addBuild(new BuildPlan(steps, List.of(new BuildPlan.Batch(0, 3, List.of()), new BuildPlan.Batch(3, 6, List.of()),
 			new BuildPlan.Batch(6, 9, List.of()))));
-		List<AntBot> bots = List.of(member(helper, colony, BotRole.BUILDER, 2, 2), member(helper, colony, BotRole.FARMER, 4, 2),
-			member(helper, colony, BotRole.LUMBERJACK, 6, 2));
+		List<AntBot> bots = List.of(member(helper, colony, 2, 2), member(helper, colony, 4, 2),
+			member(helper, colony, 6, 2));
 
 		boolean[] together = {false};
 		helper.onEachTick(() -> together[0] |= bots.stream().allMatch(bot -> colony.board().jobOf(bot.getUUID()).isPresent()));
@@ -340,7 +345,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(4, 2, 4, Blocks.DIRT);
 		colony.addBuild(RegionPlan.copy(helper.getLevel()::getBlockState,
 			helper.absolutePos(new BlockPos(5, 1, 1)), helper.absolutePos(new BlockPos(6, 2, 2)), helper.absolutePos(new BlockPos(4, 1, 4))).orElseThrow());
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 4, 1, 4, doorLower);
@@ -363,7 +368,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		}
 		colony.addBuild(RegionPlan.copy(helper.getLevel()::getBlockState,
 			helper.absolutePos(new BlockPos(0, 1, 7)), helper.absolutePos(new BlockPos(7, 2, 7)), helper.absolutePos(new BlockPos(0, 1, 4))).orElseThrow());
-		List<AntBot> builders = List.of(member(helper, colony, BotRole.BUILDER, 2, 2), member(helper, colony, BotRole.BUILDER, 5, 2));
+		List<AntBot> builders = List.of(member(helper, colony, 2, 2), member(helper, colony, 5, 2));
 
 		boolean[] together = {false};
 		helper.onEachTick(() -> {
@@ -427,7 +432,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(3, 1, 6, Blocks.COBBLESTONE);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 3, 1, 6, COBBLE), step(helper, 4, 1, 6, COBBLE),
 			step(helper, 5, 1, 6, COBBLE), step(helper, 6, 1, 6, COBBLE))));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		AntBot[] copy = {null};
 		helper.onEachTick(() -> {
@@ -453,7 +458,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
 		BlockPos planks = new BlockPos(4, 1, 4);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.OAK_PLANKS.defaultBlockState()))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		LevelWorldView view = new LevelWorldView(helper.getLevel(), new SimpleContainer(1), ItemStack.EMPTY, Set.of());
 		helper.succeedWhen(() -> {
@@ -469,7 +474,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
 		BlockPos planks = new BlockPos(4, 1, 4);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.OAK_PLANKS.defaultBlockState()))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		BlockPos pos = helper.absolutePos(planks);
 		LevelWorldView view = new LevelWorldView(helper.getLevel(), new SimpleContainer(1), ItemStack.EMPTY, Set.of());
@@ -628,7 +633,6 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		colony.setMineshaft(shaft);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
-		builder.setRole(BotRole.BUILDER);
 		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		carried.forEach(stack -> builder.getInventory().addItem(stack.copy()));
 
@@ -671,7 +675,6 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		colony.setMineshaft(shaft);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
-		builder.setRole(BotRole.BUILDER);
 		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 
 		helper.succeedWhen(() -> {
@@ -699,7 +702,6 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		for (BlockPos at : List.of(new BlockPos(1, 5, 1), new BlockPos(1, 5, 5))) {
 			AntBot builder = helper.spawn(ModEntities.ANT_BOT, at.getX(), at.getY(), at.getZ());
 			ColonyManager.get(helper.getLevel()).join(builder, colony);
-			builder.setRole(BotRole.BUILDER);
 			builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 			builders.add(builder);
 		}
@@ -730,7 +732,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))),
 			BuildPlan.Step.clear(helper.absolutePos(new BlockPos(5, 1, 3))),
 			step(helper, 5, 1, 5, COBBLE))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(5, 1, 3));
@@ -756,7 +758,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		colony.addBuild(new BuildPlan(List.of(
 			BuildPlan.Step.clear(helper.absolutePos(dirt)),
 			step(helper, 6, 1, 6, COBBLE))));
-		member(helper, colony, BotRole.BUILDER, 2, 4);
+		member(helper, colony, 2, 4);
 
 		helper.onEachTick(() -> {
 			if (!helper.getBlockState(dirt).is(Blocks.DIRT)) {
@@ -779,7 +781,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
 		BuildPlan.Step high = step(helper, 4, 7, 4, COBBLE);
 		colony.addBuild(new BuildPlan(List.of(high, step(helper, 6, 1, 6, COBBLE))));
-		member(helper, colony, BotRole.BUILDER, 2, 4);
+		member(helper, colony, 2, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 6, 1, 6, COBBLE);
@@ -806,8 +808,8 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			step(helper, 5, 1, 5, COBBLE)),
 			List.of(new BuildPlan.Batch(0, 1, List.of()), new BuildPlan.Batch(1, 2, List.of(0)),
 				new BuildPlan.Batch(2, 3, List.of()), new BuildPlan.Batch(3, 4, List.of(2)))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
-		member(helper, colony, BotRole.BUILDER, 1, 5);
+		member(helper, colony, 1, 4);
+		member(helper, colony, 1, 5);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(5, 1, 3));
@@ -827,7 +829,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(4, 2, 4, Blocks.BEDROCK);
 		BuildPlan.Step door = new BuildPlan.Step(helper.absolutePos(new BlockPos(4, 1, 4)), Blocks.OAK_DOOR.defaultBlockState());
 		colony.addBuild(new BuildPlan(List.of(door, step(helper, 5, 1, 5, COBBLE))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 5, 1, 5, COBBLE);
@@ -843,7 +845,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.STONE_PICKAXE));
 		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
 		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] replaced = {false};
 		helper.onEachTick(() -> {
@@ -865,7 +867,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
 		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4))))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] cleared = {false};
 		helper.onEachTick(() -> {
@@ -896,7 +898,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.BUCKET));
 		colony.addBuild(pool(helper, Blocks.WATER.defaultBlockState()));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
@@ -911,7 +913,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.DIRT));
 		colony.addBuild(pool(helper, Blocks.WATER.defaultBlockState()));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
@@ -924,7 +926,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	public void reportsLavaItCannotClearAsBlocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(pool(helper, Blocks.LAVA.defaultBlockState()));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.LAVA, new BlockPos(4, 1, 4));
@@ -945,7 +947,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	public void doesNotPlaceWaterWithoutABucketOrASourceAndReportsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(waterStep(helper));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
@@ -958,7 +960,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
 		colony.addBuild(waterStep(helper));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 4, 1, 4, Blocks.WATER.defaultBlockState());
@@ -977,7 +979,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		}
 		helper.setBlock(source, Blocks.WATER);
 		colony.addBuild(waterStep(helper));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
@@ -992,7 +994,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(stocked[0], "no bucket ordered: " + colony.orders());
 			assertState(helper, 4, 1, 4, Blocks.WATER.defaultBlockState());
 			helper.assertBlockNotPresent(Blocks.WATER, source);
-			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(onlyTheMineshaftLeft(colony), "plan not finished");
 		});
 	}
 
@@ -1009,7 +1011,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
 		colony.addBuild(waterloggedStairStep(helper));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.onEachTick(() -> helper.assertFalse(helper.getBlockState(new BlockPos(4, 1, 4)).getFluidState().is(Fluids.WATER),
 			"stair waterlogged without a water bucket"));
@@ -1025,7 +1027,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
 		core(helper).setItem(1, new ItemStack(Items.WATER_BUCKET));
 		colony.addBuild(waterloggedStairStep(helper));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
@@ -1046,7 +1048,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
 		core(helper).setItem(1, new ItemStack(Items.BUCKET));
 		colony.addBuild(waterloggedStairStep(helper));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			assertState(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
@@ -1063,7 +1065,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(new BlockPos(4, 1, 4), STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
 		core(helper).setItem(0, new ItemStack(Items.BUCKET));
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		// The stair stays: only its water goes, scooped up like a player would, not broken out.
 		helper.onEachTick(() -> helper.assertBlockPresent(Blocks.OAK_STAIRS, new BlockPos(4, 1, 4)));
@@ -1081,7 +1083,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		// Over air, with nothing flammable beside it, fire goes out at once.
 		BuildPlan.Step fire = step(helper, 4, 2, 4, Blocks.FIRE.defaultBlockState());
 		colony.addBuild(new BuildPlan(List.of(fire)));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 2, 4));
@@ -1110,7 +1112,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
 		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState()))));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.FIRE, new BlockPos(4, 1, 4));
@@ -1128,7 +1130,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		// Stone does not burn forever: fire on it goes out and would be lit again until the tool breaks.
 		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
 		colony.addBuild(new BuildPlan(List.of(fire)));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.onEachTick(() -> helper.assertBlockNotPresent(Blocks.FIRE, new BlockPos(4, 1, 4)));
 		helper.succeedWhen(() -> {
@@ -1142,7 +1144,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
 		colony.addBuild(new BuildPlan(List.of(fire)));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.onEachTick(() -> helper.assertFalse(colony.ordersFor(Colony.OrderPurpose.BUILD).containsKey(Items.FLINT_AND_STEEL),
 			"flint and steel ordered: " + colony.orders()));
@@ -1159,7 +1161,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(6, 1, 4, Blocks.OAK_PLANKS);
 		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
 		colony.addBuild(new BuildPlan(List.of(planks, fire)));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		helper.onEachTick(() -> helper.assertBlockNotPresent(Blocks.FIRE, new BlockPos(4, 1, 4)));
 		helper.succeedWhen(() -> {
@@ -1174,7 +1176,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState()))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
@@ -1187,7 +1189,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(stocked[0], "no flint and steel ordered: " + colony.orders());
 			helper.assertBlockPresent(Blocks.FIRE, new BlockPos(4, 1, 4));
-			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertTrue(onlyTheMineshaftLeft(colony), "plan not finished");
 		});
 	}
 
@@ -1199,7 +1201,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, COBBLE))));
 		Pig pig = helper.spawn(EntityTypes.PIG, spot);
 		pig.setNoAi(true);
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		helper.onEachTick(() -> {
 			if (pig.isAlive() && helper.getBlockState(spot).is(Blocks.COBBLESTONE)) {
@@ -1218,7 +1220,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		BuildPlan plan = new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST)));
 		colony.addBuild(plan);
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] cancelled = {false};
 		helper.onEachTick(() -> {
@@ -1237,7 +1239,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	public void withdrawsOrderWhenPlanFinishesWithItemsFromElsewhere(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
-		member(helper, colony, BotRole.BUILDER, 1, 4);
+		member(helper, colony, 1, 4);
 
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
@@ -1280,7 +1282,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
 		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
 		colony.addBuild(column(helper, 6, COBBLE));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		boolean[] pillared = {false};
 		helper.onEachTick(() -> pillared[0] |= !builder.getScaffold().isEmpty());
@@ -1316,7 +1318,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
 		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
 		colony.addBuild(column(helper, 6, COBBLE));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		// A visit is a run of ticks in which the builder takes items from the core.
 		int[] last = {itemCount(core(helper))};
@@ -1347,7 +1349,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
 		colony.addBuild(column(helper, 6, COBBLE));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 		builder.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 
 		helper.onEachTick(() -> {
@@ -1370,7 +1372,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
 		colony.addBuild(column(helper, 2, COBBLE));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 		builder.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 
 		helper.succeedWhen(() -> {
@@ -1390,7 +1392,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
 		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
 		colony.addBuild(column(helper, 6, COBBLE));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		Set<BlockPos> pillar = new HashSet<>();
 		helper.onEachTick(() -> {
@@ -1411,7 +1413,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
 		core(helper).setItem(1, new ItemStack(Items.DIRT, 16));
 		colony.addBuild(column(helper, 6, COBBLE));
-		AntBot[] builder = {member(helper, colony, BotRole.BUILDER, 1, 4)};
+		AntBot[] builder = {member(helper, colony, 1, 4)};
 
 		Set<BlockPos> pillar = new HashSet<>();
 		helper.onEachTick(() -> {
@@ -1428,16 +1430,15 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** A builder made a farmer with its scaffold still up takes that scaffold down, as a former lumberjack does. */
+	/** A bot with scaffold left up from a build it was called away from takes it down between jobs. */
 	@GameTest(maxTicks = 600)
-	public void takesBuilderScaffoldDownAfterRoleChange(GameTestHelper helper) {
+	public void takesScaffoldLeftFromABuildDownBetweenJobs(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		AntBot bot = member(helper, colony, BotRole.BUILDER, 4, 4);
+		AntBot bot = member(helper, colony, 4, 4);
 		for (int y = 1; y <= 2; y++) {
 			helper.setBlock(5, y, 5, Blocks.DIRT);
-			bot.addScaffold(helper.absolutePos(new BlockPos(5, y, 5)), BotRole.BUILDER);
+			bot.addScaffold(helper.absolutePos(new BlockPos(5, y, 5)));
 		}
-		bot.setRole(BotRole.FARMER);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
@@ -1478,7 +1479,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.DIRT, 22));
 		colony.addBuild(column(helper, 6, Blocks.DIRT.defaultBlockState()));
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 4);
+		AntBot builder = member(helper, colony, 1, 4);
 
 		boolean[] placed = new boolean[7];
 		boolean[] pillared = {false};

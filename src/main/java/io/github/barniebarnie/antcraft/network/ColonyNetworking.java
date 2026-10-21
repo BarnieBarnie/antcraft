@@ -7,15 +7,11 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
-import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import java.util.Optional;
-import java.util.UUID;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -71,21 +67,6 @@ public final class ColonyNetworking {
 		}
 	}
 
-	/** Client asks to give a member bot a role, or with an empty role to hand it back to the colony. */
-	public record RoleRequest(BlockPos core, UUID bot, Optional<BotRole> role) implements CustomPacketPayload {
-		public static final Type<RoleRequest> TYPE = new Type<>(AntCraft.id("colony_role"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, RoleRequest> STREAM_CODEC = StreamCodec.composite(
-			BlockPos.STREAM_CODEC, RoleRequest::core,
-			UUIDUtil.STREAM_CODEC, RoleRequest::bot,
-			ByteBufCodecs.optional(ByteBufCodecs.stringUtf8(32).map(BotRole::byId, BotRole::id)), RoleRequest::role,
-			RoleRequest::new);
-
-		@Override
-		public Type<RoleRequest> type() {
-			return TYPE;
-		}
-	}
-
 	/**
 	 * Who sent a request and what they may do: the player's position, whether they are an operator, whether only
 	 * operators may act on colonies, and whether bots are allowed on the server. Built once per received payload.
@@ -100,19 +81,12 @@ public final class ColonyNetworking {
 	public static void register() {
 		PayloadTypeRegistry.serverboundPlay().register(StatusRequest.TYPE, StatusRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(EditRequest.TYPE, EditRequest.STREAM_CODEC);
-		PayloadTypeRegistry.serverboundPlay().register(RoleRequest.TYPE, RoleRequest.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			context.responseSender().sendPacket(reply(player.level(), Requester.of(player)));
 		});
 		ServerPlayNetworking.registerGlobalReceiver(EditRequest.TYPE, (request, context) -> {
-			ServerPlayer player = context.player();
-			Requester requester = Requester.of(player);
-			handle(player.level(), requester, request);
-			context.responseSender().sendPacket(reply(player.level(), requester));
-		});
-		ServerPlayNetworking.registerGlobalReceiver(RoleRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			Requester requester = Requester.of(player);
 			handle(player.level(), requester, request);
@@ -144,22 +118,6 @@ public final class ColonyNetworking {
 		return colony(level, requester, request.core())
 			.map(colony -> ColonyActions.edit(colony, request.kind(), request.target(), request.count()))
 			.orElse(false);
-	}
-
-	/**
-	 * Sets or releases a member's role for {@code requester}, unless they may not change the colony, the bot is not
-	 * its member, or bots are not allowed on the server ({@link Requester#botsAllowed}, as for {@code /antcraft role}).
-	 *
-	 * @return whether the bot changed
-	 */
-	public static boolean handle(ServerLevel level, Requester requester, RoleRequest request) {
-		Optional<Colony> colony = colony(level, requester, request.core());
-		if (colony.isEmpty() || !(level.getEntity(request.bot()) instanceof AntBot bot)
-				|| !ColonyActions.mayGiveRole(colony.get(), bot.getUUID(), bot.getColonyId(), requester.botsAllowed())) {
-			return false;
-		}
-		request.role().ifPresentOrElse(bot::setRole, bot::releaseRole);
-		return true;
 	}
 
 	/**

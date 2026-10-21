@@ -4,7 +4,6 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
@@ -36,7 +35,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		// Bedrock walls keep patrolling guards inside the test area.
+		// Bedrock walls keep bots inside the test area.
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				boolean border = x == 0 || x == 7 || z == 0 || z == 7;
@@ -63,36 +62,22 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		return (Container) helper.getBlockEntity(CORE, BlockEntity.class);
 	}
 
-	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role) {
+	private static AntBot member(GameTestHelper helper, Colony colony) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(role);
 		return bot;
 	}
 
 	@GameTest(maxTicks = 300)
-	public void guardTakesWeaponFromCore(GameTestHelper helper) {
+	public void aColonyBotArmsItselfWithASwordFromTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.IRON_SWORD));
-		AntBot guard = member(helper, colony, BotRole.GUARD);
+		AntBot bot = member(helper, colony);
 
 		helper.succeedWhen(() -> {
-			boolean armed = guard.getMainHandItem().is(Items.IRON_SWORD) || guard.getInventory().countItem(Items.IRON_SWORD) == 1;
-			helper.assertTrue(armed, "guard has no sword");
+			boolean armed = bot.getMainHandItem().is(Items.IRON_SWORD) || bot.getInventory().countItem(Items.IRON_SWORD) == 1;
+			helper.assertTrue(armed, "bot has no sword");
 			helper.assertTrue(core(helper).countItem(Items.IRON_SWORD) == 0, "sword still in core");
-		});
-	}
-
-	@GameTest(maxTicks = 600)
-	public void guardPatrolsAroundCore(GameTestHelper helper) {
-		Colony colony = colony(helper);
-		AntBot guard = member(helper, colony, BotRole.GUARD);
-		Set<BlockPos> visited = new HashSet<>();
-
-		helper.onEachTick(() -> visited.add(guard.blockPosition()));
-		helper.succeedWhen(() -> {
-			helper.assertTrue(visited.size() >= 6, "guard visited only " + visited.size() + " spots");
-			helper.assertTrue(guard.blockPosition().closerThan(helper.absolutePos(CORE), colony.radius() + 1), "guard wandered off");
 		});
 	}
 
@@ -121,7 +106,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
 		}
 		int logs = core.countItem(Items.OAK_LOG);
-		member(helper, colony, BotRole.HAULER);
+		member(helper, colony);
 
 		helper.succeedWhen(() -> {
 			// Without stock targets, the core keeps one stack.
@@ -145,7 +130,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		for (int i = 0; i < core.getContainerSize(); i++) {
 			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
 		}
-		AntBot hauler = member(helper, colony, BotRole.HAULER);
+		AntBot hauler = member(helper, colony);
 		hauler.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 64));
 		hauler.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 32));
 		return hauler;
@@ -183,7 +168,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		for (int i = 0; i < 3; i++) {
 			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
 		}
-		member(helper, colony, BotRole.HAULER);
+		member(helper, colony);
 		boolean[] brought = {false};
 
 		helper.onEachTick(() -> {
@@ -199,12 +184,12 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A colony whose core is full and that has no storage area: it needs a hauler, a site and a chest,
-	 * and the chest has no slot in the core to be crafted into. Inside the walls the only flat site
+	 * A colony whose core is full and that has no storage area: it needs a site and a chest, and the
+	 * chest has no slot in the core to be crafted into. Inside the walls the only flat site
 	 * clear of the core is the rows z=4 and z=6.
 	 */
 	@GameTest(maxTicks = 1500)
-	public void aFullCoreGetsAHaulerAndAStorageChest(GameTestHelper helper) {
+	public void aFullCoreGetsAStorageChest(GameTestHelper helper) {
 		BlockPos corePos = new BlockPos(2, 1, 2);
 		helper.setBlock(corePos, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(corePos)).orElseThrow();
@@ -215,11 +200,10 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		for (int i = 1; i < core.getContainerSize(); i++) {
 			core.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
 		}
-		member(helper, colony, BotRole.CRAFTER);
-		AntBot newcomer = member(helper, colony, BotRole.NONE);
+		member(helper, colony);
+		member(helper, colony);
 
 		helper.succeedWhen(() -> {
-			helper.assertTrue(newcomer.getRole() == BotRole.HAULER, "newcomer is a " + newcomer.getRole());
 			helper.assertTrue(colony.storage().isPresent(), "no storage area");
 			List<Container> chests = storageChests(helper, colony);
 			helper.assertTrue(!chests.isEmpty(), "no storage chest placed");
@@ -255,7 +239,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A colony whose core at {@link #FULL_CORE} is full of different items, a stack of each and none
 	 * above a stock target, so nothing in it is surplus; planks in the first slot to craft a chest from.
-	 * It has a crafter and a newcomer, who becomes its hauler.
+	 * It has two bots, which craft the chest and store the surplus between jobs.
 	 */
 	private static Colony coreFullOfDifferentItems(GameTestHelper helper) {
 		helper.setBlock(FULL_CORE, ModBlocks.COLONY_CORE);
@@ -268,8 +252,8 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		for (int i = 1; i < core.getContainerSize(); i++) {
 			core.setItem(i, others.get(i - 1));
 		}
-		member(helper, colony, BotRole.CRAFTER);
-		member(helper, colony, BotRole.NONE);
+		member(helper, colony);
+		member(helper, colony);
 		return colony;
 	}
 
@@ -351,7 +335,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 			targets.add(StockTarget.of(stacks.get(i).getItem(), stacks.get(i).getCount()));
 		}
 		colony.setStockTargets(targets);
-		member(helper, colony, BotRole.HAULER);
+		member(helper, colony);
 		int[] stored = {0};
 		boolean[] fetchedBack = {false};
 
@@ -383,7 +367,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		for (int i = 0; i < core.getContainerSize(); i++) {
 			core.setItem(i, stacks.get(i).copy());
 		}
-		AntBot hauler = member(helper, colony, BotRole.HAULER);
+		AntBot hauler = member(helper, colony);
 		ItemStack[] held = {ItemStack.EMPTY};
 
 		helper.onEachTick(() -> {
@@ -416,7 +400,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(STORAGE, Blocks.CHEST);
 		Container chest = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.STONE_PICKAXE));
-		member(helper, colony, BotRole.HAULER);
+		member(helper, colony);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper).countItem(Items.STONE_PICKAXE) == 1, "pickaxe not in the core");
@@ -430,7 +414,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.spawnItem(Items.OAK_SAPLING, 5, 1, 5);
 		helper.spawnItem(Items.STICK, 2, 1, 5);
 		helper.spawnItem(Items.APPLE, 5, 1, 2);
-		member(helper, colony, BotRole.HAULER);
+		member(helper, colony);
 
 		helper.succeedWhen(() -> {
 			Container core = core(helper);

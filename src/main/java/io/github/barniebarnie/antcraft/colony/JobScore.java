@@ -4,7 +4,6 @@ import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
-import java.util.Set;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
@@ -14,11 +13,9 @@ import net.minecraft.world.item.Item;
  * Rates jobs for one bot, lower is better, so a generalist bot takes the job that suits it best.
  * The bot is described by its position, the items and tools it carries, its free inventory slots and the
  * job it last finished. {@code fetch} is the cost of the trip to get an item from the core or storage, or a
- * tool at least as good for a tool, and infinite if the colony has none. Jobs of a {@code preferred} type, the
- * bot's role's, cost {@link #ROLE_BONUS} less, while roles still claim some jobs themselves.
+ * tool at least as good for a tool, and infinite if the colony has none.
  */
-public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional<Job> last, ToDoubleFunction<Item> fetch,
-		Set<JobType> preferred) {
+public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional<Job> last, ToDoubleFunction<Item> fetch) {
 	// ponytail: naive weights, tune from game tests.
 	/** Cost added for a job that yields items, divided by the free slots. */
 	static final double ROOM_WEIGHT = 16;
@@ -27,12 +24,6 @@ public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional
 	/** Bonus for a job of the same type within {@link #STICKY_RANGE} blocks of the last finished one. */
 	static final double STICKY_BONUS = 8;
 	static final double STICKY_RANGE = 4;
-	/** Blocks of distance a job of the bot's role is worth. */
-	static final double ROLE_BONUS = 32;
-
-	public JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional<Job> last, ToDoubleFunction<Item> fetch) {
-		this(pos, carried, freeSlots, last, fetch, Set.of());
-	}
 
 	/** The job's cost for this bot, or empty if it cannot take it: a full bot for a job that yields items, or a need nothing satisfies. */
 	public OptionalDouble score(Job job) {
@@ -56,9 +47,6 @@ public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional
 		cost -= PRIORITY_WEIGHT * job.priority();
 		if (this.last.filter(l -> l.type() == job.type() && l.target().closerThan(job.target(), STICKY_RANGE + 0.5)).isPresent()) {
 			cost -= STICKY_BONUS;
-		}
-		if (this.preferred.contains(job.type())) {
-			cost -= ROLE_BONUS;
 		}
 		return OptionalDouble.of(cost);
 	}

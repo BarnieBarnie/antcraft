@@ -6,7 +6,6 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
@@ -80,8 +79,8 @@ import org.jspecify.annotations.Nullable;
  * and the step may fall, never for a mineshaft's walls. In a terraform it leaves lava and
  * the blocks holding it back alone, to be reported as blocked. Like a player it breaks only blocks
  * it can see; a step it finds no way to, in sight or within reach, it gives up on for the job and
- * reports as blocked once the rest is done. A bot of another role than builder or miner takes home what it
- * dug or has left over after each job. As the builder's role goal it takes down scaffolding left from a job.
+ * reports as blocked once the rest is done. The bot takes home what it dug or has left over after each job.
+ * Between jobs it takes down scaffolding left up, such as from a job it was called away from.
  */
 public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Cheap blocks a builder fills a fluid source with to clear it without a bucket. */
@@ -133,34 +132,39 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private boolean storing;
 
 	public BuilderGoal(AntBot bot) {
-		super(bot, BotRole.BUILDER);
+		super(bot);
 		this.follower.setScaffold(SCAFFOLD);
 		// Every block placed on the way is scaffold, taken down once the plan is done; plans never get scaffold where their own blocks go.
-		this.follower.setPlaceListener(pos -> this.bot.addScaffold(pos, BotRole.BUILDER));
+		this.follower.setPlaceListener(pos -> this.bot.addScaffold(pos));
 		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, this::stopTravel);
 	}
 
-	@Override
-	public void stop() {
-		super.stop();
+	/** Stops where it is; scaffolding it was taking down stays up, to come down between jobs. */
+	private void stop() {
+		this.resetMovement();
 		if (this.cleaning) {
 			this.scaffoldCleanup.cancelRetry();
 			this.follower.setMayPlace(false);
 		}
 	}
 
-	/** The builder's own work between jobs: taking down scaffolding a job left up, such as one it was called away from. */
+	/**
+	 * Work between jobs, for any bot: taking down scaffolding a job left up, such as one it was called away from,
+	 * a tree's as well as a build's. Never a block a plan placed, which the colony protects.
+	 */
 	@Override
-	protected void work(ServerLevel level, Colony colony) {
+	protected boolean betweenJobs(ServerLevel level, Colony colony) {
 		Supplier<Set<BlockPos>> planned = Suppliers.memoize(() -> planned(colony));
 		this.follower.setMayPlaceAt(pos -> !planned.get().contains(pos));
 		if (this.cleaning) {
 			this.cleanUp(level, colony);
-		} else if (!this.bot.getScaffold().isEmpty() && this.bot.getScaffoldRole() == BotRole.BUILDER) {
-			this.startCleanup();
-		} else {
-			this.cooldown = IDLE_TICKS;
+			return true;
 		}
+		if (!this.bot.getScaffold().isEmpty()) {
+			this.startCleanup();
+			return true;
+		}
+		return false;
 	}
 
 	/** Whether this bot has something to do in the job's batch, or can finish it or report it blocked. */
@@ -238,18 +242,18 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
 	}
 
-	/** Ends the job begun; a bot of another role then takes home what the job left it with (see {@link #store}). */
+	/** Ends the job begun, then takes home what the job left it with (see {@link #store}). */
 	private void endJob(ServerLevel level, WorkerGoal.Outcome how) {
 		this.outcome = how;
 		this.job = null;
 		this.bot.setWorking(false);
 		this.resetMovement();
-		this.storing = this.bot.getRole() != BotRole.BUILDER && this.bot.getRole() != BotRole.MINER && !this.leftOver().isEmpty();
+		this.storing = !this.leftOver().isEmpty();
 	}
 
 	/**
 	 * What the bot carries beyond what it did when it began the job, such as the blocks it dug or materials
-	 * it did not use; never a tool. A miner unloads its haul itself, and a builder keeps it for the next job.
+	 * it did not use; never a tool.
 	 */
 	private Map<Item, Integer> leftOver() {
 		Map<Item, Integer> left = new HashMap<>();

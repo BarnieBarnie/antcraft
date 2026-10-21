@@ -4,7 +4,7 @@ A quick tour of the codebase for new contributors. For the gameplay design and r
 
 ## What it is
 
-AntCraft is a server-side Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot entities (`AntBot`) that join a colony (a Colony Core block), take roles and work through a shared job board: chopping trees, mining, farming, crafting, hauling and building. Milestone M5, the blueprint builder, is in progress.
+AntCraft is a server-side Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot entities (`AntBot`) that join a colony (a Colony Core block) and, all alike, work through a shared job board: chopping trees, mining, farming, crafting, hauling and building. Milestone M5, the blueprint builder, is in progress.
 
 ## Source sets
 
@@ -15,7 +15,7 @@ AntCraft is a server-side Fabric mod for Minecraft 26.3 (Java 25, Mojang names).
 | `src/test/java` | JUnit unit tests for pure logic |
 | `src/gametest/java` | Fabric GameTests: real bots on a headless server |
 | `src/main/resources` | `fabric.mod.json`, lang, textures, recipes, tags, loot tables |
-| `tools/skins.py` | Generates the role skins (needs Pillow) |
+| `tools/skins.py` | Generates the bot skins, one per kind of job (needs Pillow) |
 | `scripts/check.sh` | Gradle wrapper that prints a short PASS/FAIL summary |
 
 The main package is `io.github.barniebarnie.antcraft`.
@@ -29,19 +29,19 @@ All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
 - **`registry/`**: `ModBlocks`, `ModEntities`, `ModItems`. Plain registration.
 - **`block/`, `item/`**: `ColonyCoreBlock` and its block entity (54 slots), and `BotCoreItem`, which activates a bot.
 - **`entity/`**
-  - `AntBot`: the mob itself, with a 27-slot inventory, role, home, colony id and scaffold bookkeeping. `registerGoals()` lists every goal in priority order, so it shows how a bot "thinks".
-  - `BotRole`, `Tools` (picks the best tool or weapon), `BotSkins`.
-  - `goal/`: one goal per role (`LumberjackGoal`, `MinerGoal`, `FarmerGoal`, `BuilderGoal`, `CrafterGoal`, `HaulerGoal`, `GuardGoal`), plus:
-    - `ColonyWorkGoal`: the shared base class. It handles travel, reach, the job heartbeat and tool upgrades.
-    - `WorkerGoal`: the newer generic job loop. It claims the best job by `JobScore` and runs it on the role's `Executor`. Tree, replant, harvest and plant jobs have moved here already; the other job types still live in their role goals. This migration is ongoing work, as the recent commits show.
+  - `AntBot`: the mob itself, with a 27-slot inventory, the type of its last job (for its skin), home, colony id and scaffold bookkeeping. `registerGoals()` lists every goal in priority order, so it shows how a bot "thinks".
+  - `Tools` (picks the best tool or weapon), `BotSkins`.
+  - `goal/`: `WorkerGoal`, every colony bot's work loop, and the executors it runs jobs on (`LumberjackGoal`, `MinerGoal`, `FarmerGoal`, `BuilderGoal`, `CrafterGoal`, `HaulerGoal`), plus:
+    - `ColonyWorkGoal`: the shared base class of the executors. It handles travel, reach, tool upgrades, and the work a bot does between jobs (`upkeep`).
+    - `WorkerGoal`: claims the best job by `JobScore` and runs it on the `Executor` of its type; with no job it does the work between jobs, such as storing, arming and taking scaffolding down.
   - `navigation/`: `PathFollower` carries out paths step by step (dig, place scaffold, move); `BlockBreaker` breaks blocks over time like a player.
 - **`pathing/`**: a custom A* (`PathFinder`) over the `WorldView` interface. `LevelWorldView` backs it with a live world; tests use `GridWorld`. `MoveType`, `Step`, `Path` and `Goal` describe moves and targets.
 - **`colony/`**: the colony's brain.
-  - `ColonyManager`: the `SavedData` holding all colonies in a level. Its `tick()` runs a **survey** every 5 seconds per colony: it releases stale claims, rechecks blocked steps, surveys crops, the mine, builds, storage, stock and trees, and then assigns roles.
+  - `ColonyManager`: the `SavedData` holding all colonies in a level. Its `tick()` runs a **survey** every 5 seconds per colony: it releases stale claims, rechecks blocked steps, surveys crops, the mine, builds, storage, stock and trees.
   - `Colony`: a colony's persistent state, saved with Codecs. Note the `withAlternative` codecs, which keep old saves loading. Do not break them.
   - `JobBoard`, `Job`, `JobType`, `JobScore`: the blackboard. Each job has at most one bot, and each bot at most one job.
   - `TaskPlanner` (an order into crafting steps), `StockPlanner` (stock targets into orders), `Stockkeeping` (what moves between the core and storage). These are generic over the item type, so they can be unit-tested without a game.
-  - `RoleAssigner`, `Territory`, `TripClaims`, `ToolUpgrade`, `DefaultStock`.
+  - `Territory`, `TripClaims`, `ToolUpgrade`, `DefaultStock`.
   - `ColonyActions`: changes a player makes. Commands and the screen share it, and it validates client input.
   - `ColonyStatus`: one snapshot used by both `/antcraft colony info` and the screen, so the two never disagree.
 - **`work/`**: world logic and plain-data plans.
@@ -56,8 +56,8 @@ All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
 
 1. A player places a Colony Core, and `ColonyManager.create` makes a colony.
 2. A Bot Core used within 32 blocks of it spawns an `AntBot`, which joins the colony.
-3. Every 5 seconds the survey posts jobs (trees, crops, branches, builds), places orders and assigns roles.
-4. Each bot's goals claim jobs from the board, find a path, do the work and bring the loot to the core. Haulers move surplus to the storage chests.
+3. Every 5 seconds the survey posts jobs (trees, crops, branches, builds), and places orders.
+4. Each bot's `WorkerGoal` claims a job from the board, finds a path, does the work and brings the loot to the core. Between jobs bots move surplus to the storage chests.
 5. Everything persists through Codecs in `Colony` and `AntBot` (`ValueInput` and `ValueOutput`).
 
 ## Workflow rules
@@ -98,6 +98,6 @@ Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case
 
 ## Good first places to start
 
-- **Move a job type onto `WorkerGoal`**: follow the pattern of the latest commits. Implement `Executor` on the role goal and register it. Mining and build jobs have not moved yet.
+- **Add a job type**: implement `WorkerGoal.Executor` and register it in `WorkerGoal`, following the existing executors.
 - **M5 leftovers**: importing `.nbt` and Litematica files into a `BuildPlan`. `RegionPlan` is the closest example, and it can be unit-tested.
 - **Small, isolated logic** in `work/` or the colony planners, covered by unit tests, for fast feedback.

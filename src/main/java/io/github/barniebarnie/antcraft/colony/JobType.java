@@ -2,6 +2,8 @@ package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.serialization.Codec;
 import java.util.Locale;
+import java.util.Optional;
+import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 
 public enum JobType implements StringRepresentable {
@@ -33,10 +35,23 @@ public enum JobType implements StringRepresentable {
 	ACTIVATE_BOT;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
+	/** Prefix of the lang keys that name the job types, shared by the colony screen and the commands. */
+	public static final String KEY_PREFIX = "job.antcraft.";
+	/** The lang key that says a bot has no job. */
+	public static final String NO_JOB_KEY = "job.antcraft.none";
 
 	/** Whether the work fills the bot's inventory, such as digging, chopping and harvesting. */
 	public boolean yieldsItems() {
 		return this == CHOP_TREE || this == MINE_BRANCH || this == HARVEST_CROP || this == CLEAR_AREA;
+	}
+
+	public String translationKey() {
+		return KEY_PREFIX + this.getSerializedName();
+	}
+
+	/** What a bot on a job of this type is doing, or that it has no job, translated. */
+	public static Component describe(Optional<JobType> job) {
+		return Component.translatable(job.map(JobType::translationKey).orElse(NO_JOB_KEY));
 	}
 
 	@Override

@@ -5,7 +5,6 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
@@ -65,15 +64,14 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		return (Container) helper.getBlockEntity(core, BlockEntity.class);
 	}
 
-	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role, int x, int z) {
+	private static AntBot member(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(role);
 		return bot;
 	}
 
 	private static AntBot miner(GameTestHelper helper, Colony colony, int x, int z) {
-		AntBot miner = member(helper, colony, BotRole.MINER, x, z);
+		AntBot miner = member(helper, colony, x, z);
 		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		return miner;
 	}
@@ -110,7 +108,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(5, 3, 5, Blocks.DIRT);
 		core(helper, CORE).setItem(0, new ItemStack(Items.DIRT, 4));
 		AntBot miner = miner(helper, colony, 1, 3);
-		AntBot builder = member(helper, colony, BotRole.BUILDER, 1, 5);
+		AntBot builder = member(helper, colony, 1, 5);
 		terraform(helper, colony, new BlockPos(2, 0, 2), new BlockPos(7, 4, 7), 1);
 		boolean[] builderDug = {false};
 		helper.onEachTick(() -> builderDug[0] |= builder.getInventory().countItem(Items.DIRT) > 4);
@@ -132,15 +130,14 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 2, 6)) {
 			helper.setBlock(pos, Blocks.DIRT);
 		}
-		AntBot farmer = member(helper, colony, BotRole.FARMER, 1, 3);
-		AntBot lumberjack = member(helper, colony, BotRole.LUMBERJACK, 1, 5);
+		AntBot farmer = member(helper, colony, 1, 3);
+		AntBot lumberjack = member(helper, colony, 1, 5);
 		terraform(helper, colony, new BlockPos(2, 0, 2), new BlockPos(6, 3, 6), 0);
 
 		helper.succeedWhen(() -> {
 			assertLevel(helper, 2, 2, 6, 6, 0, 3);
 			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
 			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CLEAR_AREA), "dig jobs left: " + colony.board().jobs());
-			helper.assertTrue(farmer.getRole() == BotRole.FARMER && lumberjack.getRole() == BotRole.LUMBERJACK, "a bot changed roles");
 		});
 	}
 
@@ -159,24 +156,31 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	@GameTest(maxTicks = 2000)
-	public void treesInTheAreaAreFelledByLumberjacksNotDugOut(GameTestHelper helper) {
+	public void treesInTheAreaAreFelledThroughTreeJobsNotDugOut(GameTestHelper helper) {
 		Colony colony = colonyWithMiner(helper);
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 7)) {
 			helper.setBlock(pos, Blocks.DIRT);
 		}
 		tree(helper, 4, 4);
-		AntBot miner = miner(helper, colony, 1, 3);
-		AntBot lumberjack = member(helper, colony, BotRole.LUMBERJACK, 1, 5);
+		List<AntBot> bots = List.of(miner(helper, colony, 1, 3), member(helper, colony, 1, 5));
 		terraform(helper, colony, new BlockPos(2, 0, 2), new BlockPos(6, 6, 6), 0);
-		boolean[] minerHadLogs = {false};
-		helper.onEachTick(() -> minerHadLogs[0] |= miner.getInventory().countItem(Items.OAK_LOG) > 0);
+		int[] logsHeld = new int[bots.size()];
+		helper.onEachTick(() -> {
+			for (int i = 0; i < bots.size(); i++) {
+				AntBot bot = bots.get(i);
+				int logs = bot.getInventory().countItem(Items.OAK_LOG);
+				if (logs > logsHeld[i] && colony.board().jobOf(bot.getUUID()).filter(job -> job.type() == JobType.CLEAR_AREA).isPresent()) {
+					helper.fail("a bot dug out logs on a dig job");
+				}
+				logsHeld[i] = logs;
+			}
+		});
 
 		helper.succeedWhen(() -> {
-			helper.assertTrue(!minerHadLogs[0], "the miner dug out logs");
 			assertLevel(helper, 2, 2, 6, 6, 0, 6);
 			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
-			int logs = lumberjack.getInventory().countItem(Items.OAK_LOG) + core(helper, CORE).countItem(Items.OAK_LOG);
-			helper.assertTrue(logs == 4, "the lumberjack has " + logs + " logs");
+			int logs = bots.stream().mapToInt(bot -> bot.getInventory().countItem(Items.OAK_LOG)).sum() + core(helper, CORE).countItem(Items.OAK_LOG);
+			helper.assertTrue(logs == 4, "the colony has " + logs + " logs");
 		});
 	}
 
@@ -203,8 +207,8 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		for (int i = 2; i < core.getContainerSize(); i++) {
 			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
 		}
-		member(helper, colony, BotRole.HAULER, 3, 3);
-		member(helper, colony, BotRole.BUILDER, 4, 3);
+		member(helper, colony, 3, 3);
+		member(helper, colony, 4, 3);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 5)).isAir(), "bump not dug");
@@ -273,7 +277,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(4, 1, 4, Blocks.LAVA);
 		Colony colony = colony(helper, corePos, 6);
 		core(helper, corePos).setItem(0, new ItemStack(Items.DIRT, 8));
-		member(helper, colony, BotRole.BUILDER, 1, 2, 3);
+		member(helper, colony, 1, 2, 3);
 		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(6, 3, 6), 1);
 		BlockPos lava = helper.absolutePos(new BlockPos(4, 1, 4));
 		boolean[] reported = {false};
@@ -295,10 +299,9 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A member standing at (x, y, z), such as on ground raised above the floor. */
-	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role, int x, int y, int z) {
+	private static AntBot member(GameTestHelper helper, Colony colony, int x, int y, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, y, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(role);
 		return bot;
 	}
 
@@ -319,7 +322,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		BlockPos corePos = new BlockPos(0, 3, 0);
 		Colony colony = colony(helper, corePos, 6);
 		core(helper, corePos).setItem(0, new ItemStack(Items.SAND, 24));
-		member(helper, colony, BotRole.BUILDER, 1, 3, 3);
+		member(helper, colony, 1, 3, 3);
 		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(6, 4, 6), 2);
 
 		helper.succeedWhen(() -> {
@@ -351,9 +354,9 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		core(helper, corePos).setItem(0, new ItemStack(Items.COBBLESTONE, 64));
 		// For the builder, to break the cobblestone it fills the water above the height with.
 		core(helper, corePos).setItem(1, new ItemStack(Items.STONE_PICKAXE));
-		AntBot miner = member(helper, colony, BotRole.MINER, 1, 3, 3);
+		AntBot miner = member(helper, colony, 1, 3, 3);
 		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
-		member(helper, colony, BotRole.BUILDER, 2, 3, 4);
+		member(helper, colony, 2, 3, 4);
 		// Level the bank and the near half of the river at y=1, below the river's surface.
 		terraform(helper, colony, new BlockPos(1, 1, 1), new BlockPos(5, 4, 6), 1);
 		long[] doneAt = {-1};

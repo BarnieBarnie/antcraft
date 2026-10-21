@@ -7,12 +7,11 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
+import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Replanting;
-import io.github.barniebarnie.antcraft.work.Revisit;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -20,7 +19,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -36,7 +34,6 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.entity.ai.goal.WrappedGoal;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -44,8 +41,9 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.util.ProblemReporter;
 
 public class LumberjackGameTest implements CustomTestMethodInvoker {
+	/** The colony core, where bots take the logs. */
 	private static final BlockPos CHEST = new BlockPos(1, 1, 1);
-	/** Solo lumberjacks search 24 blocks around home, so keep them out of each other's test areas. */
+	/** Keeps the test areas apart, so no colony posts jobs for another test's trees. */
 	private static final int PADDING = 32;
 
 	@Override
@@ -56,8 +54,16 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
 			}
 		}
-		helper.setBlock(CHEST, Blocks.CHEST);
+		// A colony core that wants only logs, so it posts its trees and orders no crafting.
+		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
+		Colony colony = colonyAtHome(helper);
+		colony.setRadius(6);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
 		method.invoke(this, helper);
+	}
+
+	private static Container home(GameTestHelper helper) {
+		return (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
 	}
 
 	/** A 4-log oak with a small canopy, trunk at (x, 1..4, z). */
@@ -112,10 +118,10 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		return lumberjack(helper, x, 1, z);
 	}
 
+	/** A member of the colony at {@link #CHEST}. */
 	private static AntBot lumberjack(GameTestHelper helper, int x, int y, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, y, z);
-		bot.setHome(helper.absolutePos(CHEST));
-		bot.setRole(BotRole.LUMBERJACK);
+		ColonyManager.get(helper.getLevel()).join(bot, colonyAtHome(helper));
 		return bot;
 	}
 
@@ -124,25 +130,24 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * Its top blocks are 5 and 6 blocks above the ground, out of reach from it.
 	 */
 	private static void leftoverPillar(GameTestHelper helper, AntBot bot, int x, int z) {
-		LumberjackGoal goal = goal(bot);
 		for (int y = 1; y <= 7; y++) {
 			helper.setBlock(x, y, z, Blocks.DIRT);
-			goal.adoptScaffold(helper.absolutePos(new BlockPos(x, y, z)));
+			bot.addScaffold(helper.absolutePos(new BlockPos(x, y, z)));
 		}
 	}
 
 	private static LumberjackGoal goal(AntBot bot) {
 		return bot.getGoalSelector().getAvailableGoals().stream()
 			.map(WrappedGoal::getGoal)
-			.filter(LumberjackGoal.class::isInstance)
-			.map(LumberjackGoal.class::cast)
+			.filter(WorkerGoal.class::isInstance)
+			.map(goal -> (LumberjackGoal) ((WorkerGoal) goal).executor(JobType.CHOP_TREE))
 			.findFirst()
 			.orElseThrow();
 	}
 
-	/** The bot only chops the tree after cleanup is done, so storing its logs shows cleanup finished. */
+	/** The bot only takes the tree on after cleanup is done, so storing its logs shows cleanup finished. */
 	private static void assertTreeStored(GameTestHelper helper) {
-		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		Container chest = home(helper);
 		helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 	}
 
@@ -180,7 +185,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 6, 2);
 		helper.setBlock(5, 7, 5, Blocks.DIRT);
-		goal(bot).adoptScaffold(helper.absolutePos(new BlockPos(5, 7, 5)));
+		bot.addScaffold(helper.absolutePos(new BlockPos(5, 7, 5)));
 
 		// With no scaffold blocks to pillar with, it gives up on the floating block and moves on.
 		helper.succeedWhen(() -> {
@@ -195,7 +200,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		AntBot bot = lumberjack(helper, 6, 2);
 		for (int y = 1; y <= 3; y++) {
 			helper.setBlock(5, y, 5, Blocks.DIRT);
-			goal(bot).adoptScaffold(helper.absolutePos(new BlockPos(5, y, 5)));
+			bot.addScaffold(helper.absolutePos(new BlockPos(5, y, 5)));
 		}
 		AntBot copy = reload(helper, bot);
 		bot.discard();
@@ -207,37 +212,22 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1600)
-	public void takesScaffoldDownAfterPlayerChangesRole(GameTestHelper helper) {
-		scaffoldThenNewRole(helper, AntBot::setRole);
-	}
-
-	@GameTest(padding = PADDING, maxTicks = 1600)
-	public void takesScaffoldDownAfterColonyChangesRole(GameTestHelper helper) {
-		scaffoldThenNewRole(helper, AntBot::assignRole);
-	}
-
 	/**
-	 * A colony lumberjack stands on top of its scaffold pillar when it is made a farmer. It takes
-	 * the pillar down first, and then harvests the colony's ripe wheat.
+	 * A bot stands on top of a scaffold pillar left from a tree it was called away from. It takes the
+	 * pillar down first, and only then takes another job: harvesting the colony's ripe wheat.
 	 */
-	private static void scaffoldThenNewRole(GameTestHelper helper, BiConsumer<AntBot, BotRole> changeRole) {
-		BlockPos corePos = new BlockPos(1, 1, 6);
-		helper.setBlock(corePos, ModBlocks.COLONY_CORE);
-		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(corePos)).orElseThrow();
-		colony.setRadius(6);
-		// No default stock targets, so harvesting is the only colony work.
-		colony.setStockTargets(List.of());
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void takesScaffoldLeftUpDownBeforeTakingAnotherJob(GameTestHelper helper) {
+		// No logs wanted, so harvesting is the only colony work.
+		colonyAtHome(helper).setStockTargets(List.of());
 		for (int x = 3; x <= 5; x++) {
 			helper.setBlock(x, 0, 5, Blocks.FARMLAND);
 			helper.setBlock(x, 1, 5, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
 		}
 		AntBot bot = lumberjack(helper, 6, 8, 2);
-		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		leftoverPillar(helper, bot, 6, 2);
-		changeRole.accept(bot, BotRole.FARMER);
 
-		Container core = (Container) helper.getBlockEntity(corePos, BlockEntity.class);
+		Container core = home(helper);
 		helper.onEachTick(() -> {
 			if (core.countItem(Items.WHEAT) > 0 && helper.getBlockState(new BlockPos(6, 1, 2)).is(Blocks.DIRT)) {
 				helper.fail("farmed before taking the scaffold down");
@@ -285,7 +275,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -310,7 +300,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 				helper.setBlock(column, Blocks.JUNGLE_LOG);
 			}
 		}
-		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		Container chest = home(helper);
 		chest.setItem(0, new ItemStack(Items.DIRT, 16));
 		AntBot bot = lumberjack(helper, 1, 6);
 		goal(bot).setScaffoldStock(1);
@@ -338,12 +328,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		for (BlockPos branch : List.of(new BlockPos(5, 7, 5), new BlockPos(1, 7, 1))) {
 			helper.setBlock(branch.above(), leaves);
 		}
-		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
+		home(helper).setItem(0, new ItemStack(Items.DIRT, 16));
 		lumberjack(helper, 1, 5);
 
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 9, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -357,7 +347,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			for (int y = 1; y <= 4; y++) {
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, 5, y, 5);
 			}
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -370,7 +360,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -378,12 +368,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	@GameTest(padding = PADDING, maxTicks = 2400)
 	public void takesScaffoldFromHomeToReachTallTree(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
-		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
+		home(helper).setItem(0, new ItemStack(Items.DIRT, 16));
 		lumberjack(helper, 2, 4);
 
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -391,7 +381,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	@GameTest(padding = PADDING, maxTicks = 2400)
 	public void takesOnlyDirtFromHomeNotCobblestone(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
-		Container home = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		Container home = home(helper);
 		// Cobblestone first, so a bot that takes any scaffold block takes it.
 		home.setItem(0, new ItemStack(Items.COBBLESTONE, 16));
 		home.setItem(1, new ItemStack(Items.DIRT, 16));
@@ -423,9 +413,9 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
-			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 16, "bot lost cobblestone");
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) + home(helper).countItem(Items.COBBLESTONE) == 16, "bot lost cobblestone");
 		});
 	}
 
@@ -462,7 +452,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(leavesLeft[0] >= 0, "not yet checked the leaves");
 			helper.assertTrue(leavesLeft[0] >= 6, "only " + leavesLeft[0] + " of 9 leaves left");
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -477,142 +467,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		return count;
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
-	public void comesBackForSaplingsDroppedByDecayingLeaves(GameTestHelper helper) {
-		tree(helper, 5, 5, false);
-		lumberjack(helper, 2, 4);
-		boolean[] decayed = {false};
-		// Once the bot has stored the logs and moved on, the leaves decay and drop a sapling.
-		helper.onEachTick(() -> {
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
-			if (!decayed[0] && chest.countItem(Items.OAK_LOG) == 4) {
-				decayed[0] = true;
-				for (BlockPos pos : BlockPos.betweenClosed(4, 4, 4, 6, 5, 6)) {
-					if (helper.getBlockState(pos).is(BlockTags.LEAVES)) {
-						helper.setBlock(pos, Blocks.AIR);
-					}
-				}
-				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 4, 6));
-			}
-		});
-		helper.succeedWhen(() -> {
-			helper.assertTrue(decayed[0], "logs not stored yet");
-			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
-		});
-	}
-
-	/**
-	 * A solo lumberjack fells a tree without a sapling to replant, then its chunk unloads and loads
-	 * again. When the leaves drop a sapling later, the loaded bot still comes back to plant it.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 1600)
-	public void remembersTreeToReplantAcrossReload(GameTestHelper helper) {
-		bareTree(helper, 5, 5);
-		AntBot bot = lumberjack(helper, 2, 4);
-		AntBot[] copy = {null};
-		helper.onEachTick(() -> {
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
-			if (copy[0] == null && chest.countItem(Items.OAK_LOG) == 4) {
-				copy[0] = reload(helper, bot);
-				bot.discard();
-				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6));
-			}
-		});
-		helper.succeedWhen(() -> {
-			helper.assertTrue(copy[0] != null, "logs not stored yet");
-			helper.assertTrue(copy[0].isAlive(), "reloaded bot is gone");
-			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
-		});
-	}
-
 	private static List<BlockPos> trunk(GameTestHelper helper, int x, int z) {
 		List<BlockPos> logs = new ArrayList<>();
 		for (int y = 1; y <= 4; y++) {
 			logs.add(helper.absolutePos(new BlockPos(x, y, z)));
 		}
 		return logs;
-	}
-
-	/**
-	 * A solo lumberjack's tree claim is saved with it: after a reload it goes back to its tree, and
-	 * another solo lumberjack leaves that tree alone.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 1200)
-	public void soloTreeClaimSurvivesReload(GameTestHelper helper) {
-		tree(helper, 5, 5, false);
-		List<BlockPos> logs = trunk(helper, 5, 5);
-		AntBot bot = lumberjack(helper, 2, 2);
-		bot.setTree(logs);
-		AntBot copy = reload(helper, bot);
-		bot.discard();
-		helper.assertTrue(copy.getTree().equals(logs), "claim not loaded: " + copy.getTree());
-		AntBot other = lumberjack(helper, 6, 4);
-
-		helper.onEachTick(() -> {
-			if (other.getTree().stream().anyMatch(logs::contains)) {
-				helper.fail("the other lumberjack picked the claimed tree");
-			}
-		});
-		helper.succeedWhen(() -> {
-			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
-			helper.assertTrue(carried(other, Items.OAK_LOG) == 0, "the other lumberjack has logs");
-			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
-		});
-	}
-
-	/** A saved claim on a tree whose logs are all gone is dropped after loading. */
-	@GameTest(padding = PADDING, maxTicks = 100)
-	public void dropsSavedClaimOnTreeWithNoLogsLeft(GameTestHelper helper) {
-		AntBot bot = lumberjack(helper, 2, 2);
-		bot.setTree(trunk(helper, 5, 5));
-		AntBot copy = reload(helper, bot);
-		bot.discard();
-
-		helper.succeedWhen(() -> helper.assertTrue(copy.getTree().isEmpty(), "claim kept: " + copy.getTree()));
-	}
-
-	/**
-	 * A solo lumberjack interrupted mid-tree whose leaves have decayed since: what is left no longer
-	 * looks like a tree, but the bot remembers its logs and fells the rest after loading.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 1200)
-	public void soloLumberjackFellsLeaflessRestOfItsTreeAfterReload(GameTestHelper helper) {
-		for (int y = 2; y <= 4; y++) {
-			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
-		}
-		AntBot bot = lumberjack(helper, 2, 2);
-		bot.setTree(trunk(helper, 5, 5));
-		AntBot copy = reload(helper, bot);
-		bot.discard();
-
-		helper.succeedWhen(() -> {
-			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
-			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
-		});
-	}
-
-	/**
-	 * A solo lumberjack resuming a saved claim whose bottom log is already gone replants at the
-	 * tree's original base on the ground, not at the lowest log still standing.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 1200)
-	public void soloLumberjackReplantsResumedTreeAtItsOriginalBase(GameTestHelper helper) {
-		for (int y = 2; y <= 4; y++) {
-			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
-		}
-		AntBot bot = lumberjack(helper, 2, 2);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
-		// Resumed once before: the claim holds only the logs still standing, and the base apart.
-		List<BlockPos> logs = trunk(helper, 5, 5);
-		bot.setTree(logs.getFirst(), logs.subList(1, logs.size()));
-		AntBot copy = reload(helper, bot);
-		bot.discard();
-		helper.assertTrue(logs.getFirst().equals(copy.getTreeBase()), "base not loaded: " + copy.getTreeBase());
-
-		helper.succeedWhen(() -> {
-			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
-			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
-		});
 	}
 
 	/**
@@ -637,41 +497,6 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A solo lumberjack finding a tree whose bottom log someone already cut plants the sapling on the
-	 * ground under the trunk, not at the lowest log still standing.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 1200)
-	public void soloLumberjackReplantsPartlyCutTreeOnTheGround(GameTestHelper helper) {
-		tree(helper, 5, 5, false);
-		helper.setBlock(5, 1, 5, Blocks.AIR);
-		AntBot bot = lumberjack(helper, 2, 2);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
-
-		helper.succeedWhen(() -> {
-			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
-			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
-		});
-	}
-
-	/** A remembered tree is forgotten once it was felled too long ago, counted in game time across a reload. */
-	@GameTest(padding = PADDING, maxTicks = 400)
-	public void forgetsTreeFelledTooLongAgoAcrossReload(GameTestHelper helper) {
-		AntBot bot = lumberjack(helper, 2, 4);
-		long now = helper.getLevel().getGameTime();
-		// Felled long enough ago that it is forgotten 50 ticks from now.
-		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
-		bot.getRevisits().put(base, new Revisit(base, now - LumberjackGoal.REVISIT_TICKS + 50, List.of(base), Optional.empty()));
-		AntBot copy = reload(helper, bot);
-		bot.discard();
-		helper.runAfterDelay(100, () -> helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6)));
-		helper.runAfterDelay(300, () -> {
-			helper.assertTrue(copy.isAlive(), "reloaded bot is gone");
-			helper.assertBlockNotPresent(Blocks.OAK_SAPLING, 5, 1, 5);
-			helper.succeed();
-		});
-	}
-
-	/**
 	 * A 4-log oak with a single leaf on top, out of the way, trunk at (x, 1..4, z). Once the logs are
 	 * gone the leaf is removed, so no sapling can drop by chance: the test decides when one is available.
 	 */
@@ -692,19 +517,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** Turns the home chest into a colony core that wants only logs, so it posts its trees and orders no crafting. */
 	private static Colony colonyAtHome(GameTestHelper helper) {
-		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
-		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CHEST)).orElseThrow();
-		colony.setRadius(6);
-		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
-		return colony;
+		return ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CHEST)).orElseThrow();
 	}
 
 	private static AntBot colonyLumberjack(GameTestHelper helper, Colony colony, int x, int z) {
-		AntBot bot = lumberjack(helper, x, z);
-		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		return bot;
+		return lumberjack(helper, x, z);
 	}
 
 	@GameTest(padding = PADDING, maxTicks = 1600)
@@ -715,8 +533,9 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
 		AntBot[] planter = {null};
 		helper.onEachTick(() -> {
-			// The feller had no sapling and posted a replant job; it is now taking its logs home.
-			if (planter[0] == null && colony.board().has(JobType.REPLANT, base) && feller.isWorking()) {
+			// The feller had no sapling and posted a replant job; it is now sent off, out of the way, as on another errand.
+			if (planter[0] == null && colony.board().has(JobType.REPLANT, base)) {
+				feller.setWalkTarget(helper.absolutePos(new BlockPos(0, 1, 7)));
 				planter[0] = colonyLumberjack(helper, colony, 6, 3);
 				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6));
 			}
@@ -728,7 +547,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(planter[0] != null, "no replant job posted yet");
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5);
 			helper.assertTrue(!colony.board().has(JobType.REPLANT, base), "replant job still on the board");
-			Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+			Container core = home(helper);
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -773,39 +592,13 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			if (!stocked[0] && colony.board().jobs().stream().anyMatch(job -> job.type() == JobType.CHOP_TREE && job.tries() == 1)) {
 				stocked[0] = true;
-				((Container) helper.getBlockEntity(CHEST, BlockEntity.class)).setItem(0, new ItemStack(Items.DIRT, 16));
+				(home(helper)).setItem(0, new ItemStack(Items.DIRT, 16));
 			}
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(stocked[0], "the tree was not given back to retry");
 			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
 			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_TREE), "chop job left: " + colony.board().jobs());
-		});
-	}
-
-	/**
-	 * A solo lumberjack's tree whose top logs are out of reach, with no scaffold anywhere: it remembers the
-	 * tree to retry later, and that survives a reload. Once home holds scaffold, a later visit fells the rest.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 2400)
-	public void soloLumberjackComesBackForLogsItCouldNotReach(GameTestHelper helper) {
-		tallTree(helper, 5, 5);
-		AntBot bot = lumberjack(helper, 2, 4);
-		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
-		AntBot[] copy = {null};
-		helper.onEachTick(() -> {
-			if (copy[0] == null && bot.getTreeRetries().containsKey(base) && bot.getTreeRetries().get(base).tries() == 1) {
-				copy[0] = reload(helper, bot);
-				bot.discard();
-				helper.assertTrue(copy[0].getTreeRetries().equals(bot.getTreeRetries()), "retry not loaded: " + copy[0].getTreeRetries());
-				helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
-			}
-		});
-		helper.succeedWhen(() -> {
-			helper.assertTrue(copy[0] != null, "the tree was not remembered to retry");
-			helper.assertTrue(copy[0].isAlive(), "reloaded bot is gone");
-			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
-			helper.assertTrue(copy[0].getTreeRetries().isEmpty(), "retry left: " + copy[0].getTreeRetries());
 		});
 	}
 
@@ -829,7 +622,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void swapsToBetterAxeInColonyCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
-		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		Container core = home(helper);
 		core.setItem(0, new ItemStack(Items.STONE_AXE));
 		AntBot bot = colonyLumberjack(helper, colony, 5, 5);
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_AXE));
@@ -844,7 +637,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	@GameTest(padding = PADDING, maxTicks = 400)
 	public void ordersBetterAxeTheColonyCanMake(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
-		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		Container core = home(helper);
 		core.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
 		core.setItem(1, new ItemStack(Items.STICK, 2));
 		AntBot bot = colonyLumberjack(helper, colony, 5, 5);
@@ -853,23 +646,10 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().getOrDefault(Items.STONE_AXE, 0) == 1, "orders: " + colony.orders()));
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 400)
-	public void soloLumberjackSwapsToBetterAxeInHomeChest(GameTestHelper helper) {
-		Container chest = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
-		chest.setItem(0, new ItemStack(Items.STONE_AXE));
-		AntBot bot = lumberjack(helper, 5, 5);
-		bot.getInventory().addItem(new ItemStack(Items.WOODEN_AXE));
-
-		helper.succeedWhen(() -> {
-			helper.assertTrue(carried(bot, Items.STONE_AXE) == 1, "lumberjack has no stone axe");
-			helper.assertTrue(chest.countItem(Items.WOODEN_AXE) == 1, "wooden axe not back in the chest");
-		});
-	}
-
 	@GameTest(padding = PADDING, maxTicks = 1600)
 	public void replantsWithSaplingFromColonyCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
-		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		Container core = home(helper);
 		core.setItem(0, new ItemStack(Items.OAK_SAPLING));
 		bareTree(helper, 5, 5);
 		colonyLumberjack(helper, colony, 2, 2);
@@ -915,7 +695,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			assertTreeStored(helper);
 			assertNoDirtLeft(helper);
-			helper.assertTrue(bot.getInventory().countItem(Items.DIRT) == 16, "bot has " + bot.getInventory().countItem(Items.DIRT) + " dirt");
+			helper.assertTrue(bot.getInventory().countItem(Items.DIRT) + home(helper).countItem(Items.DIRT) == 16, "bot placed dirt it did not take down");
 		});
 	}
 
@@ -937,7 +717,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			for (int y = 1; y <= 4; y++) {
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, 6, y, 6);
 			}
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
@@ -976,7 +756,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		for (BlockPos wall : List.of(hidden.west(), hidden.east(), hidden.north(), hidden.south(), hidden.above())) {
 			helper.setBlock(wall, Blocks.BEDROCK);
 		}
-		goal(bot).adoptScaffold(helper.absolutePos(hidden));
+		bot.addScaffold(helper.absolutePos(hidden));
 
 		helper.onEachTick(() -> {
 			if (!helper.getBlockState(hidden).is(Blocks.DIRT)) {
@@ -1008,31 +788,6 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
 			helper.assertTrue(claimers.size() == 1, "nobody claimed the tree");
-		});
-	}
-
-	@GameTest(padding = PADDING, maxTicks = 2400)
-	public void onlyOneSoloLumberjackWorksOnATree(GameTestHelper helper) {
-		tallTree(helper, 5, 5);
-		AntBot a = lumberjack(helper, 2, 4);
-		AntBot b = lumberjack(helper, 4, 2);
-		a.getInventory().addItem(new ItemStack(Items.DIRT, 16));
-		b.getInventory().addItem(new ItemStack(Items.DIRT, 16));
-		Set<AntBot> choppers = new HashSet<>();
-		helper.onEachTick(() -> {
-			for (AntBot bot : List.of(a, b)) {
-				if (carried(bot, Items.OAK_LOG) > 0) {
-					choppers.add(bot);
-				}
-			}
-			if (choppers.size() > 1) {
-				helper.fail("both lumberjacks chopped the tree");
-			}
-		});
-		helper.succeedWhen(() -> {
-			assertAreaCleared(helper);
-			Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
-			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 7, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 		});
 	}
 
@@ -1118,49 +873,11 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> assertDarkOakSaplingSquare(helper));
 	}
 
-	/**
-	 * A solo lumberjack felling a dark oak with no dark oak saplings remembers the whole square and its
-	 * sapling kind, and once four dark oak saplings turn up it comes back and plants all four spots, not
-	 * one sapling of any kind.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 2400)
-	public void soloLumberjackRevisitsFelled2x2DarkOakAndPlantsTheSquare(GameTestHelper helper) {
-		darkOak(helper);
-		// Once the logs are gone the leaves are removed, so no sapling drops by chance.
-		helper.onEachTick(() -> {
-			if (countBlocks(helper, BlockTags.LOGS) == 0) {
-				for (BlockPos pos : BlockPos.betweenClosed(3, 4, 3, 6, 4, 6)) {
-					if (helper.getBlockState(pos).is(BlockTags.LEAVES)) {
-						helper.setBlock(pos, Blocks.AIR);
-					}
-				}
-			}
-		});
-		AntBot bot = lumberjack(helper, 1, 6);
-		// An oak sapling, which would not grow a dark oak back.
-		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
-		boolean[] dropped = {false};
-		helper.onEachTick(() -> {
-			if (!dropped[0] && !bot.getRevisits().isEmpty() && countBlocks(helper, BlockTags.LOGS) == 0) {
-				dropped[0] = true;
-				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(6, 1, 3));
-				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(6, 1, 3));
-				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(3, 1, 6));
-				helper.spawnItem(Items.DARK_OAK_SAPLING, new BlockPos(3, 1, 6));
-			}
-		});
-
-		helper.succeedWhen(() -> {
-			helper.assertTrue(dropped[0], "no revisit remembered yet");
-			assertDarkOakSaplingSquare(helper);
-		});
-	}
-
 	/** A colony lumberjack without saplings posts a replant job for the whole square, then plants it from the core. */
 	@GameTest(padding = PADDING, maxTicks = 1600)
 	public void colonyReplantsFelled2x2DarkOakFromTheCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
-		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		Container core = home(helper);
 		core.setItem(0, new ItemStack(Items.OAK_SAPLING, 4));
 		core.setItem(1, new ItemStack(Items.DARK_OAK_SAPLING, 4));
 		darkOak(helper);
@@ -1190,7 +907,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	@GameTest(padding = PADDING, maxTicks = 1600)
 	public void colonyReplantsFelledBirchWithBirchSaplingFromTheCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
-		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		Container core = home(helper);
 		core.setItem(0, new ItemStack(Items.OAK_SAPLING));
 		core.setItem(1, new ItemStack(Items.BIRCH_SAPLING));
 		bareTree(helper, 5, 5, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
@@ -1207,21 +924,6 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/**
-	 * A felled birch no birch sapling turned up for in time is still replanted: a solo lumberjack carrying
-	 * only an oak sapling comes back and plants that once the wait for its own kind is over.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 600)
-	public void replantsWithAnotherSaplingOnceTheWaitForItsOwnKindIsOver(GameTestHelper helper) {
-		AntBot bot = lumberjack(helper, 2, 4);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
-		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
-		long felled = helper.getLevel().getGameTime() - AntCraftConfig.replantMatchWaitTicks();
-		bot.getRevisits().put(base, new Revisit(base, felled, List.of(base), Optional.of(Items.BIRCH_SAPLING)));
-
-		helper.succeedWhen(() -> helper.assertBlockPresent(Blocks.OAK_SAPLING, 5, 1, 5));
-	}
-
 	/** The four spots of a 2x2 trunk at (4..5, 1, 4..5), the first of them built over with cobblestone. */
 	private static List<BlockPos> partlyBuiltOverSquare(GameTestHelper helper) {
 		helper.setBlock(4, 1, 4, Blocks.COBBLESTONE);
@@ -1235,25 +937,11 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(saplings == 1, saplings + " spruce saplings planted");
 	}
 
-	/**
-	 * A 2x2 spruce site with one spot built over cannot grow a 2x2 tree back, so a solo lumberjack carrying
-	 * one spruce sapling comes back and plants it as a 1x1 tree, rather than waiting for four.
-	 */
-	@GameTest(padding = PADDING, maxTicks = 600)
-	public void soloLumberjackReplantsAPartlyBuiltOver2x2SiteAs1x1(GameTestHelper helper) {
-		AntBot bot = lumberjack(helper, 2, 2);
-		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING));
-		List<BlockPos> spots = partlyBuiltOverSquare(helper);
-		bot.getRevisits().put(spots.getFirst(), new Revisit(spots.getFirst(), helper.getLevel().getGameTime(), spots, Optional.of(Items.SPRUCE_SAPLING)));
-
-		helper.succeedWhen(() -> assertOneSpruceSaplingBesideTheCobblestone(helper));
-	}
-
 	/** A colony replant job for a partly built-over 2x2 spruce site is taken with one spruce sapling in the core. */
 	@GameTest(padding = PADDING, maxTicks = 600)
 	public void colonyReplantsAPartlyBuiltOver2x2SiteAs1x1FromTheCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
-		Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+		Container core = home(helper);
 		core.setItem(0, new ItemStack(Items.SPRUCE_SAPLING));
 		List<BlockPos> spots = partlyBuiltOverSquare(helper);
 		colony.board().post(JobType.REPLANT, spots.getFirst(), spots, Optional.of(Items.SPRUCE_SAPLING), helper.getLevel().getGameTime());
@@ -1291,29 +979,19 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** A colony bot with another role, kept by a player so the colony does not make it a lumberjack. */
-	private static AntBot colonyGuard(GameTestHelper helper, Colony colony, int x, int z) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
-		bot.setHome(helper.absolutePos(CHEST));
-		bot.setRole(BotRole.GUARD);
-		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		return bot;
-	}
-
 	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void colonyBotOfAnotherRoleFellsATreeFromItsJob(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 5, 5);
-		AntBot bot = colonyGuard(helper, colony, 2, 2);
+		AntBot bot = colonyLumberjack(helper, colony, 2, 2);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
 			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_TREE), "chop job left: " + colony.board().jobs());
 			// Done with the job, it brings the logs home rather than keep them from the colony.
-			Container core = (Container) helper.getBlockEntity(CHEST, BlockEntity.class);
+			Container core = home(helper);
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
 			helper.assertTrue(carried(bot, Items.OAK_LOG) == 0, "guard kept " + carried(bot, Items.OAK_LOG) + " logs");
-			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
 		});
 	}
 
@@ -1322,8 +1000,8 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 2, 5);
 		bareTree(helper, 5, 2);
-		AntBot west = colonyGuard(helper, colony, 1, 6);
-		AntBot east = colonyGuard(helper, colony, 6, 1);
+		AntBot west = colonyLumberjack(helper, colony, 1, 6);
+		AntBot east = colonyLumberjack(helper, colony, 6, 1);
 		BlockPos westTree = helper.absolutePos(new BlockPos(2, 1, 5));
 		BlockPos eastTree = helper.absolutePos(new BlockPos(5, 1, 2));
 		Set<BlockPos> felled = new HashSet<>();
@@ -1350,7 +1028,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		Colony colony = colonyAtHome(helper);
 		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));
 		colony.board().post(JobType.REPLANT, base, List.of(base), Optional.of(Items.OAK_SAPLING), helper.getLevel().getGameTime());
-		AntBot bot = colonyGuard(helper, colony, 2, 2);
+		AntBot bot = colonyLumberjack(helper, colony, 2, 2);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
 
 		helper.succeedWhen(() -> {

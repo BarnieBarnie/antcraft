@@ -6,7 +6,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 
 /**
- * Raw materials some bot role can collect (item tag {@code antcraft:gatherable}), so the
+ * Raw materials bots can collect (item tag {@code antcraft:gatherable}), so the
  * planner asks for them instead of trying to craft them.
  */
 public final class Gatherables {

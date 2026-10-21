@@ -6,7 +6,6 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
@@ -87,7 +86,6 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		colony.setMineshaft(shaft);
 		for (BlockPos at : List.of(new BlockPos(7, 5, 0), new BlockPos(7, 5, 7))) {
 			AntBot bot = member(helper, colony, at);
-			bot.setRole(BotRole.BUILDER);
 			bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 			if (at.getZ() == 0) {
 				bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE));

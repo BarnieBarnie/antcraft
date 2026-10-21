@@ -5,14 +5,12 @@ import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -27,8 +25,9 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Overview of the nearest colony, asking the server for fresh data while open. Rows have buttons to change a bot's
- * role, cancel an order or edit a stock target; the panel on the right orders items, sets stock targets and the radius.
+ * Overview of the nearest colony, asking the server for fresh data while open: each bot with the job it holds, and
+ * more. Rows have buttons to cancel an order or edit a stock target; the panel on the right orders items, sets stock
+ * targets and the radius.
  */
 public class ColonyStatusScreen extends Screen {
 	private static final int REFRESH_TICKS = 60;
@@ -42,7 +41,6 @@ public class ColonyStatusScreen extends Screen {
 	private static final int RED = 0xFFFF5555;
 	private static final int YELLOW = 0xFFFFFF55;
 	private static final String KEY = "screen.antcraft.colony_status";
-	/** Followed by a {@link BotRole#id()}. */
 	/** Followed by an {@link Colony.OrderPurpose#getSerializedName()}. */
 	private static final String PURPOSE_KEY = "screen.antcraft.colony_status.purpose.";
 
@@ -184,11 +182,6 @@ public class ColonyStatusScreen extends Screen {
 			.ifPresent(status -> ClientPlayNetworking.send(new ColonyNetworking.EditRequest(status.core(), kind, target, count)));
 	}
 
-	private void role(UUID bot, Optional<BotRole> role) {
-		this.reply.flatMap(ColonyNetworking.StatusReply::status)
-			.ifPresent(status -> ClientPlayNetworking.send(new ColonyNetworking.RoleRequest(status.core(), bot, role)));
-	}
-
 	@Override
 	public void tick() {
 		if (++this.ticks % REFRESH_TICKS == 0) {
@@ -233,16 +226,8 @@ public class ColonyStatusScreen extends Screen {
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.colony", status.core().toShortString(), status.radius()), WHITE));
 
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.bots", status.members(), status.idle()), YELLOW));
-		status.bots().forEach((id, bot) -> {
-			List<Act> acts = new ArrayList<>();
-			BotRole next = BotRole.values()[(bot.role().ordinal() + 1) % BotRole.values().length];
-			acts.add(new Act(Component.translatable("screen.antcraft.colony_status.next_role"), () -> this.role(id, Optional.of(next))));
-			if (bot.setByPlayer()) {
-				acts.add(new Act(Component.translatable("screen.antcraft.colony_status.give_back"), () -> this.role(id, Optional.empty())));
-			}
-			String key = bot.setByPlayer() ? "screen.antcraft.colony_status.bot_by_player" : "screen.antcraft.colony_status.bot";
-			lines.add(new Line(Component.translatable(key, bot.name(), bot.role().displayName()), bot.idle() ? GREY : WHITE, acts));
-		});
+		status.bots().values().forEach(bot -> lines.add(new Line(
+			Component.translatable("screen.antcraft.colony_status.bot", bot.name(), JobType.describe(bot.job())), bot.idle() ? GREY : WHITE)));
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.jobs", status.jobs(), status.claimed()), YELLOW));
 
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.stock"), YELLOW));

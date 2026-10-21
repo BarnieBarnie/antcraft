@@ -64,23 +64,6 @@ class ColonyActionsTest {
 	}
 
 	@Test
-	void onlyMembersOfThisColonyCanBeGivenRoles() {
-		Colony colony = colony();
-		assertTrue(ColonyActions.isMember(colony, MEMBER, colony.id()));
-		assertFalse(ColonyActions.isMember(colony, MEMBER, UUID.randomUUID()), "member of another colony");
-		assertFalse(ColonyActions.isMember(colony, MEMBER, null), "left the colony");
-		assertFalse(ColonyActions.isMember(colony, UUID.randomUUID(), colony.id()), "unknown bot");
-	}
-
-	@Test
-	void rolesAreGivenOnlyWhenBotsAreAllowedOnTheServer() {
-		Colony colony = colony();
-		assertTrue(ColonyActions.mayGiveRole(colony, MEMBER, colony.id(), true));
-		assertFalse(ColonyActions.mayGiveRole(colony, MEMBER, colony.id(), false), "bots not allowed");
-		assertFalse(ColonyActions.mayGiveRole(colony, UUID.randomUUID(), colony.id(), true), "not a member");
-	}
-
-	@Test
 	void editsOnlyChangeColonyDataSoTheyDoNotNeedBotsAllowed() {
 		for (ColonyActions.Edit edit : ColonyActions.Edit.values()) {
 			assertTrue(ColonyActions.mayEdit(edit, true), edit + " with bots allowed");

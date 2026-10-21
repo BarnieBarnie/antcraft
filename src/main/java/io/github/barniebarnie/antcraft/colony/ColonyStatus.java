@@ -1,7 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
@@ -14,6 +13,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -34,14 +34,13 @@ import net.minecraft.world.level.block.state.BlockState;
  * blocked, the trees and branches given up on as out of reach, and the room left in its core. {@code /antcraft colony info}
  * prints it and the colony status screen shows it, so the two cannot disagree.
  */
-public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<BotRole, Integer> roles, int idle, int radius,
+public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
 		List<Build> builds, List<BlockPos> blocked, List<GivenUp> givenUp, Room room) {
 
 	/** Why the storage area cannot take what the core has no room for, if it cannot. */
 	public enum StorageState {
 		READY("commands.antcraft.colony.storage.ready"),
-		NO_HAULER("commands.antcraft.colony.storage.no_hauler"),
 		NO_SITE("commands.antcraft.colony.storage.no_site"),
 		NO_CHEST("commands.antcraft.colony.storage.no_chest");
 
@@ -73,8 +72,11 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 			enumCodec(JobType.values()), GivenUp::type, BlockPos.STREAM_CODEC, GivenUp::target, GivenUp::new);
 	}
 
-	/** A loaded member bot; {@code setByPlayer} when a player chose its role, so the colony leaves it. */
-	public record Bot(String name, BotRole role, boolean idle, boolean setByPlayer) {
+	/** How long a member has had nothing to do before it counts as idle. */
+	public static final int IDLE_TICKS = 600;
+
+	/** A loaded member bot, with the type of the job it holds, if any. */
+	public record Bot(String name, Optional<JobType> job, boolean idle) {
 	}
 
 	/** A stock target with how many the colony has. */
@@ -116,8 +118,8 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 
 	// Here, not in Bot: Bot is built before ColonyStatus is loaded, and would see this class's codecs half made.
 	private static final StreamCodec<ByteBuf, Bot> BOT = StreamCodec.composite(
-		ByteBufCodecs.STRING_UTF8, Bot::name, enumCodec(BotRole.values()), Bot::role, ByteBufCodecs.BOOL, Bot::idle,
-		ByteBufCodecs.BOOL, Bot::setByPlayer, Bot::new);
+		ByteBufCodecs.STRING_UTF8, Bot::name, ByteBufCodecs.optional(enumCodec(JobType.values())), Bot::job, ByteBufCodecs.BOOL, Bot::idle,
+		Bot::new);
 	private static final StreamCodec<RegistryFriendlyByteBuf, Item> ITEM = ByteBufCodecs.registry(Registries.ITEM);
 	private static final StreamCodec<RegistryFriendlyByteBuf, Map<Item, Integer>> ITEM_COUNTS = ByteBufCodecs.map(LinkedHashMap::new, ITEM, ByteBufCodecs.VAR_INT);
 	private static final StreamCodec<ByteBuf, Map<JobType, Integer>> JOB_COUNTS =
@@ -127,7 +129,6 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		BlockPos.STREAM_CODEC, ColonyStatus::core,
 		ByteBufCodecs.VAR_INT, ColonyStatus::members,
 		ByteBufCodecs.map(LinkedHashMap::new, UUIDUtil.STREAM_CODEC, BOT), ColonyStatus::bots,
-		ByteBufCodecs.map(n -> new EnumMap<>(BotRole.class), enumCodec(BotRole.values()), ByteBufCodecs.VAR_INT), ColonyStatus::roles,
 		ByteBufCodecs.VAR_INT, ColonyStatus::idle,
 		ByteBufCodecs.VAR_INT, ColonyStatus::radius,
 		JOB_COUNTS, ColonyStatus::openJobs,
@@ -177,8 +178,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 		Map<UUID, Bot> bots = new HashMap<>();
 		for (UUID member : colony.members()) {
 			if (level.getEntity(member) instanceof AntBot bot) {
-				bots.put(member, new Bot(bot.getName().getString(), bot.getRole(), bot.getIdleTicks() >= RoleAssigner.IDLE_TICKS_BEFORE_REASSIGN,
-					bot.isRoleSetByPlayer()));
+				bots.put(member, new Bot(bot.getName().getString(), colony.board().jobOf(member).map(Job::type), bot.getIdleTicks() >= IDLE_TICKS));
 			}
 		}
 		Container core = Storage.containerAt(level, colony.core());
@@ -205,14 +205,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 	 */
 	public static ColonyStatus of(Colony colony, Map<UUID, Bot> bots, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
 			Predicate<Item> gatherable, Function<BlockPos, BlockState> world, int coreFreeSlots, boolean chestWithRoom) {
-		Map<BotRole, Integer> roles = new EnumMap<>(BotRole.class);
 		Map<UUID, Bot> loaded = new LinkedHashMap<>();
 		int idle = 0;
 		for (UUID member : colony.members()) {
 			Bot bot = bots.get(member);
 			if (bot != null) {
 				loaded.put(member, bot);
-				roles.merge(bot.role(), 1, Integer::sum);
 				idle += bot.idle() ? 1 : 0;
 			}
 		}
@@ -263,12 +261,11 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, Map<
 				batches));
 		}
 
-		StorageState storage = roles.getOrDefault(BotRole.HAULER, 0) == 0 ? StorageState.NO_HAULER
-			: colony.storage().isEmpty() ? StorageState.NO_SITE
+		StorageState storage = colony.storage().isEmpty() ? StorageState.NO_SITE
 			: !chestWithRoom ? StorageState.NO_CHEST
 			: StorageState.READY;
 
-		return new ColonyStatus(colony.core(), colony.members().size(), loaded, roles, idle, colony.radius(), open, claimed, stocks, orders, builds,
+		return new ColonyStatus(colony.core(), colony.members().size(), loaded, idle, colony.radius(), open, claimed, stocks, orders, builds,
 			colony.blockedSteps(), givenUp, new Room(coreFreeSlots, storage));
 	}
 }

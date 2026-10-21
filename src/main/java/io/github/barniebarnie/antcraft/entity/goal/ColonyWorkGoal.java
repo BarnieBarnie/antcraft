@@ -1,21 +1,20 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
-import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
-import java.util.EnumSet;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
@@ -29,10 +28,10 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Shared plumbing for colony roles: travelling, reaching blocks, the colony and its
- * job heartbeat, and a cooldown between idle checks.
+ * Shared plumbing for the work {@link WorkerGoal} runs: travelling, reaching blocks, fetching tools,
+ * and a cooldown before trying again after something failed. Work between jobs goes in {@link #betweenJobs}.
  */
-public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.Goal {
+public abstract class ColonyWorkGoal {
 	protected static final double REACH = 4.0;
 	protected static final int IDLE_TICKS = 20;
 	/** How often a bot looks for a better tool in the core. */
@@ -45,59 +44,67 @@ public abstract class ColonyWorkGoal extends net.minecraft.world.entity.ai.goal.
 	protected final BlockBreaker breaker;
 	/** What the bot can see, to break only blocks in sight; one for good, as goals compare by value. */
 	protected final Goal.Sight sight;
-	private final BotRole role;
 	private @Nullable Goal travelGoal;
-	protected boolean hasJob;
 	protected int cooldown;
 	/** The better tool the bot is on its way to fetch from the core, or null. */
 	private @Nullable Item upgrade;
 	private long nextUpgradeCheck;
 
-	protected ColonyWorkGoal(AntBot bot, BotRole role) {
+	protected ColonyWorkGoal(AntBot bot) {
 		this.bot = bot;
-		this.role = role;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
 		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
-		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
-	@Override
-	public boolean canUse() {
-		return this.bot.getRole() == this.role && this.bot.getWalkTarget() == null && this.bot.getColonyId() != null;
-	}
-
-	@Override
-	public boolean requiresUpdateEveryTick() {
-		return true;
-	}
-
-	@Override
-	public void stop() {
-		this.resetMovement();
-	}
-
-	@Override
-	public final void tick() {
-		if (!(this.bot.level() instanceof ServerLevel level)) {
-			return;
-		}
-		Optional<Colony> colony = Optional.ofNullable(this.bot.getColonyId()).flatMap(id -> ColonyManager.get(level).byId(id));
-		if (colony.isEmpty()) {
-			return;
-		}
-		this.bot.setWorking(this.hasJob);
-		if (this.hasJob && level.getGameTime() % 20 == 0) {
-			colony.get().board().heartbeat(this.bot.getUUID(), level.getGameTime());
-		}
+	/**
+	 * For {@link WorkerGoal}: works one tick on what there is to do between jobs, after waiting out a cooldown.
+	 * Returns false when there is nothing.
+	 */
+	public boolean upkeep(ServerLevel level, Colony colony) {
 		if (this.cooldown > 0) {
 			this.cooldown--;
-			return;
+			return true;
 		}
-		this.work(level, colony.get());
+		return this.betweenJobs(level, colony);
 	}
 
-	protected abstract void work(ServerLevel level, Colony colony);
+	/** Works one tick on what there is to do between jobs, such as storing what a job left. Returns false when there is nothing. */
+	protected boolean betweenJobs(ServerLevel level, Colony colony) {
+		return false;
+	}
+
+	/**
+	 * Takes the best sword in the core when it beats the weapon the bot carries, so the bot fights hostile mobs
+	 * armed. Returns true while busy doing so.
+	 */
+	protected boolean armFromCore(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (core == null) {
+			return false;
+		}
+		float carried = Tools.weaponScore(this.bot.getMainHandItem());
+		for (int i = 0; i < this.bot.getInventory().getContainerSize(); i++) {
+			carried = Math.max(carried, Tools.weaponScore(this.bot.getInventory().getItem(i)));
+		}
+		int slot = -1;
+		float best = carried;
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			ItemStack stack = core.getItem(i);
+			if (stack.is(ItemTags.SWORDS) && Tools.weaponScore(stack) > best) {
+				best = Tools.weaponScore(stack);
+				slot = i;
+			}
+		}
+		if (slot < 0) {
+			return false;
+		}
+		if (this.reach(colony.core())) {
+			this.bot.getInventory().addItem(core.removeItem(slot, 1));
+			Tools.equipBestWeapon(this.bot);
+		}
+		return true;
+	}
 
 	/**
 	 * Now and then looks for a better {@code kind} of tool: it fetches one from the core, leaving

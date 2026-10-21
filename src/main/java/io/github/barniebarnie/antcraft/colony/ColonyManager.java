@@ -5,7 +5,6 @@ import com.mojang.serialization.Codec;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
@@ -28,7 +27,6 @@ import io.github.barniebarnie.antcraft.work.ToolKind;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
@@ -67,6 +65,10 @@ public class ColonyManager extends SavedData {
 	private static final int SURVEY_INTERVAL = 100;
 	/** How far above and below the core crops are looked for. */
 	private static final int CROP_SCAN_HEIGHT = 4;
+	/** What a field yields: the colony lays one out only while it wants some of it. */
+	private static final Set<Item> FIELD_YIELDS = Set.of(Items.WHEAT, Items.WHEAT_SEEDS);
+	/** A core with this few free slots left gets a storage area levelled when there is no flat spot for one. */
+	private static final int NEARLY_FULL_FREE_SLOTS = 4;
 	/** Jobs whose bot has not reported for this long are freed for others. */
 	private static final long CLAIM_TIMEOUT = 600;
 
@@ -158,6 +160,11 @@ public class ColonyManager extends SavedData {
 		bot.setColonyId(null);
 	}
 
+	/**
+	 * Posts a harvest job for each ripe crop in the territory. A colony with no crops lays out a field once it wants
+	 * what a field yields (see {@link #FIELD_YIELDS}), for stock targets or orders, and posts a plant job for each
+	 * open spot of its field.
+	 */
 	private void surveyCrops(ServerLevel level, Colony colony) {
 		colony.board().removeOpenIf(job -> job.type() == JobType.HARVEST_CROP && !Farming.isRipe(level.getBlockState(job.target())));
 		BlockPos core = colony.core();
@@ -172,7 +179,7 @@ public class ColonyManager extends SavedData {
 				colony.board().post(JobType.HARVEST_CROP, pos);
 			}
 		}
-		if (colony.field().isEmpty() && crops == 0 && this.hasRole(level, colony, BotRole.FARMER)) {
+		if (colony.field().isEmpty() && crops == 0 && FIELD_YIELDS.stream().anyMatch(Storage.wanted(level, colony))) {
 			Field.choose(core, r, occupied(colony), pos -> Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
 				.ifPresent(colony::setField);
 		}
@@ -185,8 +192,8 @@ public class ColonyManager extends SavedData {
 
 	/**
 	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}),
-	 * for stock targets or orders, does it pick a mineshaft site, once it has a miner, and post branch jobs;
-	 * otherwise the open ones come off the board. It posts a job for each branch with
+	 * for stock targets or orders, does it pick a mineshaft site and post branch jobs, and order a pickaxe
+	 * when it has none; otherwise the open ones come off the board. It posts a job for each branch with
 	 * blocks left to dig at one mining level: the deepest dug one whose ores the colony wants. Each job
 	 * needs the pickaxe its level does (see {@link PickaxeTier#forBranch}).
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
@@ -201,10 +208,13 @@ public class ColonyManager extends SavedData {
 		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> Storage.wanted(level, colony));
 		Set<BlockPos> posted = new HashSet<>();
 		// With nothing mining yields wanted, no site is picked and no branch posted, so bots do other work.
-		boolean mining = (colony.mineshaft().isPresent() || this.hasRole(level, colony, BotRole.MINER)) && Mineshaft.yieldsWanted(wanted.get());
-		if (!mining) {
+		if (!Mineshaft.yieldsWanted(wanted.get())) {
 			colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp());
 			return;
+		}
+		if (bestPickaxe(level, colony, holds) == null) {
+			// No bot can take a branch job without one.
+			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
 		}
 		if (colony.mineshaft().isEmpty()) {
 			// The colony has no shaft yet, so this avoids the field and storage only.
@@ -281,10 +291,6 @@ public class ColonyManager extends SavedData {
 		return best;
 	}
 
-	private boolean hasRole(ServerLevel level, Colony colony, BotRole role) {
-		return colony.members().stream().anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getRole() == role);
-	}
-
 	/** Areas the colony already uses, which a new area must keep clear of. Add new kinds of areas here. */
 	private static List<BoundingBox> occupied(Colony colony) {
 		List<BoundingBox> areas = new ArrayList<>();
@@ -295,18 +301,21 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Picks the storage area once the colony has a hauler to keep it, levelling one first with its
-	 * builders when there is no flat spot, and orders the chests it needs
-	 * beyond the chests in {@code spare}; orders it no longer needs are withdrawn.
+	 * Picks the storage area once the core is nearly full, levelling one first when there is no flat spot, and orders
+	 * the chests it needs beyond the chests in {@code spare}; orders it no longer needs are withdrawn.
 	 */
 	private void surveyStorage(ServerLevel level, Colony colony, Map<Item, Integer> spare) {
-		if (!this.hasRole(level, colony, BotRole.HAULER)) {
-			colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of());
-			return;
-		}
 		if (colony.storage().isPresent()) {
 			int chests = HaulerGoal.chestsToOrder(level, colony, Math.max(0, spare.getOrDefault(Items.CHEST, 0)));
 			colony.orderFor(Colony.OrderPurpose.STORAGE, chests > 0 ? Map.of(Items.CHEST, chests) : Map.of());
+			return;
+		}
+		Container core = Storage.containerAt(level, colony.core());
+		int free = 0;
+		for (int i = 0; core != null && i < core.getContainerSize(); i++) {
+			free += core.getItem(i).isEmpty() ? 1 : 0;
+		}
+		if (core == null || free > NEARLY_FULL_FREE_SLOTS) {
 			return;
 		}
 		Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
@@ -314,7 +323,7 @@ public class ColonyManager extends SavedData {
 			pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
 		if (site.isPresent()) {
 			colony.setStorage(site.get());
-		} else if (!colony.hasTerraform() && this.hasRole(level, colony, BotRole.BUILDER)) {
+		} else if (!colony.hasTerraform()) {
 			// No flat spot: the colony levels one, and picks it once it is flat.
 			StorageArea.levelling(colony.core(), colony.radius(), occupied(colony), level::getBlockState, pos -> isWorkable(level, colony, pos))
 				.ifPresent(colony::addBuild);
@@ -330,19 +339,14 @@ public class ColonyManager extends SavedData {
 
 	/**
 	 * Posts a job per batch of each build plan, declaring what each still needs (see {@link Colony#declareBuildNeeds}),
-	 * and orders what the plans still have to place beyond what the colony holds, its bots' inventories included,
-	 * while it has a builder. Orders plans no longer need are withdrawn.
+	 * and orders what the plans still have to place beyond what the colony holds, its bots' inventories included.
+	 * Orders plans no longer need are withdrawn.
 	 */
 	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have) {
 		colony.postBuildJobs();
 		Item pickaxe = bestPickaxe(level, colony, have);
 		colony.declareBuildNeeds(level::getBlockState, step -> BuilderGoal.isPossible(level, step),
 			tool -> ToolKind.PICKAXE.rank(pickaxe) >= ToolKind.PICKAXE.rank(tool));
-		// ponytail: any bot builds now, but only a colony with a builder orders for its plans.
-		if (!this.hasRole(level, colony, BotRole.BUILDER)) {
-			colony.orderFor(Colony.OrderPurpose.BUILD, Map.of());
-			return;
-		}
 		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for.
 		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream()
 			.map(plan -> plan.materials(level::getBlockState, step -> BuilderGoal.isPossible(level, step))).toList());
@@ -412,39 +416,6 @@ public class ColonyManager extends SavedData {
 		}
 	}
 
-	/**
-	 * Gives unassigned members (such as freshly built bots) whatever work the colony needs
-	 * most, and moves idle members the colony assigned to roles that have work.
-	 */
-	private void assignRoles(ServerLevel level, Colony colony) {
-		List<AntBot> members = new ArrayList<>();
-		for (UUID id : colony.members()) {
-			if (level.getEntity(id) instanceof AntBot bot) {
-				members.add(bot);
-			}
-		}
-		Map<BotRole, Integer> roles = new EnumMap<>(BotRole.class);
-		members.forEach(bot -> roles.merge(bot.getRole(), 1, Integer::sum));
-		Map<JobType, Integer> openJobs = new EnumMap<>(JobType.class);
-		colony.board().jobs().stream().filter(Job::isOpen).forEach(job -> openJobs.merge(job.type(), 1, Integer::sum));
-
-		boolean hasOrders = !colony.orders().isEmpty();
-		boolean needsHauler = HaulerGoal.needsHauler(level, colony);
-		boolean coreNearlyFull = HaulerGoal.coreNearlyFull(level, colony);
-		for (AntBot bot : members) {
-			BotRole current = bot.getRole();
-			BotRole role = current == BotRole.NONE
-				? RoleAssigner.choose(roles, openJobs, hasOrders, needsHauler, coreNearlyFull)
-				: RoleAssigner.reassign(current, bot.isRoleSetByPlayer(), bot.getIdleTicks(), roles, openJobs, hasOrders, needsHauler);
-			if (role == current) {
-				continue;
-			}
-			bot.assignRole(role);
-			roles.merge(role, 1, Integer::sum);
-			roles.merge(current, -1, Integer::sum);
-		}
-	}
-
 	public void tick(ServerLevel level) {
 		long now = level.getGameTime();
 		for (Colony colony : this.colonies.values()) {
@@ -474,7 +445,6 @@ public class ColonyManager extends SavedData {
 			this.surveyStock(level, colony);
 			this.surveyCoreJobs(level, colony);
 			this.surveyTrees(level, colony, trees);
-			this.assignRoles(level, colony);
 		}
 	}
 }

@@ -16,7 +16,6 @@ import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
@@ -61,8 +60,6 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft status
  * /antcraft goto &lt;pos&gt; [bots]   (defaults to the nearest bot)
  * /antcraft stop [bots]
- * /antcraft role &lt;role&gt; [bots]
- * /antcraft home &lt;pos&gt; [bots]
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
@@ -85,14 +82,6 @@ public final class AntCraftCommands {
 	}
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext) {
-		LiteralArgumentBuilder<CommandSourceStack> role = Commands.literal("role");
-		for (BotRole value : BotRole.values()) {
-			role.then(Commands.literal(value.id())
-				.executes(ctx -> setRole(ctx.getSource(), nearestBot(ctx.getSource()), value))
-				.then(Commands.argument("bots", EntityArgument.entities())
-					.executes(ctx -> setRole(ctx.getSource(), bots(ctx), value))));
-		}
-
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 			.then(Commands.literal("status").executes(AntCraftCommands::status))
@@ -105,7 +94,6 @@ public final class AntCraftCommands {
 				.executes(ctx -> stop(ctx.getSource(), nearestBot(ctx.getSource())))
 				.then(Commands.argument("bots", EntityArgument.entities())
 					.executes(ctx -> stop(ctx.getSource(), bots(ctx)))))
-			.then(role)
 			.then(Commands.literal("colony")
 				.then(Commands.literal("info").executes(ctx -> colonyInfo(ctx.getSource())))
 				.then(Commands.literal("blocked")
@@ -158,12 +146,7 @@ public final class AntCraftCommands {
 									BlockPosArgument.getLoadedBlockPos(ctx, "to"), IntegerArgumentType.getInteger(ctx, "y")))))))
 				.then(Commands.literal("cancel")
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
-						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value())))))
-			.then(Commands.literal("home")
-				.then(Commands.argument("pos", BlockPosArgument.blockPos())
-					.executes(ctx -> setHome(ctx, nearestBot(ctx.getSource())))
-					.then(Commands.argument("bots", EntityArgument.entities())
-						.executes(ctx -> setHome(ctx, bots(ctx)))))));
+						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value()))))));
 	}
 
 	private static Optional<Colony> nearestColony(CommandSourceStack source) {
@@ -180,9 +163,9 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		ColonyStatus status = ColonyStatus.of(source.getLevel(), found.get());
-		Component roles = ComponentUtils.formatList(roleCounts(status.roles()), Component.literal(", "));
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.info",
-			status.core().toShortString(), status.members(), roles, status.jobs(),status.claimed(), status.radius(), status.idle()), false);
+			status.core().toShortString(), status.members(), status.jobs(), status.claimed(), status.radius(), status.idle()), false);
+		status.bots().values().forEach(bot -> source.sendSuccess(() -> botLine(bot), false));
 
 		List<String> low = status.stock().stream().filter(ColonyStatus.Stock::isShort)
 			.map(stock -> stock.have() + "/" + stock.want() + " " + stock.name()).toList();
@@ -481,35 +464,9 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
-	private static int setRole(CommandSourceStack source, List<AntBot> bots, BotRole role) {
-		if (!checkAllowed(source) || !checkAny(source, bots)) {
-			return 0;
-		}
-		bots.forEach(bot -> bot.setRole(role));
-		source.sendSuccess(() -> roleReply(bots.size(), role), false);
-		return bots.size();
-	}
-
-	static Component roleReply(int count, BotRole role) {
-		return Component.translatable("commands.antcraft.role", count, role.displayName());
-	}
-
-	/** One "role: count" part per role, with the role's translated name. */
-	static List<Component> roleCounts(Map<BotRole, Integer> roles) {
-		return roles.entrySet().stream()
-			.map(entry -> (Component) Component.translatable("commands.antcraft.colony.role_count", entry.getKey().displayName(), entry.getValue()))
-			.toList();
-	}
-
-	private static int setHome(CommandContext<CommandSourceStack> ctx, List<AntBot> bots) {
-		CommandSourceStack source = ctx.getSource();
-		if (!checkAllowed(source) || !checkAny(source, bots)) {
-			return 0;
-		}
-		BlockPos pos = BlockPosArgument.getBlockPos(ctx, "pos");
-		bots.forEach(bot -> bot.setHome(pos));
-		source.sendSuccess(() -> Component.translatable("commands.antcraft.home", bots.size(), pos.toShortString()), false);
-		return bots.size();
+	/** A member's line in {@code colony info}: its name and the job it holds, or that it has none. */
+	static Component botLine(ColonyStatus.Bot bot) {
+		return Component.translatable("commands.antcraft.colony.bot", bot.name(), JobType.describe(bot.job()));
 	}
 
 	private static int status(CommandContext<CommandSourceStack> ctx) {

@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.barniebarnie.antcraft.colony.Colony;
-import io.github.barniebarnie.antcraft.entity.BotRole;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -31,7 +31,7 @@ class LangKeysTest {
 	private static final Pattern KEY = Pattern.compile("\"((?:[a-z0-9_]+\\.)+antcraft(?:\\.[a-z0-9_]+)*\\.?)\"");
 	/** Key families built at runtime from a prefix and an enum value. */
 	private static final Map<String, List<String>> FAMILIES = Map.of(
-		BotRole.KEY_PREFIX, Stream.of(BotRole.values()).map(BotRole::id).toList(),
+		JobType.KEY_PREFIX, Stream.of(JobType.values()).map(JobType::getSerializedName).toList(),
 		"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
 
 	@Test
@@ -52,9 +52,9 @@ class LangKeysTest {
 	}
 
 	@Test
-	void everyRoleHasALangKey() throws IOException {
+	void everyJobTypeHasALangKey() throws IOException {
 		Set<String> lang = JsonParser.parseString(Files.readString(LANG)).getAsJsonObject().keySet();
-		List<String> missing = Stream.of(BotRole.values()).map(BotRole::translationKey).filter(key -> !lang.contains(key)).toList();
+		List<String> missing = Stream.of(JobType.values()).map(JobType::translationKey).filter(key -> !lang.contains(key)).toList();
 		assertEquals(List.of(), missing);
 	}
 

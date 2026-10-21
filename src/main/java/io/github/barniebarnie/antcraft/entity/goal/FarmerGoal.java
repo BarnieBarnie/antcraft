@@ -5,7 +5,6 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Farming;
@@ -47,10 +46,9 @@ import org.jspecify.annotations.Nullable;
  * Farm work. As the executor of crop jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work}, it
  * gets any colony bot to harvest a ripe crop and replant it, or to till and plant a spot in the colony field,
  * fetching seeds and a hoe from the core or breaking grass for seeds, and watering the field's middle with a
- * bucket first. A bot of another role stores the produce after each harvest.
- * As the farmer's role goal it stores the produce, and with nothing else to do shears sheep in the territory
- * for wool, fetching shears from the core or ordering a pair.
- * Now and then it swaps its hoe for a better one in the core, or orders the best one the colony can make.
+ * bucket first. It stores the produce after each harvest.
+ * Between jobs it shears sheep in the territory while the colony is short of wool, fetching shears from the core
+ * or ordering a pair.
  */
 public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Seeds a farmer keeps for replanting. */
@@ -95,31 +93,17 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private long fleeceUntil;
 
 	public FarmerGoal(AntBot bot) {
-		super(bot, BotRole.FARMER);
+		super(bot);
 	}
 
-	/** The farmer's own work between crop jobs: storing produce, a better hoe, and shearing. */
+	/** Farm work between jobs, for any bot: storing produce, and shearing sheep while the colony is short of wool. */
 	@Override
-	protected void work(ServerLevel level, Colony colony) {
+	protected boolean betweenJobs(ServerLevel level, Colony colony) {
 		if (this.depositing) {
 			this.deposit(level, colony);
-			return;
+			return true;
 		}
-		if (this.upgradeTool(level, colony, ToolKind.HOE)) {
-			return;
-		}
-		if (freeSlots(this.bot.getInventory()) < MIN_FREE_SLOTS && this.mayDeposit(level)) {
-			this.depositing = true;
-			return;
-		}
-		if (this.shearSheep(level, colony)) {
-			return;
-		}
-		if (!this.produce().isEmpty() && this.mayDeposit(level)) {
-			this.depositing = true;
-		} else {
-			this.cooldown = IDLE_TICKS;
-		}
+		return this.shearSheep(level, colony);
 	}
 
 	@Override
@@ -192,7 +176,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		this.bot.setWorking(false);
 	}
 
-	/** Harvests the ripe crop and replants it. A bot of another role then stores the produce, which it would keep from the colony. */
+	/** Harvests the ripe crop and replants it, then stores the produce, which it would otherwise keep from the colony. */
 	private void harvest(ServerLevel level, Job job) {
 		BlockPos crop = job.target();
 		BlockState state = level.getBlockState(crop);
@@ -203,7 +187,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (this.reach(crop) && this.breaker.tick(level, crop, true)) {
 			this.replant(level, crop, state.getBlock());
 			this.endJob(WorkerGoal.Outcome.COMPLETE);
-			this.depositing = this.bot.getRole() != BotRole.FARMER && !this.produce().isEmpty() && this.mayDeposit(level);
+			this.depositing = !this.produce().isEmpty() && this.mayDeposit(level);
 		}
 	}
 

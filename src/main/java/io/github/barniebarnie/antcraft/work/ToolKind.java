@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A kind of tool a role works with (pickaxes, axes, hoes) and its tiers, worst first, with the
+ * A kind of tool bots work with (pickaxes, axes, hoes) and its tiers, worst first, with the
  * in-world side of {@link ToolUpgrade}: which one a bot carries, swapping it for a better one from
  * storage, and ordering one from the colony. Tiers the colony cannot craft yet (copper and iron need
  * smelting, netherite smithing) are listed so they rank right; they are only ordered once their
@@ -69,8 +69,8 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	/**
 	 * The best tool in {@code storage} that beats what the bot carries, to go and fetch. If there
 	 * is none and the bot is in {@code colony}, orders the best tier the colony can make instead.
-	 * A bot without a tool of this kind only fetches one, unless it {@code needs} one now: roles that
-	 * can work without one do not order.
+	 * A bot without a tool of this kind only fetches one, unless it {@code needs} one now: a job that
+	 * can be done without one orders none.
 	 */
 	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony) {
 		return this.findUpgrade(level, bot, storage, colony, () -> false);

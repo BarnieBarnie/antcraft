@@ -1,4 +1,4 @@
-"""Generates AntCraft role skins (64x64 wide-arm player layout). Original art, drawn from code."""
+"""Generates AntCraft bot skins, one per kind of work (64x64 wide-arm player layout). Original art, drawn from code."""
 import sys
 from PIL import Image
 
@@ -96,7 +96,7 @@ def person(skin, hair, eyes, shirt, pants, shoes, extra=None):
     return role
 
 
-# --- roles -----------------------------------------------------------------
+# --- kinds of work (see BotSkins) -----------------------------------------
 
 def lumberjack_shirt(part, face, x, y):
     red, dark, black = rgb("b22222"), rgb("7a1414"), rgb("1c1c1c")
@@ -155,28 +155,6 @@ def farmer_extra(part, layer, face, x, y, fw, fh):
             if face == "front" and y == 3 and x in (1, 6):
                 return rgb("d4d4d4")  # buttons
             return overall
-    return None
-
-
-def guard_shirt(part, face, x, y):
-    steel, light = rgb("8e959c"), rgb("b7bec4")
-    return light if (y % 3 == 0) else steel
-
-
-def guard_extra(part, layer, face, x, y, fw, fh):
-    blue, gold = rgb("23408e"), rgb("d8b23a")
-    # Blue tabard with a gold stripe over the chainmail.
-    if layer == "base" and part == "body" and face in ("front", "back") and 2 <= x <= 5 and y >= 1:
-        return gold if x in (3, 4) and face == "front" and 2 <= y <= 4 else blue
-    if part == "head" and layer == "over":
-        steel, dark = rgb("9aa1a8"), rgb("5d6369")
-        if face == "top":
-            return steel if (x + y) % 2 else dark
-        if face != "bottom" and y < 3:
-            if face == "front" and y == 2 and x in (3, 4):
-                return dark  # nose guard
-            return dark if y == 2 else steel
-        return None
     return None
 
 
@@ -246,16 +224,15 @@ def builder_extra(part, layer, face, x, y, fw, fh):
     return None
 
 
-ROLES = {
+SKINS = {
     "lumberjack": person("c68e6a", "5a3a1e", "3a5f8a", lumberjack_shirt, "34508a", "4a2f1b", lumberjack_extra),
     "miner": person("b5815f", "2a2a2a", "4a3420", "3b3f45", "2d2f33", "1e1e1e", miner_extra),
     "farmer": person("e0ac84", "c9893a", "4f7a2e", farmer_shirt, "3f7d3a", "5b3b20", farmer_extra),
-    "guard": person("d9a27e", "1f1f1f", "2c4a8a", guard_shirt, "23408e", "3a3a3a", guard_extra),
     "hauler": person("a8724f", "3a2818", "5a3a22", "9b6b3c", "c2a77a", "4a3220", hauler_extra),
     "crafter": person("f0c8a0", "a0a0a0", "6a2c91", crafter_robe, "4b1f68", "2b2b2b", crafter_extra),
     "builder": person("d8a07a", "6b4a2b", "3f6e4a", builder_vest, "3d5470", "5a3b22", builder_extra),
 }
 
-for name, role in ROLES.items():
-    paint(role).save(f"{out_dir}/{name}.png")
+for name, look in SKINS.items():
+    paint(look).save(f"{out_dir}/{name}.png")
     print("wrote", name)

@@ -21,7 +21,7 @@ import org.jspecify.annotations.Nullable;
  * retried once the rest is down: the bot pillars up to them, and that pillar is taken down in turn,
  * under it. Retries are limited per {@link #reset}, and a block it cannot reach even by pillaring is
  * left behind, and so is one it cannot see from anywhere in reach, since like a player it breaks
- * only blocks in sight. Shared by the roles that pillar up, such as lumberjacks and builders.
+ * only blocks in sight. Shared by the work that pillars up: trees and builds.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;

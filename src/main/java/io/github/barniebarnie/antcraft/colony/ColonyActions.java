@@ -4,7 +4,6 @@ import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
@@ -12,7 +11,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
-import org.jspecify.annotations.Nullable;
 
 /**
  * Changes a player makes to a colony, from {@code /antcraft colony} commands or the colony screen. The screen's
@@ -25,7 +23,7 @@ public final class ColonyActions {
 	public static final int MAX_RADIUS = 128;
 
 	/**
-	 * What a player can change in a colony, besides roles. The colony screen makes the first few; the rest only come from
+	 * What a player can change in a colony. The colony screen makes the first few; the rest only come from
 	 * {@code /antcraft colony} commands, which need positions in the world ({@link #fromScreen}). Every colony-editing
 	 * command checks its edit with {@link #mayEdit}, the same as the screen.
 	 */
@@ -88,27 +86,12 @@ public final class ColonyActions {
 		return mayAct(colony, from, isOp, requireOp);
 	}
 
-	/** Whether the bot with id {@code bot}, which says it belongs to {@code botColony}, is a member of {@code colony}. */
-	public static boolean isMember(Colony colony, UUID bot, @Nullable UUID botColony) {
-		return colony.id().equals(botColony) && colony.members().contains(bot);
-	}
-
-	/**
-	 * Whether the bot with id {@code bot} may be given a role in {@code colony}: it must be a member, and bots must be
-	 * allowed on the server ({@link io.github.barniebarnie.antcraft.config.AntCraftConfig#botsAllowed}), the same gate as
-	 * {@code /antcraft role}.
-	 */
-	public static boolean mayGiveRole(Colony colony, UUID bot, @Nullable UUID botColony, boolean botsAllowed) {
-		return botsAllowed && isMember(colony, bot, botColony);
-	}
-
 	/**
 	 * Whether {@code edit} may be made, from the colony screen or the matching {@code /antcraft colony} command, given
 	 * whether bots are allowed on the server ({@link io.github.barniebarnie.antcraft.config.AntCraftConfig#botsAllowed}).
 	 * The rule: changes to the colony's data (orders, stock targets, radius, the mineshaft, builds, terraform plans and
 	 * blocked steps) do not need bots allowed, so a colony can be
-	 * planned or tidied while its bots are off; anything that commands bots does ({@link #mayGiveRole}, and
-	 * {@code /antcraft role}, {@code goto} and {@code home}).
+	 * planned or tidied while its bots are off; anything that commands bots does (such as {@code /antcraft goto}).
 	 */
 	public static boolean mayEdit(Edit edit, boolean botsAllowed) {
 		return botsAllowed || !edit.commandsBots();

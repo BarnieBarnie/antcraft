@@ -1,12 +1,12 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.FarmerGoal;
-import io.github.barniebarnie.antcraft.entity.goal.GuardGoal;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
 import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
@@ -14,15 +14,12 @@ import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.work.Revisit;
-import io.github.barniebarnie.antcraft.work.TreeRetry;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -57,7 +54,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * A colony worker. Carries an inventory, picks up items, defends itself
- * against hostile mobs and can be sent to a target position.
+ * against hostile mobs and can be sent to a target position. In a colony it
+ * takes whatever job the colony has (see {@link WorkerGoal}); without one it
+ * does no work.
  */
 public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private static final int INVENTORY_SIZE = 27;
@@ -67,16 +66,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 * ponytail: a distance stands in for "still needed"; a bot coming back over a bridge it left may have to bridge again.
 	 */
 	private static final int PATH_SCAFFOLD_RANGE = 8;
-	/** The role id, synched so clients can dress the bot for its role. */
-	public static final EntityDataAccessor<String> DATA_ROLE = SynchedEntityData.defineId(AntBot.class, EntityDataSerializers.STRING);
+	/**
+	 * The type of the job the bot took last, empty before its first, synched so clients can dress the bot for its
+	 * work. Not saved: a bot loads in its own skin until it takes a job.
+	 */
+	public static final EntityDataAccessor<String> DATA_JOB = SynchedEntityData.defineId(AntBot.class, EntityDataSerializers.STRING);
 
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 	private @Nullable BlockPos walkTarget;
-	/** Roles set by a player are kept; the colony may change the ones it assigned itself. */
-	private boolean roleSetByPlayer = true;
 	private @Nullable BlockPos home;
 	private @Nullable UUID colonyId;
-	/** Set by the role goals while they have a job; not saved, they set it again after loading. */
+	/** Set while the bot has work, a job or work between jobs; not saved, it is set again after loading. */
 	private boolean working;
 	private int idleTicks;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
@@ -84,23 +84,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
 	/**
-	 * The role whose goal placed that scaffold and takes it down while the bot has that role; saved with it.
-	 * Bots saved before this was saved only had a lumberjack's scaffold.
-	 */
-	private BotRole scaffoldRole = BotRole.LUMBERJACK;
-	/**
 	 * Every block the bot placed while following a path, which other bots leave alone until the bot
 	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
 	 */
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
-	/** Saved, so after loading a solo lumberjack goes back to its tree and others still leave it alone. */
-	private List<BlockPos> tree = List.of();
-	/** Where that tree stood on the ground, which its bottom log may no longer show; saved with it. */
-	private @Nullable BlockPos treeBase;
-	/** Felled trees the bot could not replant, by base; saved, so it comes back after unloading. */
-	private final Map<BlockPos, Revisit> revisits = new LinkedHashMap<>();
-	/** Trees a solo bot could not fell whole, by base, to come back to; saved, so the retries and their bound survive unloading. */
-	private final Map<BlockPos, TreeRetry> treeRetries = new LinkedHashMap<>();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -120,7 +107,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	@Override
 	protected void defineSynchedData(SynchedEntityData.Builder builder) {
 		super.defineSynchedData(builder);
-		builder.define(DATA_ROLE, BotRole.NONE.id());
+		builder.define(DATA_JOB, "");
 	}
 
 	public static int countIn(ServerLevel level) {
@@ -133,21 +120,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
 		this.goalSelector.addGoal(2, new ReturnHomeGoal(this));
-		// Colony jobs that have moved off the role goals; it takes the bot from its role goal while that has no work.
-		LumberjackGoal lumberjack = new LumberjackGoal(this);
-		FarmerGoal farmer = new FarmerGoal(this);
-		MinerGoal miner = new MinerGoal(this);
-		HaulerGoal hauler = new HaulerGoal(this);
-		BuilderGoal builder = new BuilderGoal(this);
-		// The crafter's work is all jobs now, so it has no role goal.
-		this.goalSelector.addGoal(3, new WorkerGoal(this, lumberjack, farmer, miner, new CrafterGoal(this), hauler, builder));
-		// First of the role goals: it also takes down scaffolding left from an earlier role, before the new role's work.
-		this.goalSelector.addGoal(4, lumberjack);
-		this.goalSelector.addGoal(4, miner);
-		this.goalSelector.addGoal(4, farmer);
-		this.goalSelector.addGoal(4, new GuardGoal(this));
-		this.goalSelector.addGoal(4, hauler);
-		this.goalSelector.addGoal(4, builder);
+		// All colony work: jobs from the board, and what is left to do between them.
+		this.goalSelector.addGoal(3, new WorkerGoal(this, new LumberjackGoal(this), new FarmerGoal(this), new MinerGoal(this),
+			new CrafterGoal(this), new HaulerGoal(this), new BuilderGoal(this)));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
@@ -214,37 +189,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 	}
 
-	public BotRole getRole() {
-		return BotRole.byId(this.entityData.get(DATA_ROLE));
+	/** The type of the job the bot took last, or empty before its first. */
+	public Optional<JobType> getJobType() {
+		String id = this.entityData.get(DATA_JOB);
+		return Stream.of(JobType.values()).filter(type -> type.getSerializedName().equals(id)).findFirst();
 	}
 
-	/** Sets the role on a player's behalf; the colony will not change it. */
-	public void setRole(BotRole role) {
-		this.changeRole(role, true);
+	public void setJobType(JobType type) {
+		this.entityData.set(DATA_JOB, type.getSerializedName());
 	}
 
-	/** Sets the role on the colony's behalf; the colony may move the bot to other work later. */
-	public void assignRole(BotRole role) {
-		this.changeRole(role, false);
-	}
-
-	private void changeRole(BotRole role, boolean byPlayer) {
-		this.entityData.set(DATA_ROLE, role.id());
-		this.roleSetByPlayer = byPlayer;
-		this.working = false;
-		this.idleTicks = 0;
-	}
-
-	/** Hands the bot back to the colony: it keeps its role until the colony moves it to other work. */
-	public void releaseRole() {
-		this.roleSetByPlayer = false;
-	}
-
-	public boolean isRoleSetByPlayer() {
-		return this.roleSetByPlayer;
-	}
-
-	/** Whether the bot's role has work in progress, such as a claimed job. */
+	/** Whether the bot has work in progress, such as a claimed job. */
 	public boolean isWorking() {
 		return this.working;
 	}
@@ -263,20 +218,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.scaffold;
 	}
 
-	/** Records a scaffold block {@code role}'s goal placed and will take down while the bot has that role. */
-	public void addScaffold(BlockPos pos, BotRole role) {
+	/** Records a scaffold block the bot placed for its work, to take down once done with it. */
+	public void addScaffold(BlockPos pos) {
 		this.scaffold.add(pos.immutable());
-		this.scaffoldRole = role;
-	}
-
-	/** The role whose goal placed the scaffold in {@link #getScaffold}. */
-	public BotRole getScaffoldRole() {
-		return this.scaffoldRole;
-	}
-
-	/** Whether there is scaffold up that the bot's role did not place, such as after a role change, for whichever goal cleans that up. */
-	public boolean hasLeftoverScaffold() {
-		return !this.scaffold.isEmpty() && this.scaffoldRole != this.getRole();
 	}
 
 	/** Records a block placed while following a path, so other bots leave it alone while this bot is near it. */
@@ -291,47 +235,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return all;
 	}
 
-	/** Logs of the tree the bot is felling, so other lumberjacks leave that tree alone. Empty when it is not felling one. */
-	public List<BlockPos> getTree() {
-		return this.tree;
-	}
-
-	/** Claims {@code logs}, taking the lowest of them as the tree's base. */
-	public void setTree(List<BlockPos> logs) {
-		this.setTree(lowest(logs), logs);
-	}
-
-	public void setTree(@Nullable BlockPos base, List<BlockPos> logs) {
-		this.tree = List.copyOf(logs);
-		this.treeBase = logs.isEmpty() ? null : base;
-	}
-
-	/** Where the claimed tree stood on the ground, or null when not felling one. */
-	public @Nullable BlockPos getTreeBase() {
-		return this.treeBase;
-	}
-
-	private static @Nullable BlockPos lowest(List<BlockPos> logs) {
-		return logs.stream().min(Comparator.comparingInt(BlockPos::getY)).orElse(null);
-	}
-
-	/**
-	 * Trees this bot felled without the saplings to replant, by base, oldest first. Saved with the bot;
-	 * callers change it in place.
-	 */
-	public Map<BlockPos, Revisit> getRevisits() {
-		return this.revisits;
-	}
-
-	/**
-	 * Trees this bot left logs of out of reach, by base, oldest first, to retry later or given up on.
-	 * Saved with the bot; callers change it in place. Colony bots keep these on the job board instead.
-	 */
-	public Map<BlockPos, TreeRetry> getTreeRetries() {
-		return this.treeRetries;
-	}
-
-	/** The storage block this bot brings its work to, usually a chest. */
+	/** The storage block this bot brings its work to: its colony's core. */
 	public @Nullable BlockPos getHome() {
 		return this.home;
 	}
@@ -395,39 +299,20 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.addAdditionalSaveData(output);
 		this.writeInventoryToTag(output);
 		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
-		output.putString("Role", this.entityData.get(DATA_ROLE));
-		output.putBoolean("RoleSetByPlayer", this.roleSetByPlayer);
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
-		output.putString("ScaffoldRole", this.scaffoldRole.id());
-		output.store("Tree", BlockPos.CODEC.listOf(), this.tree);
-		output.storeNullable("TreeBase", BlockPos.CODEC, this.treeBase);
-		output.store("Revisits", Revisit.CODEC.listOf(), List.copyOf(this.revisits.values()));
-		output.store("TreeRetries", TreeRetry.CODEC.listOf(), List.copyOf(this.treeRetries.values()));
 	}
 
+	/** Bots saved with a role ({@code Role}, {@code RoleSetByPlayer}, {@code ScaffoldRole}) load without it, as workers like any other. */
 	@Override
 	protected void readAdditionalSaveData(ValueInput input) {
 		super.readAdditionalSaveData(input);
 		this.readInventoryFromTag(input);
 		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
-		this.entityData.set(DATA_ROLE, BotRole.byId(input.getStringOr("Role", BotRole.NONE.id())).id());
-		// Bots saved before this flag existed keep their role.
-		this.roleSetByPlayer = input.getBooleanOr("RoleSetByPlayer", true);
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
-		this.scaffoldRole = BotRole.byId(input.getStringOr("ScaffoldRole", BotRole.LUMBERJACK.id()));
-		List<BlockPos> claim = input.read("Tree", BlockPos.CODEC.listOf()).orElse(List.of());
-		// Claims saved before the base was saved were the whole tree, so its lowest log is the base.
-		this.setTree(input.read("TreeBase", BlockPos.CODEC).orElseGet(() -> lowest(claim)), claim);
-		this.revisits.clear();
-		input.read("Revisits", Revisit.CODEC.listOf())
-			.ifPresent(list -> list.forEach(revisit -> this.revisits.put(revisit.pos(), revisit)));
-		this.treeRetries.clear();
-		input.read("TreeRetries", TreeRetry.CODEC.listOf())
-			.ifPresent(list -> list.forEach(retry -> this.treeRetries.put(retry.base(), retry)));
 	}
 }

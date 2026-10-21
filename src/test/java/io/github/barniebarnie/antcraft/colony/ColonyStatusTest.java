@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.netty.buffer.Unpooled;
@@ -63,33 +62,31 @@ class ColonyStatusTest {
 		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(new BlockPos(12, 64, 12))), List.of(), BuildPlan.Kind.TERRAFORM));
 
 		Map<UUID, ColonyStatus.Bot> bots = Map.of(
-			LUMBERJACK, new ColonyStatus.Bot("Lumberjack", BotRole.LUMBERJACK, false, false),
-			MINER, new ColonyStatus.Bot("Miner", BotRole.MINER, false, true),
-			IDLE_MINER, new ColonyStatus.Bot("Idle miner", BotRole.MINER, true, false));
+			LUMBERJACK, new ColonyStatus.Bot("Lumberjack", Optional.of(JobType.CHOP_TREE), false),
+			MINER, new ColonyStatus.Bot("Miner", Optional.empty(), false),
+			IDLE_MINER, new ColonyStatus.Bot("Idle miner", Optional.empty(), true));
 		Map<Item, Integer> stock = Map.of(Items.OAK_LOG, 40, Items.TORCH, 2, Items.COBBLESTONE, 10);
 		// The first step is placed already.
-		// The core is full, and there is no hauler to keep storage.
+		// The core is full, and the colony has no storage area.
 		return ColonyStatus.of(colony, bots, stock, item -> List.of(), Items.OAK_LOG::equals,
 			pos -> pos.getY() == 64 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), 0, false);
 	}
 
-	/** A colony with a hauler, and a storage area if {@code site}. */
+	/** A colony with a storage area if {@code site}. */
 	private static ColonyStatus.Room room(boolean site, int freeSlots, boolean chestWithRoom) {
-		UUID hauler = UUID.randomUUID();
-		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(hauler), new JobBoard(), 20,
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20,
 			Map.of(), Optional.empty(), List.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
 		if (site) {
 			colony.setStorage(new StorageArea(new BlockPos(5, 64, 5)));
 		}
-		Map<UUID, ColonyStatus.Bot> bots = Map.of(hauler, new ColonyStatus.Bot("Hauler", BotRole.HAULER, false, false));
-		return ColonyStatus.of(colony, bots, Map.of(), item -> List.of(), item -> false, pos -> Blocks.AIR.defaultBlockState(), freeSlots, chestWithRoom).room();
+		return ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false, pos -> Blocks.AIR.defaultBlockState(), freeSlots, chestWithRoom).room();
 	}
 
 	@Test
 	void reportsAFullCoreAndWhyThereIsNoStorage() {
 		ColonyStatus.Room room = status().room();
 		assertTrue(room.coreFull());
-		assertEquals(ColonyStatus.StorageState.NO_HAULER, room.storage());
+		assertEquals(ColonyStatus.StorageState.NO_SITE, room.storage());
 		assertEquals(new ColonyStatus.Room(0, ColonyStatus.StorageState.NO_SITE), room(false, 0, false));
 		assertEquals(new ColonyStatus.Room(0, ColonyStatus.StorageState.NO_CHEST), room(true, 0, false));
 		assertEquals(new ColonyStatus.Room(3, ColonyStatus.StorageState.READY), room(true, 3, true));
@@ -97,10 +94,9 @@ class ColonyStatusTest {
 	}
 
 	@Test
-	void countsMembersByRole() {
+	void countsMembersAndIdleOnes() {
 		ColonyStatus status = status();
 		assertEquals(4, status.members());
-		assertEquals(Map.of(BotRole.LUMBERJACK, 1, BotRole.MINER, 2), status.roles());
 		assertEquals(1, status.idle());
 		assertEquals(20, status.radius());
 		assertEquals(Map.of(JobType.CHOP_TREE, 1, JobType.MINE_BRANCH, 1), status.openJobs());
@@ -110,7 +106,7 @@ class ColonyStatusTest {
 	@Test
 	void listsLoadedMembersInOrder() {
 		assertEquals(List.of(LUMBERJACK, MINER, IDLE_MINER), List.copyOf(status().bots().keySet()));
-		assertEquals(new ColonyStatus.Bot("Miner", BotRole.MINER, false, true), status().bots().get(MINER));
+		assertEquals(new ColonyStatus.Bot("Lumberjack", Optional.of(JobType.CHOP_TREE), false), status().bots().get(LUMBERJACK));
 	}
 
 	@Test

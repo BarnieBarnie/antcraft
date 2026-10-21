@@ -7,7 +7,6 @@ import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.work.Crafting;
@@ -78,13 +77,7 @@ public class CrafterGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private long smeltUntil;
 
 	public CrafterGoal(AntBot bot) {
-		super(bot, BotRole.CRAFTER);
-	}
-
-	/** The crafter's role has no work of its own: its jobs are taken through {@link WorkerGoal}. */
-	@Override
-	protected void work(ServerLevel level, Colony colony) {
-		this.cooldown = IDLE_TICKS;
+		super(bot);
 	}
 
 	@Override

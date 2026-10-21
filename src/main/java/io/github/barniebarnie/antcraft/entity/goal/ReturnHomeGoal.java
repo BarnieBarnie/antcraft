@@ -13,15 +13,15 @@ import net.minecraft.server.level.ServerLevel;
 
 /**
  * Walks a colony member with nothing to do back to the core when it is outside the
- * colony, for example after chasing a mob. Runs ahead of the role goals, which stay
- * in charge while they report work.
+ * colony, for example after chasing a mob. Runs ahead of the worker goal, which stays
+ * in charge while it has work.
  */
 public class ReturnHomeGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** How close to the core the bot walks, at most; small colonies need it closer. */
 	private static final int ARRIVE_RANGE = 3;
 	/** How long to wait before trying again when no path home was found. */
 	private static final int RETRY_TICKS = 100;
-	/** Gives the role goal time to find work before the bot counts as idle, e.g. right after a fight. */
+	/** Gives the worker goal time to find work before the bot counts as idle, e.g. right after a fight. */
 	private static final int IDLE_GRACE_TICKS = 40;
 
 	private final AntBot bot;

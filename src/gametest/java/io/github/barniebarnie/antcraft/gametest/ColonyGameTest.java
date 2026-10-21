@@ -10,7 +10,6 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -18,6 +17,12 @@ import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
+import net.minecraft.world.entity.monster.zombie.Husk;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.nbt.CompoundTag;
+import java.util.Set;
+import java.util.EnumSet;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -91,64 +96,113 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	private static AntBot member(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(BotRole.LUMBERJACK);
 		return bot;
 	}
 
-	@GameTest(maxTicks = 1000)
-	public void idleColonyLumberjackBecomesFarmer(GameTestHelper helper) {
+	/** Bots saved while colonies still gave them roles load as ordinary workers: the role is ignored. */
+	@GameTest(maxTicks = 1200)
+	public void aBotSavedWithARoleLoadsWithoutItAndTakesAnyJob(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
-		helper.setBlock(4, 0, 4, Blocks.FARMLAND);
-		helper.setBlock(4, 1, 4, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, CropBlock.MAX_AGE));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
-		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		// No trees here, so the lumberjack the colony picked has nothing to do; with a full pack it
-		// cannot take the harvest job itself either.
-		bot.assignRole(BotRole.LUMBERJACK);
-		for (int i = 0; i < bot.getInventory().getContainerSize(); i++) {
-			bot.getInventory().setItem(i, new ItemStack(Items.COBBLESTONE, 64));
-		}
-
-		helper.succeedWhen(() -> helper.assertValueEqual(bot.getRole(), BotRole.FARMER, "role"));
-	}
-
-	@GameTest
-	public void whoSetTheRoleSurvivesSaveAndLoad(GameTestHelper helper) {
-		AntBot assigned = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
-		assigned.assignRole(BotRole.MINER);
-		AntBot chosen = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
-		chosen.setRole(BotRole.FARMER);
-
-		AntBot assignedCopy = reload(helper, assigned);
-		AntBot chosenCopy = reload(helper, chosen);
-		helper.assertValueEqual(assignedCopy.getRole(), BotRole.MINER, "assigned role");
-		helper.assertFalse(assignedCopy.isRoleSetByPlayer(), "colony-assigned role came back as set by a player");
-		helper.assertValueEqual(chosenCopy.getRole(), BotRole.FARMER, "chosen role");
-		helper.assertTrue(chosenCopy.isRoleSetByPlayer(), "player-set role came back as colony-assigned");
-		helper.succeed();
-	}
-
-	/** Clients pick the bot's skin by role, so the role has to be in the synched data. */
-	@GameTest
-	public void roleIsSyncedAndSurvivesSaveAndLoad(GameTestHelper helper) {
-		AntBot assigned = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
-		assigned.assignRole(BotRole.MINER);
-		AntBot chosen = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
-		chosen.setRole(BotRole.GUARD);
-		helper.assertValueEqual(assigned.getEntityData().get(AntBot.DATA_ROLE), BotRole.MINER.id(), "synched assigned role");
-		helper.assertValueEqual(chosen.getEntityData().get(AntBot.DATA_ROLE), BotRole.GUARD.id(), "synched chosen role");
-
-		AntBot copy = reload(helper, chosen);
-		helper.assertValueEqual(copy.getEntityData().get(AntBot.DATA_ROLE), BotRole.GUARD.id(), "synched role after load");
-		helper.succeed();
-	}
-
-	private static AntBot reload(GameTestHelper helper, AntBot bot) {
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
+		tree(helper, 5, 5);
+		AntBot bot = member(helper, colony, 2, 2);
 		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
 		bot.saveWithoutId(output);
-		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
-		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
-		return copy;
+		CompoundTag saved = output.buildResult();
+		// A guard, set by a player: such a bot used to patrol and never fell trees.
+		saved.putString("Role", "guard");
+		saved.putBoolean("RoleSetByPlayer", true);
+		saved.putString("ScaffoldRole", "builder");
+		bot.discard();
+		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), saved));
+
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(copy.getColonyId(), colony.id(), "colony");
+			Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	/** Clients pick the bot's skin by the kind of job it took last, so that has to be in the synched data. */
+	@GameTest(maxTicks = 200)
+	public void theTypeOfTheJobTakenIsSynched(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
+		tree(helper, 5, 5);
+		AntBot bot = member(helper, colony, 2, 2);
+		helper.assertValueEqual(bot.getEntityData().get(AntBot.DATA_JOB), "", "synched job before any");
+
+		helper.succeedWhen(() -> helper.assertValueEqual(bot.getEntityData().get(AntBot.DATA_JOB), JobType.CHOP_TREE.getSerializedName(), "synched job"));
+	}
+
+	/** A colony is a set of identical workers: three bots take a tree, a crop and a build at once. */
+	@GameTest(maxTicks = 600)
+	public void threeBotsWorkATreeACropAndABuildAtOnce(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
+		// Each a walk away from the bots, so no job is done the moment it is taken.
+		tree(helper, 5, 2);
+		helper.setBlock(6, 0, 6, Blocks.FARMLAND);
+		helper.setBlock(6, 1, 6, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, CropBlock.MAX_AGE));
+		Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+		colony.addBuild(new BuildPlan(List.of(
+			new BuildPlan.Step(helper.absolutePos(new BlockPos(1, 1, 6)), Blocks.COBBLESTONE.defaultBlockState()),
+			new BuildPlan.Step(helper.absolutePos(new BlockPos(1, 2, 6)), Blocks.COBBLESTONE.defaultBlockState()),
+			new BuildPlan.Step(helper.absolutePos(new BlockPos(1, 3, 6)), Blocks.COBBLESTONE.defaultBlockState()))));
+		List<AntBot> bots = List.of(member(helper, colony, 2, 2), member(helper, colony, 3, 2), member(helper, colony, 2, 3));
+
+		Set<JobType> together = EnumSet.noneOf(JobType.class);
+		helper.onEachTick(() -> {
+			Set<JobType> now = EnumSet.noneOf(JobType.class);
+			bots.forEach(bot -> colony.board().jobOf(bot.getUUID()).ifPresent(job -> now.add(job.type())));
+			if (now.size() > together.size()) {
+				together.clear();
+				together.addAll(now);
+			}
+		});
+		helper.succeedWhen(() -> helper.assertValueEqual(together, EnumSet.of(JobType.CHOP_TREE, JobType.HARVEST_CROP, JobType.BUILD),
+			"jobs worked at once"));
+	}
+
+	/** Bots without a colony only follow orders and fight: no tree felling around them. */
+	@GameTest(maxTicks = 400)
+	public void aBotWithoutAColonyDoesNoWorkButWalksToAGotoTarget(GameTestHelper helper) {
+		tree(helper, 5, 5);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 1));
+		boolean[] sent = {false};
+		helper.runAfterDelay(150, () -> {
+			bot.setWalkTarget(target);
+			sent[0] = true;
+		});
+
+		helper.onEachTick(() -> {
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockPresent(Blocks.OAK_LOG, 5, y, 5);
+			}
+			helper.assertTrue(bot.getInventory().isEmpty(), "bot picked something up");
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(sent[0], "not sent anywhere yet");
+			helper.assertTrue(bot.getWalkTarget() == null, "walk target not cleared yet");
+			helper.assertTrue(bot.blockPosition().distManhattan(target) <= 2, "bot not at target");
+		});
+	}
+
+	@GameTest(maxTicks = 600)
+	public void aColonyBotFightsAZombieThatComesNearItInsideTheRadius(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		AntBot bot = member(helper, colony, 2, 2);
+		// Armed, the outcome does not depend on luck; a husk does not burn in daylight, so only the bot can kill it.
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 6);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!husk.isAlive(), "husk still alive");
+			helper.assertTrue(husk.getLastHurtByMob() == bot, "husk was not killed by the bot");
+		});
 	}
 
 	@GameTest
@@ -288,7 +342,6 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 
 		helper.succeedWhen(() -> {
-			helper.assertValueEqual(bot.getRole(), BotRole.LUMBERJACK, "role");
 			Container core = (Container) helper.getBlockEntity(CORE, net.minecraft.world.level.block.entity.BlockEntity.class);
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "core has " + core.countItem(Items.OAK_LOG) + " logs");
 		});
@@ -312,8 +365,6 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	@GameTest
 	public void screenActionsChangeTheColony(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
-		AntBot bot = member(helper, colony, 2, 2);
-		AntBot stranger = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
 		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
 
 		helper.assertTrue(edit(helper, near, false, colony, ColonyActions.Edit.ORDER, "minecraft:oak_planks", 4), "order refused");
@@ -321,14 +372,6 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(edit(helper, near, false, colony, ColonyActions.Edit.SET_STOCK, "minecraft:torch", 8), "stock target refused");
 		helper.assertValueEqual(colony.stockTargets(), List.of(StockTarget.of(Items.TORCH, 8)), "stock targets");
 
-		helper.assertTrue(role(helper, near, false, colony, bot, Optional.of(BotRole.MINER)), "role change refused");
-		helper.assertValueEqual(bot.getRole(), BotRole.MINER, "role");
-		helper.assertTrue(bot.isRoleSetByPlayer(), "role not set by player");
-		helper.assertTrue(role(helper, near, false, colony, bot, Optional.empty()), "giving back refused");
-		helper.assertFalse(bot.isRoleSetByPlayer(), "bot not given back to the colony");
-
-		helper.assertFalse(role(helper, near, false, colony, stranger, Optional.of(BotRole.MINER)), "role change for a bot not in the colony");
-		helper.assertValueEqual(stranger.getRole(), BotRole.NONE, "stranger's role");
 		// Far above every test area, so out of range of the colony.
 		BlockPos far = helper.absolutePos(new BlockPos(4, 1000, 4));
 		helper.assertFalse(edit(helper, far, false, colony, ColonyActions.Edit.ORDER, "minecraft:stick", 4), "order from out of range");
@@ -377,18 +420,6 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	@GameTest
-	public void screenRoleChangesAreIgnoredWhenBotsAreNotAllowed(GameTestHelper helper) {
-		Colony colony = placeCore(helper);
-		AntBot bot = member(helper, colony, 2, 2);
-		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
-		ColonyNetworking.RoleRequest request = new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), Optional.of(BotRole.MINER));
-
-		helper.assertFalse(ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(near, true, false, false), request), "role change accepted with bots not allowed");
-		helper.assertValueEqual(bot.getRole(), BotRole.LUMBERJACK, "role");
-		helper.succeed();
-	}
-
-	@GameTest
 	public void screenEditsApplyWhenBotsAreNotAllowed(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
@@ -404,9 +435,5 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	private static boolean edit(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, ColonyActions.Edit kind, String target, int count) {
 		return ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(from, false, requireOp, true), new ColonyNetworking.EditRequest(colony.core(), kind, target, count));
-	}
-
-	private static boolean role(GameTestHelper helper, BlockPos from, boolean requireOp, Colony colony, AntBot bot, Optional<BotRole> role) {
-		return ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(from, false, requireOp, true), new ColonyNetworking.RoleRequest(colony.core(), bot.getUUID(), role));
 	}
 }

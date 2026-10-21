@@ -1,29 +1,24 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
-import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Replanting;
-import io.github.barniebarnie.antcraft.work.Revisit;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
-import io.github.barniebarnie.antcraft.work.TreeRetry;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -44,29 +39,21 @@ import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Lumberjack work loop: get a tree (from the colony job board, or by searching near
- * home when not in a colony), chop every log, remove the scaffold blocks it placed to get
- * up there, pick up the drops, replant a sapling, and bring logs to the home chest or colony
- * core. It leaves the canopy alone (only breaking leaves in its way): with the logs gone the
- * leaves decay by themselves. That is slow, so when it could not replant it comes back later
- * for saplings and apples the leaves dropped. In a colony that is shared work instead: it posts a
- * replant job, which a bot takes once a sapling lies near the base or the colony core holds one.
- * Colony bots of any role get tree and replant jobs from {@link WorkerGoal}, which runs them here
- * through {@link #begin} and {@link #work}; this goal itself only does a colony lumberjack's work
- * between jobs, such as taking logs home. Before a tree it tops up
- * its scaffold blocks from home, so it can pillar up to logs it cannot reach, and when it runs out
- * on the way up it fetches more and goes back to the same tree. It only uses
- * scaffold blocks that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast. Between trees
- * it swaps its axe for a better one at home, and in a colony orders the best axe the colony can make.
+ * Tree work, as the executor of tree and replant jobs for {@link WorkerGoal}, through {@link #begin} and
+ * {@link #work}: chop every log of the job's tree, remove the scaffold blocks it placed to get up there, pick
+ * up the drops, replant a sapling, and bring logs to the colony core (its home). It leaves the canopy alone
+ * (only breaking leaves in its way): with the logs gone the leaves decay by themselves. When it has no sapling
+ * to replant it posts a replant job, which a bot takes once a sapling lies near the base or the core holds one.
+ * Before a tree it tops up its scaffold blocks from home, so it can pillar up to logs it cannot reach, and
+ * when it runs out on the way up it fetches more and goes back to the same tree. It only uses scaffold blocks
+ * that break quickly by hand ({@link #SCAFFOLD}), so cleanup is fast. Between trees it swaps its axe for a
+ * better one at home, or orders the best axe the colony can make.
  */
-public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal implements WorkerGoal.Executor {
-	private static final int SEARCH_RADIUS = 24;
+public class LumberjackGoal implements WorkerGoal.Executor {
 	private static final double REACH = 4.0;
 	private static final int DEPOSIT_AT_LOGS = 32;
 	private static final int COLLECT_RADIUS = 8;
 	private static final int IDLE_RESCAN_TICKS = 40;
-	/** Checking the job board is cheap, so colony bots look for work more often than solo bots search. */
-	private static final int IDLE_JOB_CHECK_TICKS = 10;
 	/** Fetches scaffold blocks from home when carrying fewer than this. */
 	private static final int RESTOCK_BELOW = 8;
 	private static final int SCAFFOLD_STOCK = 16;
@@ -75,22 +62,12 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 	/** How often, between trees, it looks for a better axe at home. */
 	private static final int UPGRADE_CHECK_TICKS = 100;
 	/**
-	 * How long to keep coming back to a felled tree for the saplings its decaying leaves drop. Leaves
-	 * take minutes to decay, and dropped items despawn after five.
-	 */
-	public static final int REVISIT_TICKS = 12000;
-	/** At most this many felled trees are remembered to come back to; the oldest is forgotten first. */
-	private static final int MAX_REVISITS = 8;
-	/**
-	 * A tree with logs it could not reach, even with scaffold, is retried this long after; say once there
-	 * is more scaffold, or a player cleared the way. A colony tree goes back on the job board for that, a
-	 * solo bot remembers the tree itself.
+	 * A tree with logs it could not reach, even with scaffold, goes back on the job board to retry this long
+	 * after; say once there is more scaffold, or a player cleared the way.
 	 */
 	static final int TREE_RETRY_TICKS = 600;
 	/** How many visits a tree gets before its unreachable logs are given up for good. */
 	static final int TREE_TRIES = 5;
-	/** At most this many trees are remembered to retry or as given up on; the oldest is forgotten first. */
-	private static final int MAX_TREE_RETRIES = 8;
 	/** The scaffold blocks lumberjacks fetch and place: ones they can take down quickly without a tool. */
 	private static final TagKey<Item> SCAFFOLD = PathFollower.FAST_SCAFFOLD_BLOCKS;
 
@@ -136,7 +113,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 	private @Nullable UUID jobId;
 	/** What became of the job begun through {@link #begin}, for {@link WorkerGoal} to report to the board. */
 	private WorkerGoal.@Nullable Outcome outcome;
-	/** Whether a bot of another role still takes its logs home after the job begun. */
+	/** Whether the bot still takes its logs home after the job begun. */
 	private boolean depositAfterJob;
 	/** The better axe it is on its way to fetch from home, or null. */
 	private @Nullable Item upgrade;
@@ -154,37 +131,17 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 		});
 		this.follower.setPlaceListener(pos -> {
 			if (TREE_WORK.contains(this.state) || this.scaffoldCleanup.isRetrying() || this.resumeTree) {
-				this.bot.addScaffold(pos, BotRole.LUMBERJACK);
+				this.bot.addScaffold(pos);
 			}
 		});
-		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
 	/**
 	 * Scaffold blocks placed while working on the current tree. The bot keeps them, so they are saved
-	 * with it and cleanup resumes after loading. (Goals are made before the bot's fields are set, so
-	 * this is looked up each time.)
+	 * with it, and taken down between jobs should the tree be left half done (see {@link BuilderGoal}).
 	 */
 	private Set<BlockPos> placed() {
 		return this.bot.getScaffold();
-	}
-
-	/**
-	 * Felled trees not yet replanted, by base, to come back to for saplings: with the game time they
-	 * were felled, the spots to plant and the sapling kind. Bots in a colony post replant jobs instead.
-	 * Kept by the bot and saved with it, so it survives unloading; the felled time is game time, so
-	 * entries still expire after loading.
-	 */
-	private Map<BlockPos, Revisit> revisits() {
-		return this.bot.getRevisits();
-	}
-
-	/**
-	 * Treats the block at {@code pos} as scaffolding this bot placed for its current tree,
-	 * so it is taken down in the next cleanup. Lets game tests set up leftover scaffolding.
-	 */
-	public void adoptScaffold(BlockPos pos) {
-		this.bot.addScaffold(pos, BotRole.LUMBERJACK);
 	}
 
 	/** Changes how many scaffold blocks it takes from home at a time. Lets game tests run it short of scaffold. */
@@ -192,76 +149,20 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 		this.scaffoldStock = stock;
 	}
 
-	/**
-	 * Also runs for a bot that still has scaffolding up from an earlier role, a lumberjack's or
-	 * another's, so it takes that down before its new role's work. Scaffold the current role placed,
-	 * such as a builder's, is left to that role's goal. This goal is registered before the other role
-	 * goals at the same priority, so it gets the bot first, and they cannot take over while it runs.
-	 */
+	/** Drops the job begun and stops where it is; scaffolding up stays with the bot, to be taken down between jobs. */
 	@Override
-	public boolean canUse() {
-		return (this.isLumberjack() || this.bot.hasLeftoverScaffold()) && this.bot.getWalkTarget() == null;
-	}
-
-	private boolean isLumberjack() {
-		return this.bot.getRole() == BotRole.LUMBERJACK;
-	}
-
-	@Override
-	public boolean requiresUpdateEveryTick() {
-		return true;
-	}
-
-	@Override
-	public void start() {
-		// A solo bot loaded mid-tree goes back to the logs it still claims, leaves or not. Colony bots
-		// get trees from the job board instead, and a claim with no logs left is dropped by enter().
-		Optional<TreeScanner.Tree> claimed = this.isLumberjack() && this.bot.getColonyId() == null && this.bot.level() instanceof ServerLevel level
-			? TreeScanner.remaining(new LevelTreeView(level), this.bot.getTreeBase(), this.bot.getTree())
-			: Optional.empty();
-		if (claimed.isPresent()) {
-			// Scaffolding already up stays in placed(), so cleanup after the tree takes it down too.
-			this.startTree((ServerLevel) this.bot.level(), claimed.get());
-			return;
-		}
-		// Interrupted mid-tree: take the scaffolding down before anything else.
-		this.enter(this.placed().isEmpty() ? State.SEARCH : State.CLEANUP);
-	}
-
-	@Override
-	public void stop() {
+	public void reset() {
 		this.jobId = null;
-		this.bot.setTree(List.of());
+		this.state = State.SEARCH;
+		this.resumeTree = false;
 		this.follower.stop();
 		this.breaker.reset();
 		this.travelGoal = null;
-		if (!this.isLumberjack()) {
-			// Done with the scaffolding left from being a lumberjack; the new role reports its own work.
-			this.bot.setWorking(false);
-		}
-	}
-
-	@Override
-	public void reset() {
-		this.stop();
-	}
-
-	@Override
-	public void tick() {
-		if (!(this.bot.level() instanceof ServerLevel level)) {
-			return;
-		}
-		if (!this.isLumberjack() && this.state != State.CLEANUP) {
-			// The role changed mid-tree: give the tree back and only take the scaffolding down.
-			this.releaseJob(level);
-			this.enter(State.CLEANUP);
-		}
-		this.step(level);
 	}
 
 	private void step(ServerLevel level) {
 		switch (this.state) {
-			case SEARCH -> this.search(level);
+			case SEARCH -> { }
 			case RESTOCK -> this.restock(level);
 			case UPGRADE -> this.fetchUpgrade(level);
 			case CHOP -> this.chop(level);
@@ -303,8 +204,7 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 	/**
 	 * For {@link WorkerGoal}: works one tick on the job begun, and on what follows it, such as taking the
 	 * scaffold down and replanting, then on taking logs home or fetching a better axe or scaffold between
-	 * trees. A bot of another role takes all its logs home after each job. Returns false once it is ready
-	 * for the next job.
+	 * trees. It takes all its logs home after each job. Returns false once it is ready for the next job.
 	 */
 	@Override
 	public boolean work(ServerLevel level) {
@@ -317,10 +217,9 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 				this.cooldown--;
 				return true;
 			}
-			if (this.depositAfterJob && !this.isLumberjack() && countLogs(this.bot.getInventory()) > 0 && this.bot.getHome() != null) {
-				// Logs it carries count as colony stock, so a bot of another role brings them home before
-				// its next job: in its inventory no one can craft with them. A lumberjack takes them home
-				// once it carries many, or has no tree to fell.
+			if (this.depositAfterJob && countLogs(this.bot.getInventory()) > 0 && this.bot.getHome() != null) {
+				// Logs it carries count as colony stock, so it brings them home before its next job: in its
+				// inventory no one can craft with them.
 				// Once per job, so a full or unreachable core does not keep it from other work.
 				this.depositAfterJob = false;
 				this.enter(State.DEPOSIT);
@@ -366,63 +265,15 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 	/**
 	 * Gives the tree back to the board with the logs it could not reach, to be retried later. After its
 	 * last try it is given up: it stays on the board, so it is not posted anew, but no one takes it.
-	 * A solo bot has no board: it remembers the tree itself, with the same bounds.
 	 */
 	private void retryJobLater(ServerLevel level) {
-		if (this.jobId == null) {
-			this.retryTreeLater(level);
-			return;
-		}
 		this.endJob(WorkerGoal.Outcome.RETRY);
-	}
-
-	/** Remembers the current tree, with the logs still standing, to retry later or as given up on. */
-	private void retryTreeLater(ServerLevel level) {
-		if (this.bot.getColonyId() != null) {
-			return;
-		}
-		BlockPos base = this.tree.base();
-		List<BlockPos> left = this.tree.logs().stream().filter(log -> level.getBlockState(log).is(BlockTags.LOGS)).toList();
-		Map<BlockPos, TreeRetry> retries = this.bot.getTreeRetries();
-		TreeRetry retry = TreeRetry.after(retries.remove(base), base, left, level.getGameTime(), TREE_RETRY_TICKS, TREE_TRIES);
-		if (retries.size() >= MAX_TREE_RETRIES) {
-			retries.remove(retries.keySet().iterator().next());
-		}
-		retries.put(base, retry);
-		if (retry.givenUp()) {
-			AntCraft.LOGGER.info("Lumberjack {} gave up on the tree at {}: {} logs out of reach after {} tries",
-				this.bot.getName().getString(), base.toShortString(), this.unreachableLogs.size(), TREE_TRIES);
-		}
-	}
-
-	/**
-	 * Outside a colony: goes back to a remembered tree that is due for another try, if another bot is not
-	 * felling it. Forgets trees with no logs left. Returns whether it started on one.
-	 */
-	private boolean retryTree(ServerLevel level, Set<BlockPos> taken) {
-		LevelTreeView view = new LevelTreeView(level);
-		Map<BlockPos, TreeRetry> retries = this.bot.getTreeRetries();
-		retries.values().removeIf(retry -> TreeScanner.remaining(view, retry.logs()).isEmpty());
-		for (TreeRetry retry : retries.values()) {
-			if (retry.isDue(level.getGameTime()) && retry.logs().stream().noneMatch(taken::contains)) {
-				Optional<TreeScanner.Tree> rest = TreeScanner.remaining(view, retry.base(), retry.logs());
-				if (rest.isPresent()) {
-					this.startTree(level, rest.get());
-					return true;
-				}
-			}
-		}
-		return false;
 	}
 
 	private void enter(State next) {
 		this.state = next;
 		if (next != State.RESTOCK) {
 			this.resumeTree = false;
-		}
-		if (next != State.CHOP && !this.resumeTree) {
-			// Done with the tree, or gave it up: other lumberjacks may take what is left of it.
-			this.bot.setTree(List.of());
 		}
 		this.bot.setWorking(next != State.SEARCH);
 		this.travelGoal = null;
@@ -432,43 +283,16 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 		this.scaffoldCleanup.cancelRetry();
 	}
 
-	private void search(ServerLevel level) {
-		if (this.restockCooldown > 0) {
-			this.restockCooldown--;
-		}
-		if (this.cooldown > 0) {
-			this.cooldown--;
-			return;
-		}
-		if (this.prepare(level)) {
-			return;
-		}
-		if (this.bot.getColonyId() == null) {
-			if (this.takeNearbyTree(level)) {
-				return;
-			}
-		} else if (this.colony(level).isEmpty()) {
-			// The colony was dissolved: carry on alone.
-			this.bot.setColonyId(null);
-			this.bot.setHome(null);
-		}
-		if (countLogs(this.bot.getInventory()) > 0 && this.bot.getHome() != null) {
-			this.enter(State.DEPOSIT);
-		} else {
-			this.cooldown = this.bot.getColonyId() != null ? IDLE_JOB_CHECK_TICKS : IDLE_RESCAN_TICKS;
-		}
-	}
-
 	/**
-	 * Between trees: takes the logs home once it carries many, fetches a better axe, goes back to a felled
-	 * tree for its saplings, or tops up its scaffold blocks. Returns whether it is off to do one.
+	 * Between trees: takes the logs home once it carries many, fetches a better axe, or tops up its
+	 * scaffold blocks. Returns whether it is off to do one.
 	 */
 	private boolean prepare(ServerLevel level) {
 		if (countLogs(this.bot.getInventory()) >= DEPOSIT_AT_LOGS) {
 			this.enter(State.DEPOSIT);
 			return true;
 		}
-		if (this.checkUpgrade(level) || this.revisit(level)) {
+		if (this.checkUpgrade(level)) {
 			return true;
 		}
 		if (this.restockCooldown == 0 && this.needsScaffold() && this.homeScaffold(level) > 0) {
@@ -478,26 +302,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 		return false;
 	}
 
-	/**
-	 * Outside a colony: goes back to a tree it left logs of, once due, or searches around home for a
-	 * tree. Trees it remembers, to retry or given up on, are not taken anew. Returns whether it found one.
-	 */
-	private boolean takeNearbyTree(ServerLevel level) {
-		BlockPos origin = this.bot.getHome() != null ? this.bot.getHome() : this.bot.blockPosition();
-		Set<BlockPos> taken = new HashSet<>();
-		level.getEntitiesOfClass(AntBot.class, new AABB(origin).inflate(SEARCH_RADIUS * 2), other -> other != this.bot)
-			.forEach(other -> taken.addAll(other.getTree()));
-		if (this.retryTree(level, taken)) {
-			return true;
-		}
-		this.bot.getTreeRetries().values().forEach(retry -> taken.addAll(retry.logs()));
-		Optional<TreeScanner.Tree> found = TreeScanner.findAll(new LevelTreeView(level), origin, SEARCH_RADIUS).stream()
-			.filter(tree -> tree.logs().stream().noneMatch(taken::contains))
-			.min(Comparator.comparingDouble(tree -> tree.base().distSqr(origin)));
-		found.ifPresent(tree -> this.startTree(level, tree));
-		return found.isPresent();
-	}
-
 	private void startTree(ServerLevel level, TreeScanner.Tree found) {
 		this.tree = found;
 		this.spots = TreeScanner.replantSpots(found);
@@ -505,7 +309,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 		// its own kind too, while one may still turn up (see Replanting.saplingNeeded).
 		this.sapling = Replanting.saplingFor(level.getBlockState(found.logs().getFirst()).getBlock());
 		this.felled = level.getGameTime();
-		this.bot.setTree(found.base(), found.logs());
 		this.unreachableLogs.clear();
 		this.scaffoldCleanup.reset();
 		this.enter(State.CHOP);
@@ -622,9 +425,8 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 	}
 
 	/**
-	 * Now and then, between trees, heads home for a better axe. In a colony home is the core, and
-	 * when it holds no better axe the lumberjack orders the best one the colony can make; a lumberjack
-	 * on its own has no one to order from. Returns true when it is now on its way to fetch one.
+	 * Now and then, between trees, heads home, the core, for a better axe; when it holds no better axe
+	 * the bot orders the best one the colony can make. Returns true when it is now on its way to fetch one.
 	 */
 	private boolean checkUpgrade(ServerLevel level) {
 		if (level.getGameTime() < this.nextUpgradeCheck) {
@@ -682,7 +484,6 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 			if (this.unreachableLogs.stream().anyMatch(log -> level.getBlockState(log).is(BlockTags.LOGS))) {
 				this.retryJobLater(level);
 			} else {
-				this.bot.getTreeRetries().remove(this.tree.base());
 				this.completeJob(level);
 			}
 			// The leaves decay by themselves now; take the scaffolding down while still up there.
@@ -747,32 +548,17 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 		List<BlockPos> open = this.toPlant(level, this.spots);
 		if (open.isEmpty()) {
 			// Replanted by someone else, or built over.
-			this.revisits().remove(base);
 			this.completeJob(level);
 			this.enter(State.SEARCH);
 			return;
 		}
 		Predicate<ItemStack> wanted = this.wanted(level);
-		boolean enough = count(this.bot.getInventory(), wanted) >= open.size();
-		Optional<Colony> colony = this.colony(level);
-		if (!enough && colony.isPresent()) {
-			// The leaves may still drop one as they decay. In a colony, whichever lumberjack is
-			// nearest when saplings turn up replants it.
+		if (count(this.bot.getInventory(), wanted) < open.size()) {
+			// The leaves may still drop one as they decay. Whichever bot is nearest when saplings turn up
+			// replants it; the job remembers every spot and the kind, so a 2x2 tree is planted whole and
+			// a 1x1 tree waits for its own kind.
 			this.releaseJob(level);
-			colony.get().board().post(JobType.REPLANT, base, this.spots, this.sapling, this.felled);
-			this.enter(State.SEARCH);
-			return;
-		}
-		if (!enough) {
-			// The leaves may still drop one as they decay. It remembers every spot and the kind, so
-			// a 2x2 tree is planted whole when it comes back, and a 1x1 tree waits for its own kind.
-			Map<BlockPos, Revisit> revisits = this.revisits();
-			if (!revisits.containsKey(base)) {
-				if (revisits.size() >= MAX_REVISITS) {
-					revisits.remove(revisits.keySet().iterator().next());
-				}
-				revisits.put(base, new Revisit(base, this.felled, this.spots, this.sapling));
-			}
+			this.colony(level).ifPresent(colony -> colony.board().post(JobType.REPLANT, base, this.spots, this.sapling, this.felled));
 			this.enter(State.SEARCH);
 			return;
 		}
@@ -787,46 +573,13 @@ public class LumberjackGoal extends net.minecraft.world.entity.ai.goal.Goal impl
 					sapling.shrink(1);
 				}
 			}
-			this.revisits().remove(base);
 			this.completeJob(level);
 			this.enter(State.SEARCH);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
-			// A replant job or revisit for a base no one can walk to is dropped, so lumberjacks do not keep trying.
-			this.revisits().remove(base);
+			// A replant job for a base no one can walk to is dropped, so bots do not keep trying.
 			this.completeJob(level);
 			this.enter(State.SEARCH);
 		}
-	}
-
-	/**
-	 * Goes back to a felled tree that was not replanted once its decaying leaves have dropped a
-	 * sapling or apple, to pick the drops up and replant, or once it carries the saplings the tree
-	 * takes: a 1x1 tree takes any after waiting a while for its own kind. Forgets trees felled too long ago.
-	 */
-	private boolean revisit(ServerLevel level) {
-		long now = level.getGameTime();
-		this.revisits().values().removeIf(revisit -> now - revisit.felled() > REVISIT_TICKS);
-		for (Revisit revisit : this.revisits().values()) {
-			BlockPos base = revisit.pos();
-			boolean dropped = !level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
-				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && isLeafDrop(item.getItem())
-					&& this.bot.wantsToPickUp(level, item.getItem())).isEmpty();
-			int toPlant = this.toPlant(level, revisit.spots()).size();
-			Predicate<ItemStack> wanted = this.wanted(level, revisit.sapling(), revisit.spots(), revisit.felled());
-			if (dropped || count(this.bot.getInventory(), wanted) >= toPlant) {
-				this.site = base;
-				this.spots = revisit.spots();
-				this.sapling = revisit.sapling();
-				this.felled = revisit.felled();
-				this.enter(State.COLLECT);
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static boolean isLeafDrop(ItemStack stack) {
-		return stack.is(ItemTags.SAPLINGS) || stack.is(Items.APPLE);
 	}
 
 	private void deposit(ServerLevel level) {

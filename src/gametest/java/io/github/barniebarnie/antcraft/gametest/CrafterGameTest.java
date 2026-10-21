@@ -7,7 +7,6 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
@@ -67,7 +66,6 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 	private static AntBot crafter(GameTestHelper helper, Colony colony) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(BotRole.CRAFTER);
 		return bot;
 	}
 
@@ -187,7 +185,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 
 	private static void assertIngots(GameTestHelper helper, Colony colony, int ingots) {
 		helper.assertTrue(core(helper).countItem(Items.IRON_INGOT) == ingots, "core has " + core(helper).countItem(Items.IRON_INGOT) + " iron ingots");
-		helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
+		helper.assertTrue(!colony.orders().containsKey(Items.IRON_INGOT), "order not cleared: " + colony.orders());
 		// The coal went into a furnace: the ingots were smelted, not crafted.
 		helper.assertTrue(core(helper).countItem(Items.COAL) == 0, "coal left in core: " + core(helper).countItem(Items.COAL));
 	}
@@ -246,7 +244,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper).countItem(Items.IRON_INGOT) == 4, "core has " + core(helper).countItem(Items.IRON_INGOT) + " iron ingots");
-			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
+			helper.assertTrue(!colony.orders().containsKey(Items.IRON_INGOT), "order not cleared: " + colony.orders());
 			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 1, "core has " + core(helper).countItem(Items.OAK_LOG) + " logs");
 			helper.assertTrue(core(helper).countItem(Items.CHARCOAL) == 0, "charcoal left in core: " + core(helper).countItem(Items.CHARCOAL));
 		});
@@ -273,6 +271,11 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		fill(helper, new ItemStack(Items.STICK, 64));
 		int cobblestone = core(helper).countItem(Items.COBBLESTONE);
 		AntBot crafter = crafter(helper, colony);
+		// A full core gets a storage area, and a bot with room would take surplus out for a chest, freeing a slot
+		// (see GuardHaulerGameTest); this one keeps a pack full of scaffold blocks, so it has no room for that.
+		for (int i = 0; i < crafter.getInventory().getContainerSize() - 1; i++) {
+			crafter.getInventory().addItem(new ItemStack(Items.DIRT, 64));
+		}
 
 		helper.runAtTickTime(400, () -> {
 			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == cobblestone, "crafter used cobblestone: " + core(helper).countItem(Items.COBBLESTONE));
@@ -336,7 +339,6 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 	private static AntBot colonyGuard(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(BotRole.GUARD);
 		return bot;
 	}
 
@@ -350,7 +352,6 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper).countItem(Items.STICK) >= 4, "core has " + core(helper).countItem(Items.STICK) + " sticks");
 			helper.assertTrue(colony.orders().isEmpty(), "order not cleared: " + colony.orders());
-			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
 		});
 	}
 

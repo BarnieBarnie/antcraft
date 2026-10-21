@@ -4,10 +4,10 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Field;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -65,7 +65,6 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	private static AntBot farmer(GameTestHelper helper, Colony colony) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(BotRole.FARMER);
 		return bot;
 	}
 
@@ -141,6 +140,11 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The colony wants wheat: it lays out a field only while it wants what one yields. */
+	private static void wantWheat(Colony colony) {
+		colony.setStockTarget(StockTarget.of(Items.WHEAT, 64));
+	}
+
 	private static boolean planted(GameTestHelper helper, BlockPos crop) {
 		return helper.getLevel().getBlockState(crop).is(Blocks.WHEAT) && helper.getLevel().getBlockState(crop.below()).is(Blocks.FARMLAND);
 	}
@@ -148,6 +152,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 600)
 	public void collectsSeedsFromGrassTillsAndPlants(GameTestHelper helper) {
 		Colony colony = colony(helper);
+		wantWheat(colony);
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				if (helper.getBlockState(new BlockPos(x, 1, z)).isAir()) {
@@ -168,6 +173,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 800)
 	public void plantsAnEmptyFieldNearTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
+		wantWheat(colony);
 		AntBot bot = farmer(helper, colony);
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
 		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
@@ -185,6 +191,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		BlockPos source = new BlockPos(7, 0, 7);
 		helper.setBlock(source, Blocks.WATER);
 		Colony colony = colony(helper);
+		wantWheat(colony);
 		AntBot bot = farmer(helper, colony);
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
 		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
@@ -201,6 +208,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 400)
 	public void ordersABucketAndTheFieldWaterWaits(GameTestHelper helper) {
 		Colony colony = colony(helper);
+		wantWheat(colony);
 		AntBot bot = farmer(helper, colony);
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
 		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
@@ -249,6 +257,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 200)
 	public void storesWoolItCarriesWhileWaitingForSeeds(GameTestHelper helper) {
 		Colony colony = colony(helper);
+		wantWheat(colony);
 		AntBot bot = farmer(helper, colony);
 		// Once the field is planned and its planting waits for seeds the farmer has none of.
 		helper.runAfterDelay(60, () -> {
@@ -292,7 +301,6 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	private static AntBot farmerWithWheat(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(BotRole.FARMER);
 		bot.getInventory().addItem(new ItemStack(Items.WHEAT, 5));
 		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 4));
 		return bot;
@@ -320,6 +328,11 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper);
 		fillCore(helper);
 		AntBot bot = farmerWithWheat(helper, colony, 6, 6);
+		// A full core gets a storage area, and a bot with room would take surplus out for a chest (see
+		// GuardHaulerGameTest); this one keeps a pack full of scaffold blocks, so it has no room for that.
+		for (int i = 0; i < bot.getInventory().getContainerSize() - 3; i++) {
+			bot.getInventory().addItem(new ItemStack(Items.DIRT, 64));
+		}
 
 		helper.runAfterDelay(150, () -> {
 			// The core is 7 blocks off and reached from 4: a farmer heading there has moved 3.
@@ -347,7 +360,6 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	private static AntBot colonyGuard(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(BotRole.GUARD);
 		return bot;
 	}
 
@@ -364,7 +376,6 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			}
 			// Done with the job, it brings the wheat home rather than keep it from the colony.
 			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 3, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
-			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
 		});
 	}
 
@@ -384,7 +395,6 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).isEmpty(), "unplanted: " + field.toPlant(crop -> planted(helper, crop)));
 			helper.assertTrue(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "no water in the middle");
 			helper.assertBlockNotPresent(Blocks.WATER, source);
-			helper.assertTrue(bot.getRole() == BotRole.GUARD, "role changed to " + bot.getRole());
 		});
 	}
 }

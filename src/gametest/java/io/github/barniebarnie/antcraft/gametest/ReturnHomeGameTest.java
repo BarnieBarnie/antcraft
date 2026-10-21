@@ -6,7 +6,6 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotRole;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
@@ -53,19 +52,18 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 		return new Territory(colony.core(), colony.radius());
 	}
 
-	/** A member with a role whose work is not available here, so it has nothing to do unless told. */
-	private static AntBot member(GameTestHelper helper, Colony colony, BotRole role, int x, int z) {
+	/** A member with no work here, so it has nothing to do unless told. */
+	private static AntBot member(GameTestHelper helper, Colony colony, int x, int z) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		bot.setRole(role);
 		return bot;
 	}
 
 	@GameTest(maxTicks = 200)
 	public void idleMemberWalksBackIntoTerritory(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		// No mineshaft dug, so the miner has no work.
-		AntBot bot = member(helper, colony, BotRole.MINER, 6, 6);
+		// No work here, so the bot is idle.
+		AntBot bot = member(helper, colony, 6, 6);
 
 		helper.succeedWhen(() -> helper.assertTrue(territory(colony).contains(bot.blockPosition()), "bot still at " + bot.blockPosition().toShortString()));
 	}
@@ -84,12 +82,12 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 		}
 		// The tree is outside the colony radius, so the survey would not post it.
 		colony.board().post(JobType.CHOP_TREE, helper.absolutePos(new BlockPos(6, 1, 6)));
-		AntBot bot = member(helper, colony, BotRole.LUMBERJACK, 6, 4);
+		AntBot bot = member(helper, colony, 6, 4);
 
 		helper.onEachTick(() -> {
 			boolean logsLeft = helper.getBlockState(new BlockPos(6, 1, 6)).is(Blocks.OAK_LOG) || helper.getBlockState(new BlockPos(6, 3, 6)).is(Blocks.OAK_LOG);
 			if (logsLeft && territory(colony).contains(bot.blockPosition())) {
-				helper.fail("lumberjack went home before finishing its tree");
+				helper.fail("bot went home before finishing its tree");
 			}
 		});
 		helper.succeedWhen(() -> {
@@ -102,7 +100,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 600)
 	public void finishesFightOutsideTerritoryThenReturns(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		AntBot bot = member(helper, colony, BotRole.MINER, 6, 6);
+		AntBot bot = member(helper, colony, 6, 6);
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
 		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 4);
 		bot.setTarget(husk);
@@ -117,7 +115,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 100)
 	public void ignoresMobsOutsideTerritory(GameTestHelper helper) {
 		Colony colony = colony(helper);
-		AntBot bot = member(helper, colony, BotRole.MINER, 2, 2);
+		AntBot bot = member(helper, colony, 2, 2);
 		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 6);
 		husk.setNoAi(true);
 
