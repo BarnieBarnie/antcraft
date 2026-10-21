@@ -38,6 +38,10 @@ import org.jspecify.annotations.Nullable;
  * produce and shears sheep, and keeps the core and storage, picking up loose items. While scaffolding is up it
  * takes only jobs that take it down when done. A job that turns up meanwhile takes the bot from that, but not
  * from carrying a load to the core or storage, which it finishes first. Only with none of it to do is the bot idle.
+ * <p>
+ * A busy board would keep the bot from that for good, so after {@link #JOBS_PER_ROUND} jobs in a row it does a round
+ * of it before it claims the next: up to {@link #ROUND_TICKS} of work between jobs that no job takes it from. Not while
+ * scaffolding is up, which may be kept for the next log of a tree.
  */
 public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** What became of a job, as its executor reports it. */
@@ -79,6 +83,11 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	private static final Set<JobType> CLEARS_SCAFFOLD = EnumSet.of(JobType.CHOP_TREE, JobType.BUILD, JobType.CLEAR_AREA);
 	/** How often an idle bot looks at the board. */
 	private static final int CHECK_TICKS = 10;
+	/** How many jobs a bot takes in a row before a round of work between jobs. */
+	// ponytail: fixed share, tune from play-tests.
+	static final int JOBS_PER_ROUND = 3;
+	/** How long a round of work between jobs lasts at most before jobs may take the bot from it again. */
+	static final int ROUND_TICKS = 600;
 	/**
 	 * What a tool the colony has no good enough one of costs a bot that carries a weaker one of its kind: it can
 	 * still do the job, such as a branch with a pickaxe that leaves the ores it cannot harvest.
@@ -101,6 +110,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** Whether the executor is still at work, on the job or on what follows it, or the bot on work between jobs. */
 	private boolean busy;
 	private long nextCheck;
+	/** Jobs claimed since the last round of work between jobs. */
+	private int jobsInRow;
+	/** Until when the bot is on a round of work between jobs that no job takes it from. */
+	private long roundUntil;
 	/** Fetches the tool the job declares once the bot carries none of its kind, such as after its own broke. */
 	private final ColonyWorkGoal toolFetch;
 	private boolean fetchingTool;
@@ -149,7 +162,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return false;
 		}
 		this.nextCheck = level.getGameTime() + CHECK_TICKS;
-		this.busy = this.colony(level).map(colony -> this.next(level, colony) || this.startUpkeep(level, colony)).orElse(false);
+		this.busy = this.colony(level).map(colony -> this.nextOrUpkeep(level, colony)).orElse(false);
 		return this.busy;
 	}
 
@@ -196,7 +209,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		if (this.upkeep != null) {
 			// A job that turns up takes the bot from work between jobs, once a load it carries is put away.
-			if (!this.upkeep.carriesLoad() && level.getGameTime() >= this.nextCheck) {
+			if (!this.upkeep.carriesLoad() && level.getGameTime() >= this.nextCheck && level.getGameTime() >= this.roundUntil) {
 				this.nextCheck = level.getGameTime() + CHECK_TICKS;
 				if (this.next(level, colony.get())) {
 					this.busy = true;
@@ -217,8 +230,23 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.busy = false;
 		}
 		if (!this.busy) {
-			this.busy = this.next(level, colony.get()) || this.startUpkeep(level, colony.get());
+			this.busy = this.nextOrUpkeep(level, colony.get());
 		}
+	}
+
+	/**
+	 * Goes on with the bot's job or takes the next, or does work between jobs; after {@link #JOBS_PER_ROUND} jobs a round
+	 * of work between jobs comes first.
+	 */
+	private boolean nextOrUpkeep(ServerLevel level, Colony colony) {
+		if (this.jobsInRow >= JOBS_PER_ROUND && this.bot.getScaffold().isEmpty() && colony.board().jobOf(this.bot.getUUID()).isEmpty()) {
+			this.jobsInRow = 0;
+			this.roundUntil = level.getGameTime() + ROUND_TICKS;
+			if (this.startUpkeep(level, colony)) {
+				return true;
+			}
+		}
+		return this.next(level, colony) || this.startUpkeep(level, colony);
 	}
 
 	/**
@@ -235,6 +263,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				return true;
 			}
 		}
+		this.roundUntil = 0;
 		this.bot.setWorking(false);
 		return false;
 	}
@@ -319,6 +348,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 					return false;
 				}
 				held = board.claim(id, now, open -> open.id().equals(best.get().id()), score);
+				this.jobsInRow++;
 			}
 			if (held.isEmpty()) {
 				return false;
