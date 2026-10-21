@@ -28,6 +28,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -139,6 +140,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return ColonyManager.get(level).byId(this.colonyId)
 			.map(colony -> Territory.of(colony).mayTarget(target.blockPosition()))
 			.orElse(true);
+	}
+
+	/**
+	 * Bots do not push each other, so they pass in a one-wide shaft or tunnel: a bot standing idle there, such as in
+	 * the corner of a landing, would otherwise push one climbing past it back for good. Other entities they push as usual.
+	 */
+	@Override
+	protected void doPush(Entity entity) {
+		if (!(entity instanceof AntBot)) {
+			super.doPush(entity);
+		}
 	}
 
 	@Override

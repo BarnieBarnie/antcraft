@@ -15,6 +15,7 @@ import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
+import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -818,11 +819,43 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(together[0], "the builders never dug at the same time");
-			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished, next step " + shaft.plan().nextStep(helper.getLevel()::getBlockState));
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished, next step " + shaft.plan().nextStep(helper.getLevel()::getBlockState)
+				+ "; core " + Storage.stock(core) + builders.stream().map(builder -> "; bot at " + builder.position().subtract(helper.absoluteVec(Vec3.ZERO))
+					+ " holds " + Storage.stock(builder.getInventory()) + " on " + colony.board().jobOf(builder.getUUID()).map(job -> relative(helper, job.target()))).toList());
 			helper.assertTrue(shaft.plan().nextStep(helper.getLevel()::getBlockState).isEmpty(), "plan dropped before it was done");
 			for (int level : shaft.levels()) {
 				helper.assertTrue(helper.getLevel().getBlockState(shaft.landingChest(level)).is(Blocks.CHEST), "no chest at landing " + level);
 			}
+		});
+	}
+
+	/**
+	 * Where two builders stalled for good (#160): one finished the stairs to the lower landing with nothing left to
+	 * take home and stands idle in the corner of the landing, by the stairs up. The other has dug the lower hall and
+	 * must fetch the landing's chest from the core. Bots do not push each other, so it gets past.
+	 */
+	@GameTest(maxTicks = 600)
+	public void climbsTheShaftPastAnIdleBotOnTheLanding(GameTestHelper helper) {
+		Mineshaft shaft = MinerGameTest.mine(helper);
+		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
+		colony.setStockTargets(List.of());
+		((Container) helper.getBlockEntity(MinerGameTest.MINE_CORE, BlockEntity.class)).setItem(0, new ItemStack(Items.CHEST, 1));
+		BlockPos chest = shaft.landingChest(shaft.levels().getLast());
+		for (BuildPlan.Step step : shaft.plan().steps()) {
+			helper.getLevel().setBlockAndUpdate(step.pos(), step.pos().equals(chest) ? Blocks.AIR.defaultBlockState() : step.state());
+		}
+		colony.setMineshaft(shaft);
+		// Not of the colony, so it stands still as an idle member does.
+		helper.spawn(ModEntities.ANT_BOT, new Vec3(3.7, 1, 3.3));
+		AntBot builder = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.8, 1, 3.7));
+		ColonyManager.get(helper.getLevel()).join(builder, colony);
+		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getBlockState(chest).is(Blocks.CHEST), "no chest at the lower landing; the builder is at "
+				+ builder.position().subtract(helper.absoluteVec(Vec3.ZERO)));
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
 		});
 	}
 
