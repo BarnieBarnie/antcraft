@@ -260,14 +260,19 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 
 	/**
 	 * Whether this bot could start on the job now: a replant job once it could get the saplings, a log once it
-	 * can get at it and no other bot stands on it, and a tree once its log jobs are done.
+	 * can get at it and no other bot stands on it or below it in its column, and a tree once its log jobs are done.
+	 * A bot in the column, such as on the pillar it keeps up for the tree's next log, would leave this one to
+	 * climb beside it on a staircase of scaffold, which it falls off when it takes it down.
 	 */
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		BlockPos log = job.target();
 		return switch (job.type()) {
 			case REPLANT -> this.hasSaplingsFor(level, colony, job);
-			case CHOP_LOG -> TreeScanner.isReachable(new LevelTreeView(level), job.target())
-				&& level.getEntitiesOfClass(AntBot.class, new AABB(job.target().above()), other -> other != this.bot && other.getOnPos().equals(job.target())).isEmpty();
+			case CHOP_LOG -> TreeScanner.isReachable(new LevelTreeView(level), log)
+				&& level.getEntitiesOfClass(AntBot.class, new AABB(log.getX(), level.getMinY(), log.getZ(), log.getX() + 1, log.getY() + 2, log.getZ() + 1),
+					other -> other != this.bot && other.getOnPos().getX() == log.getX() && other.getOnPos().getZ() == log.getZ()
+						&& other.getOnPos().getY() <= log.getY()).isEmpty();
 			case CHOP_TREE -> colony.board().treeReady(job);
 			default -> true;
 		};

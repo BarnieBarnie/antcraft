@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -344,6 +345,57 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 				}
 			}
 			helper.assertTrue(most[0] == 4, "at most " + most[0] + " branches dug at once");
+		});
+	}
+
+	/**
+	 * In a 16x16 area: one branch, 7 long, of a level at y=1, so two segments dug one after the other. The miner of
+	 * the first walks out with its haul while the other walks in to the second, through the same 1-wide branch:
+	 * neither keeps the other in. Both segments get dug and both miners get their haul out to the core.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
+	public void twoMinersDigConsecutiveSegmentsOfOneBranchWithoutBoxingEachOtherIn(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(6, 3, 2));
+		wantStone(colony);
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 7, 4, 1, false);
+		dig(helper, colony, shaft);
+		// The other branch is dug already, so both miners work the one left.
+		Mineshaft.Branch branch = shaft.branches(y).getFirst();
+		shaft.branches(y).getLast().cells().forEach(cell -> helper.getLevel().setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState()));
+		// A roof over the branch, so it is a tunnel: in and out only through the hall.
+		branch.cells().forEach(cell -> helper.getLevel().setBlockAndUpdate(cell.above(), Blocks.STONE.defaultBlockState()));
+		List<Mineshaft.Branch> segments = branch.segments();
+		helper.assertTrue(segments.size() == 2, segments.size() + " segments");
+		List<AntBot> bots = new ArrayList<>();
+		for (BlockPos at : List.of(new BlockPos(3, 3, 3), new BlockPos(5, 3, 4))) {
+			AntBot bot = member(helper, colony, at.getX(), at.getY(), at.getZ());
+			bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+			// The scaffold blocks a miner keeps, so it takes all of its haul out after the first segment.
+			bot.getInventory().addItem(new ItemStack(Items.DIRT, 8));
+			bots.add(bot);
+		}
+		Set<UUID> diggers = new HashSet<>();
+		helper.onEachTick(() -> bots.forEach(bot -> colony.board().jobOf(bot.getUUID())
+			.filter(job -> job.type() == JobType.MINE_BRANCH).ifPresent(job -> diggers.add(bot.getUUID()))));
+		helper.succeedWhen(() -> {
+			for (BlockPos cell : branch.cells()) {
+				BlockState state = helper.getLevel().getBlockState(cell);
+				helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "branch not dug at " + relative(helper, cell).toShortString());
+			}
+			helper.assertTrue(diggers.size() == 2, diggers.size() + " miners dug the branch");
+			for (AntBot bot : bots) {
+				helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 0,
+					"a miner still holds its haul, at " + relative(helper, bot.blockPosition()).toShortString());
+				helper.assertTrue(!branch.cells().contains(bot.blockPosition()), "a miner is still in the branch, at " + relative(helper, bot.blockPosition()).toShortString());
+			}
+			helper.assertTrue(core(helper, new BlockPos(6, 3, 2)).countItem(Items.COBBLESTONE) > 0, "no haul in the core");
 		});
 	}
 

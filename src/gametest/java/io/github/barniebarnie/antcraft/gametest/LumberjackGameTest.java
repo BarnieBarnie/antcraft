@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
+
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
@@ -829,6 +831,51 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
 			helper.assertTrue(choppers.size() == 2, "logs chopped by " + choppers.size() + " bots");
+		});
+	}
+
+	/**
+	 * Two bots fell a 12-log trunk together, each on its own pillar, at times on logs right above one another. Neither
+	 * breaks the log or the scaffold the other stands on: no bot falls further than a path may drop, or gets hurt.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 3600)
+	public void twoBotsOnAdjacentLogsOfOneTrunkKeepTheirFooting(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		int logs = 12;
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, false);
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				helper.setBlock(5 + dx, logs, 5 + dz, leaves);
+			}
+		}
+		for (int y = 1; y <= logs; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		List<AntBot> bots = List.of(colonyLumberjack(helper, colony, 2, 4), colonyLumberjack(helper, colony, 4, 2));
+		bots.forEach(bot -> bot.getInventory().addItem(new ItemStack(Items.DIRT, 32)));
+		boolean[] adjacent = {false};
+		helper.onEachTick(() -> {
+			List<BlockPos> targets = bots.stream().flatMap(bot -> colony.board().jobOf(bot.getUUID())
+				.filter(job -> job.type() == JobType.CHOP_LOG).map(Job::target).stream()).toList();
+			if (targets.size() == 2 && Math.abs(targets.get(0).getY() - targets.get(1).getY()) == 1) {
+				adjacent[0] = true;
+			}
+			for (AntBot bot : bots) {
+				// A path drops 3 blocks at most (PathFollower.MAX_DROP), which does no harm.
+				if (bot.fallDistance > 3 || bot.getHealth() < bot.getMaxHealth()) {
+					helper.fail("a bot fell " + bot.fallDistance + " blocks, health " + bot.getHealth() + ", at " + relative(helper, bot.blockPosition()).toShortString());
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, logs + 1, 7)) {
+				helper.assertTrue(!helper.getBlockState(pos).is(BlockTags.LOGS), "log left at " + pos.toShortString());
+				helper.assertTrue(!helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos.toShortString());
+			}
+			helper.assertTrue(adjacent[0], "the bots never worked adjacent logs at the same time");
+			bots.forEach(bot -> helper.assertTrue(bot.getScaffold().isEmpty(), "a bot still has scaffold " + bot.getScaffold()));
 		});
 	}
 
