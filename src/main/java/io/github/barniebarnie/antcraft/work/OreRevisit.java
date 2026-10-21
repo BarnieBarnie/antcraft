@@ -9,7 +9,6 @@ import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.state.BlockState;
-import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -29,7 +28,7 @@ public final class OreRevisit {
 
 	/** Ores are the blocks of {@code c:ores}, and the ores {@link PickaxeTier} knows the drops of. */
 	public OreRevisit() {
-		this(state -> state.is(ConventionalBlockTags.ORES) || PickaxeTier.oreItem(state.getBlock()).isPresent());
+		this(OreVein::isOre);
 	}
 
 	public OreRevisit(Predicate<BlockState> isOre) {

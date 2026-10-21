@@ -29,7 +29,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The work loop of every colony bot, all alike: claims the job that {@link JobScore} rates best for the bot and
  * runs it on the executor of its type: tree and replant jobs on {@link LumberjackGoal}, crop jobs on
- * {@link FarmerGoal}, branch jobs on {@link MinerGoal}, craft and Bot Core jobs on {@link CrafterGoal}, haul jobs
+ * {@link FarmerGoal}, branch and vein jobs on {@link MinerGoal}, craft and Bot Core jobs on {@link CrafterGoal}, haul jobs
  * on {@link HaulerGoal} and build and dig jobs on {@link BuilderGoal}. It heartbeats the job while the executor
  * works on it, and completes, releases or retries it as the executor reports.
  * <p>
@@ -105,7 +105,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		this.bot = bot;
 		this.executors = Map.ofEntries(Map.entry(JobType.CHOP_TREE, lumberjack), Map.entry(JobType.CHOP_LOG, lumberjack), Map.entry(JobType.REPLANT, lumberjack),
 			Map.entry(JobType.HARVEST_CROP, farmer), Map.entry(JobType.PLANT_CROP, farmer),
-			Map.entry(JobType.MINE_BRANCH, miner),
+			Map.entry(JobType.MINE_BRANCH, miner), Map.entry(JobType.MINE_VEIN, miner),
 			Map.entry(JobType.CRAFT, crafter), Map.entry(JobType.ACTIVATE_BOT, crafter),
 			Map.entry(JobType.HAUL, hauler),
 			Map.entry(JobType.BUILD, builder), Map.entry(JobType.CLEAR_AREA, builder));

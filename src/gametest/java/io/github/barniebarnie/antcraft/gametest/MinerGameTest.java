@@ -721,6 +721,70 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * {@code size} blocks from {@code from} on, each touching one before it, out of sight of the mineshaft: inside the
+	 * stone of the test area and not beside anything dug. {@code from} itself may show.
+	 */
+	private static List<BlockPos> hidden(GameTestHelper helper, Mineshaft shaft, BlockPos from, int size) {
+		Set<BlockPos> dug = new HashSet<>(dugPath(shaft, true));
+		List<BlockPos> blocks = new ArrayList<>(List.of(from));
+		for (int i = 0; i < blocks.size() && blocks.size() < size; i++) {
+			for (Direction dir : Direction.values()) {
+				BlockPos next = blocks.get(i).relative(dir);
+				BlockPos rel = relative(helper, next);
+				boolean inside = rel.getX() >= 0 && rel.getX() < 8 && rel.getZ() >= 0 && rel.getZ() < 8 && rel.getY() >= 1 && rel.getY() <= 4;
+				if (inside && blocks.size() < size && !blocks.contains(next) && Direction.stream().noneMatch(side -> dug.contains(next.relative(side)))) {
+					blocks.add(next);
+				}
+			}
+		}
+		helper.assertTrue(blocks.size() == size, "no room for " + size + " hidden blocks");
+		return blocks;
+	}
+
+	/** An iron vein that shows one block in a branch wall is mined whole, the blocks behind it too. */
+	@GameTest(maxTicks = 1500)
+	public void minerMinesAWholeIronVeinThatShowsOneBlockInABranchWall(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		List<BlockPos> vein = hidden(helper, shaft, wall(helper, shaft), 5);
+		vein.forEach(pos -> helper.getLevel().setBlockAndUpdate(pos, Blocks.IRON_ORE.defaultBlockState()));
+		AntBot miner = member(helper, colony, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.succeedWhen(() -> {
+			vein.forEach(pos -> helper.assertTrue(helper.getLevel().getBlockState(pos).isAir(), "iron ore left at " + relative(helper, pos).toShortString()));
+			int iron = Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.RAW_IRON, 0) + miner.getInventory().countItem(Items.RAW_IRON);
+			helper.assertTrue(iron == 5, "raw iron: " + iron);
+		});
+	}
+
+	/** Water a vein opens into is walled off before the ore beside it is mined, so it does not flood the vein or the branch. */
+	@GameTest(maxTicks = 1500)
+	public void waterAVeinOpensIntoIsWalledOff(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		List<BlockPos> blocks = hidden(helper, shaft, wall(helper, shaft), 3);
+		List<BlockPos> vein = blocks.subList(0, 2);
+		BlockPos water = blocks.get(2);
+		vein.forEach(pos -> helper.getLevel().setBlockAndUpdate(pos, Blocks.IRON_ORE.defaultBlockState()));
+		helper.getLevel().setBlockAndUpdate(water, Blocks.WATER.defaultBlockState());
+		AntBot miner = member(helper, colony, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+
+		helper.onEachTick(() -> vein.forEach(pos -> helper.assertTrue(helper.getLevel().getFluidState(pos).isEmpty(),
+			"water in the vein at " + relative(helper, pos).toShortString())));
+		helper.succeedWhen(() -> {
+			vein.forEach(pos -> helper.assertTrue(helper.getLevel().getBlockState(pos).isAir(), "iron ore left at " + relative(helper, pos).toShortString()));
+			helper.assertTrue(helper.getLevel().getFluidState(water).isEmpty() && !helper.getLevel().getBlockState(water).isAir(), "water not walled off");
+		});
+	}
+
 	/** The pickaxe the deepest level of {@code shaft} needs, the colony wanting no ore in particular. */
 	private static Item need(Mineshaft shaft) {
 		return PickaxeTier.forLevel(shaft.levels().getLast(), item -> false);

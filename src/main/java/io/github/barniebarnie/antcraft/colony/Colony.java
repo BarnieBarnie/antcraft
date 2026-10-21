@@ -690,10 +690,12 @@ public class Colony {
 		return false;
 	}
 
-	/** Where paths must not place scaffold: the mineshaft's stairs, halls and branches, and every build plan's step, which the plan wants as it says. */
+	/** Where paths must not place scaffold: the mineshaft's stairs, halls and branches, every build plan's step, which the plan wants as it says, and the ore veins posted. */
 	public Set<BlockPos> keepOpen() {
 		Set<BlockPos> open = new HashSet<>(this.shaftOpen);
 		this.builds().forEach(plan -> plan.steps().forEach(step -> open.add(step.pos())));
+		// The holes a miner digs out a vein through.
+		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).forEach(job -> open.addAll(job.area()));
 		return open;
 	}
 

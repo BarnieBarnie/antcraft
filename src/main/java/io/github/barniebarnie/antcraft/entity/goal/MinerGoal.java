@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.OreVein;
 import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
@@ -25,12 +26,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
-import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -41,7 +43,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Mine work. As the executor of branch jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work},
- * it gets any colony bot to dig a mineshaft branch out with the ores in its walls its pickaxe can harvest,
+ * it gets any colony bot to dig a mineshaft branch out, posting a vein job for each ore in its walls its pickaxe
+ * can harvest and digging such veins out whole (see {@link OreVein}),
  * light it with torches from the core as it goes, and bring the haul to the core; a bot without a pickaxe
  * first takes the best one in the core. Before mining a level it makes sure a pickaxe good enough for the
  * ores the colony wants there is in hand or on its way. When it is full, it leaves what the core does not
@@ -107,6 +110,10 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
+		if (job.type() == JobType.MINE_VEIN) {
+			// Only a bot whose pickaxe harvests the ore, so none is lost.
+			return job.tool().filter(tool -> ToolKind.PICKAXE.rank(ToolKind.PICKAXE.bestCarried(this.bot)) >= ToolKind.PICKAXE.rank(tool)).isPresent();
+		}
 		// A segment once the one before it is dug, so the bot can walk up to it.
 		return colony.mineshaft().filter(shaft -> shaft.segmentReady(job.target(), pos -> !Mining.isMinable(level, pos))).isPresent()
 			&& !this.betterPickaxeFree(level, colony, job);
@@ -131,7 +138,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	public boolean begin(ServerLevel level, Job job) {
 		this.outcome = null;
 		Optional<Colony> colony = this.colony(level);
-		if (colony.isEmpty() || colony.get().mineshaft().flatMap(shaft -> shaft.segment(job.target())).isEmpty()) {
+		if (colony.isEmpty() || job.type() != JobType.MINE_VEIN && colony.get().mineshaft().flatMap(shaft -> shaft.segment(job.target())).isEmpty()) {
 			return false;
 		}
 		this.job = job;
@@ -250,6 +257,10 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.DEPOSIT);
 			return;
 		}
+		if (job.type() == JobType.MINE_VEIN) {
+			this.mineVein(level, job);
+			return;
+		}
 		Optional<Mineshaft.Branch> branch = colony.mineshaft().flatMap(shaft -> shaft.segment(job.target()));
 		if (branch.isEmpty()) {
 			// The mine moved.
@@ -265,6 +276,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (this.light(level, colony, branch.get())) {
 			return;
 		}
+		this.postVeins(level, colony, branch.get());
 		List<BlockPos> blocks = this.toMine(level, branch.get());
 		if (blocks.isEmpty()) {
 			// Cells left that it could not reach: try again later, then give them up.
@@ -272,12 +284,71 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.endJob(left ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
-		BlockPos next = blocks.getFirst();
+		this.dig(level, blocks.getFirst());
+	}
+
+	/** Breaks {@code next} once in reach and sight of it, walking there first; a block it finds no way to is left. */
+	private void dig(ServerLevel level, BlockPos next) {
 		Goal reach = new Goal.InSight(next, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
 			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
 			this.unreachable.add(next);
+		}
+	}
+
+	/**
+	 * Digs out the ore vein of the job begun, from the block that showed inwards, walling off with a scaffold block any
+	 * fluid beside an ore before it breaks it. The holes stay open. Completes the job, or gives it back to retry when
+	 * ore is left it could not get at, or wall off for want of blocks.
+	 */
+	private void mineVein(ServerLevel level, Job job) {
+		List<BlockPos> left = job.area().stream()
+			.filter(pos -> OreVein.isOre(level.getBlockState(pos)) && this.canHarvest(level.getBlockState(pos)) && !this.unreachable.contains(pos)).toList();
+		if (left.isEmpty()) {
+			boolean ore = job.area().stream().anyMatch(pos -> OreVein.isOre(level.getBlockState(pos)));
+			this.endJob(ore ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
+			return;
+		}
+		BlockPos next = left.getFirst();
+		for (Direction dir : Direction.values()) {
+			BlockPos side = next.relative(dir);
+			if (!level.getFluidState(side).isEmpty() && !this.wallOff(level, side)) {
+				this.unreachable.add(next);
+				return;
+			}
+		}
+		if (!Mining.isMinable(level, next)) {
+			this.unreachable.add(next);
+			return;
+		}
+		this.dig(level, next);
+	}
+
+	/** Fills the fluid at {@code pos} with a scaffold block it carries. Returns false when it has none. */
+	private boolean wallOff(ServerLevel level, BlockPos pos) {
+		int slot = findSlot(this.bot.getInventory(), stack -> stack.is(PathFollower.SCAFFOLD_BLOCKS) && stack.getItem() instanceof BlockItem);
+		if (slot < 0) {
+			return false;
+		}
+		ItemStack stack = this.bot.getInventory().getItem(slot);
+		// ponytail: placed from wherever the bot stands, like a builder walling off fluid; walk up to it if that looks wrong.
+		level.setBlockAndUpdate(pos, ((BlockItem) stack.getItem()).getBlock().defaultBlockState());
+		stack.shrink(1);
+		this.bot.getInventory().setChanged();
+		return true;
+	}
+
+	/**
+	 * Posts a vein job (see {@link OreVein}) for each ore in the walls and ceiling of what is dug of {@code branch} that
+	 * its pickaxe can harvest: the ores it sees, so no ore out of sight starts one.
+	 */
+	private void postVeins(ServerLevel level, Colony colony, Mineshaft.Branch branch) {
+		for (BlockPos side : branch.walls(level::getBlockState)) {
+			BlockState state = level.getBlockState(side);
+			if (OreVein.isOre(state) && this.canHarvest(state) && !ColonyManager.isProtected(level, side)) {
+				OreVein.post(colony.board(), side, level::getBlockState, level.getGameTime());
+			}
 		}
 	}
 
@@ -306,21 +377,12 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return this.upgradeTool(level, colony, kind);
 	}
 
-	/**
-	 * The branch's blocks left to dig, from the hall outwards, then the ores in the walls and ceiling
-	 * of what is dug that its pickaxe can harvest.
-	 */
+	/** The branch's blocks left to dig, from the hall outwards; the ores in its walls are vein jobs (see {@link #postVeins}). */
 	private List<BlockPos> toMine(ServerLevel level, Mineshaft.Branch branch) {
 		List<BlockPos> blocks = new ArrayList<>();
 		for (BlockPos cell : branch.cells()) {
 			if (Mining.isMinable(level, cell) && !this.unreachable.contains(cell)) {
 				blocks.add(cell);
-			}
-		}
-		for (BlockPos side : branch.walls(level::getBlockState)) {
-			if (!this.unreachable.contains(side) && level.getBlockState(side).is(ConventionalBlockTags.ORES) && this.canHarvest(level.getBlockState(side))
-					&& Mining.isMinable(level, side)) {
-				blocks.add(side);
 			}
 		}
 		return blocks;
