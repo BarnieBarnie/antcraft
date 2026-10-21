@@ -995,6 +995,30 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Logs a bot carries count as colony stock, which crafters cannot use, so with trees still to fell and an
+	 * order for planks it brings the first tree's logs to the core rather than keep them until the last.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 2400)
+	public void bringsLogsToTheCoreForAnOrderWhileTreesAreLeft(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		bareTree(helper, 5, 5);
+		bareTree(helper, 5, 2);
+		bareTree(helper, 2, 6);
+		colony.addOrder(Items.OAK_PLANKS, 4);
+		colonyLumberjack(helper, colony, 2, 2);
+		boolean[] storedWithTreesLeft = {false};
+		helper.onEachTick(() -> {
+			Container core = home(helper);
+			if (core.countItem(Items.OAK_LOG) + core.countItem(Items.OAK_PLANKS) > 0 && countBlocks(helper, BlockTags.LOGS) > 0) {
+				storedWithTreesLeft[0] = true;
+			}
+		});
+
+		helper.succeedWhen(() -> helper.assertTrue(storedWithTreesLeft[0],
+			"core has " + home(helper).countItem(Items.OAK_LOG) + " logs, " + countBlocks(helper, BlockTags.LOGS) + " logs standing"));
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void twoColonyBotsEachTakeTheTreeNearerToThem(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
