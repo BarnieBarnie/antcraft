@@ -24,7 +24,8 @@ Game tests run on a dedicated server, so they enable bots with `AntCraftConfig.s
 ./gradlew test          # unit tests
 ./gradlew runGameTest   # game tests (headless server)
 ./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*'   # only matching game tests
-./gradlew build         # compile + both test suites; this is what CI runs
+./gradlew build         # compile + both test suites
+./gradlew testIsolated  # unit tests, one JVM per class, catches bootstrap-order bugs; CI runs build and this
 ./gradlew runClient     # play-test manually
 ```
 

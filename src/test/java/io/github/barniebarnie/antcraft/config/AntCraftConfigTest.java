@@ -7,9 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class AntCraftConfigTest {
+	// Parsing the mineshaft levels loads Mineshaft, which reads Items.
+	@BeforeAll
+	static void bootstrap() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
+
 	@Test
 	void defaultsWhenEmpty() {
 		AntCraftConfig.Values values = AntCraftConfig.parse(new Properties());

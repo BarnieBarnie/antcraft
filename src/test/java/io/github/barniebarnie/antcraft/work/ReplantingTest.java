@@ -7,8 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
-import net.minecraft.SharedConstants;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -20,8 +18,8 @@ class ReplantingTest {
 
 	@BeforeAll
 	static void bootstrap() {
-		SharedConstants.tryDetectVersion();
-		Bootstrap.bootStrap();
+		// Item stacks need their components bound, which happens once the registries are frozen.
+		VanillaData.recipeBook();
 	}
 
 	@Test

@@ -3,6 +3,7 @@
 #
 #   scripts/check.sh                       # ./gradlew build
 #   scripts/check.sh test                  # unit tests only
+#   scripts/check.sh testIsolated          # unit tests, one JVM per class (CI runs this)
 #   scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
 #
 # Gradle runs with --continue so one run reports every failing suite. The full
@@ -27,7 +28,7 @@ status=$?
 game=$(sed -n 's/^\[[0-9:]*\] \[[^]]*\] ([^)]*) //p' "$log" |
 	sed -n '/GAME TESTS COMPLETE/,/^=====/p' | grep -v '^=*$')
 
-reports=$(find build/test-results/test -name '*.xml' -newer "$start" 2>/dev/null)
+reports=$(find build/test-results/test build/test-results/testIsolated -name '*.xml' -newer "$start" 2>/dev/null)
 unit=""
 if [ -n "$reports" ]; then
 	unit=$(cat $reports | sed -n 's/^<testsuite .* tests="\([0-9]*\)" skipped="[0-9]*" failures="\([0-9]*\)" errors="\([0-9]*\)".*/\1 \2 \3/p' |

@@ -37,6 +37,18 @@ test {
 	useJUnitPlatform()
 }
 
+// The unit tests again, each class in a fresh JVM. A class that touches Items or Blocks
+// before its own bootstrap passes in the shared `test` JVM if another class bootstrapped
+// first, and fails here. CI runs it; it is not part of `build`, to keep local runs fast.
+tasks.register('testIsolated', Test) {
+	description = 'Runs the unit tests with one JVM per test class.'
+	group = 'verification'
+	testClassesDirs = sourceSets.test.output.classesDirs
+	classpath = sourceSets.test.runtimeClasspath
+	useJUnitPlatform()
+	forkEvery = 1
+}
+
 // Server game tests live in src/gametest and run headless as part of `build`.
 fabricApi {
 	configureTests {
