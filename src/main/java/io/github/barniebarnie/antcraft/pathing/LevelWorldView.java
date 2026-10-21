@@ -12,6 +12,7 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** {@link WorldView} backed by a live level. Break times assume the bot uses its best tool for each block. */
@@ -50,8 +51,18 @@ public class LevelWorldView implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		BlockState state = this.level.getBlockState(pos);
-		// Farmland is a little lower than a full block, but walkable.
-		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.is(Blocks.FARMLAND);
+		// Farmland is a little lower than a full block, and a stair half a block lower at the front, but both are walkable.
+		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.is(Blocks.FARMLAND) || this.isStair(pos);
+	}
+
+	@Override
+	public boolean isStair(BlockPos pos) {
+		return this.level.getBlockState(pos).getBlock() instanceof StairBlock;
+	}
+
+	@Override
+	public boolean isBedrock(BlockPos pos) {
+		return this.level.getBlockState(pos).is(Blocks.BEDROCK);
 	}
 
 	@Override

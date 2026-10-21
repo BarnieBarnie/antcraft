@@ -17,7 +17,8 @@
 			"io.github.barniebarnie.antcraft.gametest.FarmerGameTest",
 			"io.github.barniebarnie.antcraft.gametest.GuardHaulerGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BuilderGameTest",
-			"io.github.barniebarnie.antcraft.gametest.TerraformGameTest"
+			"io.github.barniebarnie.antcraft.gametest.TerraformGameTest",
+			"io.github.barniebarnie.antcraft.gametest.SpiralMineshaftGameTest"
 		]
 	},
 	"depends": {

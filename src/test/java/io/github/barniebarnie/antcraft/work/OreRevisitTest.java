@@ -31,7 +31,7 @@ class OreRevisitTest {
 	static void loadTags() {
 		// Which pickaxe harvests which ore comes from the vanilla tags.
 		VanillaData.recipeBook();
-		SHAFT = new Mineshaft(new BlockPos(0, 10, 0), List.of(6), 1, 3, 4);
+		SHAFT = new Mineshaft(new BlockPos(0, 10, 0), List.of(6), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
 		BRANCH = SHAFT.branches(6).getFirst();
 	}
 

@@ -21,6 +21,16 @@ public interface WorldView {
 	/** Ticks needed to break the block, or a negative number if it must not be broken. */
 	float breakTicks(BlockPos pos);
 
+	/** A stair block a bot walks up onto without jumping, such as on the mineshaft's stairs. */
+	default boolean isStair(BlockPos pos) {
+		return false;
+	}
+
+	/** Bedrock, which no shaft digs through; not other blocks that cannot be broken, such as a barrier. */
+	default boolean isBedrock(BlockPos pos) {
+		return false;
+	}
+
 	/** Whether a path may place a scaffold block here; not where a builder's plan puts a block of its own, say. */
 	default boolean mayPlace(BlockPos pos) {
 		return true;

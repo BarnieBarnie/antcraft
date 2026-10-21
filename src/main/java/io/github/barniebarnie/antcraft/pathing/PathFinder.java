@@ -150,7 +150,8 @@ public final class PathFinder {
 
 		private Candidate stepUp(BlockPos feet, Direction dir) {
 			BlockPos to = feet.relative(dir).above();
-			Builder b = new Builder(MoveType.STEP_UP, to, WALK_COST + JUMP_COST);
+			// Onto a stair block a bot walks up without jumping.
+			Builder b = new Builder(MoveType.STEP_UP, to, this.world.isStair(to.below()) ? WALK_COST : WALK_COST + JUMP_COST);
 			b.clear(feet.above(2)).clear(to).clear(to.above()).support(to.below());
 			return b.build();
 		}

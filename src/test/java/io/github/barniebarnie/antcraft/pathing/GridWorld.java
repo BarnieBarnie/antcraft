@@ -9,7 +9,7 @@ import net.minecraft.core.BlockPos;
 /**
  * In-memory block world for pathfinder tests. Unset positions are air.
  * '#' = stone (30 ticks to break), 'D' = dirt (10 ticks), 'B' = bedrock (unbreakable), 'L' = lava,
- * 'W' = water (a hazard like any fluid, but swimmable).
+ * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block (stood on, and walked up onto without a jump).
  */
 final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
@@ -67,13 +67,18 @@ final class GridWorld implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		char c = this.at(pos);
-		return c == '#' || c == 'D' || c == 'B';
+		return c == '#' || c == 'D' || c == 'B' || c == 'S';
 	}
 
 	@Override
 	public boolean isHazard(BlockPos pos) {
 		char c = this.at(pos);
 		return c == 'L' || c == 'W';
+	}
+
+	@Override
+	public boolean isStair(BlockPos pos) {
+		return this.at(pos) == 'S';
 	}
 
 	@Override
@@ -84,7 +89,7 @@ final class GridWorld implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		return switch (this.at(pos)) {
-			case '#' -> 30;
+			case '#', 'S' -> 30;
 			case 'D' -> 10;
 			default -> -1;
 		};

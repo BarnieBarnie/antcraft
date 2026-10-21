@@ -41,6 +41,7 @@ import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -224,15 +225,18 @@ public class ColonyManager extends SavedData {
 		colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH && job.givenUp()).forEach(job -> givenUp.add(job.target()));
 		colony.mineshaft().ifPresent(shaft -> {
 			Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
-			// The builder has dug the hall, so miners can walk to the branches.
+			// The builder has dug the way there, so miners can walk to the hall (of a spiral) or the branches (of an old shaft).
 			List<Integer> open = shaft.levels().stream().filter(y -> {
-				BlockPos hallEnd = shaft.hall(y).getLast();
-				return level.getBlockState(hallEnd).getCollisionShape(level, hallEnd).isEmpty();
+				BlockPos reached = shaft.hallWork(y).isPresent() ? shaft.landing(y) : shaft.hall(y).getLast();
+				return level.getBlockState(reached).getCollisionShape(level, reached).isEmpty();
 			}).toList();
 			for (int y : open) {
-				// The first round with blocks left to dig; the rounds before it are dug, so may need lighting.
-				for (int round = 0; round < shaft.rounds(); round++) {
-					List<Mineshaft.Branch> branches = shaft.branches(y, round);
+				// A spiral's hall first, then the branches off it.
+				List<List<Mineshaft.Branch>> stages = new ArrayList<>();
+				shaft.hallWork(y).ifPresent(hall -> stages.add(List.of(hall)));
+				IntStream.range(0, shaft.rounds()).forEach(round -> stages.add(shaft.branches(y, round)));
+				// The first stage with blocks left to dig; the ones before it are dug, so may need lighting.
+				for (List<Mineshaft.Branch> branches : stages) {
 					if (torches) {
 						branches.stream().filter(branch -> branch.darkTorch(level).isPresent()).forEach(post);
 					}

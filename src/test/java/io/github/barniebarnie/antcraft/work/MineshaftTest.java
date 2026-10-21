@@ -23,22 +23,35 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class MineshaftTest {
 	private static final BlockPos TOP = new BlockPos(0, 10, 0);
-	/** Down to y=6, one branch each side of a 3 long hall, branches 3 long, a torch every 4 blocks. */
+	/**
+	 * An old shaft, from before the spiral (see {@link #old}): down to y=6, one branch each side of a 3 long hall,
+	 * branches 3 long, a torch every 4 blocks.
+	 */
 	// Set in bootstrap(): building a Mineshaft touches the item registry, which needs the bootstrap first.
 	private static Mineshaft SHAFT;
+	/** Like {@link #SHAFT}, but a new one: the 2-wide spiral. */
+	private static Mineshaft SPIRAL;
 
 	@BeforeAll
 	static void bootstrap() {
 		// Bootstraps the registries and loads the vanilla recipes and tags.
 		VanillaData.recipeBook();
-		SHAFT = new Mineshaft(TOP, List.of(6), 1, 3, 4);
+		SHAFT = old(TOP, List.of(6), 1, 3, 4);
+		SPIRAL = new Mineshaft(TOP, List.of(6), 1, 3, 4);
+	}
+
+	/** A shaft of the old layout, a 1-wide staircase round a 2x2 column, which colonies that dug one keep. */
+	private static Mineshaft old(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing) {
+		return new Mineshaft(top, levels, branchesPerSide, branchLength, torchSpacing, Mineshaft.DEFAULT_ROUNDS, false);
 	}
 
 	private static Map<BlockPos, BuildPlan.Step> steps() {
@@ -109,7 +122,7 @@ class MineshaftTest {
 		List<BlockPos> positions = steps.stream().map(BuildPlan.Step::pos).toList();
 		assertTrue(positions.indexOf(chest) > positions.indexOf(SHAFT.hall(6).getLast()));
 		// A landing on each side of the column.
-		Mineshaft wide = new Mineshaft(TOP, List.of(9, 7, 4, 2), 3, 16, 8);
+		Mineshaft wide = old(TOP, List.of(9, 7, 4, 2), 3, 16, 8);
 		for (int level : wide.levels()) {
 			BlockPos spot = wide.landingChest(level);
 			assertEquals(1, spot.distManhattan(wide.landing(level)), "not beside the landing at " + level);
@@ -135,20 +148,26 @@ class MineshaftTest {
 
 	@Test
 	void levelsAtOrAboveTheTopAreDropped() {
-		assertEquals(List.of(6, 2), new Mineshaft(TOP, List.of(2, 12, 10, 6), 1, 3, 4).levels());
+		assertEquals(List.of(6, 2), old(TOP, List.of(2, 12, 10, 6), 1, 3, 4).levels());
 	}
 
 	@Test
 	void levelsTooCloseToTheLevelAboveAreDropped() {
-		assertEquals(List.of(8, 6, 3), new Mineshaft(TOP, List.of(8, 7, 6, 3), 1, 3, 4).levels());
+		assertEquals(List.of(8, 6, 3), old(TOP, List.of(8, 7, 6, 3), 1, 3, 4).levels());
 		assertEquals(List.of(9, 7, 5), Mineshaft.spaced(List.of(5, 9, 8, 7, 6, 5)));
 	}
 
 	@Test
 	void branchesOfEveryRoundKeepClearOfOtherLevelsWhenLevelsAreTwoApart() {
+		for (boolean spiral : List.of(false, true)) {
+			branchesOfEveryRoundKeepClearOfOtherLevelsWhenLevelsAreTwoApart(spiral);
+		}
+	}
+
+	private static void branchesOfEveryRoundKeepClearOfOtherLevelsWhenLevelsAreTwoApart(boolean spiral) {
 		List<Integer> levels = IntStream.iterate(48, y -> y > 20, y -> y - Mineshaft.MIN_LEVEL_GAP).boxed().toList();
 		Mineshaft shaft = new Mineshaft(new BlockPos(0, 50, 0), levels, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH,
-			Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS);
+			Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, spiral);
 		assertEquals(levels, shaft.levels());
 		// What the stairs and every hall dig out, with the floors under them, and each landing chest.
 		Set<BlockPos> stairs = new HashSet<>();
@@ -196,7 +215,7 @@ class MineshaftTest {
 
 	@Test
 	void branchesAreAFewBlocksApart() {
-		Mineshaft wide = new Mineshaft(TOP, List.of(6), 3, 16, 8);
+		Mineshaft wide = old(TOP, List.of(6), 3, 16, 8);
 		assertEquals(9, wide.hall(6).size());
 		List<Integer> xs = wide.branches(6).stream().filter(b -> b.start().getZ() < 0).map(b -> b.start().getX()).toList();
 		assertEquals(List.of(-3, -6, -9), xs);
@@ -206,7 +225,7 @@ class MineshaftTest {
 
 	@Test
 	void aMinedOutLevelGetsFurtherBranchesClearOfTheOldOnesAndTheShaft() {
-		Mineshaft wide = new Mineshaft(TOP, List.of(6), 3, 16, 8, 3);
+		Mineshaft wide = new Mineshaft(TOP, List.of(6), 3, 16, 8, 3, false);
 		Set<BlockPos> taken = new HashSet<>(wide.protectedBlocks());
 		wide.plan().steps().forEach(step -> taken.add(step.pos()));
 		List<Mineshaft.Branch> before = List.of();
@@ -282,7 +301,16 @@ class MineshaftTest {
 
 	@Test
 	void survivesCodecRoundTrip() {
-		var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, SHAFT).getOrThrow();
+		for (Mineshaft shaft : List.of(SHAFT, SPIRAL)) {
+			var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, shaft).getOrThrow();
+			assertEquals(shaft, Mineshaft.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+		}
+	}
+
+	@Test
+	void aShaftSavedBeforeTheSpiralKeepsTheOldLayout() {
+		var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, SHAFT).getOrThrow().getAsJsonObject();
+		json.remove("spiral");
 		assertEquals(SHAFT, Mineshaft.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
 	}
 
@@ -306,7 +334,7 @@ class MineshaftTest {
 
 	@Test
 	void planIsBatchedPerStairSegmentAndPerHall() {
-		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
+		Mineshaft shaft = old(TOP, List.of(8, 6), 1, 3, 4);
 		// Stairs down to y=8, its hall, the stairs on down to y=6, its hall.
 		assertEquals(List.of(List.of(), List.of(0), List.of(0), List.of(2)), shaft.plan().batches().stream().map(BuildPlan.Batch::needs).toList());
 
@@ -322,7 +350,7 @@ class MineshaftTest {
 
 	@Test
 	void aHallWaitsForTheStairsThatReachIt() {
-		BuildPlan plan = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4).plan();
+		BuildPlan plan = old(TOP, List.of(8, 6), 1, 3, 4).plan();
 		assertEquals(List.of(0), plan.ready(Set.of()));
 		// Once the stairs reach y=8, its hall and the stairs on down can be dug at the same time.
 		assertEquals(List.of(1, 2), plan.ready(Set.of(0)));
@@ -331,7 +359,17 @@ class MineshaftTest {
 
 	/** Solid rock, but for some fluid and some bedrock. */
 	private static WorldView rock(Predicate<BlockPos> fluid, Predicate<BlockPos> bedrock) {
+		return rock(fluid, bedrock, pos -> false);
+	}
+
+	/** Solid rock, but for some fluid, some bedrock and some barriers, which cannot be broken either. */
+	private static WorldView rock(Predicate<BlockPos> fluid, Predicate<BlockPos> bedrock, Predicate<BlockPos> barrier) {
 		return new WorldView() {
+			@Override
+			public boolean isBedrock(BlockPos pos) {
+				return bedrock.test(pos);
+			}
+
 			@Override
 			public boolean isPassable(BlockPos pos) {
 				return false;
@@ -349,7 +387,7 @@ class MineshaftTest {
 
 			@Override
 			public float breakTicks(BlockPos pos) {
-				return bedrock.test(pos) ? -1 : 30;
+				return bedrock.test(pos) || barrier.test(pos) ? -1 : 30;
 			}
 		};
 	}
@@ -398,7 +436,7 @@ class MineshaftTest {
 
 	@Test
 	void wallsFloorsAndCeilingsOfTheStairsAndHallsAreKeptSolidBeforeTheyAreDug() {
-		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
+		Mineshaft shaft = old(TOP, List.of(8, 6), 1, 3, 4);
 		List<BuildPlan.Step> steps = shaft.plan().steps();
 		Map<BlockPos, Integer> index = new HashMap<>();
 		for (int i = 0; i < steps.size(); i++) {
@@ -428,7 +466,7 @@ class MineshaftTest {
 
 	@Test
 	void theBlockPastEachHallsEndIsWalled() {
-		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6), 1, 3, 4);
+		Mineshaft shaft = old(TOP, List.of(8, 6), 1, 3, 4);
 		Map<BlockPos, BuildPlan.Step> steps = shaft.plan().steps().stream().collect(Collectors.toMap(BuildPlan.Step::pos, step -> step));
 		for (int level : shaft.levels()) {
 			List<BlockPos> hall = shaft.hall(level);
@@ -484,13 +522,129 @@ class MineshaftTest {
 
 	@Test
 	void aBlockedStairDropsTheLevelsBelowItAndABlockedHallOnlyItsLevel() {
-		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 6, 4), 1, 3, 4);
+		Mineshaft shaft = old(TOP, List.of(8, 6, 4), 1, 3, 4);
 		// On the way from y=8 down to y=6.
 		BlockPos stair = shaft.stairs().get(3);
-		assertEquals(new Mineshaft(TOP, List.of(8), 1, 3, 4), shaft.reachable(List.of(stair)));
+		assertEquals(old(TOP, List.of(8), 1, 3, 4), shaft.reachable(List.of(stair)));
 		assertEquals(List.of(8), shaft.reachable(List.of(stair.below())).levels());
 		assertEquals(List.of(8, 4), shaft.reachable(List.of(shaft.hall(6).get(1))).levels());
 		assertEquals(List.of(), shaft.reachable(List.of(shaft.stairs().get(1))).levels());
 		assertEquals(shaft, shaft.reachable(List.of(new BlockPos(100, 0, 100))));
+	}
+
+	/** The cells of the spiral at the heights of one full turn from the top: 4 heights, each one side further round. */
+	private static List<BlockPos> oneTurn(Mineshaft shaft) {
+		return shaft.stairs().stream().filter(cell -> cell.getY() > shaft.top().getY() - 4).toList();
+	}
+
+	@Test
+	void spiralStairsOfOneTurnFillASixBySixRingAroundATwoByTwoCentre() {
+		List<BlockPos> turn = oneTurn(SPIRAL);
+		Set<BlockPos> footprint = turn.stream().map(cell -> cell.atY(0)).collect(Collectors.toSet());
+		assertEquals(turn.size(), footprint.size(), "a cell twice in one turn");
+		Set<BlockPos> ring = new HashSet<>();
+		for (int x = 0; x < 6; x++) {
+			for (int z = 0; z < 6; z++) {
+				// The centre column stays solid.
+				if (x < 2 || x > 3 || z < 2 || z > 3) {
+					ring.add(new BlockPos(x, 0, z));
+				}
+			}
+		}
+		assertEquals(ring, footprint);
+		// Each height is a flat 2x2 corner with the 2-wide rows either side of it, one corner further round than the height above.
+		Map<Integer, Long> perHeight = turn.stream().collect(Collectors.groupingBy(BlockPos::getY, Collectors.counting()));
+		assertEquals(Map.of(10, 8L, 9, 8L, 8, 8L, 7, 8L), perHeight);
+		Mineshaft deep = new Mineshaft(TOP, List.of(9, 7, 5), 1, 3, 4);
+		assertEquals(List.of(new BlockPos(5, 9, 0), new BlockPos(0, 7, 5), new BlockPos(5, 5, 0)), deep.levels().stream().map(deep::landing).toList());
+	}
+
+	@Test
+	void everySpiralStepHasThreeBlocksOfHeadroomAndAFloor() {
+		Map<BlockPos, BuildPlan.Step> steps = SPIRAL.plan().steps().stream().collect(Collectors.toMap(BuildPlan.Step::pos, step -> step));
+		for (BlockPos cell : SPIRAL.stairs()) {
+			for (int up = 0; up < 3; up++) {
+				BuildPlan.Step step = steps.get(cell.above(up));
+				assertTrue(step != null && (step.isClear() || step.state().is(Blocks.TORCH)), "no headroom at " + cell.above(up));
+			}
+			BuildPlan.Step floor = steps.get(cell.below());
+			assertTrue(floor != null && (floor.anySolid() || floor.state().getBlock() instanceof StairBlock), "no floor under " + cell);
+		}
+		assertTrue(SPIRAL.protectedBlocks().containsAll(SPIRAL.stairs().stream().map(BlockPos::below).toList()), "stair floors not protected");
+	}
+
+	@Test
+	void theSpiralPlanHasAStairBlockFacingUpOnEveryStepALandingAtEachLevelAndNoHallOrBranch() {
+		Mineshaft shaft = new Mineshaft(TOP, List.of(8, 5), 1, 3, 4);
+		Map<BlockPos, BuildPlan.Step> steps = shaft.plan().steps().stream().collect(Collectors.toMap(BuildPlan.Step::pos, step -> step));
+		Set<BlockPos> cells = new HashSet<>(shaft.stairs());
+		int stairs = 0;
+		for (BlockPos lower : cells) {
+			for (Direction up : Direction.Plane.HORIZONTAL) {
+				BlockPos upper = lower.relative(up).above();
+				if (cells.contains(upper)) {
+					// A step up: walked onto its stair block, which faces the way up, rather than jumped.
+					BlockState floor = steps.get(upper.below()).state();
+					assertTrue(floor.is(Blocks.COBBLESTONE_STAIRS), "no stair block under " + upper + ": " + floor);
+					assertEquals(up, floor.getValue(StairBlock.FACING), "the stair under " + upper + " faces the wrong way");
+					assertEquals(Half.BOTTOM, floor.getValue(StairBlock.HALF));
+					stairs++;
+				}
+			}
+		}
+		// Each side of the spiral has one 2-wide stair, down to y=5: 5 sides.
+		assertEquals(10, stairs);
+		for (int level : shaft.levels()) {
+			BlockPos landing = shaft.landing(level);
+			assertEquals(level, landing.getY());
+			// A flat 2x2 corner, for several bots, with its chest beside it.
+			List<BlockPos> corner = cells.stream().filter(cell -> cell.getY() == level && Math.abs(cell.getX() - landing.getX()) <= 1
+				&& Math.abs(cell.getZ() - landing.getZ()) <= 1 && steps.get(cell.below()).anySolid()).toList();
+			assertEquals(4, corner.size(), "no flat 2x2 landing at " + level);
+			corner.forEach(cell -> assertTrue(steps.get(cell).isClear() || steps.get(cell).state().is(Blocks.TORCH), "landing not dug at " + cell));
+			assertTrue(steps.get(shaft.landingChest(level)).state().is(Blocks.CHEST), "no chest at landing " + level);
+			assertEquals(1, shaft.landingChest(level).distManhattan(landing));
+			// The hall and branches are mining work, not part of the shaft.
+			assertTrue(shaft.hall(level).stream().noneMatch(cell -> steps.containsKey(cell) || steps.containsKey(cell.above())), "hall in the plan at " + level);
+			assertTrue(shaft.branches(level).stream().flatMap(branch -> branch.cells().stream()).noneMatch(steps::containsKey), "branch in the plan at " + level);
+			assertTrue(shaft.hallWork(level).isPresent(), "no hall to mine at " + level);
+		}
+		assertEquals(Items.COBBLESTONE_STAIRS, shaft.plan().materials(pos -> Blocks.STONE.defaultBlockState()).keySet().stream()
+			.filter(item -> item != Items.CHEST && item != Items.TORCH).findFirst().orElseThrow());
+		assertEquals(10, shaft.plan().materials(pos -> Blocks.STONE.defaultBlockState()).get(Items.COBBLESTONE_STAIRS));
+		assertEquals(2, shaft.plan().materials(pos -> Blocks.STONE.defaultBlockState()).get(Items.CHEST));
+	}
+
+	@Test
+	void theHallOfASpiralLevelIsMiningWorkLeadingAwayFromTheLanding() {
+		Mineshaft.Branch hall = SPIRAL.hallWork(6).orElseThrow();
+		assertEquals(List.of(new BlockPos(-1, 6, 0), new BlockPos(-2, 6, 0), new BlockPos(-3, 6, 0)), SPIRAL.hall(6));
+		assertEquals(SPIRAL.hall(6).getFirst(), hall.start());
+		assertEquals(Set.of(new BlockPos(-1, 6, 0), new BlockPos(-1, 7, 0), new BlockPos(-2, 6, 0), new BlockPos(-2, 7, 0),
+			new BlockPos(-3, 6, 0), new BlockPos(-3, 7, 0)), Set.copyOf(hall.cells()));
+		assertEquals(Optional.of(hall), SPIRAL.branch(hall.start()));
+		// An old shaft's plan digs its halls itself.
+		assertEquals(Optional.empty(), SHAFT.hallWork(6));
+	}
+
+	@Test
+	void aSiteWhoseHallCrossesWaterIsRejected() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 20);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), ROCK);
+		// Under the first level, where the column alone is not checked.
+		BlockPos water = first.hall(20).get(2).above();
+		Mineshaft other = Mineshaft.nextTo(core, levels, List.of(), rock(water::equals, pos -> false));
+		assertFalse(other.top().equals(first.top()), "the hall at y=20 runs into water");
+		assertEquals(levels, other.levels());
+	}
+
+	@Test
+	void aBarrierIsNotTakenForBedrock() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 20);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), ROCK);
+		BlockPos barrier = first.top().offset(1, -30, 1);
+		assertEquals(first, Mineshaft.nextTo(core, levels, List.of(), rock(pos -> false, pos -> false, barrier::equals)));
 	}
 }

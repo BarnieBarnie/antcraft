@@ -49,6 +49,16 @@ class PathFinderTest {
 	}
 
 	@Test
+	void walksUpAStairBlockWithoutJumping() {
+		GridWorld world = GridWorld.flat(10).set(1, 1, 0, 'S');
+		Path path = find(world, new BlockPos(1, 2, 0), WALK_ONLY);
+
+		assertTrue(path.complete());
+		assertEquals(List.of(MoveType.STEP_UP), types(path));
+		assertEquals(PathFinder.WALK_COST, path.cost(), 1e-9);
+	}
+
+	@Test
 	void cannotClimbTwoBlockWallWithoutTools() {
 		// Wall of height 2 across the whole floor.
 		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 2, 10, '#');
