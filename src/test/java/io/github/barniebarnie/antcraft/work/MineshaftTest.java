@@ -639,6 +639,27 @@ class MineshaftTest {
 	}
 
 	@Test
+	void aBranchOf12BlocksGivesThreeSegmentJobsEachReadyAfterTheOneBefore() {
+		Mineshaft shaft = old(TOP, List.of(6), 1, 12, 8);
+		Mineshaft.Branch branch = shaft.branches(6).getFirst();
+		List<Mineshaft.Branch> segments = branch.segments();
+
+		assertEquals(3, segments.size());
+		assertEquals(branch.cells(), segments.stream().flatMap(segment -> segment.cells().stream()).toList());
+		assertEquals(branch.torches(), segments.stream().flatMap(segment -> segment.torches().stream()).toList());
+		assertEquals(Optional.of(segments.get(1)), shaft.segment(segments.get(1).start()));
+		Set<BlockPos> dug = new HashSet<>();
+		for (int i = 0; i < segments.size(); i++) {
+			for (int j = 0; j < segments.size(); j++) {
+				assertEquals(j <= i, shaft.segmentReady(segments.get(j).start(), dug::contains), "segment " + j + " with " + i + " dug");
+			}
+			dug.addAll(segments.get(i).cells());
+		}
+		// A spiral's hall, 12 long with 4 branches a side, is split the same way.
+		assertEquals(3, new Mineshaft(TOP, List.of(6)).hallWork(6).orElseThrow().segments().size());
+	}
+
+	@Test
 	void aSiteWhoseHallCrossesWaterIsRejected() {
 		BlockPos core = new BlockPos(0, 64, 0);
 		List<Integer> levels = List.of(40, 20);

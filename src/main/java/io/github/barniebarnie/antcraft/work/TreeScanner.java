@@ -19,6 +19,8 @@ public final class TreeScanner {
 	private static final int SCAN_ABOVE = 8;
 	/** How many cut logs under a standing trunk are looked through for the ground it grew on. */
 	private static final int MAX_CUT_BELOW = 8;
+	/** How many blocks above what it stands on a bot reaches a log. */
+	private static final int REACH = 4;
 
 	public interface TreeView {
 		boolean isLog(BlockPos pos);
@@ -80,6 +82,24 @@ public final class TreeScanner {
 	 */
 	public static Optional<Tree> remaining(TreeView view, BlockPos base, Collection<BlockPos> knownLogs) {
 		return remaining(view, knownLogs).map(rest -> new Tree(base, rest.logs()));
+	}
+
+	/**
+	 * Whether a bot can get at the log at {@code log} now: within {@link #REACH} blocks above whatever it
+	 * stands on, such as the ground or scaffold, through the logs and air under it. Or, with air right
+	 * under it, it is the bottom of the logs left once those under them were cut, which a bot pillars up to.
+	 */
+	public static boolean isReachable(TreeView view, BlockPos log) {
+		if (view.isOpen(log.below())) {
+			return true;
+		}
+		for (int down = 1; down <= REACH; down++) {
+			BlockPos under = log.below(down);
+			if (!view.isOpen(under) && !view.isLog(under)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

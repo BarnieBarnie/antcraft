@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -203,12 +204,12 @@ public class ColonyManager extends SavedData {
 	/**
 	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}),
 	 * for stock targets or orders, does it pick a mineshaft site and post branch jobs, and order a pickaxe
-	 * when it has none; otherwise the open ones come off the board. It posts a job for each branch with
-	 * blocks left to dig at one mining level: the deepest dug one whose ores the colony wants. Each job
-	 * needs the pickaxe its level does (see {@link PickaxeTier#forBranch}).
+	 * when it has none; otherwise the open ones come off the board. It posts a job for each segment with blocks
+	 * left to dig (see {@link Mineshaft.Branch#segments}) of the branches at one mining level: the deepest dug one
+	 * whose ores the colony wants. Each job needs the pickaxe its level does (see {@link PickaxeTier#forBranch}).
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
-	 * every dug branch with a dark torch spot gets a job too, so a miner goes back to light it.
-	 * A branch whose job was given up, its cells left out of reach, counts as dug: its job stays
+	 * every dug segment with a dark torch spot gets a job too, so a miner goes back to light it.
+	 * A branch with a segment whose job was given up, its cells left out of reach, counts as dug: its job stays
 	 * on the board so it is not posted anew, until {@link Colony#recheckGivenUp} puts it back up.
 	 * Once the colony's best pickaxe, among what it {@code holds} and its bots carry, beats the ones it
 	 * had, dug branches whose walls hold wanted ores the new one harvests get a job again (see {@link OreRevisit}).
@@ -231,11 +232,12 @@ public class ColonyManager extends SavedData {
 			LevelWorldView world = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
 			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), occupied(colony), world));
 		}
-		// The pickaxe the job needs, so a bot carrying one takes it (see JobScore).
-		Consumer<Mineshaft.Branch> post = branch -> {
-			posted.add(branch.start());
-			colony.board().post(JobType.MINE_BRANCH, branch.start(), branch.cells(), Optional.empty(), level.getGameTime(),
-				Optional.of(PickaxeTier.forBranch(branch.start().getY(), wanted.get())));
+		// A job per segment of a branch, so several bots dig a hall one segment after the other. The pickaxe the
+		// job needs, so a bot carrying one takes it (see JobScore).
+		Consumer<Mineshaft.Branch> post = segment -> {
+			posted.add(segment.start());
+			colony.board().post(JobType.MINE_BRANCH, segment.start(), segment.cells(), Optional.empty(), level.getGameTime(),
+				Optional.of(PickaxeTier.forBranch(segment.start().getY(), wanted.get())));
 		};
 		Container core = Storage.containerAt(level, colony.core());
 		// In the core, or carried by a bot that took them from there.
@@ -258,20 +260,21 @@ public class ColonyManager extends SavedData {
 				// The first stage with blocks left to dig; the ones before it are dug, so may need lighting.
 				for (List<Mineshaft.Branch> branches : stages) {
 					if (torches) {
-						branches.stream().filter(branch -> branch.darkTorch(level).isPresent()).forEach(post);
+						branches.stream().flatMap(branch -> branch.segments().stream()).filter(segment -> segment.darkTorch(level).isPresent()).forEach(post);
 					}
 					List<Mineshaft.Branch> left = branches.stream()
-						.filter(branch -> !givenUp.contains(branch.start()) && branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
+						.filter(branch -> !givenUp(branch, givenUp) && branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
 					if (!left.isEmpty()) {
 						work.put(y, left);
 						break;
 					}
 				}
 			}
-			Mineshaft.branchesToPost(work, wanted.get()).forEach(post);
+			Mineshaft.branchesToPost(work, wanted.get()).stream().flatMap(branch -> branch.segments().stream())
+				.filter(segment -> segment.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).forEach(post);
 			colony.oreRevisit().update(bestPickaxe(level, colony, holds), start -> colony.board().has(JobType.MINE_BRANCH, start),
 					() -> dugBranches(level, shaft, open, givenUp), level::getBlockState, pos -> Mining.isMinable(level, pos), wanted)
-				.forEach(start -> shaft.branch(start).ifPresent(post));
+				.forEach(start -> shaft.branch(start).ifPresent(branch -> branch.segments().forEach(post)));
 		});
 		colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp() && !posted.contains(job.target()));
 	}
@@ -282,11 +285,16 @@ public class ColonyManager extends SavedData {
 		for (int y : levels) {
 			for (int round = 0; round < shaft.rounds(); round++) {
 				shaft.branches(y, round).stream()
-					.filter(branch -> !givenUp.contains(branch.start()) && branch.cells().stream().noneMatch(pos -> Mining.isMinable(level, pos)))
+					.filter(branch -> !givenUp(branch, givenUp) && branch.cells().stream().noneMatch(pos -> Mining.isMinable(level, pos)))
 					.forEach(dug::add);
 			}
 		}
 		return dug;
+	}
+
+	/** Whether a segment of {@code branch} was {@code givenUp}: the rest of it cannot be dug either, so it counts as dug. */
+	private static boolean givenUp(Mineshaft.Branch branch, Set<BlockPos> givenUp) {
+		return branch.segments().stream().anyMatch(segment -> givenUp.contains(segment.start()));
 	}
 
 	/** The best pickaxe in what the colony {@code holds} or in a member's hand, or null if it has none. */
@@ -416,13 +424,14 @@ public class ColonyManager extends SavedData {
 	private void surveyTrees(ServerLevel level, Colony colony, LevelTreeView trees) {
 		List<TreeScanner.Tree> all = TreeScanner.findAll(trees, colony.core(), colony.radius());
 		Set<BlockPos> building = colony.builds().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
+		Function<TreeScanner.Tree, Optional<Item>> sapling = tree -> Replanting.saplingFor(level.getBlockState(tree.logs().getFirst()).getBlock());
 		all.stream().filter(tree -> tree.logs().stream().anyMatch(building::contains))
-			.forEach(tree -> colony.board().post(JobType.CHOP_TREE, tree.base(), tree.logs()));
+			.forEach(tree -> colony.board().postTree(tree, sapling.apply(tree)));
 		List<StockPlanner.Target<Item>> targets = colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
 		int logs = Stockkeeping.logsShort(targets, colony.orders(), Storage.held(level, colony), GameRecipeBook.of(level.getServer()),
 			Gatherables::isGatherable, item -> item.builtInRegistryHolder().is(ItemTags.LOGS));
 		if (logs > 0) {
-			colony.board().postTrees(all, colony.core(), logs);
+			colony.board().postTrees(all, colony.core(), logs, sapling);
 		}
 	}
 
@@ -441,9 +450,8 @@ public class ColonyManager extends SavedData {
 			// A block of a finished batch broken since, such as a torch off the mineshaft stairs, is built again.
 			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			LevelTreeView trees = new LevelTreeView(level);
-			// A tree job stays while any of its logs stand, even once the leaves have decayed.
-			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_TREE && !trees.isLog(job.target())
-				&& TreeScanner.remaining(trees, job.area()).isEmpty());
+			// A log job goes once its log does; a tree job stays to pick up the drops and replant the tree.
+			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_LOG && !trees.isLog(job.target()));
 			// Replanted since, or built over.
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));

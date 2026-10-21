@@ -100,12 +100,12 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer, MinerGoal miner, CrafterGoal crafter, HaulerGoal hauler,
 			BuilderGoal builder) {
 		this.bot = bot;
-		this.executors = Map.of(JobType.CHOP_TREE, lumberjack, JobType.REPLANT, lumberjack,
-			JobType.HARVEST_CROP, farmer, JobType.PLANT_CROP, farmer,
-			JobType.MINE_BRANCH, miner,
-			JobType.CRAFT, crafter, JobType.ACTIVATE_BOT, crafter,
-			JobType.HAUL, hauler,
-			JobType.BUILD, builder, JobType.CLEAR_AREA, builder);
+		this.executors = Map.ofEntries(Map.entry(JobType.CHOP_TREE, lumberjack), Map.entry(JobType.CHOP_LOG, lumberjack), Map.entry(JobType.REPLANT, lumberjack),
+			Map.entry(JobType.HARVEST_CROP, farmer), Map.entry(JobType.PLANT_CROP, farmer),
+			Map.entry(JobType.MINE_BRANCH, miner),
+			Map.entry(JobType.CRAFT, crafter), Map.entry(JobType.ACTIVATE_BOT, crafter),
+			Map.entry(JobType.HAUL, hauler),
+			Map.entry(JobType.BUILD, builder), Map.entry(JobType.CLEAR_AREA, builder));
 		// Arming and better tools are the same for every bot; the shared plumbing does them.
 		List<ColonyWorkGoal> upkeeps = new ArrayList<>();
 		upkeeps.add(new ColonyWorkGoal(bot) {

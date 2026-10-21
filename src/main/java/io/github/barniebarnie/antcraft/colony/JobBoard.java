@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 import net.minecraft.core.BlockPos;
@@ -106,17 +107,39 @@ public class JobBoard {
 	 * Posts tree jobs for the {@code trees} nearest to {@code from} until they and the tree jobs on the
 	 * board, claimed or not, cover {@code logs} logs. Given-up jobs bring no logs, so they do not count.
 	 */
-	public void postTrees(List<TreeScanner.Tree> trees, BlockPos from, int logs) {
+	public void postTrees(List<TreeScanner.Tree> trees, BlockPos from, int logs, Function<TreeScanner.Tree, Optional<Item>> sapling) {
 		int covered = this.jobs.stream().filter(job -> job.type() == JobType.CHOP_TREE && !job.givenUp()).mapToInt(job -> job.blocks().size()).sum();
 		for (TreeScanner.Tree tree : trees.stream().sorted(Comparator.comparingDouble(tree -> tree.base().distSqr(from))).toList()) {
 			if (covered >= logs) {
 				return;
 			}
-			// Covering its logs keeps the rest of a tree being felled from being posted as a new tree.
-			if (this.post(JobType.CHOP_TREE, tree.base(), tree.logs()).isPresent()) {
+			if (this.postTree(tree, sapling.apply(tree))) {
 				covered += tree.logs().size();
 			}
 		}
+	}
+
+	/**
+	 * Posts a job for each log of {@code tree}, so several bots fell it together, and one for the tree, to pick
+	 * up the drops and replant it with {@code sapling} once they are done (see {@link #treeReady}). Not if a tree
+	 * job covers any of its logs already: that keeps the rest of a tree being felled from being posted as a new
+	 * tree. Returns whether it was posted.
+	 */
+	public boolean postTree(TreeScanner.Tree tree, Optional<Item> sapling) {
+		if (this.post(JobType.CHOP_TREE, tree.base(), tree.logs(), sapling).isEmpty()) {
+			return false;
+		}
+		// ponytail: a job per log; group logs per layer if giant trees ever crowd the board.
+		tree.logs().forEach(log -> this.post(JobType.CHOP_LOG, log, List.of(log)));
+		return true;
+	}
+
+	/**
+	 * Whether the {@code tree} job may be begun: no log of it has a log job left that is not given up. So a
+	 * tree posted before log jobs, or with logs no bot could get at, is felled whole by the bot that takes it.
+	 */
+	public boolean treeReady(Job tree) {
+		return this.jobs.stream().noneMatch(job -> job.type() == JobType.CHOP_LOG && !job.givenUp() && tree.area().contains(job.target()));
 	}
 
 	/** Sets what the job with id {@code id} needs, claimed or not, such as once a build survey finds what its batch still needs. */

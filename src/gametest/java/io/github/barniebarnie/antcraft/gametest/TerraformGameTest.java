@@ -155,6 +155,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
+	/** The trees are felled by tree jobs, which the miner may help with, not dug out by the terraform's dig jobs. */
 	@GameTest(maxTicks = 2000)
 	public void treesInTheAreaAreFelledThroughTreeJobsNotDugOut(GameTestHelper helper) {
 		Colony colony = colonyWithMiner(helper);

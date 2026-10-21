@@ -107,7 +107,9 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
-		return colony.mineshaft().flatMap(shaft -> shaft.branch(job.target())).isPresent() && !this.betterPickaxeFree(level, colony, job);
+		// A segment once the one before it is dug, so the bot can walk up to it.
+		return colony.mineshaft().filter(shaft -> shaft.segmentReady(job.target(), pos -> !Mining.isMinable(level, pos))).isPresent()
+			&& !this.betterPickaxeFree(level, colony, job);
 	}
 
 	/**
@@ -129,7 +131,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	public boolean begin(ServerLevel level, Job job) {
 		this.outcome = null;
 		Optional<Colony> colony = this.colony(level);
-		if (colony.isEmpty() || colony.get().mineshaft().flatMap(shaft -> shaft.branch(job.target())).isEmpty()) {
+		if (colony.isEmpty() || colony.get().mineshaft().flatMap(shaft -> shaft.segment(job.target())).isEmpty()) {
 			return false;
 		}
 		this.job = job;
@@ -248,7 +250,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.DEPOSIT);
 			return;
 		}
-		Optional<Mineshaft.Branch> branch = colony.mineshaft().flatMap(shaft -> shaft.branch(job.target()));
+		Optional<Mineshaft.Branch> branch = colony.mineshaft().flatMap(shaft -> shaft.segment(job.target()));
 		if (branch.isEmpty()) {
 			// The mine moved.
 			this.endJob(WorkerGoal.Outcome.COMPLETE);

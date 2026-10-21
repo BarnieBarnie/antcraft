@@ -23,7 +23,7 @@ public final class BotSkins {
 			return Identifier.withDefaultNamespace("entity/player/wide/" + VANILLA[Math.floorMod(uuid.hashCode(), VANILLA.length)]);
 		}
 		String skin = switch (job.get()) {
-			case CHOP_TREE, REPLANT -> "lumberjack";
+			case CHOP_TREE, CHOP_LOG, REPLANT -> "lumberjack";
 			case MINE_BRANCH, CLEAR_AREA -> "miner";
 			case HARVEST_CROP, PLANT_CROP -> "farmer";
 			case BUILD -> "builder";

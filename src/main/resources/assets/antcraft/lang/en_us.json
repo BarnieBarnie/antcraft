@@ -83,6 +83,7 @@
 	"screen.antcraft.colony_status.separator": ", ",
 	"job.antcraft.none": "no job",
 	"job.antcraft.chop_tree": "felling a tree",
+	"job.antcraft.chop_log": "chopping a log",
 	"job.antcraft.mine_branch": "mining a branch",
 	"job.antcraft.harvest_crop": "harvesting a crop",
 	"job.antcraft.replant": "replanting a tree",

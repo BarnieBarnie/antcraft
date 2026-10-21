@@ -303,6 +303,51 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * In a 16x16 area: one level at y=1, its hall heading east along z=8 with two branches a side, 7 long, at
+	 * x=4 and x=7. Each branch is two jobs, the second ready once the first is dug. Four bots dig the four
+	 * branches at the same time.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1500)
+	public void fourBotsDigTheBranchesOfOneLevelAtTheSameTime(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(6, 3, 2));
+		wantStone(colony);
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 2, 7, 4, 1, false);
+		dig(helper, colony, shaft);
+		List<Mineshaft.Branch> branches = shaft.branches(y);
+		helper.assertTrue(branches.size() == 4 && branches.stream().allMatch(branch -> branch.segments().size() == 2), "not 4 branches of 2 segments");
+		List<AntBot> bots = new ArrayList<>();
+		for (BlockPos at : List.of(new BlockPos(3, 3, 3), new BlockPos(4, 3, 3), new BlockPos(5, 3, 4), new BlockPos(3, 3, 5))) {
+			AntBot bot = member(helper, colony, at.getX(), at.getY(), at.getZ());
+			bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+			bots.add(bot);
+		}
+		int[] most = {0};
+		helper.onEachTick(() -> {
+			Set<Mineshaft.Branch> dug = new HashSet<>();
+			for (AntBot bot : bots) {
+				colony.board().jobOf(bot.getUUID()).filter(job -> job.type() == JobType.MINE_BRANCH)
+					.ifPresent(job -> branches.stream().filter(branch -> branch.cells().contains(job.target())).forEach(dug::add));
+			}
+			most[0] = Math.max(most[0], dug.size());
+		});
+		helper.succeedWhen(() -> {
+			for (Mineshaft.Branch branch : branches) {
+				for (BlockPos cell : branch.cells()) {
+					helper.assertTrue(helper.getLevel().getBlockState(cell).isAir(), "branch not dug at " + relative(helper, cell).toShortString());
+				}
+			}
+			helper.assertTrue(most[0] == 4, "at most " + most[0] + " branches dug at once");
+		});
+	}
+
+	/**
 	 * A branch of the deepest level starts with bedrock, and the cells behind it are walled in
 	 * with bedrock all round. They are within reach of the hall, but a miner cannot see them, so like
 	 * a player it cannot break them: it gives the branch up instead.

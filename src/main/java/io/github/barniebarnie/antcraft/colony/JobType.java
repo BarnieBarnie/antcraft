@@ -7,7 +7,10 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.StringRepresentable;
 
 public enum JobType implements StringRepresentable {
-	/** Chop the tree whose lowest log is at the job target. */
+	/**
+	 * Pick up the drops and replant the tree that stood at the job target once its {@link #CHOP_LOG} jobs are
+	 * done, felling any of its logs left without one, such as all of them for a tree posted before log jobs.
+	 */
 	CHOP_TREE,
 	/** Dig the mineshaft branch that starts at the job target. */
 	MINE_BRANCH,
@@ -32,7 +35,9 @@ public enum JobType implements StringRepresentable {
 	/** Carry what the colony wants from the container at the job target, such as a mineshaft landing chest, to the core. */
 	HAUL,
 	/** Turn the Bot Cores stored in the core at the job target into new bots. */
-	ACTIVATE_BOT;
+	ACTIVATE_BOT,
+	/** Chop the log at the job target, one of a tree's, so several bots fell a tree together. */
+	CHOP_LOG;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 	/** Prefix of the lang keys that name the job types, shared by the colony screen and the commands. */
@@ -42,7 +47,7 @@ public enum JobType implements StringRepresentable {
 
 	/** Whether the work fills the bot's inventory, such as digging, chopping and harvesting. */
 	public boolean yieldsItems() {
-		return this == CHOP_TREE || this == MINE_BRANCH || this == HARVEST_CROP || this == CLEAR_AREA;
+		return this == CHOP_TREE || this == CHOP_LOG || this == MINE_BRANCH || this == HARVEST_CROP || this == CLEAR_AREA;
 	}
 
 	public String translationKey() {

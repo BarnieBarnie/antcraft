@@ -537,7 +537,8 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			if (planter[0] == null && colony.board().has(JobType.REPLANT, base)) {
 				feller.setWalkTarget(helper.absolutePos(new BlockPos(0, 1, 7)));
 				planter[0] = colonyLumberjack(helper, colony, 6, 3);
-				helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6));
+				// Once the feller is off: with nothing left to store it would otherwise take it before it leaves.
+				helper.runAfterDelay(20, () -> helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6)));
 			}
 			if (colony.board().jobOf(feller.getUUID()).filter(job -> job.type() == JobType.REPLANT).isPresent()) {
 				helper.fail("the feller claimed the replant job instead of the nearer lumberjack");
@@ -590,7 +591,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		colonyLumberjack(helper, colony, 2, 4);
 		boolean[] stocked = {false};
 		helper.onEachTick(() -> {
-			if (!stocked[0] && colony.board().jobs().stream().anyMatch(job -> job.type() == JobType.CHOP_TREE && job.tries() == 1)) {
+			if (!stocked[0] && colony.board().jobs().stream().anyMatch(job -> job.type() == JobType.CHOP_LOG && job.tries() == 1)) {
 				stocked[0] = true;
 				(home(helper)).setItem(0, new ItemStack(Items.DIRT, 16));
 			}
@@ -766,28 +767,26 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> assertTreeStored(helper));
 	}
 
+	/** Two colony lumberjacks fell a tall tree together, a log each at a time, and the rest of it is never posted as another tree. */
 	@GameTest(padding = PADDING, maxTicks = 2400)
-	public void onlyOneColonyLumberjackWorksOnATree(GameTestHelper helper) {
+	public void colonyLumberjacksFellATreeTogetherWithoutPostingItAgain(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		tallTree(helper, 5, 5);
 		AntBot a = colonyLumberjack(helper, colony, 2, 4);
 		AntBot b = colonyLumberjack(helper, colony, 4, 2);
 		a.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 		b.getInventory().addItem(new ItemStack(Items.DIRT, 16));
-		Set<UUID> claimers = new HashSet<>();
+		Set<UUID> choppers = new HashSet<>();
 		helper.onEachTick(() -> {
-			List<Job> chops = colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE).toList();
-			chops.forEach(job -> job.claimedBy().ifPresent(claimers::add));
-			if (chops.size() > 1) {
-				helper.fail("tree posted again while claimed: " + chops);
+			List<Job> trees = colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE).toList();
+			if (trees.size() > 1) {
+				helper.fail("tree posted again while being felled: " + trees);
 			}
-			if (claimers.size() > 1) {
-				helper.fail("both lumberjacks claimed the tree");
-			}
+			colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_LOG).forEach(job -> job.claimedBy().ifPresent(choppers::add));
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(countBlocks(helper, BlockTags.LOGS) == 0, "logs left");
-			helper.assertTrue(claimers.size() == 1, "nobody claimed the tree");
+			helper.assertTrue(choppers.size() == 2, "logs chopped by " + choppers.size() + " bots");
 		});
 	}
 
@@ -850,6 +849,47 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
+	}
+
+	/** At most how long three bots take to fell a {@link #darkOak} together; one bot alone takes longer. */
+	private static final int SWARM_TICKS = 500;
+
+	@GameTest(padding = PADDING, maxTicks = 800)
+	public void threeBotsFellOneTreeTogether(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		darkOak(helper);
+		List<AntBot> bots = List.of(colonyLumberjack(helper, colony, 1, 6), colonyLumberjack(helper, colony, 6, 1), colonyLumberjack(helper, colony, 7, 7));
+		Set<UUID> choppers = new HashSet<>();
+		long[] felledAt = {-1};
+		helper.onEachTick(() -> {
+			bots.forEach(bot -> colony.board().jobOf(bot.getUUID())
+				.filter(job -> job.type() == JobType.CHOP_LOG).ifPresent(job -> choppers.add(bot.getUUID())));
+			if (felledAt[0] < 0 && countBlocks(helper, BlockTags.LOGS) == 0) {
+				felledAt[0] = helper.getTick();
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(felledAt[0] >= 0, "logs left");
+			helper.assertTrue(choppers.size() == 3, "logs chopped by " + choppers.size() + " bots");
+			helper.assertTrue(felledAt[0] <= SWARM_TICKS, "three bots took " + felledAt[0] + " ticks");
+		});
+	}
+
+	@GameTest(padding = PADDING, maxTicks = 1600)
+	public void oneBotAloneFellsTheTreeSlowerThanThree(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		darkOak(helper);
+		colonyLumberjack(helper, colony, 1, 6);
+		long[] felledAt = {-1};
+		helper.onEachTick(() -> {
+			if (felledAt[0] < 0 && countBlocks(helper, BlockTags.LOGS) == 0) {
+				felledAt[0] = helper.getTick();
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(felledAt[0] >= 0, "logs left");
+			helper.assertTrue(felledAt[0] > SWARM_TICKS, "one bot alone took only " + felledAt[0] + " ticks");
+		});
 	}
 
 	private static void assertDarkOakSaplingSquare(GameTestHelper helper) {
@@ -1032,11 +1072,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			for (AntBot bot : List.of(west, east)) {
 				BlockPos nearer = bot == west ? westTree : eastTree;
-				colony.board().jobOf(bot.getUUID()).filter(job -> job.type() == JobType.CHOP_TREE).ifPresent(job -> {
-					if (!job.target().equals(nearer)) {
-						helper.fail("a bot took the tree further from it, at " + job.target().subtract(helper.absolutePos(BlockPos.ZERO)));
+				colony.board().jobOf(bot.getUUID()).filter(job -> job.type() == JobType.CHOP_LOG).ifPresent(job -> {
+					BlockPos trunk = job.target().atY(nearer.getY());
+					if (!trunk.equals(nearer)) {
+						helper.fail("a bot took a log of the tree further from it, at " + job.target().subtract(helper.absolutePos(BlockPos.ZERO)));
 					}
-					felled.add(job.target());
+					felled.add(trunk);
 				});
 			}
 		});

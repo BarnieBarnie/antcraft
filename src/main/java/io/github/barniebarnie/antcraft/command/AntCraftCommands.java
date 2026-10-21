@@ -186,7 +186,7 @@ public final class AntCraftCommands {
 			String blocked = String.join(", ", status.blocked().stream().map(BlockPos::toShortString).toList());
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked", blocked), false);
 		}
-		for (JobType type : List.of(JobType.CHOP_TREE, JobType.MINE_BRANCH)) {
+		for (JobType type : List.of(JobType.CHOP_TREE, JobType.CHOP_LOG, JobType.MINE_BRANCH)) {
 			List<BlockPos> givenUp = status.givenUp(type);
 			if (!givenUp.isEmpty()) {
 				String list = String.join(", ", givenUp.stream().map(BlockPos::toShortString).toList());

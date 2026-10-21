@@ -133,7 +133,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		AntBot bot = member(helper, colony, 2, 2);
 		helper.assertValueEqual(bot.getEntityData().get(AntBot.DATA_JOB), "", "synched job before any");
 
-		helper.succeedWhen(() -> helper.assertValueEqual(bot.getEntityData().get(AntBot.DATA_JOB), JobType.CHOP_TREE.getSerializedName(), "synched job"));
+		helper.succeedWhen(() -> helper.assertValueEqual(bot.getEntityData().get(AntBot.DATA_JOB), JobType.CHOP_LOG.getSerializedName(), "synched job"));
 	}
 
 	/** A colony is a set of identical workers: three bots take a tree, a crop and a build at once. */
@@ -162,7 +162,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				together.addAll(now);
 			}
 		});
-		helper.succeedWhen(() -> helper.assertValueEqual(together, EnumSet.of(JobType.CHOP_TREE, JobType.HARVEST_CROP, JobType.BUILD),
+		helper.succeedWhen(() -> helper.assertValueEqual(together, EnumSet.of(JobType.CHOP_LOG, JobType.HARVEST_CROP, JobType.BUILD),
 			"jobs worked at once"));
 	}
 

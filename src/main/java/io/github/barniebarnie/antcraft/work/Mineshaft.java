@@ -49,6 +49,8 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	public static final int DEFAULT_BRANCH_LENGTH = 16;
 	public static final int DEFAULT_TORCH_SPACING = 8;
 	public static final int DEFAULT_ROUNDS = 4;
+	/** How many blocks of a branch or hall one job digs (see {@link Branch#segments}). */
+	public static final int SEGMENT_LENGTH = 4;
 	/**
 	 * How far apart mining levels must be. A branch digs its level and the block above, so a level
 	 * 1 below or above another would have branches cutting into that level's hall.
@@ -120,6 +122,21 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 				}
 			}
 			return walls;
+		}
+
+		/**
+		 * This branch in stretches of {@link #SEGMENT_LENGTH} blocks from the hall outwards, each with its torches:
+		 * a job each, so several bots dig a long hall one stretch after the other.
+		 */
+		public List<Branch> segments() {
+			// Each block of the branch is a cell and the one above it.
+			int size = 2 * SEGMENT_LENGTH;
+			List<Branch> segments = new ArrayList<>();
+			for (int i = 0; i < this.cells.size(); i += size) {
+				List<BlockPos> cells = List.copyOf(this.cells.subList(i, Math.min(i + size, this.cells.size())));
+				segments.add(new Branch(cells.getFirst(), cells, this.torches.stream().filter(cells::contains).toList()));
+			}
+			return segments;
 		}
 	}
 
@@ -550,11 +567,28 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return Optional.of(new Branch(hall.getFirst(), cells, torches));
 	}
 
-	/** The branch, or hall, a job points at, by its start. */
+	/** The branch, or hall, that starts at {@code start}. */
 	public Optional<Branch> branch(BlockPos start) {
+		return this.allBranches().filter(b -> b.start().equals(start)).findFirst();
+	}
+
+	/** The segment of a branch or hall a job points at, by its start (see {@link Branch#segments}). */
+	public Optional<Branch> segment(BlockPos start) {
+		return this.allBranches().flatMap(b -> b.segments().stream()).filter(s -> s.start().equals(start)).findFirst();
+	}
+
+	/** Whether the segment that starts at {@code start} can be dug: it is the first of its branch, or the one before it is {@code dug}. */
+	public boolean segmentReady(BlockPos start, Predicate<BlockPos> dug) {
+		return this.allBranches().map(Branch::segments).flatMap(segments -> IntStream.range(0, segments.size())
+				.filter(i -> segments.get(i).start().equals(start))
+				.mapToObj(i -> i == 0 || segments.get(i - 1).cells().stream().allMatch(dug)))
+			.findFirst().orElse(false);
+	}
+
+	/** Every hall that is mining work and every round of branches, at every level. */
+	private Stream<Branch> allBranches() {
 		return this.levels.stream().flatMap(level -> Stream.concat(this.hallWork(level).stream(),
-				IntStream.range(0, this.rounds).boxed().flatMap(round -> this.branches(level, round).stream())))
-			.filter(b -> b.start().equals(start)).findFirst();
+			IntStream.range(0, this.rounds).boxed().flatMap(round -> this.branches(level, round).stream())));
 	}
 
 	/** The ores worth digging for at a height. */

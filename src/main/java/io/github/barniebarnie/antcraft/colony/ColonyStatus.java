@@ -154,9 +154,9 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		return total(this.claimedJobs);
 	}
 
-	/** The lang key that lists the given-up jobs of {@code type}: trees, or branches for any other type. */
+	/** The lang key that lists the given-up jobs of {@code type}: trees or logs, or branches for any other type. */
 	public static String givenUpKey(JobType type) {
-		return type == JobType.CHOP_TREE ? "commands.antcraft.colony.given_up" : "commands.antcraft.colony.given_up_branches";
+		return type == JobType.CHOP_TREE || type == JobType.CHOP_LOG ? "commands.antcraft.colony.given_up" : "commands.antcraft.colony.given_up_branches";
 	}
 
 	/** Where the jobs of {@code type} that bots gave up on are. */

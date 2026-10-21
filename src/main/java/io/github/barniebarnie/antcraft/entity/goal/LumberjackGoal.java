@@ -51,7 +51,6 @@ import org.jspecify.annotations.Nullable;
  */
 public class LumberjackGoal implements WorkerGoal.Executor {
 	private static final double REACH = 4.0;
-	private static final int DEPOSIT_AT_LOGS = 32;
 	private static final int COLLECT_RADIUS = 8;
 	private static final int IDLE_RESCAN_TICKS = 40;
 	/** Fetches scaffold blocks from home when carrying fewer than this. */
@@ -113,6 +112,8 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	private @Nullable UUID jobId;
 	/** What became of the job begun through {@link #begin}, for {@link WorkerGoal} to report to the board. */
 	private WorkerGoal.@Nullable Outcome outcome;
+	/** Whether the job begun is a log of a tree, rather than the tree, so it leaves the drops and replanting to the tree's job. */
+	private boolean logJob;
 	/** Whether the bot still takes its logs home after the job begun. */
 	private boolean depositAfterJob;
 	/** The better axe it is on its way to fetch from home, or null. */
@@ -190,14 +191,26 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			this.startReplant(level, job);
 			return true;
 		}
-		// What is left of a tree felled before is found by the logs the job remembers, leaves or not.
+		if (job.type() == JobType.CHOP_LOG) {
+			if (!level.getBlockState(job.target()).is(BlockTags.LOGS)) {
+				return false;
+			}
+			this.jobId = job.id();
+			this.startTree(level, new TreeScanner.Tree(job.target(), List.of(job.target())));
+			this.logJob = true;
+			return true;
+		}
+		// What is left of a tree felled before is found by the logs the job remembers, leaves or not. With
+		// its logs gone, by its log jobs, it still picks up the drops and replants it with the job's sapling.
 		LevelTreeView view = new LevelTreeView(level);
-		Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, job.target()).or(() -> TreeScanner.remaining(view, job.target(), job.area()));
+		Optional<TreeScanner.Tree> tree = TreeScanner.treeAt(view, job.target()).or(() -> TreeScanner.remaining(view, job.target(), job.area()))
+			.or(() -> job.area().isEmpty() ? Optional.empty() : Optional.of(new TreeScanner.Tree(job.target(), job.area())));
 		if (tree.isEmpty()) {
 			return false;
 		}
 		this.jobId = job.id();
 		this.startTree(level, tree.get());
+		job.item().ifPresent(sapling -> this.sapling = Optional.of(sapling));
 		return true;
 	}
 
@@ -239,10 +252,19 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 		return taken;
 	}
 
-	/** Whether this bot could start on the job now: a replant job once it could get the saplings. */
+	/**
+	 * Whether this bot could start on the job now: a replant job once it could get the saplings, a log once it
+	 * can get at it and no other bot stands on it, and a tree once its log jobs are done.
+	 */
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
-		return job.type() != JobType.REPLANT || this.hasSaplingsFor(level, colony, job);
+		return switch (job.type()) {
+			case REPLANT -> this.hasSaplingsFor(level, colony, job);
+			case CHOP_LOG -> TreeScanner.isReachable(new LevelTreeView(level), job.target())
+				&& level.getEntitiesOfClass(AntBot.class, new AABB(job.target().above()), other -> other != this.bot && other.getOnPos().equals(job.target())).isEmpty();
+			case CHOP_TREE -> colony.board().treeReady(job);
+			default -> true;
+		};
 	}
 
 	/** Gives the claimed job back to the board, so another bot can take it. */
@@ -284,14 +306,10 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Between trees: takes the logs home once it carries many, fetches a better axe, or tops up its
+	 * Between trees: fetches a better axe, or tops up its
 	 * scaffold blocks. Returns whether it is off to do one.
 	 */
 	private boolean prepare(ServerLevel level) {
-		if (countLogs(this.bot.getInventory()) >= DEPOSIT_AT_LOGS) {
-			this.enter(State.DEPOSIT);
-			return true;
-		}
 		if (this.checkUpgrade(level)) {
 			return true;
 		}
@@ -309,6 +327,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 		// its own kind too, while one may still turn up (see Replanting.saplingNeeded).
 		this.sapling = Replanting.saplingFor(level.getBlockState(found.logs().getFirst()).getBlock());
 		this.felled = level.getGameTime();
+		this.logJob = false;
 		this.unreachableLogs.clear();
 		this.scaffoldCleanup.reset();
 		this.enter(State.CHOP);
@@ -517,7 +536,8 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			return;
 		}
 		this.unreachableItems.clear();
-		this.site = this.tree != null ? this.tree.base() : null;
+		// The tree's job picks up the drops and replants it once its logs are gone.
+		this.site = this.tree != null && !this.logJob ? this.tree.base() : null;
 		this.enter(this.site != null ? State.COLLECT : State.SEARCH);
 	}
 

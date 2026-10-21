@@ -81,7 +81,7 @@ class JobBoardTest {
 	@Test
 	void noTreeJobsWithoutLogsWanted() {
 		JobBoard board = new JobBoard();
-		board.postTrees(List.of(tree(3), tree(6)), BlockPos.ZERO, 0);
+		board.postTrees(List.of(tree(3), tree(6)), BlockPos.ZERO, 0, tree -> Optional.empty());
 		assertTrue(board.jobs().isEmpty());
 	}
 
@@ -92,8 +92,67 @@ class JobBoardTest {
 		board.post(JobType.CHOP_TREE, tree(9).base(), tree(9).logs());
 		board.claim(ALICE, CHOP, new BlockPos(9, 1, 0), 0);
 		// 20 logs wanted from trees of 6: 4 trees, the nearest ones.
-		board.postTrees(List.of(tree(30), tree(15), tree(3), tree(6), tree(9), tree(20)), BlockPos.ZERO, 20);
+		board.postTrees(List.of(tree(30), tree(15), tree(3), tree(6), tree(9), tree(20)), BlockPos.ZERO, 20, tree -> Optional.empty());
 		assertEquals(Set.of(3, 6, 9, 15), board.jobs().stream().map(job -> job.target().getX()).collect(java.util.stream.Collectors.toSet()));
+	}
+
+	/** A trunk at x=3 up to y=6, standing on the ground at y=0 while {@code bottom} is 1, else cut below {@code bottom}. */
+	private static TreeScanner.TreeView trunk(int bottom) {
+		return new TreeScanner.TreeView() {
+			@Override
+			public boolean isLog(BlockPos pos) {
+				return pos.getX() == 3 && pos.getZ() == 0 && pos.getY() >= bottom && pos.getY() <= 6;
+			}
+
+			@Override
+			public boolean isNaturalLeaves(BlockPos pos) {
+				return false;
+			}
+
+			@Override
+			public boolean isOpen(BlockPos pos) {
+				return pos.getY() > 0 && !this.isLog(pos);
+			}
+		};
+	}
+
+	@Test
+	void aTreeOfSixLogsGivesSixLogJobsAndOnlyTheReachableOnesAreReady() {
+		JobBoard board = new JobBoard();
+		board.postTrees(List.of(tree(3)), BlockPos.ZERO, 6, tree -> Optional.of(Items.OAK_SAPLING));
+
+		List<Job> logs = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_LOG).toList();
+		assertEquals(tree(3).logs(), logs.stream().map(Job::target).toList());
+		// Up to 4 above the ground, within reach of a bot standing on it.
+		TreeScanner.TreeView whole = trunk(1);
+		assertEquals(List.of(1, 2, 3, 4), logs.stream().filter(job -> TreeScanner.isReachable(whole, job.target())).map(job -> job.target().getY()).toList());
+		// Once the logs under them are cut, the bottom one of the rest is too: a bot pillars up to it.
+		TreeScanner.TreeView cut = trunk(5);
+		assertTrue(TreeScanner.isReachable(cut, new BlockPos(3, 5, 0)));
+		assertFalse(TreeScanner.isReachable(cut, new BlockPos(3, 6, 0)));
+		// One more job for the tree, to pick up the drops and replant it with its own sapling.
+		Job tree = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE).findFirst().orElseThrow();
+		assertEquals(Optional.of(Items.OAK_SAPLING), tree.item());
+		assertEquals(7, board.jobs().size());
+	}
+
+	@Test
+	void theTreeJobIsReadyOnceItsLogJobsAreDoneOrGivenUpOrItHasNone() {
+		JobBoard board = new JobBoard();
+		board.postTrees(List.of(tree(3)), BlockPos.ZERO, 6, tree -> Optional.empty());
+		Job tree = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE).findFirst().orElseThrow();
+		List<Job> logs = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_LOG).toList();
+
+		assertFalse(board.treeReady(tree));
+		logs.subList(1, 6).forEach(job -> board.complete(job.id()));
+		assertFalse(board.treeReady(tree));
+		board.claim(ALICE, Set.of(JobType.CHOP_LOG), BlockPos.ZERO, 0);
+		board.retryLater(ALICE, 0, 1);
+		assertTrue(board.treeReady(tree), "the last log job was given up");
+		// A tree posted before log jobs fells its logs itself.
+		JobBoard old = new JobBoard();
+		Job felledWhole = old.post(JobType.CHOP_TREE, tree(3).base(), tree(3).logs()).orElseThrow();
+		assertTrue(old.treeReady(felledWhole));
 	}
 
 	@Test
