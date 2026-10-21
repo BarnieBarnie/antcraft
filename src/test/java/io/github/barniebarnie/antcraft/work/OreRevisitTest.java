@@ -22,14 +22,17 @@ import org.junit.jupiter.api.Test;
 
 class OreRevisitTest {
 	/** Down to y=6, one branch each side of a 3 long hall, branches 3 long, a torch every 4 blocks. */
-	private static final Mineshaft SHAFT = new Mineshaft(new BlockPos(0, 10, 0), List.of(6), 1, 3, 4);
-	private static final Mineshaft.Branch BRANCH = SHAFT.branches(6).getFirst();
+	// Set in loadTags(): building a Mineshaft touches the item registry, which needs the bootstrap first.
+	private static Mineshaft SHAFT;
+	private static Mineshaft.Branch BRANCH;
 	private static final Predicate<Item> ANY = item -> true;
 
 	@BeforeAll
 	static void loadTags() {
 		// Which pickaxe harvests which ore comes from the vanilla tags.
 		VanillaData.recipeBook();
+		SHAFT = new Mineshaft(new BlockPos(0, 10, 0), List.of(6), 1, 3, 4);
+		BRANCH = SHAFT.branches(6).getFirst();
 	}
 
 	/** A dug branch in stone: its cells are air, with {@code ore} at {@code pos}. */

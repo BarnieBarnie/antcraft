@@ -37,7 +37,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class ColonyTest {
-	private static final Mineshaft SHAFT = new Mineshaft(new BlockPos(2, 64, 2), List.of(60), 1, 3, 4);
+	// Set in bootstrap(): building a Mineshaft touches the item registry, which needs the bootstrap first.
+	private static Mineshaft SHAFT;
 
 	@BeforeAll
 	static void bootstrap() {
@@ -45,6 +46,8 @@ class ColonyTest {
 		Bootstrap.bootStrap();
 		// The vanilla tags, such as which blocks are dug with a pickaxe.
 		VanillaData.recipeBook();
+		SHAFT = new Mineshaft(new BlockPos(2, 64, 2), List.of(60), 1, 3, 4);
+		TWO_LEVELS = new Mineshaft(new BlockPos(2, 64, 2), List.of(62, 60), 1, 3, 4);
 	}
 
 	private static Colony colony() {
@@ -507,7 +510,7 @@ class ColonyTest {
 	}
 
 	/** Two levels: its stairs to y=62 (batch 0), that hall (1), the stairs on to y=60 (2) and that hall (3). */
-	private static final Mineshaft TWO_LEVELS = new Mineshaft(new BlockPos(2, 64, 2), List.of(62, 60), 1, 3, 4);
+	private static Mineshaft TWO_LEVELS;
 	private static final UUID ALICE = UUID.randomUUID();
 	private static final UUID BOB = UUID.randomUUID();
 

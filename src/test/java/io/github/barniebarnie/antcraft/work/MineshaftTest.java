@@ -31,12 +31,14 @@ import org.junit.jupiter.api.Test;
 class MineshaftTest {
 	private static final BlockPos TOP = new BlockPos(0, 10, 0);
 	/** Down to y=6, one branch each side of a 3 long hall, branches 3 long, a torch every 4 blocks. */
-	private static final Mineshaft SHAFT = new Mineshaft(TOP, List.of(6), 1, 3, 4);
+	// Set in bootstrap(): building a Mineshaft touches the item registry, which needs the bootstrap first.
+	private static Mineshaft SHAFT;
 
 	@BeforeAll
 	static void bootstrap() {
 		// Bootstraps the registries and loads the vanilla recipes and tags.
 		VanillaData.recipeBook();
+		SHAFT = new Mineshaft(TOP, List.of(6), 1, 3, 4);
 	}
 
 	private static Map<BlockPos, BuildPlan.Step> steps() {
