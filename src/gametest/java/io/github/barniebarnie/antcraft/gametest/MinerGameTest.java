@@ -469,6 +469,37 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A tree job posted near a bot that carries a landing chest's load waits until the load is in the core. */
+	@GameTest(maxTicks = 1200)
+	public void aBotMidHaulDeliversItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = landingChest(helper, shaft);
+		chest.setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		wantStone(colony);
+		AntBot bot = member(helper, colony, 1, 5, 1);
+		List<BlockPos> logs = List.of(helper.absolutePos(new BlockPos(6, 5, 6)), helper.absolutePos(new BlockPos(6, 6, 6)));
+		boolean[] posted = {false};
+
+		helper.onEachTick(() -> {
+			if (!posted[0] && bot.getInventory().countItem(Items.COBBLESTONE) > 0) {
+				logs.forEach(log -> helper.getLevel().setBlockAndUpdate(log, Blocks.OAK_LOG.defaultBlockState()));
+				colony.board().post(JobType.CHOP_TREE, logs.getFirst(), logs);
+				posted[0] = true;
+			}
+			boolean chopped = posted[0] && logs.stream().anyMatch(log -> !helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG));
+			if (chopped && core(helper, MINE_CORE).countItem(Items.COBBLESTONE) < 64) {
+				helper.fail("bot chopped the tree before it delivered its load");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(posted[0], "bot never took the load");
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.COBBLESTONE) == 64, "load not in the core");
+			helper.assertTrue(logs.stream().noneMatch(log -> helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG)), "tree not chopped");
+		});
+	}
+
 	/** Any colony bot hauls up what the colony wants. */
 	@GameTest(maxTicks = 1200)
 	public void colonyBotOfAnotherRoleEmptiesTheLandingChestIntoTheCore(GameTestHelper helper) {

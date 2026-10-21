@@ -36,7 +36,8 @@ import org.jspecify.annotations.Nullable;
  * With no job to take it does the work between jobs (see {@link ColonyWorkGoal#upkeep}): it arms itself from the
  * core, swaps a tool it carries for a better one, takes down scaffolding left up, unloads a full pack, stores
  * produce and shears sheep, and keeps the core and storage, picking up loose items. While scaffolding is up it
- * takes only jobs that take it down when done. A job that turns up meanwhile takes the bot from that. Only with none of it to do is the bot idle.
+ * takes only jobs that take it down when done. A job that turns up meanwhile takes the bot from that, but not
+ * from carrying a load to the core or storage, which it finishes first. Only with none of it to do is the bot idle.
  */
 public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** What became of a job, as its executor reports it. */
@@ -183,8 +184,8 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			board.heartbeat(this.bot.getUUID(), level.getGameTime());
 		}
 		if (this.upkeep != null) {
-			// A job that turns up takes the bot from work between jobs.
-			if (level.getGameTime() >= this.nextCheck) {
+			// A job that turns up takes the bot from work between jobs, once a load it carries is put away.
+			if (!this.upkeep.carriesLoad() && level.getGameTime() >= this.nextCheck) {
 				this.nextCheck = level.getGameTime() + CHECK_TICKS;
 				if (this.next(level, colony.get())) {
 					this.busy = true;

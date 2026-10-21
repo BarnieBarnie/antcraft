@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -120,6 +121,46 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 					helper.assertTrue(stack.isEmpty() || StorageCategory.of(stack) == StorageCategory.WOOD, "not a wood chest: " + stack);
 				}
 			}
+		});
+	}
+
+	/**
+	 * A tree job posted while a bot carries what the full core cannot take across the area to storage waits
+	 * until that is stored.
+	 */
+	@GameTest(maxTicks = 600)
+	public void aBotMidTripStoresItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// Storage in the far corner from where the bot starts, so the trip spans a few looks at the board.
+		BlockPos storage = new BlockPos(1, 1, 6);
+		colony.setStorage(new StorageArea(helper.absolutePos(storage)));
+		helper.setBlock(storage, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(storage, BlockEntity.class);
+		Container core = core(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, core.getContainerSize() * 64, Items.OAK_LOG)));
+		for (int i = 0; i < core.getContainerSize(); i++) {
+			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 64));
+		List<BlockPos> logs = List.of(helper.absolutePos(new BlockPos(5, 1, 5)), helper.absolutePos(new BlockPos(5, 2, 5)));
+		boolean[] posted = {false};
+
+		helper.onEachTick(() -> {
+			boolean carrying = bot.getInventory().countItem(Items.COBBLESTONE) > 0;
+			if (!posted[0] && bot.isWorking()) {
+				logs.forEach(log -> helper.getLevel().setBlockAndUpdate(log, Blocks.OAK_LOG.defaultBlockState()));
+				colony.board().post(JobType.CHOP_TREE, logs.getFirst(), logs);
+				posted[0] = true;
+			}
+			if (posted[0] && carrying && logs.stream().anyMatch(log -> !helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG))) {
+				helper.fail("bot chopped the tree before it stored its load");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 64, "storage holds " + chest.countItem(Items.COBBLESTONE) + " cobblestone");
+			helper.assertTrue(logs.stream().noneMatch(log -> helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG)), "tree not chopped");
 		});
 	}
 

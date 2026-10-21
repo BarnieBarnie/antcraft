@@ -359,6 +359,15 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return true;
 	}
 
+	/**
+	 * On its way to the core or a storage chest with a load: the trip is finished before the bot takes a job. Not
+	 * while it waits after finding no path there, so a load it cannot deliver does not keep it from jobs.
+	 */
+	@Override
+	protected boolean carriesLoad() {
+		return this.cooldown == 0 && (this.depositing || this.trip != null && this.loaded);
+	}
+
 	/** Whether the bot puts the stack in the core when it deposits: not what it works with, nor surplus it holds. */
 	private boolean deposits(ItemStack stack) {
 		return !this.holds(stack) && !isWorkingKit(stack);

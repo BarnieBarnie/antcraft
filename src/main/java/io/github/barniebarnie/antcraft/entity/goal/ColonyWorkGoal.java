@@ -69,6 +69,11 @@ public abstract class ColonyWorkGoal {
 		return this.betweenJobs(level, colony);
 	}
 
+	/** Whether the bot is carrying a load to put away, which a job that turns up does not take it from. */
+	protected boolean carriesLoad() {
+		return false;
+	}
+
 	/** Works one tick on what there is to do between jobs, such as storing what a job left. Returns false when there is nothing. */
 	protected boolean betweenJobs(ServerLevel level, Colony colony) {
 		return false;
