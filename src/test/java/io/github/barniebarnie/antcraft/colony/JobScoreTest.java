@@ -118,6 +118,16 @@ class JobScoreTest {
 		assertEquals(0, loaded.priority());
 	}
 
+	/** A tree job's sapling comes from the tree's own drops: saplings in the core add no trip to the core. */
+	@Test
+	void aTreeJobsSaplingIsNotFetched() {
+		Job tree = new Job(UUID.randomUUID(), JobType.CHOP_TREE, new BlockPos(4, 0, 0), Optional.empty(), 0L, List.of(), Optional.of(Items.OAK_SAPLING),
+			0, 0L, 0L, Optional.empty(), 0);
+		double withSaplings = bot(BlockPos.ZERO, List.of(), 10, Optional.empty(), item -> 30).score(tree).orElseThrow();
+		double without = bot(BlockPos.ZERO, List.of(), 10, Optional.empty(), item -> 0).score(tree).orElseThrow();
+		assertEquals(without, withSaplings, 1e-9);
+	}
+
 	/** A craft job's item is what it makes, which nobody has yet: it costs no fetch. Its station is fetched like a tool. */
 	@Test
 	void aCraftJobsItemIsItsProductNotANeed() {
