@@ -83,7 +83,7 @@ class StructurePlanTest {
 	void loadsTheSamePlanAsCopyingTheSameBlocks() {
 		BlockPos at = new BlockPos(10, 1, 10);
 
-		BuildPlan loaded = RegionPlan.load(template(2, 2, 1, wall), at, Mirror.NONE, Rotation.NONE).orElseThrow();
+		BuildPlan loaded = RegionPlan.load(template(2, 2, 1, wall), at, Mirror.NONE, Rotation.NONE, 0).orElseThrow();
 		BuildPlan copied = RegionPlan.copy(pos -> wall.getOrDefault(pos, air), BlockPos.ZERO, new BlockPos(1, 1, 0), at).orElseThrow();
 
 		assertEquals(copied.steps(), loaded.steps());
@@ -92,7 +92,7 @@ class StructurePlanTest {
 
 	@Test
 	void aRotatedLoadTurnsPositionsAndFacing() {
-		BuildPlan plan = RegionPlan.load(template(2, 2, 1, wall), new BlockPos(10, 1, 10), Mirror.NONE, Rotation.CLOCKWISE_90).orElseThrow();
+		BuildPlan plan = RegionPlan.load(template(2, 2, 1, wall), new BlockPos(10, 1, 10), Mirror.NONE, Rotation.CLOCKWISE_90, 0).orElseThrow();
 
 		// Turned clockwise seen from above, the wall runs south from its lowest corner and the stairs face south.
 		assertEquals(List.of(
@@ -106,7 +106,7 @@ class StructurePlanTest {
 	void structureVoidLeavesTheBlockThere() {
 		// Only the bottom row is saved; the top row is structure void, so it gets no clear step.
 		BuildPlan plan = RegionPlan.load(template(2, 2, 1, Map.of(new BlockPos(0, 0, 0), cobble, new BlockPos(1, 0, 0), cobble)),
-			BlockPos.ZERO, Mirror.NONE, Rotation.NONE).orElseThrow();
+			BlockPos.ZERO, Mirror.NONE, Rotation.NONE, 0).orElseThrow();
 
 		assertEquals(List.of(new BuildPlan.Step(BlockPos.ZERO, cobble), new BuildPlan.Step(new BlockPos(1, 0, 0), cobble)), plan.steps());
 	}
@@ -129,7 +129,7 @@ class StructurePlanTest {
 
 	@Test
 	void aMirroredLoadFlipsPositionsFacingHingeAndShape() {
-		BuildPlan plan = RegionPlan.load(template(3, 1, 2, lopsided), new BlockPos(10, 1, 10), Mirror.FRONT_BACK, Rotation.NONE).orElseThrow();
+		BuildPlan plan = RegionPlan.load(template(3, 1, 2, lopsided), new BlockPos(10, 1, 10), Mirror.FRONT_BACK, Rotation.NONE, 0).orElseThrow();
 
 		// Front to back flips x: the row runs the other way, east faces west, and a left hinge or outer-left corner turns right.
 		assertEquals(Map.of(
@@ -154,8 +154,51 @@ class StructurePlanTest {
 				lopsided.forEach((pos, state) -> expected.put(StructureTemplate.calculateRelativePosition(settings, pos).offset(shift),
 					state.mirror(mirror).rotate(rotation)));
 
-				assertEquals(expected, placed(RegionPlan.load(template, at, mirror, rotation).orElseThrow()), mirror + " " + rotation);
+				assertEquals(expected, placed(RegionPlan.load(template, at, mirror, rotation, 0).orElseThrow()), mirror + " " + rotation);
 			}
 		}
+	}
+
+	/** A 2x1x1 template saved with a {@code palettes} list, as vanilla shipwrecks are: each palette holds the block for state 0 and 1. */
+	private static StructureTemplate multiPalette(List<List<BlockState>> palettes) {
+		ListTag palettesTag = new ListTag();
+		for (List<BlockState> palette : palettes) {
+			ListTag paletteTag = new ListTag();
+			palette.forEach(state -> paletteTag.add(NbtUtils.writeBlockState(state)));
+			palettesTag.add(paletteTag);
+		}
+		ListTag blocksTag = new ListTag();
+		for (int x = 0; x < 2; x++) {
+			CompoundTag block = new CompoundTag();
+			block.put("pos", ints(x, 0, 0));
+			block.putInt("state", x);
+			blocksTag.add(block);
+		}
+		CompoundTag tag = new CompoundTag();
+		tag.put("size", ints(2, 1, 1));
+		tag.put("palettes", palettesTag);
+		tag.put("blocks", blocksTag);
+		tag.put("entities", new ListTag());
+		StructureTemplate template = new StructureTemplate();
+		template.load(BuiltInRegistries.BLOCK, tag);
+		return template;
+	}
+
+	@Test
+	void loadsTheChosenPaletteOfAMultiPaletteTemplate() {
+		BlockState oak = Blocks.OAK_PLANKS.defaultBlockState();
+		BlockState spruce = Blocks.SPRUCE_PLANKS.defaultBlockState();
+		StructureTemplate template = multiPalette(List.of(List.of(cobble, oak), List.of(stairsEast, spruce)));
+
+		assertEquals(2, RegionPlan.paletteCount(template));
+		assertEquals(Map.of(BlockPos.ZERO, cobble, new BlockPos(1, 0, 0), oak),
+			placed(RegionPlan.load(template, BlockPos.ZERO, Mirror.NONE, Rotation.NONE, 0).orElseThrow()));
+		assertEquals(Map.of(BlockPos.ZERO, stairsEast, new BlockPos(1, 0, 0), spruce),
+			placed(RegionPlan.load(template, BlockPos.ZERO, Mirror.NONE, Rotation.NONE, 1).orElseThrow()));
+	}
+
+	@Test
+	void aSinglePaletteTemplateHasOnePalette() {
+		assertEquals(1, RegionPlan.paletteCount(template(2, 2, 1, wall)));
 	}
 }

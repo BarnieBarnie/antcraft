@@ -8,10 +8,6 @@ import java.util.Optional;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.NbtUtils;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -74,31 +70,26 @@ public final class RegionPlan {
 	/**
 	 * A plan that builds a structure template (a structure block's {@code .nbt}) mirrored by
 	 * {@code mirror}, then turned by {@code rotation}, as a structure block places it, with the lowest corner of the turned box at {@code at}, batched like
-	 * {@link #copy}. Structure void is left as it is; block-entity contents and entities are skipped.
+	 * {@link #copy}. A template with several palettes (block variants, like vanilla shipwrecks) is
+	 * built from palette {@code palette}, which must be below {@link #paletteCount}. Structure void
+	 * is left as it is; block-entity contents and entities are skipped.
 	 */
-	public static Optional<BuildPlan> load(StructureTemplate template, BlockPos at, Mirror mirror, Rotation rotation) {
-		// ponytail: the template keeps its blocks private, so read them back from its saved form.
-		CompoundTag tag = template.save(new CompoundTag());
-		ListTag paletteTag = tag.getList(StructureTemplate.PALETTE_TAG)
-			.orElseGet(() -> tag.getListOrEmpty(StructureTemplate.PALETTE_LIST_TAG).getListOrEmpty(0));
-		List<BlockState> palette = new ArrayList<>();
-		for (int i = 0; i < paletteTag.size(); i++) {
-			palette.add(NbtUtils.readBlockState(BuiltInRegistries.BLOCK, paletteTag.getCompoundOrEmpty(i)).mirror(mirror).rotate(rotation));
-		}
-		Map<BlockPos, BlockState> blocks = new HashMap<>();
-		ListTag blocksTag = tag.getListOrEmpty(StructureTemplate.BLOCKS_TAG);
-		for (int i = 0; i < blocksTag.size(); i++) {
-			CompoundTag block = blocksTag.getCompoundOrEmpty(i);
-			ListTag pos = block.getListOrEmpty(StructureTemplate.BLOCK_TAG_POS);
-			blocks.put(turn(new BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)), mirror, rotation),
-				palette.get(block.getIntOr(StructureTemplate.BLOCK_TAG_STATE, 0)));
-		}
+	public static Optional<BuildPlan> load(StructureTemplate template, BlockPos at, Mirror mirror, Rotation rotation, int palette) {
 		Vec3i size = template.getSize();
 		if (size.getX() <= 0 || size.getY() <= 0 || size.getZ() <= 0) {
 			return Optional.empty();
 		}
+		Map<BlockPos, BlockState> blocks = new HashMap<>();
+		for (StructureTemplate.StructureBlockInfo block : template.palettes.get(palette).blocks()) {
+			blocks.put(turn(block.pos(), mirror, rotation), block.state().mirror(mirror).rotate(rotation));
+		}
 		return copy(blocks::get, turn(BlockPos.ZERO, mirror, rotation),
 			turn(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), mirror, rotation), at);
+	}
+
+	/** How many palettes {@code template} holds: 1 for a structure block's save. */
+	public static int paletteCount(StructureTemplate template) {
+		return template.palettes.size();
 	}
 
 	private static BlockPos turn(BlockPos pos, Mirror mirror, Rotation rotation) {

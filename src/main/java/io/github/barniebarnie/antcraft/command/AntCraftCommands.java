@@ -65,7 +65,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
- * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation]|cancel &lt;n&gt;
+ * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation] [mirror] [palette]|cancel &lt;n&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
  */
 public final class AntCraftCommands {
@@ -133,14 +133,18 @@ public final class AntCraftCommands {
 								ctx.getSource().getServer().getStructureTemplateManager().listTemplates(), builder))
 							.then(Commands.argument("at", BlockPosArgument.blockPos())
 								.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
-									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE, Mirror.NONE))
+									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE, Mirror.NONE, 0))
 								.then(Commands.argument("rotation", TemplateRotationArgument.templateRotation())
 									.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
-										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"), Mirror.NONE))
+										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"), Mirror.NONE, 0))
 									.then(Commands.argument("mirror", TemplateMirrorArgument.templateMirror())
 										.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
 											BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
-											TemplateMirrorArgument.getMirror(ctx, "mirror"))))))))
+											TemplateMirrorArgument.getMirror(ctx, "mirror"), 0))
+										.then(Commands.argument("palette", IntegerArgumentType.integer(0))
+											.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
+												BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
+												TemplateMirrorArgument.getMirror(ctx, "mirror"), IntegerArgumentType.getInteger(ctx, "palette")))))))))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
@@ -372,13 +376,18 @@ public final class AntCraftCommands {
 	 * Adds a build from a structure template: one bundled under {@code data/<namespace>/structure/}
 	 * or one a structure block saved in the world. Block states only, like {@code build copy}.
 	 */
-	private static int loadBuild(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation, Mirror mirror) {
+	private static int loadBuild(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation, Mirror mirror, int palette) {
 		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_COPY)) {
 			return 0;
 		}
 		Optional<StructureTemplate> template = source.getServer().getStructureTemplateManager().get(id);
 		if (template.isEmpty()) {
 			source.sendFailure(Component.translatable("commands.antcraft.colony.build.no_structure", id.toString()));
+			return 0;
+		}
+		int palettes = RegionPlan.paletteCount(template.get());
+		if (palette >= palettes) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.no_palette", id.toString(), palette, palettes));
 			return 0;
 		}
 		Vec3i size = template.get().getSize();
@@ -391,7 +400,7 @@ public final class AntCraftCommands {
 		if (colony.isEmpty()) {
 			return 0;
 		}
-		Optional<BuildPlan> plan = RegionPlan.load(template.get(), at, mirror, rotation);
+		Optional<BuildPlan> plan = RegionPlan.load(template.get(), at, mirror, rotation, palette);
 		if (plan.isEmpty()) {
 			source.sendFailure(Component.translatable("commands.antcraft.colony.build.nothing_to_copy"));
 			return 0;

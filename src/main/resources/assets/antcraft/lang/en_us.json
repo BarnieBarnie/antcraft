@@ -41,6 +41,7 @@
 	"commands.antcraft.colony.build.copied": "Copied %s blocks into a build at %s (build %s)",
 	"commands.antcraft.colony.build.loaded": "Loaded structure %s into a build at %s (build %s)",
 	"commands.antcraft.colony.build.no_structure": "No structure named %s",
+	"commands.antcraft.colony.build.no_palette": "Structure %s has no palette %s; it has %s, numbered from 0",
 	"commands.antcraft.colony.build.nothing_to_copy": "That region holds nothing to build: only the other halves of doors, beds or tall plants outside it, or flowing fluid",
 	"commands.antcraft.colony.build.too_big": "That region holds %s blocks; at most %s can be copied",
 	"commands.antcraft.colony.build.not_found": "The colony has no build %s",
