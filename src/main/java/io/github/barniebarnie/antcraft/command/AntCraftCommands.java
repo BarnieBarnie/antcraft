@@ -33,21 +33,28 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
+import net.minecraft.commands.arguments.TemplateRotationArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.ComponentUtils;
+import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -59,7 +66,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
- * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|cancel &lt;n&gt;
+ * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation]|cancel &lt;n&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
  */
 public final class AntCraftCommands {
@@ -130,6 +137,16 @@ public final class AntCraftCommands {
 								.then(Commands.argument("at", BlockPosArgument.blockPos())
 									.executes(ctx -> copyBuild(ctx.getSource(), BlockPosArgument.getLoadedBlockPos(ctx, "from"),
 										BlockPosArgument.getLoadedBlockPos(ctx, "to"), BlockPosArgument.getBlockPos(ctx, "at")))))))
+					.then(Commands.literal("load")
+						.then(Commands.argument("structure", IdentifierArgument.id())
+							.suggests((ctx, builder) -> SharedSuggestionProvider.suggestResource(
+								ctx.getSource().getServer().getStructureTemplateManager().listTemplates(), builder))
+							.then(Commands.argument("at", BlockPosArgument.blockPos())
+								.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
+									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE))
+								.then(Commands.argument("rotation", TemplateRotationArgument.templateRotation())
+									.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
+										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation")))))))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
@@ -359,6 +376,39 @@ public final class AntCraftCommands {
 		}
 		colony.get().addBuild(plan.get());
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.copied", volume, at.toShortString(), colony.get().builds().size()), false);
+		return 1;
+	}
+
+	/**
+	 * Adds a build from a structure template: one bundled under {@code data/<namespace>/structure/}
+	 * or one a structure block saved in the world. Block states only, like {@code build copy}.
+	 */
+	private static int loadBuild(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation) {
+		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_COPY)) {
+			return 0;
+		}
+		Optional<StructureTemplate> template = source.getServer().getStructureTemplateManager().get(id);
+		if (template.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.no_structure", id.toString()));
+			return 0;
+		}
+		Vec3i size = template.get().getSize();
+		long volume = (long) size.getX() * size.getY() * size.getZ();
+		if (volume > MAX_COPY_VOLUME) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.too_big", volume, MAX_COPY_VOLUME));
+			return 0;
+		}
+		Optional<Colony> colony = nearestColony(source);
+		if (colony.isEmpty()) {
+			return 0;
+		}
+		Optional<BuildPlan> plan = RegionPlan.load(template.get(), at, rotation);
+		if (plan.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.nothing_to_copy"));
+			return 0;
+		}
+		colony.get().addBuild(plan.get());
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.loaded", id.toString(), at.toShortString(), colony.get().builds().size()), false);
 		return 1;
 	}
 

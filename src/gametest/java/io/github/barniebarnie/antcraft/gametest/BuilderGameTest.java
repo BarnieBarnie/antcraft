@@ -244,6 +244,28 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The bundled cobble_step structure: two cobblestone with east-facing stairs on one, turned to run south. */
+	@GameTest(maxTicks = 600)
+	public void loadCommandAddsBundledStructureThatBuilderBuilds(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		core(helper).setItem(1, new ItemStack(Items.OAK_STAIRS, 1));
+		// In the way of the structure, where it has air.
+		helper.setBlock(5, 2, 5, Blocks.DIRT);
+
+		command(helper, PermissionSet.ALL_PERMISSIONS, "antcraft colony build load antcraft:cobble_step " + coords(helper, 5, 1, 4) + " clockwise_90");
+		helper.assertTrue(colony.builds().size() == 1, "structure not added: " + colony.builds());
+		member(helper, colony, BotRole.BUILDER, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 4, COBBLE);
+			assertState(helper, 5, 1, 5, COBBLE);
+			assertState(helper, 5, 2, 4, STAIRS_EAST.setValue(StairBlock.FACING, Direction.SOUTH));
+			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(5, 2, 5));
+			helper.assertTrue(colony.builds().isEmpty(), "finished structure still listed");
+		});
+	}
+
 	/** Any colony bot takes build jobs through the worker goal, not only builders. */
 	@GameTest(maxTicks = 600)
 	public void aColonyBotWithoutTheBuilderRoleBuildsACopy(GameTestHelper helper) {
