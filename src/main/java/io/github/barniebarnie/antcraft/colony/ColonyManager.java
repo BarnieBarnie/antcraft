@@ -374,8 +374,16 @@ public class ColonyManager extends SavedData {
 		// is ordered until one is made, not just while none is coming, or the order would withdraw itself.
 		Map<Item, Integer> materials = colony.planProjects(level::getBlockState, step -> BuilderGoal.isPossible(level, step), have,
 			tool -> kind.rank(pickaxe) >= kind.rank(tool));
+		colony.postStairCrafts(level::getBlockState, have, craftsStairsOnTheSpot(level, colony));
 		// What builders will place is not there for anything else.
 		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));
+	}
+
+	/** Whether a member carries a crafting table and what a recipe for cobblestone stairs takes, to craft them where they go. */
+	private static boolean craftsStairsOnTheSpot(ServerLevel level, Colony colony) {
+		List<TaskPlanner.Recipe<Item>> recipes = GameRecipeBook.of(level.getServer()).recipesFor(Items.COBBLESTONE_STAIRS);
+		return colony.members().stream().anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getInventory().countItem(Items.CRAFTING_TABLE) > 0
+			&& recipes.stream().anyMatch(recipe -> !recipe.smelting() && Storage.canCraft(bot.getInventory(), recipe, 1)));
 	}
 
 	/** Orders whatever the colony is short of. */

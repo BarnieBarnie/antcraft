@@ -373,9 +373,9 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return !this.holds(stack) && !isWorkingKit(stack);
 	}
 
-	/** What a bot keeps to work with rather than store: tools, weapons and the scaffold blocks it pillars with. */
+	/** What a bot keeps to work with rather than store: tools, weapons, the scaffold blocks it pillars with and a crafting table or furnace it crafts at. */
 	private static boolean isWorkingKit(ItemStack stack) {
-		return stack.isDamageableItem() || stack.is(PathFollower.FAST_SCAFFOLD_BLOCKS);
+		return stack.isDamageableItem() || stack.is(PathFollower.FAST_SCAFFOLD_BLOCKS) || stack.is(Items.CRAFTING_TABLE) || stack.is(Items.FURNACE);
 	}
 
 	/** Whether the stack is surplus the bot took out of a full core to keep a slot free. */

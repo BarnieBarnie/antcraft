@@ -7,6 +7,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.HashSet;
 import java.util.List;
@@ -171,6 +172,61 @@ class ProjectTest {
 		assertEquals(buildPriorities(colony), buildPriorities(loaded));
 		loaded.cancelProject(hut.id());
 		assertEquals(List.of(plan(new BlockPos(5, 64, 5), Blocks.COBBLESTONE)), loaded.builds());
+	}
+
+	private static final Function<BlockPos, BlockState> STONE = pos -> Blocks.STONE.defaultBlockState();
+
+	/** A new spiral shaft with its first batch posted, the stairs it needs ordered and their crafts posted. */
+	private static Mineshaft shaftNeedingStairs(Colony colony, Map<Item, Integer> has, boolean onSpot) {
+		Mineshaft shaft = new Mineshaft(new BlockPos(2, 64, 2), List.of(60));
+		colony.setMineshaft(shaft);
+		colony.postBuildJobs();
+		colony.planProjects(STONE, step -> true, has, tool -> true);
+		colony.postStairCrafts(STONE, has, onSpot);
+		colony.postCraftJobs(coreCrafts(colony, has), has, book, gatherable);
+		return shaft;
+	}
+
+	private static List<Job> stairCrafts(Colony colony) {
+		return colony.board().jobs().stream().filter(job -> job.type() == JobType.CRAFT && job.item().equals(Optional.of(Items.COBBLESTONE_STAIRS))).toList();
+	}
+
+	@Test
+	void aShaftBatchWhoseStairsTheCoreLacksYieldsACraftJobAtTheBatch() {
+		Colony colony = colony();
+		Mineshaft shaft = shaftNeedingStairs(colony, Map.of(), true);
+		assertTrue(colony.orders().containsKey(Items.COBBLESTONE_STAIRS), "stairs not ordered: " + colony.orders());
+		// Crafted on the spot with a carried crafting table, and not at the core as well.
+		List<Job> crafts = stairCrafts(colony);
+		assertEquals(1, crafts.size(), crafts.toString());
+		assertEquals(shaft.plan().batch(0).target(), crafts.getFirst().target());
+		assertEquals(Optional.of(Items.CRAFTING_TABLE), crafts.getFirst().tool());
+	}
+
+	@Test
+	void withNoBotToCraftThemOnTheSpotShaftStairsAreCraftedAtTheCore() {
+		Colony colony = colony();
+		shaftNeedingStairs(colony, Map.of(), true);
+		colony.postStairCrafts(STONE, Map.of(), false);
+		colony.postCraftJobs(coreCrafts(colony, Map.of()), Map.of(), book, gatherable);
+		List<Job> crafts = stairCrafts(colony);
+		assertEquals(1, crafts.size(), crafts.toString());
+		assertEquals(colony.core(), crafts.getFirst().target());
+	}
+
+	@Test
+	void stoneStairsTheColonyHasLeaveNothingToCraftOnTheSpot() {
+		Colony colony = colony();
+		shaftNeedingStairs(colony, Map.of(Items.STONE_BRICK_STAIRS, 64), true);
+		assertEquals(List.of(), stairCrafts(colony));
+	}
+
+	@Test
+	void anOnTheSpotCraftGoesWithItsShaft() {
+		Colony colony = colony();
+		Mineshaft shaft = shaftNeedingStairs(colony, Map.of(), true);
+		colony.removeBuild(shaft.plan());
+		assertEquals(List.of(), stairCrafts(colony).stream().filter(job -> !job.target().equals(colony.core())).toList());
 	}
 
 	@Test

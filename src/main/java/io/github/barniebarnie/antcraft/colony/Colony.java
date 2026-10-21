@@ -24,6 +24,8 @@ import java.util.function.Function;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -476,7 +478,12 @@ public class Colony {
 	 * ones for anything else. A craft for what a project waits for carries the project's priority, the highest of them
 	 * when several do: what {@link TaskPlanner} plans to make it from {@code stock} with {@code book}.
 	 */
-	public void postCraftJobs(Set<Item> crafts, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+	public void postCraftJobs(Set<Item> ordered, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		// What a bot crafts on the spot (see postStairCrafts) is not crafted at the core as well.
+		Set<Item> crafts = new HashSet<>(ordered);
+		if (this.board.jobs().stream().anyMatch(Colony::isStairCraft)) {
+			crafts.remove(Items.COBBLESTONE_STAIRS);
+		}
 		this.board.removeOpenIf(job -> job.type() == JobType.CRAFT && job.target().equals(this.core) && job.item().filter(crafts::contains).isEmpty());
 		Map<Item, Integer> priorities = new HashMap<>();
 		for (Project project : this.projects()) {
@@ -488,6 +495,43 @@ public class Colony {
 			});
 		}
 		crafts.forEach(item -> this.board.postFor(JobType.CRAFT, this.core, item, Optional.empty(), priorities.getOrDefault(item, 0)));
+	}
+
+	/** Where each batch of {@code plan} with steps is known by on the board. */
+	private static Stream<BlockPos> batchTargets(BuildPlan plan) {
+		return IntStream.range(0, plan.batches().size()).filter(i -> plan.batches().get(i).to() > plan.batches().get(i).from())
+			.mapToObj(i -> plan.batch(i).target());
+	}
+
+	/** Whether {@code job} crafts a mineshaft batch's stairs at the batch (see {@link #postStairCrafts}). */
+	private static boolean isStairCraft(Job job) {
+		return job.type() == JobType.CRAFT && job.item().equals(Optional.of(Items.COBBLESTONE_STAIRS)) && job.tool().equals(Optional.of(Items.CRAFTING_TABLE));
+	}
+
+	/**
+	 * While {@code onSpot}, as a bot carries a crafting table and the cobblestone, posts a craft job for cobblestone stairs at
+	 * each batch posted to build whose stair steps the stone stairs the colony {@code has} do not cover, the batches in order,
+	 * so the bot crafts them there rather than at the core, to be hauled down. Such a job stops the core crafting them too
+	 * (see {@link #postCraftJobs}). Without {@code onSpot} they come from the core, and the open such jobs are taken down.
+	 */
+	public void postStairCrafts(Function<BlockPos, BlockState> world, Map<Item, Integer> has, boolean onSpot) {
+		int left = BuildPlan.STONE_STAIRS.stream().mapToInt(item -> has.getOrDefault(item, 0)).sum();
+		Map<BlockPos, Integer> wanting = new HashMap<>();
+		for (Job job : this.board.jobs()) {
+			Optional<BuildPlan> batch = job.type() == JobType.BUILD ? this.build(job.id()) : Optional.empty();
+			if (batch.isPresent()) {
+				int stairs = batch.get().stoneStairMaterials(world).values().stream().mapToInt(Integer::intValue).sum();
+				if (stairs > left) {
+					wanting.put(batch.get().target(), job.priority());
+				}
+				left = Math.max(0, left - stairs);
+			}
+		}
+		Set<BlockPos> batches = this.builds.values().stream().flatMap(Colony::batchTargets).collect(Collectors.toSet());
+		this.board.removeOpenIf(job -> isStairCraft(job) && batches.contains(job.target()) && !(onSpot && wanting.containsKey(job.target())));
+		if (onSpot) {
+			wanting.forEach((at, priority) -> this.board.postFor(JobType.CRAFT, at, Items.COBBLESTONE_STAIRS, Optional.of(Items.CRAFTING_TABLE), priority));
+		}
 	}
 
 	/**
@@ -547,6 +591,8 @@ public class Colony {
 		for (int i = 0; i < this.builds.get(id).batches().size(); i++) {
 			jobs.add(batchId(id, i));
 		}
+		Set<BlockPos> targets = batchTargets(this.builds.get(id)).collect(Collectors.toSet());
+		this.board.removeOpenIf(job -> isStairCraft(job) && targets.contains(job.target()));
 		this.builds.remove(id);
 		this.projects.replaceAll(project -> project.without(id));
 		this.projects.stream().filter(project -> project.plans().isEmpty()).forEach(project -> this.waiting.remove(project.id()));

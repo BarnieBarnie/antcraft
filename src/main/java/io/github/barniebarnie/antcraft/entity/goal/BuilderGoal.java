@@ -240,11 +240,15 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/** Ends the job begun, then takes home what the job left it with (see {@link #store}). */
 	private void endJob(ServerLevel level, WorkerGoal.Outcome how) {
+		BlockPos at = this.job == null ? null : this.job.target();
 		this.outcome = how;
 		this.job = null;
 		this.bot.setWorking(false);
 		this.resetMovement();
-		this.storing = !this.leftOver().isEmpty();
+		// The batch's stairs crafted on the spot are made from what was dug there, so that stays with the bot.
+		boolean craftHere = at != null && this.colonyOf(level).filter(colony -> colony.board().jobs().stream()
+			.anyMatch(job -> job.isOpen() && job.type() == JobType.CRAFT && job.target().equals(at))).isPresent();
+		this.storing = !craftHere && !this.leftOver().isEmpty();
 	}
 
 	/**

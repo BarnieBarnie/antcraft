@@ -107,6 +107,33 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A bot carrying a crafting table digs the top of a new shaft with an empty core: it crafts the stairs in the shaft
+	 * from the cobblestone it dug and places them, and never brings anything to the core to craft them there.
+	 */
+	@GameTest(maxTicks = 3000)
+	public void aBotCraftsTheStairsInTheShaftWithTheCraftingTableItCarries(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		Mineshaft shaft = shaft(helper, 3);
+		colony.setMineshaft(shaft);
+		AntBot bot = member(helper, colony, new BlockPos(7, 5, 7));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE));
+		boolean[] tablePlaced = {false};
+		helper.onEachTick(() -> {
+			tablePlaced[0] |= stairBlocks(helper, Blocks.CRAFTING_TABLE) > 0;
+			if (!core(helper).isEmpty()) {
+				helper.fail("brought to the core: " + core(helper).getItem(0));
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(stairBlocks(helper) == 4, "stair blocks placed: " + stairBlocks(helper));
+			helper.assertTrue(tablePlaced[0], "crafting table never placed");
+			helper.assertTrue(bot.getInventory().countItem(Items.CRAFTING_TABLE) == 1, "crafting table not taken back");
+		});
+	}
+
 	/** With stone brick stairs in the core and no cobblestone ones, the bots put those on the steps and make none. */
 	@GameTest(maxTicks = 3000)
 	public void botsBuildTheStepsFromTheStoneStairsTheCoreHas(GameTestHelper helper) {
