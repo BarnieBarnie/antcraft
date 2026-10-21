@@ -72,7 +72,8 @@ class ColonyActionsTest {
 	}
 
 	private static final List<ColonyActions.Edit> COMMAND_EDITS = List.of(ColonyActions.Edit.MINESHAFT, ColonyActions.Edit.BUILD_COPY,
-		ColonyActions.Edit.BUILD_CANCEL, ColonyActions.Edit.TERRAFORM, ColonyActions.Edit.CLEAR_BLOCKED);
+		ColonyActions.Edit.BUILD_CANCEL, ColonyActions.Edit.TERRAFORM, ColonyActions.Edit.CLEAR_BLOCKED, ColonyActions.Edit.PROJECT_CANCEL,
+		ColonyActions.Edit.PROJECT_PRIORITY);
 
 	@Test
 	void mineshaftBuildTerraformAndBlockedEditsOnlyChangeColonyData() {

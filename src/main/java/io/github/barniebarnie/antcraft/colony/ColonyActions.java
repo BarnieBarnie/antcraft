@@ -46,7 +46,11 @@ public final class ColonyActions {
 		/** Add a terraform plan ({@code colony terraform}). */
 		TERRAFORM,
 		/** Give up on the blocked build steps ({@code colony blocked clear}). */
-		CLEAR_BLOCKED;
+		CLEAR_BLOCKED,
+		/** Drop a project with its builds ({@code colony project cancel}). */
+		PROJECT_CANCEL,
+		/** Set a project's priority ({@code colony project priority}). */
+		PROJECT_PRIORITY;
 
 		/**
 		 * Whether this edit commands bots, and so needs bots allowed on the server. Each new edit has to answer this here.
@@ -54,7 +58,8 @@ public final class ColonyActions {
 		 */
 		boolean commandsBots() {
 			return switch (this) {
-				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS, MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED -> false;
+				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS, MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL,
+					PROJECT_PRIORITY -> false;
 			};
 		}
 
@@ -62,7 +67,7 @@ public final class ColonyActions {
 		public boolean fromScreen() {
 			return switch (this) {
 				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS -> true;
-				case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED -> false;
+				case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
 			};
 		}
 	}
@@ -126,7 +131,7 @@ public final class ColonyActions {
 				colony.setRadius(count);
 				yield true;
 			}
-			case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED -> false;
+			case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
 		};
 	}
 

@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.Project;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -66,6 +67,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
  * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation] [mirror] [palette]|cancel &lt;n&gt;
+ * /antcraft colony project list|cancel &lt;n&gt;|priority &lt;n&gt; &lt;priority&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
  */
 public final class AntCraftCommands {
@@ -73,6 +75,8 @@ public final class AntCraftCommands {
 	public static final int COLONY_RANGE = 64;
 	/** Largest region {@code colony build copy} takes, the same as vanilla /clone. */
 	private static final int MAX_COPY_VOLUME = 32768;
+	/** Highest priority a project may get, and lowest below zero. */
+	private static final int MAX_PRIORITY = 100;
 	private static final DynamicCommandExceptionType UNKNOWN_ITEM = new DynamicCommandExceptionType(
 		name -> Component.translatableEscape("commands.antcraft.colony.stock.unknown", name));
 
@@ -148,6 +152,16 @@ public final class AntCraftCommands {
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
+				.then(Commands.literal("project")
+					.then(Commands.literal("list").executes(ctx -> listProjects(ctx.getSource())))
+					.then(Commands.literal("cancel")
+						.then(Commands.argument("n", IntegerArgumentType.integer(1))
+							.executes(ctx -> cancelProject(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n")))))
+					.then(Commands.literal("priority")
+						.then(Commands.argument("n", IntegerArgumentType.integer(1))
+							.then(Commands.argument("priority", IntegerArgumentType.integer(-MAX_PRIORITY, MAX_PRIORITY))
+								.executes(ctx -> setProjectPriority(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"),
+									IntegerArgumentType.getInteger(ctx, "priority")))))))
 				.then(Commands.literal("terraform")
 					.then(Commands.argument("from", BlockPosArgument.blockPos())
 						.then(Commands.argument("to", BlockPosArgument.blockPos())
@@ -405,7 +419,7 @@ public final class AntCraftCommands {
 			source.sendFailure(Component.translatable("commands.antcraft.colony.build.nothing_to_copy"));
 			return 0;
 		}
-		colony.get().addBuild(plan.get());
+		colony.get().addBuild(id.toString(), plan.get());
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.loaded", id.toString(), at.toShortString(), colony.get().builds().size()), false);
 		return 1;
 	}
@@ -476,6 +490,71 @@ public final class AntCraftCommands {
 		}
 		colony.removeBuild(plan);
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.cancelled", n, plan.target().toShortString()), false);
+		return 1;
+	}
+
+	/** Lists the projects, highest priority first, with what each still waits for, as the last survey found. */
+	private static int listProjects(CommandSourceStack source) {
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		Colony colony = found.get();
+		List<Project> projects = colony.projects();
+		if (projects.isEmpty()) {
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.empty"), false);
+		}
+		for (int i = 0; i < projects.size(); i++) {
+			Project project = projects.get(i);
+			List<BuildPlan> plans = colony.plans(project);
+			long left = plans.stream().flatMap(plan -> plan.steps().stream()).filter(step -> !step.isDone(source.getLevel().getBlockState(step.pos()))).count();
+			int n = i + 1;
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.line", n, project.name(), project.priority(),
+				plans.size(), left, names(colony.waitingFor(project.id()))), false);
+		}
+		return projects.size();
+	}
+
+	/** Project {@code n} of {@code colony project list}, unless there is none or it is the mineshaft, which is moved instead. */
+	private static Optional<Project> project(CommandSourceStack source, Colony colony, int n) {
+		List<Project> projects = colony.projects();
+		if (n > projects.size()) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.project.not_found", n));
+			return Optional.empty();
+		}
+		Project project = projects.get(n - 1);
+		if (colony.plans(project).stream().anyMatch(plan -> isMineshaft(colony, plan))) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.project.is_mineshaft", n));
+			return Optional.empty();
+		}
+		return Optional.of(project);
+	}
+
+	private static int cancelProject(CommandSourceStack source, int n) {
+		if (!checkMayEdit(source, ColonyActions.Edit.PROJECT_CANCEL)) {
+			return 0;
+		}
+		Optional<Colony> colony = nearestColony(source);
+		Optional<Project> project = colony.flatMap(c -> project(source, c, n));
+		if (project.isEmpty()) {
+			return 0;
+		}
+		colony.get().cancelProject(project.get().id());
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.cancelled", n, project.get().name()), false);
+		return 1;
+	}
+
+	private static int setProjectPriority(CommandSourceStack source, int n, int priority) {
+		if (!checkMayEdit(source, ColonyActions.Edit.PROJECT_PRIORITY)) {
+			return 0;
+		}
+		Optional<Colony> colony = nearestColony(source);
+		Optional<Project> project = colony.flatMap(c -> project(source, c, n));
+		if (project.isEmpty()) {
+			return 0;
+		}
+		colony.get().setPriority(project.get().id(), priority);
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.priority", n, project.get().name(), priority), false);
 		return 1;
 	}
 

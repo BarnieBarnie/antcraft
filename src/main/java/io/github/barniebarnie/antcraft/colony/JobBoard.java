@@ -70,10 +70,18 @@ public class JobBoard {
 	 * already. Unlike other jobs, several share a target, such as the crafts of an order at the core.
 	 */
 	public Optional<Job> postFor(JobType type, BlockPos target, Item item, Optional<Item> tool) {
-		if (this.jobs.stream().anyMatch(job -> job.type() == type && job.target().equals(target) && job.item().filter(item::equals).isPresent())) {
+		return this.postFor(type, target, item, tool, 0);
+	}
+
+	/** Like {@link #postFor(JobType, BlockPos, Item, Optional)}, with a {@code priority}; one posted already gets it too. */
+	public Optional<Job> postFor(JobType type, BlockPos target, Item item, Optional<Item> tool, int priority) {
+		Optional<Job> posted = this.jobs.stream()
+			.filter(job -> job.type() == type && job.target().equals(target) && job.item().filter(item::equals).isPresent()).findFirst();
+		if (posted.isPresent()) {
+			this.prioritize(posted.get(), priority);
 			return Optional.empty();
 		}
-		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.of(item), 0, 0L, 0L, tool, 0);
+		Job job = new Job(UUID.randomUUID(), type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.of(item), 0, 0L, 0L, tool, priority);
 		this.jobs.add(job);
 		return Optional.of(job);
 	}
@@ -93,9 +101,14 @@ public class JobBoard {
 		return this.post(id, type, target, 0);
 	}
 
-	/** Like {@link #post(UUID, JobType, BlockPos)}, with a {@code priority}, such as a later batch of a plan's lower one. */
+	/**
+	 * Like {@link #post(UUID, JobType, BlockPos)}, with a {@code priority}, such as a later batch of a plan's lower one.
+	 * The job posted already gets it too, such as once its project's priority changed.
+	 */
 	public Optional<Job> post(UUID id, JobType type, BlockPos target, int priority) {
-		if (this.jobs.stream().anyMatch(job -> job.id().equals(id))) {
+		Optional<Job> posted = this.jobs.stream().filter(job -> job.id().equals(id)).findFirst();
+		if (posted.isPresent()) {
+			this.prioritize(posted.get(), priority);
 			return Optional.empty();
 		}
 		Job job = new Job(id, type, target.immutable(), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L, Optional.empty(), priority);
@@ -266,6 +279,12 @@ public class JobBoard {
 	/** Removes unclaimed jobs matching the filter, e.g. trees that no longer exist. */
 	public void removeOpenIf(Predicate<Job> filter) {
 		this.jobs.removeIf(job -> job.isOpen() && filter.test(job));
+	}
+
+	private void prioritize(Job job, int priority) {
+		if (job.priority() != priority) {
+			this.replace(job, job.withPriority(priority));
+		}
 	}
 
 	private void replace(Job old, Job updated) {

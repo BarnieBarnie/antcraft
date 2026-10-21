@@ -267,7 +267,11 @@ public class ColonyStatusScreen extends Screen {
 		for (ColonyStatus.Build build : status.builds()) {
 			String key = build.mineshaft() ? "screen.antcraft.colony_status.build_mineshaft"
 				: build.terraform() ? "screen.antcraft.colony_status.build_terraform" : "screen.antcraft.colony_status.build";
+			lines.add(new Line(Component.translatable("screen.antcraft.colony_status.project", build.project(), build.priority()), WHITE));
 			lines.add(new Line(Component.translatable(key, build.target().toShortString(), build.left(), build.steps()), WHITE));
+			if (!build.waitsFor().isEmpty()) {
+				lines.add(new Line(Component.translatable("screen.antcraft.colony_status.waits_for", items(build.waitsFor())), GREY));
+			}
 			// A plan of one batch says it all on its own line.
 			for (int i = 0; build.batches().size() > 1 && i < build.batches().size(); i++) {
 				ColonyStatus.Batch batch = build.batches().get(i);

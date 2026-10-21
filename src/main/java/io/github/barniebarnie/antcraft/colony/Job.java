@@ -72,6 +72,10 @@ public record Job(UUID id, JobType type, BlockPos target, Optional<UUID> claimed
 		return new Job(this.id, this.type, this.target, this.claimedBy, this.heartbeat, this.area, item, this.tries, this.notBefore, this.posted, tool, this.priority);
 	}
 
+	Job withPriority(int priority) {
+		return new Job(this.id, this.type, this.target, this.claimedBy, this.heartbeat, this.area, this.item, this.tries, this.notBefore, this.posted, this.tool, priority);
+	}
+
 	Job withHeartbeat(long now) {
 		return new Job(this.id, this.type, this.target, this.claimedBy, now, this.area, this.item, this.tries, this.notBefore, this.posted, this.tool, this.priority);
 	}

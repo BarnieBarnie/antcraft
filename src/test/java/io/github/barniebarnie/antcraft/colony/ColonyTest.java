@@ -924,8 +924,14 @@ class ColonyTest {
 	void aFlatSaveFromBeforeTheCodecWasSplitLoadsTheSameColony() {
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(FLAT_SAVE)).getOrThrow();
 		assertSameAsEveryField(loaded);
-		// And it saves in the same flat layout, so older versions of the mod still read it.
-		assertEquals(JsonParser.parseString(FLAT_SAVE), Colony.CODEC.encodeStart(JsonOps.INSTANCE, loaded).getOrThrow());
+		// And it saves in the same flat layout, so older versions of the mod still read it, with a project for each of its
+		// plans, which those versions skip.
+		var expected = JsonParser.parseString(FLAT_SAVE).getAsJsonObject();
+		expected.add("projects", JsonParser.parseString("""
+			[{"id":"00000000-0000-0000-0000-000000000007","name":"build","plans":["00000000-0000-0000-0000-000000000007"]},
+			{"id":"00000000-0000-0000-0000-000000000008","name":"build","plans":["00000000-0000-0000-0000-000000000008"]}]
+			"""));
+		assertEquals(expected, Colony.CODEC.encodeStart(JsonOps.INSTANCE, loaded).getOrThrow());
 	}
 
 	@Test

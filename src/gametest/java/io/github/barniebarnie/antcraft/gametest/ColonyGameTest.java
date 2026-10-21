@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.DefaultStock;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.Project;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -164,6 +165,30 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> helper.assertValueEqual(together, EnumSet.of(JobType.CHOP_LOG, JobType.HARVEST_CROP, JobType.BUILD),
 			"jobs worked at once"));
+	}
+
+	/**
+	 * A project with nothing for it in the core: the colony orders what it waits for, bots fell a tree for the logs,
+	 * craft the planks and the crafting table at the core, and build it.
+	 */
+	@GameTest(maxTicks = 2400)
+	public void aProjectWithNoMaterialsInTheCoreIsFinishedByBotsWhoGatherAndCraftWhatItNeeds(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		tree(helper, 5, 5);
+		BlockPos planks = new BlockPos(1, 1, 6);
+		BlockPos table = new BlockPos(2, 1, 6);
+		Project hut = colony.addBuild("hut", new BuildPlan(List.of(
+			new BuildPlan.Step(helper.absolutePos(planks), Blocks.OAK_PLANKS.defaultBlockState()),
+			new BuildPlan.Step(helper.absolutePos(table), Blocks.CRAFTING_TABLE.defaultBlockState()))));
+		colony.setPriority(hut.id(), 1);
+		member(helper, colony, 2, 2);
+		member(helper, colony, 3, 2);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_PLANKS, planks);
+			helper.assertBlockPresent(Blocks.CRAFTING_TABLE, table);
+			helper.assertTrue(colony.projects().isEmpty(), "finished project still listed: " + colony.projects());
+		});
 	}
 
 	/** Bots without a colony only follow orders and fight: no tree felling around them. */

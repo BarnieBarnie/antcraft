@@ -48,7 +48,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -371,18 +370,10 @@ public class ColonyManager extends SavedData {
 			.filter(order -> ToolUpgrade.makeableNow(order, have, GameRecipeBook.of(level.getServer()), item -> false));
 		Item coming = Stream.concat(Stream.ofNullable(pickaxe), made).max(Comparator.comparingInt(kind::rank)).orElse(null);
 		colony.declareBuildNeeds(level::getBlockState, step -> BuilderGoal.isPossible(level, step), tool -> kind.rank(coming) >= kind.rank(tool));
-		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for.
-		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream()
-			.map(plan -> plan.materials(level::getBlockState, step -> BuilderGoal.isPossible(level, step))).toList());
-		// Steps any solid block will do take whichever fill block the colony has: a terraform's fill sand too, a mineshaft's wall only one that holds.
-		Map<Item, Integer> holding = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState, false)).toList());
-		Map<Item, Integer> resting = StockPlanner.total(colony.builds().stream().map(plan -> plan.fillMaterials(level::getBlockState, true)).toList());
-		Map<Item, Integer> needed = new HashMap<>(BuildPlan.shortfall(materials, holding, resting, have));
-		// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
-		if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && have.getOrDefault(Items.BUCKET, 0) == 0) {
-			needed.put(Items.BUCKET, 1);
-		}
-		colony.orderFor(Colony.OrderPurpose.BUILD, needed);
+		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for. A pickaxe
+		// is ordered until one is made, not just while none is coming, or the order would withdraw itself.
+		Map<Item, Integer> materials = colony.planProjects(level::getBlockState, step -> BuilderGoal.isPossible(level, step), have,
+			tool -> kind.rank(pickaxe) >= kind.rank(tool));
 		// What builders will place is not there for anything else.
 		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));
 	}
@@ -410,9 +401,8 @@ public class ColonyManager extends SavedData {
 		}
 		BlockPos at = colony.core();
 		JobBoard board = colony.board();
-		Set<Item> crafts = CrafterGoal.coreCrafts(level, colony, core);
-		board.removeOpenIf(job -> job.type() == JobType.CRAFT && job.target().equals(at) && job.item().filter(crafts::contains).isEmpty());
-		crafts.forEach(item -> board.postFor(JobType.CRAFT, at, item, Optional.empty()));
+		colony.postCraftJobs(CrafterGoal.coreCrafts(level, colony, core), Storage.held(level, colony), GameRecipeBook.of(level.getServer()),
+			Gatherables::isGatherable);
 		if (core.countItem(ModItems.BOT_CORE) > 0) {
 			board.post(JobType.ACTIVATE_BOT, at);
 		} else {

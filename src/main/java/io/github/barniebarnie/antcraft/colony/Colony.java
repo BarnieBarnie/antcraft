@@ -7,6 +7,7 @@ import com.mojang.datafixers.util.Either;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -15,6 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +34,9 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.OreRevisit;
 import io.github.barniebarnie.antcraft.work.StorageArea;
+import io.github.barniebarnie.antcraft.work.ToolKind;
+import net.minecraft.world.item.BucketItem;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -41,6 +46,8 @@ import org.jspecify.annotations.Nullable;
 /** A colony: its core block (storage), member bots, work radius and job board. */
 public class Colony {
 	public static final int DEFAULT_RADIUS = 32;
+	/** The name of the mineshaft's project. */
+	public static final String MINESHAFT = "mineshaft";
 	/** How often given-up trees and branches are put back up for one more try: a Minecraft day. */
 	public static final long GIVEN_UP_RECHECK_TICKS = 24000;
 
@@ -144,9 +151,9 @@ public class Colony {
 		).apply(i, Wants::new));
 	}
 
-	/** What the colony builds and works: the mineshaft, build plans and their progress, the field and the storage area. */
+	/** What the colony builds and works: the mineshaft, build plans and their progress, the projects they make up, the field and the storage area. */
 	private record Works(Optional<Mineshaft> mineshaft, Map<UUID, BuildPlan> builds, List<Placed> placed, List<Blocked> blockedSteps,
-			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage) {
+			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage, List<Project> projects) {
 		static final MapCodec<Works> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
 			// Old saves may still have a "quarry"; it is ignored.
 			Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Works::mineshaft),
@@ -155,14 +162,16 @@ public class Colony {
 			BLOCKED.optionalFieldOf("blocked_steps", List.of()).forGetter(Works::blockedSteps),
 			Codec.unboundedMap(UUIDUtil.STRING_CODEC, BatchState.CODEC).optionalFieldOf("batches", Map.of()).forGetter(Works::batchStates),
 			Field.CODEC.optionalFieldOf("field").forGetter(Works::field),
-			StorageArea.CODEC.optionalFieldOf("storage").forGetter(Works::storage)
+			StorageArea.CODEC.optionalFieldOf("storage").forGetter(Works::storage),
+			// Saves from before projects get a project for each plan.
+			Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(Works::projects)
 		).apply(i, Works::new));
 	}
 
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
-		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage))
+		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects)))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -176,6 +185,10 @@ public class Colony {
 	private Set<BlockPos> shaftBlocks;
 	private Set<BlockPos> shaftOpen;
 	private final List<StockTarget> stock;
+	/** The projects the colony works on, in the order they were added; see {@link #projects}. */
+	private final List<Project> projects = new ArrayList<>();
+	/** What each project still waits for, by project id, as {@link #planProjects} last found; not saved. */
+	private final Map<UUID, Map<Item, Integer>> waiting = new HashMap<>();
 	/** Build plans by id, so plans that start at the same spot get jobs of their own. */
 	private final Map<UUID, BuildPlan> builds;
 	/** The plan and batch of each build job, by job id; see {@link #batchId}. Kept up to date with {@link #builds}. */
@@ -204,7 +217,7 @@ public class Colony {
 	private Colony(Basics basics, Wants wants, Works works) {
 		this(basics.id(), basics.core(), basics.members(), basics.board(), basics.radius(), wants.orders(), works.mineshaft(), wants.stock(),
 			works.builds(), works.placed(), works.field(), works.storage(), wants.buildOrders(), works.blockedSteps(), wants.systemOrders(),
-			works.batchStates());
+			works.batchStates(), works.projects());
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
@@ -219,6 +232,24 @@ public class Colony {
 			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
 			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<Blocked> blockedSteps,
 			Map<OrderPurpose, Map<Item, Integer>> systemOrders, Map<UUID, BatchState> batchStates) {
+		this(id, core, members, board, radius, orders, mineshaft, stock, builds, protectedBlocks, field, storage, buildOrders, blockedSteps,
+			systemOrders, batchStates, List.of());
+	}
+
+	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
+			List<StockTarget> stock, Map<UUID, BuildPlan> builds, List<Placed> protectedBlocks, Optional<Field> field,
+			Optional<StorageArea> storage, Map<Item, Integer> buildOrders, List<Blocked> blockedSteps,
+			Map<OrderPurpose, Map<Item, Integer>> systemOrders, Map<UUID, BatchState> batchStates, List<Project> projects) {
+		// Projects lose plans that are gone; a plan of no project, as in saves from before projects, gets one of its own.
+		projects.forEach(project -> this.projects.add(new Project(project.id(), project.name(), project.priority(),
+			project.plans().stream().filter(builds::containsKey).toList())));
+		this.projects.removeIf(project -> project.plans().isEmpty());
+		builds.forEach((planId, plan) -> {
+			if (this.projects.stream().noneMatch(project -> project.plans().contains(planId))) {
+				this.projects.add(new Project(planId, mineshaft.filter(shaft -> shaft.isPlan(plan)).isPresent() ? MINESHAFT : defaultName(plan), 0,
+					List.of(planId)));
+			}
+		});
 		this.batchStates = new HashMap<>(batchStates);
 		systemOrders.forEach((purpose, counts) -> this.systemOrders.put(purpose, new LinkedHashMap<>(counts)));
 		buildOrders.forEach((item, count) -> this.part(OrderPurpose.BUILD).merge(item, count, Integer::sum));
@@ -241,6 +272,11 @@ public class Colony {
 		this.indexBatches();
 		List.copyOf(this.builds.keySet()).forEach(this::settleEmpty);
 		protectedBlocks.forEach(placed -> this.protectedBlocks.put(placed.pos(), placed.block().orElse(null)));
+	}
+
+	/** What a project of just {@code plan} is called when nobody named it. */
+	private static String defaultName(BuildPlan plan) {
+		return plan.kind().getSerializedName();
 	}
 
 	private static Map<UUID, BuildPlan> withIds(List<BuildPlan> plans) {
@@ -341,11 +377,115 @@ public class Colony {
 	 * (see {@link #withoutOverlaps}).
 	 */
 	public void addBuild(BuildPlan plan) {
+		this.addBuild(defaultName(plan), plan);
+	}
+
+	/** {@link #addBuild(BuildPlan)} as a project of its own called {@code name}, at priority 0. */
+	public Project addBuild(String name, BuildPlan plan) {
 		UUID id = UUID.randomUUID();
+		Project project = new Project(id, name, 0, List.of(id));
+		this.projects.add(project);
 		this.builds.put(id, withoutOverlaps(plan));
 		this.indexBatches();
 		this.settleEmpty(id);
 		this.lastSurvey = -1;
+		return project;
+	}
+
+	/** The colony's projects, highest priority first, and in the order they were added among equals. */
+	public List<Project> projects() {
+		return this.projects.stream().sorted(Comparator.comparingInt(Project::priority).reversed()).toList();
+	}
+
+	/** Sets the priority of the project with id {@code id}; its jobs get it once posted again. Returns whether there is such a project. */
+	public boolean setPriority(UUID id, int priority) {
+		for (int i = 0; i < this.projects.size(); i++) {
+			if (this.projects.get(i).id().equals(id)) {
+				this.projects.set(i, this.projects.get(i).withPriority(priority));
+				this.lastSurvey = -1;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Drops the project with id {@code id} and its plans, with their open jobs (see {@link #removeBuild}). */
+	public void cancelProject(UUID id) {
+		this.projects.stream().filter(project -> project.id().equals(id)).findFirst()
+			.ifPresent(project -> project.plans().forEach(this::removePlan));
+	}
+
+	/** The build plans of {@code project}. */
+	public List<BuildPlan> plans(Project project) {
+		return project.plans().stream().map(this.builds::get).filter(Objects::nonNull).toList();
+	}
+
+	/** What the project with id {@code id} still waits for, as {@link #planProjects} last found: materials and tools to get. */
+	public Map<Item, Integer> waitingFor(UUID id) {
+		return Map.copyOf(this.waiting.getOrDefault(id, Map.of()));
+	}
+
+	/** The priority of the project plan {@code plan} belongs to; 0 if none. */
+	private int priorityOf(UUID plan) {
+		return this.projects.stream().filter(project -> project.plans().contains(plan)).mapToInt(Project::priority).findFirst().orElse(0);
+	}
+
+	/**
+	 * Works out what each project still waits for (see {@link #waitingFor}), highest priority first, and orders it all
+	 * for builds ({@link OrderPurpose#BUILD}): what its plans still have to place beyond what the colony {@code has}, and
+	 * the pickaxe its blocks in the way need when the colony {@code hasTool} none as good. A project takes from {@code has}
+	 * before those below it. Steps that are not {@code possible} for a builder order nothing. Returns what the plans
+	 * still have to place, which is there for nothing else.
+	 */
+	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
+			Predicate<Item> hasTool) {
+		this.waiting.clear();
+		Map<Item, Integer> left = new HashMap<>(has);
+		Map<Item, Integer> placed = new HashMap<>();
+		Map<Item, Integer> total = new HashMap<>();
+		ToolKind pickaxes = ToolKind.PICKAXE;
+		for (Project project : this.projects()) {
+			List<BuildPlan> plans = project.plans().stream().filter(id -> this.hasWorkLeft(id, this.builds.get(id))).map(this.builds::get).toList();
+			Map<Item, Integer> materials = StockPlanner.total(plans.stream().map(plan -> plan.materials(world, possible)).toList());
+			// Steps any solid block will do take whichever fill block the colony has: a terraform's fill sand too, a mineshaft's wall only one that holds.
+			Map<Item, Integer> holding = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, false)).toList());
+			Map<Item, Integer> resting = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, true)).toList());
+			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, left));
+			// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
+			if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && left.getOrDefault(Items.BUCKET, 0) <= 0) {
+				needed.put(Items.BUCKET, 1);
+			}
+			plans.stream().flatMap(plan -> plan.needs(world, possible).tool().stream()).filter(hasTool.negate())
+				.max(Comparator.comparingInt(pickaxes::rank)).ifPresent(tool -> needed.put(tool, 1));
+			materials.forEach((item, count) -> {
+				left.computeIfPresent(item, (key, held) -> Math.max(0, held - count));
+				placed.merge(item, count, Integer::sum);
+			});
+			this.waiting.put(project.id(), needed);
+			// One bucket or pickaxe does for every project.
+			needed.forEach((item, count) -> total.merge(item, count, item == Items.BUCKET || pickaxes.tiers().contains(item) ? Math::max : Integer::sum));
+		}
+		this.orderFor(OrderPurpose.BUILD, total);
+		return placed;
+	}
+
+	/**
+	 * Posts a craft job at the core for each of {@code crafts}, the items the colony crafts there, and takes down the open
+	 * ones for anything else. A craft for what a project waits for carries the project's priority, the highest of them
+	 * when several do: what {@link TaskPlanner} plans to make it from {@code stock} with {@code book}.
+	 */
+	public void postCraftJobs(Set<Item> crafts, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		this.board.removeOpenIf(job -> job.type() == JobType.CRAFT && job.target().equals(this.core) && job.item().filter(crafts::contains).isEmpty());
+		Map<Item, Integer> priorities = new HashMap<>();
+		for (Project project : this.projects()) {
+			this.waiting.getOrDefault(project.id(), Map.of()).forEach((item, count) -> {
+				Map<Item, Integer> available = new HashMap<>(stock);
+				available.remove(item);
+				TaskPlanner.plan(item, count, available, book, gatherable).crafts()
+					.forEach(craft -> priorities.putIfAbsent(craft.recipe().output(), project.priority()));
+			});
+		}
+		crafts.forEach(item -> this.board.postFor(JobType.CRAFT, this.core, item, Optional.empty(), priorities.getOrDefault(item, 0)));
 	}
 
 	/**
@@ -406,6 +546,9 @@ public class Colony {
 			jobs.add(batchId(id, i));
 		}
 		this.builds.remove(id);
+		this.projects.replaceAll(project -> project.without(id));
+		this.projects.stream().filter(project -> project.plans().isEmpty()).forEach(project -> this.waiting.remove(project.id()));
+		this.projects.removeIf(project -> project.plans().isEmpty());
 		this.indexBatches();
 		this.batchStates.keySet().removeAll(jobs);
 		this.blockedSteps.removeIf(blocked -> jobs.contains(blocked.plan()));
@@ -474,7 +617,8 @@ public class Colony {
 		this.builds.forEach((id, plan) -> this.ready(id, plan).stream()
 			.filter(i -> ready.contains(batchId(id, i)))
 			// A plan's batches in order where they can: the first one first, such as a mineshaft's from the top down.
-			.forEach(i -> this.board.post(batchId(id, i), plan.batches().get(i).dig() ? JobType.CLEAR_AREA : JobType.BUILD, plan.batch(i).target(), -i)));
+				.forEach(i -> this.board.post(batchId(id, i), plan.batches().get(i).dig() ? JobType.CLEAR_AREA : JobType.BUILD, plan.batch(i).target(),
+				this.priorityOf(id) - i)));
 	}
 
 	/** Declares on each build job what its batch still needs with {@code world} as it is (see {@link BuildPlan#needs}), for the job score. */
@@ -734,7 +878,7 @@ public class Colony {
 		this.shaftBlocks = shaft.protectedBlocks();
 		this.shaftOpen = shaft.keepOpen();
 		this.board.removeOpenIf(job -> job.type() == JobType.MINE_BRANCH);
-		this.addBuild(shaft.plan());
+		this.addBuild(MINESHAFT, shaft.plan());
 	}
 
 	/** The crop field the colony started itself, if it needed one. */
