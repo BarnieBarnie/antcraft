@@ -100,6 +100,40 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
+	/**
+	 * A colony a player founds in a 16x16 area with three bots, an empty core and three trees starts its starter
+	 * projects, tools first, and gets its starter tool kit crafted from wood it fells. Without the tools project it
+	 * takes over 900 ticks, the default stock ordering each tool only once its wood is in.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
+	public void aNewColonyCraftsItsStarterToolsFromWoodItFells(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		tree(helper, 2, 2);
+		tree(helper, 13, 2);
+		tree(helper, 2, 13);
+		BlockPos core = new BlockPos(8, 1, 8);
+		helper.setBlock(core, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(core)).orElseThrow();
+		colony.setRadius(7);
+		// As a player's placing does.
+		ModBlocks.COLONY_CORE.setPlacedBy(helper.getLevel(), helper.absolutePos(core), helper.getBlockState(core), null, new ItemStack(ModItems.COLONY_CORE));
+		helper.assertTrue(!colony.projects().isEmpty() && colony.projects().getFirst().name().equals("tools"),
+			"tools not the first project: " + colony.projects().stream().map(Project::name).toList());
+		member(helper, colony, 7, 6);
+		member(helper, colony, 9, 6);
+		member(helper, colony, 6, 9);
+
+		helper.succeedWhen(() -> {
+			Map<net.minecraft.world.item.Item, Integer> held = Storage.held(helper.getLevel(), colony);
+			for (StockTarget tool : DefaultStock.TOOLS) {
+				int have = held.entrySet().stream().filter(e -> tool.matches(e.getKey())).mapToInt(Map.Entry::getValue).sum();
+				helper.assertTrue(have >= tool.count(), "short of " + tool.name() + "; holds " + held);
+			}
+		});
+	}
+
 	/** Bots saved while colonies still gave them roles load as ordinary workers: the role is ignored. */
 	@GameTest(maxTicks = 1200)
 	public void aBotSavedWithARoleLoadsWithoutItAndTakesAnyJob(GameTestHelper helper) {

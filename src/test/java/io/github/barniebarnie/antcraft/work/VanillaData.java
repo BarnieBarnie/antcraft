@@ -14,6 +14,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.NbtAccounter;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
@@ -74,6 +77,19 @@ public final class VanillaData {
 			gatherable = Set.copyOf(items);
 		}
 		return gatherable::contains;
+	}
+
+	/** A structure bundled with the mod, such as {@code starter_house}, read from its resources as the server's structure manager would. */
+	public static StructureTemplate structure(String name) {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+		try (InputStream in = VanillaData.class.getResourceAsStream("/data/antcraft/structure/" + name + ".nbt")) {
+			StructureTemplate template = new StructureTemplate();
+			template.load(BuiltInRegistries.BLOCK, NbtIo.readCompressed(Objects.requireNonNull(in, name), NbtAccounter.unlimitedHeap()));
+			return template;
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	/**

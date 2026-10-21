@@ -8,10 +8,11 @@ import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /** Finding room near the core for a colony area, such as a field or storage. */
-final class Sites {
+public final class Sites {
 	/** How far below and above the core's level an area may lie. */
 	private static final int HEIGHT_RANGE = 2;
 
@@ -36,6 +37,15 @@ final class Sites {
 			}
 		}
 		return Optional.empty();
+	}
+
+	/**
+	 * The box of {@code size} nearest the core, its lowest corner within {@code reach} of it and up to two blocks
+	 * above or below the core's level, clear of the core and the {@code avoid} areas, all of whose blocks {@code fit}.
+	 */
+	public static Optional<BoundingBox> box(BlockPos core, int reach, List<BoundingBox> avoid, Vec3i size, Predicate<BlockPos> fits) {
+		return nearest(core, reach, avoid, pos -> BoundingBox.fromCorners(pos, pos.offset(size).offset(-1, -1, -1)), box -> box,
+			box -> BlockPos.betweenClosedStream(box).allMatch(fits));
 	}
 
 	/**

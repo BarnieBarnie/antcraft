@@ -162,16 +162,21 @@ class ProjectTest {
 		Project hut = colony.addBuild("hut", plan(new BlockPos(9, 64, 9), Blocks.OAK_PLANKS));
 		Project shed = colony.addBuild("shed", plan(new BlockPos(5, 64, 5), Blocks.COBBLESTONE));
 		colony.setPriority(shed.id(), 2);
+		Project tools = colony.addProject("tools", DefaultStock.TOOLS);
 		colony.postBuildJobs();
 		var json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
 
 		assertEquals(colony.projects(), loaded.projects());
-		assertEquals(List.of("shed", "hut"), loaded.projects().stream().map(Project::name).toList());
+		assertEquals(List.of("shed", "hut", "tools"), loaded.projects().stream().map(Project::name).toList());
+		assertEquals(DefaultStock.TOOLS, loaded.projects().getLast().stock());
 		loaded.postBuildJobs();
 		assertEquals(buildPriorities(colony), buildPriorities(loaded));
 		loaded.cancelProject(hut.id());
 		assertEquals(List.of(plan(new BlockPos(5, 64, 5), Blocks.COBBLESTONE)), loaded.builds());
+		// A project of stock alone goes too.
+		loaded.cancelProject(tools.id());
+		assertEquals(List.of("shed"), loaded.projects().stream().map(Project::name).toList());
 	}
 
 	private static final Function<BlockPos, BlockState> STONE = pos -> Blocks.STONE.defaultBlockState();

@@ -5,7 +5,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -24,6 +26,16 @@ public class ColonyCoreBlock extends BaseEntityBlock {
 		super.onPlace(state, level, pos, oldState, movedByPiston);
 		if (level instanceof ServerLevel serverLevel && !oldState.is(this)) {
 			ColonyManager.get(serverLevel).create(pos);
+		}
+	}
+
+	/** A colony a player founds starts its starter projects; one placed otherwise, such as by a test, starts with none. */
+	@Override
+	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity by, ItemStack stack) {
+		super.setPlacedBy(level, pos, state, by, stack);
+		if (level instanceof ServerLevel serverLevel) {
+			ColonyManager manager = ColonyManager.get(serverLevel);
+			manager.byCore(pos).ifPresent(colony -> manager.startProjects(serverLevel, colony));
 		}
 	}
 

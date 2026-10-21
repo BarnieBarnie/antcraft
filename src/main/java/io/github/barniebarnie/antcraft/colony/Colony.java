@@ -244,8 +244,8 @@ public class Colony {
 			Map<OrderPurpose, Map<Item, Integer>> systemOrders, Map<UUID, BatchState> batchStates, List<Project> projects) {
 		// Projects lose plans that are gone; a plan of no project, as in saves from before projects, gets one of its own.
 		projects.forEach(project -> this.projects.add(new Project(project.id(), project.name(), project.priority(),
-			project.plans().stream().filter(builds::containsKey).toList())));
-		this.projects.removeIf(project -> project.plans().isEmpty());
+			project.plans().stream().filter(builds::containsKey).toList(), project.stock())));
+		this.projects.removeIf(Project::isEmpty);
 		builds.forEach((planId, plan) -> {
 			if (this.projects.stream().noneMatch(project -> project.plans().contains(planId))) {
 				this.projects.add(new Project(planId, mineshaft.filter(shaft -> shaft.isPlan(plan)).isPresent() ? MINESHAFT : defaultName(plan), 0,
@@ -394,6 +394,14 @@ public class Colony {
 		return project;
 	}
 
+	/** Adds a project of no plans called {@code name} that wants {@code stock} held, at priority 0. */
+	public Project addProject(String name, List<StockTarget> stock) {
+		Project project = new Project(UUID.randomUUID(), name, 0, List.of(), stock);
+		this.projects.add(project);
+		this.lastSurvey = -1;
+		return project;
+	}
+
 	/** The colony's projects, highest priority first, and in the order they were added among equals. */
 	public List<Project> projects() {
 		return this.projects.stream().sorted(Comparator.comparingInt(Project::priority).reversed()).toList();
@@ -415,6 +423,8 @@ public class Colony {
 	public void cancelProject(UUID id) {
 		this.projects.stream().filter(project -> project.id().equals(id)).findFirst()
 			.ifPresent(project -> project.plans().forEach(this::removePlan));
+		this.projects.removeIf(project -> project.id().equals(id));
+		this.waiting.remove(id);
 	}
 
 	/** The build plans of {@code project}. */
@@ -435,8 +445,9 @@ public class Colony {
 	/**
 	 * Works out what each project still waits for (see {@link #waitingFor}), highest priority first, and orders it all
 	 * for builds ({@link OrderPurpose#BUILD}): what its plans still have to place beyond what the colony {@code has}, and
-	 * the pickaxe its blocks in the way need when the colony {@code hasTool} none as good. A project takes from {@code has}
-	 * before those below it. Steps that are not {@code possible} for a builder order nothing. Returns what the plans
+	 * the pickaxe its blocks in the way need when the colony {@code hasTool} none as good, and its stock short of what
+	 * the colony {@code has}, the last option of each target (the cheapest, such as a wooden pickaxe). A project takes
+	 * from {@code has} before those below it. A project with no plans left whose stock the colony has is done. Steps that are not {@code possible} for a builder order nothing. Returns what the plans
 	 * still have to place, which is there for nothing else.
 	 */
 	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
@@ -461,6 +472,19 @@ public class Colony {
 			}
 			plans.stream().flatMap(plan -> plan.needs(world, possible).tool().stream()).filter(hasTool.negate())
 				.max(Comparator.comparingInt(pickaxes::rank)).ifPresent(tool -> needed.put(tool, 1));
+			for (StockTarget target : project.stock()) {
+				StockPlanner.Target<Item> planned = target.toPlannerTarget();
+				int have = StockPlanner.have(planned, left);
+				if (have < target.count()) {
+					needed.merge(planned.make().getLast(), target.count() - have, Math::max);
+				}
+				// What counts toward it is not there for the projects below.
+				left.replaceAll((item, held) -> target.matches(item) ? 0 : held);
+			}
+			if (project.plans().isEmpty() && needed.isEmpty()) {
+				this.projects.remove(project);
+				continue;
+			}
 			materials.forEach((item, count) -> {
 				left.computeIfPresent(item, (key, held) -> Math.max(0, held - count));
 				placed.merge(item, count, Integer::sum);
@@ -595,8 +619,8 @@ public class Colony {
 		this.board.removeOpenIf(job -> isStairCraft(job) && targets.contains(job.target()));
 		this.builds.remove(id);
 		this.projects.replaceAll(project -> project.without(id));
-		this.projects.stream().filter(project -> project.plans().isEmpty()).forEach(project -> this.waiting.remove(project.id()));
-		this.projects.removeIf(project -> project.plans().isEmpty());
+		this.projects.stream().filter(Project::isEmpty).forEach(project -> this.waiting.remove(project.id()));
+		this.projects.removeIf(Project::isEmpty);
 		this.indexBatches();
 		this.batchStates.keySet().removeAll(jobs);
 		this.blockedSteps.removeIf(blocked -> jobs.contains(blocked.plan()));
@@ -920,13 +944,13 @@ public class Colony {
 	}
 
 	/** Moves the mine: builders dig the new shaft instead of the old one, and miners wait for it. */
-	public void setMineshaft(Mineshaft shaft) {
+	public Project setMineshaft(Mineshaft shaft) {
 		this.mineshaft.ifPresent(old -> this.removeBuild(old.plan()));
 		this.mineshaft = Optional.of(shaft);
 		this.shaftBlocks = shaft.protectedBlocks();
 		this.shaftOpen = shaft.keepOpen();
 		this.board.removeOpenIf(job -> job.type() == JobType.MINE_BRANCH);
-		this.addBuild(MINESHAFT, shaft.plan());
+		return this.addBuild(MINESHAFT, shaft.plan());
 	}
 
 	/** The crop field the colony started itself, if it needed one. */

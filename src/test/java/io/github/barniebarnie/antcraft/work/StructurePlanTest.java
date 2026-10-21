@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -200,5 +201,23 @@ class StructurePlanTest {
 	@Test
 	void aSinglePaletteTemplateHasOnePalette() {
 		assertEquals(1, RegionPlan.paletteCount(template(2, 2, 1, wall)));
+	}
+
+	/** The house a new colony builds: 5x4x5, a cobblestone floor, oak plank walls and roof, a door at the front and three straw beds. */
+	@Test
+	void theBundledStarterHouseLoadsWithItsBlocks() {
+		Map<BlockPos, BlockState> house = placed(RegionPlan.load(VanillaData.structure("starter_house"), BlockPos.ZERO, Mirror.NONE, Rotation.NONE, 0).orElseThrow());
+
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 4, 0, 4)) {
+			assertEquals(cobble, house.get(pos), "floor at " + pos.toShortString());
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 3, 0, 4, 3, 4)) {
+			assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), house.get(pos), "roof at " + pos.toShortString());
+		}
+		assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), house.get(new BlockPos(0, 1, 2)), "no wall");
+		assertEquals(Blocks.OAK_PLANKS.defaultBlockState(), house.get(new BlockPos(4, 2, 4)), "no wall");
+		assertTrue(house.get(new BlockPos(2, 1, 0)).is(Blocks.OAK_DOOR), "no door at the front: " + house.get(new BlockPos(2, 1, 0)));
+		assertEquals(3, house.values().stream().filter(state -> state.is(Blocks.STRAW_BED)).count(), "not three beds: " + house);
+		assertEquals(air, house.get(new BlockPos(2, 1, 1)), "the way in is blocked");
 	}
 }

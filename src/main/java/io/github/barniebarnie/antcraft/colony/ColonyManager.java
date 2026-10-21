@@ -108,6 +108,13 @@ public class ColonyManager extends SavedData {
 		return colony;
 	}
 
+	/** Starts the starter projects of {@code colony}, just founded (see {@link StarterProjects}). */
+	public void startProjects(ServerLevel level, Colony colony) {
+		LevelWorldView view = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
+		StarterProjects.start(colony, level::getBlockState, view, pos -> isWorkable(level, colony, pos), AntCraftConfig.mineshaftLevels(),
+			level.getServer().getStructureTemplateManager().get(StarterProjects.HOUSE).orElse(null));
+	}
+
 	public void remove(BlockPos core) {
 		this.colonies.values().removeIf(colony -> colony.core().equals(core));
 	}
@@ -195,7 +202,10 @@ public class ColonyManager extends SavedData {
 				.ifPresent(colony::setField);
 		}
 		colony.field().ifPresent(field -> {
-			List<BlockPos> toPlant = field.toPlant(pos -> level.getBlockState(pos).getBlock() instanceof CropBlock);
+			// Not while a plan, such as the farm's, still has to ready the spot.
+			Set<BlockPos> open = colony.keepOpen();
+			List<BlockPos> toPlant = field.toPlant(pos -> level.getBlockState(pos).getBlock() instanceof CropBlock).stream()
+				.filter(pos -> !open.contains(pos) && !open.contains(pos.below())).toList();
 			colony.board().removeOpenIf(job -> job.type() == JobType.PLANT_CROP && !toPlant.contains(job.target()));
 			toPlant.forEach(pos -> colony.board().post(JobType.PLANT_CROP, pos, Farming.plantTool(level.getBlockState(pos.below()))));
 		});

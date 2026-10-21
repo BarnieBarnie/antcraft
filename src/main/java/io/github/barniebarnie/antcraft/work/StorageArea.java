@@ -9,7 +9,9 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
@@ -81,6 +83,42 @@ public record StorageArea(BlockPos origin) {
 				return plan.map(p -> OptionalInt.of(p.steps().size())).orElse(OptionalInt.empty());
 			});
 		return site.map(plans::get);
+	}
+
+	/**
+	 * The plan that sets the area up: levelled at its floor (see {@link Terraform}), then the first chest placed.
+	 * Empty if both are done.
+	 */
+	public Optional<BuildPlan> plan(Function<BlockPos, BlockState> world) {
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		List<BuildPlan.Batch> batches = new ArrayList<>();
+		Terraform.plan(world, this.origin.below(), this.origin.offset(WIDTH - 1, 1, DEPTH - 1), this.origin.getY() - 1).ifPresent(level -> {
+			steps.addAll(level.steps());
+			batches.addAll(level.batches());
+		});
+		BuildPlan.Step chest = new BuildPlan.Step(this.chestSpots().getFirst(), Blocks.CHEST.defaultBlockState());
+		if (!chest.isDone(world.apply(chest.pos()))) {
+			batches.add(new BuildPlan.Batch(steps.size(), steps.size() + 1, IntStream.range(0, batches.size()).boxed().toList()));
+			steps.add(chest);
+		}
+		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches));
+	}
+
+	/**
+	 * Where a new colony sets up its storage: at the core's level near it, clear of the core and of the {@code avoid}
+	 * areas, with every block {@code workable}, needing the smallest {@link #plan}, the nearest of those.
+	 */
+	public static Optional<StorageArea> site(BlockPos core, int radius, List<BoundingBox> avoid, Function<BlockPos, BlockState> world,
+			Predicate<BlockPos> workable) {
+		return Sites.cheapest(core, Math.min(LEVEL_REACH, radius - WIDTH / 2), avoid, pos -> new StorageArea(pos.offset(-WIDTH / 2, 0, -DEPTH / 2)),
+			StorageArea::area, storage -> {
+				for (BlockPos pos : BlockPos.betweenClosed(storage.origin.below(), storage.origin.offset(WIDTH - 1, 1, DEPTH - 1))) {
+					if (!workable.test(pos)) {
+						return OptionalInt.empty();
+					}
+				}
+				return OptionalInt.of(storage.plan(world).map(plan -> plan.steps().size()).orElse(0));
+			});
 	}
 
 	private boolean isFlat(Predicate<BlockPos> isFloor, Predicate<BlockPos> isOpen) {
