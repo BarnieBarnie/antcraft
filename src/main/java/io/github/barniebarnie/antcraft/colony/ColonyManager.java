@@ -41,6 +41,7 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -363,8 +364,13 @@ public class ColonyManager extends SavedData {
 	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have) {
 		colony.postBuildJobs();
 		Item pickaxe = bestPickaxe(level, colony, have);
-		colony.declareBuildNeeds(level::getBlockState, step -> BuilderGoal.isPossible(level, step),
-			tool -> ToolKind.PICKAXE.rank(pickaxe) >= ToolKind.PICKAXE.rank(tool));
+		// A pickaxe on order that the colony holds the materials for counts too, so no bot digs the batch by hand
+		// while one is being made; a colony that has to gather them first digs by hand meanwhile.
+		ToolKind kind = ToolKind.PICKAXE;
+		Stream<Item> made = colony.orders().keySet().stream().filter(kind.tiers()::contains)
+			.filter(order -> ToolUpgrade.makeableNow(order, have, GameRecipeBook.of(level.getServer()), item -> false));
+		Item coming = Stream.concat(Stream.ofNullable(pickaxe), made).max(Comparator.comparingInt(kind::rank)).orElse(null);
+		colony.declareBuildNeeds(level::getBlockState, step -> BuilderGoal.isPossible(level, step), tool -> kind.rank(coming) >= kind.rank(tool));
 		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for.
 		Map<Item, Integer> materials = StockPlanner.total(colony.builds().stream()
 			.map(plan -> plan.materials(level::getBlockState, step -> BuilderGoal.isPossible(level, step))).toList());

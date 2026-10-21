@@ -207,6 +207,88 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A plan to dig four stone blocks, and a member with a wooden pickaxe that breaks after the second. */
+	private static AntBot digsStoneWithAPickaxeAboutToBreak(GameTestHelper helper, Colony colony) {
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		for (BlockPos pos : List.of(new BlockPos(4, 1, 4), new BlockPos(5, 1, 4), new BlockPos(4, 1, 5), new BlockPos(5, 1, 5))) {
+			helper.setBlock(pos, Blocks.STONE);
+			steps.add(BuildPlan.Step.clear(helper.absolutePos(pos)));
+		}
+		colony.addBuild(new BuildPlan(steps));
+		AntBot builder = member(helper, colony, 2, 4);
+		ItemStack pickaxe = new ItemStack(Items.WOODEN_PICKAXE);
+		pickaxe.setDamageValue(pickaxe.getMaxDamage() - 2);
+		builder.getInventory().addItem(pickaxe);
+		return builder;
+	}
+
+	private static long stoneLeft(GameTestHelper helper) {
+		return Stream.of(new BlockPos(4, 1, 4), new BlockPos(5, 1, 4), new BlockPos(4, 1, 5), new BlockPos(5, 1, 5))
+			.filter(pos -> helper.getBlockState(pos).is(Blocks.STONE)).count();
+	}
+
+	/** A pickaxe that breaks mid-batch is replaced from the core at once, not on the next upgrade check, and the batch dug with it. */
+	@GameTest(maxTicks = 800)
+	public void fetchesAnotherPickaxeAtOnceWhenItsPickaxeBreaks(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
+		AntBot builder = digsStoneWithAPickaxeAboutToBreak(helper, colony);
+
+		long[] broke = {-1};
+		long[] stone = {4};
+		helper.onEachTick(() -> {
+			long now = helper.getLevel().getGameTime();
+			boolean has = ToolKind.PICKAXE.bestCarried(builder) != null;
+			if (broke[0] < 0 && !has) {
+				broke[0] = now;
+				stone[0] = stoneLeft(helper);
+			}
+			if (broke[0] >= 0 && !has) {
+				helper.assertTrue(now - broke[0] <= 50, "no new pickaxe fetched " + (now - broke[0]) + " ticks after the old one broke");
+				helper.assertTrue(stoneLeft(helper) == stone[0], "stone dug by hand");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(broke[0] >= 0, "pickaxe never broke");
+			helper.assertTrue(stoneLeft(helper) == 0, "stone left to dig");
+			helper.assertTrue(core(helper).countItem(Items.WOODEN_PICKAXE) == 0, "pickaxe left in the core");
+		});
+	}
+
+	/**
+	 * With no other pickaxe in the core, a builder whose pickaxe breaks hands the batch back rather than dig by hand,
+	 * and the colony orders one; made from the log in the core, it digs the rest with it.
+	 */
+	@GameTest(maxTicks = 1200)
+	public void handsTheBatchBackAndOrdersAPickaxeWhenItsPickaxeBreaks(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_LOG, 2));
+		AntBot builder = digsStoneWithAPickaxeAboutToBreak(helper, colony);
+
+		long[] broke = {-1};
+		long[] stone = {4};
+		boolean[] handedBack = {false};
+		boolean[] ordered = {false};
+		helper.onEachTick(() -> {
+			boolean has = ToolKind.PICKAXE.bestCarried(builder) != null;
+			if (broke[0] < 0 && !has) {
+				broke[0] = helper.getLevel().getGameTime();
+				stone[0] = stoneLeft(helper);
+			}
+			if (broke[0] >= 0 && !has) {
+				helper.assertTrue(stoneLeft(helper) == stone[0], "stone dug by hand");
+				handedBack[0] |= colony.board().jobOf(builder.getUUID()).isEmpty();
+				ordered[0] |= colony.orders().containsKey(Items.WOODEN_PICKAXE);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(broke[0] >= 0, "pickaxe never broke");
+			helper.assertTrue(handedBack[0], "batch not handed back");
+			helper.assertTrue(ordered[0], "no pickaxe ordered");
+			helper.assertTrue(stoneLeft(helper) == 0, "stone left to dig");
+		});
+	}
+
 	/** Runs a command as the server would for an operator standing at the colony core. */
 	private static void command(GameTestHelper helper, PermissionSet permissions, String command) {
 		CommandSourceStack source = helper.getLevel().getServer().createCommandSourceStack()

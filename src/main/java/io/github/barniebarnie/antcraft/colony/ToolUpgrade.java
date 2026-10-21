@@ -59,7 +59,7 @@ public final class ToolUpgrade {
 		return current == null && !tiers.isEmpty() ? Optional.of(tiers.getFirst()) : Optional.empty();
 	}
 
-	private static <I> boolean makeableNow(I item, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+	static <I> boolean makeableNow(I item, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
 		Map<I, Integer> available = new HashMap<>(stock);
 		available.remove(item);
 		TaskPlanner.Plan<I> plan = TaskPlanner.plan(item, 1, available, book, gatherable);

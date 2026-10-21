@@ -96,6 +96,9 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** Whether the executor is still at work, on the job or on what follows it, or the bot on work between jobs. */
 	private boolean busy;
 	private long nextCheck;
+	/** Fetches the tool the job declares once the bot carries none of its kind, such as after its own broke. */
+	private final ColonyWorkGoal toolFetch;
+	private boolean fetchingTool;
 
 	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer, MinerGoal miner, CrafterGoal crafter, HaulerGoal hauler,
 			BuilderGoal builder) {
@@ -125,6 +128,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		}
 		upkeeps.addAll(List.of(builder, miner, farmer, hauler));
 		this.upkeeps = List.copyOf(upkeeps);
+		this.toolFetch = new ColonyWorkGoal(bot) {};
 		this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
 	}
 
@@ -166,6 +170,8 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			this.active = null;
 		}
 		this.stopUpkeep();
+		this.toolFetch.resetMovement();
+		this.fetchingTool = false;
 		this.bot.setWorking(false);
 	}
 
@@ -193,6 +199,10 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				}
 			}
 			this.busy = this.upkeep.upkeep(level, colony.get()) || this.startUpkeep(level, colony.get());
+			return;
+		}
+		if (this.job != null && this.lostTool(level, colony.get())) {
+			this.busy = true;
 			return;
 		}
 		if (this.active != null) {
@@ -251,6 +261,36 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Whether the bot is off to fetch the tool its job declares, as it carries none of that kind, such as once its
+	 * own broke mid-job. With none in the core it orders one and hands the job back rather than working by hand, so
+	 * a bot that carries one takes it; the job score keeps this one off it meanwhile.
+	 */
+	private boolean lostTool(ServerLevel level, Colony colony) {
+		Optional<ToolKind> kind = colony.board().jobOf(this.bot.getUUID()).flatMap(Job::tool).flatMap(ToolKind::of);
+		boolean lost = kind.isPresent() && kind.get().bestCarried(this.bot) == null;
+		if (lost != this.fetchingTool && this.active instanceof ColonyWorkGoal executor) {
+			// The executor walks and breaks afresh from wherever the fetch leaves the bot.
+			executor.resetMovement();
+		}
+		this.fetchingTool = lost;
+		if (!lost) {
+			return false;
+		}
+		this.toolFetch.checkToolNow();
+		if (this.toolFetch.upgradeTool(level, colony, kind.get(), () -> true)) {
+			return true;
+		}
+		colony.board().release(this.bot.getUUID());
+		this.job = null;
+		this.fetchingTool = false;
+		if (this.active != null) {
+			this.active.reset();
+			this.active = null;
+		}
+		return false;
 	}
 
 	/**
