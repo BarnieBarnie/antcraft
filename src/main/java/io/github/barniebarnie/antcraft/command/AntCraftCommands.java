@@ -36,6 +36,7 @@ import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
+import net.minecraft.commands.arguments.TemplateMirrorArgument;
 import net.minecraft.commands.arguments.TemplateRotationArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.item.ItemArgument;
@@ -52,6 +53,7 @@ import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.phys.Vec3;
@@ -131,10 +133,14 @@ public final class AntCraftCommands {
 								ctx.getSource().getServer().getStructureTemplateManager().listTemplates(), builder))
 							.then(Commands.argument("at", BlockPosArgument.blockPos())
 								.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
-									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE))
+									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE, Mirror.NONE))
 								.then(Commands.argument("rotation", TemplateRotationArgument.templateRotation())
 									.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
-										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation")))))))
+										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"), Mirror.NONE))
+									.then(Commands.argument("mirror", TemplateMirrorArgument.templateMirror())
+										.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
+											BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
+											TemplateMirrorArgument.getMirror(ctx, "mirror"))))))))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
@@ -366,7 +372,7 @@ public final class AntCraftCommands {
 	 * Adds a build from a structure template: one bundled under {@code data/<namespace>/structure/}
 	 * or one a structure block saved in the world. Block states only, like {@code build copy}.
 	 */
-	private static int loadBuild(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation) {
+	private static int loadBuild(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation, Mirror mirror) {
 		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_COPY)) {
 			return 0;
 		}
@@ -385,7 +391,7 @@ public final class AntCraftCommands {
 		if (colony.isEmpty()) {
 			return 0;
 		}
-		Optional<BuildPlan> plan = RegionPlan.load(template.get(), at, rotation);
+		Optional<BuildPlan> plan = RegionPlan.load(template.get(), at, mirror, rotation);
 		if (plan.isEmpty()) {
 			source.sendFailure(Component.translatable("commands.antcraft.colony.build.nothing_to_copy"));
 			return 0;

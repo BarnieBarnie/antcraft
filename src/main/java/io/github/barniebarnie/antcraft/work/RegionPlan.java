@@ -72,35 +72,36 @@ public final class RegionPlan {
 	}
 
 	/**
-	 * A plan that builds a structure template (a structure block's {@code .nbt}) turned by
-	 * {@code rotation}, with the lowest corner of the turned box at {@code at}, batched like
+	 * A plan that builds a structure template (a structure block's {@code .nbt}) mirrored by
+	 * {@code mirror}, then turned by {@code rotation}, as a structure block places it, with the lowest corner of the turned box at {@code at}, batched like
 	 * {@link #copy}. Structure void is left as it is; block-entity contents and entities are skipped.
 	 */
-	public static Optional<BuildPlan> load(StructureTemplate template, BlockPos at, Rotation rotation) {
+	public static Optional<BuildPlan> load(StructureTemplate template, BlockPos at, Mirror mirror, Rotation rotation) {
 		// ponytail: the template keeps its blocks private, so read them back from its saved form.
 		CompoundTag tag = template.save(new CompoundTag());
 		ListTag paletteTag = tag.getList(StructureTemplate.PALETTE_TAG)
 			.orElseGet(() -> tag.getListOrEmpty(StructureTemplate.PALETTE_LIST_TAG).getListOrEmpty(0));
 		List<BlockState> palette = new ArrayList<>();
 		for (int i = 0; i < paletteTag.size(); i++) {
-			palette.add(NbtUtils.readBlockState(BuiltInRegistries.BLOCK, paletteTag.getCompoundOrEmpty(i)).rotate(rotation));
+			palette.add(NbtUtils.readBlockState(BuiltInRegistries.BLOCK, paletteTag.getCompoundOrEmpty(i)).mirror(mirror).rotate(rotation));
 		}
 		Map<BlockPos, BlockState> blocks = new HashMap<>();
 		ListTag blocksTag = tag.getListOrEmpty(StructureTemplate.BLOCKS_TAG);
 		for (int i = 0; i < blocksTag.size(); i++) {
 			CompoundTag block = blocksTag.getCompoundOrEmpty(i);
 			ListTag pos = block.getListOrEmpty(StructureTemplate.BLOCK_TAG_POS);
-			blocks.put(turn(new BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)), rotation),
+			blocks.put(turn(new BlockPos(pos.getIntOr(0, 0), pos.getIntOr(1, 0), pos.getIntOr(2, 0)), mirror, rotation),
 				palette.get(block.getIntOr(StructureTemplate.BLOCK_TAG_STATE, 0)));
 		}
 		Vec3i size = template.getSize();
 		if (size.getX() <= 0 || size.getY() <= 0 || size.getZ() <= 0) {
 			return Optional.empty();
 		}
-		return copy(blocks::get, turn(BlockPos.ZERO, rotation), turn(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), rotation), at);
+		return copy(blocks::get, turn(BlockPos.ZERO, mirror, rotation),
+			turn(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), mirror, rotation), at);
 	}
 
-	private static BlockPos turn(BlockPos pos, Rotation rotation) {
-		return StructureTemplate.transform(pos, Mirror.NONE, rotation, BlockPos.ZERO);
+	private static BlockPos turn(BlockPos pos, Mirror mirror, Rotation rotation) {
+		return StructureTemplate.transform(pos, mirror, rotation, BlockPos.ZERO);
 	}
 }
