@@ -450,7 +450,9 @@ public class Colony {
 			// Steps any solid block will do take whichever fill block the colony has: a terraform's fill sand too, a mineshaft's wall only one that holds.
 			Map<Item, Integer> holding = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, false)).toList());
 			Map<Item, Integer> resting = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, true)).toList());
-			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, left));
+			// A mineshaft's steps take whichever stone stairs the colony has; only what those lack is ordered, as cobblestone stairs.
+			Map<Item, Integer> stairs = StockPlanner.total(plans.stream().map(plan -> plan.stoneStairMaterials(world)).toList());
+			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, stairs, left));
 			// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
 			if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && left.getOrDefault(Items.BUCKET, 0) <= 0) {
 				needed.put(Items.BUCKET, 1);

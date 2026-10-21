@@ -173,19 +173,26 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 * walls and floors are; only air, a fluid or the like is replaced with {@code state}. With
 	 * {@code mayFall} as well, a block that falls, such as sand, may stand in where it rests on
 	 * what is below (see {@link #fillBlocks}); without, the block must hold on its own, such as a
-	 * mineshaft's ceiling, or a wall the shaft is later dug out beside and below.
+	 * mineshaft's ceiling, or a wall the shaft is later dug out beside and below. With
+	 * {@code anyStoneStairs}, any of the {@link #STONE_STAIRS} the same way round will do, such as
+	 * for a mineshaft's steps.
 	 */
-	public record Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall) {
+	public record Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall, boolean anyStoneStairs) {
 		/** Saves from before {@code may_fall} take only fillers that hold, which is safe for any step. */
 		public static final Codec<Step> CODEC = RecordCodecBuilder.create(i -> i.group(
 			BlockPos.CODEC.fieldOf("pos").forGetter(Step::pos),
 			BlockState.CODEC.optionalFieldOf("state", Blocks.AIR.defaultBlockState()).forGetter(Step::state),
 			Codec.BOOL.optionalFieldOf("any_solid", false).forGetter(Step::anySolid),
-			Codec.BOOL.optionalFieldOf("may_fall", false).forGetter(Step::mayFall)
+			Codec.BOOL.optionalFieldOf("may_fall", false).forGetter(Step::mayFall),
+			Codec.BOOL.optionalFieldOf("any_stone_stairs", false).forGetter(Step::anyStoneStairs)
 		).apply(i, Step::new));
 
 		public Step {
 			pos = pos.immutable();
+		}
+
+		public Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall) {
+			this(pos, state, anySolid, mayFall, false);
 		}
 
 		public Step(BlockPos pos, BlockState state, boolean anySolid) {
@@ -203,6 +210,11 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		 */
 		public Set<Item> fillBlocks(BlockState below) {
 			return this.mayFall && !FallingBlock.isFree(below) ? FILL_BLOCKS : HOLDING_FILL_BLOCKS;
+		}
+
+		/** Places the stair {@code state}, or any other of the {@link #STONE_STAIRS} the same way round. */
+		public static Step stoneStairs(BlockPos pos, BlockState state) {
+			return new Step(pos, state, false, false, true);
 		}
 
 		public static Step clear(BlockPos pos) {
@@ -268,7 +280,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			if (this.anySolid) {
 				return world.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, Direction.UP);
 			}
-			return this.isClear() ? world.isAir() : matches(this.dry(), world);
+			return this.isClear() ? world.isAir() : matches(this.dry(), world, this.anyStoneStairs);
 		}
 
 		/**
@@ -297,8 +309,8 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			return this.isPlaced(world) && (this.anySolid || this.isWaterlogged() == isWaterlogged(world));
 		}
 
-		private static boolean matches(BlockState wanted, BlockState world) {
-			if (!world.is(wanted.getBlock())) {
+		private static boolean matches(BlockState wanted, BlockState world, boolean anyStoneStairs) {
+			if (!world.is(wanted.getBlock()) && !(anyStoneStairs && STONE_STAIRS.contains(world.getBlock().asItem()))) {
 				return false;
 			}
 			for (Property<?> property : wanted.getProperties()) {
@@ -421,9 +433,30 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 * of another kind can stand in for: those that {@code mayFall}, or those that must hold.
 	 */
 	public Map<Item, Integer> fillMaterials(Function<BlockPos, BlockState> world, boolean mayFall) {
+		return this.materialsOf(world, step -> step.anySolid() && step.mayFall() == mayFall);
+	}
+
+	/**
+	 * The stairs a step of {@link Step#anyStoneStairs} takes: stone ones, never wooden, which burn.
+	 * Its own block, cobblestone stairs, is what the colony makes when it holds none of these.
+	 */
+	// ponytail: a fixed list rather than a tag, so unit tests see it; make it a tag if other mods' stairs should count.
+	public static final Set<Item> STONE_STAIRS = Set.of(Items.COBBLESTONE_STAIRS, Items.STONE_STAIRS, Items.STONE_BRICK_STAIRS,
+		Items.MOSSY_COBBLESTONE_STAIRS, Items.MOSSY_STONE_BRICK_STAIRS, Items.COBBLED_DEEPSLATE_STAIRS, Items.POLISHED_DEEPSLATE_STAIRS,
+		Items.DEEPSLATE_BRICK_STAIRS, Items.DEEPSLATE_TILE_STAIRS, Items.ANDESITE_STAIRS, Items.POLISHED_ANDESITE_STAIRS,
+		Items.DIORITE_STAIRS, Items.POLISHED_DIORITE_STAIRS, Items.GRANITE_STAIRS, Items.POLISHED_GRANITE_STAIRS,
+		Items.BLACKSTONE_STAIRS, Items.POLISHED_BLACKSTONE_STAIRS, Items.POLISHED_BLACKSTONE_BRICK_STAIRS,
+		Items.TUFF_STAIRS, Items.POLISHED_TUFF_STAIRS, Items.TUFF_BRICK_STAIRS);
+
+	/** The part of {@link #materials(Function)} for steps of {@link Step#anyStoneStairs}, which other stone stairs can stand in for. */
+	public Map<Item, Integer> stoneStairMaterials(Function<BlockPos, BlockState> world) {
+		return this.materialsOf(world, Step::anyStoneStairs);
+	}
+
+	private Map<Item, Integer> materialsOf(Function<BlockPos, BlockState> world, Predicate<Step> which) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
 		for (Step step : this.steps) {
-			if (step.anySolid() && step.mayFall() == mayFall && !step.isPlaced(world.apply(step.pos()))) {
+			if (which.test(step) && !step.isPlaced(world.apply(step.pos()))) {
 				materials.merge(step.item(), 1, Integer::sum);
 			}
 		}
@@ -451,6 +484,15 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 */
 	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
 			Map<Item, Integer> has) {
+		return shortfall(materials, holding, resting, Map.of(), has);
+	}
+
+	/**
+	 * {@link #shortfall(Map, Map, Map, Map)}, where the {@code stairs} of steps any stone stairs will do
+	 * (see {@link #stoneStairMaterials}) take the {@link #STONE_STAIRS} the colony has to spare.
+	 */
+	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
+			Map<Item, Integer> stairs, Map<Item, Integer> has) {
 		Map<Item, Integer> needed = new LinkedHashMap<>();
 		materials.forEach((item, count) -> {
 			if (count > has.getOrDefault(item, 0)) {
@@ -463,6 +505,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		cover(needed, new LinkedHashMap<>(holding), spareHolding);
 		cover(needed, rest, spareFalling);
 		cover(needed, rest, spareHolding);
+		cover(needed, new LinkedHashMap<>(stairs), new int[] {spare(STONE_STAIRS, materials, has)});
 		needed.values().removeIf(count -> count <= 0);
 		return needed;
 	}
@@ -488,7 +531,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 * What a bot needs for the steps left with {@code world} as it is, for the job score: {@code tool} is the
 	 * best pickaxe tier a block in the way needs, and {@code item} the one item every step left places, if
 	 * that is all there is left to do. While there is anything else, such as blocks to dig, a step any solid
-	 * block will do or a fluid poured from a bucket filled at a source, a bot can go on without the item.
+	 * block or any stone stairs will do, or a fluid poured from a bucket filled at a source, a bot can go on without the item.
 	 */
 	public record Needs(Optional<Item> item, Optional<Item> tool) {
 	}
@@ -510,7 +553,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 				continue;
 			}
 			Item item = step.item(current);
-			if (step.anySolid() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem) {
+			if (step.anySolid() || step.anyStoneStairs() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem) {
 				other = true;
 			} else {
 				items.add(item);

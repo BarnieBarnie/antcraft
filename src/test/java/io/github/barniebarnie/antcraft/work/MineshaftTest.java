@@ -599,6 +599,13 @@ class MineshaftTest {
 					assertTrue(floor.is(Blocks.COBBLESTONE_STAIRS), "no stair block under " + upper + ": " + floor);
 					assertEquals(up, floor.getValue(StairBlock.FACING), "the stair under " + upper + " faces the wrong way");
 					assertEquals(Half.BOTTOM, floor.getValue(StairBlock.HALF));
+					// Any stone stairs will do, the same way round; wooden ones will not.
+					BuildPlan.Step step = steps.get(upper.below());
+					assertTrue(step.isDone(floor), "cobblestone stairs do not count under " + upper);
+					assertTrue(step.isDone(Blocks.STONE_BRICK_STAIRS.withPropertiesOf(floor)), "stone brick stairs do not count under " + upper);
+					assertFalse(step.isDone(Blocks.OAK_STAIRS.withPropertiesOf(floor)), "oak stairs count under " + upper);
+					assertFalse(step.isDone(Blocks.STONE_BRICK_STAIRS.withPropertiesOf(floor).setValue(StairBlock.FACING, up.getOpposite())),
+						"stone brick stairs the wrong way round count under " + upper);
 					stairs++;
 				}
 			}

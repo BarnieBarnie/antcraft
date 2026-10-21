@@ -21,6 +21,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -64,9 +65,13 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static int stairBlocks(GameTestHelper helper) {
+		return stairBlocks(helper, Blocks.COBBLESTONE_STAIRS);
+	}
+
+	private static int stairBlocks(GameTestHelper helper, Block block) {
 		int found = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 7, 7)) {
-			if (helper.getBlockState(pos).is(Blocks.COBBLESTONE_STAIRS)) {
+			if (helper.getBlockState(pos).is(block)) {
 				found++;
 			}
 		}
@@ -94,6 +99,34 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(stairBlocks(helper) == 4, "stair blocks placed: " + stairBlocks(helper));
+			for (BuildPlan.Step step : shaft.plan().steps()) {
+				BlockState state = helper.getLevel().getBlockState(step.pos());
+				helper.assertTrue(step.isDone(state), "not done at " + relative(helper, step.pos()) + ": " + state);
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
+		});
+	}
+
+	/** With stone brick stairs in the core and no cobblestone ones, the bots put those on the steps and make none. */
+	@GameTest(maxTicks = 3000)
+	public void botsBuildTheStepsFromTheStoneStairsTheCoreHas(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.TORCH, 8));
+		core(helper).setItem(1, new ItemStack(Items.CHEST, 1));
+		core(helper).setItem(2, new ItemStack(Items.STONE_BRICK_STAIRS, 4));
+		Mineshaft shaft = shaft(helper, 3);
+		colony.setMineshaft(shaft);
+		for (BlockPos at : List.of(new BlockPos(7, 5, 0), new BlockPos(7, 5, 7))) {
+			member(helper, colony, at).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		}
+		helper.onEachTick(() -> {
+			if (colony.orders().containsKey(Items.COBBLESTONE_STAIRS)) {
+				helper.fail("ordered cobblestone stairs");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(stairBlocks(helper, Blocks.STONE_BRICK_STAIRS) == 4, "stone brick stairs placed: " + stairBlocks(helper, Blocks.STONE_BRICK_STAIRS));
 			for (BuildPlan.Step step : shaft.plan().steps()) {
 				BlockState state = helper.getLevel().getBlockState(step.pos());
 				helper.assertTrue(step.isDone(state), "not done at " + relative(helper, step.pos()) + ": " + state);

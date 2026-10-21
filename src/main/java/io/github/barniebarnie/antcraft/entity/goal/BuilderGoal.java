@@ -384,12 +384,13 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * with a fill block such as cobblestone or sand that the bot or the core has, when neither has
 	 * the step's own block. Sand and gravel only where the step may fall and rests on the block
 	 * below (see {@link BuildPlan.Step#fillBlocks}), so a mineshaft's wall never drops into the shaft.
+	 * Likewise a step any stone stairs will do takes whichever of {@link BuildPlan#STONE_STAIRS} there is.
 	 */
 	private BuildPlan.Step withFiller(ServerLevel level, @Nullable Container core, BuildPlan.Step step) {
-		if (!step.anySolid() || this.has(core, stack -> stack.is(step.item()))) {
+		if (!step.anySolid() && !step.anyStoneStairs() || this.has(core, stack -> stack.is(step.item()))) {
 			return step;
 		}
-		Set<Item> fillers = step.fillBlocks(level.getBlockState(step.pos().below()));
+		Set<Item> fillers = step.anyStoneStairs() ? BuildPlan.STONE_STAIRS : step.fillBlocks(level.getBlockState(step.pos().below()));
 		Predicate<ItemStack> usable = stack -> fillers.contains(stack.getItem());
 		SimpleContainer inventory = this.bot.getInventory();
 		int slot = findSlot(inventory, usable);
@@ -397,7 +398,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (filler == null && core != null && (slot = findSlot(core, usable)) >= 0) {
 			filler = core.getItem(slot).getItem();
 		}
-		return filler == null ? step : new BuildPlan.Step(step.pos(), Block.byItem(filler).defaultBlockState(), true, step.mayFall());
+		// Stairs keep the way they face.
+		return filler == null ? step
+			: new BuildPlan.Step(step.pos(), Block.byItem(filler).withPropertiesOf(step.state()), step.anySolid(), step.mayFall(), step.anyStoneStairs());
 	}
 
 	/** Every position a plan of the colony puts a block or clears, where scaffold must never go. */
@@ -811,10 +814,16 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private void fetch(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, Item item) {
 		Map<Item, Integer> needed = plan.materials(level::getBlockState);
 		// Steps any solid block will do take whichever filler there is that they can use.
-		Set<Item> fills = plan.wantedFillBlocks(level::getBlockState);
+		Set<Item> fills = new HashSet<>(plan.wantedFillBlocks(level::getBlockState));
 		int fillers = plan.steps().stream().filter(step -> step.anySolid() && !step.isDone(level.getBlockState(step.pos()))
 			&& (step.mayFall() || BuildPlan.HOLDING_FILL_BLOCKS.contains(item))).mapToInt(step -> 1).sum();
-		int count = fills.contains(item) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
+		// Likewise steps any stone stairs will do take whichever stone stairs there are.
+		int stairs = plan.stoneStairMaterials(level::getBlockState).values().stream().mapToInt(Integer::intValue).sum();
+		if (stairs > 0) {
+			fills.addAll(BuildPlan.STONE_STAIRS);
+		}
+		int count = BuildPlan.STONE_STAIRS.contains(item) && stairs > 0 ? Math.max(stairs, needed.getOrDefault(item, 1))
+			: fills.contains(item) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
 		if (core == null) {
 			this.cooldown = IDLE_TICKS;
 			return;

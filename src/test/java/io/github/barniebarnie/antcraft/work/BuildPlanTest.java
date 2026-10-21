@@ -121,6 +121,23 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void stoneStairStepsTakeWhicheverStoneStairsTheColonyHas() {
+		BuildPlan plan = new BuildPlan(List.of(BuildPlan.Step.stoneStairs(A, Blocks.COBBLESTONE_STAIRS.defaultBlockState()),
+			BuildPlan.Step.stoneStairs(B, Blocks.COBBLESTONE_STAIRS.defaultBlockState())));
+		Function<BlockPos, BlockState> air = pos -> Blocks.AIR.defaultBlockState();
+		Map<net.minecraft.world.item.Item, Integer> materials = plan.materials(air);
+		Map<net.minecraft.world.item.Item, Integer> stairs = plan.stoneStairMaterials(air);
+		assertEquals(Map.of(Items.COBBLESTONE_STAIRS, 2), stairs);
+		assertEquals(Map.of(), BuildPlan.shortfall(materials, Map.of(), Map.of(), stairs, Map.of(Items.STONE_BRICK_STAIRS, 2)),
+			"stone brick stairs stand in for cobblestone stairs");
+		assertEquals(Map.of(Items.COBBLESTONE_STAIRS, 1), BuildPlan.shortfall(materials, Map.of(), Map.of(), stairs, Map.of(Items.STONE_BRICK_STAIRS, 1, Items.OAK_STAIRS, 9)),
+			"wooden stairs do not");
+		assertEquals(Map.of(Items.COBBLESTONE_STAIRS, 2), BuildPlan.shortfall(Map.of(Items.COBBLESTONE_STAIRS, 2), Map.of(), Map.of(), Map.of(), Map.of(Items.STONE_BRICK_STAIRS, 2)),
+			"cobblestone stairs placed as such take no other");
+		assertEquals(Optional.empty(), plan.needs(air).item(), "a job of stone stairs declares no one kind to fetch");
+	}
+
+	@Test
 	void fillStepsTakeWhicheverFillBlockTheColonyHas() {
 		// Five fill steps of dirt, and two cobblestone a wall needs as such.
 		Map<net.minecraft.world.item.Item, Integer> materials = Map.of(Items.DIRT, 5, Items.COBBLESTONE, 2);

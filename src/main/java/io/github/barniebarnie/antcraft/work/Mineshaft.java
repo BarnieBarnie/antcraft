@@ -420,10 +420,10 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 				for (int up = 2; up >= 0; up--) {
 					this.dig(steps, stair.above(up), torches, open);
 				}
-				// Once the step is dug, so the builder stands beside it.
+				// Once the step is dug, so the builder stands beside it; any stone stairs the colony has will do.
 				BlockState floor = stairBlocks.get(stair.below());
 				if (floor != null) {
-					this.place(steps, stair.below(), floor, open);
+					this.place(steps, BuildPlan.Step.stoneStairs(stair.below(), floor), open);
 				}
 			}
 			int y = heights.get(i).getFirst().getY();
@@ -452,7 +452,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	/**
 	 * Whether {@code plan} is this shaft's {@link #plan()} as an older version made it, such as one
 	 * saved before the walls: batch by batch the same steps to dig, light and place the chest, with
-	 * or without the steps any solid block will do.
+	 * or without the steps any solid block will do, and with stairs of cobblestone only or of any stone.
 	 */
 	public boolean isPlan(BuildPlan plan) {
 		BuildPlan current = this.plan();
@@ -461,7 +461,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	}
 
 	private static List<BuildPlan.Step> withoutWalls(BuildPlan plan) {
-		return plan.steps().stream().filter(step -> !step.anySolid()).toList();
+		return plan.steps().stream().filter(step -> !step.anySolid()).map(step -> new BuildPlan.Step(step.pos(), step.state())).toList();
 	}
 
 	/** Ends a batch at step {@code to}, needing the batches {@code needs}; returns it as what the next batch may need. */
@@ -482,13 +482,17 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 
 	/** Keeps the blocks around {@code pos} that are not {@code open} solid, below ground, then puts {@code state} there, or digs it out for air. */
 	private void place(Map<BlockPos, BuildPlan.Step> steps, BlockPos pos, BlockState state, Set<BlockPos> open) {
+		this.place(steps, new BuildPlan.Step(pos, state), open);
+	}
+
+	private void place(Map<BlockPos, BuildPlan.Step> steps, BuildPlan.Step step, Set<BlockPos> open) {
 		for (Direction side : Direction.values()) {
-			BlockPos wall = pos.relative(side);
+			BlockPos wall = step.pos().relative(side);
 			if (wall.getY() < this.top.getY() && !open.contains(wall) && !steps.containsKey(wall)) {
 				steps.put(wall, BuildPlan.Step.solid(wall));
 			}
 		}
-		steps.put(pos, new BuildPlan.Step(pos, state));
+		steps.put(step.pos(), step);
 	}
 
 	/** What the plan never walls in: what it digs out or puts stair blocks in, the halls, the landing chests and the branches. */
