@@ -188,11 +188,12 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			return true;
 		}
 		if (job.type() == JobType.CHOP_LOG) {
-			if (!level.getBlockState(job.target()).is(BlockTags.LOGS)) {
+			List<BlockPos> logs = logsLeft(level, job);
+			if (logs.isEmpty()) {
 				return false;
 			}
 			this.jobId = job.id();
-			this.startTree(level, new TreeScanner.Tree(job.target(), List.of(job.target())));
+			this.startTree(level, new TreeScanner.Tree(logs.getFirst(), logs));
 			this.logJob = true;
 			return true;
 		}
@@ -249,23 +250,34 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Whether this bot could start on the job now: a replant job once it could get the saplings, a log once it
-	 * can get at it and no other bot stands on it or below it in its column, and a tree once its log jobs are done.
-	 * A bot in the column, such as on the pillar it keeps up for the tree's next log, would leave this one to
-	 * climb beside it on a staircase of scaffold, which it falls off when it takes it down.
+	 * Whether this bot could start on the job now: a replant job once it could get the saplings, logs once it
+	 * can get at one of them and no other bot stands on one or below one in its column, and a tree once its log
+	 * jobs are done. A bot in the column, such as on the pillar it keeps up for the tree's next log, would leave
+	 * this one to climb beside it on a staircase of scaffold, which it falls off when it takes it down.
 	 */
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
-		BlockPos log = job.target();
 		return switch (job.type()) {
 			case REPLANT -> this.hasSaplingsFor(level, colony, job);
-			case CHOP_LOG -> TreeScanner.isReachable(new LevelTreeView(level), log)
-				&& level.getEntitiesOfClass(AntBot.class, new AABB(log.getX(), level.getMinY(), log.getZ(), log.getX() + 1, log.getY() + 2, log.getZ() + 1),
-					other -> other != this.bot && other.getOnPos().getX() == log.getX() && other.getOnPos().getZ() == log.getZ()
-						&& other.getOnPos().getY() <= log.getY()).isEmpty();
+			case CHOP_LOG -> {
+				List<BlockPos> logs = logsLeft(level, job);
+				yield TreeScanner.isReachable(new LevelTreeView(level), logs) && logs.stream().noneMatch(log -> this.otherBotUnder(level, log));
+			}
 			case CHOP_TREE -> colony.board().treeReady(job);
 			default -> true;
 		};
+	}
+
+	/** Whether another bot stands on {@code log} or below it in its column. */
+	private boolean otherBotUnder(ServerLevel level, BlockPos log) {
+		return !level.getEntitiesOfClass(AntBot.class, new AABB(log.getX(), level.getMinY(), log.getZ(), log.getX() + 1, log.getY() + 2, log.getZ() + 1),
+			other -> other != this.bot && other.getOnPos().getX() == log.getX() && other.getOnPos().getZ() == log.getZ()
+				&& other.getOnPos().getY() <= log.getY()).isEmpty();
+	}
+
+	/** The logs of a log job still standing: a layer of a tree, or one log for a job saved before logs were grouped. */
+	private static List<BlockPos> logsLeft(ServerLevel level, Job job) {
+		return job.blocks().stream().filter(log -> level.getBlockState(log).is(BlockTags.LOGS)).toList();
 	}
 
 	/** A log of the tree it keeps its scaffold up for: it takes that scaffold down when done (see {@link WorkerGoal}). */
@@ -287,7 +299,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 		List<BlockPos> logs = jobs.stream().filter(job -> job.type() == JobType.CHOP_TREE && job.area().contains(log))
 			.findFirst().map(Job::area).orElse(List.of());
 		boolean next = jobs.stream().anyMatch(job -> job.type() == JobType.CHOP_LOG && job.isOpen() && !job.givenUp()
-			&& logs.contains(job.target()) && level.getBlockState(job.target()).is(BlockTags.LOGS) && this.isReady(level, colony.get(), job));
+			&& logs.contains(job.target()) && this.isReady(level, colony.get(), job));
 		return next ? logs : List.of();
 	}
 

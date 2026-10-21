@@ -953,6 +953,9 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			bots.forEach(bot -> colony.board().jobOf(bot.getUUID())
 				.filter(job -> job.type() == JobType.CHOP_LOG).ifPresent(job -> choppers.add(bot.getUUID())));
+			// A job per layer of the 2x2 trunk, not per log.
+			colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_LOG && job.blocks().size() != 4)
+				.findFirst().ifPresent(job -> helper.fail("a log job for " + job.blocks().size() + " logs"));
 			if (felledAt[0] < 0 && countBlocks(helper, BlockTags.LOGS) == 0) {
 				felledAt[0] = helper.getTick();
 			}

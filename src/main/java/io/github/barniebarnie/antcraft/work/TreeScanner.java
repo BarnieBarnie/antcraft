@@ -102,6 +102,11 @@ public final class TreeScanner {
 		return false;
 	}
 
+	/** Whether a bot can get at any of {@code logs} still standing, such as a layer of a log job (see {@link #isReachable(TreeView, BlockPos)}). */
+	public static boolean isReachable(TreeView view, Collection<BlockPos> logs) {
+		return logs.stream().anyMatch(log -> view.isLog(log) && isReachable(view, log));
+	}
+
 	/**
 	 * Where saplings go to grow {@code tree} back: the four spots of a 2x2 trunk, else its base. The
 	 * square is looked for in the two lowest layers of logs, as the bottom one may be partly cut, and

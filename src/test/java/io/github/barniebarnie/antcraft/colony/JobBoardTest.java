@@ -123,9 +123,10 @@ class JobBoardTest {
 
 		List<Job> logs = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_LOG).toList();
 		assertEquals(tree(3).logs(), logs.stream().map(Job::target).toList());
+		assertTrue(logs.stream().allMatch(job -> job.blocks().equals(List.of(job.target()))), "a job of its own for each log");
 		// Up to 4 above the ground, within reach of a bot standing on it.
 		TreeScanner.TreeView whole = trunk(1);
-		assertEquals(List.of(1, 2, 3, 4), logs.stream().filter(job -> TreeScanner.isReachable(whole, job.target())).map(job -> job.target().getY()).toList());
+		assertEquals(List.of(1, 2, 3, 4), logs.stream().filter(job -> TreeScanner.isReachable(whole, job.blocks())).map(job -> job.target().getY()).toList());
 		// Once the logs under them are cut, the bottom one of the rest is too: a bot pillars up to it.
 		TreeScanner.TreeView cut = trunk(5);
 		assertTrue(TreeScanner.isReachable(cut, new BlockPos(3, 5, 0)));
@@ -134,6 +135,43 @@ class JobBoardTest {
 		Job tree = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE).findFirst().orElseThrow();
 		assertEquals(Optional.of(Items.OAK_SAPLING), tree.item());
 		assertEquals(7, board.jobs().size());
+	}
+
+	@Test
+	void aGiantTrunkGivesAJobPerLayerAndOnlyTheReachableLayersAreReady() {
+		// A 2x2 trunk at (3..4, 1..20, 0..1) on the ground at y=0.
+		List<BlockPos> trunk = new java.util.ArrayList<>();
+		for (int y = 1; y <= 20; y++) {
+			for (BlockPos column : List.of(new BlockPos(3, y, 0), new BlockPos(4, y, 0), new BlockPos(3, y, 1), new BlockPos(4, y, 1))) {
+				trunk.add(column);
+			}
+		}
+		TreeScanner.TreeView view = new TreeScanner.TreeView() {
+			@Override
+			public boolean isLog(BlockPos pos) {
+				return trunk.contains(pos);
+			}
+
+			@Override
+			public boolean isNaturalLeaves(BlockPos pos) {
+				return false;
+			}
+
+			@Override
+			public boolean isOpen(BlockPos pos) {
+				return pos.getY() > 0 && !this.isLog(pos);
+			}
+		};
+		JobBoard board = new JobBoard();
+		assertTrue(board.postTree(new TreeScanner.Tree(trunk.getFirst(), trunk), Optional.empty()));
+
+		List<Job> logs = board.jobs().stream().filter(job -> job.type() == JobType.CHOP_LOG).toList();
+		assertEquals(20, logs.size());
+		for (Job layer : logs) {
+			assertEquals(4, layer.blocks().size());
+			assertTrue(layer.blocks().stream().allMatch(log -> log.getY() == layer.target().getY()), "one layer per job: " + layer.blocks());
+		}
+		assertEquals(List.of(1, 2, 3, 4), logs.stream().filter(job -> TreeScanner.isReachable(view, job.blocks())).map(job -> job.target().getY()).toList());
 	}
 
 	@Test

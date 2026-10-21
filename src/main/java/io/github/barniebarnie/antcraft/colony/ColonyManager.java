@@ -465,7 +465,7 @@ public class ColonyManager extends SavedData {
 			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			LevelTreeView trees = new LevelTreeView(level);
 			// A log job goes once its log does; a tree job stays to pick up the drops and replant the tree.
-			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_LOG && !trees.isLog(job.target()));
+			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_LOG && job.blocks().stream().noneMatch(trees::isLog));
 			// Replanted since, or built over.
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));

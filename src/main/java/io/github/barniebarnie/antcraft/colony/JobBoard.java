@@ -6,12 +6,15 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Item;
 
@@ -21,6 +24,8 @@ import net.minecraft.world.item.Item;
  */
 public class JobBoard {
 	public static final Codec<JobBoard> CODEC = Job.CODEC.listOf().xmap(JobBoard::new, JobBoard::jobs);
+	/** At most how many logs of a layer of a tree one log job takes. */
+	static final int LOGS_PER_JOB = 4;
 
 	private final List<Job> jobs;
 
@@ -133,17 +138,24 @@ public class JobBoard {
 	}
 
 	/**
-	 * Posts a job for each log of {@code tree}, so several bots fell it together, and one for the tree, to pick
-	 * up the drops and replant it with {@code sapling} once they are done (see {@link #treeReady}). Not if a tree
-	 * job covers any of its logs already: that keeps the rest of a tree being felled from being posted as a new
-	 * tree. Returns whether it was posted.
+	 * Posts a log job for each layer of {@code tree}, up to {@link #LOGS_PER_JOB} logs of it each (one log of a
+	 * 1x1 trunk, the four of a 2x2 one), so several bots fell it together without a giant tree crowding the board,
+	 * and one job for the tree, to pick up the drops and replant it with {@code sapling} once they are done (see
+	 * {@link #treeReady}). Not if a tree job covers any of its logs already: that keeps the rest of a tree being
+	 * felled from being posted as a new tree. Returns whether it was posted.
 	 */
 	public boolean postTree(TreeScanner.Tree tree, Optional<Item> sapling) {
 		if (this.post(JobType.CHOP_TREE, tree.base(), tree.logs(), sapling).isEmpty()) {
 			return false;
 		}
-		// ponytail: a job per log; group logs per layer if giant trees ever crowd the board.
-		tree.logs().forEach(log -> this.post(JobType.CHOP_LOG, log, List.of(log)));
+		// ponytail: logs of a wide layer, such as branches, are split in order, not by how near they are to one another.
+		Map<Integer, List<BlockPos>> layers = tree.logs().stream().collect(Collectors.groupingBy(BlockPos::getY, TreeMap::new, Collectors.toList()));
+		for (List<BlockPos> layer : layers.values()) {
+			for (int i = 0; i < layer.size(); i += LOGS_PER_JOB) {
+				List<BlockPos> logs = layer.subList(i, Math.min(i + LOGS_PER_JOB, layer.size()));
+				this.post(JobType.CHOP_LOG, logs.getFirst(), logs);
+			}
+		}
 		return true;
 	}
 
