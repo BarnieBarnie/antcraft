@@ -114,6 +114,11 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	private WorkerGoal.@Nullable Outcome outcome;
 	/** Whether the job begun is a log of a tree, rather than the tree, so it leaves the drops and replanting to the tree's job. */
 	private boolean logJob;
+	/**
+	 * The logs of the tree whose next log the bot keeps its scaffold up for, between log jobs of that tree, so it
+	 * does not pillar up anew for every log; empty when it keeps none up.
+	 */
+	private List<BlockPos> keptFor = List.of();
 	/** Whether the bot still takes its logs home after the job begun. */
 	private boolean depositAfterJob;
 	/** The better axe it is on its way to fetch from home, or null. */
@@ -183,6 +188,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	public boolean begin(ServerLevel level, Job job) {
 		this.outcome = null;
 		this.depositAfterJob = true;
+		this.keptFor = List.of();
 		if (job.type() == JobType.REPLANT) {
 			if (job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot))) {
 				return false;
@@ -265,6 +271,29 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			case CHOP_TREE -> colony.board().treeReady(job);
 			default -> true;
 		};
+	}
+
+	/** A log of the tree it keeps its scaffold up for: it takes that scaffold down when done (see {@link WorkerGoal}). */
+	@Override
+	public boolean keepsScaffoldFor(Job job) {
+		return job.type() == JobType.CHOP_LOG && this.keptFor.contains(job.target());
+	}
+
+	/**
+	 * The logs of the tree of the log job just done when another log of it is open and ready for this bot, so it
+	 * keeps its scaffold up for that one; else empty.
+	 */
+	private List<BlockPos> nextLogOfTree(ServerLevel level, BlockPos log) {
+		Optional<Colony> colony = this.colony(level);
+		if (colony.isEmpty()) {
+			return List.of();
+		}
+		List<Job> jobs = colony.get().board().jobs();
+		List<BlockPos> logs = jobs.stream().filter(job -> job.type() == JobType.CHOP_TREE && job.area().contains(log))
+			.findFirst().map(Job::area).orElse(List.of());
+		boolean next = jobs.stream().anyMatch(job -> job.type() == JobType.CHOP_LOG && job.isOpen() && !job.givenUp()
+			&& logs.contains(job.target()) && level.getBlockState(job.target()).is(BlockTags.LOGS) && this.isReady(level, colony.get(), job));
+		return next ? logs : List.of();
 	}
 
 	/** Gives the claimed job back to the board, so another bot can take it. */
@@ -504,6 +533,14 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 				this.retryJobLater(level);
 			} else {
 				this.completeJob(level);
+				this.keptFor = this.logJob ? this.nextLogOfTree(level, this.tree.base()) : List.of();
+				if (!this.keptFor.isEmpty()) {
+					// Up on its scaffold for the next log of the tree: it stays there, logs and all, rather than
+					// take the scaffold down and climb it again. Its next job takes it down, or the work between jobs.
+					this.depositAfterJob = false;
+					this.enter(State.SEARCH);
+					return;
+				}
 			}
 			// The leaves decay by themselves now; take the scaffolding down while still up there.
 			this.enter(State.CLEANUP);

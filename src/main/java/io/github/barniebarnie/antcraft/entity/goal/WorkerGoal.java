@@ -60,6 +60,11 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		/** Drops the job begun and what follows it, as the worker goal stops. */
 		void reset();
 
+		/** Whether the bot may take {@code job} with scaffolding up, as the executor kept that scaffolding up for it. */
+		default boolean keepsScaffoldFor(Job job) {
+			return false;
+		}
+
 		/** How long a job given back to retry later waits. */
 		default int retryTicks() {
 			return LumberjackGoal.TREE_RETRY_TICKS;
@@ -308,7 +313,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				// (see BuilderGoal); only jobs that take scaffolding down at their end may come first.
 				boolean scaffoldUp = !this.bot.getScaffold().isEmpty();
 				JobScore score = this.score(level, colony);
-				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()))
+				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()) || this.executors.get(open.type()).keepsScaffoldFor(open))
 					&& this.executors.get(open.type()).isReady(level, colony, open), score);
 				if (best.isEmpty()) {
 					return false;

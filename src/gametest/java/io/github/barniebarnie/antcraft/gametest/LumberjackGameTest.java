@@ -365,6 +365,48 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A 12-log trunk whose top logs need a pillar 8 blocks high. The bot keeps its pillar up between the log jobs
+	 * of the tree, so it builds it once on the way up rather than again for every log, and takes it down at the end.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 4800)
+	public void keepsItsPillarUpBetweenTheLogsOfATallTrunk(GameTestHelper helper) {
+		int logs = 12;
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
+			.setValue(LeavesBlock.DISTANCE, 1)
+			.setValue(LeavesBlock.PERSISTENT, false);
+		for (int dx = -1; dx <= 1; dx++) {
+			for (int dz = -1; dz <= 1; dz++) {
+				helper.setBlock(5 + dx, logs, 5 + dz, leaves);
+			}
+		}
+		for (int y = 1; y <= logs; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		AntBot bot = lumberjack(helper, 2, 4);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 32));
+		Set<BlockPos> up = new HashSet<>();
+		int[] placed = {0};
+		int[] broken = {0};
+		helper.onEachTick(() -> {
+			Set<BlockPos> now = Set.copyOf(bot.getScaffold());
+			placed[0] += (int) now.stream().filter(pos -> !up.contains(pos)).count();
+			broken[0] += (int) up.stream().filter(pos -> !now.contains(pos)).count();
+			up.clear();
+			up.addAll(now);
+		});
+
+		helper.succeedWhen(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, logs + 1, 7)) {
+				helper.assertTrue(!helper.getBlockState(pos).is(BlockTags.LOGS), "log left at " + pos.toShortString());
+				helper.assertTrue(!helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos.toShortString());
+			}
+			helper.assertTrue(bot.getScaffold().isEmpty(), "bot still has scaffold " + bot.getScaffold());
+			helper.assertTrue(home(helper).countItem(Items.OAK_LOG) == logs, "chest has " + home(helper).countItem(Items.OAK_LOG) + " logs");
+			helper.assertTrue(placed[0] < logs && broken[0] < logs, "placed " + placed[0] + " and broke " + broken[0] + " scaffold blocks for " + logs + " logs");
+		});
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 2400)
 	public void takesScaffoldFromHomeToReachTallTree(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
