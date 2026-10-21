@@ -14,8 +14,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Half;
-import org.jspecify.annotations.Nullable;
+import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 /** {@link WorldView} backed by a live level. Break times assume the bot uses its best tool for each block. */
 public class LevelWorldView implements WorldView {
@@ -58,10 +60,24 @@ public class LevelWorldView implements WorldView {
 	}
 
 	@Override
-	public @Nullable Direction stairUp(BlockPos pos) {
-		// A stair's tall back is on its facing side, so it is walked up moving that way.
-		BlockState state = this.level.getBlockState(pos);
-		return state.getBlock() instanceof StairBlock && state.getValue(StairBlock.HALF) == Half.BOTTOM ? state.getValue(StairBlock.FACING) : null;
+	public boolean stairUp(BlockPos pos, Direction dir) {
+		return stairUp(this.level.getBlockState(pos), dir);
+	}
+
+	/**
+	 * A bot moving {@code dir} walks up onto this stair without jumping when the top half of the half block it
+	 * enters by is empty in the vanilla collision shape: the low front of a straight stair, either low side of an
+	 * outer corner, and never an inner corner or an upside-down stair, which are tall on every side.
+	 */
+	static boolean stairUp(BlockState state, Direction dir) {
+		if (!(state.getBlock() instanceof StairBlock)) {
+			return false;
+		}
+		// The entry half: the half of the block away from dir, from y 0.5 up.
+		double minX = dir == Direction.WEST ? 0.5 : 0, maxX = dir == Direction.EAST ? 0.5 : 1;
+		double minZ = dir == Direction.NORTH ? 0.5 : 0, maxZ = dir == Direction.SOUTH ? 0.5 : 1;
+		VoxelShape entry = Shapes.box(minX, 0.5, minZ, maxX, 1, maxZ);
+		return !Shapes.joinIsNotEmpty(state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO), entry, BooleanOp.AND);
 	}
 
 	@Override

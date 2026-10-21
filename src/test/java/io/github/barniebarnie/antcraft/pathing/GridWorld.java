@@ -85,8 +85,8 @@ final class GridWorld implements WorldView {
 	}
 
 	@Override
-	public Direction stairUp(BlockPos pos) {
-		return this.stairs.get(pos);
+	public boolean stairUp(BlockPos pos, Direction dir) {
+		return this.stairs.get(pos) == dir;
 	}
 
 	@Override
