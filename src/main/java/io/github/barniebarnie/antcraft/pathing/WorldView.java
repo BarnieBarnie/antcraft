@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.pathing;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import org.jspecify.annotations.Nullable;
 
 /** What the pathfinder needs to know about blocks. Lets the planner run without a live world. */
 public interface WorldView {
@@ -21,9 +23,12 @@ public interface WorldView {
 	/** Ticks needed to break the block, or a negative number if it must not be broken. */
 	float breakTicks(BlockPos pos);
 
-	/** A stair block a bot walks up onto without jumping, such as on the mineshaft's stairs. */
-	default boolean isStair(BlockPos pos) {
-		return false;
+	/**
+	 * The way a bot walks up onto this bottom stair block without jumping, from its low front, such as
+	 * on the mineshaft's stairs; null if it is no such stair. From any other side it is a full block.
+	 */
+	default @Nullable Direction stairUp(BlockPos pos) {
+		return null;
 	}
 
 	/** Bedrock, which no shaft digs through; not other blocks that cannot be broken, such as a barrier. */

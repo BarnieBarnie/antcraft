@@ -5,14 +5,16 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 
 /**
  * In-memory block world for pathfinder tests. Unset positions are air.
  * '#' = stone (30 ticks to break), 'D' = dirt (10 ticks), 'B' = bedrock (unbreakable), 'L' = lava,
- * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block (stood on, and walked up onto without a jump).
+ * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces).
  */
 final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
+	private final Map<BlockPos, Direction> stairs = new HashMap<>();
 	private final Set<BlockPos> noPlacing = new HashSet<>();
 	private boolean placingForbidden;
 
@@ -36,6 +38,12 @@ final class GridWorld implements WorldView {
 	GridWorld set(int x, int y, int z, char block) {
 		this.blocks.put(new BlockPos(x, y, z), block);
 		return this;
+	}
+
+	/** A bottom stair block whose tall back is on its {@code facing} side. */
+	GridWorld stair(int x, int y, int z, Direction facing) {
+		this.stairs.put(new BlockPos(x, y, z), facing);
+		return this.set(x, y, z, 'S');
 	}
 
 	/** Fills the box between two corners (inclusive). */
@@ -77,8 +85,8 @@ final class GridWorld implements WorldView {
 	}
 
 	@Override
-	public boolean isStair(BlockPos pos) {
-		return this.at(pos) == 'S';
+	public Direction stairUp(BlockPos pos) {
+		return this.stairs.get(pos);
 	}
 
 	@Override

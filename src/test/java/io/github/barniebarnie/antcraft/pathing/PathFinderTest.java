@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
 
 class PathFinderTest {
@@ -49,13 +50,28 @@ class PathFinderTest {
 	}
 
 	@Test
-	void walksUpAStairBlockWithoutJumping() {
-		GridWorld world = GridWorld.flat(10).set(1, 1, 0, 'S');
+	void walksUpAStairBlockFromItsLowSideWithoutJumping() {
+		assertEquals(PathFinder.WALK_COST, stepOntoStairFacing(Direction.EAST), 1e-9);
+	}
+
+	@Test
+	void jumpsOntoAStairBlockFromItsTallBack() {
+		assertEquals(PathFinder.WALK_COST + PathFinder.JUMP_COST, stepOntoStairFacing(Direction.WEST), 1e-9);
+	}
+
+	@Test
+	void jumpsOntoAStairBlockFromItsSide() {
+		assertEquals(PathFinder.WALK_COST + PathFinder.JUMP_COST, stepOntoStairFacing(Direction.NORTH), 1e-9);
+	}
+
+	/** The cost of stepping east from the start onto a stair block facing {@code facing}. */
+	private static double stepOntoStairFacing(Direction facing) {
+		GridWorld world = GridWorld.flat(10).stair(1, 1, 0, facing);
 		Path path = find(world, new BlockPos(1, 2, 0), WALK_ONLY);
 
 		assertTrue(path.complete());
 		assertEquals(List.of(MoveType.STEP_UP), types(path));
-		assertEquals(PathFinder.WALK_COST, path.cost(), 1e-9);
+		return path.cost();
 	}
 
 	@Test

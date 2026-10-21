@@ -14,6 +14,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
+import org.jspecify.annotations.Nullable;
 
 /** {@link WorldView} backed by a live level. Break times assume the bot uses its best tool for each block. */
 public class LevelWorldView implements WorldView {
@@ -52,12 +54,14 @@ public class LevelWorldView implements WorldView {
 	public boolean canStandOn(BlockPos pos) {
 		BlockState state = this.level.getBlockState(pos);
 		// Farmland is a little lower than a full block, and a stair half a block lower at the front, but both are walkable.
-		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.is(Blocks.FARMLAND) || this.isStair(pos);
+		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.is(Blocks.FARMLAND) || state.getBlock() instanceof StairBlock;
 	}
 
 	@Override
-	public boolean isStair(BlockPos pos) {
-		return this.level.getBlockState(pos).getBlock() instanceof StairBlock;
+	public @Nullable Direction stairUp(BlockPos pos) {
+		// A stair's tall back is on its facing side, so it is walked up moving that way.
+		BlockState state = this.level.getBlockState(pos);
+		return state.getBlock() instanceof StairBlock && state.getValue(StairBlock.HALF) == Half.BOTTOM ? state.getValue(StairBlock.FACING) : null;
 	}
 
 	@Override
