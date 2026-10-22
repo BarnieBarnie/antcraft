@@ -19,8 +19,10 @@ public record Project(UUID id, String name, int priority, List<UUID> plans, List
 	public static final String FARM = "farm";
 	public static final String STORAGE = "storage";
 	public static final String HOUSE = "house";
+	/** The pit dug for cobblestone early on (see {@link Colony#updateQuarry}). */
+	public static final String QUARRY = "quarry";
 	/** The names of the projects a colony starts by itself (see {@link StarterProjects}), which are shown translated. */
-	public static final List<String> STARTER = List.of(TOOLS, FARM, Colony.MINESHAFT, STORAGE, HOUSE);
+	public static final List<String> STARTER = List.of(TOOLS, FARM, Colony.MINESHAFT, STORAGE, HOUSE, QUARRY);
 	public static final String KEY_PREFIX = "project.antcraft.";
 
 	public static final Codec<Project> CODEC = RecordCodecBuilder.create(i -> i.group(

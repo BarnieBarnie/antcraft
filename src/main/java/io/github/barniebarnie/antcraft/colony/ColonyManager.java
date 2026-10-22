@@ -512,6 +512,8 @@ public class ColonyManager extends SavedData {
 			// Builds first, so the mine sees the build jobs open now (see surveyMine).
 			this.surveyBuilds(level, colony, have);
 			this.surveyMine(level, colony, held);
+			// After the mine, so the shaft is picked first and its branch jobs close the quarry.
+			colony.updateQuarry(Storage.wanted(level, colony).test(Items.COBBLESTONE), level::getBlockState, pos -> isWorkable(level, colony, pos));
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
 			this.surveyCoreJobs(level, colony);

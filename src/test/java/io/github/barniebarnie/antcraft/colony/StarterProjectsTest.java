@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.pathing.WorldView;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Quarry;
 import io.github.barniebarnie.antcraft.work.Sites;
 import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.ArrayList;
@@ -93,8 +95,51 @@ class StarterProjectsTest {
 	@Test
 	void theStarterAreasShareNoColumnsOnUnevenGround() {
 		// Ground steps a block up or down every few columns, so sites may lie above or below the core's level.
-		assertNoSharedColumns(found(pos -> pos.getY() < CORE.getY() + Math.floorMod(pos.getX() / 3 + pos.getZ() / 4, 3) - 1
-			? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState()));
+		Function<BlockPos, BlockState> uneven = pos -> pos.getY() < CORE.getY() + Math.floorMod(pos.getX() / 3 + pos.getZ() / 4, 3) - 1
+			? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState();
+		Colony colony = found(uneven);
+		colony.updateQuarry(true, uneven, pos -> true);
+		assertTrue(colony.quarry().isPresent(), "no quarry on uneven ground");
+		assertNoSharedColumns(colony);
+	}
+
+	@Test
+	void aColonyShortOfCobblestoneWithNoRunningShaftOpensAQuarryClearOfTheCoreAndTheOtherSites() {
+		Colony colony = found();
+		colony.updateQuarry(true, WORLD, pos -> true);
+
+		Quarry quarry = colony.quarry().orElseThrow();
+		BoundingBox coreRing = BoundingBox.fromCorners(CORE.offset(-1, 0, -1), CORE.offset(1, 0, 1));
+		assertFalse(Sites.sharesColumns(quarry.area(), coreRing), "quarry beside the core: " + quarry.area());
+		assertNoSharedColumns(colony);
+		Project project = colony.projects().stream().filter(p -> p.name().equals("quarry")).findFirst().orElseThrow();
+		List<BuildPlan.Step> steps = colony.plans(project).stream().flatMap(plan -> plan.steps().stream()).toList();
+		assertTrue(!steps.isEmpty() && steps.stream().allMatch(step -> step.isClear() && quarry.area().isInside(step.pos())), "quarry plan: " + steps);
+		// The mineshaft still comes first.
+		Project shaft = colony.projects().stream().filter(p -> p.name().equals("mineshaft")).findFirst().orElseThrow();
+		assertTrue(shaft.priority() >= project.priority(), "quarry before the shaft: " + colony.projects());
+		// The site is saved, so later sites keep clear of the pit.
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertEquals(colony.quarry(), loaded.quarry());
+		assertTrue(loaded.occupied().contains(quarry.area()));
+	}
+
+	@Test
+	void theQuarryClosesOnceTheColonyHasEnoughCobblestoneOrTheShaftRuns() {
+		Colony colony = found();
+		colony.updateQuarry(true, WORLD, pos -> true);
+		Quarry quarry = colony.quarry().orElseThrow();
+
+		colony.updateQuarry(false, WORLD, pos -> true);
+		assertTrue(colony.projects().stream().noneMatch(p -> p.name().equals("quarry")), "quarry still open: " + colony.projects());
+		assertEquals(Optional.of(quarry), colony.quarry(), "site forgotten");
+
+		colony.updateQuarry(true, WORLD, pos -> true);
+		assertTrue(colony.projects().stream().anyMatch(p -> p.name().equals("quarry")), "quarry not reopened");
+
+		colony.board().post(JobType.MINE_BRANCH, CORE.below(30));
+		colony.updateQuarry(true, WORLD, pos -> true);
+		assertTrue(colony.projects().stream().noneMatch(p -> p.name().equals("quarry")), "quarry open beside a running shaft");
 	}
 
 	private static void assertNoSharedColumns(Colony colony) {
@@ -102,6 +147,7 @@ class StarterProjectsTest {
 		areas.add(colony.field().orElseThrow().area());
 		areas.add(colony.mineshaft().orElseThrow().area());
 		areas.add(colony.storage().orElseThrow().area());
+		colony.quarry().ifPresent(quarry -> areas.add(quarry.area()));
 		colony.projects().stream().filter(project -> project.name().equals("house")).flatMap(project -> colony.plans(project).stream())
 			.forEach(plan -> areas.add(BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).orElseThrow()));
 		for (int i = 0; i < areas.size(); i++) {

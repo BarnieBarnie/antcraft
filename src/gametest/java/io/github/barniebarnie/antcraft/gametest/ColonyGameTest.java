@@ -15,7 +15,11 @@ import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.Quarry;
+import io.github.barniebarnie.antcraft.work.Sites;
 import io.github.barniebarnie.antcraft.work.Storage;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.lang.reflect.Method;
 import net.minecraft.world.entity.monster.zombie.Husk;
@@ -132,6 +136,43 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				int have = held.entrySet().stream().filter(e -> tool.matches(e.getKey())).mapToInt(Map.Entry::getValue).sum();
 				helper.assertTrue(have >= tool.count(), "short of " + tool.name() + "; holds " + held);
 			}
+		});
+	}
+
+	/**
+	 * A colony short of cobblestone whose mineshaft has no branch job yet opens a quarry a little away from the core: two
+	 * bots dig it and bring the cobblestone home, and the quarry closes once the stock target is met, its pit not dug out.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 620)
+	public void botsDigTheQuarryForCobblestoneAndStopOnceTheColonyHasEnough(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 4, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		BlockPos core = new BlockPos(2, 5, 2);
+		helper.setBlock(core, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(core)).orElseThrow();
+		colony.setStockTargets(List.of(StockTarget.of(Items.COBBLESTONE, 20)));
+		// A shaft not yet dug to its first level, so it has no branch job; its digging is left out, so all cobblestone is the quarry's.
+		int level = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		colony.cancelProject(colony.setMineshaft(new Mineshaft(helper.absolutePos(new BlockPos(10, 5, 10)), List.of(level), 1, 1,
+			Mineshaft.DEFAULT_TORCH_SPACING, 1)).id());
+		for (BlockPos at : List.of(new BlockPos(2, 5, 6), new BlockPos(6, 5, 2))) {
+			AntBot bot = helper.spawn(ModEntities.ANT_BOT, at.getX(), at.getY(), at.getZ());
+			ColonyManager.get(helper.getLevel()).join(bot, colony);
+			bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		}
+		Container store = (Container) helper.getBlockEntity(core, net.minecraft.world.level.block.entity.BlockEntity.class);
+		boolean[] opened = {false};
+		helper.onEachTick(() -> opened[0] |= colony.projects().stream().anyMatch(project -> project.name().equals(Project.QUARRY)));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(opened[0], "no quarry opened");
+			Quarry quarry = colony.quarry().orElseThrow();
+			helper.assertTrue(!Sites.sharesColumns(quarry.area(), BoundingBox.fromCorners(helper.absolutePos(core).offset(-1, 0, -1),
+				helper.absolutePos(core).offset(1, 0, 1))), "quarry beside the core");
+			helper.assertTrue(store.countItem(Items.COBBLESTONE) >= 20, "core holds " + store.countItem(Items.COBBLESTONE) + " cobblestone");
+			helper.assertTrue(colony.projects().stream().noneMatch(project -> project.name().equals(Project.QUARRY)), "quarry still open");
+			helper.assertTrue(quarry.plan(helper.getLevel()::getBlockState).isPresent(), "quarry dug out");
 		});
 	}
 

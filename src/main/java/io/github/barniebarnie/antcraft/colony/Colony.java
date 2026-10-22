@@ -36,6 +36,7 @@ import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.OreRevisit;
+import io.github.barniebarnie.antcraft.work.Quarry;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import net.minecraft.world.item.BucketItem;
@@ -169,9 +170,9 @@ public class Colony {
 	/** What the colony builds and works: the mineshaft, build plans and their progress, the projects they make up, the field and the storage area. */
 	private record Works(Optional<Mineshaft> mineshaft, Map<UUID, BuildPlan> builds, List<Placed> placed, List<Blocked> blockedSteps,
 			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage, List<Project> projects,
-			List<BoundingBox> keptGround) {
+			List<BoundingBox> keptGround, Optional<Quarry> quarry) {
 		static final MapCodec<Works> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
-			// Old saves may still have a "quarry"; it is ignored.
+			// Old saves may still have a "quarry" of the old kind, a box mined layer by layer; it is ignored.
 			Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Works::mineshaft),
 			BUILDS.optionalFieldOf("builds", Map.of()).forGetter(Works::builds),
 			PROTECTED.optionalFieldOf("protected", List.of()).forGetter(Works::placed),
@@ -181,7 +182,8 @@ public class Colony {
 			StorageArea.CODEC.optionalFieldOf("storage").forGetter(Works::storage),
 			// Saves from before projects get a project for each plan.
 			Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(Works::projects),
-			BoundingBox.CODEC.listOf().optionalFieldOf("kept_ground", List.of()).forGetter(Works::keptGround)
+			BoundingBox.CODEC.listOf().optionalFieldOf("kept_ground", List.of()).forGetter(Works::keptGround),
+			Quarry.CODEC.optionalFieldOf("open_quarry").forGetter(Works::quarry)
 		).apply(i, Works::new));
 	}
 
@@ -189,7 +191,7 @@ public class Colony {
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
 		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects),
-			List.copyOf(c.keptGround)))
+			List.copyOf(c.keptGround), c.quarry))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -231,6 +233,8 @@ public class Colony {
 	private final Map<BlockPos, Block> protectedBlocks = new HashMap<>();
 	private Optional<Field> field;
 	private Optional<StorageArea> storage;
+	/** The pit dug for cobblestone while the mineshaft yields nothing yet (see {@link #updateQuarry}), once the colony picked a site. */
+	private Optional<Quarry> quarry = Optional.empty();
 	/** The parts of {@link #orders} the colony placed itself, by purpose, which are withdrawn once no longer needed. */
 	private final Map<OrderPurpose, Map<Item, Integer>> systemOrders = new EnumMap<>(OrderPurpose.class);
 	/** Steps builders could not do, such as behind bedrock; their plans wait without a job until a recheck finds them workable. */
@@ -249,6 +253,7 @@ public class Colony {
 			works.builds(), works.placed(), works.field(), works.storage(), wants.buildOrders(), works.blockedSteps(), wants.systemOrders(),
 			works.batchStates(), works.projects());
 		this.keptGround.addAll(works.keptGround());
+		this.quarry = works.quarry();
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
@@ -449,7 +454,7 @@ public class Colony {
 
 	/** {@link #addBuild(BuildPlan)} as a project of its own called {@code name}, at priority 0. */
 	/**
-	 * Areas the colony already uses, which a new area must keep clear of: the mineshaft, field and storage, and the
+	 * Areas the colony already uses, which a new area must keep clear of: the mineshaft, field, storage and quarry, and the
 	 * bounds of each unfinished build plan (such as the house). Add new kinds of areas here.
 	 */
 	public List<BoundingBox> occupied() {
@@ -457,6 +462,7 @@ public class Colony {
 		this.mineshaft.ifPresent(shaft -> areas.add(shaft.area()));
 		this.field.ifPresent(field -> areas.add(field.area()));
 		this.storage.ifPresent(storage -> areas.add(storage.area()));
+		this.quarry.ifPresent(quarry -> areas.add(quarry.area()));
 		this.builds.values().forEach(plan -> BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).ifPresent(areas::add));
 		return areas;
 	}
@@ -1206,6 +1212,33 @@ public class Colony {
 
 	public void setStorage(StorageArea storage) {
 		this.storage = Optional.of(storage);
+	}
+
+	public Optional<Quarry> quarry() {
+		return this.quarry;
+	}
+
+	/**
+	 * Opens the quarry while the colony is {@code shortOfStone} and the mineshaft has no branch job yet, so it gets
+	 * cobblestone for stone tools and stairs early: picks a site the first time (see {@link Quarry#site}) and adds the
+	 * {@link Project#QUARRY} project to dig what is left of the pit, at the mineshaft's priority, which keeps the shaft
+	 * first. Otherwise takes the project down; the site stays, to go on with later. Every block of the pit must be
+	 * {@code workable}.
+	 */
+	public void updateQuarry(boolean shortOfStone, Function<BlockPos, BlockState> world, Predicate<BlockPos> workable) {
+		Optional<Project> open = this.projects.stream().filter(project -> project.name().equals(Project.QUARRY)).findFirst();
+		if (!shortOfStone || this.board.jobs().stream().anyMatch(job -> job.type() == JobType.MINE_BRANCH)) {
+			open.ifPresent(project -> this.cancelProject(project.id()));
+			return;
+		}
+		if (open.isPresent()) {
+			return;
+		}
+		if (this.quarry.isEmpty()) {
+			this.quarry = Quarry.site(this.core, this.radius, this.occupied(), world, workable);
+		}
+		int priority = this.projects.stream().filter(project -> project.name().equals(MINESHAFT)).mapToInt(Project::priority).findFirst().orElse(0);
+		this.quarry.flatMap(quarry -> quarry.plan(world)).ifPresent(plan -> this.setPriority(this.addBuild(Project.QUARRY, plan, true).id(), priority));
 	}
 
 	public UUID id() {
