@@ -34,7 +34,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
-		GameTests.logTicks(helper);
+		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		// Stone up to y=4, the ground the shaft is dug into; the test area ends at y=7, 3 above the top step.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 4, 7)) {

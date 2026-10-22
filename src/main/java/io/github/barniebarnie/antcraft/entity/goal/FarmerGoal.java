@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
@@ -433,7 +434,8 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** The nearest sheep in the territory ready for shearing; null without one, or when the colony has wool enough. */
 	private @Nullable Sheep findSheep(ServerLevel level, Colony colony) {
 		AABB territory = new AABB(colony.core()).inflate(colony.radius());
-		List<Sheep> sheep = level.getEntitiesOfClass(Sheep.class, territory, Sheep::readyForShearing);
+		List<Sheep> sheep = level.getEntitiesOfClass(Sheep.class, territory,
+			candidate -> candidate.readyForShearing() && Territory.of(colony).contains(candidate.blockPosition()));
 		if (sheep.isEmpty() || woolInStock(Storage.held(level, colony)) >= KEEP_WOOL) {
 			return null;
 		}

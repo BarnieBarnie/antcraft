@@ -30,7 +30,7 @@ public class UpkeepGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
-		GameTests.logTicks(helper);
+		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		method.invoke(this, helper);
 	}

@@ -1,18 +1,31 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The area a colony works in: a square of {@code radius} blocks around the core,
- * at any height, matching the area the colony surveys for work.
+ * at any height, matching the area the colony surveys for work. Game tests clip it sideways to {@code bounds}, their
+ * test area, so tests running side by side cannot reach into each other; elsewhere {@code bounds} is null.
  */
-public record Territory(BlockPos core, int radius) {
+public record Territory(BlockPos core, int radius, @Nullable BoundingBox bounds) {
+	public Territory(BlockPos core, int radius) {
+		this(core, radius, null);
+	}
+
 	public static Territory of(Colony colony) {
-		return new Territory(colony.core(), colony.radius());
+		return new Territory(colony.core(), colony.radius(), colony.bounds());
 	}
 
 	public boolean contains(BlockPos pos) {
-		return Math.abs(pos.getX() - this.core.getX()) <= this.radius && Math.abs(pos.getZ() - this.core.getZ()) <= this.radius;
+		return Math.abs(pos.getX() - this.core.getX()) <= this.radius && Math.abs(pos.getZ() - this.core.getZ()) <= this.radius
+			&& inBounds(this.bounds, pos);
+	}
+
+	/** Whether {@code pos} is inside {@code bounds} sideways, at any height; anywhere is when there are none. */
+	static boolean inBounds(@Nullable BoundingBox bounds, BlockPos pos) {
+		return bounds == null || pos.getX() >= bounds.minX() && pos.getX() <= bounds.maxX() && pos.getZ() >= bounds.minZ() && pos.getZ() <= bounds.maxZ();
 	}
 
 	/** Whether the whole box between the corners {@code from} and {@code to} is inside: the territory is a square, so both corners are. */

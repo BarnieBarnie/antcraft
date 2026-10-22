@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
@@ -248,9 +249,10 @@ public abstract class ColonyWorkGoal {
 	protected static @Nullable BlockPos nearest(ServerLevel level, Colony colony, BlockPos from, Predicate<BlockPos> wanted) {
 		BlockPos core = colony.core();
 		int r = colony.radius();
+		Territory territory = Territory.of(colony);
 		BlockPos nearest = null;
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -SCAN_HEIGHT, -r), core.offset(r, SCAN_HEIGHT, r))) {
-			if (wanted.test(pos) && (nearest == null || pos.distSqr(from) < nearest.distSqr(from))) {
+			if (territory.contains(pos) && wanted.test(pos) && (nearest == null || pos.distSqr(from) < nearest.distSqr(from))) {
 				nearest = pos.immutable();
 			}
 		}

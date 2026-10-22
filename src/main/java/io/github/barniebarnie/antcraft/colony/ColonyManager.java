@@ -80,6 +80,14 @@ public class ColonyManager extends SavedData {
 
 	private final Map<UUID, Colony> colonies = new LinkedHashMap<>();
 
+	/** The game test area a new colony's core is in, which the colony is clipped to (see {@link Territory}); none outside game tests. */
+	private static Function<BlockPos, @Nullable BoundingBox> testArea = core -> null;
+
+	/** Game tests set this, so each colony stays inside its own test area. */
+	public static void setTestArea(Function<BlockPos, @Nullable BoundingBox> area) {
+		testArea = area;
+	}
+
 	public ColonyManager() {
 	}
 
@@ -104,6 +112,7 @@ public class ColonyManager extends SavedData {
 		}
 		Colony colony = new Colony(UUID.randomUUID(), core.immutable(), List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(), DefaultStock.TARGETS,
 			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		colony.setBounds(testArea.apply(colony.core()));
 		this.colonies.put(colony.id(), colony);
 		return colony;
 	}
@@ -186,8 +195,12 @@ public class ColonyManager extends SavedData {
 		colony.board().removeOpenIf(job -> job.type() == JobType.HARVEST_CROP && !Farming.isRipe(level.getBlockState(job.target())));
 		BlockPos core = colony.core();
 		int r = colony.radius();
+		Territory territory = Territory.of(colony);
 		int crops = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -CROP_SCAN_HEIGHT, -r), core.offset(r, CROP_SCAN_HEIGHT, r))) {
+			if (!territory.contains(pos)) {
+				continue;
+			}
 			BlockState state = level.getBlockState(pos);
 			if (state.getBlock() instanceof CropBlock) {
 				crops++;
@@ -197,7 +210,7 @@ public class ColonyManager extends SavedData {
 			}
 		}
 		if (colony.field().isEmpty() && crops == 0 && FIELD_YIELDS.stream().anyMatch(Storage.wanted(level, colony))) {
-			Field.choose(core, r, occupied(colony), pos -> Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
+			Field.choose(core, r, occupied(colony), pos -> Territory.inBounds(colony.bounds(), pos) && Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
 				.ifPresent(colony::setField);
 		}
 		colony.field().ifPresent(field -> {
@@ -346,7 +359,7 @@ public class ColonyManager extends SavedData {
 			return;
 		}
 		Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
-			pos -> level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
+			pos -> Territory.inBounds(colony.bounds(), pos) && level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
 			pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
 		if (site.isPresent()) {
 			colony.setStorage(site.get());
@@ -361,7 +374,7 @@ public class ColonyManager extends SavedData {
 	private static boolean isWorkable(ServerLevel level, Colony colony, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
 		return state.getFluidState().isEmpty() && state.getDestroySpeed(level, pos) >= 0 && !state.hasBlockEntity()
-			&& !colony.isProtected(level::getBlockState, pos);
+			&& !colony.isProtected(level::getBlockState, pos) && Territory.inBounds(colony.bounds(), pos);
 	}
 
 	/**
@@ -435,7 +448,9 @@ public class ColonyManager extends SavedData {
 	 * nearest the core while the colony is short of logs; orders include what builds need.
 	 */
 	private void surveyTrees(ServerLevel level, Colony colony, LevelTreeView trees) {
-		List<TreeScanner.Tree> all = TreeScanner.findAll(trees, colony.core(), colony.radius());
+		Territory territory = Territory.of(colony);
+		List<TreeScanner.Tree> all = TreeScanner.findAll(trees, colony.core(), colony.radius()).stream()
+			.filter(tree -> territory.contains(tree.base())).toList();
 		Set<BlockPos> building = colony.builds().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
 		Function<TreeScanner.Tree, Optional<Item>> sapling = tree -> Replanting.saplingFor(level.getBlockState(tree.logs().getFirst()).getBlock());
 		all.stream().filter(tree -> tree.logs().stream().anyMatch(building::contains))

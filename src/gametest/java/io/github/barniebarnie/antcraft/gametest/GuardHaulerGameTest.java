@@ -35,7 +35,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
-		GameTests.logTicks(helper);
+		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		// Bedrock walls keep bots inside the test area.
 		for (int x = 0; x < 8; x++) {

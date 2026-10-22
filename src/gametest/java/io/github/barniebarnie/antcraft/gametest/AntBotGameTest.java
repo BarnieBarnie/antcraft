@@ -1,19 +1,26 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
+import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * Bot behaviour, tested on a real (headless) server. Each test gets an empty
@@ -22,7 +29,7 @@ import net.minecraft.world.level.block.Blocks;
 public class AntBotGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
-		GameTests.logTicks(helper);
+		GameTests.start(helper);
 		// Game tests run on a dedicated server, where bots are disabled unless opted in.
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
@@ -31,6 +38,31 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 			}
 		}
 		method.invoke(this, helper);
+	}
+
+	/**
+	 * Game tests keep each colony inside its own test area, so it cannot reach into the tests beside it. A colony with
+	 * the default radius of 32 leaves an item lying two blocks outside its area alone, on ground the bot can walk, and
+	 * stores the one inside. Without the limit the bot fetches both before it goes to the core.
+	 */
+	@GameTest(maxTicks = 40)
+	public void colonyBotLeavesAnItemJustOutsideItsTestAreaAlone(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow();
+		colony.setStockTargets(List.of());
+		for (int x = 8; x <= 9; x++) {
+			helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, 4)), Blocks.STONE.defaultBlockState());
+		}
+		helper.spawnItem(Items.COBBLESTONE, new BlockPos(6, 1, 4));
+		ItemEntity outside = helper.spawnItem(Items.COBBLESTONE, new BlockPos(9, 1, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		Container core = (Container) helper.getBlockEntity(new BlockPos(1, 1, 1), BlockEntity.class);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core.countItem(Items.COBBLESTONE) == 1, "core holds " + core.countItem(Items.COBBLESTONE) + " cobblestone");
+			helper.assertTrue(outside.isAlive(), "picked up the item outside the test area");
+		});
 	}
 
 	@GameTest(maxTicks = 100)

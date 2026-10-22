@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Log config for runGameTest (see build.gradle): only warnings and errors, except the
      game test framework (summary block, failures; scripts/check.sh parses it), the tick lines
-     of GameTests.logTicks (scripts/ticks.py) and AntCraft's own logger. The line format
+     of GameTests.start (scripts/ticks.py) and AntCraft's own logger. The line format
      matches Loom's default, which scripts/check.sh relies on. -->
 <Configuration status="WARN">
 	<Appenders>

@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
+import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
@@ -326,7 +327,8 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 		ItemEntity nearest = freeSlots(inventory) < MIN_FREE_SLOTS ? null : level.getEntitiesOfClass(ItemEntity.class,
 				new AABB(colony.core()).inflate(colony.radius()),
-				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && this.bot.wantsToPickUp(level, item.getItem()))
+				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && Territory.of(colony).contains(item.blockPosition())
+					&& this.bot.wantsToPickUp(level, item.getItem()))
 			.stream()
 			.min(Comparator.comparingDouble(this.bot::distanceToSqr))
 			.orElse(null);

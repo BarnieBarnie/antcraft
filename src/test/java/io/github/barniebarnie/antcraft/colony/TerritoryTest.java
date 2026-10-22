@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.Test;
 
 class TerritoryTest {
@@ -62,5 +63,15 @@ class TerritoryTest {
 		// turn back at the border, spot the mob again and loop.
 		assertTrue(TERRITORY.contains(new BlockPos(110, 64, 100)));
 		assertFalse(TERRITORY.mayTarget(new BlockPos(111, 64, 100)));
+	}
+
+	@Test
+	void boundsClipTheSquareSideways() {
+		// Game tests clip each colony to its test area, so it cannot reach into the tests beside it.
+		Territory clipped = new Territory(new BlockPos(100, 64, 100), 10, new BoundingBox(95, 60, 95, 102, 67, 102));
+		assertTrue(clipped.contains(new BlockPos(102, 64, 95)));
+		assertFalse(clipped.contains(new BlockPos(103, 64, 100)), "outside the bounds, inside the radius");
+		assertFalse(clipped.contains(new BlockPos(100, 64, 94)), "outside the bounds, inside the radius");
+		assertTrue(clipped.contains(new BlockPos(100, -40, 100)), "height still does not matter");
 	}
 }

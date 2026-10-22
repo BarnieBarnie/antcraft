@@ -36,6 +36,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -571,6 +572,21 @@ class ColonyTest {
 		colony.setMineshaft(moved);
 		assertEquals(List.of(moved.plan()), colony.builds());
 		assertFalse(colony.isProtected(AIR, SHAFT.stairs().getLast().below()));
+	}
+
+	@Test
+	void boundsLimitWhereTheMineshaftIsProtectedAndKeptOpen() {
+		// Game tests clip each colony to its test area, so its cells do not reach into the tests beside it.
+		Colony colony = colony();
+		colony.setMineshaft(SHAFT);
+		BlockPos floor = SHAFT.stairs().getLast().below();
+		colony.setBounds(new BoundingBox(1000, 0, 1000, 1007, 100, 1007));
+		assertFalse(colony.isProtected(AIR, floor), "protected outside the bounds");
+		assertTrue(SHAFT.keepOpen().stream().noneMatch(colony.keepOpen()), "kept open outside the bounds");
+
+		colony.setBounds(new BoundingBox(-100, 0, -100, 100, 100, 100));
+		assertTrue(colony.isProtected(AIR, floor));
+		assertTrue(SHAFT.keepOpen().stream().allMatch(colony.keepOpen()));
 	}
 
 	@Test

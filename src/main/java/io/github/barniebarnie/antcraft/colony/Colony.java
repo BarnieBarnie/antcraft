@@ -43,6 +43,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.jspecify.annotations.Nullable;
 
 /** A colony: its core block (storage), member bots, work radius and job board. */
@@ -183,6 +184,8 @@ public class Colony {
 	private final Set<UUID> members;
 	private final JobBoard board;
 	private int radius;
+	/** The game test area this colony is clipped to (see {@link Territory}); not saved, and null outside game tests. */
+	private @Nullable BoundingBox bounds;
 	private final Map<Item, Integer> orders;
 	private Optional<Mineshaft> mineshaft;
 	/** The mineshaft's stair floors and torches, which bots leave standing. */
@@ -947,6 +950,9 @@ public class Colony {
 	 * forgotten. The mineshaft stays protected even when broken, since its plan has the builder put it back.
 	 */
 	public boolean isProtected(Function<BlockPos, BlockState> world, BlockPos pos) {
+		if (!Territory.inBounds(this.bounds, pos)) {
+			return false;
+		}
 		if (this.shaftBlocks.contains(pos)) {
 			return true;
 		}
@@ -984,7 +990,8 @@ public class Colony {
 		Set<BlockPos> veins = new HashSet<>();
 		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).forEach(job -> veins.addAll(job.area()));
 		open.add(veins);
-		return pos -> open.stream().anyMatch(set -> set.contains(pos));
+		BoundingBox bounds = this.bounds;
+		return pos -> Territory.inBounds(bounds, pos) && open.stream().anyMatch(set -> set.contains(pos));
 	}
 
 	/** Forgets placed blocks that are gone or replaced, so the set does not grow for good. {@code world} gives null where it cannot tell. */
@@ -1133,5 +1140,14 @@ public class Colony {
 	public void setRadius(int radius) {
 		this.radius = radius;
 		this.lastSurvey = -1;
+	}
+
+	public @Nullable BoundingBox bounds() {
+		return this.bounds;
+	}
+
+	/** Clips the colony to a game test's area: its territory, and where its blocks are protected and kept open. */
+	public void setBounds(@Nullable BoundingBox bounds) {
+		this.bounds = bounds;
 	}
 }

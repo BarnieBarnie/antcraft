@@ -1,28 +1,49 @@
 package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.BooleanSupplier;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.phys.AABB;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/** Helpers shared by the game tests: how long each one took, and failing early once a test cannot pass any more. */
+/** Helpers shared by the game tests: keeping tests apart, how long each one took, and failing early once a test cannot pass any more. */
 public final class GameTests {
 	private static final Logger LOGGER = LoggerFactory.getLogger("AntCraft game tests");
+	/**
+	 * The area of every test started, which a colony founded in it is clipped to. Tests run side by side 5 or 6 blocks
+	 * apart, closer than a colony's radius, so without this a colony would pick up items, flowers and work in other
+	 * tests, and protect and keep open its mineshaft there.
+	 */
+	// ponytail: never cleared and scanned in full; a test area is never reused and there are a few hundred at most.
+	private static final List<BoundingBox> AREAS = new ArrayList<>();
+
+	static {
+		ColonyManager.setTestArea(core -> AREAS.stream().filter(area -> area.isInside(core)).findFirst().orElse(null));
+	}
 
 	private GameTests() {
 	}
 
 	/**
-	 * Logs the tick each test passes or fails on, as {@code Game test <id> passed at tick <n> of <maxTicks>}, so
-	 * {@code maxTicks} can be set from measured runs. Call it first in {@code invokeTestMethod}.
+	 * Call first in {@code invokeTestMethod}. Keeps the colonies founded in the test inside its area (see
+	 * {@link #AREAS}), and logs the tick the test passes or fails on, as
+	 * {@code Game test <id> passed at tick <n> of <maxTicks>}, so {@code maxTicks} can be set from measured runs.
 	 */
-	public static void logTicks(GameTestHelper helper) {
+	public static void start(GameTestHelper helper) {
+		AABB bounds = helper.getBounds();
+		AREAS.add(BoundingBox.fromCorners(BlockPos.containing(bounds.minX, bounds.minY, bounds.minZ),
+			BlockPos.containing(bounds.maxX - 1, bounds.maxY - 1, bounds.maxZ - 1)));
 		GameTestInfo info = info(helper);
 		info.addListener(new GameTestListener() {
 			@Override
