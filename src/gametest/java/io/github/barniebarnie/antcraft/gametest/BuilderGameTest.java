@@ -27,11 +27,14 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
@@ -293,14 +296,43 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** Runs a command as the server would for an operator standing at the colony core. */
-	private static void command(GameTestHelper helper, PermissionSet permissions, String command) {
+	/** Runs a command as the server would for an operator standing at the colony core, and returns the messages it sent back. */
+	private static List<Component> command(GameTestHelper helper, PermissionSet permissions, String command) {
+		List<Component> messages = new ArrayList<>();
+		CommandSource collect = new CommandSource() {
+			@Override
+			public void sendSystemMessage(Component message) {
+				messages.add(message);
+			}
+
+			@Override
+			public boolean acceptsSuccess() {
+				return true;
+			}
+
+			@Override
+			public boolean acceptsFailure() {
+				return true;
+			}
+
+			@Override
+			public boolean shouldInformAdmins() {
+				return false;
+			}
+		};
 		CommandSourceStack source = helper.getLevel().getServer().createCommandSourceStack()
+			.withSource(collect)
 			.withLevel(helper.getLevel())
 			.withPosition(Vec3.atCenterOf(helper.absolutePos(CORE)))
-			.withPermission(permissions)
-			.withSuppressedOutput();
+			.withPermission(permissions);
 		helper.getLevel().getServer().getCommands().performPrefixedCommand(source, command);
+		return messages;
+	}
+
+	/** Whether one of {@code messages} is (or holds) the translation {@code key}. */
+	private static boolean says(List<Component> messages, String key) {
+		return messages.stream().flatMap(m -> Stream.concat(Stream.of(m), m.getSiblings().stream()))
+			.anyMatch(m -> m.getContents() instanceof TranslatableContents t && t.getKey().equals(key));
 	}
 
 	private static String coords(GameTestHelper helper, int x, int y, int z) {
@@ -378,6 +410,35 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(5, 2, 4));
 			helper.assertTrue(colony.builds().isEmpty(), "finished structure still listed");
 		});
+	}
+
+	/** The test structure two_palettes: one block, cobblestone in palette 0 and oak planks in palette 1. */
+	@GameTest(maxTicks = 40)
+	public void loadCommandBuildsTheChosenPalette(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		core(helper).setItem(1, new ItemStack(Items.OAK_PLANKS, 1));
+
+		List<Component> messages = command(helper, PermissionSet.ALL_PERMISSIONS,
+			"antcraft colony build load antcraft-gametest:two_palettes " + coords(helper, 5, 1, 4) + " none none 1");
+		helper.assertTrue(colony.builds().size() == 1, "structure not added: " + messages);
+		member(helper, colony, 1, 4);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 4, Blocks.OAK_PLANKS.defaultBlockState());
+			helper.assertTrue(colony.builds().isEmpty(), "finished structure still listed");
+		});
+	}
+
+	@GameTest(maxTicks = 1)
+	public void loadCommandWithAPaletteTheStructureLacksFails(GameTestHelper helper) {
+		Colony colony = colony(helper);
+
+		List<Component> messages = command(helper, PermissionSet.ALL_PERMISSIONS,
+			"antcraft colony build load antcraft-gametest:two_palettes " + coords(helper, 5, 1, 4) + " none none 2");
+		helper.assertTrue(says(messages, "commands.antcraft.colony.build.no_palette"), "no no_palette error: " + messages);
+		helper.assertTrue(colony.builds().isEmpty(), "structure added: " + colony.builds());
+		helper.succeed();
 	}
 
 	/** Any colony bot takes build jobs through the worker goal, not only builders. */
