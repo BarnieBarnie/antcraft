@@ -93,4 +93,18 @@ class FireSpreadTest {
 		lit.put(FIRE, Blocks.FIRE.defaultBlockState());
 		assertFalse(FireSpread.endangers(at(lit), new BlockPos(2, 1, 0), PLANKS), "wall beside the hearth");
 	}
+
+	@Test
+	void soulFireNeverSpreads() {
+		Map<BlockPos, BlockState> world = new HashMap<>(Map.of(FIRE.below(), Blocks.SOUL_SOIL.defaultBlockState(), FIRE, Blocks.SOUL_FIRE.defaultBlockState()));
+		assertFalse(FireSpread.endangers(at(world), FIRE.east(), PLANKS), "a plank beside soul fire");
+	}
+
+	@Test
+	void fireSpreadsThroughAChainOfFlammableBlocks() {
+		Map<BlockPos, BlockState> world = new HashMap<>(Map.of(FIRE.below(), Blocks.NETHERRACK.defaultBlockState(), FIRE, Blocks.FIRE.defaultBlockState(),
+			FIRE.east(2), PLANKS, FIRE.east(3), PLANKS));
+		assertTrue(FireSpread.endangers(at(world), FIRE.east(4), PLANKS), "two flammable blocks away from fire");
+		assertFalse(FireSpread.endangers(at(world), FIRE.east(7), PLANKS), "out of reach of the chain");
+	}
 }
