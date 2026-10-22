@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -152,5 +153,39 @@ class RegionPlanTest {
 		// Flowing fluid alone is nothing to build either.
 		assertEquals(Optional.empty(), RegionPlan.copy(pos -> Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1),
 			BlockPos.ZERO, BlockPos.ZERO, new BlockPos(5, 1, 5)));
+	}
+
+	@Test
+	void aBlockHungOnTheSideComesAfterItsHolderEvenInTheNextCell() {
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		// A row of two cells, x 0-3 and 4-7: the torch at x 3 hangs on the block at x 4 in the next cell, and the
+		// ladder at x 5 on the block at x 6 in its own cell, after it in the order the region is read.
+		BlockState torch = Blocks.WALL_TORCH.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.WEST);
+		BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.WEST);
+		Map<BlockPos, BlockState> world = Map.of(new BlockPos(3, 0, 0), torch, new BlockPos(5, 0, 0), ladder);
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(7, 0, 0), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertPlacedAfter(plan, new BlockPos(4, 1, 0), new BlockPos(3, 1, 0));
+		assertPlacedAfter(plan, new BlockPos(6, 1, 0), new BlockPos(5, 1, 0));
+	}
+
+	/** Asserts the step at {@code held} is in the batch of the step at {@code holder} and after it, or in a batch that needs that batch. */
+	private static void assertPlacedAfter(BuildPlan plan, BlockPos holder, BlockPos held) {
+		int holderStep = stepAt(plan, holder);
+		int heldStep = stepAt(plan, held);
+		int holderBatch = batchOf(plan, holderStep);
+		int heldBatch = batchOf(plan, heldStep);
+		assertTrue(heldBatch == holderBatch && holderStep < heldStep || plan.batches().get(heldBatch).needs().contains(holderBatch),
+			held + " in batch " + heldBatch + " (step " + heldStep + "), its holder in batch " + holderBatch + " (step " + holderStep + "): " + plan.batches());
+	}
+
+	private static int stepAt(BuildPlan plan, BlockPos pos) {
+		return java.util.stream.IntStream.range(0, plan.steps().size()).filter(i -> plan.steps().get(i).pos().equals(pos)).findFirst().orElseThrow();
+	}
+
+	private static int batchOf(BuildPlan plan, int step) {
+		return java.util.stream.IntStream.range(0, plan.batches().size())
+			.filter(i -> plan.batches().get(i).from() <= step && step < plan.batches().get(i).to()).findFirst().orElseThrow();
 	}
 }

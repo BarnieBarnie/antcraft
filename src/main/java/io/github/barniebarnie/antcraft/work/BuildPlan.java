@@ -14,6 +14,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -23,10 +25,19 @@ import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.block.BaseCoralWallFanBlock;
 import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock;
 import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.RedstoneWallTorchBlock;
+import net.minecraft.world.level.block.TripWireHookBlock;
+import net.minecraft.world.level.block.WallBannerBlock;
+import net.minecraft.world.level.block.WallSignBlock;
+import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -154,7 +165,8 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 * the order of its steps, so in each column what a block rests on is still placed, and what is in its way dug,
 	 * first. Each cell needs the cells of the batches its batch needs that share a column with it, so one on top of
 	 * another waits only for what is under it, and builders can work several layers apart at once. A block rests only
-	 * on the block under it, in its own column; one held from the side, such as a wall torch, is held in its own layer.
+	 * on the block under it, in its own column; one held from the side, such as a wall torch, is held in its own layer,
+	 * and goes in the cell of the block it hangs on, after it (see {@link #holder}).
 	 * A batch that fits one square stays one batch, so a small plan stays as it is.
 	 */
 	public BuildPlan inCells() {
@@ -172,10 +184,20 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			int depth = of.stream().mapToInt(step -> step.pos().getZ()).max().orElse(0) - minZ + 1;
 			int across = Math.ceilDiv(width, CELL);
 			int down = Math.ceilDiv(depth, CELL);
+			ToIntFunction<BlockPos> cellOf = pos -> (pos.getZ() - minZ) * down / depth * across + (pos.getX() - minX) * across / width;
+			// A block hung on one beside it in this batch goes in its holder's cell, after it, even when it lies over the edge.
+			Set<BlockPos> placed = of.stream().filter(step -> !step.isClear()).map(Step::pos).collect(Collectors.toSet());
 			Map<Integer, List<Step>> cells = new TreeMap<>();
+			List<Step> hung = new ArrayList<>();
 			for (Step step : of) {
-				int cell = (step.pos().getZ() - minZ) * down / depth * across + (step.pos().getX() - minX) * across / width;
-				cells.computeIfAbsent(cell, c -> new ArrayList<>()).add(step);
+				if (holder(step).filter(placed::contains).isPresent()) {
+					hung.add(step);
+				} else {
+					cells.computeIfAbsent(cellOf.applyAsInt(step.pos()), c -> new ArrayList<>()).add(step);
+				}
+			}
+			for (Step step : hung) {
+				cells.computeIfAbsent(cellOf.applyAsInt(holder(step).orElseThrow()), c -> new ArrayList<>()).add(step);
 			}
 			if (cells.isEmpty()) {
 				// Kept, empty, so the batches after it keep their place.
@@ -196,6 +218,21 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			cellsOf.add(made);
 		}
 		return new BuildPlan(steps, batches, this.kind);
+	}
+
+	/**
+	 * Where the block {@code step} places hangs from the side, such as a wall torch, ladder, wall sign or button on a
+	 * wall: the block it is held by, which must be placed first.
+	 */
+	// ponytail: a list of vanilla blocks; a ceiling button or lantern hangs on the layer above, which comes later, and is left as it is.
+	static Optional<BlockPos> holder(Step step) {
+		BlockState state = step.state();
+		Block block = state.getBlock();
+		boolean hangs = block instanceof WallTorchBlock || block instanceof RedstoneWallTorchBlock || block instanceof LadderBlock
+			|| block instanceof WallSignBlock || block instanceof WallBannerBlock || block instanceof TripWireHookBlock || block instanceof BaseCoralWallFanBlock
+			|| block instanceof FaceAttachedHorizontalDirectionalBlock && state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE) == AttachFace.WALL;
+		return hangs && state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
+			? Optional.of(step.pos().relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite())) : Optional.empty();
 	}
 
 	/** Whether the columns {@code a} and {@code b} span (min x, min z, max x, max z) share one. */
