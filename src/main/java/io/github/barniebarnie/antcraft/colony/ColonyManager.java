@@ -210,7 +210,7 @@ public class ColonyManager extends SavedData {
 			}
 		}
 		if (colony.field().isEmpty() && crops == 0 && FIELD_YIELDS.stream().anyMatch(Storage.wanted(level, colony))) {
-			Field.choose(core, r, occupied(colony), pos -> Territory.inBounds(colony.bounds(), pos) && Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
+			Field.choose(core, r, colony.occupied(), pos -> Territory.inBounds(colony.bounds(), pos) && Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
 				.ifPresent(colony::setField);
 		}
 		colony.field().ifPresent(field -> {
@@ -250,9 +250,9 @@ public class ColonyManager extends SavedData {
 			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
 		}
 		if (colony.mineshaft().isEmpty()) {
-			// The colony has no shaft yet, so this avoids the field and storage only.
+			// The colony has no shaft yet, so this avoids the field, storage and build plans only.
 			LevelWorldView world = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
-			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), occupied(colony), world));
+			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), colony.occupied(), world));
 		}
 		// A job per segment of a branch, so several bots dig a hall one segment after the other. The pickaxe the
 		// job needs, so a bot carrying one takes it (see JobScore).
@@ -331,15 +331,6 @@ public class ColonyManager extends SavedData {
 		return best;
 	}
 
-	/** Areas the colony already uses, which a new area must keep clear of. Add new kinds of areas here. */
-	private static List<BoundingBox> occupied(Colony colony) {
-		List<BoundingBox> areas = new ArrayList<>();
-		colony.mineshaft().ifPresent(shaft -> areas.add(shaft.area()));
-		colony.field().ifPresent(field -> areas.add(field.area()));
-		colony.storage().ifPresent(storage -> areas.add(storage.area()));
-		return areas;
-	}
-
 	/**
 	 * Picks the storage area once the core is nearly full, levelling one first when there is no flat spot, and orders
 	 * the chests it needs beyond the chests in {@code spare}; orders it no longer needs are withdrawn.
@@ -358,14 +349,14 @@ public class ColonyManager extends SavedData {
 		if (core == null || free > NEARLY_FULL_FREE_SLOTS) {
 			return;
 		}
-		Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), occupied(colony),
+		Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), colony.occupied(),
 			pos -> Territory.inBounds(colony.bounds(), pos) && level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
 			pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
 		if (site.isPresent()) {
 			colony.setStorage(site.get());
 		} else if (!colony.hasTerraform()) {
 			// No flat spot: the colony levels one, and picks it once it is flat.
-			StorageArea.levelling(colony.core(), colony.radius(), occupied(colony), level::getBlockState, pos -> isWorkable(level, colony, pos))
+			StorageArea.levelling(colony.core(), colony.radius(), colony.occupied(), level::getBlockState, pos -> isWorkable(level, colony, pos))
 				.ifPresent(colony::addBuild);
 		}
 	}

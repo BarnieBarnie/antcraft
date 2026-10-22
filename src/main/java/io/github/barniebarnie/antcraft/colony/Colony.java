@@ -430,6 +430,19 @@ public class Colony {
 	}
 
 	/** {@link #addBuild(BuildPlan)} as a project of its own called {@code name}, at priority 0. */
+	/**
+	 * Areas the colony already uses, which a new area must keep clear of: the mineshaft, field and storage, and the
+	 * bounds of each unfinished build plan (such as the house). Add new kinds of areas here.
+	 */
+	public List<BoundingBox> occupied() {
+		List<BoundingBox> areas = new ArrayList<>();
+		this.mineshaft.ifPresent(shaft -> areas.add(shaft.area()));
+		this.field.ifPresent(field -> areas.add(field.area()));
+		this.storage.ifPresent(storage -> areas.add(storage.area()));
+		this.builds.values().forEach(plan -> BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).ifPresent(areas::add));
+		return areas;
+	}
+
 	public Project addBuild(String name, BuildPlan plan) {
 		UUID id = UUID.randomUUID();
 		Project project = new Project(id, name, 0, List.of(id));
