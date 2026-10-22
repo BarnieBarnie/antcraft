@@ -1203,6 +1203,41 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A wall any solid block will do, in water walled in with bedrock but for one stone side the plan digs out, as a
+	 * mineshaft walls water beside its stairs: like a player it does not wall off the water through the stone, but digs
+	 * the stone and walls the water in the same tick it sees it, before the water flows into the dug cell.
+	 */
+	@GameTest(maxTicks = 100)
+	public void doesNotWallOffWaterBehindUndugStone(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		BlockPos water = new BlockPos(4, 1, 4);
+		BlockPos stone = water.west();
+		for (Direction side : Direction.values()) {
+			helper.setBlock(water.relative(side), side == Direction.WEST ? Blocks.STONE : Blocks.BEDROCK);
+		}
+		helper.setBlock(water, Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.solid(helper.absolutePos(water)),
+			BuildPlan.Step.clear(helper.absolutePos(stone)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(water).is(Blocks.WATER) && helper.getBlockState(stone).is(Blocks.STONE)) {
+				helper.fail("walled off the water through the undug stone");
+			}
+			if (!helper.getBlockState(stone).getFluidState().isEmpty()) {
+				helper.fail("water ran into the dug cell");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, COBBLE);
+			helper.assertTrue(helper.getBlockState(stone).isAir(), "stone not dug");
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "blocked: " + colony.blockedSteps());
+		});
+	}
+
+	/**
 	 * A block to place high in the air, with no scaffold to pillar up with: the builder cannot get
 	 * within reach of it, so it gives the step up and reports it, rather than trying forever.
 	 */
