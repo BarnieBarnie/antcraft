@@ -358,6 +358,23 @@ class TaskPlannerTest {
 	}
 
 	@Test
+	void plansStringToGatherNotAsMissing() {
+		// Bots kill spiders and haulers carry the string home.
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BOW, 1, Map.of(Items.STICK, 3));
+
+		assertEquals(Map.of(), plan.missing(), "plan: " + plan);
+		assertEquals(3, plan.toGather().getOrDefault(Items.STRING, 0), "plan: " + plan);
+	}
+
+	@Test
+	void plansAYellowBedFromFlowersToGather() {
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.yellow(), 1, Map.of(Items.WOOL.white(), 3, Items.OAK_PLANKS, 3));
+
+		assertEquals(Map.of(), plan.missing(), "plan: " + plan);
+		assertEquals(Map.of(Items.DANDELION, 1), plan.toGather(), "plan: " + plan);
+	}
+
+	@Test
 	void plansABedFromWoolAndPlanks() {
 		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of(Items.WOOL.red(), 3, Items.OAK_PLANKS, 3));
 

@@ -21,6 +21,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -48,7 +49,7 @@ import org.jspecify.annotations.Nullable;
  * fetching seeds and a hoe from the core or breaking grass for seeds, and watering the field's middle with a
  * bucket first. It stores the produce after each harvest.
  * Between jobs it shears sheep in the territory while the colony is short of wool, fetching shears from the core
- * or ordering a pair.
+ * or a storage chest or ordering a pair, and picks flowers the colony wants for dye.
  */
 public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Seeds a farmer keeps for replanting. */
@@ -91,19 +92,25 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Where the farmer last sheared a sheep, to pick up the wool, until {@link #fleeceUntil}. */
 	private @Nullable BlockPos fleece;
 	private long fleeceUntil;
+	/** The flower the farmer is on its way to pick. */
+	private @Nullable BlockPos flower;
+	private long nextFlowerScan;
 
 	public FarmerGoal(AntBot bot) {
 		super(bot);
 	}
 
-	/** Farm work between jobs, for any bot: storing produce, and shearing sheep while the colony is short of wool. */
+	/**
+	 * Farm work between jobs, for any bot: storing produce, shearing sheep while the colony is short of wool,
+	 * and picking flowers the colony wants, for dye.
+	 */
 	@Override
 	protected boolean betweenJobs(ServerLevel level, Colony colony) {
 		if (this.depositing) {
 			this.deposit(level, colony);
 			return true;
 		}
-		return this.shearSheep(level, colony);
+		return this.shearSheep(level, colony) || this.pickFlower(level, colony);
 	}
 
 	@Override
@@ -366,14 +373,14 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		SimpleContainer inventory = this.bot.getInventory();
 		int shears = findSlot(inventory, stack -> stack.is(Items.SHEARS));
 		if (shears < 0) {
-			Container core = Storage.containerAt(level, colony.core());
-			if (core != null && findSlot(core, stack -> stack.is(Items.SHEARS)) >= 0) {
-				if (this.reach(colony.core())) {
-					Storage.moveItems(core, inventory, stack -> stack.is(Items.SHEARS), 1);
+			BlockPos from = Storage.holding(level, colony, stack -> stack.is(Items.SHEARS));
+			if (from != null) {
+				if (this.reach(from)) {
+					Storage.moveItems(Storage.containerAt(level, from), inventory, stack -> stack.is(Items.SHEARS), 1);
 				}
 				return true;
 			}
-			// ponytail: like the bucket, spare shears outside the core count as owned but are not fetched.
+			// ponytail: spare shears another bot carries count as owned but are not fetched.
 			if (Storage.spare(level, colony, bot -> carried(bot, stack -> stack.is(Items.SHEARS))).getOrDefault(Items.SHEARS, 0) == 0 && !colony.orders().containsKey(Items.SHEARS)) {
 				colony.addOrder(Items.SHEARS, 1);
 			}
@@ -438,6 +445,43 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return true;
 		}
 		return this.travel(new Goal.Near(wool.blockPosition(), 0)) != PathFollower.Status.FAILED;
+	}
+
+	/** Picks the nearest flower in the territory the colony wants, then stores it. Returns true while busy. */
+	private boolean pickFlower(ServerLevel level, Colony colony) {
+		if (this.flower == null || !level.getBlockState(this.flower).is(BlockTags.SMALL_FLOWERS)) {
+			this.flower = null;
+			if (level.getGameTime() < this.nextFlowerScan) {
+				return false;
+			}
+			this.nextFlowerScan = level.getGameTime() + SHEEP_SCAN_TICKS;
+			// Plans the orders only once a flower turns up: most territories have flowers nobody wants.
+			Predicate<Item>[] wanted = new Predicate[1];
+			this.flower = nearest(level, colony, this.bot.blockPosition(), pos -> {
+				BlockState state = level.getBlockState(pos);
+				if (!state.is(BlockTags.SMALL_FLOWERS)) {
+					return false;
+				}
+				if (wanted[0] == null) {
+					wanted[0] = Storage.wanted(level, colony);
+				}
+				return wanted[0].test(state.getBlock().asItem());
+			});
+			if (this.flower == null) {
+				return false;
+			}
+		}
+		PathFollower.Status status = this.approach(new Goal.Reach(this.flower, REACH), this.flower);
+		if (status == PathFollower.Status.FAILED) {
+			// ponytail: the next scan may pick the same unreachable flower; skip ones that failed if bots get stuck on them.
+			this.flower = null;
+			return false;
+		}
+		if (status == PathFollower.Status.ARRIVED && this.breaker.tick(level, this.flower, true)) {
+			this.flower = null;
+			this.depositing = this.mayDeposit(level);
+		}
+		return true;
 	}
 
 	/** Takes seeds from the core, or breaks grass in the territory until some drop. Returns false when there are none to get. */

@@ -253,6 +253,40 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The yellow dye for a bed comes from a dandelion a bot picks in the territory. */
+	@GameTest(maxTicks = 600)
+	public void makesAYellowBedFromAPickedFlower(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WOOL.white(), 3));
+		core(helper).setItem(1, new ItemStack(Items.OAK_PLANKS, 3));
+		helper.setBlock(5, 1, 5, Blocks.DANDELION);
+		colony.addOrder(Items.BED.yellow(), 1);
+		farmer(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockNotPresent(Blocks.DANDELION, new BlockPos(5, 1, 5));
+			helper.assertTrue(core(helper).countItem(Items.BED.yellow()) == 1, "core has " + core(helper).countItem(Items.BED.yellow()) + " yellow beds");
+		});
+	}
+
+	/** Shears kept in a storage chest are fetched like shears in the core. */
+	@GameTest(maxTicks = 400)
+	public void fetchesShearsFromAStorageChest(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		helper.setBlock(STORAGE, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.SHEARS));
+		Sheep sheep = sheep(helper);
+		AntBot bot = farmer(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(sheep.isSheared(), "sheep not sheared");
+			helper.assertTrue(carried(bot, Items.SHEARS) == 1, "farmer has no shears");
+			helper.assertFalse(colony.orders().containsKey(Items.SHEARS), "ordered shears: " + colony.orders());
+		});
+	}
+
 	/** Wool picked up after the fleece pickup ended, by walking over it, still goes to the core while the field waits for seeds. */
 	@GameTest(maxTicks = 200)
 	public void storesWoolItCarriesWhileWaitingForSeeds(GameTestHelper helper) {

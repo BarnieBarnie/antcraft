@@ -109,6 +109,22 @@ public final class Storage {
 		return chests;
 	}
 
+	/** Where a bot can take a stack {@code filter} accepts: the core, else a storage chest; null when neither holds one. */
+	public static @Nullable BlockPos holding(ServerLevel level, Colony colony, Predicate<ItemStack> filter) {
+		Map<BlockPos, Container> containers = new LinkedHashMap<>();
+		Container core = containerAt(level, colony.core());
+		if (core != null) {
+			containers.put(colony.core(), core);
+		}
+		containers.putAll(storageChests(level, colony));
+		for (Map.Entry<BlockPos, Container> entry : containers.entrySet()) {
+			if (entry.getValue().hasAnyMatching(filter)) {
+				return entry.getKey();
+			}
+		}
+		return null;
+	}
+
 	/** The chests at the mineshaft landings by position, those placed so far. */
 	public static Map<BlockPos, Container> landingChests(ServerLevel level, Colony colony) {
 		Map<BlockPos, Container> chests = new LinkedHashMap<>();
