@@ -880,6 +880,15 @@ public class Colony {
 		}
 	}
 
+	/**
+	 * Whether an open build or dig job waits for no item the colony lacks: it declares none (see {@link #declareBuildNeeds}),
+	 * or one the colony {@code has}. A bot could take it now.
+	 */
+	public boolean hasBuildToDo(Map<Item, Integer> has) {
+		return this.board.jobs().stream().anyMatch(job -> isBuildJob(job) && job.isOpen() && !job.givenUp()
+			&& job.item().filter(item -> has.getOrDefault(item, 0) <= 0).isEmpty());
+	}
+
 	/** Whether {@code job} is for a batch of a build plan: a build job, or a dig job of a batch that only clears blocks. */
 	private static boolean isBuildJob(Job job) {
 		return job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA;

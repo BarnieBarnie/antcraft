@@ -235,7 +235,8 @@ public class ColonyManager extends SavedData {
 
 	/**
 	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}),
-	 * for stock targets or orders, does it pick a mineshaft site and post branch jobs, and order a pickaxe
+	 * for stock targets or orders, does it pick a mineshaft site, once no build job a bot could take now is open
+	 * (see {@link Colony#hasBuildToDo}), and post branch jobs, and order a pickaxe
 	 * when it has none; otherwise the open ones come off the board. Open vein jobs whose ore is no longer wanted come off too. It posts a job for each segment with blocks
 	 * left to dig (see {@link Mineshaft.Branch#segments}) of the branches at one mining level: the deepest dug one
 	 * whose ores the colony wants. Each job needs the pickaxe its level does (see {@link PickaxeTier#forBranch}).
@@ -262,6 +263,10 @@ public class ColonyManager extends SavedData {
 			ToolKind.PICKAXE.order(level, colony, null, ToolKind.PICKAXE.spare(level, colony));
 		}
 		if (colony.mineshaft().isEmpty()) {
+			// Bots do the builds they can first; the shaft starts once only builds waiting for items are left.
+			if (colony.hasBuildToDo(holds)) {
+				return;
+			}
 			// The colony has no shaft yet, so this avoids the field, storage and build plans only.
 			LevelWorldView world = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
 			colony.setMineshaft(Mineshaft.nextTo(colony.core(), AntCraftConfig.mineshaftLevels(), colony.occupied(), world));
@@ -502,9 +507,11 @@ public class ColonyManager extends SavedData {
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));
 			this.surveyCrops(level, colony);
-			Map<Item, Integer> have = new HashMap<>(Storage.held(level, colony));
-			this.surveyMine(level, colony, have);
+			Map<Item, Integer> held = Storage.held(level, colony);
+			Map<Item, Integer> have = new HashMap<>(held);
+			// Builds first, so the mine sees the build jobs open now (see surveyMine).
 			this.surveyBuilds(level, colony, have);
+			this.surveyMine(level, colony, held);
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
 			this.surveyCoreJobs(level, colony);

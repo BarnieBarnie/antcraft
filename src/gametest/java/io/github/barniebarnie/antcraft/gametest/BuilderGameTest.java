@@ -4,6 +4,7 @@ import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
@@ -133,6 +134,34 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 3, 1, 5, STAIRS_EAST);
 			helper.assertTrue(colony.builds().isEmpty(), "finished plan still listed");
 			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == 0, "cobblestone not taken from the core");
+		});
+	}
+
+	/**
+	 * A colony short of cobblestone for one build, with the bricks for another in the core, has the bot build the
+	 * bricks before it starts the mineshaft; once only the build waiting for cobblestone is left, the mineshaft starts.
+	 */
+	// Measured: about 20 ticks.
+	@GameTest(maxTicks = 60)
+	public void aBuildWithItsBlocksInTheCoreGoesBeforeTheMineshaft(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.BRICKS, 3));
+		colony.addBuild(new BuildPlan(List.of(step(helper, 5, 1, 5, Blocks.BRICKS.defaultBlockState()),
+			step(helper, 5, 2, 5, Blocks.BRICKS.defaultBlockState()), step(helper, 5, 3, 5, Blocks.BRICKS.defaultBlockState()))));
+		colony.addBuild(new BuildPlan(List.of(step(helper, 3, 1, 5, COBBLE))));
+		// Short of cobblestone from the start, as a colony is whose build ordered it before.
+		colony.addOrder(Items.COBBLESTONE, 1);
+		member(helper, colony, 1, 4);
+
+		helper.onEachTick(() -> {
+			if (colony.mineshaft().isPresent() && colony.board().jobs().stream()
+					.anyMatch(job -> job.type() == JobType.BUILD && job.isOpen() && job.item().equals(Optional.of(Items.BRICKS)))) {
+				helper.fail("mineshaft started while the bricks build was open");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 3, 5, Blocks.BRICKS.defaultBlockState());
+			helper.assertTrue(colony.mineshaft().isPresent(), "no mineshaft once only the cobblestone build was left");
 		});
 	}
 
