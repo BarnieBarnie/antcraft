@@ -13,10 +13,12 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -83,6 +85,8 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private long noSeedsUntil;
 	/** Grass the farmer is breaking for seeds. */
 	private @Nullable BlockPos grass;
+	/** Grass the farmer found no spot to see from, skipped until it finds no other. */
+	private final Set<BlockPos> hiddenGrass = new HashSet<>();
 	/** Water the farmer is filling its bucket at. */
 	private @Nullable BlockPos water;
 	private long nextWaterScan;
@@ -191,7 +195,10 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.endJob(WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
-		if (this.reach(crop) && this.breaker.tick(level, crop, true)) {
+		PathFollower.Status status = this.inSightOf(crop);
+		if (status == PathFollower.Status.FAILED) {
+			this.endJob(WorkerGoal.Outcome.RETRY);
+		} else if (status == PathFollower.Status.ARRIVED && this.breaker.tick(level, crop, true)) {
 			this.replant(level, crop, state.getBlock());
 			this.endJob(WorkerGoal.Outcome.COMPLETE);
 			this.depositing = !this.produce().isEmpty() && this.mayDeposit(level);
@@ -231,7 +238,11 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			}
 			return;
 		}
-		if (!this.reach(crop)) {
+		PathFollower.Status status = this.inSightOf(crop);
+		if (status == PathFollower.Status.FAILED) {
+			this.endJob(WorkerGoal.Outcome.RETRY);
+		}
+		if (status != PathFollower.Status.ARRIVED) {
 			return;
 		}
 		if (!state.isAir()) {
@@ -249,6 +260,18 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.bot.getInventory().getItem(slot).shrink(1);
 		}
 		this.endJob(WorkerGoal.Outcome.COMPLETE);
+	}
+
+	/**
+	 * Moves to where the bot sees {@code pos}, as a player must to break or use the block: ARRIVED once there,
+	 * FAILED, after which it waits a while, when there is no such spot it can get to.
+	 */
+	private PathFollower.Status inSightOf(BlockPos pos) {
+		PathFollower.Status status = this.approach(this.inSight(pos), pos);
+		if (status == PathFollower.Status.FAILED) {
+			this.cooldown = IDLE_TICKS;
+		}
+		return status;
 	}
 
 	private void till(ServerLevel level, BlockPos soil) {
@@ -471,7 +494,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				return false;
 			}
 		}
-		PathFollower.Status status = this.approach(new Goal.Reach(this.flower, REACH), this.flower);
+		PathFollower.Status status = this.approach(this.inSight(this.flower), this.flower);
 		if (status == PathFollower.Status.FAILED) {
 			// ponytail: the next scan may pick the same unreachable flower; skip ones that failed if bots get stuck on them.
 			this.flower = null;
@@ -494,12 +517,18 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return true;
 		}
 		if (this.grass == null || !Farming.isSeedGrass(level.getBlockState(this.grass))) {
-			this.grass = nearest(level, colony, this.bot.blockPosition(), pos -> Farming.isSeedGrass(level.getBlockState(pos)));
+			this.grass = nearest(level, colony, this.bot.blockPosition(), pos -> Farming.isSeedGrass(level.getBlockState(pos)) && !this.hiddenGrass.contains(pos));
 			if (this.grass == null) {
+				// Looked at again once the bot next needs seeds: a wall may be gone by then.
+				this.hiddenGrass.clear();
 				return false;
 			}
 		}
-		if (this.reach(this.grass) && this.breaker.tick(level, this.grass, true)) {
+		PathFollower.Status status = this.inSightOf(this.grass);
+		if (status == PathFollower.Status.FAILED) {
+			this.hiddenGrass.add(this.grass);
+			this.grass = null;
+		} else if (status == PathFollower.Status.ARRIVED && this.breaker.tick(level, this.grass, true)) {
 			this.grass = null;
 		}
 		return true;

@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.work.StorageArea;
@@ -99,6 +100,42 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Ripe wheat at (5, 1, 5) with bedrock above it and on each of {@code walls}; returns where the wheat is. */
+	private static BlockPos walledInWheat(GameTestHelper helper, List<BlockPos> walls) {
+		BlockPos crop = new BlockPos(5, 1, 5);
+		helper.setBlock(crop.below(), Blocks.FARMLAND);
+		helper.setBlock(crop, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		helper.setBlock(crop.above(), Blocks.BEDROCK);
+		walls.forEach(wall -> helper.setBlock(wall, Blocks.BEDROCK));
+		return crop;
+	}
+
+	/** Ripe wheat walled in with bedrock on every side, within reach of the ground: like a player, the farmer cannot harvest it through the wall. */
+	@GameTest(maxTicks = 200)
+	public void leavesRipeWheatItCannotSeeAlone(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos crop = walledInWheat(helper, List.of(new BlockPos(4, 1, 5), new BlockPos(6, 1, 5), new BlockPos(5, 1, 4), new BlockPos(5, 1, 6)));
+		farmer(helper, colony);
+
+		helper.onEachTick(() -> {
+			if (!Farming.isRipe(helper.getBlockState(crop))) {
+				helper.fail("harvested the walled-in wheat through the bedrock");
+			}
+		});
+		helper.runAfterDelay(150, helper::succeed);
+	}
+
+	/** Ripe wheat walled in on all sides but the one away from the farmer: it walks round to the open side and harvests it from there. */
+	@GameTest(maxTicks = 80)
+	public void harvestsWalledInWheatFromItsOpenSide(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		walledInWheat(helper, List.of(new BlockPos(4, 1, 5), new BlockPos(5, 1, 4), new BlockPos(5, 1, 6)));
+		farmer(helper, colony);
+		GameTests.failOnGiveUp(helper, colony);
+
+		helper.succeedWhen(() -> helper.assertTrue(core(helper).countItem(Items.WHEAT) == 1, "core has " + core(helper).countItem(Items.WHEAT) + " wheat"));
+	}
+
 	private static int carried(AntBot bot, Item item) {
 		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
 	}
@@ -170,6 +207,27 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			Field field = colony.field().get();
 			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).size() < 24, "nothing planted");
 		});
+	}
+
+	/** The only grass is walled in with bedrock on every side, within reach of the ground: the farmer does not break it through the wall for seeds. */
+	@GameTest(maxTicks = 200)
+	public void leavesGrassItCannotSeeAlone(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setField(new Field(helper.absolutePos(new BlockPos(2, 0, 4))));
+		BlockPos grass = new BlockPos(6, 1, 2);
+		helper.setBlock(grass, Blocks.SHORT_GRASS);
+		for (BlockPos wall : List.of(grass.west(), grass.east(), grass.north(), grass.south(), grass.above())) {
+			helper.setBlock(wall, Blocks.BEDROCK);
+		}
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(grass).is(Blocks.SHORT_GRASS)) {
+				helper.fail("broke the walled-in grass through the bedrock");
+			}
+		});
+		helper.runAfterDelay(150, helper::succeed);
 	}
 
 	@GameTest(maxTicks = 200)
@@ -416,10 +474,10 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * Ripe wheat on a ledge too high to reach from the ground: the bot pillars up with dirt to harvest it, and
-	 * takes its pillar down once done, though harvesting is no build or tree job.
+	 * Ripe wheat on a ledge too high to reach or see from the ground: the bot pillars up with dirt until it sees
+	 * it over the edge to harvest it, and takes its pillar down once done, though harvesting is no build or tree job.
 	 */
-	@GameTest(maxTicks = 90)
+	@GameTest(maxTicks = 200)
 	public void takesDownThePillarItPlacedToReachACrop(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// A 5x5 ledge, four high, with the wheat in the middle: out of reach from the ground around it.
@@ -432,7 +490,6 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 		boolean[] pillared = {false};
 		helper.onEachTick(() -> pillared[0] |= dirtAboveFloor(helper) > 0);
-
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 1, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
 			helper.assertTrue(pillared[0], "never pillared up");
