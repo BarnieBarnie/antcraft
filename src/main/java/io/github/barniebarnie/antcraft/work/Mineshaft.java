@@ -142,11 +142,12 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 
 	/**
 	 * Only levels below the top, deepest last, each at least {@link #MIN_LEVEL_GAP} below the one above it.
-	 * At least one branch a side: a shaft without them has no hall and nothing to mine.
+	 * At least one branch a side, each at least one block long: a shaft without them has no hall and nothing to mine.
 	 */
 	public Mineshaft {
 		top = top.immutable();
 		branchesPerSide = Math.max(1, branchesPerSide);
+		branchLength = Math.max(1, branchLength);
 		int topY = top.getY();
 		levels = spaced(levels.stream().filter(y -> y < topY).toList());
 	}

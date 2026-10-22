@@ -337,6 +337,15 @@ class MineshaftTest {
 	}
 
 	@Test
+	void aShaftWithoutBranchLengthGetsOneBlock() {
+		var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, SPIRAL).getOrThrow().getAsJsonObject();
+		json.addProperty("branch_length", 0);
+		Mineshaft loaded = Mineshaft.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(1, loaded.branchLength());
+		assertEquals(2, loaded.branches(6).getFirst().cells().size());
+	}
+
+	@Test
 	void siteBesideTheCoreKeepsClearOfStorageAndField() {
 		BlockPos core = new BlockPos(0, 64, 0);
 		List<Integer> levels = List.of(40);
