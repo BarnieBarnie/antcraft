@@ -184,6 +184,62 @@ class ProjectTest {
 		assertEquals(Map.of(iron, 0, coal, 1), priorities);
 	}
 
+	/** A bot at the colony's tree, just done with a log of it: the tree's jobs are close and sticky, the core is far. */
+	private static void assertCraftBeatsTheTree(Colony colony, Item item) {
+		Job craft = colony.board().jobs().stream().filter(job -> job.type() == JobType.CRAFT && job.item().equals(Optional.of(item)))
+			.findFirst().orElseThrow(() -> new AssertionError("no craft job for " + item + ": " + colony.board().jobs()));
+		List<Job> tree = colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE || job.type() == JobType.CHOP_LOG).toList();
+		JobScore bot = new JobScore(TREE.getFirst(), List.of(), 20, Optional.of(tree.getFirst()), need -> 0);
+		double crafting = bot.score(craft).orElseThrow();
+		for (Job job : tree) {
+			assertTrue(crafting < bot.score(job).orElseThrow(), "craft " + craft + " scores " + crafting + ", not better than " + job
+				+ " at " + bot.score(job));
+		}
+	}
+
+	private static final List<BlockPos> TREE = List.of(new BlockPos(20, 64, 20), new BlockPos(20, 65, 20));
+
+	@Test
+	void aCraftForAProjectBeatsATreeNextToTheBot() {
+		Colony colony = colony();
+		Project hut = colony.addBuild("hut", plan(new BlockPos(5, 64, 5), Blocks.OAK_PLANKS));
+		colony.setPriority(hut.id(), 2);
+		colony.postBuildJobs();
+		colony.board().postTree(new TreeScanner.Tree(TREE.getFirst(), TREE), Optional.empty());
+		Map<Item, Integer> has = Map.of(Items.OAK_LOG, 4);
+
+		colony.planProjects(pos -> Blocks.AIR.defaultBlockState(), step -> true, has, tool -> true);
+		colony.postCraftJobs(coreCrafts(colony, has), has, book, gatherable);
+		colony.prioritizeGatherJobs(has, book, gatherable);
+
+		assertCraftBeatsTheTree(colony, Items.OAK_PLANKS);
+	}
+
+	@Test
+	void aCraftForAPlayerOrderBeatsATreeNextToTheBot() {
+		Colony colony = colony();
+		colony.addOrder(Items.CHEST, 1);
+		colony.board().postTree(new TreeScanner.Tree(TREE.getFirst(), TREE), Optional.empty());
+		Map<Item, Integer> has = Map.of(Items.OAK_LOG, 4);
+
+		colony.planProjects(pos -> Blocks.AIR.defaultBlockState(), step -> true, has, tool -> true);
+		colony.postCraftJobs(coreCrafts(colony, has), has, book, gatherable);
+		colony.prioritizeGatherJobs(has, book, gatherable);
+
+		assertEquals(Map.of(Items.CHEST, Colony.ORDER_PRIORITY, Items.OAK_PLANKS, Colony.ORDER_PRIORITY), craftJobs(colony));
+		assertCraftBeatsTheTree(colony, Items.CHEST);
+		assertCraftBeatsTheTree(colony, Items.OAK_PLANKS);
+	}
+
+	@Test
+	void anOrderTheColonyPlacedItselfGivesItsCraftsNoOrderPriority() {
+		Colony colony = colony();
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));
+		Map<Item, Integer> has = Map.of(Items.OAK_LOG, 4);
+		colony.postCraftJobs(coreCrafts(colony, has), has, book, gatherable);
+		assertEquals(Map.of(Items.CHEST, 0, Items.OAK_PLANKS, 0), craftJobs(colony));
+	}
+
 	private static Map<BlockPos, Integer> buildPriorities(Colony colony) {
 		return colony.board().jobs().stream().collect(Collectors.toMap(Job::target, Job::priority));
 	}

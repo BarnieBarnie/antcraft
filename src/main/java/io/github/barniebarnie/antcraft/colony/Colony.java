@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
@@ -71,6 +72,12 @@ public class Colony {
 		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Blocked(new UUID(0, 0), pos, false)).toList(),
 			blocked -> blocked.stream().map(Blocked::pos).toList()));
 	private static final Codec<Map<OrderPurpose, Map<Item, Integer>>> SYSTEM_ORDERS = Codec.unboundedMap(OrderPurpose.CODEC, ITEM_COUNTS);
+
+	/**
+	 * The priority of the crafts for a player's order. A player asked for it, so it comes before work nothing waits for
+	 * (priority 0), such as the next tree; a project the player raised higher still comes first.
+	 */
+	public static final int ORDER_PRIORITY = 1;
 
 	/** What the colony placed an order for itself, so it can withdraw the order once that no longer needs it. */
 	public enum OrderPurpose implements StringRepresentable {
@@ -578,8 +585,9 @@ public class Colony {
 
 	/**
 	 * Posts a craft job at the core for each of {@code crafts}, the items the colony crafts there, and takes down the open
-	 * ones for anything else. A craft for what a project waits for carries the project's priority, the highest of them
-	 * when several do: what {@link TaskPlanner} plans to make it from {@code stock} with {@code book}.
+	 * ones for anything else. A craft for what a project waits for carries the project's priority, and one for a player's
+	 * order {@link #ORDER_PRIORITY}, the highest of them when several do: what {@link TaskPlanner} plans to make it from
+	 * {@code stock} with {@code book}.
 	 */
 	public void postCraftJobs(Set<Item> ordered, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
 		// What a bot crafts on the spot (see postStairCrafts) is not crafted at the core as well, unless more stairs are ordered.
@@ -589,14 +597,19 @@ public class Colony {
 		}
 		this.board.removeOpenIf(job -> job.type() == JobType.CRAFT && job.target().equals(this.core) && job.item().filter(crafts::contains).isEmpty());
 		Map<Item, Integer> priorities = new HashMap<>();
-		for (Project project : this.projects()) {
-			this.waiting.getOrDefault(project.id(), Map.of()).forEach((item, count) -> {
-				Map<Item, Integer> available = new HashMap<>(stock);
-				available.remove(item);
-				TaskPlanner.plan(item, count, available, book, gatherable).crafts()
-					.forEach(craft -> priorities.putIfAbsent(craft.recipe().output(), project.priority()));
-			});
-		}
+		BiConsumer<Map<Item, Integer>, Integer> feeds = (wanted, priority) -> wanted.forEach((item, count) -> {
+			Map<Item, Integer> available = new HashMap<>(stock);
+			available.remove(item);
+			TaskPlanner.plan(item, count, available, book, gatherable).crafts()
+				.forEach(craft -> priorities.merge(craft.recipe().output(), priority, Math::max));
+		});
+		this.projects().forEach(project -> feeds.accept(this.waiting.getOrDefault(project.id(), Map.of()), project.priority()));
+		// The part of the orders a player placed: what is ordered beyond what the colony ordered itself.
+		Map<Item, Integer> placed = new HashMap<>();
+		this.systemOrders.values().forEach(part -> part.forEach((item, count) -> placed.merge(item, count, Integer::sum)));
+		Map<Item, Integer> players = new HashMap<>();
+		this.orders.forEach((item, count) -> setCount(players, item, count - placed.getOrDefault(item, 0)));
+		feeds.accept(players, ORDER_PRIORITY);
 		crafts.forEach(item -> this.board.postFor(JobType.CRAFT, this.core, item, Optional.empty(), priorities.getOrDefault(item, 0)));
 	}
 
