@@ -14,7 +14,9 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.MultifaceBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BellAttachType;
@@ -237,14 +239,56 @@ class RegionPlanTest {
 		assertPlacedAfter(plan, new BlockPos(4, 1, 1), new BlockPos(3, 1, 1));
 	}
 
+	@Test
+	void vinesAndGlowLichenComeAfterABlockTheyHangOn() {
+		BlockState air = Blocks.AIR.defaultBlockState();
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		BlockState vine = Blocks.VINE.defaultBlockState().setValue(VineBlock.EAST, true);
+		// Across the cell edge at x 3-4: a vine at x 3 on the block at x 4; glow lichen at x 3 on the west and east faces,
+		// with air at x 2, so held by x 4; and a vine at x 3 with air east of it, hung below the vine above.
+		Map<BlockPos, BlockState> world = Map.of(
+			new BlockPos(3, 0, 0), vine,
+			new BlockPos(2, 0, 1), air,
+			new BlockPos(3, 0, 1), Blocks.GLOW_LICHEN.defaultBlockState()
+				.setValue(MultifaceBlock.getFaceProperty(Direction.WEST), true).setValue(MultifaceBlock.getFaceProperty(Direction.EAST), true),
+			new BlockPos(3, 0, 2), vine,
+			new BlockPos(4, 0, 2), air,
+			new BlockPos(3, 1, 2), vine);
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(7, 1, 2), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertPlacedAfter(plan, new BlockPos(4, 1, 0), new BlockPos(3, 1, 0));
+		assertPlacedAfter(plan, new BlockPos(4, 1, 1), new BlockPos(3, 1, 1));
+		assertPlacedAfter(plan, new BlockPos(3, 2, 2), new BlockPos(3, 1, 2));
+	}
+
+	@Test
+	void aBellBetweenTwoWallsComesAfterOneOfThem() {
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		// A bell at x 4 between the walls at x 3, in the cell before, and x 5, after it in its own cell.
+		Map<BlockPos, BlockState> world = Map.of(new BlockPos(4, 0, 0), Blocks.BELL.defaultBlockState()
+			.setValue(BlockStateProperties.BELL_ATTACHMENT, BellAttachType.DOUBLE_WALL).setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST));
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(7, 0, 0), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertTrue(placedAfter(plan, new BlockPos(3, 1, 0), new BlockPos(4, 1, 0)) || placedAfter(plan, new BlockPos(5, 1, 0), new BlockPos(4, 1, 0)), plan.batches().toString());
+	}
+
 	/** Asserts the step at {@code held} is in the batch of the step at {@code holder} and after it, or in a batch that needs that batch. */
 	private static void assertPlacedAfter(BuildPlan plan, BlockPos holder, BlockPos held) {
 		int holderStep = stepAt(plan, holder);
 		int heldStep = stepAt(plan, held);
+		assertTrue(placedAfter(plan, holder, held), held + " in batch " + batchOf(plan, heldStep) + " (step " + heldStep + "), its holder in batch "
+			+ batchOf(plan, holderStep) + " (step " + holderStep + "): " + plan.batches());
+	}
+
+	/** Whether the step at {@code held} is in the batch of the step at {@code holder} and after it, or in a batch that needs that batch. */
+	private static boolean placedAfter(BuildPlan plan, BlockPos holder, BlockPos held) {
+		int holderStep = stepAt(plan, holder);
+		int heldStep = stepAt(plan, held);
 		int holderBatch = batchOf(plan, holderStep);
 		int heldBatch = batchOf(plan, heldStep);
-		assertTrue(heldBatch == holderBatch && holderStep < heldStep || plan.batches().get(heldBatch).needs().contains(holderBatch),
-			held + " in batch " + heldBatch + " (step " + heldStep + "), its holder in batch " + holderBatch + " (step " + holderStep + "): " + plan.batches());
+		return heldBatch == holderBatch && holderStep < heldStep || plan.batches().get(heldBatch).needs().contains(holderBatch);
 	}
 
 	private static int stepAt(BuildPlan plan, BlockPos pos) {

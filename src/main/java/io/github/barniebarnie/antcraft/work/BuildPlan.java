@@ -5,6 +5,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -40,10 +42,12 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.HangingRootsBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.MultifaceBlock;
 import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.RedstoneWallTorchBlock;
 import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.TripWireHookBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.WallHangingSignBlock;
 import net.minecraft.world.level.block.WallSignBlock;
@@ -210,16 +214,21 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			// A block hung on one beside it in this batch goes in its holder's cell, after it, even when it lies over the edge.
 			Set<BlockPos> placed = of.stream().filter(step -> !step.isClear()).map(Step::pos).collect(Collectors.toSet());
 			Map<Integer, List<Step>> cells = new TreeMap<>();
+			// The cell each step went to, so a block hung on a hung block, such as a vine under a vine, follows it.
+			Map<BlockPos, Integer> went = new HashMap<>();
 			List<Step> hung = new ArrayList<>();
 			for (Step step : of) {
 				if (holder(step, placed::contains).isPresent()) {
 					hung.add(step);
 				} else {
-					cells.computeIfAbsent(cellOf.applyAsInt(step.pos()), c -> new ArrayList<>()).add(step);
+					went.put(step.pos(), cellOf.applyAsInt(step.pos()));
+					cells.computeIfAbsent(went.get(step.pos()), c -> new ArrayList<>()).add(step);
 				}
 			}
 			for (Step step : hung) {
-				cells.computeIfAbsent(cellOf.applyAsInt(holder(step, placed::contains).orElseThrow()), c -> new ArrayList<>()).add(step);
+				BlockPos holder = holder(step, placed::contains).orElseThrow();
+				went.put(step.pos(), went.getOrDefault(holder, cellOf.applyAsInt(holder)));
+				cells.computeIfAbsent(went.get(step.pos()), c -> new ArrayList<>()).add(step);
 			}
 			if (cells.isEmpty()) {
 				// Kept, empty, so the batches after it keep their place.
@@ -246,10 +255,11 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 * Where the block {@code step} places hangs from, such as a wall torch, ladder, cocoa or button on a wall, or a lantern,
 	 * bell or button under a ceiling: the block it is held by, which must be placed first, among those {@code placed}. A wall
 	 * hanging sign or a bell between two walls is held by either side; the first {@code placed} one is taken. Weeping and cave
-	 * vines and dripstone pointing down hang from the block above; twisting vines and dripstone pointing up rest on the block
-	 * below, which the bottom-up order already places first.
+	 * vines and dripstone pointing down hang from the block above. Plain vines and multiface blocks such as glow lichen are held by
+	 * any block one of their faces is on, and a plain vine also by the block above, where it hangs below another vine. Twisting
+	 * vines and dripstone pointing up rest on the block below, which the bottom-up order already places first.
 	 */
-	// ponytail: a list of vanilla blocks rather than canSurvive against the planned states; side vines, glow lichen and modded blocks are not covered.
+	// ponytail: a list of vanilla blocks rather than canSurvive against the planned states; modded blocks are not covered.
 	static Optional<BlockPos> holder(Step step, Predicate<BlockPos> placed) {
 		BlockState state = step.state();
 		Block block = state.getBlock();
@@ -263,7 +273,11 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		boolean onWall = block instanceof WallTorchBlock || block instanceof RedstoneWallTorchBlock || block instanceof LadderBlock
 			|| block instanceof WallSignBlock || block instanceof WallBannerBlock || block instanceof TripWireHookBlock || block instanceof BaseCoralWallFanBlock
 			|| block instanceof FaceAttachedHorizontalDirectionalBlock && state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE) == AttachFace.WALL;
-		List<BlockPos> holders = fromCeiling ? List.of(pos.above())
+		List<BlockPos> holders = block instanceof MultifaceBlock ? MultifaceBlock.availableFaces(state).stream().map(pos::relative).toList()
+			// A vine hangs on any of its faces, or below another vine.
+			: block instanceof VineBlock ? Stream.concat(VineBlock.PROPERTY_BY_DIRECTION.entrySet().stream()
+				.filter(face -> state.getValue(face.getValue())).map(face -> pos.relative(face.getKey())), Stream.of(pos.above())).toList()
+			: fromCeiling ? List.of(pos.above())
 			: !state.hasProperty(BlockStateProperties.HORIZONTAL_FACING) ? List.of()
 			: onWall ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite()))
 			: block instanceof BellBlock && state.getValue(BellBlock.ATTACHMENT) == BellAttachType.SINGLE_WALL
