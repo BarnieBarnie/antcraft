@@ -20,7 +20,6 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.sheep.Sheep;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -384,22 +383,19 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
-		farmer(helper, colony);
-		ItemEntity[] outside = {null};
+		GameTests.failIfTakenFromOutside(helper, farmer(helper, colony), core(helper));
+		boolean[] spawned = {false};
 		helper.onEachTick(() -> {
-			if (outside[0] == null && sheep.isSheared()) {
-				outside[0] = helper.spawnItem(Items.WOOL.white(), new BlockPos(9, 1, 5));
-			}
-			if (outside[0] != null && !outside[0].isAlive()) {
-				helper.fail("picked up the wool outside the test area");
+			if (!spawned[0] && sheep.isSheared()) {
+				GameTests.spawnOutside(helper, Items.WOOL.white(), new BlockPos(9, 1, 5));
+				spawned[0] = true;
 			}
 		});
 
 		helper.succeedWhen(() -> {
-			helper.assertTrue(outside[0] != null, "sheep not sheared");
+			helper.assertTrue(spawned[0], "sheep not sheared");
 			// Stored once it is done picking up the fleece.
 			helper.assertTrue(wool(core(helper)) > 0, "no wool in the core");
-			helper.assertTrue(outside[0].isAlive(), "picked up the wool outside the test area");
 		});
 	}
 

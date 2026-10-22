@@ -7,11 +7,19 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.AABB;
 import org.slf4j.Logger;
@@ -99,6 +107,31 @@ public final class GameTests {
 			if (bot.getIdleTicks() >= ticks && workLeft.getAsBoolean()) {
 				helper.fail("bot idle for " + ticks + " ticks with work left");
 			}
+		});
+	}
+
+	/** The name {@link #spawnOutside} marks its items with. */
+	private static final Component OUTSIDE = Component.literal("outside the test area");
+
+	/**
+	 * Spawns {@code item} at {@code pos}, just outside the test area, marked so the test can tell it from items of its
+	 * own. Just outside one test area is inside or beside the next, whose bots may take it, so tests check with
+	 * {@link #failIfTakenFromOutside} that their own bot did not, rather than that the item still lies there.
+	 */
+	public static void spawnOutside(GameTestHelper helper, Item item, BlockPos pos) {
+		ItemEntity entity = helper.spawnItem(item, pos);
+		ItemStack stack = entity.getItem().copy();
+		stack.set(DataComponents.CUSTOM_NAME, OUTSIDE);
+		entity.setItem(stack);
+	}
+
+	/** Fails the test as soon as {@code bot} carries, or {@code store} holds, an item marked by {@link #spawnOutside}. */
+	public static void failIfTakenFromOutside(GameTestHelper helper, AntBot bot, Container store) {
+		helper.onEachTick(() -> {
+			Stream<ItemStack> stacks = Stream.concat(Stream.of(bot.getMainHandItem()),
+				Stream.of(bot.getInventory(), store).flatMap(container -> IntStream.range(0, container.getContainerSize()).mapToObj(container::getItem)));
+			stacks.filter(stack -> OUTSIDE.equals(stack.get(DataComponents.CUSTOM_NAME))).findFirst()
+				.ifPresent(stack -> helper.fail("picked up the " + stack.getItem() + " outside the test area"));
 		});
 	}
 }

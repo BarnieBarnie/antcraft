@@ -355,20 +355,22 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		home(helper).setItem(0, new ItemStack(Items.OAK_SAPLING));
 		BlockPos site = helper.absolutePos(new BlockPos(6, 1, 5));
 		colony.board().post(JobType.REPLANT, site, List.of(site), Optional.of(Items.OAK_SAPLING), helper.getLevel().getGameTime());
+		// A floor just outside the test area, with room to walk to it whatever the terrain there.
 		for (int x = 8; x <= 9; x++) {
 			for (int z = 4; z <= 5; z++) {
 				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
+				for (int y = 1; y <= 3; y++) {
+					helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, y, z)), Blocks.AIR.defaultBlockState());
+				}
 			}
 		}
-		ItemEntity sapling = helper.spawnItem(Items.OAK_SAPLING, new BlockPos(9, 1, 4));
-		ItemEntity log = helper.spawnItem(Items.OAK_LOG, new BlockPos(9, 1, 5));
-		lumberjack(helper, 2, 4);
+		GameTests.spawnOutside(helper, Items.OAK_SAPLING, new BlockPos(9, 1, 4));
+		GameTests.spawnOutside(helper, Items.OAK_LOG, new BlockPos(9, 1, 5));
+		GameTests.failIfTakenFromOutside(helper, lumberjack(helper, 2, 4), home(helper));
 
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, 6, 1, 5);
 			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.REPLANT), "replant job left: " + colony.board().jobs());
-			helper.assertTrue(sapling.isAlive(), "picked up the sapling outside the test area");
-			helper.assertTrue(log.isAlive(), "picked up the log outside the test area");
 		});
 	}
 
@@ -390,16 +392,12 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
-		lumberjack(helper, 2, 4);
+		GameTests.failIfTakenFromOutside(helper, lumberjack(helper, 2, 4), home(helper));
 		ItemEntity[] inside = {null};
-		ItemEntity[] outside = {null};
 		helper.onEachTick(() -> {
 			if (inside[0] == null && countBlocks(helper, BlockTags.LOGS) == 0) {
 				inside[0] = helper.spawnItem(Items.OAK_LOG, new BlockPos(4, 1, 7));
-				outside[0] = helper.spawnItem(Items.OAK_LOG, new BlockPos(9, 1, 5));
-			}
-			if (outside[0] != null && !outside[0].isAlive()) {
-				helper.fail("picked up the log outside the test area");
+				GameTests.spawnOutside(helper, Items.OAK_LOG, new BlockPos(9, 1, 5));
 			}
 		});
 
@@ -408,7 +406,6 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(!inside[0].isAlive(), "log in the test area not picked up");
 			// Posted once it is done collecting, as it has no sapling to replant with.
 			helper.assertTrue(colony.board().has(JobType.REPLANT, helper.absolutePos(new BlockPos(6, 1, 5))), "not done collecting");
-			helper.assertTrue(outside[0].isAlive(), "picked up the log outside the test area");
 		});
 	}
 

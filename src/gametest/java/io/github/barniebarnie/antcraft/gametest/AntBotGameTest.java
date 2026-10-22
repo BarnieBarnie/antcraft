@@ -14,7 +14,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
@@ -54,14 +53,14 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 			helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, 4)), Blocks.STONE.defaultBlockState());
 		}
 		helper.spawnItem(Items.COBBLESTONE, new BlockPos(6, 1, 4));
-		ItemEntity outside = helper.spawnItem(Items.COBBLESTONE, new BlockPos(9, 1, 4));
+		GameTests.spawnOutside(helper, Items.COBBLESTONE, new BlockPos(9, 1, 4));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		Container core = (Container) helper.getBlockEntity(new BlockPos(1, 1, 1), BlockEntity.class);
+		GameTests.failIfTakenFromOutside(helper, bot, core);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core.countItem(Items.COBBLESTONE) == 1, "core holds " + core.countItem(Items.COBBLESTONE) + " cobblestone");
-			helper.assertTrue(outside.isAlive(), "picked up the item outside the test area");
 		});
 	}
 
