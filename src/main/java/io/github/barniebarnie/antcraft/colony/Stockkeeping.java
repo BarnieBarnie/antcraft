@@ -107,7 +107,7 @@ public final class Stockkeeping {
 	/**
 	 * The items open orders want: the ordered items, what their plans still have to gather or lack
 	 * beyond {@code stock}, and whatever could stand in for those in a recipe (cobbled deepslate for
-	 * cobblestone). Orders reserve stock in turn: what one uses up is not there for the next. Plans
+	 * cobblestone) or gathered for another recipe of the same item (a rose bush for red dye from a poppy). Orders reserve stock in turn: what one uses up is not there for the next. Plans
 	 * once per order, so call it once per check rather than per item.
 	 */
 	public static <I> Set<I> wantedForOrders(Map<I, Integer> orders, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
@@ -123,9 +123,19 @@ public final class Stockkeeping {
 			lacking.addAll(plan.missing().keySet());
 			wanted.addAll(lacking);
 			for (TaskPlanner.Craft<I> craft : plan.crafts()) {
+				if (craft.recipe().ingredients().keySet().stream().noneMatch(options -> options.stream().anyMatch(lacking::contains))) {
+					continue;
+				}
 				craft.recipe().ingredients().keySet().stream()
 					.filter(options -> options.stream().anyMatch(lacking::contains))
 					.forEach(wanted::addAll);
+				// The plan takes one recipe, but what the others gather does as well: a rose bush makes red dye like a poppy.
+				for (TaskPlanner.Recipe<I> other : book.recipesFor(craft.recipe().output())) {
+					if (other.equals(craft.recipe())) {
+						continue;
+					}
+					other.ingredients().keySet().forEach(options -> options.stream().filter(gatherable).forEach(wanted::add));
+				}
 			}
 		});
 		return wanted;

@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.work;
 
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.world.item.Item;
@@ -14,11 +16,11 @@ public final class Fuels {
 	private Fuels() {
 	}
 
-	/** @param logs the items that count as logs (the {@code minecraft:logs} tag on a running server) */
+	/** @param logs the items that count as logs (the {@code minecraft:logs} tag on a running server), in the order to burn them when stock ties */
 	public static List<TaskPlanner.Fuel<Item>> order(Set<Item> logs) {
 		return List.of(
 			new TaskPlanner.Fuel<>(Set.of(Items.COAL), COAL_TICKS),
 			new TaskPlanner.Fuel<>(Set.of(Items.CHARCOAL), COAL_TICKS),
-			new TaskPlanner.Fuel<>(Set.copyOf(logs), LOG_TICKS));
+			new TaskPlanner.Fuel<>(Collections.unmodifiableSet(new LinkedHashSet<>(logs)), LOG_TICKS));
 	}
 }

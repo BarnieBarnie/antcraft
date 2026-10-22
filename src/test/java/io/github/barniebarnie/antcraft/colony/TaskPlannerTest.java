@@ -41,7 +41,7 @@ class TaskPlannerTest {
 		return TaskPlanner.plan(item, count, new HashMap<>(stock), BOOK, GATHERABLE::contains);
 	}
 
-	private static List<String> craftOrder(TaskPlanner.Plan<String> plan) {
+	private static <I> List<I> craftOrder(TaskPlanner.Plan<I> plan) {
 		return plan.crafts().stream().map(c -> c.recipe().output()).toList();
 	}
 
@@ -347,7 +347,7 @@ class TaskPlannerTest {
 
 	@Test
 	void plansABedFromGatherableInputsWithEmptyStock() {
-		// Farmers shear sheep for white wool; the dye for a red one comes from beetroot.
+		// Farmers shear sheep for white wool; the dye for a red one comes from a flower.
 		for (Item bed : List.of(Items.BED.white(), Items.BED.red())) {
 			TaskPlanner.Plan<Item> plan = planVanilla(bed, 1, Map.of());
 
@@ -372,6 +372,34 @@ class TaskPlannerTest {
 
 		assertEquals(Map.of(), plan.missing(), "plan: " + plan);
 		assertEquals(Map.of(Items.DANDELION, 1), plan.toGather(), "plan: " + plan);
+	}
+
+	@Test
+	void plansRedDyeFromAFlowerTheSameEveryRun() {
+		// The colony grows no beetroot. Poppy, red tulip and rose bush tie; the book lists recipes by id,
+		// so the first, the poppy, wins in every run rather than whichever a hash order puts first.
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of(Items.WOOL.white(), 3, Items.OAK_PLANKS, 3));
+
+		assertEquals(Map.of(), plan.missing(), "plan: " + plan);
+		assertEquals(Map.of(Items.POPPY, 1), plan.toGather(), "plan: " + plan);
+	}
+
+	@Test
+	void plansARedBedTheSameEveryRun() {
+		// Ingredient options used to be hash sets in a per-run order: one run gathered birch wood, the next an acacia log.
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.BED.red(), 1, Map.of());
+
+		assertEquals(Map.of(Items.WOOL.white(), 3, Items.OAK_LOG, 1, Items.POPPY, 1), plan.toGather(), "plan: " + plan);
+		assertEquals(List.of(Items.DYE.red(), Items.OAK_PLANKS, Items.BED.white(), Items.BED.red()), craftOrder(plan));
+	}
+
+	@Test
+	void theRecipeBookListsRecipesById() {
+		// The recipe manager hands them out by id; the planner takes the first of recipes that tie.
+		List<Item> sources = VanillaData.recipeBook().recipesFor(Items.DYE.red()).stream()
+			.map(recipe -> recipe.ingredients().keySet().iterator().next().iterator().next()).toList();
+
+		assertEquals(List.of(Items.BEETROOT, Items.POPPY, Items.ROSE_BUSH, Items.RED_TULIP), sources);
 	}
 
 	@Test

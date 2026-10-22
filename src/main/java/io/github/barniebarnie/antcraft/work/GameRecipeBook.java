@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.work;
 
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,17 +63,18 @@ public final class GameRecipeBook implements TaskPlanner.RecipeBook<Item> {
 				if (result.isEmpty() || ingredients.isEmpty()) {
 					continue;
 				}
+				// In the recipe's own order: Set.of and Map.copyOf iterate in an order that differs between
+				// runs, and the planner takes the first of options and ingredients that tie.
 				Map<Set<Item>, Integer> counts = new LinkedHashMap<>();
 				for (Ingredient ingredient : ingredients) {
-					Set<Item> options = ingredient.items().map(Holder::value).collect(Collectors.toUnmodifiableSet());
-					counts.merge(options, 1, Integer::sum);
+					counts.merge(options(ingredient), 1, Integer::sum);
 				}
 				this.byOutput.computeIfAbsent(result.getItem(), item -> new ArrayList<>())
-					.add(new TaskPlanner.Recipe<>(result.getItem(), result.getCount(), Map.copyOf(counts), false, isLarge(recipe, ingredients.size())));
+					.add(new TaskPlanner.Recipe<>(result.getItem(), result.getCount(), Collections.unmodifiableMap(counts), false, isLarge(recipe, ingredients.size())));
 			} else if (holder.value() instanceof SmeltingRecipe recipe) {
 				// Like crafting results, furnace results do not depend on the input.
 				ItemStack result = recipe.assemble(ANY_SINGLE_INPUT);
-				Set<Item> options = recipe.input().items().map(Holder::value).collect(Collectors.toUnmodifiableSet());
+				Set<Item> options = options(recipe.input());
 				if (result.isEmpty() || options.isEmpty()) {
 					continue;
 				}
@@ -80,7 +83,12 @@ public final class GameRecipeBook implements TaskPlanner.RecipeBook<Item> {
 			}
 		}
 		this.fuels = Fuels.order(StreamSupport.stream(BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).spliterator(), false)
-			.map(Holder::value).collect(Collectors.toUnmodifiableSet()));
+			.map(Holder::value).collect(Collectors.toCollection(LinkedHashSet::new)));
+	}
+
+	private static Set<Item> options(Ingredient ingredient) {
+		Set<Item> options = ingredient.items().map(Holder::value).collect(Collectors.toCollection(LinkedHashSet::new));
+		return Collections.unmodifiableSet(options);
 	}
 
 	/** Whether the recipe needs a crafting table's 3x3 grid: a shape wider or taller than 2, or more than 4 ingredients. */

@@ -133,6 +133,18 @@ class StockkeepingTest {
 	}
 
 	@Test
+	void gatherableSourcesOfAnotherRecipeForTheSameItemStandIn() {
+		// The planner takes one recipe per item, but a picked rose bush makes red dye as well as a poppy.
+		Map<Item, Integer> stock = Map.of(Items.WOOL.white(), 3, Items.OAK_PLANKS, 3);
+		Set<Item> wanted = Stockkeeping.wantedForOrders(Map.of(Items.BED.red(), 1), stock, VanillaData.recipeBook(), VanillaData.gatherable());
+
+		assertTrue(wanted.containsAll(Set.of(Items.POPPY, Items.ROSE_BUSH, Items.RED_TULIP)), "wanted: " + wanted);
+		// The colony grows no beetroot, and nothing that has to be made stands in.
+		assertFalse(wanted.contains(Items.BEETROOT), "wanted: " + wanted);
+		assertFalse(wanted.contains(Items.BED.white()), "wanted: " + wanted);
+	}
+
+	@Test
 	void anOpenStonePickaxeOrderSendsAMinerWithCobblestoneToTheCore() {
 		Map<Item, Integer> stock = Map.of(Items.STICK, 8);
 		Set<Item> forOrders = Stockkeeping.wantedForOrders(Map.of(Items.STONE_PICKAXE, 1), stock, VanillaData.recipeBook(), VanillaData.gatherable());

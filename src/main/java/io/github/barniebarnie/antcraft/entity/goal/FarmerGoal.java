@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.entity.goal;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
-import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -11,7 +10,6 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
-import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
@@ -529,7 +527,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				if (wanted[0] == null) {
 					wanted[0] = Storage.wanted(level, colony);
 				}
-				return wantsFlower(state.getBlock().asItem(), wanted[0], GameRecipeBook.of(level.getServer()));
+				return wanted[0].test(state.getBlock().asItem());
 			});
 			if (this.flower == null) {
 				// Looked at again on the next scan: a wall may be gone by then.
@@ -555,25 +553,6 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static boolean isFlower(BlockState state) {
 		return state.is(BlockTags.SMALL_FLOWERS) || state.is(BlockTags.FLOWERS) && state.getBlock() instanceof DoublePlantBlock
 			&& state.getValue(DoublePlantBlock.HALF) == DoubleBlockHalf.LOWER;
-	}
-
-	/**
-	 * Whether the colony wants {@code flower}: itself, or for a dye it wants another source of. The planner takes
-	 * one recipe per dye, beetroot say, where a rose bush makes the same red dye.
-	 * ponytail: a source wanted for something else, as beetroot for soup, makes its dye's flowers wanted too.
-	 */
-	private static boolean wantsFlower(Item flower, Predicate<Item> wanted, TaskPlanner.RecipeBook<Item> book) {
-		if (wanted.test(flower)) {
-			return true;
-		}
-		for (Item dye : Items.DYE.asList()) {
-			Set<Item> sources = new HashSet<>();
-			book.recipesFor(dye).forEach(recipe -> recipe.ingredients().keySet().forEach(sources::addAll));
-			if (sources.contains(flower) && sources.stream().anyMatch(wanted)) {
-				return true;
-			}
-		}
-		return false;
 	}
 
 	/** Takes seeds from the core, or breaks grass in the territory until some drop. Returns false when there are none to get. */

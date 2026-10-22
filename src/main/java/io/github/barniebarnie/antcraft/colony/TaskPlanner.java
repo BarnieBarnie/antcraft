@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -85,7 +86,8 @@ public final class TaskPlanner {
 	public static <I> Plan<I> plan(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		State<I> state = new State<>(new HashMap<>(stock));
 		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0}).need(state, item, count, new HashSet<>(), true);
-		return new Plan<>(List.copyOf(state.crafts), Map.copyOf(state.gather), Map.copyOf(state.missing));
+		// Map.copyOf would iterate in an order that differs between runs.
+		return new Plan<>(List.copyOf(state.crafts), Collections.unmodifiableMap(state.gather), Collections.unmodifiableMap(state.missing));
 	}
 
 	private static final class State<I> {
