@@ -383,7 +383,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 */
 	private boolean shearSheep(ServerLevel level, Colony colony) {
 		if (this.fleece != null) {
-			if (this.collectFleece(level)) {
+			if (this.collectFleece(level, colony)) {
 				return true;
 			}
 			this.fleece = null;
@@ -467,12 +467,13 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/** Walks over the wool a shorn sheep dropped. Returns false once there is none left to pick up. */
-	private boolean collectFleece(ServerLevel level) {
+	private boolean collectFleece(ServerLevel level, Colony colony) {
 		if (level.getGameTime() > this.fleeceUntil) {
 			return false;
 		}
 		ItemEntity wool = level.getEntitiesOfClass(ItemEntity.class, new AABB(this.fleece).inflate(FLEECE_RADIUS),
-				item -> item.isAlive() && item.getItem().is(ItemTags.WOOL) && this.bot.wantsToPickUp(level, item.getItem()))
+				item -> item.isAlive() && item.getItem().is(ItemTags.WOOL) && this.bot.wantsToPickUp(level, item.getItem())
+				&& Territory.of(colony).contains(item.blockPosition()))
 			.stream()
 			.min(Comparator.comparingDouble(this.bot::distanceToSqr))
 			.orElse(null);

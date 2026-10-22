@@ -29,6 +29,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -340,6 +341,33 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			assertAreaCleared(helper);
 			Container chest = home(helper);
 			helper.assertTrue(chest.countItem(Items.OAK_LOG) == 9, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
+		});
+	}
+
+	/**
+	 * A felled tree's replant job near the edge of the test area takes its sapling from the core, and
+	 * leaves the sapling and log lying just outside the area alone, though they are within reach of the site.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 40)
+	public void replantsASiteNearTheEdgeButLeavesDropsJustOutsideItsTestAreaAlone(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		home(helper).setItem(0, new ItemStack(Items.OAK_SAPLING));
+		BlockPos site = helper.absolutePos(new BlockPos(6, 1, 5));
+		colony.board().post(JobType.REPLANT, site, List.of(site), Optional.of(Items.OAK_SAPLING), helper.getLevel().getGameTime());
+		for (int x = 8; x <= 9; x++) {
+			for (int z = 4; z <= 5; z++) {
+				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
+			}
+		}
+		ItemEntity sapling = helper.spawnItem(Items.OAK_SAPLING, new BlockPos(9, 1, 4));
+		ItemEntity log = helper.spawnItem(Items.OAK_LOG, new BlockPos(9, 1, 5));
+		lumberjack(helper, 2, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, 6, 1, 5);
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.REPLANT), "replant job left: " + colony.board().jobs());
+			helper.assertTrue(sapling.isAlive(), "picked up the sapling outside the test area");
+			helper.assertTrue(log.isAlive(), "picked up the log outside the test area");
 		});
 	}
 

@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
@@ -401,7 +402,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	private int saplingsNear(ServerLevel level, BlockPos base, Predicate<ItemStack> wanted) {
 		return level.getEntitiesOfClass(ItemEntity.class, new AABB(base).inflate(COLLECT_RADIUS),
 				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && wanted.test(item.getItem())
-					&& this.bot.wantsToPickUp(level, item.getItem()))
+					&& this.bot.wantsToPickUp(level, item.getItem()) && this.inTerritory(level, item.blockPosition()))
 			.stream().mapToInt(item -> item.getItem().getCount()).sum();
 	}
 
@@ -522,6 +523,11 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 		}
 	}
 
+	/** Whether {@code pos} lies in this bot's colony's territory; anywhere for a bot without a colony. */
+	private boolean inTerritory(ServerLevel level, BlockPos pos) {
+		return this.colony(level).map(colony -> Territory.of(colony).contains(pos)).orElse(true);
+	}
+
 	private Optional<Colony> colony(ServerLevel level) {
 		UUID id = this.bot.getColonyId();
 		return id == null ? Optional.empty() : ColonyManager.get(level).byId(id);
@@ -588,7 +594,8 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 	private void collect(ServerLevel level) {
 		AABB area = new AABB(this.site).inflate(COLLECT_RADIUS);
 		ItemEntity nearest = level.getEntitiesOfClass(ItemEntity.class, area,
-				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && this.bot.wantsToPickUp(level, item.getItem()))
+				item -> item.isAlive() && !this.unreachableItems.contains(item.getId()) && this.bot.wantsToPickUp(level, item.getItem())
+					&& this.inTerritory(level, item.blockPosition()))
 			.stream()
 			.min(Comparator.comparingDouble(this.bot::distanceToSqr))
 			.orElse(null);
