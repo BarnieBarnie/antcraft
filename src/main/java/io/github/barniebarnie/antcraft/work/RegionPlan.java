@@ -28,22 +28,30 @@ public final class RegionPlan {
 	 *
 	 * <p>Each layer is a batch, split into cells (see {@link BuildPlan#inCells}) so several builders can work
 	 * one layer, and each cell needs only the cells of the layer below under it, so what a block rests on comes first
-	 * while builders work several layers apart at once.
+	 * while builders work several layers apart at once. A block hung from the one above, such as a lantern, goes in the
+	 * layer of that block, after it.
 	 */
 	public static Optional<BuildPlan> copy(Function<BlockPos, BlockState> world, BlockPos from, BlockPos to, BlockPos at) {
 		BlockPos min = BlockPos.min(from, to);
 		BlockPos max = BlockPos.max(from, to);
 		List<BuildPlan.Step> steps = new ArrayList<>();
 		List<BuildPlan.Batch> batches = new ArrayList<>();
+		// Steps hung from the block above, such as a lantern, by where that block goes: they are added right after it, in its layer.
+		Map<BlockPos, List<BuildPlan.Step>> hung = new HashMap<>();
 		for (int y = min.getY(); y <= max.getY(); y++) {
 			int first = steps.size();
 			for (int z = min.getZ(); z <= max.getZ(); z++) {
 				for (int x = min.getX(); x <= max.getX(); x++) {
 					BlockPos source = new BlockPos(x, y, z);
 					BlockState state = world.apply(source);
-					// Flowing fluid cannot be placed; it follows from its source. The second half of a door or bed follows from the first.
-					if (state != null && (!(state.getBlock() instanceof LiquidBlock) || state.getFluidState().isSource()) && !BuildPlan.isSecondHalf(state)) {
-						steps.add(new BuildPlan.Step(at.offset(source.subtract(min)), state));
+					if (copied(state)) {
+						BuildPlan.Step step = new BuildPlan.Step(at.offset(source.subtract(min)), state);
+						BlockState above = y < max.getY() ? world.apply(source.above()) : null;
+						if (copied(above) && !above.isAir() && BuildPlan.holder(step, step.pos().above()::equals).isPresent()) {
+							hung.computeIfAbsent(step.pos().above(), pos -> new ArrayList<>()).add(step);
+						} else {
+							add(step, steps, hung);
+						}
 					}
 				}
 			}
@@ -53,6 +61,19 @@ public final class RegionPlan {
 			}
 		}
 		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches).inCells());
+	}
+
+	/** Whether {@code state} gets a step: flowing fluid follows from its source, and the second half of a door or bed from the first. */
+	private static boolean copied(BlockState state) {
+		return state != null && (!(state.getBlock() instanceof LiquidBlock) || state.getFluidState().isSource()) && !BuildPlan.isSecondHalf(state);
+	}
+
+	/** Adds {@code step} to {@code steps}, then what hangs from it, and what hangs from that in turn. */
+	private static void add(BuildPlan.Step step, List<BuildPlan.Step> steps, Map<BlockPos, List<BuildPlan.Step>> hung) {
+		steps.add(step);
+		for (BuildPlan.Step held : hung.getOrDefault(step.pos(), List.of())) {
+			add(held, steps, hung);
+		}
 	}
 
 	/**

@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
@@ -168,6 +169,39 @@ class RegionPlanTest {
 
 		assertPlacedAfter(plan, new BlockPos(4, 1, 0), new BlockPos(3, 1, 0));
 		assertPlacedAfter(plan, new BlockPos(6, 1, 0), new BlockPos(5, 1, 0));
+	}
+
+	@Test
+	void aBlockHungFromTheCeilingComesAfterTheBlockAbove() {
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		BlockState lantern = Blocks.LANTERN.defaultBlockState().setValue(BlockStateProperties.HANGING, true);
+		// A chain: a lantern under a lantern under the ceiling, and a ceiling button beside it.
+		Map<BlockPos, BlockState> world = Map.of(new BlockPos(0, 0, 0), lantern, new BlockPos(0, 1, 0), lantern,
+			new BlockPos(1, 1, 0), Blocks.STONE_BUTTON.defaultBlockState().setValue(BlockStateProperties.ATTACH_FACE, AttachFace.CEILING));
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(1, 2, 0), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertPlacedAfter(plan, new BlockPos(0, 3, 0), new BlockPos(0, 2, 0));
+		assertPlacedAfter(plan, new BlockPos(0, 2, 0), new BlockPos(0, 1, 0));
+		assertPlacedAfter(plan, new BlockPos(1, 3, 0), new BlockPos(1, 2, 0));
+	}
+
+	@Test
+	void cocoaAndAWallHangingSignComeAfterTheirHolder() {
+		BlockState air = Blocks.AIR.defaultBlockState();
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		// As above, across a cell edge at x 3-4: cocoa at x 3 on the jungle log at x 4, and in the next row a wall
+		// hanging sign at x 3 facing north, held by the block at x 4 with air at x 2.
+		Map<BlockPos, BlockState> world = Map.of(
+			new BlockPos(3, 0, 0), Blocks.COCOA.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST),
+			new BlockPos(4, 0, 0), Blocks.JUNGLE_LOG.defaultBlockState(),
+			new BlockPos(2, 0, 1), air,
+			new BlockPos(3, 0, 1), Blocks.OAK_WALL_HANGING_SIGN.defaultBlockState().setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH));
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(7, 0, 1), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertPlacedAfter(plan, new BlockPos(4, 1, 0), new BlockPos(3, 1, 0));
+		assertPlacedAfter(plan, new BlockPos(4, 1, 1), new BlockPos(3, 1, 1));
 	}
 
 	/** Asserts the step at {@code held} is in the batch of the step at {@code holder} and after it, or in a batch that needs that batch. */

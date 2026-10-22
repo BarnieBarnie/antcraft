@@ -27,20 +27,27 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.BaseCoralWallFanBlock;
 import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CeilingHangingSignBlock;
+import net.minecraft.world.level.block.CocoaBlock;
 import net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock;
 import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.HangingRootsBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RedstoneWallTorchBlock;
+import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.TripWireHookBlock;
 import net.minecraft.world.level.block.WallBannerBlock;
+import net.minecraft.world.level.block.WallHangingSignBlock;
 import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BedPart;
+import net.minecraft.world.level.block.state.properties.BellAttachType;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -165,8 +172,9 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 * the order of its steps, so in each column what a block rests on is still placed, and what is in its way dug,
 	 * first. Each cell needs the cells of the batches its batch needs that share a column with it, so one on top of
 	 * another waits only for what is under it, and builders can work several layers apart at once. A block rests only
-	 * on the block under it, in its own column; one held from the side, such as a wall torch, is held in its own layer,
-	 * and goes in the cell of the block it hangs on, after it (see {@link #holder}).
+	 * on the block under it, in its own column; one hung on a block of the same batch, such as a wall torch, or a lantern
+	 * that {@link RegionPlan#copy} moved up to the layer of the ceiling it hangs from, goes in the cell of the block it hangs
+	 * on, after it (see {@link #holder}).
 	 * A batch that fits one square stays one batch, so a small plan stays as it is.
 	 */
 	public BuildPlan inCells() {
@@ -190,14 +198,14 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			Map<Integer, List<Step>> cells = new TreeMap<>();
 			List<Step> hung = new ArrayList<>();
 			for (Step step : of) {
-				if (holder(step).filter(placed::contains).isPresent()) {
+				if (holder(step, placed::contains).isPresent()) {
 					hung.add(step);
 				} else {
 					cells.computeIfAbsent(cellOf.applyAsInt(step.pos()), c -> new ArrayList<>()).add(step);
 				}
 			}
 			for (Step step : hung) {
-				cells.computeIfAbsent(cellOf.applyAsInt(holder(step).orElseThrow()), c -> new ArrayList<>()).add(step);
+				cells.computeIfAbsent(cellOf.applyAsInt(holder(step, placed::contains).orElseThrow()), c -> new ArrayList<>()).add(step);
 			}
 			if (cells.isEmpty()) {
 				// Kept, empty, so the batches after it keep their place.
@@ -221,18 +229,30 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	}
 
 	/**
-	 * Where the block {@code step} places hangs from the side, such as a wall torch, ladder, wall sign or button on a
-	 * wall: the block it is held by, which must be placed first.
+	 * Where the block {@code step} places hangs from, such as a wall torch, ladder, cocoa or button on a wall, or a lantern,
+	 * bell or button under a ceiling: the block it is held by, which must be placed first, among those {@code placed}. A wall
+	 * hanging sign is held by either side; the first {@code placed} one is taken.
 	 */
-	// ponytail: a list of vanilla blocks; a ceiling button or lantern hangs on the layer above, which comes later, and is left as it is.
-	static Optional<BlockPos> holder(Step step) {
+	// ponytail: a list of vanilla blocks rather than canSurvive against the planned states; vines, dripstone and modded blocks are not covered.
+	static Optional<BlockPos> holder(Step step, Predicate<BlockPos> placed) {
 		BlockState state = step.state();
 		Block block = state.getBlock();
-		boolean hangs = block instanceof WallTorchBlock || block instanceof RedstoneWallTorchBlock || block instanceof LadderBlock
+		BlockPos pos = step.pos();
+		boolean fromCeiling = block instanceof CeilingHangingSignBlock || block instanceof SporeBlossomBlock || block instanceof HangingRootsBlock
+			|| state.hasProperty(BlockStateProperties.HANGING) && state.getValue(BlockStateProperties.HANGING)
+			|| block instanceof BellBlock && state.getValue(BellBlock.ATTACHMENT) == BellAttachType.CEILING
+			|| block instanceof FaceAttachedHorizontalDirectionalBlock && state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE) == AttachFace.CEILING;
+		boolean onWall = block instanceof WallTorchBlock || block instanceof RedstoneWallTorchBlock || block instanceof LadderBlock
 			|| block instanceof WallSignBlock || block instanceof WallBannerBlock || block instanceof TripWireHookBlock || block instanceof BaseCoralWallFanBlock
 			|| block instanceof FaceAttachedHorizontalDirectionalBlock && state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE) == AttachFace.WALL;
-		return hangs && state.hasProperty(BlockStateProperties.HORIZONTAL_FACING)
-			? Optional.of(step.pos().relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite())) : Optional.empty();
+		List<BlockPos> holders = fromCeiling ? List.of(pos.above())
+			: !state.hasProperty(BlockStateProperties.HORIZONTAL_FACING) ? List.of()
+			: onWall ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite()))
+			: block instanceof CocoaBlock ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING)))
+			: block instanceof WallHangingSignBlock ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getClockWise()),
+				pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getCounterClockWise()))
+			: List.of();
+		return holders.stream().filter(placed).findFirst();
 	}
 
 	/** Whether the columns {@code a} and {@code b} span (min x, min z, max x, max z) share one. */
