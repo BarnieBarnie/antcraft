@@ -13,6 +13,7 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
@@ -22,9 +23,16 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -62,6 +70,8 @@ public class PathFollower {
 	private int replansWithoutProgress;
 
 	private final BlockBreaker breaker;
+	/** Doors and fence gates this bot opened on its way, to shut again once it is through. */
+	private final Set<BlockPos> opened = new HashSet<>();
 	private boolean mayPlace = true;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 
@@ -88,6 +98,9 @@ public class PathFollower {
 	}
 
 	public void stop() {
+		if (this.bot.level() instanceof ServerLevel level) {
+			this.closeBehind(level);
+		}
 		this.breaker.reset();
 		this.goal = null;
 		this.path = null;
@@ -97,6 +110,7 @@ public class PathFollower {
 		if (this.goal == null || !(this.bot.level() instanceof ServerLevel level)) {
 			return Status.FAILED;
 		}
+		this.closeBehind(level);
 		BlockPos feet = this.bot.blockPosition();
 		if (this.goal.isReached(feet) && (this.bot.onGround() || this.goal.mayEndAfloat() && this.bot.isInWater())) {
 			this.stop();
@@ -140,6 +154,10 @@ public class PathFollower {
 		if (step.type() == MoveType.PILLAR) {
 			this.pillar(level, world, step);
 		} else {
+			if (step.type() == MoveType.WALK) {
+				this.open(level, step.to());
+				this.open(level, step.to().above());
+			}
 			this.moveTo(step.to());
 			if (step.type() != MoveType.SWIM && this.bot.isInWater()) {
 				this.bot.getJumpControl().jump(); // rise and climb out onto the bank
@@ -193,6 +211,44 @@ public class PathFollower {
 			budget += Math.max(0, (int) world.breakTicks(pos)) + 10;
 		}
 		return budget;
+	}
+
+	/** Opens a shut wooden door or fence gate the bot is about to walk through, as a player would. */
+	private void open(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		if (LevelWorldView.isOpenable(state) && !state.getValue(BlockStateProperties.OPEN)) {
+			this.setOpen(level, pos, state, true);
+			this.opened.add(pos);
+		}
+	}
+
+	/**
+	 * Shuts the doors and gates this bot opened as soon as, shut, they would not hit it. Forgets one that is gone or
+	 * someone else shut. ponytail: runs only while following a path, so one the bot stops in stays open.
+	 */
+	private void closeBehind(ServerLevel level) {
+		this.opened.removeIf(pos -> {
+			BlockState state = level.getBlockState(pos);
+			if (!state.hasProperty(BlockStateProperties.OPEN) || !state.getValue(BlockStateProperties.OPEN)) {
+				return true;
+			}
+			VoxelShape shut = state.setValue(BlockStateProperties.OPEN, false).getCollisionShape(level, pos).move(pos);
+			if (Shapes.joinIsNotEmpty(shut, Shapes.create(this.bot.getBoundingBox()), BooleanOp.AND)) {
+				return false;
+			}
+			this.setOpen(level, pos, state, false);
+			return true;
+		});
+	}
+
+	private void setOpen(ServerLevel level, BlockPos pos, BlockState state, boolean open) {
+		if (state.getBlock() instanceof DoorBlock door) {
+			door.setOpen(this.bot, level, state, pos, open);
+			return;
+		}
+		level.setBlock(pos, state.setValue(FenceGateBlock.OPEN, open), Block.UPDATE_CLIENTS);
+		level.playSound(null, pos, open ? SoundEvents.FENCE_GATE_OPEN : SoundEvents.FENCE_GATE_CLOSE, SoundSource.BLOCKS, 1.0F, 1.0F);
+		level.gameEvent(this.bot, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, pos);
 	}
 
 	private void moveTo(BlockPos to) {

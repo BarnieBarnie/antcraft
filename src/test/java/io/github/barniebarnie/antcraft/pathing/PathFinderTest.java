@@ -402,4 +402,23 @@ class PathFinderTest {
 		assertTrue(path.complete(), "no way to it: " + path.steps());
 		assertTrue(path.steps().stream().allMatch(s -> s.breaks().isEmpty()), "dug: " + path.steps());
 	}
+
+	@Test
+	void walksThroughADoorInAWallWithoutBreakingIt() {
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 3, 10, 'B').door(2, 1, 0, Direction.Axis.X);
+		Path path = find(world, new BlockPos(4, 1, 0), FULL);
+
+		assertTrue(path.complete(), "no way through: " + path.steps());
+		assertEquals(4, path.steps().size(), "went round: " + path.steps());
+		assertTrue(path.steps().stream().allMatch(s -> s.breaks().isEmpty() && s.places().isEmpty()), "dug or built: " + path.steps());
+	}
+
+	@Test
+	void doesNotEnterADoorFromTheSide() {
+		// A door in a wall running along x, walked through north-south: from the east it is a wall.
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 3, 10, 'B').door(2, 1, 0, Direction.Axis.Z);
+		Path path = find(world, new BlockPos(4, 1, 0), WALK_ONLY);
+
+		assertFalse(path.complete(), "went through: " + path.steps());
+	}
 }

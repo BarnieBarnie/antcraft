@@ -23,6 +23,14 @@ public interface WorldView {
 	float breakTicks(BlockPos pos);
 
 	/**
+	 * A bot moving {@code dir} walks through this block, opening it if it is shut, such as a wooden door or fence
+	 * gate across its way. A path never breaks it.
+	 */
+	default boolean canOpen(BlockPos pos, Direction dir) {
+		return false;
+	}
+
+	/**
 	 * A bot moving {@code dir} walks up onto this stair block without jumping, because the side it enters by
 	 * is low, such as the front of the mineshaft's stairs. False for any other block.
 	 */

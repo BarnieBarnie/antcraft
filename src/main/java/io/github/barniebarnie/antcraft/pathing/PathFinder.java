@@ -19,6 +19,8 @@ public final class PathFinder {
 	public static final double FALL_COST_PER_BLOCK = 1.0;
 	public static final double BREAK_OVERHEAD = 5.0;
 	public static final double PLACE_COST = 20.0;
+	/** Opening a door or fence gate on the way (see {@link WorldView#canOpen}). */
+	public static final double OPEN_COST = 2.0;
 	/**
 	 * Swimming a block at the surface: slow, so routes keep to dry land unless water saves a long way round.
 	 * Measured at about 33 ticks a block (see {@code PathingGameTest.swimCostMatchesTheTimeASwimTakes}).
@@ -149,7 +151,7 @@ public final class PathFinder {
 		private Candidate walk(BlockPos feet, Direction dir) {
 			BlockPos to = feet.relative(dir);
 			Builder b = new Builder(MoveType.WALK, to, WALK_COST);
-			b.clear(to).clear(to.above()).support(to.below());
+			b.pass(to, dir).pass(to.above(), dir).support(to.below());
 			return b.build();
 		}
 
@@ -281,6 +283,15 @@ public final class PathFinder {
 					this.cost = BLOCKED;
 				}
 				return this;
+			}
+
+			/** Like {@link #clear}, but through a door or fence gate the bot opens rather than breaks. */
+			Builder pass(BlockPos pos, Direction dir) {
+				if (Planner.this.world.canOpen(pos, dir)) {
+					this.cost += OPEN_COST;
+					return this;
+				}
+				return this.clear(pos);
 			}
 
 			/** The bot must be able to stand on this block, placing one if needed. */

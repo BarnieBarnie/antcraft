@@ -10,11 +10,13 @@ import net.minecraft.core.Direction;
 /**
  * In-memory block world for pathfinder tests. Unset positions are air.
  * '#' = stone (30 ticks to break), 'D' = dirt (10 ticks), 'B' = bedrock (unbreakable), 'L' = lava,
- * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces).
+ * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces),
+ * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis).
  */
 final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
 	private final Map<BlockPos, Direction> stairs = new HashMap<>();
+	private final Map<BlockPos, Direction.Axis> doors = new HashMap<>();
 	private final Set<BlockPos> noPlacing = new HashSet<>();
 	private boolean placingForbidden;
 
@@ -44,6 +46,13 @@ final class GridWorld implements WorldView {
 	GridWorld stair(int x, int y, int z, Direction facing) {
 		this.stairs.put(new BlockPos(x, y, z), facing);
 		return this.set(x, y, z, 'S');
+	}
+
+	/** A two-block-high door at feet height {@code y}, walked through along {@code axis}. */
+	GridWorld door(int x, int y, int z, Direction.Axis axis) {
+		this.doors.put(new BlockPos(x, y, z), axis);
+		this.doors.put(new BlockPos(x, y + 1, z), axis);
+		return this.set(x, y, z, 'O').set(x, y + 1, z, 'O');
 	}
 
 	/** Fills the box between two corners (inclusive). */
@@ -87,6 +96,11 @@ final class GridWorld implements WorldView {
 	@Override
 	public boolean stairUp(BlockPos pos, Direction dir) {
 		return this.stairs.get(pos) == dir;
+	}
+
+	@Override
+	public boolean canOpen(BlockPos pos, Direction dir) {
+		return this.doors.get(pos) == dir.getAxis();
 	}
 
 	@Override

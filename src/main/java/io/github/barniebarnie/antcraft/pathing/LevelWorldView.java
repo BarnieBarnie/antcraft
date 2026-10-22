@@ -13,6 +13,9 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.EmptyBlockGetter;
@@ -82,6 +85,24 @@ public class LevelWorldView implements WorldView {
 	}
 
 	@Override
+	public boolean canOpen(BlockPos pos, Direction dir) {
+		return canOpen(this.level.getBlockState(pos), dir);
+	}
+
+	/**
+	 * A wooden door or a fence gate, open or shut, walked through along the way it faces. Iron doors stay shut, and
+	 * trapdoors are left out: one in a floor or ceiling is a different move. ponytail: add trapdoors when a path needs one.
+	 */
+	static boolean canOpen(BlockState state, Direction dir) {
+		return isOpenable(state) && state.getValue(HorizontalDirectionalBlock.FACING).getAxis() == dir.getAxis();
+	}
+
+	/** A wooden door or a fence gate, which bots open by hand. */
+	public static boolean isOpenable(BlockState state) {
+		return DoorBlock.isWoodenDoor(state) || state.getBlock() instanceof FenceGateBlock;
+	}
+
+	@Override
 	public boolean isBedrock(BlockPos pos) {
 		return this.level.getBlockState(pos).is(Blocks.BEDROCK);
 	}
@@ -119,11 +140,12 @@ public class LevelWorldView implements WorldView {
 
 	/**
 	 * Blocks players build with to enclose or decorate, which paths go round rather than through: glass and panes,
-	 * fences, fence gates, walls, doors and trapdoors. Builders still break them for their plans (see BlockBreaker).
+	 * iron bars, fences, fence gates, walls, doors and trapdoors. Builders still break them for their plans (see BlockBreaker).
 	 */
 	static boolean isBuilt(BlockState state) {
 		return state.is(ConventionalBlockTags.GLASS_BLOCKS)
 			|| state.is(ConventionalBlockTags.GLASS_PANES)
+			|| state.is(Blocks.IRON_BARS)
 			|| state.is(BlockTags.FENCES)
 			|| state.is(BlockTags.FENCE_GATES)
 			|| state.is(BlockTags.WALLS)

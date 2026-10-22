@@ -15,11 +15,16 @@ import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 /**
  * Bots following planned paths through terrain. Each test builds a room closed in
@@ -104,6 +109,64 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		succeedWhenAt(helper, bot, new BlockPos(6, 1, 1));
+	}
+
+	/** Like {@link #walksRoundAFenceRatherThanThroughIt}, with iron bars and a bot with a diamond pickaxe. */
+	@GameTest(maxTicks = 150)
+	public void walksRoundIronBarsRatherThanThroughThem(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 7, 5, Blocks.IRON_BARS);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_PICKAXE));
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 1)));
+
+		helper.onEachTick(() -> {
+			for (int y = 1; y <= 7; y++) {
+				for (int z = 1; z <= 5; z++) {
+					if (!helper.getBlockState(new BlockPos(4, y, z)).is(Blocks.IRON_BARS)) {
+						helper.fail("broke the bars at " + new BlockPos(4, y, z).toShortString());
+					}
+				}
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(6, 1, 1));
+	}
+
+	/** A bedrock wall across the room with a closed oak door in it: the bot opens the door, walks through and shuts it behind it. */
+	@GameTest(maxTicks = 40)
+	public void walksThroughAClosedDoorAndShutsIt(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 7, 6, Blocks.BEDROCK);
+		BlockPos door = new BlockPos(4, 1, 3);
+		BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.EAST);
+		helper.setBlock(door, lower);
+		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+
+		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(helper.getBlockState(door).is(Blocks.OAK_DOOR), "the door is gone");
+			helper.assertFalse(helper.getBlockState(door).getValue(DoorBlock.OPEN), "left the door open");
+		});
+	}
+
+	/** A pen of oak fences across the room with a closed gate in it: the bot opens the gate to get in. */
+	@GameTest(maxTicks = 40)
+	public void walksThroughAClosedFenceGateIntoAPen(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 1, 6, Blocks.OAK_FENCE);
+		BlockPos gate = new BlockPos(4, 1, 3);
+		helper.setBlock(gate, Blocks.OAK_FENCE_GATE.defaultBlockState().setValue(FenceGateBlock.FACING, Direction.EAST));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+
+		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertFalse(helper.getBlockState(gate).getValue(FenceGateBlock.OPEN), "left the gate open");
+		});
 	}
 
 	@GameTest(maxTicks = 50)
