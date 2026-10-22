@@ -1056,6 +1056,64 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A block to place in a hollow walled in with bedrock on every side, within reach of where the builder stands:
+	 * like a player it cannot place what it cannot see, so it leaves the hollow empty and reports the step.
+	 */
+	@GameTest(maxTicks = 180)
+	public void doesNotPlaceAStepBehindAWallAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		BlockPos hollow = new BlockPos(4, 1, 4);
+		for (Direction side : Direction.values()) {
+			helper.setBlock(hollow.relative(side), Blocks.BEDROCK);
+		}
+		colony.addBuild(new BuildPlan(List.of(
+			step(helper, 4, 1, 4, COBBLE),
+			step(helper, 6, 1, 6, COBBLE))));
+		member(helper, colony, 2, 4);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(hollow).isAir()) {
+				helper.fail("placed the step through the bedrock wall");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 6, 1, 6, COBBLE);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(hollow))), "walled-in step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/**
+	 * Water to clear walled in with bedrock on every side, within reach of where the builder stands, and a bucket in
+	 * the core: like a player it cannot scoop what it cannot see, so it leaves the water and reports the step.
+	 */
+	@GameTest(maxTicks = 180)
+	public void doesNotScoopAStepsWaterBehindAWallAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.BUCKET));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE, 1));
+		BlockPos water = new BlockPos(4, 1, 4);
+		for (Direction side : Direction.values()) {
+			helper.setBlock(water.relative(side), Blocks.BEDROCK);
+		}
+		helper.setBlock(water, Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.clear(helper.absolutePos(water)),
+			step(helper, 6, 1, 6, COBBLE))));
+		member(helper, colony, 2, 4);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(water).is(Blocks.WATER)) {
+				helper.fail("scooped the water through the bedrock wall");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 6, 1, 6, COBBLE);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(water))), "walled-in step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/**
 	 * A block to place high in the air, with no scaffold to pillar up with: the builder cannot get
 	 * within reach of it, so it gives the step up and reports it, rather than trying forever.
 	 */

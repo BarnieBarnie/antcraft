@@ -330,7 +330,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			}
 			return;
 		}
-		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos(), false)) {
+		// A block is placed where the bot sees the spot, as a player must. Not a wall or fill any solid block will do: a
+		// mineshaft walls a cave or water off before it digs the cell that opens onto it, and a terraform fills a pond
+		// under a lid it digs in through, neither of which it can see beforehand (as with fillIn).
+		// ponytail: walls and fills go in by reach only; needs the path search to see through what its path breaks, and the walls after the dig.
+		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos(), !step.anySolid())) {
 			return;
 		}
 		if (step.isPlaced(current) && item == Items.BUCKET) {
@@ -574,7 +578,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				int bucket = findSlot(inventory, BuilderGoal::isBucket);
 				if (bucket < 0) {
 					this.fetch(level, colony, core, plan, Items.BUCKET);
-				} else if (this.reachStep(level, pos, false)) {
+				} else if (this.reachStep(level, pos, true)) {
 					this.scoop(level, pos, bucket);
 				}
 			}
