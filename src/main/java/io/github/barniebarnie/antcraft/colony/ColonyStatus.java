@@ -159,6 +159,9 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		return total(this.claimedJobs);
 	}
 
+	/** The job types whose given-up jobs colony info and the screen list. */
+	public static final List<JobType> GIVEN_UP_TYPES = List.of(JobType.CHOP_TREE, JobType.CHOP_LOG, JobType.MINE_BRANCH, JobType.MINE_VEIN);
+
 	/** The lang key that lists the given-up jobs of {@code type}: trees or logs, veins, or branches for any other type. */
 	public static String givenUpKey(JobType type) {
 		return switch (type) {

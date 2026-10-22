@@ -178,6 +178,11 @@ class ColonyStatusTest {
 
 	/** Given-up jobs are listed, not counted as open work. */
 	@Test
+	void givenUpTypesShownIncludeLogsAndVeins() {
+		assertEquals(List.of(JobType.CHOP_TREE, JobType.CHOP_LOG, JobType.MINE_BRANCH, JobType.MINE_VEIN), ColonyStatus.GIVEN_UP_TYPES);
+	}
+
+	@Test
 	void givenUpTreesAreNotOpenJobs() {
 		ColonyStatus status = status();
 		assertEquals(1, status.openJobs().get(JobType.CHOP_TREE));
