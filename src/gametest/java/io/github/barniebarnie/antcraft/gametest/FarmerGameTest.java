@@ -150,7 +150,8 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return helper.getLevel().getBlockState(crop).is(Blocks.WHEAT) && helper.getLevel().getBlockState(crop.below()).is(Blocks.FARMLAND);
 	}
 
-	@GameTest(maxTicks = 80)
+	// Grass drops seeds at random, so how long this takes varies far more than its usual pass of about 30 ticks.
+	@GameTest(maxTicks = 600)
 	public void collectsSeedsFromGrassTillsAndPlants(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wantWheat(colony);
