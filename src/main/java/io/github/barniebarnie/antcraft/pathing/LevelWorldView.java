@@ -125,8 +125,9 @@ public class LevelWorldView implements WorldView {
 	}
 
 	/**
-	 * A ladder or vine, not scaffolding, which bots stand on rather than climb. Also a trapdoor opened by hand over a ladder
-	 * facing the same way: vanilla climbs one that is open, and a bot opens it to climb through.
+	 * A ladder, vine or scaffolding, which vanilla climbs inside (scaffolding is also stood on from above, and climbed
+	 * down sneaking). Also a trapdoor opened by hand over a ladder facing the same way: vanilla climbs one that is open,
+	 * and a bot opens it to climb through.
 	 */
 	@Override
 	public boolean isClimbable(BlockPos pos) {
@@ -135,7 +136,7 @@ public class LevelWorldView implements WorldView {
 			BlockState below = this.level.getBlockState(pos.below());
 			return below.is(Blocks.LADDER) && below.getValue(LadderBlock.FACING) == state.getValue(TrapDoorBlock.FACING);
 		}
-		return state.is(BlockTags.CLIMBABLE) && !state.is(Blocks.SCAFFOLDING);
+		return state.is(BlockTags.CLIMBABLE);
 	}
 
 	@Override

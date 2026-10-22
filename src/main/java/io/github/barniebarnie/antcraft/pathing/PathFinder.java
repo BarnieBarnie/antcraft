@@ -253,12 +253,25 @@ public final class PathFinder {
 			return this.world.isWater(pos) && this.open(pos.above());
 		}
 
-		/** One block up or down a ladder, from one climbable block to the next, or down into one. Breaks nothing on the way. */
+		/**
+		 * One block up or down a ladder, from one climbable block to the next, or down into one, or up out of the top of a
+		 * climbable block a bot stands on, such as scaffolding. Breaks nothing on the way.
+		 */
 		private Candidate climb(BlockPos feet, MoveType type) {
 			boolean up = type == MoveType.CLIMB_UP;
 			BlockPos to = up ? feet.above() : feet.below();
-			boolean held = up ? this.world.isClimbable(feet) && this.world.isClimbable(to) && this.climbable(to.above()) : this.world.isClimbable(to);
+			boolean held = up
+				? this.world.isClimbable(feet) && (this.world.isClimbable(to) && this.climbable(to.above()) || this.onTop(feet) && this.open(to) && this.open(to.above()))
+				: this.world.isClimbable(to);
 			return held ? new Candidate(new Step(type, to, List.of(), List.of()), CLIMB_COST) : null;
+		}
+
+		/**
+		 * A climbable block a bot stands on once it is out of its top, such as scaffolding on the ground or on more of it.
+		 * Not a shut hatch, which stands on a ladder: the bot opens it to climb through, and then nothing holds it up.
+		 */
+		private boolean onTop(BlockPos climbable) {
+			return this.canStand(climbable) && this.canStand(climbable.below());
 		}
 
 		/** Open, or a ladder or hatch a bot climbs through. */

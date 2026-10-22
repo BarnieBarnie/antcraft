@@ -31,7 +31,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
@@ -198,6 +200,75 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A free-standing column of scaffolding four high: a bot with no blocks climbs up inside it and stands on top. */
+	@GameTest(maxTicks = 90)
+	public void climbsAColumnOfScaffoldingToItsTop(GameTestHelper helper) {
+		room(helper, 0);
+		scaffoldingColumn(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		// Near the block above the top, so standing on the top is the only way to get there.
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 6, 3)));
+
+		succeedWhenAtWithTheColumnStanding(helper, bot, new BlockPos(3, 5, 3));
+	}
+
+	/** Like {@link #climbsAColumnOfScaffoldingToItsTop}, but down from its top to the floor: the bot sneaks to climb down inside it. */
+	@GameTest(maxTicks = 70)
+	public void climbsDownAColumnOfScaffoldingFromItsTop(GameTestHelper helper) {
+		room(helper, 0);
+		scaffoldingColumn(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 5, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 1, 1)));
+
+		succeedWhenAtWithTheColumnStanding(helper, bot, new BlockPos(3, 1, 2));
+	}
+
+	/** Scaffolding at (3, 1..4, 3), standing on the floor. */
+	private static void scaffoldingColumn(GameTestHelper helper) {
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(3, y, 3, Blocks.SCAFFOLDING.defaultBlockState().setValue(ScaffoldingBlock.DISTANCE, 0));
+		}
+	}
+
+	/** Succeeds once the bot stopped on the ground at {@code relativeEnd}, not sneaking, with the column whole all the way. */
+	private static void succeedWhenAtWithTheColumnStanding(GameTestHelper helper, AntBot bot, BlockPos relativeEnd) {
+		BlockPos target = helper.absolutePos(relativeEnd);
+		helper.onEachTick(() -> {
+			for (int y = 1; y <= 4; y++) {
+				if (!helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.SCAFFOLDING)) {
+					helper.fail("the scaffolding is gone at y " + y);
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().equals(target) && bot.onGround(), "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertFalse(bot.isShiftKeyDown(), "still sneaking");
+		});
+	}
+
+	/**
+	 * A bedrock wall three high across the room, with vines on its near side at (3, 1..3, 3): a bot with no blocks
+	 * climbs the vines onto the wall.
+	 */
+	@GameTest(maxTicks = 110)
+	public void climbsVinesUpAWall(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 4, 6, 3, 6, Blocks.BEDROCK);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(3, y, 3, Blocks.VINE.defaultBlockState().setValue(VineBlock.SOUTH, true));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 4, 5)));
+
+		BlockPos target = helper.absolutePos(new BlockPos(3, 4, 5));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			for (int y = 1; y <= 3; y++) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.VINE), "the vine is gone at y " + y);
+			}
+		});
+	}
+
 	/** A bedrock wall across the room with a closed oak door in it: the bot opens the door, walks through and shuts it behind it. */
 	@GameTest(maxTicks = 40)
 	public void walksThroughAClosedDoorAndShutsIt(GameTestHelper helper) {
@@ -240,7 +311,29 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(door, lower);
 		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
-		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
+		succeedWhenThroughTheDoorOnce(helper, bot, door, new BlockPos(6, 1, 3));
+	}
+
+	/**
+	 * Like {@link #opensAndShutsADoorFacingEastOnceOnTheWayThrough}, but the doorway is on the edge of a ledge two
+	 * blocks high: the bot walks into the doorway and drops out of it, and the door opens and shuts once.
+	 */
+	@GameTest(maxTicks = 60)
+	public void opensAndShutsADoorOnceDroppingThroughIt(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 4, 2, 6, Blocks.BEDROCK);
+		fill(helper, 4, 3, 1, 4, 7, 6, Blocks.BEDROCK);
+		BlockPos door = new BlockPos(4, 3, 3);
+		BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.EAST);
+		helper.setBlock(door, lower);
+		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 3, 3);
+		succeedWhenThroughTheDoorOnce(helper, bot, door, new BlockPos(6, 1, 3));
+	}
+
+	/** Sends the bot to {@code relativeTarget} and succeeds once it is there and the door opened and shut once on the way. */
+	private static void succeedWhenThroughTheDoorOnce(GameTestHelper helper, AntBot bot, BlockPos door, BlockPos relativeTarget) {
+		BlockPos target = helper.absolutePos(relativeTarget);
 		bot.setWalkTarget(target);
 
 		// Counts every open and shut, also one undone in the same tick, which a once-a-tick look at the door would miss.

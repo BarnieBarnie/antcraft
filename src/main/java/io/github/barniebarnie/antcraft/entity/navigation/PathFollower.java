@@ -102,6 +102,7 @@ public class PathFollower {
 		this.breaker.reset();
 		this.goal = null;
 		this.path = null;
+		this.bot.setShiftKeyDown(false);
 	}
 
 	public Status tick() {
@@ -148,6 +149,7 @@ public class PathFollower {
 		if (this.bot.isInWater()) {
 			this.bot.holdAgainstCurrent();
 		}
+		this.bot.setShiftKeyDown(step.type() == MoveType.CLIMB_DOWN);
 		if (step.type() == MoveType.PILLAR) {
 			this.pillar(level, world, step);
 		} else {
@@ -276,7 +278,8 @@ public class PathFollower {
 
 	/**
 	 * Climbs up or down a ladder: steers to the middle of it without the move control, which overshoots, as a bot on a
-	 * ladder that bumps into a wall climbs up it. Jumps to climb up; slides down by itself.
+	 * ladder that bumps into a wall climbs up it. Jumps to climb up; slides down by itself, sneaking so scaffolding
+	 * lets it through.
 	 */
 	private void climb(Step step) {
 		BlockPos to = step.to();
