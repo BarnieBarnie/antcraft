@@ -372,6 +372,46 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * After felling a tree near the edge of the test area, the lumberjack picks up a log lying in the area and
+	 * leaves one lying just outside it alone, though both are within reach of the site. Both turn up as the
+	 * last log is felled, so it is the pickup after felling that finds them, and no leaves drop anything.
+	 */
+	@GameTest(padding = PADDING, maxTicks = 570)
+	public void collectsDropsAfterFellingButLeavesOnesJustOutsideItsTestAreaAlone(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		bareTree(helper, 6, 5);
+		// A floor just outside the test area, with room to walk to it whatever the terrain there.
+		for (int x = 8; x <= 9; x++) {
+			for (int z = 4; z <= 6; z++) {
+				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
+				for (int y = 1; y <= 3; y++) {
+					helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, y, z)), Blocks.AIR.defaultBlockState());
+				}
+			}
+		}
+		lumberjack(helper, 2, 4);
+		ItemEntity[] inside = {null};
+		ItemEntity[] outside = {null};
+		helper.onEachTick(() -> {
+			if (inside[0] == null && countBlocks(helper, BlockTags.LOGS) == 0) {
+				inside[0] = helper.spawnItem(Items.OAK_LOG, new BlockPos(4, 1, 7));
+				outside[0] = helper.spawnItem(Items.OAK_LOG, new BlockPos(9, 1, 5));
+			}
+			if (outside[0] != null && !outside[0].isAlive()) {
+				helper.fail("picked up the log outside the test area");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(inside[0] != null, "tree not felled yet");
+			helper.assertTrue(!inside[0].isAlive(), "log in the test area not picked up");
+			// Posted once it is done collecting, as it has no sapling to replant with.
+			helper.assertTrue(colony.board().has(JobType.REPLANT, helper.absolutePos(new BlockPos(6, 1, 5))), "not done collecting");
+			helper.assertTrue(outside[0].isAlive(), "picked up the log outside the test area");
+		});
+	}
+
 	@GameTest(padding = PADDING, maxTicks = 530)
 	public void chopsTreeAndStoresLogsInHomeChest(GameTestHelper helper) {
 		tree(helper, 5, 5, false);

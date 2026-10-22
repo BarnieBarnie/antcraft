@@ -20,6 +20,7 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -340,6 +341,43 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(sheep.isSheared(), "sheep not sheared");
 			helper.assertTrue(wool(core(helper)) > 0, "no wool in the core");
 			helper.assertTrue(carried(bot, Items.SHEARS) == 1, "farmer did not keep the shears");
+		});
+	}
+
+	/**
+	 * Wool lying just outside the test area, within reach of a sheep the farmer shears, is left alone. It turns
+	 * up as the sheep is shorn, so it is the pickup after shearing that finds it. Padded, for the floor outside.
+	 */
+	@GameTest(padding = 32, maxTicks = 140)
+	public void leavesWoolJustOutsideItsTestAreaAloneAfterShearing(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.SHEARS));
+		Sheep sheep = sheep(helper);
+		// A floor just outside the test area, with room to walk to it whatever the terrain there.
+		for (int x = 8; x <= 9; x++) {
+			for (int z = 4; z <= 6; z++) {
+				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
+				for (int y = 1; y <= 3; y++) {
+					helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, y, z)), Blocks.AIR.defaultBlockState());
+				}
+			}
+		}
+		farmer(helper, colony);
+		ItemEntity[] outside = {null};
+		helper.onEachTick(() -> {
+			if (outside[0] == null && sheep.isSheared()) {
+				outside[0] = helper.spawnItem(Items.WOOL.white(), new BlockPos(9, 1, 5));
+			}
+			if (outside[0] != null && !outside[0].isAlive()) {
+				helper.fail("picked up the wool outside the test area");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(outside[0] != null, "sheep not sheared");
+			// Stored once it is done picking up the fleece.
+			helper.assertTrue(wool(core(helper)) > 0, "no wool in the core");
+			helper.assertTrue(outside[0].isAlive(), "picked up the wool outside the test area");
 		});
 	}
 
