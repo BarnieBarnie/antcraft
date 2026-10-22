@@ -279,8 +279,9 @@ public class ColonyManager extends SavedData {
 				Optional.of(PickaxeTier.forBranch(segment.start().getY(), wanted.get())));
 		};
 		Container core = Storage.containerAt(level, colony.core());
-		// In the core, or carried by a bot that took them from there.
-		boolean torches = core != null && core.countItem(Items.TORCH) > 0 || colony.members().stream()
+		// In the core or a landing chest, or carried by a bot that took them from there.
+		boolean torches = core != null && core.countItem(Items.TORCH) > 0
+			|| Storage.landingChests(level, colony).values().stream().anyMatch(chest -> chest.countItem(Items.TORCH) > 0) || colony.members().stream()
 			.anyMatch(id -> level.getEntity(id) instanceof AntBot bot && bot.getInventory().countItem(Items.TORCH) > 0);
 		Set<BlockPos> givenUp = new HashSet<>();
 		colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH && job.givenUp()).forEach(job -> givenUp.add(job.target()));

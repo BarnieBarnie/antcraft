@@ -46,7 +46,7 @@ import org.jspecify.annotations.Nullable;
  * Mine work. As the executor of branch jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work},
  * it gets any colony bot to dig a mineshaft branch out, posting a vein job for each ore in its walls its pickaxe
  * can harvest and the colony wants, and digging such veins out whole (see {@link OreVein}),
- * light it with torches from the core as it goes, and store the haul; a bot without a pickaxe
+ * light it with torches as it goes, from the nearest landing chest that has some or else the core, and store the haul; a bot without a pickaxe
  * first takes the best one in the core. Before mining a level it makes sure a pickaxe good enough for the
  * ores the colony wants there is in hand or on its way. It stores its haul after each branch and when it is
  * full. Down in the shaft it leaves all but what open orders need, their ingredients included, in the nearest
@@ -427,8 +427,8 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Puts a torch on the first dug torch spot that is still dark, fetching torches from the core if
-	 * it has none. Returns true while busy with that. Like a player, it places the torch only where it
+	 * Puts a torch on the first dug torch spot that is still dark, fetching torches if it has none: from the
+	 * nearest landing chest that has some when that is nearer than the core, else from the core. Returns true while busy with that. Like a player, it places the torch only where it
 	 * sees the spot; one it finds no such place for is left for this job.
 	 */
 	private boolean light(ServerLevel level, Colony colony, Mineshaft.Branch branch) {
@@ -438,6 +438,13 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return false;
 		}
 		if (this.bot.getInventory().countItem(Items.TORCH) == 0) {
+			BlockPos chest = this.nearerThanCore(colony, Storage.landingChests(level, colony), container -> container.countItem(Items.TORCH) > 0);
+			if (chest != null) {
+				if (this.reach(chest)) {
+					this.takeTorches(Objects.requireNonNull(Storage.containerAt(level, chest)));
+				}
+				return true;
+			}
 			Container core = Storage.containerAt(level, colony.core());
 			if (core == null || core.countItem(Items.TORCH) == 0) {
 				// ponytail: no torches anywhere, so the spot stays dark; the colony's torch stock target orders more.
@@ -474,7 +481,9 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		BlockPos chest = this.landingChest(level, colony, forCore, forOrders);
 		if (chest != null) {
 			if (this.reach(chest)) {
-				this.storeHaul(Storage.containerAt(level, chest), forCore, item -> !forOrders.contains(item));
+				Container container = Objects.requireNonNull(Storage.containerAt(level, chest));
+				this.storeHaul(container, forCore, item -> !forOrders.contains(item));
+				this.takeTorches(container);
 				if (this.hasItemsToStore()) {
 					// What orders want, or what the chest had no room for, goes up to the core.
 					this.unloaded = true;
@@ -493,12 +502,29 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 		if (this.reach(colony.core())) {
 			this.storeHaul(core, forCore, item -> true);
-			int torches = CARRY_TORCHES - this.bot.getInventory().countItem(Items.TORCH);
-			if (torches > 0) {
-				Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(Items.TORCH), torches);
-			}
+			this.takeTorches(core);
 			this.enter(State.WORK);
 		}
+	}
+
+	/** Tops up the torches it carries from {@code container}. */
+	private void takeTorches(Container container) {
+		int torches = CARRY_TORCHES - this.bot.getInventory().countItem(Items.TORCH);
+		if (torches > 0) {
+			Storage.moveItems(container, this.bot.getInventory(), stack -> stack.is(Items.TORCH), torches);
+		}
+	}
+
+	/** The nearest of the {@code chests} that passes {@code test}, when it is nearer than the core; else null. */
+	private @Nullable BlockPos nearerThanCore(Colony colony, Map<BlockPos, Container> chests, Predicate<Container> test) {
+		BlockPos at = this.bot.blockPosition();
+		// ponytail: straight-line distance; a core across a ravine from the shaft counts as near.
+		return chests.entrySet().stream()
+			.filter(chest -> test.test(chest.getValue()))
+			.map(Map.Entry::getKey)
+			.filter(pos -> pos.distSqr(at) < colony.core().distSqr(at))
+			.min(Comparator.comparingDouble(pos -> pos.distSqr(at)))
+			.orElse(null);
 	}
 
 	/**
@@ -519,14 +545,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (!notOrdered) {
 			return null;
 		}
-		BlockPos at = this.bot.blockPosition();
-		// ponytail: straight-line distance; a core across a ravine from the shaft counts as near.
-		return Storage.landingChests(level, colony).entrySet().stream()
-			.filter(chest -> freeSlots(chest.getValue()) > 0)
-			.map(Map.Entry::getKey)
-			.filter(pos -> pos.distSqr(at) < colony.core().distSqr(at))
-			.min(Comparator.comparingDouble(pos -> pos.distSqr(at)))
-			.orElse(null);
+		return this.nearerThanCore(colony, Storage.landingChests(level, colony), chest -> freeSlots(chest) > 0);
 	}
 
 	/**

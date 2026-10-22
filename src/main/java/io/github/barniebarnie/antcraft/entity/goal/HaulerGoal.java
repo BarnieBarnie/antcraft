@@ -52,7 +52,8 @@ import org.jspecify.annotations.Nullable;
  * weapons a bot carries stay with it.
  * <p>
  * As the executor of haul jobs for {@link WorkerGoal}, it gets any colony bot to empty a mineshaft landing
- * chest into the core, a load at a time (see {@link #haulsFrom} for what it takes).
+ * chest into the core, a load at a time (see {@link #haulsFrom} for what it takes), and to bring torches down to it
+ * from the core first when it runs low (see {@link #torchesFor}), so miners need not climb out for them.
  */
 public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int MIN_FREE_SLOTS = 1;
@@ -65,6 +66,8 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int RESERVE_SLOTS = 1;
 	/** A trip that takes longer than this is given up, for example when a chest cannot be reached. */
 	private static final int TRIP_TICKS = 1200;
+	/** Torches a haul job keeps in a mineshaft landing chest: what a miner takes along; it tops them up once below half. */
+	public static final int LANDING_TORCHES = 16;
 
 	/**
 	 * Moving up to {@code count} of an item, or of everything when {@code item} is null, between
@@ -157,6 +160,8 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private boolean haulLoaded;
 	/** What the bot took out of the haul job's container, to put in the core. */
 	private final Set<Item> hauled = new HashSet<>();
+	/** Torches the bot took out of the core for the haul job's container, or -1 before it went for them. */
+	private int torches = -1;
 
 	public HaulerGoal(AntBot bot) {
 		super(bot);
@@ -169,17 +174,33 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * what the core does not need; else only what the colony wants, so bots do not carry up what a miner left below.
 	 */
 	public static Predicate<ItemStack> haulsFrom(ServerLevel level, Colony colony, Container chest) {
+		// Torches stay down there for miners (see torchesFor).
 		if (colony.storage().isPresent()) {
-			return stack -> true;
+			return stack -> !stack.is(Items.TORCH);
 		}
 		Predicate<Item> wanted = Storage.wanted(level, colony, Storage.stock(chest));
-		return stack -> wanted.test(stack.getItem());
+		return stack -> !stack.is(Items.TORCH) && wanted.test(stack.getItem());
+	}
+
+	/**
+	 * Torches a haul job brings down to {@code chest} from the core: none until it holds fewer than half of
+	 * {@link #LANDING_TORCHES}, then what tops it up, out of what the core holds beyond the needs of its open
+	 * orders and builds.
+	 */
+	public static int torchesFor(ServerLevel level, Colony colony, Container chest) {
+		Container core = Storage.containerAt(level, colony.core());
+		int held = chest.countItem(Items.TORCH);
+		if (core == null || held >= LANDING_TORCHES / 2 || core.countItem(Items.TORCH) == 0) {
+			return 0;
+		}
+		int spare = core.countItem(Items.TORCH) - Storage.neededInCore(level, colony, Storage.stock(core)).getOrDefault(Items.TORCH, 0);
+		return Math.clamp(spare, 0, LANDING_TORCHES - held);
 	}
 
 	/** The mineshaft landing chests a haul job should empty into the core, by position. */
 	public static List<BlockPos> chestsToHaul(ServerLevel level, Colony colony) {
 		return Storage.landingChests(level, colony).entrySet().stream()
-			.filter(chest -> !chest.getValue().isEmpty() && holds(chest.getValue(), haulsFrom(level, colony, chest.getValue())))
+			.filter(chest -> holds(chest.getValue(), haulsFrom(level, colony, chest.getValue())) || torchesFor(level, colony, chest.getValue()) > 0)
 			.map(Map.Entry::getKey)
 			.toList();
 	}
@@ -192,20 +213,21 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
 		Container chest = Storage.containerAt(level, job.target());
 		Container core = Storage.containerAt(level, colony.core());
-		return job.type() == JobType.HAUL && chest != null && core != null && freeSlots(core) > 0 && freeSlots(this.bot.getInventory()) > 0
-			&& holds(chest, haulsFrom(level, colony, chest));
+		return job.type() == JobType.HAUL && chest != null && core != null && freeSlots(this.bot.getInventory()) > 0
+			&& (freeSlots(core) > 0 && holds(chest, haulsFrom(level, colony, chest)) || torchesFor(level, colony, chest) > 0);
 	}
 
 	@Override
 	public boolean begin(ServerLevel level, Job job) {
 		this.haulOutcome = null;
 		Container chest = Storage.containerAt(level, job.target());
-		if (chest == null || chest.isEmpty()) {
+		if (chest == null) {
 			return false;
 		}
 		this.haul = job;
 		this.haulLoaded = false;
 		this.hauled.clear();
+		this.torches = -1;
 		this.resetMovement();
 		return true;
 	}
@@ -233,7 +255,16 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (!this.haulLoaded) {
 			if (chest == null) {
 				this.endHaul(WorkerGoal.Outcome.COMPLETE);
+			} else if (this.torches < 0) {
+				int torches = torchesFor(level, colony.get(), chest);
+				if (torches == 0) {
+					this.torches = 0;
+				} else if (this.reach(colony.get().core())) {
+					this.torches = Storage.moveItems(core, inventory, stack -> stack.is(Items.TORCH), torches);
+				}
 			} else if (this.reach(job.target())) {
+				// ponytail: torches that do not fit in the chest stay with the bot.
+				this.torches -= Storage.moveItems(inventory, chest, stack -> stack.is(Items.TORCH), this.torches);
 				Predicate<ItemStack> filter = haulsFrom(level, colony.get(), chest);
 				Storage.moveItems(chest, inventory, stack -> {
 					boolean take = filter.test(stack);
@@ -274,6 +305,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		this.haulOutcome = null;
 		this.haulLoaded = false;
 		this.hauled.clear();
+		this.torches = -1;
 		this.resetMovement();
 	}
 

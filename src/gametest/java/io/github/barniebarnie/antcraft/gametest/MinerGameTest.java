@@ -180,7 +180,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
-	@GameTest(maxTicks = 840)
+	@GameTest(maxTicks = 610)
 	public void digsBranchFromLandingAndLightsIt(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		GameTests.failOnGiveUp(helper, colony);
@@ -587,6 +587,31 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A miner out of torches at the deepest level takes them from the landing chest there rather than climbing out to the core. */
+	@GameTest(maxTicks = 350)
+	public void minerOutOfTorchesTakesThemFromTheLandingChest(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.TORCH, 16));
+		// Both landing chests, so no haul job takes the miner up to top one up.
+		shaft.levels().forEach(y -> Storage.containerAt(helper.getLevel(), shaft.landingChest(y)).setItem(0, new ItemStack(Items.TORCH, 16)));
+		int deepest = shaft.levels().getLast();
+		BlockPos landing = relative(helper, shaft.landing(deepest));
+		AntBot miner = member(helper, colony, landing.getX(), landing.getY(), landing.getZ());
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		int surface = helper.absolutePos(MINE_CORE).getY();
+
+		helper.onEachTick(() -> {
+			if (miner.getBlockY() >= surface) {
+				helper.fail("miner climbed out of the shaft");
+			}
+		});
+		helper.succeedWhen(() -> assertBranchesDug(helper, shaft, deepest));
+	}
+
 	/**
 	 * The mine is the colony's, however far it reaches past the colony's radius (its branches do, 64 blocks out by
 	 * default): miners with no job at the bottom of the shaft, at the landing and at a branch end, stay there rather
@@ -677,6 +702,26 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(chest.isEmpty(), "landing chest not emptied");
 			Container core = core(helper, MINE_CORE);
 			helper.assertTrue(core.countItem(Items.COBBLESTONE) == 64 && core.countItem(Items.RAW_IRON) == 3, "haul not in the core");
+		});
+	}
+
+	/** A hauler brings torches down from the core to the landing chests, and leaves them there. */
+	@GameTest(maxTicks = 200)
+	public void haulerStocksTheLandingChestsWithTorches(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.TORCH, 64));
+		// Torches are wanted in the core too, so none come back up.
+		colony.setStockTarget(StockTarget.of(Items.TORCH, 64));
+		member(helper, colony, 1, 5, 1);
+		List<Container> chests = shaft.levels().stream().map(y -> Storage.containerAt(helper.getLevel(), shaft.landingChest(y))).toList();
+
+		helper.succeedWhen(() -> {
+			for (Container chest : chests) {
+				helper.assertTrue(chest.countItem(Items.TORCH) > 0, "no torches in a landing chest");
+			}
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.TORCH) > 0, "core emptied of torches");
 		});
 	}
 
@@ -1087,7 +1132,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 700)
+	@GameTest(maxTicks = 600)
 	public void fetchesPickaxeFromCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
