@@ -265,6 +265,16 @@ class ProjectTest {
 	}
 
 	@Test
+	void stairsAnotherBuildIsShortOfAreStillCraftedAtTheCoreBesideAnOnTheSpotCraft() {
+		Colony colony = colony();
+		colony.addBuild("porch", plan(new BlockPos(9, 64, 9), Blocks.COBBLESTONE_STAIRS));
+		Mineshaft shaft = shaftNeedingStairs(colony, Map.of(), true);
+		List<Job> crafts = stairCrafts(colony);
+		assertTrue(crafts.stream().anyMatch(job -> job.target().equals(shaft.plan().batch(0).target())), "no craft at the batch: " + crafts);
+		assertTrue(crafts.stream().anyMatch(job -> job.target().equals(colony.core())), "no craft at the core: " + crafts);
+	}
+
+	@Test
 	void stoneStairsTheColonyHasLeaveNothingToCraftOnTheSpot() {
 		Colony colony = colony();
 		shaftNeedingStairs(colony, Map.of(Items.STONE_BRICK_STAIRS, 64), true);

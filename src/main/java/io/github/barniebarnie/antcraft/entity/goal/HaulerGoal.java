@@ -317,7 +317,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				this.depositing = false;
 				this.cooldown = IDLE_TICKS;
 			} else if (this.reach(colony.core())) {
-				Storage.moveItems(inventory, core, this::deposits);
+				Storage.moveItems(inventory, core, stack -> this.deposits(stack, colony));
 				this.returnHeld(core);
 				this.depositing = false;
 				this.unreachableItems.clear();
@@ -334,7 +334,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			.orElse(null);
 		if (nearest == null) {
 			Container core = Storage.containerAt(level, colony.core());
-			if (core != null && this.hasRoomForAny(core, inventory)) {
+			if (core != null && this.hasRoomForAny(core, inventory, colony)) {
 				this.depositing = true;
 				return true;
 			}
@@ -371,8 +371,14 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/** Whether the bot puts the stack in the core when it deposits: not what it works with, nor surplus it holds. */
-	private boolean deposits(ItemStack stack) {
-		return !this.holds(stack) && !isWorkingKit(stack);
+	private boolean deposits(ItemStack stack, Colony colony) {
+		return !this.holds(stack) && !this.keeps(stack, colony);
+	}
+
+	/** Its working kit, and while a stair craft is posted to be done on the spot, the cobblestone for it if it carries a crafting table. */
+	private boolean keeps(ItemStack stack, Colony colony) {
+		return isWorkingKit(stack) || stack.is(Items.COBBLESTONE) && this.bot.getInventory().countItem(Items.CRAFTING_TABLE) > 0
+			&& colony.board().jobs().stream().anyMatch(Colony::isStairCraft);
 	}
 
 	/** What a bot keeps to work with rather than store: tools, weapons, the scaffold blocks it pillars with and a crafting table or furnace it crafts at. */
@@ -385,10 +391,10 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return this.holding.contains(stack.getItem());
 	}
 
-	private boolean hasRoomForAny(Container core, Container inventory) {
+	private boolean hasRoomForAny(Container core, Container inventory, Colony colony) {
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (!stack.isEmpty() && (this.deposits(stack) ? Storage.hasRoomFor(core, stack) : this.holds(stack) && freeSlots(core) > RESERVE_SLOTS)) {
+			if (!stack.isEmpty() && (this.deposits(stack, colony) ? Storage.hasRoomFor(core, stack) : this.holds(stack) && freeSlots(core) > RESERVE_SLOTS)) {
 				return true;
 			}
 		}
@@ -448,7 +454,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		SimpleContainer inventory = this.bot.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			BlockPos chest = stack.isEmpty() || isWorkingKit(stack) ? null : Storage.chestFor(chests, stack);
+			BlockPos chest = stack.isEmpty() || this.keeps(stack, colony) ? null : Storage.chestFor(chests, stack);
 			if (chest != null) {
 				return new Trip(chest, chest, stack.getItem(), Integer.MAX_VALUE);
 			}

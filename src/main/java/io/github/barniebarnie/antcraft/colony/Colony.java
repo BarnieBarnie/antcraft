@@ -197,6 +197,8 @@ public class Colony {
 	private final List<Project> projects = new ArrayList<>();
 	/** What each project still waits for, by project id, as {@link #planProjects} last found; not saved. */
 	private final Map<UUID, Map<Item, Integer>> waiting = new HashMap<>();
+	/** How many cobblestone stairs the craft jobs at the batches make, as {@link #postStairCrafts} last posted them; not saved. */
+	private int stairsOnSpot;
 	/** Build plans by id, so plans that start at the same spot get jobs of their own. */
 	private final Map<UUID, BuildPlan> builds;
 	/** The plan and batch of each build job, by job id; see {@link #batchId}. Kept up to date with {@link #builds}. */
@@ -580,9 +582,9 @@ public class Colony {
 	 * when several do: what {@link TaskPlanner} plans to make it from {@code stock} with {@code book}.
 	 */
 	public void postCraftJobs(Set<Item> ordered, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
-		// What a bot crafts on the spot (see postStairCrafts) is not crafted at the core as well.
+		// What a bot crafts on the spot (see postStairCrafts) is not crafted at the core as well, unless more stairs are ordered.
 		Set<Item> crafts = new HashSet<>(ordered);
-		if (this.board.jobs().stream().anyMatch(Colony::isStairCraft)) {
+		if (this.board.jobs().stream().anyMatch(Colony::isStairCraft) && this.orders.getOrDefault(Items.COBBLESTONE_STAIRS, 0) <= this.stairsOnSpot) {
 			crafts.remove(Items.COBBLESTONE_STAIRS);
 		}
 		this.board.removeOpenIf(job -> job.type() == JobType.CRAFT && job.target().equals(this.core) && job.item().filter(crafts::contains).isEmpty());
@@ -636,31 +638,34 @@ public class Colony {
 	}
 
 	/** Whether {@code job} crafts a mineshaft batch's stairs at the batch (see {@link #postStairCrafts}). */
-	private static boolean isStairCraft(Job job) {
+	public static boolean isStairCraft(Job job) {
 		return job.type() == JobType.CRAFT && job.item().equals(Optional.of(Items.COBBLESTONE_STAIRS)) && job.tool().equals(Optional.of(Items.CRAFTING_TABLE));
 	}
 
 	/**
 	 * While {@code onSpot}, as a bot carries a crafting table and the cobblestone, posts a craft job for cobblestone stairs at
 	 * each batch posted to build whose stair steps the stone stairs the colony {@code has} do not cover, the batches in order,
-	 * so the bot crafts them there rather than at the core, to be hauled down. Such a job stops the core crafting them too
-	 * (see {@link #postCraftJobs}). Without {@code onSpot} they come from the core, and the open such jobs are taken down.
+	 * so the bot crafts them there rather than at the core, to be hauled down. Such jobs stop the core crafting them too
+	 * unless more are ordered than they make (see {@link #postCraftJobs}). Without {@code onSpot} they come from the core, and the open such jobs are taken down.
 	 */
 	public void postStairCrafts(Function<BlockPos, BlockState> world, Map<Item, Integer> has, boolean onSpot) {
 		int left = BuildPlan.STONE_STAIRS.stream().mapToInt(item -> has.getOrDefault(item, 0)).sum();
 		Map<BlockPos, Integer> wanting = new HashMap<>();
+		int missing = 0;
 		for (Job job : this.board.jobs()) {
 			Optional<BuildPlan> batch = job.type() == JobType.BUILD ? this.build(job.id()) : Optional.empty();
 			if (batch.isPresent()) {
 				int stairs = batch.get().stoneStairMaterials(world).values().stream().mapToInt(Integer::intValue).sum();
 				if (stairs > left) {
 					wanting.put(batch.get().target(), job.priority());
+					missing += stairs - left;
 				}
 				left = Math.max(0, left - stairs);
 			}
 		}
 		Set<BlockPos> batches = this.builds.values().stream().flatMap(Colony::batchTargets).collect(Collectors.toSet());
 		this.board.removeOpenIf(job -> isStairCraft(job) && batches.contains(job.target()) && !(onSpot && wanting.containsKey(job.target())));
+		this.stairsOnSpot = onSpot ? missing : 0;
 		if (onSpot) {
 			wanting.forEach((at, priority) -> this.board.postFor(JobType.CRAFT, at, Items.COBBLESTONE_STAIRS, Optional.of(Items.CRAFTING_TABLE), priority));
 		}

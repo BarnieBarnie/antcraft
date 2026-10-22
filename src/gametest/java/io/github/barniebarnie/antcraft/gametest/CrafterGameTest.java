@@ -14,6 +14,8 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -420,6 +422,33 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getInventory().countItem(Items.CRAFTING_TABLE) == 1, "crafting table not taken back");
 			helper.assertTrue(blocksInArea(helper, Blocks.CRAFTING_TABLE) == 0, "crafting table left standing");
 			helper.assertTrue(looseItems(helper).isEmpty(), "items dropped: " + looseItems(helper));
+		});
+	}
+
+	/**
+	 * A bot with a crafting table keeps the cobblestone for a stair craft posted to be done on the spot when it puts its
+	 * pack away between jobs, rather than leaving the core to craft them. Another bot holds the job, so this one only does upkeep.
+	 */
+	@GameTest(maxTicks = 20)
+	public void botWithACraftingTableKeepsTheCobblestoneForAStairCraftOnTheSpot(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = colonyGuard(helper, colony, 3, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 6));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		BlockPos batch = helper.absolutePos(new BlockPos(6, 1, 6));
+		colony.board().postFor(JobType.CRAFT, batch, Items.COBBLESTONE_STAIRS, Optional.of(Items.CRAFTING_TABLE));
+		colony.board().claim(UUID.randomUUID(), Set.of(JobType.CRAFT), batch, helper.getLevel().getGameTime());
+		helper.onEachTick(() -> {
+			if (core(helper).countItem(Items.COBBLESTONE) > 0) {
+				helper.fail("cobblestone put in the core");
+			}
+		});
+
+		// The logs show the bot did put its pack away.
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.OAK_LOG) == 2, "pack not put away");
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 6, "bot has " + bot.getInventory().countItem(Items.COBBLESTONE) + " cobblestone");
 		});
 	}
 
