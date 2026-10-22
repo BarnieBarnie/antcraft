@@ -368,6 +368,38 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		helper.runAfterDelay(150, helper::succeed);
 	}
 
+	/** A sheep shut in a glass pen with a glass roof: the farmer does not break the glass to reach it. */
+	@GameTest(maxTicks = 200)
+	public void leavesAGlassPenWhole(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.SHEARS));
+		Sheep sheep = sheep(helper);
+		List<BlockPos> glass = new java.util.ArrayList<>();
+		for (int x = 4; x <= 6; x++) {
+			for (int z = 4; z <= 6; z++) {
+				for (int y = 1; y <= 3; y++) {
+					if (y == 3 || x != 5 || z != 5) {
+						helper.setBlock(x, y, z, Blocks.GLASS);
+						glass.add(new BlockPos(x, y, z));
+					}
+				}
+			}
+		}
+		farmer(helper, colony);
+
+		helper.onEachTick(() -> {
+			for (BlockPos pos : glass) {
+				if (!helper.getBlockState(pos).is(Blocks.GLASS)) {
+					helper.fail("broke the glass at " + pos.toShortString());
+				}
+			}
+			if (sheep.isSheared()) {
+				helper.fail("sheared the sheep in the glass pen");
+			}
+		});
+		helper.runAfterDelay(150, helper::succeed);
+	}
+
 	/** The yellow dye for a bed comes from a dandelion a bot picks in the territory. */
 	@GameTest(maxTicks = 600)
 	public void makesAYellowBedFromAPickedFlower(GameTestHelper helper) {

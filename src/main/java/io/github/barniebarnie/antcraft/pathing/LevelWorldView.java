@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
 import java.util.function.Predicate;
+import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.tags.BlockTags;
@@ -109,11 +110,25 @@ public class LevelWorldView implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		BlockState state = this.level.getBlockState(pos);
-		// Leave containers, other block entities, blocks the caller keeps and what colony builders built alone.
-		if (state.hasBlockEntity() || this.keep.contains(pos) || ColonyManager.isProtected(this.level, pos)) {
+		// Leave containers, other block entities, blocks the caller keeps, what colony builders built and what players build with alone.
+		if (state.hasBlockEntity() || this.keep.contains(pos) || ColonyManager.isProtected(this.level, pos) || isBuilt(state)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));
+	}
+
+	/**
+	 * Blocks players build with to enclose or decorate, which paths go round rather than through: glass and panes,
+	 * fences, fence gates, walls, doors and trapdoors. Builders still break them for their plans (see BlockBreaker).
+	 */
+	static boolean isBuilt(BlockState state) {
+		return state.is(ConventionalBlockTags.GLASS_BLOCKS)
+			|| state.is(ConventionalBlockTags.GLASS_PANES)
+			|| state.is(BlockTags.FENCES)
+			|| state.is(BlockTags.FENCE_GATES)
+			|| state.is(BlockTags.WALLS)
+			|| state.is(BlockTags.DOORS)
+			|| state.is(BlockTags.TRAPDOORS);
 	}
 
 	public static int breakTicks(BlockState state, Level level, BlockPos pos, ItemStack tool) {

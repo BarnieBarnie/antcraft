@@ -82,6 +82,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		succeedWhenAt(helper, bot, new BlockPos(6, 1, 3));
 	}
 
+	/**
+	 * A wall of oak fences, top to bottom, with a gap at the far end. A bot with a golden axe could chop through
+	 * it sooner than walk round, but fences are what players build with, so it walks round.
+	 */
+	@GameTest(maxTicks = 150)
+	public void walksRoundAFenceRatherThanThroughIt(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 7, 5, Blocks.OAK_FENCE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_AXE));
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 1)));
+
+		helper.onEachTick(() -> {
+			for (int y = 1; y <= 7; y++) {
+				for (int z = 1; z <= 5; z++) {
+					if (!helper.getBlockState(new BlockPos(4, y, z)).is(Blocks.OAK_FENCE)) {
+						helper.fail("broke the fence at " + new BlockPos(4, y, z).toShortString());
+					}
+				}
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(6, 1, 1));
+	}
+
 	@GameTest(maxTicks = 50)
 	public void bridgesGap(GameTestHelper helper) {
 		room(helper, 3);
