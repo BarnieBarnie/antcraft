@@ -21,7 +21,8 @@ import org.jspecify.annotations.Nullable;
  * retried once the rest is down: the bot pillars up to them, and that pillar is taken down in turn,
  * under it. Retries are limited per {@link #reset}, and a block it cannot reach even by pillaring is
  * left behind, and so is one it cannot see from anywhere in reach, since like a player it breaks
- * only blocks in sight, and one it stands on with a drop below further than a path may take. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
+ * only blocks in sight. One it stands on with a drop below further than a path may take it towers down
+ * from, placing a scaffold block under it before taking it down, or leaves up when it carries none. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -113,8 +114,12 @@ final class ScaffoldCleanup {
 		if (reach.isReached(feet) && this.bot.onGround()) {
 			this.stopTravel.run();
 			if (next.equals(feet.below()) && fallUnder(level, next) > PathFollower.MAX_DROP) {
-				// Taking it down from under itself would drop the bot further than a path may: it leaves it up.
-				this.abandoned.add(next);
+				// Taking it down from under itself would drop the bot further than a path may. It towers down instead:
+				// a block under this one first, so taking it down drops the bot one block. Without one it leaves it up.
+				BlockPos under = next.below();
+				if (!level.getBlockState(under).canBeReplaced() || !this.follower.placeBlock(level, under)) {
+					this.abandoned.add(next);
+				}
 				return false;
 			}
 			if (this.breaker.tick(level, next, true)) {

@@ -1947,4 +1947,63 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.succeed();
 		});
 	}
+
+	/**
+	 * A bot on top of a 5-high pillar of its own scaffold, too high to drop from (a 6-high one would put its head
+	 * in the ceiling of the test area): it does not stay up there,
+	 * but gets down, taking the pillar down under it, unhurt.
+	 */
+	@GameTest(maxTicks = 200)
+	public void getsDownFromAHighPillarAndTakesItDown(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		for (int y = 1; y <= 5; y++) {
+			helper.setBlock(4, y, 4, Blocks.DIRT);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		for (int y = 1; y <= 5; y++) {
+			bot.addScaffold(helper.absolutePos(new BlockPos(4, y, 4)));
+		}
+		bot.setHealth(bot.getMaxHealth());
+		helper.onEachTick(() -> {
+			if (bot.getScaffold().isEmpty() && strayDirt(helper) > 0) {
+				helper.fail("forgot the pillar with " + strayDirt(helper) + " dirt standing, bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(strayDirt(helper) == 0, strayDirt(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+			helper.assertTrue(bot.onGround() && bot.getY() < helper.absolutePos(new BlockPos(0, 2, 0)).getY(), "not down on the floor");
+			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
+		});
+	}
+
+	/**
+	 * A bot on a lone scaffold block five blocks up, carrying scaffold blocks: rather than stay up there, it towers
+	 * down, placing a block under the one it stands on and taking that one down, and leaves no scaffold standing.
+	 */
+	@GameTest(maxTicks = 140)
+	public void towersDownFromAFloatingScaffoldBlock(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos floating = new BlockPos(4, 5, 4);
+		helper.setBlock(floating, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.addScaffold(helper.absolutePos(floating));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+		bot.setHealth(bot.getMaxHealth());
+		helper.onEachTick(() -> {
+			if (bot.getScaffold().isEmpty() && strayDirt(helper) > 0) {
+				helper.fail("left " + strayDirt(helper) + " dirt standing, bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(strayDirt(helper) == 0, strayDirt(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+			helper.assertTrue(bot.onGround() && bot.getY() < helper.absolutePos(new BlockPos(0, 2, 0)).getY(), "not down on the floor");
+			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
+		});
+	}
 }

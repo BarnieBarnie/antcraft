@@ -132,6 +132,24 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			|| findSlot(this.bot.getInventory(), Farming::isSeed) >= 0;
 	}
 
+	/**
+	 * A crop job up near where it stands on its scaffold, such as on the same ledge: it keeps the scaffold up for that
+	 * one rather than take it down and build it again (see {@link WorkerGoal}); the work between jobs takes it down once done.
+	 */
+	// ponytail: near and at or above its feet stands in for "on the same ledge"; a crop on a ledge next door counts too.
+	@Override
+	public boolean keepsScaffoldFor(Job job) {
+		BlockPos feet = this.bot.blockPosition();
+		return (job.type() == JobType.HARVEST_CROP || job.type() == JobType.PLANT_CROP) && !this.bot.getScaffold().isEmpty()
+			&& job.target().getY() >= feet.getY() && job.target().closerThan(feet, 2 * REACH);
+	}
+
+	/** Whether another open crop job it is ready for is up near the scaffold it stands on, to do before it goes down. */
+	private boolean moreCropsFromHere(ServerLevel level, Colony colony) {
+		return colony.board().jobs().stream()
+			.anyMatch(job -> job.isOpen() && !job.givenUp() && this.keepsScaffoldFor(job) && this.isReady(level, colony, job));
+	}
+
 	@Override
 	public boolean begin(ServerLevel level, Job job) {
 		this.outcome = null;
@@ -164,7 +182,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			if (this.job.type() == JobType.PLANT_CROP) {
 				this.plant(level, colony.get(), this.job);
 			} else {
-				this.harvest(level, this.job);
+				this.harvest(level, colony.get(), this.job);
 			}
 			return true;
 		}
@@ -197,7 +215,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/** Harvests the ripe crop and replants it, then stores the produce, which it would otherwise keep from the colony. */
-	private void harvest(ServerLevel level, Job job) {
+	private void harvest(ServerLevel level, Colony colony, Job job) {
 		BlockPos crop = job.target();
 		BlockState state = level.getBlockState(crop);
 		if (!Farming.isRipe(state)) {
@@ -210,7 +228,9 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		} else if (status == PathFollower.Status.ARRIVED && this.breaker.tick(level, crop, true)) {
 			this.replant(level, crop, state.getBlock());
 			this.endJob(WorkerGoal.Outcome.COMPLETE);
-			this.depositing = !this.produce().isEmpty() && this.mayDeposit(level);
+			// Up on its scaffold with more crops up there, it stores the produce after the last of them.
+			// ponytail: should another bot take those, the produce waits for its next harvest or a full pack.
+			this.depositing = !this.produce().isEmpty() && this.mayDeposit(level) && !this.moreCropsFromHere(level, colony);
 		}
 	}
 

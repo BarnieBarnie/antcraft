@@ -686,6 +686,41 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Two ripe wheat side by side on a ledge too high to reach from the ground: the bot pillars up once and
+	 * harvests both from up there, rather than take the pillar down after the first and build it again.
+	 */
+	@GameTest(maxTicks = 250)
+	public void harvestsTwoCropsOnALedgeWithOnePillar(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (int z = 4; z <= 5; z++) {
+			helper.setBlock(5, 4, z, Blocks.FARMLAND);
+			helper.setBlock(5, 5, z, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		}
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		// Blocks placed in all and the most standing at once: equal while it never builds a pillar again.
+		int[] placed = {0, 0, 0};
+		helper.onEachTick(() -> {
+			int now = dirtAboveFloor(helper);
+			placed[0] += Math.max(0, now - placed[2]);
+			placed[1] = Math.max(placed[1], now);
+			placed[2] = now;
+			if (placed[0] > placed[1]) {
+				helper.fail("built the pillar again: placed " + placed[0] + " blocks, at most " + placed[1] + " at once");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.WHEAT) == 2, "core has " + core(helper).countItem(Items.WHEAT) + " wheat");
+			helper.assertTrue(placed[1] > 0, "never pillared up");
+			helper.assertTrue(dirtAboveFloor(helper) == 0, dirtAboveFloor(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+		});
+	}
+
 	private static int dirtAboveFloor(GameTestHelper helper) {
 		int found = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {

@@ -276,7 +276,8 @@ public class PathFollower {
 		}
 	}
 
-	private boolean placeBlock(ServerLevel level, BlockPos pos) {
+	/** Places one of the bot's scaffold blocks at {@code pos}, recorded as its scaffold. Returns false when it carries none. */
+	public boolean placeBlock(ServerLevel level, BlockPos pos) {
 		SimpleContainer inventory = this.bot.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
