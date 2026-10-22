@@ -196,26 +196,28 @@ public final class PathFinder {
 			BlockPos to = feet.relative(dir).above();
 			// Onto a stair block from its low front a bot walks up without jumping.
 			Builder b = new Builder(MoveType.STEP_UP, to, this.world.stairUp(to.below(), dir) ? WALK_COST : WALK_COST + JUMP_COST);
-			b.clear(feet.above(2)).clear(to).clear(to.above()).support(to.below());
+			b.clear(feet.above(2)).pass(to, dir).pass(to.above(), dir).support(to.below());
 			return b.build();
 		}
 
 		private Candidate drop(BlockPos feet, Direction dir) {
 			BlockPos edge = feet.relative(dir);
-			if (!this.open(edge) || !this.open(edge.above()) || this.canStand(edge.below())) {
+			if (!this.open(edge, dir) || !this.open(edge.above(), dir) || this.canStand(edge.below())) {
 				return null;
 			}
+			// A door on the way, such as one the bot drops into the doorway of, costs its opening once.
+			double opening = this.world.canOpen(edge, dir) || this.world.canOpen(edge.above(), dir) ? OPEN_COST : 0;
 			int maxFall = Math.max(this.options.maxDrop(), MAX_WATER_DROP);
 			for (int fall = 1; fall <= maxFall; fall++) {
 				BlockPos to = edge.below(fall);
 				if (this.swimmable(to)) {
-					return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST + fall * FALL_COST_PER_BLOCK);
+					return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST + fall * FALL_COST_PER_BLOCK + opening);
 				}
-				if (!this.open(to)) {
+				if (!this.open(to, dir)) {
 					return null;
 				}
 				if (fall <= this.options.maxDrop() && this.canStand(to.below())) {
-					return new Candidate(new Step(MoveType.DROP, to, List.of(), List.of()), WALK_COST + fall * FALL_COST_PER_BLOCK);
+					return new Candidate(new Step(MoveType.DROP, to, List.of(), List.of()), WALK_COST + fall * FALL_COST_PER_BLOCK + opening);
 				}
 			}
 			return null;
@@ -320,6 +322,11 @@ public final class PathFinder {
 
 		private boolean open(BlockPos pos) {
 			return this.world.isPassable(pos) && !this.world.isHazard(pos);
+		}
+
+		/** Open, or a door or fence gate a bot moving {@code dir} opens by hand. */
+		private boolean open(BlockPos pos, Direction dir) {
+			return this.open(pos) || this.world.canOpen(pos, dir);
 		}
 
 		private boolean canStand(BlockPos pos) {

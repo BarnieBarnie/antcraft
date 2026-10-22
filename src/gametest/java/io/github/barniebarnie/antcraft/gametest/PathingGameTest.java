@@ -331,6 +331,23 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		succeedWhenThroughTheDoorOnce(helper, bot, door, new BlockPos(6, 1, 3));
 	}
 
+	/**
+	 * Like {@link #opensAndShutsADoorOnceDroppingThroughIt}, but the other way: the doorway is on a step one block up,
+	 * and the bot steps up into it from the floor, and the door opens and shuts once.
+	 */
+	@GameTest(maxTicks = 60)
+	public void opensAndShutsADoorOnceSteppingUpThroughIt(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 6, 1, 6, Blocks.BEDROCK);
+		fill(helper, 4, 2, 1, 4, 7, 6, Blocks.BEDROCK);
+		BlockPos door = new BlockPos(4, 2, 3);
+		BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.EAST);
+		helper.setBlock(door, lower);
+		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		succeedWhenThroughTheDoorOnce(helper, bot, door, new BlockPos(6, 2, 3));
+	}
+
 	/** Sends the bot to {@code relativeTarget} and succeeds once it is there and the door opened and shut once on the way. */
 	private static void succeedWhenThroughTheDoorOnce(GameTestHelper helper, AntBot bot, BlockPos door, BlockPos relativeTarget) {
 		BlockPos target = helper.absolutePos(relativeTarget);

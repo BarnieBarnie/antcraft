@@ -458,6 +458,27 @@ class PathFinderTest {
 	}
 
 	@Test
+	void stepsUpThroughADoorOneBlockHigher() {
+		// A wall at x=2 on a step one block up, with a shut door in it at the step's height.
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 10, 1, 10, 'B').fill(2, 2, -10, 2, 4, 10, 'B').door(2, 2, 0, Direction.Axis.X);
+		Path path = find(world, new BlockPos(4, 2, 0), WALK_ONLY);
+
+		assertTrue(path.complete(), "no way up through: " + path.steps());
+		assertEquals(MoveType.STEP_UP, path.steps().get(1).type(), "did not step up into the doorway: " + path.steps());
+	}
+
+	@Test
+	void dropsIntoADoorwayOneBlockLower() {
+		// A step one block up at x>=3, and a wall at x=2 with a shut door in it on the floor and a hole above the door.
+		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 10, 1, 10, 'B').fill(2, 1, -10, 2, 4, 10, 'B')
+			.door(2, 1, 0, Direction.Axis.X).set(2, 3, 0, ' ');
+		Path path = PathFinder.find(world, new BlockPos(4, 2, 0), new Goal.Block(START), WALK_ONLY);
+
+		assertTrue(path.complete(), "no way down through: " + path.steps());
+		assertEquals(MoveType.DROP, path.steps().get(1).type(), "did not drop into the doorway: " + path.steps());
+	}
+
+	@Test
 	void doesNotEnterADoorFromTheSide() {
 		// A door in a wall running along x, walked through north-south: from the east it is a wall.
 		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 3, 10, 'B').door(2, 1, 0, Direction.Axis.Z);
