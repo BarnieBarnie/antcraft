@@ -49,6 +49,7 @@ import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -1357,6 +1358,64 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps());
 			helper.assertTrue(flintAndSteel(helper, builder).getDamageValue() == 0, "flint and steel used");
 		});
+	}
+
+	/** Fire spreads with no player near, as it would around one, in this test's own batch only (see its test environment). */
+	@GameTest(maxTicks = 800, environment = "antcraft-gametest:fire_spread")
+	public void lightsAFireplaceInsideAWoodenHouseThatDoesNotBurn(GameTestHelper helper) {
+		helper.assertTrue(helper.getLevel().getGameRules().get(GameRules.FIRE_SPREAD_RADIUS_AROUND_PLAYER) == -1, "fire does not spread");
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+		// A stone hearth around (4, 1, 4) on netherrack, open to the west, with a chimney of air above the fire.
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 5, 6, 5)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
+		for (int y = 1; y <= 6; y++) {
+			helper.setBlock(4, y, 4, Blocks.AIR);
+		}
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		// Oak planks walls against it, two blocks from the fire.
+		List<BlockPos> walls = new ArrayList<>();
+		for (int y = 1; y <= 3; y++) {
+			for (int i = 2; i <= 6; i++) {
+				walls.add(new BlockPos(i, y, 2));
+				walls.add(new BlockPos(i, y, 6));
+				walls.add(new BlockPos(6, y, i));
+			}
+		}
+		walls.forEach(pos -> helper.setBlock(pos, Blocks.OAK_PLANKS));
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState()))));
+		member(helper, colony, 1, 4);
+
+		long[] lit = {-1};
+		helper.onEachTick(() -> {
+			walls.forEach(pos -> helper.assertBlockPresent(Blocks.OAK_PLANKS, pos));
+			if (lit[0] < 0 && helper.getBlockState(new BlockPos(4, 1, 4)).is(Blocks.FIRE)) {
+				lit[0] = helper.getTick();
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(lit[0] >= 0, "fireplace not lit: blocked " + colony.blockedSteps());
+			// Long enough for the fire to tick several times.
+			helper.assertTrue(helper.getTick() - lit[0] >= 400, "fire not burning long enough yet");
+			helper.assertBlockPresent(Blocks.FIRE, new BlockPos(4, 1, 4));
+		});
+	}
+
+	@GameTest(maxTicks = 300)
+	public void placesNoPlanksWhereLitFireSpreadsToThem(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
+		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
+		helper.setBlock(4, 1, 4, Blocks.FIRE);
+		// Two blocks away: fire spreads into the air beside it, and on to the planks.
+		BuildPlan.Step planks = step(helper, 6, 1, 4, Blocks.OAK_PLANKS.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(planks)));
+		member(helper, colony, 1, 4);
+
+		helper.onEachTick(() -> helper.assertBlockNotPresent(Blocks.OAK_PLANKS, new BlockPos(6, 1, 4)));
+		helper.succeedWhen(() -> helper.assertTrue(colony.blockedSteps().equals(List.of(planks.pos())), "step not reported: " + colony.blockedSteps()));
 	}
 
 	@GameTest(maxTicks = 600)

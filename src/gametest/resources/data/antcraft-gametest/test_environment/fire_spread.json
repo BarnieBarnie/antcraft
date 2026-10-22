@@ -1,0 +1,6 @@
+{
+	"type": "minecraft:game_rules",
+	"rules": {
+		"minecraft:fire_spread_radius_around_player": -1
+	}
+}
