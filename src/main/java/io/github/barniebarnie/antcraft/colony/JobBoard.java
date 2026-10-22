@@ -65,8 +65,13 @@ public class JobBoard {
 		return this.post(type, target, area, item, now, Optional.empty());
 	}
 
-	/** Like {@link #post(JobType, BlockPos)}, for a job that needs {@code tool}, such as a hoe to till. */
+	/**
+	 * Like {@link #post(JobType, BlockPos)}, for a job that needs {@code tool}, such as a hoe to till. One posted
+	 * already gets the tool too, such as no hoe once its soil is tilled.
+	 */
 	public Optional<Job> post(JobType type, BlockPos target, Optional<Item> tool) {
+		this.jobs.stream().filter(job -> job.type() == type && job.target().equals(target)).findFirst()
+			.ifPresent(job -> this.declare(job.id(), job.item(), tool));
 		return this.post(type, target, List.of(), Optional.empty(), 0L, tool);
 	}
 

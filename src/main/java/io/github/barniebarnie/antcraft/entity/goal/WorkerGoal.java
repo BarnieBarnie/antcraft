@@ -299,13 +299,22 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	/**
-	 * Whether the bot is off to fetch the tool its job declares, as it carries none of that kind, such as once its
-	 * own broke mid-job. With none in the core it orders one and hands the job back rather than working by hand, so
-	 * a bot that carries one takes it; the job score keeps this one off it meanwhile.
+	 * Whether the bot is off to fetch the tool its job declares, as it carries none of that kind or only a lower
+	 * tier, such as once its own broke mid-job. With none in the core it orders one; carrying none, it hands the job
+	 * back rather than working by hand, so a bot that carries one takes it, and the job score keeps this one off it
+	 * meanwhile. Carrying a lower tier, it works on with that, as the job score lets a bot take the job with one.
 	 */
 	private boolean lostTool(ServerLevel level, Colony colony) {
-		Optional<ToolKind> kind = colony.board().jobOf(this.bot.getUUID()).flatMap(Job::tool).flatMap(ToolKind::of);
-		boolean lost = kind.isPresent() && kind.get().bestCarried(this.bot) == null;
+		Optional<Item> tool = colony.board().jobOf(this.bot.getUUID()).flatMap(Job::tool);
+		Optional<ToolKind> kind = tool.flatMap(ToolKind::of);
+		Item carried = kind.map(k -> k.bestCarried(this.bot)).orElse(null);
+		boolean lost = kind.isPresent() && kind.get().rank(carried) < kind.get().rank(tool.get());
+		if (lost && carried != null && !this.fetchingTool && Storage.containerAt(level, colony.core()) instanceof Container core
+				&& kind.get().betterIn(Storage.stock(core), carried).filter(better -> kind.get().rank(better) >= kind.get().rank(tool.get())).isEmpty()) {
+			// No good enough one to fetch: on with the weaker one, while the upgrade checks order one.
+			// ponytail: scans the core each tick of such a job; check now and then if that shows up in profiles.
+			lost = false;
+		}
 		if (lost != this.fetchingTool && this.active instanceof ColonyWorkGoal executor) {
 			// The executor walks and breaks afresh from wherever the fetch leaves the bot.
 			executor.resetMovement();

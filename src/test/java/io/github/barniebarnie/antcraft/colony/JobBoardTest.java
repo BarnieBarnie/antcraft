@@ -10,9 +10,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.SharedConstants;
 import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
@@ -53,6 +55,20 @@ class JobBoardTest {
 		Job job = board.post(JobType.PLANT_CROP, new BlockPos(5, 1, 5), Optional.of(Items.WOODEN_HOE)).orElseThrow();
 
 		assertEquals(Optional.of(Items.WOODEN_HOE), job.tool());
+	}
+
+	/** The survey after tilling posts the plant job again, over farmland now: it needs no hoe any more, claimed or not. */
+	@Test
+	void aPlantJobOverFarmlandDeclaresNoToolAfterTheSurveyThatFollowsTilling() {
+		JobBoard board = new JobBoard();
+		BlockPos crop = new BlockPos(5, 1, 5);
+		board.post(JobType.PLANT_CROP, crop, Farming.plantTool(Blocks.DIRT.defaultBlockState()));
+		board.claim(ALICE, Set.of(JobType.PLANT_CROP), BlockPos.ZERO, 0);
+
+		assertTrue(board.post(JobType.PLANT_CROP, crop, Farming.plantTool(Blocks.FARMLAND.defaultBlockState())).isEmpty());
+		assertEquals(1, board.jobs().size());
+		Job job = board.jobOf(ALICE).orElseThrow();
+		assertEquals(Optional.empty(), job.tool());
 	}
 
 	@Test

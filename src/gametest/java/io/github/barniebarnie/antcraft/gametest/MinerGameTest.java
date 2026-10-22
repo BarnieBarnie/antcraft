@@ -933,6 +933,47 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	private static long cellsDug(GameTestHelper helper, Mineshaft shaft) {
+		return shaft.branches(shaft.levels().getLast()).stream().flatMap(branch -> branch.cells().stream())
+			.filter(cell -> helper.getLevel().getBlockState(cell).isAir() || helper.getLevel().getBlockState(cell).is(Blocks.TORCH)).count();
+	}
+
+	/** A miner whose pickaxe of the branch's tier breaks mid-branch fetches another from the core at once, not dig on with the weaker one it carries. */
+	@GameTest(maxTicks = 270)
+	public void fetchesAGoodEnoughPickaxeWhenItsOwnBreaksMidBranch(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		// Iron, so the branch declares a stone pickaxe.
+		colony.setStockTarget(StockTarget.of(Items.RAW_IRON, 1));
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Item need = PickaxeTier.forBranch(shaft.levels().getLast(), Items.RAW_IRON::equals);
+		helper.assertTrue(need == Items.STONE_PICKAXE, "the branch takes a " + need);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(need));
+		AntBot miner = member(helper, colony, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(need));
+
+		long[] dugAtBreak = {-1};
+		helper.onEachTick(() -> {
+			if (dugAtBreak[0] < 0 && anyBranchDug(helper, shaft)) {
+				// Its pickaxe breaks: gone from hand and pack, the wooden one left.
+				if (miner.getMainHandItem().is(need)) {
+					miner.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+				}
+				miner.getInventory().removeItemType(need, 1);
+				dugAtBreak[0] = cellsDug(helper, shaft);
+			}
+			if (dugAtBreak[0] >= 0 && pickaxes(miner, need) == 0 && cellsDug(helper, shaft) > dugAtBreak[0]) {
+				helper.fail("dug on with a wooden pickaxe");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(dugAtBreak[0] >= 0, "pickaxe never broke");
+			helper.assertTrue(pickaxes(miner, need) == 1, "miner has no " + need);
+			helper.assertTrue(core(helper, MINE_CORE).countItem(need) == 0, need + " left in the core");
+		});
+	}
+
 	@GameTest(maxTicks = 470)
 	public void fetchesPickaxeFromCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
