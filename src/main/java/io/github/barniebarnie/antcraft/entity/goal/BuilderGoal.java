@@ -746,14 +746,14 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * burning anything: soul fire on soul soil or sand, which never goes out, and fire only on a
 	 * block that burns forever in this dimension, such as netherrack, since fire on stone goes out
 	 * and would be lit again until the tool breaks. Neither is lit while it would spread to a block
-	 * that burns (see {@link FireSpread}), so a fireplace walled in by stone is lit in a wooden house.
+	 * that burns (see {@link FireSpread}; soul fire never spreads, so it is lit whatever stands beside it), so a fireplace walled in by stone is lit in a wooden house.
 	 */
 	private static boolean canLight(LevelReader level, BuildPlan.Step step) {
 		BlockPos pos = step.pos();
 		BlockState fire = BaseFireBlock.getState(level, pos);
 		return fire.is(step.state().getBlock()) && fire.canSurvive(level, pos)
 			&& (!fire.is(Blocks.FIRE) || level.getBlockState(pos.below()).is(level.dimensionType().infiniburn()))
-			&& !FireSpread.reachesFlammable(level::getBlockState, pos);
+			&& (fire.is(Blocks.SOUL_FIRE) || !FireSpread.reachesFlammable(level::getBlockState, pos));
 	}
 
 	private static boolean isUnbreakable(LevelReader level, BlockPos pos) {

@@ -1455,6 +1455,22 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	@GameTest(maxTicks = 30)
+	public void lightsSoulFireNextToPlanksSinceItNeverSpreads(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
+		helper.setBlock(4, 0, 4, Blocks.SOUL_SAND);
+		BuildPlan.Step planks = step(helper, 5, 1, 4, Blocks.OAK_PLANKS.defaultBlockState());
+		helper.setBlock(5, 1, 4, Blocks.OAK_PLANKS);
+		colony.addBuild(new BuildPlan(List.of(planks, step(helper, 4, 1, 4, Blocks.SOUL_FIRE.defaultBlockState()))));
+		member(helper, colony, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.SOUL_FIRE, new BlockPos(4, 1, 4));
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		});
+	}
+
 	/** Fire spreads with no player near, as it would around one, in this test's own batch only (see its test environment). */
 	@GameTest(maxTicks = 800, environment = "antcraft-gametest:fire_spread")
 	public void lightsAFireplaceInsideAWoodenHouseThatDoesNotBurn(GameTestHelper helper) {
