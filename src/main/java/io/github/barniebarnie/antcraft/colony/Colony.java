@@ -1180,6 +1180,11 @@ public class Colony {
 		this.protectedBlocks.remove(pos);
 	}
 
+	/** Where bots walk in the mine: its stairs, halls and every round of branches; none before it has a site. */
+	public Set<BlockPos> mineCells() {
+		return this.shaftOpen;
+	}
+
 	/** Where the colony mines, once it has picked a site. */
 	public Optional<Mineshaft> mineshaft() {
 		return this.mineshaft;

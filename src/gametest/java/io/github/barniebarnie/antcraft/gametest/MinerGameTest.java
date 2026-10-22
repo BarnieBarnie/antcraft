@@ -587,6 +587,34 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The mine is the colony's, however far it reaches past the colony's radius (its branches do, 64 blocks out by
+	 * default): miners with no job at the bottom of the shaft, at the landing and at a branch end, stay there rather
+	 * than walk home to the core.
+	 */
+	@GameTest(maxTicks = 140)
+	public void idleMinersAtTheShaftBottomStayInTheMine(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		colony.setRadius(1);
+		int bottom = shaft.levels().getLast();
+		Mineshaft.Branch branch = shaft.branches(bottom).getLast();
+		branch.cells().forEach(cell -> helper.getLevel().setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState()));
+		BlockPos landing = relative(helper, shaft.landing(bottom));
+		BlockPos branchEnd = relative(helper, branch.cells().get(branch.cells().size() - 2));
+		List<AntBot> miners = List.of(member(helper, colony, landing.getX(), landing.getY(), landing.getZ()),
+			member(helper, colony, branchEnd.getX(), branchEnd.getY(), branchEnd.getZ()));
+		miners.forEach(miner -> miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE)));
+
+		helper.onEachTick(() -> miners.forEach(miner -> {
+			if (miner.getBlockY() > bottom + 1) {
+				helper.fail("idle miner climbed out of the mine to " + relative(helper, miner.blockPosition()).toShortString());
+			}
+		}));
+		helper.runAfterDelay(120, helper::succeed);
+	}
+
 	@GameTest(maxTicks = 240)
 	public void minerBringsWhatTheColonyOrderedToTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);

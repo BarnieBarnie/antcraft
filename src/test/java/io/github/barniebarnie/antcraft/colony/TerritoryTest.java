@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.colony;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.Test;
@@ -43,6 +44,14 @@ class TerritoryTest {
 	}
 
 	@Test
+	void idleBotInTheMineStays() {
+		// Branches reach far past the radius, deep below; a bot there is in the colony's mine.
+		Territory territory = new Territory(new BlockPos(100, 64, 100), 10, null, Set.of(new BlockPos(150, -30, 100)));
+		assertFalse(territory.shouldReturnHome(new BlockPos(150, -30, 100), false, false));
+		assertTrue(territory.shouldReturnHome(new BlockPos(150, 64, 100), false, false), "on the surface above the mine");
+	}
+
+	@Test
 	void fightingBotIsNotCalledBack() {
 		assertFalse(TERRITORY.shouldReturnHome(new BlockPos(130, 64, 100), true, false));
 	}
@@ -68,7 +77,7 @@ class TerritoryTest {
 	@Test
 	void boundsClipTheSquareSideways() {
 		// Game tests clip each colony to its test area, so it cannot reach into the tests beside it.
-		Territory clipped = new Territory(new BlockPos(100, 64, 100), 10, new BoundingBox(95, 60, 95, 102, 67, 102));
+		Territory clipped = new Territory(new BlockPos(100, 64, 100), 10, new BoundingBox(95, 60, 95, 102, 67, 102), Set.of());
 		assertTrue(clipped.contains(new BlockPos(102, 64, 95)));
 		assertFalse(clipped.contains(new BlockPos(103, 64, 100)), "outside the bounds, inside the radius");
 		assertFalse(clipped.contains(new BlockPos(100, 64, 94)), "outside the bounds, inside the radius");

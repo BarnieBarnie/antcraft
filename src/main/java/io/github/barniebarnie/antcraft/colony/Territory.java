@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.jspecify.annotations.Nullable;
@@ -8,14 +9,16 @@ import org.jspecify.annotations.Nullable;
  * The area a colony works in: a square of {@code radius} blocks around the core,
  * at any height, matching the area the colony surveys for work. Game tests clip it sideways to {@code bounds}, their
  * test area, so tests running side by side cannot reach into each other; elsewhere {@code bounds} is null.
+ * {@code mine} is where bots walk in the colony's mine (see {@link io.github.barniebarnie.antcraft.work.Mineshaft#keepOpen}),
+ * whose branches reach far past the radius.
  */
-public record Territory(BlockPos core, int radius, @Nullable BoundingBox bounds) {
+public record Territory(BlockPos core, int radius, @Nullable BoundingBox bounds, Set<BlockPos> mine) {
 	public Territory(BlockPos core, int radius) {
-		this(core, radius, null);
+		this(core, radius, null, Set.of());
 	}
 
 	public static Territory of(Colony colony) {
-		return new Territory(colony.core(), colony.radius(), colony.bounds());
+		return new Territory(colony.core(), colony.radius(), colony.bounds(), colony.mineCells());
 	}
 
 	public boolean contains(BlockPos pos) {
@@ -33,9 +36,9 @@ public record Territory(BlockPos core, int radius, @Nullable BoundingBox bounds)
 		return this.contains(from) && this.contains(to);
 	}
 
-	/** A bot with nothing to do, outside the colony, heads home. A fight or a job in progress is never cut short. */
+	/** A bot with nothing to do, outside the colony and its mine, heads home. A fight or a job in progress is never cut short. */
 	public boolean shouldReturnHome(BlockPos bot, boolean fighting, boolean working) {
-		return !fighting && !working && !this.contains(bot);
+		return !fighting && !working && !this.contains(bot) && !this.mine.contains(bot);
 	}
 
 	/**
