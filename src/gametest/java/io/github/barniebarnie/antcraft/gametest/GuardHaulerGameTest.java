@@ -24,6 +24,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -196,6 +197,54 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 64, "storage holds " + chest.countItem(Items.COBBLESTONE) + " cobblestone");
+			helper.assertTrue(logs.stream().noneMatch(log -> helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG)), "tree not chopped");
+		});
+	}
+
+	/** A tree job posted while a full miner walks its haul to the core between jobs waits until the haul is in. */
+	@GameTest(maxTicks = 300)
+	public void aFullMinerDeliversItsHaulBeforeItTakesATreeJob(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		// One slot free: too full to dig on. Raw iron, as a miner keeps no scaffold blocks of it back.
+		for (int i = 1; i < bot.getInventory().getContainerSize(); i++) {
+			bot.getInventory().setItem(i, new ItemStack(Items.RAW_IRON, 64));
+		}
+		depositBeforeTreeJob(helper, colony, bot, Items.RAW_IRON);
+	}
+
+	/** A tree job posted while a farmer walks its wool to the core between jobs waits until the wool is in. */
+	@GameTest(maxTicks = 300)
+	public void aFarmerDeliversItsProduceBeforeItTakesATreeJob(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOOL.white(), 16));
+		depositBeforeTreeJob(helper, colony, bot, Items.WOOL.white());
+	}
+
+	/**
+	 * Posts a tree job next to the bot once it starts on work between jobs, and fails should it chop the tree while it
+	 * still carries {@code load}; passes once all of it is in the core and the tree is chopped.
+	 */
+	private static void depositBeforeTreeJob(GameTestHelper helper, Colony colony, AntBot bot, Item load) {
+		int carried = bot.getInventory().countItem(load);
+		List<BlockPos> logs = List.of(helper.absolutePos(new BlockPos(6, 1, 3)), helper.absolutePos(new BlockPos(6, 2, 3)));
+		boolean[] posted = {false};
+
+		helper.onEachTick(() -> {
+			if (!posted[0] && bot.isWorking()) {
+				logs.forEach(log -> helper.getLevel().setBlockAndUpdate(log, Blocks.OAK_LOG.defaultBlockState()));
+				colony.board().post(JobType.CHOP_TREE, logs.getFirst(), logs);
+				posted[0] = true;
+			}
+			if (posted[0] && bot.getInventory().countItem(load) > 0 && logs.stream().anyMatch(log -> !helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG))) {
+				helper.fail("bot chopped the tree before it delivered its load");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(load) == carried, "core holds " + core(helper).countItem(load) + " of " + carried);
 			helper.assertTrue(logs.stream().noneMatch(log -> helper.getLevel().getBlockState(log).is(Blocks.OAK_LOG)), "tree not chopped");
 		});
 	}

@@ -110,6 +110,12 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return true;
 	}
 
+	/** On its way to unload: the trip is finished before the bot takes a job. Not while it waits after finding no path. */
+	@Override
+	protected boolean carriesLoad() {
+		return this.cooldown == 0 && this.state == State.DEPOSIT;
+	}
+
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
 		if (job.type() == JobType.MINE_VEIN) {

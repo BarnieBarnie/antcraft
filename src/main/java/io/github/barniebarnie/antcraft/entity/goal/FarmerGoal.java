@@ -124,6 +124,12 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return this.shearSheep(level, colony) || this.pickFlower(level, colony);
 	}
 
+	/** On its way to store produce: the trip is finished before the bot takes a job. Not while it waits after finding no path. */
+	@Override
+	protected boolean carriesLoad() {
+		return this.cooldown == 0 && this.depositing;
+	}
+
 	@Override
 	public boolean isReady(ServerLevel level, Colony colony, Job job) {
 		return job.type() != JobType.PLANT_CROP || level.getGameTime() >= this.noSeedsUntil
