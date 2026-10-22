@@ -83,9 +83,17 @@ public final class Sites {
 		return columns;
 	}
 
-	/** Whether {@code box} is clear of the {@code avoid} areas and of a ring around the core kept free so bots can always reach it. */
+	/** Whether {@code a} and {@code b} cover any of the same block columns, at whatever height. */
+	public static boolean sharesColumns(BoundingBox a, BoundingBox b) {
+		return a.minX() <= b.maxX() && a.maxX() >= b.minX() && a.minZ() <= b.maxZ() && a.maxZ() >= b.minZ();
+	}
+
+	/**
+	 * Whether {@code box} shares no columns with the {@code avoid} areas or with a ring around the core kept free so bots
+	 * can always reach it, at any height: sites never stack over each other.
+	 */
 	private static boolean isClear(BlockPos core, List<BoundingBox> avoid, BoundingBox box) {
 		BoundingBox coreArea = BoundingBox.fromCorners(core.offset(-1, -1, -1), core.offset(1, 1, 1));
-		return !box.intersects(coreArea) && avoid.stream().noneMatch(box::intersects);
+		return !sharesColumns(box, coreArea) && avoid.stream().noneMatch(area -> sharesColumns(box, area));
 	}
 }

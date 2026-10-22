@@ -189,7 +189,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
 		List<Mineshaft> spots = candidates(core).stream()
 			.map(top -> new Mineshaft(top, levels))
-			.filter(shaft -> avoid.stream().noneMatch(shaft.area()::intersects))
+			.filter(shaft -> avoid.stream().noneMatch(area -> Sites.sharesColumns(shaft.area(), area)))
 			.toList();
 		Mineshaft site = spots.stream().filter(shaft -> shaft.isDiggable(world)).findFirst()
 			.orElseGet(() -> spots.isEmpty() ? new Mineshaft(core.offset(2, 0, 2), levels) : spots.getFirst());

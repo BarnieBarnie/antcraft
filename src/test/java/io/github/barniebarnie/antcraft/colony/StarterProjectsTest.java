@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.pathing.WorldView;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Sites;
 import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,9 +56,13 @@ class StarterProjectsTest {
 	}
 
 	private static Colony found() {
+		return found(WORLD);
+	}
+
+	private static Colony found(Function<BlockPos, BlockState> world) {
 		Colony colony = new Colony(UUID.randomUUID(), CORE, List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(),
 			DefaultStock.TARGETS, Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
-		StarterProjects.start(colony, WORLD, VIEW, pos -> true, List.of(CORE.getY() - 20), VanillaData.structure("starter_house"));
+		StarterProjects.start(colony, world, VIEW, pos -> true, List.of(CORE.getY() - 20), VanillaData.structure("starter_house"));
 		return colony;
 	}
 
@@ -82,8 +87,17 @@ class StarterProjectsTest {
 
 	@Test
 	void theStarterAreasDoNotOverlap() {
-		Colony colony = found();
+		assertNoSharedColumns(found());
+	}
 
+	@Test
+	void theStarterAreasShareNoColumnsOnUnevenGround() {
+		// Ground steps a block up or down every few columns, so sites may lie above or below the core's level.
+		assertNoSharedColumns(found(pos -> pos.getY() < CORE.getY() + Math.floorMod(pos.getX() / 3 + pos.getZ() / 4, 3) - 1
+			? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState()));
+	}
+
+	private static void assertNoSharedColumns(Colony colony) {
 		List<BoundingBox> areas = new ArrayList<>();
 		areas.add(colony.field().orElseThrow().area());
 		areas.add(colony.mineshaft().orElseThrow().area());
@@ -92,7 +106,7 @@ class StarterProjectsTest {
 			.forEach(plan -> areas.add(BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).orElseThrow()));
 		for (int i = 0; i < areas.size(); i++) {
 			for (int j = i + 1; j < areas.size(); j++) {
-				assertFalse(areas.get(i).intersects(areas.get(j)), areas.get(i) + " overlaps " + areas.get(j));
+				assertFalse(Sites.sharesColumns(areas.get(i), areas.get(j)), areas.get(i) + " shares columns with " + areas.get(j));
 			}
 		}
 	}
