@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.pathing.Path;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.pathing.Step;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -149,8 +150,10 @@ public class PathFollower {
 			this.pillar(level, world, step);
 		} else {
 			if (step.type() == MoveType.WALK) {
-				this.open(level, step.to());
-				this.open(level, step.to().above());
+				// And the doorway it stands in: shut, the panel may still be in its way out.
+				for (BlockPos pos : List.of(feet, feet.above(), step.to(), step.to().above())) {
+					this.open(level, pos);
+				}
 			}
 			this.moveTo(step.to());
 			if (step.type() != MoveType.SWIM && this.bot.isInWater()) {
@@ -208,24 +211,37 @@ public class PathFollower {
 		return budget;
 	}
 
-	/** Opens a shut wooden door or fence gate the bot is about to walk through, as a player would. */
+	/**
+	 * Opens a shut wooden door or fence gate the bot is walking through, as a player would, and keeps one it opened
+	 * from being shut behind it until it has walked through.
+	 */
 	private void open(ServerLevel level, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
-		if (LevelWorldView.isOpenable(state) && !state.getValue(BlockStateProperties.OPEN)) {
-			setOpen(this.bot, level, pos, state, true);
-			this.bot.getOpened().add(pos.immutable());
+		if (!LevelWorldView.isOpenable(state)) {
+			return;
 		}
+		if (!state.getValue(BlockStateProperties.OPEN)) {
+			setOpen(this.bot, level, pos, state, true);
+		} else if (!this.bot.getOpened().containsKey(pos)) {
+			return; // left open by someone else: theirs to shut
+		}
+		this.bot.getOpened().put(pos.immutable(), level.getGameTime());
 	}
 
 	/**
-	 * Shuts the doors and gates the bot opened as soon as, shut, they would not hit it. Forgets one that is gone or
-	 * someone else shut. The bot runs this every tick, so a door it stopped in shuts once it leaves, whatever takes it away.
+	 * Shuts the doors and gates the bot opened once no path step walked through them last tick and, shut, they would
+	 * not hit it. Forgets one that is gone or someone else shut. The bot runs this every tick before its goals, so a
+	 * door it stopped in shuts once it leaves, whatever takes it away, and one it is on its way through stays open.
 	 */
 	public static void closeBehind(AntBot bot, ServerLevel level) {
-		bot.getOpened().removeIf(pos -> {
+		bot.getOpened().entrySet().removeIf(entry -> {
+			BlockPos pos = entry.getKey();
 			BlockState state = level.getBlockState(pos);
 			if (!state.hasProperty(BlockStateProperties.OPEN) || !state.getValue(BlockStateProperties.OPEN)) {
 				return true;
+			}
+			if (entry.getValue() >= level.getGameTime() - 1) {
+				return false;
 			}
 			VoxelShape shut = state.setValue(BlockStateProperties.OPEN, false).getCollisionShape(level, pos).move(pos);
 			if (Shapes.joinIsNotEmpty(shut, Shapes.create(bot.getBoundingBox()), BooleanOp.AND)) {

@@ -19,7 +19,11 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Holder;
+import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -28,6 +32,14 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.gameevent.BlockPositionSource;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.gameevent.GameEventListener;
+import net.minecraft.world.level.gameevent.GameEventListenerRegistry;
+import net.minecraft.world.level.gameevent.PositionSource;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Bots following planned paths through terrain. Each test builds a room closed in
@@ -155,6 +167,68 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Like {@link #walksThroughAClosedDoorAndShutsIt}, but counts the door's state changes: open once, shut once, no
+	 * flicker while the bot walks up to it. Both facings, so the shut panel is once on the near and once on the far side.
+	 */
+	@GameTest(maxTicks = 40)
+	public void opensAndShutsADoorFacingEastOnceOnTheWayThrough(GameTestHelper helper) {
+		opensAndShutsADoorOnce(helper, Direction.EAST);
+	}
+
+	@GameTest(maxTicks = 40)
+	public void opensAndShutsADoorFacingWestOnceOnTheWayThrough(GameTestHelper helper) {
+		opensAndShutsADoorOnce(helper, Direction.WEST);
+	}
+
+	private static void opensAndShutsADoorOnce(GameTestHelper helper, Direction facing) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 7, 6, Blocks.BEDROCK);
+		BlockPos door = new BlockPos(4, 1, 3);
+		BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, facing);
+		helper.setBlock(door, lower);
+		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
+		bot.setWalkTarget(target);
+
+		// Counts every open and shut, also one undone in the same tick, which a once-a-tick look at the door would miss.
+		BlockPos at = helper.absolutePos(door);
+		int[] changes = {0};
+		GameEventListener counter = new GameEventListener() {
+			@Override
+			public PositionSource getListenerSource() {
+				return new BlockPositionSource(at);
+			}
+
+			@Override
+			public int getListenerRadius() {
+				return 1;
+			}
+
+			@Override
+			public boolean handleGameEvent(ServerLevel level, Holder<GameEvent> event, GameEvent.Context context, Vec3 pos) {
+				if (BlockPos.containing(pos).equals(at) && (event.is(GameEvent.BLOCK_OPEN) || event.is(GameEvent.BLOCK_CLOSE))) {
+					changes[0]++;
+				}
+				return false;
+			}
+		};
+		GameEventListenerRegistry listeners = helper.getLevel().getChunkAt(at).getListenerRegistry(SectionPos.blockToSectionCoord(at.getY()));
+		listeners.register(counter);
+		helper.onEachTick(() -> {
+			if (changes[0] > 2) {
+				listeners.unregister(counter);
+				helper.fail("the door changed state " + changes[0] + " times");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(changes[0] == 2, "the door changed state " + changes[0] + " times");
+			listeners.unregister(counter);
+		});
+	}
+
 	/** A pen of oak fences across the room with a closed gate in it: the bot opens the gate to get in. */
 	@GameTest(maxTicks = 40)
 	public void walksThroughAClosedFenceGateIntoAPen(GameTestHelper helper) {
@@ -198,6 +272,43 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(helper.getBlockState(door).getValue(DoorBlock.OPEN), "shut the door on the bot");
 			BlockPos away = helper.absolutePos(new BlockPos(2, 1, 3));
 			bot.teleportTo(away.getX() + 0.5, away.getY(), away.getZ() + 0.5);
+			left[0] = true;
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(left[0], "still walking");
+			helper.assertFalse(helper.getBlockState(door).getValue(DoorBlock.OPEN), "left the door open");
+		});
+	}
+
+	/**
+	 * Like {@link #shutsADoorItStoppedInOnceItLeaves}, but the bot is saved and loaded again (as when its chunk unloads)
+	 * before it leaves: the loaded bot still shuts the door it opened.
+	 */
+	@GameTest(maxTicks = 50)
+	public void shutsADoorItOpenedBeforeItWasSavedAndLoaded(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 7, 6, Blocks.BEDROCK);
+		BlockPos door = new BlockPos(4, 1, 3);
+		BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.EAST);
+		helper.setBlock(door, lower);
+		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 1, 3)));
+
+		boolean[] left = {false};
+		int[] waited = {0};
+		helper.onEachTick(() -> {
+			if (left[0] || bot.getWalkTarget() != null || ++waited[0] < 5) {
+				return;
+			}
+			helper.assertTrue(helper.getBlockState(door).getValue(DoorBlock.OPEN), "shut the door on the bot");
+			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+			bot.saveWithoutId(output);
+			bot.discard();
+			AntBot copy = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+			copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+			BlockPos away = helper.absolutePos(new BlockPos(2, 1, 3));
+			copy.teleportTo(away.getX() + 0.5, away.getY(), away.getZ() + 0.5);
 			left[0] = true;
 		});
 		helper.succeedWhen(() -> {

@@ -15,8 +15,10 @@ import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -93,7 +95,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
 	 */
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
-	private final Set<BlockPos> opened = new HashSet<>();
+	private final Map<BlockPos, Long> opened = new HashMap<>();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -261,10 +263,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	/**
-	 * Doors and fence gates the bot opened on its way, to shut again once it is clear of them (see
-	 * {@link PathFollower#closeBehind}). Callers change it in place. ponytail: not saved, so one open on unload stays open.
+	 * Doors and fence gates the bot opened on its way, each with the game time a path step last walked through it, to
+	 * shut again once the bot is through and clear of them (see {@link PathFollower#closeBehind}). Callers change it in place.
 	 */
-	public Set<BlockPos> getOpened() {
+	public Map<BlockPos, Long> getOpened() {
 		return this.opened;
 	}
 
@@ -347,6 +349,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
+		if (!this.opened.isEmpty()) {
+			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
+		}
 	}
 
 	/** Bots saved with a role ({@code Role}, {@code RoleSetByPlayer}, {@code ScaffoldRole}) load without it, as workers like any other. */
@@ -359,5 +364,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
+		this.opened.clear();
+		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
+		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));
 	}
 }
