@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.entity.goal;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.Job;
+import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -10,6 +11,7 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
+import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
@@ -40,8 +42,10 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
 import org.jspecify.annotations.Nullable;
@@ -293,7 +297,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/**
 	 * Waters the middle of the colony field with a bucket: it pours a water bucket, fills an empty
-	 * one at the nearest water in the territory, or fetches one from the core. Without any bucket in
+	 * one at the nearest water in the territory, or fetches one from the core or a storage chest. Without any bucket in
 	 * the colony it orders one. Returns true while busy, so the caller skips its own work this tick.
 	 * ponytail: the field is planted while the water waits; farmland under a crop stays tilled when
 	 * dry, the crops just grow slower until the water comes.
@@ -317,14 +321,14 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (empty >= 0) {
 			return this.fillBucket(level, colony, empty);
 		}
-		Container core = Storage.containerAt(level, colony.core());
-		if (core != null && findSlot(core, FarmerGoal::isBucket) >= 0) {
-			if (this.reach(colony.core())) {
-				Storage.moveItems(core, inventory, FarmerGoal::isBucket, 1);
+		BlockPos from = Storage.holding(level, colony, FarmerGoal::isBucket);
+		if (from != null) {
+			if (this.reach(from)) {
+				Storage.moveItems(Storage.containerAt(level, from), inventory, FarmerGoal::isBucket, 1);
 			}
 			return true;
 		}
-		// ponytail: a spare bucket in a storage chest or another bot's pack counts as owned but is not fetched; the hauler keeps a stack of anything in the core, so one only ends up there by hand.
+		// ponytail: a spare bucket in another bot's pack counts as owned but is not fetched.
 		Map<Item, Integer> stock = Storage.spare(level, colony, bot -> carried(bot, FarmerGoal::isBucket));
 		if (stock.getOrDefault(Items.BUCKET, 0) + stock.getOrDefault(Items.WATER_BUCKET, 0) == 0 && !colony.orders().containsKey(Items.BUCKET)) {
 			colony.addOrder(Items.BUCKET, 1);
@@ -489,7 +493,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/** Picks the nearest flower in the territory the colony wants, then stores it. Returns true while busy. */
 	private boolean pickFlower(ServerLevel level, Colony colony) {
-		if (this.flower == null || !level.getBlockState(this.flower).is(BlockTags.SMALL_FLOWERS)) {
+		if (this.flower == null || !isFlower(level.getBlockState(this.flower))) {
 			this.flower = null;
 			if (level.getGameTime() < this.nextFlowerScan) {
 				return false;
@@ -499,13 +503,13 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			Predicate<Item>[] wanted = new Predicate[1];
 			this.flower = nearest(level, colony, this.bot.blockPosition(), pos -> {
 				BlockState state = level.getBlockState(pos);
-				if (!state.is(BlockTags.SMALL_FLOWERS) || this.hiddenFlowers.contains(pos)) {
+				if (!isFlower(state) || this.hiddenFlowers.contains(pos)) {
 					return false;
 				}
 				if (wanted[0] == null) {
 					wanted[0] = Storage.wanted(level, colony);
 				}
-				return wanted[0].test(state.getBlock().asItem());
+				return wantsFlower(state.getBlock().asItem(), wanted[0], GameRecipeBook.of(level.getServer()));
 			});
 			if (this.flower == null) {
 				// Looked at again on the next scan: a wall may be gone by then.
@@ -525,6 +529,31 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.depositing = this.mayDeposit(level);
 		}
 		return true;
+	}
+
+	/** A flower to pick for dye: a small one, or the lower half of a tall one, which drops the flower and takes the upper half with it. */
+	private static boolean isFlower(BlockState state) {
+		return state.is(BlockTags.SMALL_FLOWERS) || state.is(BlockTags.FLOWERS) && state.getBlock() instanceof DoublePlantBlock
+			&& state.getValue(DoublePlantBlock.HALF) == DoubleBlockHalf.LOWER;
+	}
+
+	/**
+	 * Whether the colony wants {@code flower}: itself, or for a dye it wants another source of. The planner takes
+	 * one recipe per dye, beetroot say, where a rose bush makes the same red dye.
+	 * ponytail: a source wanted for something else, as beetroot for soup, makes its dye's flowers wanted too.
+	 */
+	private static boolean wantsFlower(Item flower, Predicate<Item> wanted, TaskPlanner.RecipeBook<Item> book) {
+		if (wanted.test(flower)) {
+			return true;
+		}
+		for (Item dye : Items.DYE.asList()) {
+			Set<Item> sources = new HashSet<>();
+			book.recipesFor(dye).forEach(recipe -> recipe.ingredients().keySet().forEach(sources::addAll));
+			if (sources.contains(flower) && sources.stream().anyMatch(wanted)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Takes seeds from the core, or breaks grass in the territory until some drop. Returns false when there are none to get. */

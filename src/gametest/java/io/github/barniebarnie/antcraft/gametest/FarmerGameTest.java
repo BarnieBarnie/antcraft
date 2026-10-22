@@ -26,8 +26,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 
 public class FarmerGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CORE = new BlockPos(1, 1, 1);
@@ -313,6 +315,26 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A water bucket kept in a storage chest is fetched like one in the core, for the field. */
+	@GameTest(maxTicks = 40)
+	public void fetchesABucketFromAStorageChest(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos storage = new BlockPos(6, 1, 1);
+		colony.setStorage(new StorageArea(helper.absolutePos(storage)));
+		helper.setBlock(storage, Blocks.CHEST);
+		((Container) helper.getBlockEntity(storage, BlockEntity.class)).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		wantWheat(colony);
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.field().isPresent(), "no field");
+			helper.assertTrue(helper.getLevel().getBlockState(colony.field().get().center()).is(Blocks.WATER), "no water in the middle");
+			helper.assertTrue(carried(bot, Items.BUCKET) == 1, "farmer did not keep the empty bucket");
+		});
+	}
+
 	/** A sheep that stays put at x = 5, z = 5, so the test does not depend on where it wanders. */
 	private static Sheep sheep(GameTestHelper helper) {
 		Sheep sheep = helper.spawn(EntityTypes.SHEEP, 5, 1, 5);
@@ -451,6 +473,25 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertBlockNotPresent(Blocks.DANDELION, new BlockPos(5, 1, 5));
 			helper.assertTrue(core(helper).countItem(Items.BED.yellow()) == 1, "core has " + core(helper).countItem(Items.BED.yellow()) + " yellow beds");
+		});
+	}
+
+	/** The red dye for a bed comes from a rose bush, a tall flower, a bot picks in the territory. */
+	@GameTest(maxTicks = 80)
+	public void makesARedBedFromAPickedRoseBush(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WOOL.white(), 3));
+		core(helper).setItem(1, new ItemStack(Items.OAK_PLANKS, 3));
+		BlockPos rose = new BlockPos(5, 1, 5);
+		helper.setBlock(rose, Blocks.ROSE_BUSH.defaultBlockState().setValue(DoublePlantBlock.HALF, DoubleBlockHalf.LOWER));
+		helper.setBlock(rose.above(), Blocks.ROSE_BUSH.defaultBlockState().setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+		colony.addOrder(Items.BED.red(), 1);
+		farmer(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockNotPresent(Blocks.ROSE_BUSH, rose);
+			helper.assertBlockNotPresent(Blocks.ROSE_BUSH, rose.above());
+			helper.assertTrue(core(helper).countItem(Items.BED.red()) == 1, "core has " + core(helper).countItem(Items.BED.red()) + " red beds");
 		});
 	}
 

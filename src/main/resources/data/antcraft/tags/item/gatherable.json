@@ -21,6 +21,10 @@
 		"minecraft:beetroot",
 		"minecraft:white_wool",
 		"minecraft:string",
-		"#minecraft:small_flowers"
+		"#minecraft:small_flowers",
+		"minecraft:sunflower",
+		"minecraft:lilac",
+		"minecraft:rose_bush",
+		"minecraft:peony"
 	]
 }
