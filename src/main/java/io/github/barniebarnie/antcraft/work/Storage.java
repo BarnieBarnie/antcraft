@@ -227,9 +227,15 @@ public final class Storage {
 
 	/** {@link #wanted(ServerLevel, Colony)}, leaving {@code haul} out of what the colony holds: the haul being decided on. */
 	public static Predicate<Item> wanted(ServerLevel level, Colony colony, Map<Item, Integer> haul) {
+		Map<Item, Integer> stock = heldLess(level, colony, haul);
+		return Stockkeeping.wanted(wantedForOrders(level, colony, stock), targets(colony), stock);
+	}
+
+	/** What the colony {@linkplain #held holds}, less {@code haul}: the haul being decided on. */
+	public static Map<Item, Integer> heldLess(ServerLevel level, Colony colony, Map<Item, Integer> haul) {
 		Map<Item, Integer> stock = new HashMap<>(held(level, colony));
 		haul.forEach((item, count) -> stock.merge(item, -count, Integer::sum));
-		return Stockkeeping.wanted(wantedForOrders(level, colony, stock), targets(colony), stock);
+		return stock;
 	}
 
 	/** The colony's stock targets, for {@link Stockkeeping}. */

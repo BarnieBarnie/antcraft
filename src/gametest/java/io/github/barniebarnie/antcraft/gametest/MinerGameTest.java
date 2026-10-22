@@ -367,7 +367,8 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	/**
 	 * In a 16x16 area: one branch, 7 long, of a level at y=1, so two segments dug one after the other. The miner of
 	 * the first walks out with its haul while the other walks in to the second, through the same 1-wide branch:
-	 * neither keeps the other in. Both segments get dug and both miners get their haul out to the core.
+	 * neither keeps the other in. Both segments get dug and both miners get their haul out to the core: an order wants
+	 * the stone, so it goes straight up rather than into the landing chest.
 	 */
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 640)
 	public void twoMinersDigConsecutiveSegmentsOfOneBranchWithoutBoxingEachOtherIn(GameTestHelper helper) {
@@ -378,7 +379,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(pos, Blocks.STONE);
 		}
 		Colony colony = colony(helper, new BlockPos(6, 3, 2));
-		wantStone(colony);
+		colony.addOrder(Items.COBBLESTONE, 1000);
 		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
 		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 7, 4, 1, false);
 		dig(helper, colony, shaft);
@@ -556,6 +557,33 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(landingChest(helper, shaft).countItem(Items.DIRT) > 0, "landing chest is empty");
 			helper.assertTrue(anyBranchDug(helper, shaft), "no branch dug");
+		});
+	}
+
+	/**
+	 * A miner on the deepest level stores the cobblestone of its branches, which only a stock target wants, in the
+	 * landing chest it sees there rather than climbing out to the core on top of the shaft after each branch.
+	 */
+	@GameTest(maxTicks = 700)
+	public void minerAtALowerLevelDepositsWithoutLeavingTheShaft(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		AntBot miner = member(helper, colony, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(Items.TORCH, 16));
+
+		helper.onEachTick(() -> {
+			// A hauler may bring it up later, once it is in the landing chest.
+			if (core(helper, MINE_CORE).countItem(Items.COBBLESTONE) > 0 && landingChest(helper, shaft).countItem(Items.COBBLESTONE) == 0) {
+				helper.fail("miner climbed out to the core with its haul");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertBranchesDug(helper, shaft, shaft.levels().getLast());
+			helper.assertTrue(landingChest(helper, shaft).countItem(Items.COBBLESTONE) > 0, "no cobblestone in the landing chest");
 		});
 	}
 
@@ -784,7 +812,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(branchesDug(helper, shaft), "branches not dug"));
 	}
 
-	@GameTest(maxTicks = 890)
+	@GameTest(maxTicks = 520)
 	public void stonePickaxeMinesIronOreInTheWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStoneAndIron(colony);
@@ -802,7 +830,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A diamond ore its stone pickaxe left in a branch wall is mined once the miner gets an iron pickaxe, after the branch was done. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 1060)
 	public void ironPickaxeSendsTheMinerBackForADiamondItLeft(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		GameTests.failOnGiveUp(helper, colony);
@@ -854,7 +882,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An iron vein that shows one block in a branch wall is mined whole, the blocks behind it too. */
-	@GameTest(maxTicks = 1100)
+	@GameTest(maxTicks = 780)
 	public void minerMinesAWholeIronVeinThatShowsOneBlockInABranchWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStoneAndIron(colony);
@@ -876,7 +904,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * Water hidden in the rock beside an ore of a vein, where the miner sees it from nowhere it can stand: like a player,
 	 * it does not wall it off blind, and leaves that ore rather than break into the water.
 	 */
-	@GameTest(maxTicks = 750)
+	@GameTest(maxTicks = 520)
 	public void oreBesideWaterTheMinerCannotSeeIsLeft(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStoneAndIron(colony);

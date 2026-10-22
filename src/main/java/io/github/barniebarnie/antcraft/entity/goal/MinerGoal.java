@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -45,11 +46,12 @@ import org.jspecify.annotations.Nullable;
  * Mine work. As the executor of branch jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work},
  * it gets any colony bot to dig a mineshaft branch out, posting a vein job for each ore in its walls its pickaxe
  * can harvest and the colony wants, and digging such veins out whole (see {@link OreVein}),
- * light it with torches from the core as it goes, and bring the haul to the core; a bot without a pickaxe
+ * light it with torches from the core as it goes, and store the haul; a bot without a pickaxe
  * first takes the best one in the core. Before mining a level it makes sure a pickaxe good enough for the
- * ores the colony wants there is in hand or on its way. When it is full, it leaves what the core does not
- * want in a landing chest on the way; the core wants what open orders need, their ingredients included,
- * and what the colony is short of a stock target of. It stores its haul after each branch. Like a player,
+ * ores the colony wants there is in hand or on its way. It stores its haul after each branch and when it is
+ * full. Down in the shaft it leaves all but what open orders need, their ingredients included, in the nearest
+ * landing chest, which it sees there, for haulers to bring up, and climbs out to the core only with what
+ * orders need; nearer the core than any landing chest, it stores it all in the core. Like a player,
  * it only breaks a block it can see from within reach, not one behind a wall. A branch with cells it cannot
  * get within reach and sight of goes back on the board to retry later, and is given up after a few tries. A
  * bot whose pickaxe is not good enough for a branch leaves it a while to a free member that carries one.
@@ -78,9 +80,11 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private @Nullable UUID tierChecked;
 	/** What the core wants of its haul, worked out once per trip to unload. */
 	private @Nullable Predicate<Item> forCore;
+	/** What open orders want of its haul, which goes straight up to the core; worked out once per trip to unload. */
+	private @Nullable Set<Item> forOrders;
 	/** The ores the colony wants, worked out once per job when it first sees an ore (see {@link #postVeins}). */
 	private @Nullable Predicate<Item> oresWanted;
-	/** Whether it left what the core does not want in a landing chest on this trip. */
+	/** Whether it left what no order wants in a landing chest on this trip. */
 	private boolean unloaded;
 	/** The branch job begun through {@link #begin}, until it is done. */
 	private @Nullable Job job;
@@ -224,6 +228,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private void enter(State next) {
 		this.state = next;
 		this.forCore = null;
+		this.forOrders = null;
 		this.unloaded = false;
 		this.resetMovement();
 	}
@@ -452,20 +457,23 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Unloads its haul into the core, where it also tops up its torches. When it is full, it first
-	 * leaves what the core does not want in the nearest landing chest with room.
+	 * Unloads its haul into the core, where it also tops up its torches. Nearer a landing chest with room
+	 * than the core, it first leaves all but what open orders need there (see {@link #landingChest}).
 	 */
 	private void deposit(ServerLevel level, Colony colony) {
 		if (this.forCore == null) {
-			this.forCore = Storage.wanted(level, colony, Storage.stock(this.bot.getInventory()));
+			Map<Item, Integer> haul = Storage.stock(this.bot.getInventory());
+			this.forCore = Storage.wanted(level, colony, haul);
+			this.forOrders = Storage.wantedForOrders(level, colony, Storage.heldLess(level, colony, haul));
 		}
 		Predicate<Item> forCore = this.forCore;
-		BlockPos chest = this.landingChest(level, colony, forCore);
+		Set<Item> forOrders = Objects.requireNonNull(this.forOrders);
+		BlockPos chest = this.landingChest(level, colony, forCore, forOrders);
 		if (chest != null) {
 			if (this.reach(chest)) {
-				this.storeHaul(Storage.containerAt(level, chest), forCore, item -> !forCore.test(item));
+				this.storeHaul(Storage.containerAt(level, chest), forCore, item -> !forOrders.contains(item));
 				if (this.hasItemsToStore()) {
-					// What the core wants, or what the chest had no room for, goes up to the core.
+					// What orders want, or what the chest had no room for, goes up to the core.
 					this.unloaded = true;
 					this.resetMovement();
 				} else {
@@ -491,27 +499,30 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * The nearest landing chest with room, when it unloads because it is full, carries something
-	 * the core does not want, and has not been to one on this trip yet; else null, and it walks up
-	 * to the core.
+	 * The nearest landing chest with room, when it is nearer than the core, the bot carries something no open
+	 * order wants, and it has not been to one on this trip yet; else null, and it walks up to the core. Since
+	 * bots open a container only where they see it, a core on top of the shaft is out of sight from below.
 	 */
-	private @Nullable BlockPos landingChest(ServerLevel level, Colony colony, Predicate<Item> forCore) {
+	private @Nullable BlockPos landingChest(ServerLevel level, Colony colony, Predicate<Item> forCore, Set<Item> forOrders) {
 		SimpleContainer inventory = this.bot.getInventory();
-		if (this.unloaded || freeSlots(inventory) >= MIN_FREE_SLOTS) {
+		if (this.unloaded) {
 			return null;
 		}
 		int[] store = this.toStore(forCore);
-		boolean unwanted = false;
+		boolean notOrdered = false;
 		for (int i = 0; i < store.length; i++) {
-			unwanted |= store[i] > 0 && !forCore.test(inventory.getItem(i).getItem());
+			notOrdered |= store[i] > 0 && !forOrders.contains(inventory.getItem(i).getItem());
 		}
-		if (!unwanted) {
+		if (!notOrdered) {
 			return null;
 		}
+		BlockPos at = this.bot.blockPosition();
+		// ponytail: straight-line distance; a core across a ravine from the shaft counts as near.
 		return Storage.landingChests(level, colony).entrySet().stream()
 			.filter(chest -> freeSlots(chest.getValue()) > 0)
 			.map(Map.Entry::getKey)
-			.min(Comparator.comparingDouble(pos -> pos.distSqr(this.bot.blockPosition())))
+			.filter(pos -> pos.distSqr(at) < colony.core().distSqr(at))
+			.min(Comparator.comparingDouble(pos -> pos.distSqr(at)))
 			.orElse(null);
 	}
 
