@@ -501,7 +501,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			}
 			BuildPlan.Step step = this.withFiller(level, core, planned);
 			if (step.needsClearing(current)) {
-				return WORKABLE.contains(this.clearing(level, core, step)) || !this.fluidsToWall(level, core, plan, step).isEmpty();
+				return WORKABLE.contains(this.clearing(level, core, step)) || !this.fluidsToWall(level, core, step).isEmpty();
 			}
 			Item item = step.item(current);
 			if (!isPossible(level, step)) {
@@ -523,6 +523,20 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return false;
 	}
 
+	/** Whether a cell beside {@code step} that the plan opens up still holds a block to dig, rather than a fluid. */
+	private static boolean isBesideUndugBlock(ServerLevel level, Map<BlockPos, BuildPlan.Step> opened, BuildPlan.Step step) {
+		for (Direction side : Direction.values()) {
+			BuildPlan.Step cell = opened.get(step.pos().relative(side));
+			if (cell != null) {
+				BlockState state = level.getBlockState(cell.pos());
+				if (state.getFluidState().isEmpty() && cell.needsClearing(state)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	/** The steps of {@code plan} that open a cell up, such as to dig it out or put a torch in, by position. */
 	private static Map<BlockPos, BuildPlan.Step> opened(BuildPlan plan) {
 		Map<BlockPos, BuildPlan.Step> opened = new HashMap<>();
@@ -534,12 +548,14 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * Whether {@code step} is a wall any solid block will do that the plan opens the way to only by digging out a cell
 	 * beside it, and every such cell is still to dig, such as a cave behind the stone of a mineshaft: it is put off until
 	 * then, as it cannot be seen before. One in a fluid is put off while any such cell is still to clear: it is walled off
-	 * as that cell is dug, in the same tick, so it does not flow in (see {@link #digAndWall}).
+	 * as that cell is dug, in the same tick, so it does not flow in (see {@link #digAndWall}). So is a fluid the plan
+	 * clears itself, beside a cell that still holds a block to dig, such as water behind the stone of a mineshaft cell:
+	 * a builder fills a fluid only where it sees it.
 	 */
 	private static boolean isBehindUndug(ServerLevel level, Map<BlockPos, BuildPlan.Step> opened, BuildPlan.Step step) {
 		BlockPos pos = step.pos();
 		if (!step.anySolid()) {
-			return false;
+			return step.isClear() && !level.getFluidState(pos).isEmpty() && isBesideUndugBlock(level, opened, step);
 		}
 		if (!level.getFluidState(pos).isEmpty()) {
 			return isBesideUndug(level, opened, step);
@@ -619,7 +635,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		BlockPos pos = step.pos();
 		SimpleContainer inventory = this.bot.getInventory();
 		BuildPlan.Clearing clearing = this.clearing(level, core, step);
-		List<BlockPos> walls = clearing == BuildPlan.Clearing.BLOCKED ? this.fluidsToWall(level, core, plan, step) : List.of();
+		List<BlockPos> walls = clearing == BuildPlan.Clearing.BLOCKED ? this.fluidsToWall(level, core, step) : List.of();
 		if (!walls.isEmpty()) {
 			this.digAndWall(level, colony, core, plan, pos, walls);
 			return;
@@ -633,9 +649,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 					this.scoop(level, pos, bucket);
 				}
 			}
-			// ponytail: by reach where it is beside a cell still to clear, as a pond's water is beside more water: with sight
-			// the builder digs into the bank of a sunken pond to see it (TerraformGameTest.aBuilderClearsASunkenPondFromTheWater).
-			case FILL -> this.fillIn(level, colony, core, plan, pos, !isBesideUndug(level, opened(plan), step));
+			case FILL -> this.fillIn(level, colony, core, plan, pos);
 			default -> {
 				if (this.reachStep(level, pos) && this.breaker.tick(level, pos, true)) {
 					colony.unprotect(pos);
@@ -647,10 +661,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Fills the fluid at {@code pos} with a filler block, fetching one from the core first: dirt while
 	 * neither the bot nor the core has a pickaxe, since cobblestone is slow to break by hand (see {@link BuildPlan#waterFiller}).
-	 * It fills from the water where no dry spot is in reach (see {@link #reachStep}), and for {@code sight} only where it
-	 * sees {@code pos}. While {@code pos} stays taken it waits, and gives the step up after a while.
+	 * It fills only where it sees {@code pos}, from the water where no dry spot does (see {@link #reachStep}). While {@code pos} stays taken it waits, and gives the step up after a while.
 	 */
-	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, boolean sight) {
+	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos) {
 		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
 		Optional<Item> filler = BuildPlan.waterFiller(item -> this.has(core, stack -> stack.is(item)), pickaxe);
 		if (filler.isEmpty()) {
@@ -659,7 +672,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Item item = filler.get();
 		if (this.bot.getInventory().countItem(item) == 0) {
 			this.fetch(level, colony, core, plan, item);
-		} else if (this.reachStep(level, pos, sight ? this.inSight(pos) : new Goal.Reach(pos, REACH))) {
+		} else if (this.reachStep(level, pos)) {
 			BlockState block = Block.byItem(item).defaultBlockState();
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);
@@ -730,22 +743,20 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/**
 	 * The fluids beside or above the block of clear step {@code step} that hold it standing (see
-	 * {@link BuildPlan.Step#clearing}) and that {@code plan} does not clear itself, such as water
-	 * in the rock beside a mineshaft or in a hall that is dug later: the builder walls them off with
-	 * filler blocks as it breaks the block, so they cannot flow in. Empty if there are none, or no filler at hand.
+	 * {@link BuildPlan.Step#clearing}), such as water in the rock beside a mineshaft or in a hall that is dug later: the
+	 * builder walls them off with filler blocks as it breaks the block, so they cannot flow in. Water the plan clears
+	 * itself, in a cell beside, is filled in so too, as it is not seen before (see {@link #isBehindUndug}). Empty if there are none, or no filler at hand.
 	 */
-	private List<BlockPos> fluidsToWall(ServerLevel level, @Nullable Container core, BuildPlan plan, BuildPlan.Step step) {
+	private List<BlockPos> fluidsToWall(ServerLevel level, @Nullable Container core, BuildPlan.Step step) {
 		if (!step.isClear() || !level.getFluidState(step.pos()).isEmpty() || !this.has(core, BuilderGoal::isFiller)) {
 			return List.of();
 		}
-		Set<BlockPos> cleared = plan.steps().stream().filter(BuildPlan.Step::isClear).map(BuildPlan.Step::pos).collect(Collectors.toSet());
 		List<BlockPos> walls = new ArrayList<>();
 		for (Direction side : new Direction[] {Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST}) {
 			BlockPos beside = step.pos().relative(side);
 			BlockState state = level.getBlockState(beside);
 			if (!state.getFluidState().isEmpty()) {
-				// A fluid the plan clears itself goes first, so the block is not broken while it can still flow in.
-				if (cleared.contains(beside) || !state.canBeReplaced()) {
+				if (!state.canBeReplaced()) {
 					return List.of();
 				}
 				walls.add(beside);
