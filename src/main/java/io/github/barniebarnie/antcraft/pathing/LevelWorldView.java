@@ -49,7 +49,8 @@ public class LevelWorldView implements WorldView {
 
 	/**
 	 * This view for a bot standing at {@code feet}. A bot that stands inside ground a colony keeps, such as at the bottom
-	 * of a pit a terraform has yet to fill, may break that ground, so it can dig its way out without blocks to pillar on.
+	 * of a pit a terraform has yet to fill, may break that ground in the columns at and beside its own, from its feet up,
+	 * so it can dig a stair out without blocks to pillar on, but no other hole in the ground.
 	 */
 	public LevelWorldView from(BlockPos feet) {
 		this.from = feet;
@@ -174,12 +175,17 @@ public class LevelWorldView implements WorldView {
 		if (this.keepGround == null) {
 			Predicate<BlockPos> ground = ColonyManager.keepGround(this.level);
 			BlockPos feet = this.from;
-			this.keepGround = feet != null && ground.test(feet) ? p -> false : ground;
+			this.keepGround = feet != null && ground.test(feet) ? ground.and(p -> !inPit(feet, p)) : ground;
 		}
 		if (this.keepGround.test(pos)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));
+	}
+
+	/** {@code pos} is in the column at {@code feet} or one beside it, diagonals too, from the feet up. */
+	private static boolean inPit(BlockPos feet, BlockPos pos) {
+		return pos.getY() >= feet.getY() && Math.abs(pos.getX() - feet.getX()) <= 1 && Math.abs(pos.getZ() - feet.getZ()) <= 1;
 	}
 
 	/**

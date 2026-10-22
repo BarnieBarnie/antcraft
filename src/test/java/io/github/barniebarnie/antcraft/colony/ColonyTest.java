@@ -1209,6 +1209,22 @@ class ColonyTest {
 	}
 
 	@Test
+	void groundKeptForGoodIsNotKeptInsideANewerPlan() {
+		Colony colony = colony();
+		colony.addBuild(terraformAt(0));
+		finishAll(colony);
+		BuildPlan dig = new BuildPlan(List.of(BuildPlan.Step.clear(new BlockPos(1, 61, 1)), BuildPlan.Step.clear(new BlockPos(2, 62, 1))));
+		colony.addBuild(dig);
+
+		assertFalse(colony.keepGround().test(new BlockPos(1, 61, 1)), "a step of the newer plan");
+		assertFalse(colony.keepGround().test(new BlockPos(2, 61, 1)), "inside the newer plan's area");
+		assertTrue(colony.keepGround().test(new BlockPos(3, 61, 1)), "beside the newer plan");
+
+		colony.removeBuild(dig);
+		assertTrue(colony.keepGround().test(new BlockPos(1, 61, 1)), "not kept once the newer plan is gone");
+	}
+
+	@Test
 	void theColonyRemembersOnlyTheLatestFinishedTerraforms() {
 		Colony colony = colony();
 		for (int i = 0; i <= Colony.MAX_KEPT_GROUND; i++) {

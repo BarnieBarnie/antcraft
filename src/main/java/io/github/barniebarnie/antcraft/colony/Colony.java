@@ -1125,14 +1125,20 @@ public class Colony {
 
 	/**
 	 * Where paths must not break a block: the ground each terraform with work left levels, as it wants it (see
-	 * {@link BuildPlan#ground}), and the ground of the last {@link #MAX_KEPT_GROUND} terraforms finished.
+	 * {@link BuildPlan#ground}), and the ground of the last {@link #MAX_KEPT_GROUND} terraforms finished, but for where a
+	 * plan with work left has steps (inside the box round them), as that plan's own steps dig and fill there.
 	 */
 	public Predicate<BlockPos> keepGround() {
-		List<BoundingBox> ground = new ArrayList<>(this.keptGround);
-		this.builds.entrySet().stream().filter(e -> e.getValue().ground().isPresent() && this.hasWorkLeft(e.getKey(), e.getValue()))
-			.map(e -> e.getValue().ground().orElseThrow()).forEach(ground::add);
+		List<BoundingBox> ground = new ArrayList<>();
+		List<BoundingBox> planned = new ArrayList<>();
+		this.builds.entrySet().stream().filter(e -> this.hasWorkLeft(e.getKey(), e.getValue())).map(Map.Entry::getValue).forEach(plan -> {
+			plan.ground().ifPresent(ground::add);
+			BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).ifPresent(planned::add);
+		});
+		List<BoundingBox> kept = List.copyOf(this.keptGround);
 		BoundingBox bounds = this.bounds;
-		return pos -> Territory.inBounds(bounds, pos) && ground.stream().anyMatch(box -> box.isInside(pos));
+		return pos -> Territory.inBounds(bounds, pos) && (ground.stream().anyMatch(box -> box.isInside(pos))
+			|| kept.stream().anyMatch(box -> box.isInside(pos)) && planned.stream().noneMatch(box -> box.isInside(pos)));
 	}
 
 	/** Forgets placed blocks that are gone or replaced, so the set does not grow for good. {@code world} gives null where it cannot tell. */

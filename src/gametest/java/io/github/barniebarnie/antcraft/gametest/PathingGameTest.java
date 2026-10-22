@@ -680,4 +680,35 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 
 		succeedWhenAt(helper, bot, new BlockPos(0, 4, 0));
 	}
+
+	/**
+	 * A bot with no blocks at the bottom of a pit 2 deep in the levelled ground of {@link #levelledGroundBehindAWall},
+	 * beside the wall. Tunnelling under the wall is quicker than walking round, but from the pit the bot may break only
+	 * the ground it needs to climb out, beside the pit: it climbs out and walks round.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
+	public void leavesAPitInLevelledGroundWithoutDiggingOtherHoles(GameTestHelper helper) {
+		Colony colony = levelledGroundBehindAWall(helper);
+		helper.setBlock(14, 3, 14, Blocks.AIR);
+		colony.postBuildJobs();
+		for (Job job : colony.board().jobs().stream().filter(job -> job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA).toList()) {
+			colony.finishBatch(job.id());
+			colony.board().complete(job.id());
+		}
+		helper.assertTrue(colony.builds().isEmpty(), "the terraform is not done: " + colony.builds());
+		fill(helper, 6, 1, 1, 6, 2, 1, Blocks.AIR);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(10, 3, 0)));
+
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
+				boolean besidePit = Math.abs(pos.getX() - 6) <= 1 && Math.abs(pos.getZ() - 1) <= 1;
+				if (!besidePit && !helper.getBlockState(pos).is(Blocks.DIRT)) {
+					helper.fail("dug a hole in the levelled ground at " + pos.toShortString());
+				}
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(10, 3, 0));
+	}
 }
