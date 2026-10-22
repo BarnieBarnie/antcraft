@@ -21,6 +21,9 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /** Scans the mod's sources for lang keys and checks that {@code en_us.json} has them all. */
@@ -30,11 +33,18 @@ class LangKeysTest {
 	private static final Path SCREEN = Path.of("src/client/java/io/github/barniebarnie/antcraft/client/ColonyStatusScreen.java");
 	/** A string literal such as {@code "commands.antcraft.status"}; one ending in a dot is the prefix of a key family. */
 	private static final Pattern KEY = Pattern.compile("\"((?:[a-z0-9_]+\\.)+antcraft(?:\\.[a-z0-9_]+)*\\.?)\"");
-	/** Key families built at runtime from a prefix and an enum value. */
-	private static final Map<String, List<String>> FAMILIES = Map.of(
-		JobType.KEY_PREFIX, Stream.of(JobType.values()).map(JobType::getSerializedName).toList(),
-		Project.KEY_PREFIX, Project.STARTER,
-		"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
+	/** Key families built at runtime from a prefix and an enum value; set after bootstrap, since {@link Project} touches the item registry. */
+	private static Map<String, List<String>> FAMILIES;
+
+	@BeforeAll
+	static void bootstrap() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+		FAMILIES = Map.of(
+			JobType.KEY_PREFIX, Stream.of(JobType.values()).map(JobType::getSerializedName).toList(),
+			Project.KEY_PREFIX, Project.STARTER,
+			"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
+	}
 
 	@Test
 	void everyKeyInTheSourcesIsInTheLangFile() throws IOException {
