@@ -79,6 +79,25 @@ public final class ToolUpgrade {
 		return free;
 	}
 
+	/**
+	 * The tier a bot with {@code current}, whose own job needs {@code need} (null for none), takes from {@code stock}: the
+	 * best that beats {@code current}, leaving what {@code waiting} (other bots' claimed jobs, see {@link #unreserved}) and
+	 * {@code open} (the tiers unclaimed jobs declare) need. When nothing else left gets it to {@code need}, it takes the
+	 * lowest tier that does after all, open jobs' tools included, or else the best there is.
+	 */
+	public static <I> Optional<I> toTake(List<I> tiers, @Nullable I current, Map<I, Integer> stock, List<I> waiting, List<I> open,
+			@Nullable I need) {
+		Map<I, Integer> free = unreserved(tiers, stock, waiting);
+		Optional<I> spare = bestInStock(tiers, current, unreserved(tiers, free, open));
+		int needed = rank(tiers, need);
+		if (rank(tiers, current) >= needed || spare.filter(tier -> rank(tiers, tier) >= needed).isPresent()) {
+			return spare;
+		}
+		// Open jobs, such as the bot's own next branches, may hold every tool: the lowest that does, so the rest stay.
+		return tiers.subList(needed, tiers.size()).stream().filter(tier -> free.getOrDefault(tier, 0) > 0).findFirst()
+			.or(() -> bestInStock(tiers, current, free));
+	}
+
 	static <I> boolean makeableNow(I item, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
 		Map<I, Integer> available = new HashMap<>(stock);
 		available.remove(item);

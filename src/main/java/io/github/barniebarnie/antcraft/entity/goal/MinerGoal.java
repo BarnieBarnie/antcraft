@@ -233,7 +233,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		this.resetMovement();
 	}
 
-	/** For a branch job: takes the best pickaxe in the core, or gives the job back when there is none. */
+	/** For a branch job: takes a pickaxe from the core, or gives the job back when there is none. */
 	private void fetchPickaxe(ServerLevel level, Colony colony) {
 		if (this.hasPickaxe()) {
 			this.enter(State.WORK);
@@ -242,11 +242,14 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 	}
 
-	/** Walks to the core for its best pickaxe and takes it, then gets to work. Returns false when the core has none. */
+	/**
+	 * Walks to the core for the best pickaxe it may {@linkplain ToolKind#toTake take} and takes it, then gets to work.
+	 * Returns false when the core has none.
+	 */
 	private boolean takePickaxe(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
 		Map<Item, Integer> stock = core == null ? Map.of() : Storage.stock(core);
-		Optional<Item> best = ToolKind.PICKAXE.betterIn(stock, null);
+		Optional<Item> best = ToolKind.PICKAXE.toTake(level, this.bot, null, stock, colony);
 		int slot = core == null ? -1 : findSlot(core, stack -> best.isPresent() ? stack.is(best.get()) : stack.is(ItemTags.PICKAXES));
 		if (slot < 0) {
 			return false;

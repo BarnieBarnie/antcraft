@@ -1264,6 +1264,32 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A miner whose branch needs a stone pickaxe takes the stone one from the core, leaving the iron one an open vein job needs. */
+	@GameTest(maxTicks = 230)
+	public void leavesThePickaxeAnOpenJobNeedsWhenAnotherFits(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		colony.setStockTarget(StockTarget.of(Items.RAW_IRON, 1));
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		helper.assertTrue(need(shaft) == Items.STONE_PICKAXE, "the branch takes a " + need(shaft));
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.IRON_PICKAXE));
+		core(helper, MINE_CORE).setItem(1, new ItemStack(Items.STONE_PICKAXE));
+		BlockPos ore = helper.absolutePos(new BlockPos(7, 1, 7));
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.DIAMOND_ORE.defaultBlockState());
+		colony.board().post(JobType.MINE_VEIN, ore, List.of(ore), Optional.empty(), helper.getLevel().getGameTime(), Optional.of(Items.IRON_PICKAXE));
+		AntBot miner = member(helper, colony, 1, 5, 1);
+
+		helper.onEachTick(() -> {
+			if (pickaxes(miner, Items.IRON_PICKAXE) > 0) {
+				helper.fail("took the iron pickaxe an open job needs");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(pickaxes(miner, Items.STONE_PICKAXE) == 1, "miner has no stone pickaxe");
+			helper.assertTrue(cellsDug(helper, shaft) >= 3, "dug " + cellsDug(helper, shaft) + " cells");
+		});
+	}
+
 	/** A colony that wants stone and has no pickaxe fells a tree for one, crafts it, and a bot takes it up to dig. */
 	@GameTest(maxTicks = 440)
 	public void colonyMakesItsOwnPickaxe(GameTestHelper helper) {

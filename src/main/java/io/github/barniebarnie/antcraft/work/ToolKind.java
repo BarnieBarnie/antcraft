@@ -73,7 +73,7 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	 * is none and the bot is in {@code colony}, orders the best tier the colony can make instead.
 	 * A bot without a tool of this kind only fetches one, unless it {@code needs} one now: a job that
 	 * can be done without one orders none. It leaves a tool another member's job declares and that
-	 * member lacks, and orders no pickaxe above the best one a job on the board declares.
+	 * member lacks, and one an open job declares when another fits (see {@link #toTake}), and orders no pickaxe above the best one a job on the board declares.
 	 */
 	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony) {
 		return this.findUpgrade(level, bot, storage, colony, () -> false);
@@ -85,12 +85,7 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 		if (colony == null) {
 			return this.betterIn(stock, current);
 		}
-		// Not one another bot's job waits for.
-		List<Item> waiting = colony.members().stream().filter(id -> !id.equals(bot.getUUID()))
-			.flatMap(id -> colony.board().jobOf(id).flatMap(Job::tool).filter(this.tiers::contains)
-				.filter(tool -> level.getEntity(id) instanceof AntBot other && this.rank(this.bestCarried(other)) < this.rank(tool)).stream())
-			.toList();
-		Optional<Item> better = this.betterIn(ToolUpgrade.unreserved(this.tiers, stock, waiting), current);
+		Optional<Item> better = this.toTake(level, bot, current, stock, colony);
 		if (better.isEmpty() && (current != null || needs.getAsBoolean())) {
 			// A pickaxe's tier is what jobs need it for (the ores it harvests), so none better than a job on the board
 			// declares; stock targets order better ones for the core. Axes and hoes upgrade as far as the colony can make.
@@ -100,6 +95,23 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 				Gatherables::isGatherable, ceiling).ifPresent(tool -> colony.addOrder(tool, 1));
 		}
 		return better;
+	}
+
+	/**
+	 * The tool in {@code stock} that beats {@code current} for {@code bot} to take (see {@link ToolUpgrade#toTake}): not one
+	 * another member's job waits for, nor one an open job declares unless nothing else gets the bot the tier its own job
+	 * declares, or any tool when it carries none.
+	 */
+	public Optional<Item> toTake(ServerLevel level, AntBot bot, @Nullable Item current, Map<Item, Integer> stock, Colony colony) {
+		List<Item> waiting = colony.members().stream().filter(id -> !id.equals(bot.getUUID()))
+			.flatMap(id -> colony.board().jobOf(id).flatMap(Job::tool).filter(this.tiers::contains)
+				.filter(tool -> level.getEntity(id) instanceof AntBot other && this.rank(this.bestCarried(other)) < this.rank(tool)).stream())
+			.toList();
+		List<Item> open = colony.board().jobs().stream().filter(job -> job.isOpen() && !job.givenUp())
+			.flatMap(job -> job.tool().filter(this.tiers::contains).stream()).toList();
+		Item need = colony.board().jobOf(bot.getUUID()).flatMap(Job::tool).filter(this.tiers::contains)
+			.orElse(current == null ? this.tiers.getFirst() : null);
+		return ToolUpgrade.toTake(this.tiers, current, stock, waiting, open, need);
 	}
 
 	/** What the colony {@linkplain Storage#spare holds} beyond the tool of this kind each member works with. */

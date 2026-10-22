@@ -116,6 +116,26 @@ class ToolUpgradeTest {
 	}
 
 	@Test
+	void anOpenJobsToolIsLeftWhenAnotherFitsTheTaker() {
+		Map<String, Integer> stock = Map.of("stone_pickaxe", 1, "iron_pickaxe", 1);
+		List<String> openIron = List.of("iron_pickaxe");
+		// A bot without one whose job needs stone takes the stone one, leaving the iron one an open job declares.
+		assertEquals(Optional.of("stone_pickaxe"), ToolUpgrade.toTake(TIERS, null, stock, List.of(), openIron, "stone_pickaxe"));
+		// With stone, it does not swap up to the iron one either.
+		assertEquals(Optional.empty(), ToolUpgrade.toTake(TIERS, "stone_pickaxe", Map.of("iron_pickaxe", 1), List.of(), openIron, null));
+		// Open jobs, such as its own next branches, hold every tool: the lowest that does its job.
+		assertEquals(Optional.of("stone_pickaxe"),
+			ToolUpgrade.toTake(TIERS, null, stock, List.of(), List.of("iron_pickaxe", "stone_pickaxe"), "stone_pickaxe"));
+		// Nothing else fits its job: it takes the open job's tool after all.
+		assertEquals(Optional.of("iron_pickaxe"), ToolUpgrade.toTake(TIERS, null, Map.of("iron_pickaxe", 1), List.of(), openIron, "stone_pickaxe"));
+		assertEquals(Optional.of("iron_pickaxe"), ToolUpgrade.toTake(TIERS, "stone_pickaxe", stock, List.of(), openIron, "iron_pickaxe"));
+		// A claimed job's tool is never taken, as before.
+		assertEquals(Optional.empty(), ToolUpgrade.toTake(TIERS, null, Map.of("iron_pickaxe", 1), openIron, List.of(), "stone_pickaxe"));
+		// Without jobs, the best in stock.
+		assertEquals(Optional.of("iron_pickaxe"), ToolUpgrade.toTake(TIERS, null, stock, List.of(), List.of(), "stone_pickaxe"));
+	}
+
+	@Test
 	void unlistedToolsRankLowest() {
 		// A golden pickaxe is not a tier: any listed tool replaces it, but it is still a tool.
 		assertEquals(0, ToolUpgrade.rank(TIERS, "golden_pickaxe"));
