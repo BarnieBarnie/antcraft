@@ -58,16 +58,21 @@ public record Field(BlockPos center) {
 	/** How far from the core a new colony looks for its field (see {@link #site}). */
 	private static final int SITE_REACH = 8;
 
+	/** How many blocks above the soil {@link #plan} clears: the crop layer and the one above, room to walk and light. */
+	private static final int CLEAR_HEIGHT = 2;
+
 	/**
-	 * The plan that readies the field for planting: what would keep a crop out of the crop layer cleared, and dirt
+	 * The plan that readies the field for planting: the two layers above the soil cleared (top first), and dirt
 	 * where the soil cannot be tilled, such as rock, in cells (see {@link BuildPlan#inCells}). The middle is left for the water. Empty if it is ready.
 	 */
 	public Optional<BuildPlan> plan(Function<BlockPos, BlockState> world) {
 		List<BuildPlan.Step> clear = new ArrayList<>();
 		List<BuildPlan.Step> soil = new ArrayList<>();
 		for (BlockPos pos : BlockPos.betweenClosed(this.center.offset(-RADIUS, 0, -RADIUS), this.center.offset(RADIUS, 0, RADIUS))) {
-			if (!Farming.isOpen(world.apply(pos.above()))) {
-				clear.add(BuildPlan.Step.clear(pos.above()));
+			for (int up = CLEAR_HEIGHT; up >= 1; up--) {
+				if (!Farming.isOpen(world.apply(pos.above(up)))) {
+					clear.add(BuildPlan.Step.clear(pos.above(up)));
+				}
 			}
 			if (!pos.equals(this.center) && !Farming.isSoil(world.apply(pos))) {
 				soil.add(new BuildPlan.Step(pos, Blocks.DIRT.defaultBlockState()));

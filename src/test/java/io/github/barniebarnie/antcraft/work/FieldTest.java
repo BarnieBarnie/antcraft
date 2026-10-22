@@ -123,4 +123,14 @@ class FieldTest {
 		// The soil once the crop layer above it is clear.
 		assertEquals(List.of(4, 5, 6, 7), plan.ready(Set.of(0, 1, 2, 3)));
 	}
+
+	@Test
+	void blocksTwoAboveTheSoilAreClearedToo() {
+		Field field = new Field(new BlockPos(5, 0, 5));
+		BlockPos leaves = new BlockPos(4, 2, 4);
+		BuildPlan plan = field.plan(pos -> pos.getY() == 0 ? Blocks.DIRT.defaultBlockState()
+			: pos.equals(leaves) ? Blocks.OAK_LEAVES.defaultBlockState() : Blocks.AIR.defaultBlockState()).orElseThrow();
+
+		assertEquals(List.of(BuildPlan.Step.clear(leaves)), plan.steps());
+	}
 }
