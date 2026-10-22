@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
@@ -36,8 +37,9 @@ import org.jspecify.annotations.Nullable;
  * With no job to take it does the work between jobs (see {@link ColonyWorkGoal#upkeep}): it arms itself from the
  * core, swaps a tool it carries for a better one, takes down scaffolding left up, unloads a full pack, stores
  * produce and shears sheep, and keeps the core and storage, picking up loose items. While scaffolding is up it
- * takes only jobs that take it down when done. A job that turns up meanwhile takes the bot from that, but not
- * from carrying a load to the core or storage, which it finishes first. Only with none of it to do is the bot idle.
+ * takes only jobs that take it down when done, or jobs up on the ledge it stands on (see {@link #onLedge}). A job
+ * that turns up meanwhile takes the bot from that, but not from carrying a load to the core or storage, which it
+ * finishes first. Only with none of it to do is the bot idle.
  * <p>
  * A busy board would keep the bot from that for good, so after {@link #JOBS_PER_ROUND} jobs in a row it does a round
  * of it before it claims the next: up to {@link #ROUND_TICKS} of work between jobs that no job takes it from. Not while
@@ -352,7 +354,8 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				// (see BuilderGoal); only jobs that take scaffolding down at their end may come first.
 				boolean scaffoldUp = !this.bot.getScaffold().isEmpty();
 				JobScore score = this.score(level, colony);
-				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()) || this.executors.get(open.type()).keepsScaffoldFor(open))
+				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()) || onLedge(this.bot, open)
+						|| this.executors.get(open.type()).keepsScaffoldFor(open))
 					&& this.executors.get(open.type()).isReady(level, colony, open), score);
 				if (best.isEmpty()) {
 					return false;
@@ -376,6 +379,17 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 			board.complete(held.get().id());
 		}
+	}
+
+	/**
+	 * Whether {@code job} is up near where the bot stands on its scaffold, such as on the same ledge: it keeps the
+	 * scaffold up for that job, whatever its type, rather than take it down and build it again; the work between jobs
+	 * takes it down once done.
+	 */
+	// ponytail: near and at or above its feet stands in for "on the same ledge"; a job on a ledge next door counts too.
+	static boolean onLedge(AntBot bot, Job job) {
+		BlockPos feet = bot.blockPosition();
+		return !bot.getScaffold().isEmpty() && job.target().getY() >= feet.getY() && job.target().closerThan(feet, 2 * ColonyWorkGoal.REACH);
 	}
 
 	/**

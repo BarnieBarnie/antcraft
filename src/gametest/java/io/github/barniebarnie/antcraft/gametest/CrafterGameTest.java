@@ -388,6 +388,48 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Two orders at a core on a ledge too high to reach from the ground: the bot pillars up once and crafts both from
+	 * up there, rather than take the pillar down after the first and build it again.
+	 */
+	@GameTest(maxTicks = 280)
+	public void craftsTwoOrdersOnALedgeWithOnePillar(GameTestHelper helper) {
+		BlockPos ledge = new BlockPos(5, 5, 5);
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(ledge, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(ledge)).orElseThrow();
+		colony.setRadius(6);
+		colony.setStockTargets(List.of());
+		Container core = (Container) helper.getBlockEntity(ledge, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.OAK_LOG, 1));
+		core.setItem(1, new ItemStack(Items.STONE, 1));
+		colony.addOrder(Items.OAK_PLANKS, 4);
+		colony.addOrder(Items.STONE_BUTTON, 1);
+		AntBot bot = colonyGuard(helper, colony, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		// Blocks placed in all and the most standing at once: equal while it never builds a pillar again.
+		int[] placed = {0, 0, 0};
+		helper.onEachTick(() -> {
+			int now = blocksInArea(helper, Blocks.DIRT);
+			placed[0] += Math.max(0, now - placed[2]);
+			placed[1] = Math.max(placed[1], now);
+			placed[2] = now;
+			if (placed[0] > placed[1]) {
+				helper.fail("built the pillar again: placed " + placed[0] + " blocks, at most " + placed[1] + " at once");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core.countItem(Items.OAK_PLANKS) >= 4, "core has " + core.countItem(Items.OAK_PLANKS) + " planks");
+			helper.assertTrue(core.countItem(Items.STONE_BUTTON) >= 1, "core has no stone button");
+			helper.assertTrue(placed[1] > 0, "never pillared up");
+			helper.assertTrue(blocksInArea(helper, Blocks.DIRT) == 0, blocksInArea(helper, Blocks.DIRT) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+		});
+	}
+
 	private static int blocksInArea(GameTestHelper helper, Block block) {
 		int found = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {

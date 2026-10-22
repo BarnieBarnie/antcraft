@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
@@ -12,6 +13,9 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -22,7 +26,8 @@ import org.jspecify.annotations.Nullable;
  * under it. Retries are limited per {@link #reset}, and a block it cannot reach even by pillaring is
  * left behind, and so is one it cannot see from anywhere in reach, since like a player it breaks
  * only blocks in sight. One it stands on with a drop below further than a path may take it towers down
- * from, placing a scaffold block under it before taking it down, or leaves up when it carries none. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
+ * from, placing a scaffold block under it before taking it down; carrying none, it digs down, breaking that block
+ * for its own block and placing it one lower, and leaves it up only when breaking it gives no scaffold block. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -115,10 +120,19 @@ final class ScaffoldCleanup {
 			this.stopTravel.run();
 			if (next.equals(feet.below()) && fallUnder(level, next) > PathFollower.MAX_DROP) {
 				// Taking it down from under itself would drop the bot further than a path may. It towers down instead:
-				// a block under this one first, so taking it down drops the bot one block. Without one it leaves it up.
+				// a block under this one first, so taking it down drops the bot one block.
 				BlockPos under = next.below();
-				if (!level.getBlockState(under).canBeReplaced() || !this.follower.placeBlock(level, under)) {
+				if (!level.getBlockState(under).canBeReplaced()) {
 					this.abandoned.add(next);
+				} else if (!this.follower.placeBlock(level, under)) {
+					// Carrying none, it digs down: breaks this one for its block and places that under it in the same
+					// tick, before it falls. Leaves it up if breaking it gives no scaffold block.
+					if (!dropsScaffold(level, next)) {
+						this.abandoned.add(next);
+					} else if (this.breaker.tick(level, next, true)) {
+						placed.remove(next);
+						this.follower.placeBlock(level, under);
+					}
 				}
 				return false;
 			}
@@ -129,6 +143,14 @@ final class ScaffoldCleanup {
 			this.unreachable.add(next);
 		}
 		return false;
+	}
+
+	/** Whether breaking the block at {@code pos} with what the bot holds gives it a scaffold block to place, with room in its pack. */
+	private boolean dropsScaffold(ServerLevel level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		ItemStack tool = this.bot.getMainHandItem();
+		return Tools.canHarvest(tool, state) && ColonyWorkGoal.freeSlots(this.bot.getInventory()) > 0
+			&& Block.getDrops(state, level, pos, level.getBlockEntity(pos), this.bot, tool).stream().anyMatch(drop -> drop.is(PathFollower.SCAFFOLD_BLOCKS));
 	}
 
 	/** How far the bot standing on {@code pos} falls once that block is gone. */

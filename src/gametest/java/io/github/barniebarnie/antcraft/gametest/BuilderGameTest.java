@@ -2194,21 +2194,22 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot standing on a lone scaffold block five blocks up, with nothing else under it, does not take that block
-	 * down from under itself: it would fall further than a path may drop and get hurt. It leaves the block up.
+	 * A bot standing on a lone cobblestone scaffold block five blocks up, with nothing else under it and no blocks or
+	 * pickaxe to dig down with, does not take that block down from under itself: it would fall further than a path
+	 * may drop and get hurt. It leaves the block up.
 	 */
 	@GameTest(maxTicks = 200)
 	public void doesNotTakeDownScaffoldItWouldFallFarFrom(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BlockPos floating = new BlockPos(4, 5, 4);
-		helper.setBlock(floating, Blocks.DIRT);
+		helper.setBlock(floating, Blocks.COBBLESTONE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		bot.addScaffold(helper.absolutePos(floating));
 		bot.setHealth(bot.getMaxHealth());
 
 		helper.runAfterDelay(150, () -> {
-			helper.assertBlockPresent(Blocks.DIRT, floating);
+			helper.assertBlockPresent(Blocks.COBBLESTONE, floating);
 			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
 			helper.assertTrue(bot.getScaffold().isEmpty(), "still taking it down: " + bot.getScaffold());
 			helper.succeed();
@@ -2235,6 +2236,33 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			if (bot.getScaffold().isEmpty() && strayDirt(helper) > 0) {
 				helper.fail("forgot the pillar with " + strayDirt(helper) + " dirt standing, bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(strayDirt(helper) == 0, strayDirt(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+			helper.assertTrue(bot.onGround() && bot.getY() < helper.absolutePos(new BlockPos(0, 2, 0)).getY(), "not down on the floor");
+			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
+		});
+	}
+
+	/**
+	 * A bot on a lone scaffold block five blocks up, carrying no blocks: rather than stay up there or fall, it digs
+	 * down, taking the block it stands on and placing it again one lower, and leaves no scaffold standing.
+	 */
+	@GameTest(maxTicks = 140)
+	public void digsDownFromAFloatingScaffoldBlockWithNoBlocks(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos floating = new BlockPos(4, 5, 4);
+		helper.setBlock(floating, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.addScaffold(helper.absolutePos(floating));
+		bot.setHealth(bot.getMaxHealth());
+		helper.onEachTick(() -> {
+			if (bot.getScaffold().isEmpty() && strayDirt(helper) > 0) {
+				helper.fail("left " + strayDirt(helper) + " dirt standing, bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
 			}
 		});
 
