@@ -16,6 +16,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -622,5 +623,17 @@ class BuildPlanTest {
 
 		assertEquals(plan, plan.inCells());
 		assertEquals(plan(), plan().inCells());
+	}
+
+	@Test
+	void waterIsClearedWithDirtWithoutAPickaxeAndWithCobblestoneWithOne() {
+		Set<Item> both = Set.of(Items.DIRT, Items.COBBLESTONE);
+
+		assertEquals(Optional.of(Items.DIRT), BuildPlan.waterFiller(both::contains, false));
+		assertEquals(Optional.of(Items.COBBLESTONE), BuildPlan.waterFiller(both::contains, true));
+		// Without dirt, cobblestone still does, however slow to break by hand.
+		assertEquals(Optional.of(Items.COBBLESTONE), BuildPlan.waterFiller(Set.of(Items.COBBLESTONE)::contains, false));
+		assertEquals(Optional.of(Items.DIRT), BuildPlan.waterFiller(Set.of(Items.DIRT)::contains, true));
+		assertEquals(Optional.empty(), BuildPlan.waterFiller(Set.of(Items.SAND)::contains, false));
 	}
 }

@@ -367,6 +367,48 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A pond 6 wide and 3 deep in the middle of a 16x16 area: its middle columns are out of reach from the bank,
+	 * and from the top of the columns filled beside them, so the builders fill them swimming.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1000)
+	public void buildersFillAPondTooWideAndDeepToReachFromTheBank(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 3, 15)) {
+			boolean pond = pos.getY() > 0 && pos.getX() >= 5 && pos.getX() <= 10 && pos.getZ() >= 5 && pos.getZ() <= 10;
+			helper.setBlock(pos, pos.getY() == 0 ? Blocks.STONE : pond ? Blocks.WATER : Blocks.DIRT);
+		}
+		BlockPos corePos = new BlockPos(0, 4, 0);
+		Colony colony = colony(helper, corePos, 12);
+		// A mineshaft of no levels, taken as dug, so the bots have only the terraform to do.
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 4, 15)), List.of(), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+		colony.setMineshaft(shaft);
+		colony.removeBuild(shaft.plan());
+		core(helper, corePos).setItem(0, new ItemStack(Items.DIRT, 64));
+		core(helper, corePos).setItem(1, new ItemStack(Items.DIRT, 64));
+		List<AntBot> bots = List.of(member(helper, colony, 2, 4, 3), member(helper, colony, 3, 4, 2));
+		terraform(helper, colony, new BlockPos(4, 1, 4), new BlockPos(11, 5, 11), 3);
+		boolean[] swam = {false};
+		helper.onEachTick(() -> swam[0] |= bots.stream().anyMatch(AntBot::isInWater));
+
+		// They fill it from the water, rather than dig down into the bank to get close enough.
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 12, 3, 12)) {
+				boolean bank = pos.getX() == 3 || pos.getX() == 12 || pos.getZ() == 3 || pos.getZ() == 12;
+				if (bank && !helper.getBlockState(pos).is(Blocks.DIRT)) {
+					helper.fail("dug into the bank at " + pos.toShortString());
+				}
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			assertDry(helper, 4, 1, 4, 11, 5, 11);
+			assertLevel(helper, 4, 4, 11, 11, 3, 5);
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+			helper.assertTrue(swam[0], "no builder went into the water");
+		});
+	}
+
 	@GameTest(maxTicks = 1000)
 	public void aRiverEdgeIsFilledAndWalledOff(GameTestHelper helper) {
 		// A bank of ground at y=1..2 along x 0..3, and a river 2 deep at x 4..6 between stone banks.

@@ -54,8 +54,13 @@ public final class PathFinder {
 	/**
 	 * Plans a path from {@code start} to {@code goal}. A path never ends in water: a bot swims only to
 	 * get somewhere dry, and a partial path stops on the nearest shore rather than out in the water.
+	 * Only a goal that {@link Goal#mayEndAfloat may end afloat} is reached swimming at the surface too, and
+	 * a path to one never breaks a block: the bot swims out rather than dig down into the bank.
 	 */
 	public static Path find(WorldView world, BlockPos start, Goal goal, Options options) {
+		if (goal.mayEndAfloat()) {
+			options = new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop());
+		}
 		Planner planner = new Planner(world, options);
 		Map<BlockPos, Double> bestCost = new HashMap<>();
 		PriorityQueue<Entry> open = new PriorityQueue<>((a, b) -> Double.compare(a.priority, b.priority));
@@ -74,7 +79,7 @@ public final class PathFinder {
 				continue; // stale queue entry
 			}
 			boolean inWater = world.isWater(node.pos);
-			if (!inWater && goal.isReached(node.pos)) {
+			if ((!inWater || goal.mayEndAfloat() && planner.swimmable(node.pos)) && goal.isReached(node.pos)) {
 				return toPath(start, node, true);
 			}
 			expanded++;

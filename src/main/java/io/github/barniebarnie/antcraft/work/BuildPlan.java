@@ -475,6 +475,17 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	public static final Set<Item> HOLDING_FILL_BLOCKS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
 
 	/**
+	 * Which of the {@link #HOLDING_FILL_BLOCKS} the colony {@code has} to fill water with that is broken next, such as
+	 * a source above a terraform's height: dirt without a {@code pickaxe}, as cobblestone is slow to break by hand,
+	 * else cobblestone; either rather than none.
+	 */
+	public static Optional<Item> waterFiller(Predicate<Item> has, boolean pickaxe) {
+		List<Item> order = pickaxe ? List.of(Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.DIRT)
+			: List.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
+		return order.stream().filter(has).findFirst();
+	}
+
+	/**
 	 * The part of {@link #materials(Function)} for steps any solid block will do, which a fill block
 	 * of another kind can stand in for: those that {@code mayFall}, or those that must hold.
 	 */

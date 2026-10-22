@@ -8,10 +8,37 @@ public interface Goal {
 	/** Estimated cost to reach the goal, in the same units as {@link PathFinder} move costs. */
 	double heuristic(BlockPos feet);
 
+	/** Whether a path may end swimming at the surface, rather than only on dry ground (see {@link Afloat}). */
+	default boolean mayEndAfloat() {
+		return false;
+	}
+
 	static double estimate(BlockPos from, BlockPos to) {
 		int horizontal = Math.abs(from.getX() - to.getX()) + Math.abs(from.getZ() - to.getZ());
 		int vertical = Math.abs(from.getY() - to.getY());
 		return horizontal * PathFinder.WALK_COST + vertical * PathFinder.FALL_COST_PER_BLOCK;
+	}
+
+	/**
+	 * {@code goal}, reached swimming at the surface too, as a player fills a pond from the water: for a
+	 * block out of reach from every dry spot, such as the bottom of the middle of a deep pond. A path
+	 * to it breaks no blocks, so the bot swims out rather than dig a hole in the bank to get closer.
+	 */
+	record Afloat(Goal goal) implements Goal {
+		@Override
+		public boolean isReached(BlockPos feet) {
+			return this.goal.isReached(feet);
+		}
+
+		@Override
+		public double heuristic(BlockPos feet) {
+			return this.goal.heuristic(feet);
+		}
+
+		@Override
+		public boolean mayEndAfloat() {
+			return true;
+		}
 	}
 
 	/** Stand exactly on this position. */

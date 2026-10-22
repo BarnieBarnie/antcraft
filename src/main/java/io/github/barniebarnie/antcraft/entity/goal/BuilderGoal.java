@@ -350,7 +350,10 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.reachingSince = now;
 		}
 		this.reachingLast = now;
-		PathFollower.Status status = this.approach(sight ? this.inSight(pos) : new Goal.Reach(pos, REACH), pos);
+		// Water to fill or scoop may be out of reach from every dry spot, such as in the middle of a deep pond: the bot
+		// swims out to it, as a player would, rather than dig into the bank.
+		Goal goal = sight ? this.inSight(pos) : new Goal.Reach(pos, REACH);
+		PathFollower.Status status = this.approach(level.getFluidState(pos).isEmpty() ? goal : new Goal.Afloat(goal), pos);
 		if (status == PathFollower.Status.ARRIVED) {
 			this.reachingSince = now;
 			return true;
@@ -542,14 +545,20 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 	}
 
-	/** Fills the fluid at {@code pos} with a filler block such as dirt, fetching one from the core first. */
+	/**
+	 * Fills the fluid at {@code pos} with a filler block, fetching one from the core first: dirt while
+	 * neither the bot nor the core has a pickaxe, since cobblestone is slow to break by hand (see {@link BuildPlan#waterFiller}).
+	 */
 	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos) {
-		SimpleContainer inventory = this.bot.getInventory();
-		int filler = findSlot(inventory, BuilderGoal::isFiller);
-		if (filler < 0) {
-			this.fetch(level, colony, core, plan, core.getItem(findSlot(core, BuilderGoal::isFiller)).getItem());
+		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
+		Optional<Item> filler = BuildPlan.waterFiller(item -> this.has(core, stack -> stack.is(item)), pickaxe);
+		if (filler.isEmpty()) {
+			return;
+		}
+		Item item = filler.get();
+		if (this.bot.getInventory().countItem(item) == 0) {
+			this.fetch(level, colony, core, plan, item);
 		} else if (this.reach(pos)) {
-			Item item = inventory.getItem(filler).getItem();
 			BlockState block = Block.byItem(item).defaultBlockState();
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);

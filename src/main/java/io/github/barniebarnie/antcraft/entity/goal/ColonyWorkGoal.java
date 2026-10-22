@@ -189,10 +189,11 @@ public abstract class ColonyWorkGoal {
 
 	/**
 	 * Moves toward a spot where {@code goal} is reached, then looks at {@code pos}: ARRIVED once
-	 * there, FAILED when no path can be found, and RUNNING meanwhile.
+	 * there, standing or, for a goal that {@link Goal#mayEndAfloat may end afloat}, swimming; FAILED
+	 * when no path can be found, and RUNNING meanwhile.
 	 */
 	protected PathFollower.Status approach(Goal goal, BlockPos pos) {
-		if (goal.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
+		if (goal.isReached(this.bot.blockPosition()) && (this.bot.onGround() || goal.mayEndAfloat() && this.bot.isInWater())) {
 			this.travelGoal = null;
 			this.bot.getLookControl().setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
 			return PathFollower.Status.ARRIVED;

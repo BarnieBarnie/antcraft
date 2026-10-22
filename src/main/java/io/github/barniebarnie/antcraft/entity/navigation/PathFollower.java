@@ -98,7 +98,7 @@ public class PathFollower {
 			return Status.FAILED;
 		}
 		BlockPos feet = this.bot.blockPosition();
-		if (this.goal.isReached(feet) && this.bot.onGround()) {
+		if (this.goal.isReached(feet) && (this.bot.onGround() || this.goal.mayEndAfloat() && this.bot.isInWater())) {
 			this.stop();
 			return Status.ARRIVED;
 		}

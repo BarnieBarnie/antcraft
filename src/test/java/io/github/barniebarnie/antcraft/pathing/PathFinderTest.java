@@ -375,4 +375,31 @@ class PathFinderTest {
 		assertFalse(world.isWater(path.end()), "ends in the water: " + path.steps());
 		assertEquals(new BlockPos(3, 2, 0), path.end());
 	}
+
+	@Test
+	void anAfloatGoalMayEndSwimmingWhenTheBlockIsOutOfReachFromTheBank() {
+		GridWorld world = pond(2).forbidAllPlacing();
+		// The bottom of the middle of the pool, out of reach from every spot on the bank.
+		Goal.Reach bottom = new Goal.Reach(new BlockPos(0, 0, 0), 4.0);
+		PathFinder.Options walkOnly = new PathFinder.Options(false, false, 10_000, 3);
+
+		assertFalse(PathFinder.find(world, new BlockPos(5, 2, 0), bottom, walkOnly).complete(), "reached it from the bank");
+		Path path = PathFinder.find(world, new BlockPos(5, 2, 0), new Goal.Afloat(bottom), walkOnly);
+		assertTrue(path.complete(), "no way to it: " + path.steps());
+		assertTrue(world.isWater(path.end()) && !world.isWater(path.end().above()), "not afloat at the surface: " + path.steps());
+	}
+
+	@Test
+	void anAfloatGoalSwimsOutRatherThanDigIntoTheBank() {
+		// Out of reach from the dirt bank, but not from a spot dug down into it, a block from the water.
+		GridWorld world = new GridWorld().fill(-10, -3, -10, 10, 1, 10, 'D').fill(-2, -1, -2, 2, 1, 2, 'W').forbidAllPlacing();
+		Goal.Reach bottom = new Goal.Reach(new BlockPos(0, -1, 0), 5.0);
+		PathFinder.Options digging = new PathFinder.Options(true, false, 10_000, 3);
+
+		// Digging down into the bank beside the pool is quicker than swimming out.
+		assertTrue(PathFinder.find(world, new BlockPos(5, 2, 0), bottom, digging).steps().stream().anyMatch(s -> !s.breaks().isEmpty()));
+		Path path = PathFinder.find(world, new BlockPos(5, 2, 0), new Goal.Afloat(bottom), digging);
+		assertTrue(path.complete(), "no way to it: " + path.steps());
+		assertTrue(path.steps().stream().allMatch(s -> s.breaks().isEmpty()), "dug: " + path.steps());
+	}
 }
