@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
@@ -209,7 +210,8 @@ public abstract class ColonyWorkGoal {
 	/**
 	 * Whether {@code state} can go at {@code pos} without boxing in a bot or mob standing there,
 	 * as for a player placing a block. If the bot itself is in the way, it steps to the middle of
-	 * its own block, out of the spot.
+	 * its own block, out of the spot. A bot with nothing to do never moves off on its own, such as
+	 * one left floating in the last water of a pond, so one in the way is called over to this bot.
 	 */
 	protected boolean isFreeToPlace(ServerLevel level, BlockPos pos, BlockState state) {
 		if (level.isUnobstructed(state, pos, CollisionContext.empty())) {
@@ -219,7 +221,16 @@ public abstract class ColonyWorkGoal {
 			BlockPos feet = this.bot.blockPosition();
 			this.bot.getMoveControl().setWantedPosition(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, 1.0);
 		}
+		for (AntBot idle : level.getEntitiesOfClass(AntBot.class, new AABB(pos), other -> other != this.bot && isIdle(level, other))) {
+			idle.setWalkTarget(this.bot.blockPosition());
+		}
 		return false;
+	}
+
+	/** Neither at work, walking somewhere nor holding a job. */
+	private static boolean isIdle(ServerLevel level, AntBot bot) {
+		return !bot.isWorking() && bot.getWalkTarget() == null && Optional.ofNullable(bot.getColonyId())
+			.flatMap(id -> ColonyManager.get(level).byId(id)).flatMap(colony -> colony.board().jobOf(bot.getUUID())).isEmpty();
 	}
 
 	/** Scoops the fluid at {@code pos} up into the empty bucket in {@code slot}, as a player would. Returns the filled bucket, or empty if nothing could be scooped. */

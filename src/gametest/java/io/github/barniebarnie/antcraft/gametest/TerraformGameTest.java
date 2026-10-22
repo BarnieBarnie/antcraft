@@ -455,4 +455,32 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(helper.getTick() - doneAt[0] >= 60, "watching for water flowing back since " + doneAt[0]);
 		});
 	}
+
+	/**
+	 * A colony bot with nothing to do, standing in the spot a builder fills, steps out of the way rather than keep
+	 * the builder waiting for good, as one left floating in the last water of a pond did.
+	 */
+	@GameTest(maxTicks = 300)
+	public void anIdleBotStandingWhereABlockGoesStepsAside(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 1, 6)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		helper.setBlock(4, 1, 4, Blocks.AIR);
+		Colony colony = colony(helper, CORE, 6);
+		core(helper, CORE).setItem(0, new ItemStack(Items.DIRT, 4));
+		AntBot builder = member(helper, colony, 1, 3);
+		// Standing in the hole; it joins once the builder holds the one job, so it has nothing to do.
+		AntBot idle = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(6, 3, 6), 1);
+		helper.onEachTick(() -> {
+			if (idle.getColonyId() == null && colony.board().jobOf(builder.getUUID()).isPresent()) {
+				ColonyManager.get(helper.getLevel()).join(idle, colony);
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(idle.getColonyId() != null, "the idle bot has not joined");
+			helper.assertTrue(helper.getBlockState(new BlockPos(4, 1, 4)).is(Blocks.DIRT), "the hole is not filled");
+		});
+	}
 }
