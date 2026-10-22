@@ -507,7 +507,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.fetch(level, colony, core, plan, Items.BUCKET);
 		} else if (source == null) {
 			this.cooldown = IDLE_TICKS;
-		} else if (this.reach(source)) {
+		} else if (this.near(source)) {
 			this.scoop(level, source, empty);
 			this.sources.remove(bucket);
 		}
@@ -581,7 +581,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Item item = filler.get();
 		if (this.bot.getInventory().countItem(item) == 0) {
 			this.fetch(level, colony, core, plan, item);
-		} else if (this.reach(pos)) {
+		} else if (this.near(pos)) {
 			BlockState block = Block.byItem(item).defaultBlockState();
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);

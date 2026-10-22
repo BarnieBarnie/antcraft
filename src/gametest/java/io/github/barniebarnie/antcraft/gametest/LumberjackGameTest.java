@@ -24,6 +24,7 @@ import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.ItemTags;
@@ -592,6 +593,26 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 				helper.setBlock(x, 5, z, Blocks.AIR);
 			}
 		});
+	}
+
+	/** The core walled in with bedrock on every side, within reach of the ground: like a player, the lumberjack does not take the sapling to replant through the wall. */
+	@GameTest(padding = PADDING, maxTicks = 60)
+	public void doesNotTakeASaplingFromACoreBehindAWall(GameTestHelper helper) {
+		Colony colony = colonyAtHome(helper);
+		home(helper).setItem(0, new ItemStack(Items.OAK_SAPLING));
+		for (Direction side : Direction.values()) {
+			helper.setBlock(CHEST.relative(side), Blocks.BEDROCK);
+		}
+		BlockPos site = helper.absolutePos(new BlockPos(5, 1, 5));
+		colony.board().post(JobType.REPLANT, site, List.of(site), Optional.of(Items.OAK_SAPLING), helper.getLevel().getGameTime());
+		lumberjack(helper, 3, 3);
+
+		helper.onEachTick(() -> {
+			if (home(helper).countItem(Items.OAK_SAPLING) == 0) {
+				helper.fail("took the sapling from the core through the bedrock");
+			}
+		});
+		helper.runAfterDelay(40, helper::succeed);
 	}
 
 	private static Colony colonyAtHome(GameTestHelper helper) {

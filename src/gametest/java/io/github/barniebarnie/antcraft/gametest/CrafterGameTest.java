@@ -360,7 +360,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 	 * A core on a ledge too high to reach from the ground: the bot pillars up with dirt to craft the order there,
 	 * and takes its pillar down once done, though crafting is no build or tree job.
 	 */
-	@GameTest(maxTicks = 220)
+	@GameTest(maxTicks = 480)
 	public void takesDownThePillarItPlacedToReachTheCore(GameTestHelper helper) {
 		// A 5x5 ledge, four high, with the core in the middle: out of reach from the ground around it.
 		BlockPos ledge = new BlockPos(5, 5, 5);

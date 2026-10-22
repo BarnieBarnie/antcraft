@@ -484,7 +484,7 @@ public class CrafterGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.endJob(WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
-		if (this.placed == null && !this.loaded && !this.reach(job.target())) {
+		if (this.placed == null && !this.loaded && !this.near(job.target())) {
 			return;
 		}
 		Crafting.Station station = Crafting.station(recipe);

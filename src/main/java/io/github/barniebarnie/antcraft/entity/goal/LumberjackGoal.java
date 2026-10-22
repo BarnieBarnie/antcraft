@@ -435,7 +435,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			this.enter(State.SEARCH);
 			return;
 		}
-		Goal reach = new Goal.Reach(core, REACH);
+		Goal reach = new Goal.InSight(core, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(core.getX() + 0.5, core.getY() + 0.5, core.getZ() + 0.5);
 			Predicate<ItemStack> wanted = this.wanted(level);
@@ -468,7 +468,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			this.enter(State.SEARCH);
 			return;
 		}
-		Goal reach = new Goal.Reach(home, REACH);
+		Goal reach = new Goal.InSight(home, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
 			int wanted = this.scaffoldStock - PathFollower.scaffoldCount(this.bot.getInventory(), SCAFFOLD);
@@ -511,7 +511,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			this.enter(State.SEARCH);
 			return;
 		}
-		Goal reach = new Goal.Reach(home, REACH);
+		Goal reach = new Goal.InSight(home, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
 			ToolKind.AXE.swap(this.bot, container, target);
@@ -661,7 +661,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 			this.enter(State.SEARCH);
 			return;
 		}
-		Goal reach = new Goal.Reach(home, REACH);
+		Goal reach = new Goal.InSight(home, REACH, this.sight);
 		if (reach.isReached(this.bot.blockPosition())) {
 			this.bot.getLookControl().setLookAt(home.getX() + 0.5, home.getY() + 0.5, home.getZ() + 0.5);
 			Storage.moveItems(this.bot.getInventory(), container, stack -> stack.is(ItemTags.LOGS));

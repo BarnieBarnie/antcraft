@@ -406,7 +406,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.DEPOSIT);
 			return true;
 		}
-		if (this.reach(dark.get())) {
+		if (this.near(dark.get())) {
 			level.setBlockAndUpdate(dark.get(), Blocks.TORCH.defaultBlockState());
 			Storage.take(this.bot.getInventory(), Items.TORCH, 1);
 			colony.protect(dark.get(), Blocks.TORCH);

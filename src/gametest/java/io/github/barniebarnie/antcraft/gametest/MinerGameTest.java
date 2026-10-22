@@ -193,7 +193,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 690)
+	@GameTest(maxTicks = 1400)
 	public void minersNeverBreakTheStairsOrTorches(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		GameTests.failOnGiveUp(helper, colony);
@@ -245,7 +245,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Branches 1 long, so three rounds of them fit in the test area. */
-	@GameTest(maxTicks = 730)
+	@GameTest(maxTicks = 1700)
 	public void minedOutLevelGetsFurtherBranches(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		GameTests.failOnGiveUp(helper, colony);

@@ -178,11 +178,21 @@ public abstract class ColonyWorkGoal {
 	}
 
 	/**
-	 * Moves toward {@code pos} until it is within reach. Returns true once there.
-	 * If no path can be found, waits a while before trying again.
+	 * Moves toward {@code pos} until it is within reach and in sight of it, as a player must be to
+	 * open a container. Returns true once there. If no path can be found, waits a while before
+	 * trying again.
 	 */
 	protected boolean reach(BlockPos pos) {
-		PathFollower.Status status = this.approach(new Goal.Reach(pos, REACH), pos);
+		return this.reach(this.inSight(pos), pos);
+	}
+
+	/** Like {@link #reach(BlockPos)}, but within reach is enough, seen or not. */
+	protected boolean near(BlockPos pos) {
+		return this.reach(new Goal.Reach(pos, REACH), pos);
+	}
+
+	private boolean reach(Goal goal, BlockPos pos) {
+		PathFollower.Status status = this.approach(goal, pos);
 		if (status == PathFollower.Status.FAILED) {
 			this.cooldown = IDLE_TICKS;
 		}

@@ -83,6 +83,41 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The core in the corner, walled in with bedrock on every side, within reach of the floor: like a player, a bot does not open it through the wall. */
+	@GameTest(maxTicks = 60)
+	public void aBotDoesNotTakeFromACoreBehindAWall(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.IRON_SWORD));
+		helper.setBlock(2, 1, 1, Blocks.BEDROCK);
+		helper.setBlock(1, 1, 2, Blocks.BEDROCK);
+		helper.setBlock(1, 2, 1, Blocks.BEDROCK);
+		member(helper, colony);
+
+		helper.onEachTick(() -> {
+			if (core(helper).countItem(Items.IRON_SWORD) == 0) {
+				helper.fail("took the sword from the core through the bedrock");
+			}
+		});
+		helper.runAfterDelay(40, helper::succeed);
+	}
+
+	/** The core in an alcove open to the south, the bot east of it behind the wall: it walks round to where it sees the core and takes the sword. */
+	@GameTest(maxTicks = 40)
+	public void aBotTakesFromACoreItSeesFromOneSide(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.IRON_SWORD));
+		helper.setBlock(2, 1, 1, Blocks.BEDROCK);
+		helper.setBlock(2, 2, 1, Blocks.BEDROCK);
+		helper.setBlock(1, 2, 1, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+
+		helper.succeedWhen(() -> {
+			boolean armed = bot.getMainHandItem().is(Items.IRON_SWORD) || bot.getInventory().countItem(Items.IRON_SWORD) == 1;
+			helper.assertTrue(armed, "bot has no sword");
+		});
+	}
+
 	/** Chests stand on the rows z=4 and z=6, with an aisle between them. */
 	private static final BlockPos STORAGE = new BlockPos(2, 1, 4);
 
