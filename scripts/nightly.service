@@ -1,0 +1,8 @@
+# Install: ln -s "$PWD"/scripts/nightly.{service,timer} ~/.config/systemd/user/
+#          systemctl --user daemon-reload && systemctl --user enable --now nightly.timer
+[Unit]
+Description=AntCraft nightly game test runs
+
+[Service]
+Type=oneshot
+ExecStart=%h/git/antcraft/scripts/nightly.sh

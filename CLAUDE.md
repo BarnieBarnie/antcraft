@@ -27,6 +27,7 @@ Game tests run on a dedicated server, so they enable bots with `AntCraftConfig.s
 ./gradlew build         # compile + both test suites
 ./gradlew testIsolated  # unit tests, one JVM per class, catches bootstrap-order bugs; CI runs build and this
 ./gradlew runClient     # play-test manually
+scripts/nightly.sh      # every game test twice on origin/main, files an issue per failing test (systemd timer at 03:00)
 ```
 
 Agents run builds through `scripts/check.sh` instead of `./gradlew` directly. It takes the same tasks and options (default `build`), saves the full output to `build/check.log` and prints only `PASS`/`FAIL` with test counts, compile errors as `file:line: message`, and each failing test with its message. Its exit code is Gradle's, and it adds `--continue` so one run reports every failing suite. Grep `build/check.log` only when the summary is not enough.

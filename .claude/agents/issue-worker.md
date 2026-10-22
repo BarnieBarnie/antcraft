@@ -18,7 +18,8 @@ You implement exactly one GitHub issue for AntCraft, a Fabric mod for Minecraft 
 1. Create your branch: `git switch -c <branch>` (the name the manager gave you).
 2. Read the code the issue points at, then its tests.
 3. Work through the acceptance criteria one at a time, red then green. Run unit tests with `scripts/check.sh test`. To run only some game tests, use `scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'` (see `CLAUDE.md`). Do not write your own Gradle init scripts for this.
-4. Run `scripts/check.sh` (`./gradlew build`: compile and both test suites). It must pass before you commit.
+4. Before you commit, run `scripts/check.sh test` and the game tests of every class you changed or whose behaviour you touched, with `-PgameTest`. They must pass. Do not run the full game test suite (`scripts/check.sh` or `runGameTest` without `-PgameTest`): it takes about 25 minutes. CI and the nightly run (`scripts/nightly.sh`) run it, and the nightly run files an issue for each test that fails.
+   - Exception: if the issue is about tests that only fail together (crosstalk, flaky in full runs), you may run the full suite, at most 3 times. If it still fails after that, or after about 90 minutes of work, stop and report `blocked` with what you found. A fresh worker can pick it up from your report.
 5. Commit on your branch. Match the style of recent commits (`git log --oneline -10`). End the message with `Fixes #<issue>` on its own line, then the attribution line from your instructions, if any. Use one commit, or a few if they read better as separate steps.
 
 ## Report
@@ -28,7 +29,7 @@ Finish with a short report for the manager:
 - Status: `done`, `blocked` or `failed`
 - Branch and the commit hash(es)
 - What changed, in a few lines, and which acceptance criteria are covered by which tests
-- Result of the build (the `PASS`/`FAIL` line of `scripts/check.sh`; quote the failing test names if it failed)
+- Result of each check you ran (the `PASS`/`FAIL` lines of `scripts/check.sh`, with the `-PgameTest` pattern; quote the failing test names if one failed)
 - Files changed, so the manager can spot overlap with other branches
 - Anything left undone, or follow-up issues worth filing
 
