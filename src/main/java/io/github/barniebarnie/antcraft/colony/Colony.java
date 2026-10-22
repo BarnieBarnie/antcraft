@@ -558,6 +558,17 @@ public class Colony {
 			// One bucket or pickaxe does for every project.
 			needed.forEach((item, count) -> total.merge(item, count, item == Items.BUCKET || pickaxes.tiers().contains(item) ? Math::max : Integer::sum));
 		}
+		// A better pickaxe ordered also counts for the projects that need a worse one.
+		int better = 0;
+		for (Item tier : pickaxes.tiers().reversed()) {
+			int still = Math.max(0, total.getOrDefault(tier, 0) - better);
+			if (still == 0) {
+				total.remove(tier);
+			} else {
+				total.put(tier, still);
+			}
+			better += still;
+		}
 		this.orderFor(OrderPurpose.BUILD, total);
 		return placed;
 	}

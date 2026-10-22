@@ -96,6 +96,19 @@ class ProjectTest {
 	}
 
 	@Test
+	void theStonePickaxeABuildNeedsCountsForTheToolsProjectsPickaxes() {
+		Colony colony = colony();
+		colony.addProject("tools", DefaultStock.TOOLS.subList(0, 1));
+		colony.addBuild("hut", plan(ORE, Blocks.OAK_PLANKS));
+		colony.postBuildJobs();
+
+		colony.planProjects(WORLD, step -> true, Map.of(), tool -> false);
+
+		// Two pickaxes wanted, one of them stone: the stone one and one wooden, not two wooden as well.
+		assertEquals(Map.of(Items.STONE_PICKAXE, 1, Items.WOODEN_PICKAXE, 1, Items.OAK_PLANKS, 1), colony.orders());
+	}
+
+	@Test
 	void twoProjectsJobsCarryTheirOwnPriorities() {
 		Colony colony = colony();
 		Project low = colony.addBuild("shed", plan(new BlockPos(5, 64, 5), Blocks.OAK_PLANKS));
