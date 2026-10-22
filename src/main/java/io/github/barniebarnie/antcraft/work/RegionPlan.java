@@ -27,7 +27,8 @@ public final class RegionPlan {
 	 * contents. Empty when that leaves no step, such as for a box holding only a door's upper half.
 	 *
 	 * <p>Each layer is a batch, split into cells (see {@link BuildPlan#inCells}) so several builders can work
-	 * one layer, and each cell needs every cell of the layer below, so what a block rests on comes first.
+	 * one layer, and each cell needs only the cells of the layer below under it, so what a block rests on comes first
+	 * while builders work several layers apart at once.
 	 */
 	public static Optional<BuildPlan> copy(Function<BlockPos, BlockState> world, BlockPos from, BlockPos to, BlockPos at) {
 		BlockPos min = BlockPos.min(from, to);

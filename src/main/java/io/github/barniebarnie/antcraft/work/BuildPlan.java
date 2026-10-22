@@ -152,17 +152,20 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 * This plan with each batch that spreads over more than a square of {@link #CELL} columns split into cells, so
 	 * several bots work it at once: squares of columns of about the same size, each of every height. A cell keeps
 	 * the order of its steps, so in each column what a block rests on is still placed, and what is in its way dug,
-	 * first. Each cell needs every cell of the batches its batch needs, so one on top of another waits for the one
-	 * below. A batch that fits one square stays one batch, so a small plan stays as it is.
+	 * first. Each cell needs the cells of the batches its batch needs that share a column with it, so one on top of
+	 * another waits only for what is under it, and builders can work several layers apart at once. A block rests only
+	 * on the block under it, in its own column; one held from the side, such as a wall torch, is held in its own layer.
+	 * A batch that fits one square stays one batch, so a small plan stays as it is.
 	 */
 	public BuildPlan inCells() {
 		List<Step> steps = new ArrayList<>();
 		List<Batch> batches = new ArrayList<>();
-		// The cells each batch became, by index.
+		// The cells each batch became, by index, and the columns each cell spans: min x, min z, max x, max z.
 		List<List<Integer>> cellsOf = new ArrayList<>();
+		List<int[]> spans = new ArrayList<>();
 		for (Batch batch : this.batches) {
 			List<Step> of = this.steps.subList(batch.from(), batch.to());
-			List<Integer> needs = batch.needs().stream().flatMap(need -> cellsOf.get(need).stream()).toList();
+			List<Integer> needed = batch.needs().stream().flatMap(need -> cellsOf.get(need).stream()).toList();
 			int minX = of.stream().mapToInt(step -> step.pos().getX()).min().orElse(0);
 			int minZ = of.stream().mapToInt(step -> step.pos().getZ()).min().orElse(0);
 			int width = of.stream().mapToInt(step -> step.pos().getX()).max().orElse(0) - minX + 1;
@@ -180,13 +183,24 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			}
 			List<Integer> made = new ArrayList<>();
 			for (List<Step> cell : cells.values()) {
+				// An empty cell spans every column, so what comes after it still waits for what it needed.
+				int[] span = cell.isEmpty() ? new int[] {Integer.MIN_VALUE, Integer.MIN_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE} : new int[] {
+					cell.stream().mapToInt(step -> step.pos().getX()).min().orElseThrow(), cell.stream().mapToInt(step -> step.pos().getZ()).min().orElseThrow(),
+					cell.stream().mapToInt(step -> step.pos().getX()).max().orElseThrow(), cell.stream().mapToInt(step -> step.pos().getZ()).max().orElseThrow()};
+				List<Integer> needs = needed.stream().filter(need -> overlaps(spans.get(need), span)).toList();
 				made.add(batches.size());
+				spans.add(span);
 				batches.add(new Batch(steps.size(), steps.size() + cell.size(), needs, batch.dig()));
 				steps.addAll(cell);
 			}
 			cellsOf.add(made);
 		}
 		return new BuildPlan(steps, batches, this.kind);
+	}
+
+	/** Whether the columns {@code a} and {@code b} span (min x, min z, max x, max z) share one. */
+	private static boolean overlaps(int[] a, int[] b) {
+		return a[0] <= b[2] && b[0] <= a[2] && a[1] <= b[3] && b[1] <= a[3];
 	}
 
 	/** The batches not {@code done} yet whose needed batches are all done, by index. */

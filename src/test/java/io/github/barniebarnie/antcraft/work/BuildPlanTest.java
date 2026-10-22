@@ -589,7 +589,7 @@ class BuildPlanTest {
 	}
 
 	@Test
-	void splitsA6x1x6FloorBatchIntoCellsAndACellOnTopWaitsForTheOnesBelow() {
+	void splitsA6x1x6FloorBatchIntoCellsAndACellOnTopWaitsForTheOneUnderIt() {
 		List<BuildPlan.Step> steps = new java.util.ArrayList<>(floor(1));
 		steps.addAll(floor(2));
 		BuildPlan plan = new BuildPlan(steps, List.of(new BuildPlan.Batch(0, 36, List.of()), new BuildPlan.Batch(36, 72, List.of(0), true))).inCells();
@@ -606,10 +606,12 @@ class BuildPlanTest {
 			assertEquals(i >= 4, plan.batches().get(i).dig(), "cell " + i);
 		}
 		assertEquals(Set.copyOf(steps), Set.copyOf(plan.steps()));
-		// The floor's cells at once; one on top only once the floor below is placed.
+		// The floor's cells at once; one on top once the cell under it is placed, whatever the rest of the floor.
 		assertEquals(List.of(0, 1, 2, 3), plan.ready(Set.of()));
-		assertEquals(List.of(3), plan.ready(Set.of(0, 1, 2)));
-		assertEquals(List.of(4, 5, 6, 7), plan.ready(Set.of(0, 1, 2, 3)));
+		assertEquals(List.of(3, 4, 5, 6), plan.ready(Set.of(0, 1, 2)));
+		for (int i = 4; i < 8; i++) {
+			assertEquals(List.of(i - 4), plan.batches().get(i).needs(), "cell " + i);
+		}
 	}
 
 	@Test

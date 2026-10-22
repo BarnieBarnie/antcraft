@@ -64,17 +64,30 @@ class RegionPlanTest {
 	}
 
 	@Test
-	void splitsAWideLayerIntoSquaresThatEachNeedTheWholeLayerBelow() {
+	void splitsAWideLayerIntoSquaresThatEachNeedOnlyTheSquareUnderIt() {
 		// 8 columns wide: two squares a layer, so two builders can work a layer at once.
 		BuildPlan plan = RegionPlan.copy(pos -> Blocks.COBBLESTONE.defaultBlockState(), new BlockPos(0, 0, 0), new BlockPos(7, 1, 0), BlockPos.ZERO).orElseThrow();
 
 		assertEquals(List.of(
 			new BuildPlan.Batch(0, 4, List.of()),
 			new BuildPlan.Batch(4, 8, List.of()),
-			new BuildPlan.Batch(8, 12, List.of(0, 1)),
-			new BuildPlan.Batch(12, 16, List.of(0, 1))), plan.batches());
+			new BuildPlan.Batch(8, 12, List.of(0)),
+			new BuildPlan.Batch(12, 16, List.of(1))), plan.batches());
 		assertEquals(List.of(0, 1, 2, 3), plan.batch(1).steps().stream().map(step -> step.pos().getX() - 4).toList());
 		assertEquals(List.of(0, 1), plan.ready(Set.of()));
+	}
+
+	@Test
+	void aSquareOnTheSecondLayerOpensWhileADistantSquareBelowIsStillOpen() {
+		// 12x12 columns, 2 high: nine squares a layer.
+		BuildPlan plan = RegionPlan.copy(pos -> Blocks.COBBLESTONE.defaultBlockState(), new BlockPos(0, 0, 0), new BlockPos(11, 1, 11), BlockPos.ZERO).orElseThrow();
+
+		assertEquals(18, plan.batches().size());
+		// Only the corner square of the bottom layer is done; the far corner is still open.
+		BuildPlan.Step corner = plan.batch(0).steps().getFirst();
+		assertEquals(BlockPos.ZERO, corner.pos());
+		assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9), plan.ready(Set.of(0)));
+		assertEquals(new BlockPos(0, 1, 0), plan.batch(9).steps().getFirst().pos());
 	}
 
 	@Test
