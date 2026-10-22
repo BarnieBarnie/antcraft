@@ -91,6 +91,31 @@ class ToolUpgradeTest {
 	}
 
 	@Test
+	void ordersNoTierAboveTheBestOneJobsDeclare() {
+		Map<String, Integer> stock = Map.of("cobblestone", 3, "diamond", 3, "stick", 2);
+		// Only wooden pickaxes wanted: a bot with one orders nothing better.
+		assertEquals(Optional.empty(), ToolUpgrade.toOrder(TIERS, "wooden_pickaxe", stock, Map.of(), BOOK, GATHERABLE::contains, "wooden_pickaxe"));
+		// Up to stone: stone, not diamond.
+		assertEquals(Optional.of("stone_pickaxe"),
+			ToolUpgrade.toOrder(TIERS, "wooden_pickaxe", stock, Map.of(), BOOK, GATHERABLE::contains, "stone_pickaxe"));
+		// No job declares a tier: the best the colony can make, as before.
+		assertEquals(Optional.of("diamond_pickaxe"), ToolUpgrade.toOrder(TIERS, "wooden_pickaxe", stock, Map.of(), BOOK, GATHERABLE::contains, null));
+		// A bot without one still gets the lowest tier.
+		assertEquals(Optional.of("wooden_pickaxe"), ToolUpgrade.toOrder(TIERS, null, Map.of(), Map.of(), BOOK, GATHERABLE::contains, "wooden_pickaxe"));
+	}
+
+	@Test
+	void aToolAnotherJobWaitsForIsNotFreeToTake() {
+		Map<String, Integer> stock = Map.of("stone_pickaxe", 1, "iron_pickaxe", 1);
+		// One waits for a stone pickaxe: the lowest good enough one is kept for it.
+		assertEquals(Map.of("iron_pickaxe", 1), ToolUpgrade.unreserved(TIERS, stock, List.of("stone_pickaxe")));
+		assertEquals(Map.of("stone_pickaxe", 1), ToolUpgrade.unreserved(TIERS, stock, List.of("iron_pickaxe")));
+		assertEquals(Map.of(), ToolUpgrade.unreserved(TIERS, stock, List.of("stone_pickaxe", "wooden_pickaxe")));
+		// None good enough in stock: nothing is kept.
+		assertEquals(stock, ToolUpgrade.unreserved(TIERS, stock, List.of("diamond_pickaxe")));
+	}
+
+	@Test
 	void unlistedToolsRankLowest() {
 		// A golden pickaxe is not a tier: any listed tool replaces it, but it is still a tool.
 		assertEquals(0, ToolUpgrade.rank(TIERS, "golden_pickaxe"));

@@ -46,17 +46,37 @@ public final class ToolUpgrade {
 	 */
 	public static <I> Optional<I> toOrder(List<I> tiers, @Nullable I current, Map<I, Integer> stock, Map<I, Integer> orders,
 			TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+		return toOrder(tiers, current, stock, orders, book, gatherable, null);
+	}
+
+	/** Like {@link #toOrder(List, Object, Map, Map, TaskPlanner.RecipeBook, Predicate)}, but no tier above {@code ceiling}, unless it is null. */
+	public static <I> Optional<I> toOrder(List<I> tiers, @Nullable I current, Map<I, Integer> stock, Map<I, Integer> orders,
+			TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable, @Nullable I ceiling) {
 		int rank = rank(tiers, current);
 		List<I> better = tiers.subList(rank + 1, tiers.size());
 		if (better.stream().anyMatch(tier -> stock.getOrDefault(tier, 0) > 0 || orders.getOrDefault(tier, 0) > 0)) {
 			return Optional.empty();
 		}
+		int top = ceiling == null ? tiers.size() - 1 : rank(tiers, ceiling);
 		for (I tier : better.reversed()) {
-			if (makeableNow(tier, stock, book, gatherable)) {
+			if (rank(tiers, tier) <= top && makeableNow(tier, stock, book, gatherable)) {
 				return Optional.of(tier);
 			}
 		}
 		return current == null && !tiers.isEmpty() ? Optional.of(tiers.getFirst()) : Optional.empty();
+	}
+
+	/**
+	 * {@code stock} less what bots wait for: for each tier in {@code waiting}, which another bot's job declares and it
+	 * lacks, one of the lowest tier in stock that is good enough, if any.
+	 */
+	public static <I> Map<I, Integer> unreserved(List<I> tiers, Map<I, Integer> stock, List<I> waiting) {
+		Map<I, Integer> free = new HashMap<>(stock);
+		for (I need : waiting) {
+			tiers.subList(rank(tiers, need), tiers.size()).stream().filter(tier -> free.getOrDefault(tier, 0) > 0).findFirst()
+				.ifPresent(tier -> free.computeIfPresent(tier, (item, count) -> count > 1 ? count - 1 : null));
+		}
+		return free;
 	}
 
 	static <I> boolean makeableNow(I item, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {

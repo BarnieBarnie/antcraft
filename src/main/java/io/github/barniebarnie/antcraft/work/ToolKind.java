@@ -1,8 +1,10 @@
 package io.github.barniebarnie.antcraft.work;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.ToolUpgrade;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -70,7 +72,8 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	 * The best tool in {@code storage} that beats what the bot carries, to go and fetch. If there
 	 * is none and the bot is in {@code colony}, orders the best tier the colony can make instead.
 	 * A bot without a tool of this kind only fetches one, unless it {@code needs} one now: a job that
-	 * can be done without one orders none.
+	 * can be done without one orders none. It leaves a tool another member's job declares and that
+	 * member lacks, and orders no pickaxe above the best one a job on the board declares.
 	 */
 	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony) {
 		return this.findUpgrade(level, bot, storage, colony, () -> false);
@@ -79,9 +82,22 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony, BooleanSupplier needs) {
 		Item current = this.bestCarried(bot);
 		Map<Item, Integer> stock = Storage.stock(storage);
-		Optional<Item> better = this.betterIn(stock, current);
-		if (better.isEmpty() && (current != null || needs.getAsBoolean()) && colony != null) {
-			this.order(level, colony, current, this.spare(level, colony));
+		if (colony == null) {
+			return this.betterIn(stock, current);
+		}
+		// Not one another bot's job waits for.
+		List<Item> waiting = colony.members().stream().filter(id -> !id.equals(bot.getUUID()))
+			.flatMap(id -> colony.board().jobOf(id).flatMap(Job::tool).filter(this.tiers::contains)
+				.filter(tool -> level.getEntity(id) instanceof AntBot other && this.rank(this.bestCarried(other)) < this.rank(tool)).stream())
+			.toList();
+		Optional<Item> better = this.betterIn(ToolUpgrade.unreserved(this.tiers, stock, waiting), current);
+		if (better.isEmpty() && (current != null || needs.getAsBoolean())) {
+			// A pickaxe's tier is what jobs need it for (the ores it harvests), so none better than a job on the board
+			// declares; stock targets order better ones for the core. Axes and hoes upgrade as far as the colony can make.
+			Item ceiling = this != PICKAXE ? null : colony.board().jobs().stream().flatMap(job -> job.tool().stream())
+				.filter(this.tiers::contains).max(Comparator.comparingInt(this::rank)).orElse(this.tiers.getFirst());
+			ToolUpgrade.toOrder(this.tiers, current, this.spare(level, colony), colony.orders(), GameRecipeBook.of(level.getServer()),
+				Gatherables::isGatherable, ceiling).ifPresent(tool -> colony.addOrder(tool, 1));
 		}
 		return better;
 	}

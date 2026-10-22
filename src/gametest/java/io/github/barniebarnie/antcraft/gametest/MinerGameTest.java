@@ -1111,10 +1111,14 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		return bot.getInventory().countItem(pickaxe) + (bot.getMainHandItem().is(pickaxe) ? bot.getMainHandItem().getCount() : 0);
 	}
 
-	/** Cobblestone and sticks in the core become a stone pickaxe that replaces the wooden one. */
+	/**
+	 * Cobblestone and sticks in the core become a stone pickaxe that replaces the wooden one. The colony's stock wants
+	 * it: no job needs more than the wooden one, so the miner orders none itself.
+	 */
 	@GameTest(maxTicks = 210)
 	public void upgradesToStonePickaxe(GameTestHelper helper) {
 		Colony colony = colony(helper);
+		colony.setStockTarget(StockTarget.of(Items.STONE_PICKAXE, 1));
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 3));
 		core(helper).setItem(1, new ItemStack(Items.STICK, 2));
 		AntBot miner = member(helper, colony, 1, 4);
@@ -1148,6 +1152,60 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.runAfterDelay(250, helper::succeed);
+	}
+
+	/** Branches that need no more than a wooden pickaxe: the miner orders no stone one, though the colony could make it. */
+	@GameTest(maxTicks = 710)
+	public void ordersNoStonePickaxeForWoodenBranches(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		helper.assertTrue(PickaxeTier.forBranch(shaft.levels().getLast(), Items.COBBLESTONE::equals) == Items.WOODEN_PICKAXE,
+			"branches need more than a wooden pickaxe");
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+		core(helper, MINE_CORE).setItem(1, new ItemStack(Items.STICK, 2));
+		AntBot miner = member(helper, colony, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (colony.orders().containsKey(Items.STONE_PICKAXE)) {
+				helper.fail("ordered a stone pickaxe no branch needs: " + colony.orders());
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(branchesDug(helper, shaft), "branches not dug"));
+	}
+
+	/** A better pickaxe in the core that another bot's job waits for is left for that bot. */
+	@GameTest(maxTicks = 160)
+	public void leavesAPickaxeAnotherBotsJobWaitsFor(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		AntBot miner = member(helper, colony, 2, 1);
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		// Walled in, so it cannot fetch the pickaxe its vein job needs, and waits.
+		for (BlockPos pos : BlockPos.betweenClosed(5, 1, 5, 7, 3, 7)) {
+			helper.setBlock(pos, Blocks.BARRIER);
+		}
+		helper.setBlock(6, 1, 6, Blocks.AIR);
+		helper.setBlock(6, 2, 6, Blocks.AIR);
+		BlockPos ore = helper.absolutePos(new BlockPos(6, 3, 6));
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.IRON_ORE.defaultBlockState());
+		AntBot waiting = member(helper, colony, 6, 6);
+		waiting.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		long now = helper.getLevel().getGameTime();
+		colony.board().post(JobType.MINE_VEIN, ore, List.of(ore), Optional.empty(), now, Optional.of(Items.STONE_PICKAXE));
+		helper.assertTrue(colony.board().claim(waiting.getUUID(), Set.of(JobType.MINE_VEIN), ore, now).isPresent(), "vein job not claimed");
+
+		helper.onEachTick(() -> {
+			if (pickaxes(miner, Items.STONE_PICKAXE) > 0) {
+				helper.fail("took the stone pickaxe another bot's job waits for");
+			}
+		});
+		helper.runAfterDelay(120, () -> {
+			helper.assertTrue(colony.board().jobOf(waiting.getUUID()).isPresent(), "the other bot gave its job up");
+			helper.succeed();
+		});
 	}
 
 	/** A colony that wants stone and has no pickaxe fells a tree for one, crafts it, and a bot takes it up to dig. */
