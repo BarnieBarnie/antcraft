@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
 
 class GoalTest {
@@ -63,6 +64,24 @@ class GoalTest {
 
 		assertTrue(path.complete());
 		assertTrue(path.steps().stream().anyMatch(step -> step.breaks().contains(lid)));
+	}
+
+	@Test
+	void anAfloatPathDigsThroughALidOverWaterToSeeTheWaterUnderIt() {
+		// A pool under a stone lid as high as the dirt bank, filled up to its lid: the water is seen only once a lid
+		// block over it or beside that is gone. The path breaks one from on top and drops into the water under it, which
+		// floods nothing.
+		GridWorld world = new GridWorld().fill(-10, -3, -10, 10, 1, 10, 'D').fill(-2, -1, -2, 2, 0, 2, 'W').fill(-2, 1, -2, 2, 1, 2, '#')
+			.forbidAllPlacing();
+		BlockPos water = new BlockPos(0, 0, 0);
+		Goal.Sight sight = (feet, target, broken) -> broken.test(target.above())
+			|| Direction.Plane.HORIZONTAL.stream().anyMatch(side -> broken.test(target.relative(side).above()));
+		Path path = PathFinder.find(world, new BlockPos(5, 2, 0), new Goal.Afloat(new Goal.InSight(water, 4.5, sight)),
+			new PathFinder.Options(true, false, 10_000, 3));
+
+		assertTrue(path.complete(), "no way to see it: " + path.steps());
+		assertTrue(path.steps().stream().anyMatch(step -> step.breaks().stream().anyMatch(pos -> pos.getY() == 1)), "lid not dug: " + path.steps());
+		assertTrue(world.isWater(path.end()), "not afloat: " + path.steps());
 	}
 
 	@Test

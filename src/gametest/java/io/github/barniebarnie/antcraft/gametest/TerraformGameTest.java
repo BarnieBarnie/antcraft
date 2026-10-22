@@ -372,7 +372,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	 * A pond 6 wide and 3 deep in the middle of a 16x16 area: its middle columns are out of reach from the bank,
 	 * and from the top of the columns filled beside them, so the builders fill them swimming.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1000)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1400)
 	public void buildersFillAPondTooWideAndDeepToReachFromTheBank(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 3, 15)) {
 			boolean pond = pos.getY() > 0 && pos.getX() >= 5 && pos.getX() <= 10 && pos.getZ() >= 5 && pos.getZ() <= 10;
@@ -457,9 +457,10 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A pond 4 wide and 2 deep under a stone lid as high as the ground round it, filled up to its lid: there is no
-	 * water to swim in, so the builder digs in to reach it.
+	 * water to swim in, so the builder digs in to reach it. It fills only water it sees, so it breaks lid blocks by hand
+	 * to drop into the water under them, which is slower than filling through the lid was (passes at about tick 1100).
 	 */
-	@GameTest(maxTicks = 1100)
+	@GameTest(maxTicks = 2200)
 	public void aBuilderDigsInToFillAPondUnderALid(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {
 			boolean pond = pos.getX() >= 2 && pos.getX() <= 5 && pos.getZ() >= 2 && pos.getZ() <= 5;

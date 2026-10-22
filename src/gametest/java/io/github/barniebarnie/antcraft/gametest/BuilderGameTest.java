@@ -1084,6 +1084,35 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A wall any solid block will do, in water walled in with bedrock on every side, within reach of where the builder
+	 * stands: like a player it cannot wall off water it cannot see, so it leaves the water and reports the step.
+	 */
+	@GameTest(maxTicks = 180)
+	public void doesNotWallOffWaterItCannotSeeAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		BlockPos water = new BlockPos(4, 1, 4);
+		for (Direction side : Direction.values()) {
+			helper.setBlock(water.relative(side), Blocks.BEDROCK);
+		}
+		helper.setBlock(water, Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.solid(helper.absolutePos(water)),
+			step(helper, 6, 1, 6, COBBLE))));
+		member(helper, colony, 2, 4);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(water).is(Blocks.WATER)) {
+				helper.fail("walled off the water through the bedrock wall");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 6, 1, 6, COBBLE);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(water))), "walled-in step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/**
 	 * Water to clear walled in with bedrock on every side, within reach of where the builder stands, and a bucket in
 	 * the core: like a player it cannot scoop what it cannot see, so it leaves the water and reports the step.
 	 */
@@ -1105,6 +1134,35 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			if (!helper.getBlockState(water).is(Blocks.WATER)) {
 				helper.fail("scooped the water through the bedrock wall");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 6, 1, 6, COBBLE);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(water))), "walled-in step not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/**
+	 * Water to clear walled in with bedrock on every side, within reach of where the builder stands, and no bucket but
+	 * cobblestone in the core: like a player it cannot fill what it cannot see, so it leaves the water and reports the step.
+	 */
+	@GameTest(maxTicks = 180)
+	public void doesNotFillAStepsWaterBehindAWallAndReportsIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		BlockPos water = new BlockPos(4, 1, 4);
+		for (Direction side : Direction.values()) {
+			helper.setBlock(water.relative(side), Blocks.BEDROCK);
+		}
+		helper.setBlock(water, Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.clear(helper.absolutePos(water)),
+			step(helper, 6, 1, 6, COBBLE))));
+		member(helper, colony, 2, 4);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(water).is(Blocks.WATER)) {
+				helper.fail("filled the water through the bedrock wall");
 			}
 		});
 		helper.succeedWhen(() -> {

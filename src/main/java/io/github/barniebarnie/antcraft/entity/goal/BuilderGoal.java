@@ -332,9 +332,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 		// A block is placed where the bot sees the spot, as a player must; a wall behind stone the plan digs is put off
 		// until then (see isBehindUndug).
-		// ponytail: a wall or fill in a fluid goes in by reach only, as fillIn does: water beside a mineshaft is walled
-		// before the cell beside it is dug, so it does not flood the shaft, and a pond under a lid has no spot that sees it.
-		boolean sight = !step.anySolid() || level.getFluidState(step.pos()).isEmpty();
+		// ponytail: a wall in a fluid beside a cell the plan still digs goes in by reach only, as fluidToWall's does:
+		// water beside a mineshaft is walled before the cell beside it is dug, so it does not flood the shaft.
+		boolean sight = !step.anySolid() || level.getFluidState(step.pos()).isEmpty() || !isBesideUndug(level, opened(plan.get()), step);
 		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos(), sight)) {
 			return;
 		}
@@ -510,6 +510,17 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}, progress);
 	}
 
+	/** Whether a cell beside {@code step} that the plan opens up is still to dig. */
+	private static boolean isBesideUndug(ServerLevel level, Map<BlockPos, BuildPlan.Step> opened, BuildPlan.Step step) {
+		for (Direction side : Direction.values()) {
+			BuildPlan.Step cell = opened.get(step.pos().relative(side));
+			if (cell != null && cell.needsClearing(level.getBlockState(cell.pos()))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** The steps of {@code plan} that open a cell up, such as to dig it out or put a torch in, by position. */
 	private static Map<BlockPos, BuildPlan.Step> opened(BuildPlan plan) {
 		Map<BlockPos, BuildPlan.Step> opened = new HashMap<>();
@@ -604,7 +615,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		BuildPlan.Clearing clearing = this.clearing(level, core, step);
 		BlockPos wall = clearing == BuildPlan.Clearing.BLOCKED ? this.fluidToWall(level, core, plan, step) : null;
 		if (wall != null) {
-			this.fillIn(level, colony, core, plan, wall, pos);
+			// ponytail: by reach, as it is walled off before the cell beside it is dug, so it does not flood the shaft.
+			this.fillIn(level, colony, core, plan, wall, pos, false);
 			return;
 		}
 		switch (clearing) {
@@ -616,7 +628,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 					this.scoop(level, pos, bucket);
 				}
 			}
-			case FILL -> this.fillIn(level, colony, core, plan, pos, pos);
+			// By reach where it is beside a cell still to dig, as a mineshaft hall's next cell is: walled off first, as above.
+			case FILL -> this.fillIn(level, colony, core, plan, pos, pos, !isBesideUndug(level, opened(plan), step));
 			default -> {
 				if (this.reachStep(level, pos, true) && this.breaker.tick(level, pos, true)) {
 					colony.unprotect(pos);
@@ -628,11 +641,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Fills the fluid at {@code pos} with a filler block, fetching one from the core first: dirt while
 	 * neither the bot nor the core has a pickaxe, since cobblestone is slow to break by hand (see {@link BuildPlan#waterFiller}).
-	 * It fills from the water where no dry spot is in reach (see {@link #reachStep}). While {@code pos} stays taken it
-	 * waits, and gives up the step at {@code step}, such as the one the fluid is walled off for, after a while or once
-	 * {@code pos} is out of reach.
+	 * It fills from the water where no dry spot is in reach (see {@link #reachStep}), and for {@code sight} only where it
+	 * sees {@code pos}. While {@code pos} stays taken it waits, and gives up the step at {@code step}, such as the one the
+	 * fluid is walled off for, after a while or once {@code pos} is out of reach.
 	 */
-	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, BlockPos step) {
+	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, BlockPos step, boolean sight) {
 		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
 		Optional<Item> filler = BuildPlan.waterFiller(item -> this.has(core, stack -> stack.is(item)), pickaxe);
 		if (filler.isEmpty()) {
@@ -641,7 +654,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Item item = filler.get();
 		if (this.bot.getInventory().countItem(item) == 0) {
 			this.fetch(level, colony, core, plan, item);
-		} else if (this.reachStep(level, pos, false)) {
+		} else if (this.reachStep(level, pos, sight)) {
 			BlockState block = Block.byItem(item).defaultBlockState();
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);

@@ -75,7 +75,7 @@ public final class PathFinder {
 	}
 
 	private static Path search(WorldView world, BlockPos start, Goal goal, Options options) {
-		Planner planner = new Planner(world, options);
+		Planner planner = new Planner(world, options, goal.mayEndAfloat());
 		Map<BlockPos, Double> bestCost = new HashMap<>();
 		PriorityQueue<Entry> open = new PriorityQueue<>((a, b) -> Double.compare(a.priority, b.priority));
 
@@ -93,7 +93,9 @@ public final class PathFinder {
 				continue; // stale queue entry
 			}
 			boolean inWater = world.isWater(node.pos);
-			if ((!inWater || goal.mayEndAfloat() && planner.swimmable(node.pos)) && goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
+			// Afloat in water whose cover the path broke, such as a pond under a lid it dug into, counts as at the surface.
+			boolean afloat = planner.swimmable(node.pos) || inWater && brokenOnTheWay(node, node.pos.above());
+			if ((!inWater || goal.mayEndAfloat() && afloat) && goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
 				return toPath(start, node, true);
 			}
 			expanded++;
@@ -147,12 +149,15 @@ public final class PathFinder {
 	private static final class Planner {
 		private final WorldView world;
 		private final Options options;
+		/** Whether a path may dig down into water (see {@link #digDown}): only one that may end afloat, so others never wade into a hidden pocket. */
+		private final boolean intoWater;
 		/** The node whose moves are being generated; its path so far tells which blocks it placed and broke. */
 		private Node node;
 
-		Planner(WorldView world, Options options) {
+		Planner(WorldView world, Options options, boolean intoWater) {
 			this.world = world;
 			this.options = options;
+			this.intoWater = intoWater;
 		}
 
 		List<Candidate> moves(Node node) {
@@ -275,9 +280,24 @@ public final class PathFinder {
 			return b.build();
 		}
 
+		/**
+		 * Breaks the block underfoot and lands on the one under it, or for a goal that may end afloat drops into water
+		 * under it, such as a pond under a lid, with its head out where the block was.
+		 */
 		private Candidate digDown(BlockPos feet) {
 			BlockPos below = feet.below();
-			if (this.world.isPassable(below) || this.world.isClimbable(below) || !this.canStand(below.below())) {
+			if (this.world.isPassable(below) || this.world.isClimbable(below)) {
+				return null;
+			}
+			if (this.world.isWater(below.below())) {
+				if (!this.intoWater || !this.breakable(below, true)) {
+					return null;
+				}
+				Builder b = new Builder(MoveType.SWIM, below.below(), SWIM_COST + this.world.breakTicks(below) + BREAK_OVERHEAD);
+				b.breaks.add(below);
+				return b.build();
+			}
+			if (!this.canStand(below.below())) {
 				return null;
 			}
 			Builder b = new Builder(MoveType.DIG_DOWN, below, FALL_COST_PER_BLOCK);
@@ -322,12 +342,16 @@ public final class PathFinder {
 			return !this.world.isPassable(pos) && !this.world.isHazard(pos);
 		}
 
-		private boolean breakable(BlockPos pos) {
+		/**
+		 * Whether a path may break the block at {@code pos}: never one beside a fluid, which would flow in, but for
+		 * {@code overWater} one with water only under it, which stays put.
+		 */
+		private boolean breakable(BlockPos pos, boolean overWater) {
 			if (!this.options.canBreak() || this.world.isHazard(pos) || this.world.breakTicks(pos) < 0) {
 				return false;
 			}
 			for (Direction dir : Direction.values()) {
-				if (this.world.isHazard(pos.relative(dir))) {
+				if (this.world.isHazard(pos.relative(dir)) && !(overWater && dir == Direction.DOWN && this.world.isWater(pos.below()))) {
 					return false;
 				}
 			}
@@ -353,7 +377,7 @@ public final class PathFinder {
 				if (Planner.this.climbable(pos)) {
 					return this;
 				}
-				if (Planner.this.breakable(pos)) {
+				if (Planner.this.breakable(pos, false)) {
 					this.breaks.add(pos);
 					this.cost += Planner.this.world.breakTicks(pos) + BREAK_OVERHEAD;
 				} else {
