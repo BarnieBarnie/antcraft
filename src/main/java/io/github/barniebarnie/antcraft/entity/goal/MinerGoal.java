@@ -278,7 +278,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 		if (!job.id().equals(this.tierChecked)) {
 			this.tierChecked = job.id();
-			if (this.getPickaxeFor(level, colony, job.target().getY())) {
+			if (this.getPickaxeFor(level, colony, job)) {
 				return;
 			}
 		}
@@ -376,15 +376,15 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Before mining at height {@code y}, makes sure a good enough pickaxe for the ores the colony
-	 * wants there is coming: orders it, or the step towards it its pickaxe can mine the materials
-	 * for, unless one is in stock or on order, and fetches the best one in the core right away.
+	 * Before mining the branch of {@code job}, makes sure the pickaxe the job declares (see
+	 * {@link PickaxeTier#forBranch(Job, java.util.function.Predicate)}) is coming: orders it, or the step towards it its
+	 * pickaxe can mine the materials for, unless one is in stock or on order, and fetches the best one in the core right away.
 	 * Returns true while it goes to fetch one. Without one it still digs the branch, leaving the ores
 	 * it cannot harvest.
 	 */
-	private boolean getPickaxeFor(ServerLevel level, Colony colony, int y) {
+	private boolean getPickaxeFor(ServerLevel level, Colony colony, Job job) {
 		ToolKind kind = ToolKind.PICKAXE;
-		Item need = PickaxeTier.forLevel(y, Storage.wanted(level, colony));
+		Item need = PickaxeTier.forBranch(job, Storage.wanted(level, colony));
 		Item carried = kind.bestCarried(this.bot);
 		if (kind.rank(carried) >= kind.rank(need)) {
 			return false;

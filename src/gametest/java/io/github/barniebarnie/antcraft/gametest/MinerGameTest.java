@@ -944,16 +944,16 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** The pickaxe the deepest level of {@code shaft} needs, the colony wanting no ore in particular. */
+	/** The pickaxe a branch job at the deepest level of {@code shaft} declares, the colony wanting iron (a stone one). */
 	private static Item need(Mineshaft shaft) {
-		return PickaxeTier.forLevel(shaft.levels().getLast(), item -> false);
+		return PickaxeTier.forBranch(shaft.levels().getLast(), Items.RAW_IRON::equals);
 	}
 
 	/** Its wooden pickaxe harvests no ore, so the miner orders a stone one first, the step to any better one. */
 	@GameTest(maxTicks = 30)
 	public void ordersAGoodEnoughPickaxeBeforeMining(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
-		wantStone(colony);
+		wantStoneAndIron(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
 		AntBot miner = member(helper, colony, 1, 5, 1);
@@ -971,7 +971,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 140)
 	public void takesAGoodEnoughPickaxeFromTheCoreBeforeMining(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
-		wantStone(colony);
+		wantStoneAndIron(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
 		Item need = need(shaft);
