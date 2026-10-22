@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Log config for runGameTest (see build.gradle): only warnings and errors, except the
+     game test framework (summary block, failures; scripts/check.sh parses it), the tick lines
+     of GameTests.logTicks (scripts/ticks.py) and AntCraft's own logger. The line format
+     matches Loom's default, which scripts/check.sh relies on. -->
+<Configuration status="WARN">
+	<Appenders>
+		<Console name="SysOut" target="SYSTEM_OUT">
+			<PatternLayout>
+				<LoggerNamePatternSelector defaultPattern="[%d{HH:mm:ss}] [%t/%level] (%logger{1}) %msg{nolookups}%n">
+					<PatternMatch key="net.minecraft.,com.mojang." pattern="[%d{HH:mm:ss}] [%t/%level] (Minecraft) %msg{nolookups}%n"/>
+				</LoggerNamePatternSelector>
+			</PatternLayout>
+		</Console>
+	</Appenders>
+	<Loggers>
+		<Logger level="info" name="net.minecraft.gametest"/>
+		<Logger level="info" name="AntCraft game tests"/>
+		<Logger level="info" name="antcraft"/>
+		<Root level="warn">
+			<AppenderRef ref="SysOut"/>
+		</Root>
+	</Loggers>
+</Configuration>

@@ -65,6 +65,9 @@ fabricApi {
 // Without the property every game test runs.
 def gameTestFilter = providers.gradleProperty("gameTest")
 tasks.matching { it.name == "runGameTest" }.configureEach {
+	// Only warnings, failures and AntCraft's own lines, so build/check.log stays small.
+	// log4j2.configurationFile wins over the log4j.configurationFile that Loom's launch config sets.
+	jvmArgs "-Dlog4j2.configurationFile=${file('src/gametest/log4j2.xml')}"
 	if (gameTestFilter.isPresent()) {
 		jvmArgs "-Dfabric-api.gametest.filter=${gameTestFilter.get()}"
 	}
