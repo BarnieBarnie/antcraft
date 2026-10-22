@@ -30,6 +30,8 @@ import net.minecraft.world.level.block.BaseFireBlock;
 import net.minecraft.world.level.block.BellBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CaveVinesBlock;
+import net.minecraft.world.level.block.CaveVinesPlantBlock;
 import net.minecraft.world.level.block.CeilingHangingSignBlock;
 import net.minecraft.world.level.block.CocoaBlock;
 import net.minecraft.world.level.block.FaceAttachedHorizontalDirectionalBlock;
@@ -37,6 +39,7 @@ import net.minecraft.world.level.block.FallingBlock;
 import net.minecraft.world.level.block.HangingRootsBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.PointedDripstoneBlock;
 import net.minecraft.world.level.block.RedstoneWallTorchBlock;
 import net.minecraft.world.level.block.SporeBlossomBlock;
 import net.minecraft.world.level.block.TripWireHookBlock;
@@ -44,6 +47,8 @@ import net.minecraft.world.level.block.WallBannerBlock;
 import net.minecraft.world.level.block.WallHangingSignBlock;
 import net.minecraft.world.level.block.WallSignBlock;
 import net.minecraft.world.level.block.WallTorchBlock;
+import net.minecraft.world.level.block.WeepingVinesBlock;
+import net.minecraft.world.level.block.WeepingVinesPlantBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.block.state.properties.BedPart;
@@ -231,15 +236,19 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	/**
 	 * Where the block {@code step} places hangs from, such as a wall torch, ladder, cocoa or button on a wall, or a lantern,
 	 * bell or button under a ceiling: the block it is held by, which must be placed first, among those {@code placed}. A wall
-	 * hanging sign is held by either side; the first {@code placed} one is taken.
+	 * hanging sign or a bell between two walls is held by either side; the first {@code placed} one is taken. Weeping and cave
+	 * vines and dripstone pointing down hang from the block above; twisting vines and dripstone pointing up rest on the block
+	 * below, which the bottom-up order already places first.
 	 */
-	// ponytail: a list of vanilla blocks rather than canSurvive against the planned states; vines, dripstone and modded blocks are not covered.
+	// ponytail: a list of vanilla blocks rather than canSurvive against the planned states; side vines, glow lichen and modded blocks are not covered.
 	static Optional<BlockPos> holder(Step step, Predicate<BlockPos> placed) {
 		BlockState state = step.state();
 		Block block = state.getBlock();
 		BlockPos pos = step.pos();
 		boolean fromCeiling = block instanceof CeilingHangingSignBlock || block instanceof SporeBlossomBlock || block instanceof HangingRootsBlock
 			|| state.hasProperty(BlockStateProperties.HANGING) && state.getValue(BlockStateProperties.HANGING)
+			|| block instanceof WeepingVinesBlock || block instanceof WeepingVinesPlantBlock || block instanceof CaveVinesBlock || block instanceof CaveVinesPlantBlock
+			|| block instanceof PointedDripstoneBlock && state.getValue(PointedDripstoneBlock.TIP_DIRECTION) == Direction.DOWN
 			|| block instanceof BellBlock && state.getValue(BellBlock.ATTACHMENT) == BellAttachType.CEILING
 			|| block instanceof FaceAttachedHorizontalDirectionalBlock && state.getValue(FaceAttachedHorizontalDirectionalBlock.FACE) == AttachFace.CEILING;
 		boolean onWall = block instanceof WallTorchBlock || block instanceof RedstoneWallTorchBlock || block instanceof LadderBlock
@@ -248,6 +257,10 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 		List<BlockPos> holders = fromCeiling ? List.of(pos.above())
 			: !state.hasProperty(BlockStateProperties.HORIZONTAL_FACING) ? List.of()
 			: onWall ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite()))
+			: block instanceof BellBlock && state.getValue(BellBlock.ATTACHMENT) == BellAttachType.SINGLE_WALL
+				? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING)))
+			: block instanceof BellBlock && state.getValue(BellBlock.ATTACHMENT) == BellAttachType.DOUBLE_WALL
+				? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING)), pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getOpposite()))
 			: block instanceof CocoaBlock ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING)))
 			: block instanceof WallHangingSignBlock ? List.of(pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getClockWise()),
 				pos.relative(state.getValue(BlockStateProperties.HORIZONTAL_FACING).getCounterClockWise()))

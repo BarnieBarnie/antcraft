@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BellAttachType;
 import net.minecraft.world.level.block.state.properties.BedPart;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DoorHingeSide;
@@ -184,6 +185,38 @@ class RegionPlanTest {
 		assertPlacedAfter(plan, new BlockPos(0, 3, 0), new BlockPos(0, 2, 0));
 		assertPlacedAfter(plan, new BlockPos(0, 2, 0), new BlockPos(0, 1, 0));
 		assertPlacedAfter(plan, new BlockPos(1, 3, 0), new BlockPos(1, 2, 0));
+	}
+
+	@Test
+	void vinesAndDripstoneHungFromTheCeilingComeAfterTheBlockAbove() {
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		// Weeping vines: a tip under a stem under the ceiling; a cave vine and a pointed dripstone down from the ceiling; twisting
+		// vines grow up from the floor, so the bottom-up order already puts them after the block below.
+		Map<BlockPos, BlockState> world = Map.of(new BlockPos(0, 0, 0), Blocks.WEEPING_VINES.defaultBlockState(),
+			new BlockPos(0, 1, 0), Blocks.WEEPING_VINES_PLANT.defaultBlockState(),
+			new BlockPos(1, 1, 0), Blocks.CAVE_VINES.defaultBlockState(),
+			new BlockPos(2, 1, 0), Blocks.POINTED_DRIPSTONE.defaultBlockState().setValue(BlockStateProperties.VERTICAL_DIRECTION, Direction.DOWN),
+			new BlockPos(3, 1, 0), Blocks.TWISTING_VINES.defaultBlockState());
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(3, 2, 0), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertPlacedAfter(plan, new BlockPos(0, 3, 0), new BlockPos(0, 2, 0));
+		assertPlacedAfter(plan, new BlockPos(0, 2, 0), new BlockPos(0, 1, 0));
+		assertPlacedAfter(plan, new BlockPos(1, 3, 0), new BlockPos(1, 2, 0));
+		assertPlacedAfter(plan, new BlockPos(2, 3, 0), new BlockPos(2, 2, 0));
+		assertPlacedAfter(plan, new BlockPos(3, 1, 0), new BlockPos(3, 2, 0));
+	}
+
+	@Test
+	void aWallBellComesAfterItsWall() {
+		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+		// Across the cell edge at x 3-4: a bell at x 3 hung on the wall at x 4.
+		Map<BlockPos, BlockState> world = Map.of(new BlockPos(3, 0, 0), Blocks.BELL.defaultBlockState()
+			.setValue(BlockStateProperties.BELL_ATTACHMENT, BellAttachType.SINGLE_WALL).setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.EAST));
+
+		BuildPlan plan = RegionPlan.copy(pos -> world.getOrDefault(pos, cobble), new BlockPos(0, 0, 0), new BlockPos(7, 0, 0), new BlockPos(0, 1, 0)).orElseThrow();
+
+		assertPlacedAfter(plan, new BlockPos(4, 1, 0), new BlockPos(3, 1, 0));
 	}
 
 	@Test
