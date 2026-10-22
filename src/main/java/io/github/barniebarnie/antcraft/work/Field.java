@@ -87,7 +87,9 @@ public record Field(BlockPos center) {
 		if (!soil.isEmpty()) {
 			batches.add(new BuildPlan.Batch(clear.size(), steps.size(), batches.isEmpty() ? List.of() : List.of(0)));
 		}
-		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM).inCells());
+		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM,
+			Optional.of(new BoundingBox(this.center.getX() - RADIUS, this.center.getY(), this.center.getZ() - RADIUS,
+				this.center.getX() + RADIUS, this.center.getY(), this.center.getZ() + RADIUS))).inCells());
 	}
 
 	/**

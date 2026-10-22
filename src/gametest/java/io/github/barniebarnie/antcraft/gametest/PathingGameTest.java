@@ -2,6 +2,8 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.Job;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
@@ -438,11 +440,9 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * Ground at y=1..2 that a terraform levels at y=2, with a hill left on it, and a bedrock wall across it but for a gap
-	 * at the far end. Digging under the wall with a golden shovel is quicker than walking round, but the ground is as the
-	 * terraform wants it and no step of it, so nothing would fill the holes: the bot walks round.
+	 * at the far end. Returns the colony that levels it.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
-	public void walksRoundRatherThanDigIntoLevelledGround(GameTestHelper helper) {
+	private static Colony levelledGroundBehindAWall(GameTestHelper helper) {
 		fill(helper, 0, 0, 0, 15, 0, 15, Blocks.STONE);
 		fill(helper, 0, 1, 0, 15, 2, 15, Blocks.DIRT);
 		fill(helper, 8, 3, 0, 8, 5, 14, Blocks.BEDROCK);
@@ -454,6 +454,15 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		int height = helper.absolutePos(new BlockPos(0, 2, 0)).getY();
 		colony.addBuild(Terraform.plan(helper.getLevel()::getBlockState, helper.absolutePos(new BlockPos(0, 1, 0)),
 			helper.absolutePos(new BlockPos(15, 4, 15)), height).orElseThrow());
+		return colony;
+	}
+
+	/**
+	 * A bot with a golden shovel walks past the wall of {@link #levelledGroundBehindAWall}. Digging under the wall is
+	 * quicker than walking round, but the ground is as the terraform wants it and no step of it, so nothing would fill
+	 * the holes: the bot walks round.
+	 */
+	private static void walksRoundTheWall(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 3, 0);
 		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
 		bot.setWalkTarget(helper.absolutePos(new BlockPos(10, 3, 0)));
@@ -466,5 +475,47 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		succeedWhenAt(helper, bot, new BlockPos(10, 3, 0));
+	}
+
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
+	public void walksRoundRatherThanDigIntoLevelledGround(GameTestHelper helper) {
+		levelledGroundBehindAWall(helper);
+		walksRoundTheWall(helper);
+	}
+
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
+	public void walksRoundRatherThanDigIntoGroundLevelledBefore(GameTestHelper helper) {
+		Colony colony = levelledGroundBehindAWall(helper);
+		// The hill dug, and every batch of the terraform done.
+		helper.setBlock(14, 3, 14, Blocks.AIR);
+		colony.postBuildJobs();
+		for (Job job : colony.board().jobs().stream().filter(job -> job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA).toList()) {
+			colony.finishBatch(job.id());
+			colony.board().complete(job.id());
+		}
+		helper.assertTrue(colony.builds().isEmpty(), "the terraform is not done: " + colony.builds());
+		walksRoundTheWall(helper);
+	}
+
+	/**
+	 * A bot with no blocks to pillar on at the bottom of a pit 3 deep in ground a terraform levels: it cannot get out
+	 * without digging into that ground, so it may, from inside it.
+	 */
+	@GameTest(maxTicks = 300)
+	public void getsOutOfAPitInLevelledGround(GameTestHelper helper) {
+		fill(helper, 0, 1, 0, 7, 3, 7, Blocks.DIRT);
+		fill(helper, 3, 1, 3, 3, 3, 3, Blocks.AIR);
+		helper.setBlock(6, 4, 6, Blocks.DIRT);
+		helper.setBlock(7, 4, 7, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(7, 4, 7))).orElseThrow();
+		colony.setStockTargets(List.of());
+		int height = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
+		colony.addBuild(Terraform.plan(helper.getLevel()::getBlockState, helper.absolutePos(new BlockPos(0, 1, 0)),
+			helper.absolutePos(new BlockPos(6, 5, 6)), height).orElseThrow());
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(0, 4, 0)));
+
+		succeedWhenAt(helper, bot, new BlockPos(0, 4, 0));
 	}
 }

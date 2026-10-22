@@ -51,6 +51,8 @@ import org.jspecify.annotations.Nullable;
 /** A colony: its core block (storage), member bots, work radius and job board. */
 public class Colony {
 	public static final int DEFAULT_RADIUS = 32;
+	/** How many finished terraforms' ground the colony keeps at most (see {@link #keepGround}); the oldest is forgotten first. */
+	public static final int MAX_KEPT_GROUND = 32;
 	/** The name of the mineshaft's project. */
 	public static final String MINESHAFT = "mineshaft";
 	/** How often given-up trees and branches are put back up for one more try: a Minecraft day. */
@@ -166,7 +168,8 @@ public class Colony {
 
 	/** What the colony builds and works: the mineshaft, build plans and their progress, the projects they make up, the field and the storage area. */
 	private record Works(Optional<Mineshaft> mineshaft, Map<UUID, BuildPlan> builds, List<Placed> placed, List<Blocked> blockedSteps,
-			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage, List<Project> projects) {
+			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage, List<Project> projects,
+			List<BoundingBox> keptGround) {
 		static final MapCodec<Works> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
 			// Old saves may still have a "quarry"; it is ignored.
 			Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Works::mineshaft),
@@ -177,14 +180,16 @@ public class Colony {
 			Field.CODEC.optionalFieldOf("field").forGetter(Works::field),
 			StorageArea.CODEC.optionalFieldOf("storage").forGetter(Works::storage),
 			// Saves from before projects get a project for each plan.
-			Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(Works::projects)
+			Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(Works::projects),
+			BoundingBox.CODEC.listOf().optionalFieldOf("kept_ground", List.of()).forGetter(Works::keptGround)
 		).apply(i, Works::new));
 	}
 
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
-		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects)))
+		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects),
+			List.copyOf(c.keptGround)))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -202,6 +207,8 @@ public class Colony {
 	private final List<StockTarget> stock;
 	/** The projects the colony works on, in the order they were added; see {@link #projects}. */
 	private final List<Project> projects = new ArrayList<>();
+	/** The ground of finished terraforms, oldest first, which paths leave standing for good (see {@link #keepGround}). */
+	private final List<BoundingBox> keptGround = new ArrayList<>();
 	/** What each project still waits for, by project id, as {@link #planProjects} last found; not saved. */
 	private final Map<UUID, Map<Item, Integer>> waiting = new HashMap<>();
 	/** How many cobblestone stairs the craft jobs at the batches make, as {@link #postStairCrafts} last posted them; not saved. */
@@ -241,6 +248,7 @@ public class Colony {
 		this(basics.id(), basics.core(), basics.members(), basics.board(), basics.radius(), wants.orders(), works.mineshaft(), wants.stock(),
 			works.builds(), works.placed(), works.field(), works.storage(), wants.buildOrders(), works.blockedSteps(), wants.systemOrders(),
 			works.batchStates(), works.projects());
+		this.keptGround.addAll(works.keptGround());
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
@@ -755,6 +763,20 @@ public class Colony {
 		this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst().ifPresent(this::removePlan);
 	}
 
+	/** Drops the finished plan with id {@code id}, keeping its ground, if any, for good (see {@link #keepGround}). */
+	private void finishPlan(UUID id) {
+		this.builds.get(id).ground().ifPresent(ground -> {
+			this.keptGround.removeIf(kept -> ground.isInside(kept.minX(), kept.minY(), kept.minZ())
+				&& ground.isInside(kept.maxX(), kept.maxY(), kept.maxZ()));
+			this.keptGround.add(ground);
+			// ponytail: a cap, oldest out; merge touching boxes if colonies level more than this.
+			if (this.keptGround.size() > MAX_KEPT_GROUND) {
+				this.keptGround.removeFirst();
+			}
+		});
+		this.removePlan(id);
+	}
+
 	private void removePlan(UUID id) {
 		Set<UUID> jobs = new HashSet<>();
 		for (int i = 0; i < this.builds.get(id).batches().size(); i++) {
@@ -794,7 +816,7 @@ public class Colony {
 		this.batchStates.put(job, BatchState.DONE);
 		BuildPlan plan = this.builds.get(batch.plan());
 		if (this.isFinished(batch.plan(), plan)) {
-			this.removePlan(batch.plan());
+			this.finishPlan(batch.plan());
 		} else {
 			this.postBuildJobs();
 		}
@@ -1030,7 +1052,7 @@ public class Colony {
 		this.blockedSteps.clear();
 		// Their steps are no longer kept open.
 		plans.forEach(this.stepSets::remove);
-		plans.stream().filter(id -> this.isFinished(id, this.builds.get(id))).toList().forEach(this::removePlan);
+		plans.stream().filter(id -> this.isFinished(id, this.builds.get(id))).toList().forEach(this::finishPlan);
 		this.postBuildJobs();
 		this.lastSurvey = -1;
 		return count;
@@ -1090,10 +1112,14 @@ public class Colony {
 		return pos -> Territory.inBounds(bounds, pos) && open.stream().anyMatch(set -> set.contains(pos));
 	}
 
-	/** Where paths must not break a block: the ground each terraform with work left levels, as it wants it (see {@link BuildPlan#ground}). */
+	/**
+	 * Where paths must not break a block: the ground each terraform with work left levels, as it wants it (see
+	 * {@link BuildPlan#ground}), and the ground of the last {@link #MAX_KEPT_GROUND} terraforms finished.
+	 */
 	public Predicate<BlockPos> keepGround() {
-		List<BoundingBox> ground = this.builds.entrySet().stream().filter(e -> e.getValue().ground().isPresent() && this.hasWorkLeft(e.getKey(), e.getValue()))
-			.map(e -> e.getValue().ground().orElseThrow()).toList();
+		List<BoundingBox> ground = new ArrayList<>(this.keptGround);
+		this.builds.entrySet().stream().filter(e -> e.getValue().ground().isPresent() && this.hasWorkLeft(e.getKey(), e.getValue()))
+			.map(e -> e.getValue().ground().orElseThrow()).forEach(ground::add);
 		BoundingBox bounds = this.bounds;
 		return pos -> Territory.inBounds(bounds, pos) && ground.stream().anyMatch(box -> box.isInside(pos));
 	}

@@ -34,6 +34,8 @@ public class LevelWorldView implements WorldView {
 	private @Nullable Predicate<BlockPos> keepOpen;
 	/** Ground colonies level, looked up once per view, the first time a path asks. */
 	private @Nullable Predicate<BlockPos> keepGround;
+	/** Where the bot stands, if the caller says: from inside kept ground, the bot may dig its way out (see {@link #from}). */
+	private @Nullable BlockPos from;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
@@ -41,6 +43,15 @@ public class LevelWorldView implements WorldView {
 		this.inventory = inventory;
 		this.hand = hand;
 		this.keep = keep;
+	}
+
+	/**
+	 * This view for a bot standing at {@code feet}. A bot that stands inside ground a colony keeps, such as at the bottom
+	 * of a pit a terraform has yet to fill, may break that ground, so it can dig its way out without blocks to pillar on.
+	 */
+	public LevelWorldView from(BlockPos feet) {
+		this.from = feet;
+		return this;
 	}
 
 	/** Paths place scaffold anywhere but where a colony keeps blocks open (see {@link ColonyManager#keepOpen}), whatever work the bot is on. */
@@ -139,7 +150,9 @@ public class LevelWorldView implements WorldView {
 			return -1;
 		}
 		if (this.keepGround == null) {
-			this.keepGround = ColonyManager.keepGround(this.level);
+			Predicate<BlockPos> ground = ColonyManager.keepGround(this.level);
+			BlockPos feet = this.from;
+			this.keepGround = feet != null && ground.test(feet) ? p -> false : ground;
 		}
 		if (this.keepGround.test(pos)) {
 			return -1;

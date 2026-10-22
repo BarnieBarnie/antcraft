@@ -126,6 +126,14 @@ class FieldTest {
 	}
 
 	@Test
+	void readyingAFieldKeepsTheSoilLayerAsGround() {
+		Field field = new Field(new BlockPos(5, 0, 5));
+		BuildPlan plan = field.plan(pos -> Blocks.STONE.defaultBlockState()).orElseThrow();
+
+		assertEquals(Optional.of(new BoundingBox(3, 0, 3, 7, 0, 7)), plan.ground());
+	}
+
+	@Test
 	void blocksTwoAboveTheSoilAreClearedToo() {
 		Field field = new Field(new BlockPos(5, 0, 5));
 		BlockPos leaves = new BlockPos(4, 2, 4);

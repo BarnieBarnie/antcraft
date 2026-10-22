@@ -1156,4 +1156,44 @@ class ColonyTest {
 		colony.removeBuild(terraform);
 		assertFalse(colony.keepGround().test(new BlockPos(2, 63, 2)), "kept once the terraform is gone");
 	}
+
+	/** A terraform of one dig step at (x, 64, x) over the ground from (x, 60, x) to (x + 3, 63, x + 3). */
+	private static BuildPlan terraformAt(int x) {
+		return new BuildPlan(List.of(BuildPlan.Step.clear(new BlockPos(x, 64, x))), List.of(), BuildPlan.Kind.TERRAFORM,
+			Optional.of(new BoundingBox(x, 60, x, x + 3, 63, x + 3)));
+	}
+
+	private static void finishAll(Colony colony) {
+		colony.postBuildJobs();
+		for (Job job : colony.board().jobs().stream().filter(job -> job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA).toList()) {
+			colony.finishBatch(job.id());
+			colony.board().complete(job.id());
+		}
+	}
+
+	@Test
+	void aFinishedTerraformKeepsItsGroundForGood() {
+		Colony colony = colony();
+		colony.addBuild(terraformAt(0));
+		finishAll(colony);
+		assertTrue(colony.builds().isEmpty(), "not finished");
+
+		assertTrue(colony.keepGround().test(new BlockPos(2, 63, 2)), "forgotten once done");
+		assertFalse(colony.keepGround().test(new BlockPos(2, 64, 2)), "above the height");
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertTrue(loaded.keepGround().test(new BlockPos(2, 63, 2)), "not saved");
+	}
+
+	@Test
+	void theColonyRemembersOnlyTheLatestFinishedTerraforms() {
+		Colony colony = colony();
+		for (int i = 0; i <= Colony.MAX_KEPT_GROUND; i++) {
+			colony.addBuild(terraformAt(i * 10));
+			finishAll(colony);
+		}
+
+		assertFalse(colony.keepGround().test(new BlockPos(0, 60, 0)), "the oldest is still kept");
+		assertTrue(colony.keepGround().test(new BlockPos(10, 60, 10)));
+		assertTrue(colony.keepGround().test(new BlockPos(Colony.MAX_KEPT_GROUND * 10, 60, Colony.MAX_KEPT_GROUND * 10)));
+	}
 }
