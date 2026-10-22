@@ -1138,4 +1138,22 @@ class ColonyTest {
 		colony.finishBatch(build.id());
 		assertFalse(colony.keepOpen().test(inSecond));
 	}
+
+	@Test
+	void keepGroundIsTheGroundOfTerraformsWithWorkLeft() {
+		Colony colony = colony();
+		BuildPlan terraform = new BuildPlan(List.of(BuildPlan.Step.clear(new BlockPos(3, 64, 3))), List.of(), BuildPlan.Kind.TERRAFORM,
+			Optional.of(new BoundingBox(0, 60, 0, 7, 63, 7)));
+		colony.addBuild(terraform);
+		colony.addBuild(plan(Blocks.COBBLESTONE));
+
+		assertTrue(colony.keepGround().test(new BlockPos(7, 60, 0)));
+		assertTrue(colony.keepGround().test(new BlockPos(2, 63, 2)));
+		assertFalse(colony.keepGround().test(new BlockPos(2, 64, 2)), "above the height");
+		assertFalse(colony.keepGround().test(new BlockPos(8, 63, 2)), "beside the box");
+		assertFalse(colony.keepGround().test(PLACED), "a plan that is no terraform");
+
+		colony.removeBuild(terraform);
+		assertFalse(colony.keepGround().test(new BlockPos(2, 63, 2)), "kept once the terraform is gone");
+	}
 }

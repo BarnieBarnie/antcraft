@@ -14,6 +14,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.material.Fluids;
 
 /**
@@ -90,7 +91,9 @@ public final class Terraform {
 			boolean above = digs.get(i).stream().anyMatch(step -> columns.contains(column(step.pos())));
 			add(steps, batches, fills.get(i), above ? List.of(digBatch[i]) : List.of(), false);
 		}
-		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM));
+		Optional<BoundingBox> ground = y < min.getY() ? Optional.empty()
+			: Optional.of(new BoundingBox(min.getX(), min.getY(), min.getZ(), max.getX(), Math.min(y, max.getY()), max.getZ()));
+		return steps.isEmpty() ? Optional.empty() : Optional.of(new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM, ground));
 	}
 
 	private static long column(BlockPos pos) {

@@ -374,10 +374,12 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.reachingSince = now;
 		}
 		this.reachingLast = now;
-		// Water to fill or scoop may be out of reach from every dry spot, such as in the middle of a deep pond: the bot
-		// swims out to it, as a player would, rather than dig into the bank.
+		// Water to fill or scoop may be out of reach from every dry spot, such as in the middle of a deep pond, and so may
+		// a block standing in it, such as one filled in at its surface: the bot swims out to it, as a player would, rather
+		// than dig into the bank.
 		Goal goal = sight ? this.inSight(pos) : new Goal.Reach(pos, REACH);
-		PathFollower.Status status = this.approach(level.getFluidState(pos).isEmpty() ? goal : new Goal.Afloat(goal), pos);
+		boolean wet = !level.getFluidState(pos).isEmpty() || !level.getFluidState(pos.below()).isEmpty();
+		PathFollower.Status status = this.approach(wet ? new Goal.Afloat(goal) : goal, pos);
 		if (status == PathFollower.Status.ARRIVED) {
 			this.reachingSince = now;
 			return true;
@@ -588,7 +590,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Fills the fluid at {@code pos} with a filler block, fetching one from the core first: dirt while
 	 * neither the bot nor the core has a pickaxe, since cobblestone is slow to break by hand (see {@link BuildPlan#waterFiller}).
-	 * While {@code pos} stays taken, it waits, giving up the step at {@code step}, such as the one the fluid is walled off for.
+	 * It fills from the water where no dry spot is in reach (see {@link #reachStep}). While {@code pos} stays taken it
+	 * waits, and gives up the step at {@code step}, such as the one the fluid is walled off for, after a while or once
+	 * {@code pos} is out of reach.
 	 */
 	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, BlockPos step) {
 		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
@@ -599,13 +603,15 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Item item = filler.get();
 		if (this.bot.getInventory().countItem(item) == 0) {
 			this.fetch(level, colony, core, plan, item);
-		} else if (this.near(pos)) {
+		} else if (this.reachStep(level, pos, false)) {
 			BlockState block = Block.byItem(item).defaultBlockState();
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);
 			} else {
 				this.waitForSpot(level, step);
 			}
+		} else if (this.unreachable.contains(pos)) {
+			this.unreachable.add(step);
 		}
 	}
 

@@ -410,6 +410,77 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A mineshaft of no levels at (x, y, z), taken as dug, so the bots have only the terraform to do. */
+	private static void dugShaft(GameTestHelper helper, Colony colony, int x, int y, int z) {
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(x, y, z)), List.of(), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+		colony.setMineshaft(shaft);
+		colony.removeBuild(shaft.plan());
+	}
+
+	/** Fails the test as soon as a block of the dirt round the box from (x1, z1) to (x2, z2), up to {@code top}, is gone. */
+	private static void failIfBankDug(GameTestHelper helper, int x1, int z1, int x2, int z2, int top) {
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, top, 7)) {
+				boolean inside = pos.getX() >= x1 && pos.getX() <= x2 && pos.getZ() >= z1 && pos.getZ() <= z2;
+				if (!inside && !helper.getBlockState(pos).is(Blocks.DIRT)) {
+					helper.fail("dug into the bank at " + pos.toShortString());
+				}
+			}
+		});
+	}
+
+	/**
+	 * A pond 4 wide and 2 deep, its surface 2 below the ground round it, levelled below its surface: no water is in
+	 * reach from the bank, so the builder fills the water at the surface from the water, rather than dig into the bank.
+	 */
+	@GameTest(maxTicks = 750)
+	public void aBuilderClearsASunkenPondFromTheWater(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
+			boolean pond = pos.getX() >= 2 && pos.getX() <= 5 && pos.getZ() >= 2 && pos.getZ() <= 5;
+			helper.setBlock(pos, !pond ? Blocks.DIRT : pos.getY() <= 2 ? Blocks.WATER : Blocks.AIR);
+		}
+		BlockPos corePos = new BlockPos(0, 5, 0);
+		Colony colony = colony(helper, corePos, 6);
+		dugShaft(helper, colony, 0, 5, 7);
+		core(helper, corePos).setItem(0, new ItemStack(Items.DIRT, 64));
+		member(helper, colony, 1, 5, 3).getInventory().addItem(new ItemStack(Items.DIRT, 64));
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(5, 2, 5), 1);
+		failIfBankDug(helper, 2, 2, 5, 5, 4);
+
+		helper.succeedWhen(() -> {
+			assertDry(helper, 2, 1, 2, 5, 4, 5);
+			assertLevel(helper, 2, 2, 5, 5, 1, 4);
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+		});
+	}
+
+	/**
+	 * A pond 4 wide and 2 deep under a stone lid as high as the ground round it, filled up to its lid: there is no
+	 * water to swim in, so the builder digs in to reach it.
+	 */
+	@GameTest(maxTicks = 1100)
+	public void aBuilderDigsInToFillAPondUnderALid(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {
+			boolean pond = pos.getX() >= 2 && pos.getX() <= 5 && pos.getZ() >= 2 && pos.getZ() <= 5;
+			helper.setBlock(pos, !pond ? Blocks.DIRT : pos.getY() <= 2 ? Blocks.WATER : Blocks.STONE);
+		}
+		BlockPos corePos = new BlockPos(0, 4, 0);
+		Colony colony = colony(helper, corePos, 6);
+		dugShaft(helper, colony, 0, 4, 7);
+		core(helper, corePos).setItem(0, new ItemStack(Items.DIRT, 64));
+		member(helper, colony, 1, 4, 3);
+		terraform(helper, colony, new BlockPos(2, 1, 2), new BlockPos(5, 2, 5), 2);
+
+		helper.succeedWhen(() -> {
+			assertDry(helper, 2, 1, 2, 5, 2, 5);
+			for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 5, 2, 5)) {
+				helper.assertTrue(helper.getBlockState(pos).isSolid(), "not filled at " + pos.toShortString());
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "terraform still listed");
+		});
+	}
+
 	@GameTest(maxTicks = 790)
 	public void aRiverEdgeIsFilledAndWalledOff(GameTestHelper helper) {
 		// A bank of ground at y=1..2 along x 0..3, and a river 2 deep at x 4..6 between stone banks.

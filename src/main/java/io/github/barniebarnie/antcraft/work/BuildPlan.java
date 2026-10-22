@@ -60,19 +60,23 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /**
  * What to build, as an ordered list of steps: clear a block, or place a block state. Plain data,
  * so it is saved with the colony and can be made from blueprints. The world itself records the
  * progress: a step is done once the world matches it, so a plan resumes wherever it was left.
+ * A terraform's {@code ground} is the ground it levels, up to the height, which paths leave standing
+ * while the plan has work left, as no step of the plan would fill a hole in ground already right.
  */
-public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
+public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Optional<BoundingBox> ground) {
 	/** Saves from before batches hold only the steps, as one batch. */
 	public static final Codec<BuildPlan> CODEC = Codec.withAlternative(
 		RecordCodecBuilder.create(i -> i.group(
 			Step.CODEC.listOf().fieldOf("steps").forGetter(BuildPlan::steps),
 			Batch.CODEC.listOf().fieldOf("batches").forGetter(BuildPlan::batches),
-			Kind.CODEC.optionalFieldOf("kind", Kind.BUILD).forGetter(BuildPlan::kind)
+			Kind.CODEC.optionalFieldOf("kind", Kind.BUILD).forGetter(BuildPlan::kind),
+			BoundingBox.CODEC.optionalFieldOf("ground").forGetter(BuildPlan::ground)
 		).apply(i, BuildPlan::new)),
 		Step.CODEC.listOf().xmap(BuildPlan::new, BuildPlan::steps));
 
@@ -117,6 +121,10 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 
 	public BuildPlan(List<Step> steps, List<Batch> batches) {
 		this(steps, batches, Kind.BUILD);
+	}
+
+	public BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
+		this(steps, batches, kind, Optional.empty());
 	}
 
 	/** A plan of one batch. */
@@ -166,7 +174,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	/** Batch {@code index} as a plan of its own, of the same kind, to be worked through by one builder. */
 	public BuildPlan batch(int index) {
 		Batch batch = this.batches.get(index);
-		return new BuildPlan(this.steps.subList(batch.from(), batch.to()), List.of(), this.kind);
+		return new BuildPlan(this.steps.subList(batch.from(), batch.to()), List.of(), this.kind, this.ground);
 	}
 
 	/** Columns per side of a cell at most (see {@link #inCells}). */
@@ -231,7 +239,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 			}
 			cellsOf.add(made);
 		}
-		return new BuildPlan(steps, batches, this.kind);
+		return new BuildPlan(steps, batches, this.kind, this.ground);
 	}
 
 	/**

@@ -32,6 +32,8 @@ public class LevelWorldView implements WorldView {
 	private final Set<BlockPos> keep;
 	/** Where colonies want no scaffold, looked up once per view, the first time a path asks. */
 	private @Nullable Predicate<BlockPos> keepOpen;
+	/** Ground colonies level, looked up once per view, the first time a path asks. */
+	private @Nullable Predicate<BlockPos> keepGround;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
@@ -131,8 +133,15 @@ public class LevelWorldView implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		BlockState state = this.level.getBlockState(pos);
-		// Leave containers, other block entities, blocks the caller keeps, what colony builders built and what players build with alone.
+		// Leave containers, other block entities, blocks the caller keeps, what colony builders built, ground a colony
+		// levels and what players build with alone.
 		if (state.hasBlockEntity() || this.keep.contains(pos) || ColonyManager.isProtected(this.level, pos) || isBuilt(state)) {
+			return -1;
+		}
+		if (this.keepGround == null) {
+			this.keepGround = ColonyManager.keepGround(this.level);
+		}
+		if (this.keepGround.test(pos)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));

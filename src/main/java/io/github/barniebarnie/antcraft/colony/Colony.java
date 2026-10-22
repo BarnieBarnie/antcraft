@@ -355,7 +355,7 @@ public class Colony {
 	private BuildPlan unblocked(UUID id, BuildPlan plan) {
 		Set<Integer> blocked = this.blockedBatches(id, plan);
 		return blocked.isEmpty() ? plan : new BuildPlan(IntStream.range(0, plan.batches().size()).filter(i -> !blocked.contains(i))
-			.boxed().flatMap(i -> plan.batch(i).steps().stream()).toList(), List.of(), plan.kind());
+			.boxed().flatMap(i -> plan.batch(i).steps().stream()).toList(), List.of(), plan.kind(), plan.ground());
 	}
 
 	/** The {@link #builds()} without their {@linkplain #blockedBatches blocked batches}, whose materials wait until they are freed. */
@@ -724,7 +724,7 @@ public class Colony {
 			plan.steps().subList(batch.from(), batch.to()).stream().filter(step -> last.get(step.pos()).equals(step)).forEach(steps::add);
 			batches.add(new BuildPlan.Batch(from, steps.size(), batch.needs(), batch.dig()));
 		}
-		return new BuildPlan(steps, batches, plan.kind());
+		return new BuildPlan(steps, batches, plan.kind(), plan.ground());
 	}
 
 	/** The last step of {@code plan} at each position it has a step for. */
@@ -1072,6 +1072,14 @@ public class Colony {
 		open.add(veins);
 		BoundingBox bounds = this.bounds;
 		return pos -> Territory.inBounds(bounds, pos) && open.stream().anyMatch(set -> set.contains(pos));
+	}
+
+	/** Where paths must not break a block: the ground each terraform with work left levels, as it wants it (see {@link BuildPlan#ground}). */
+	public Predicate<BlockPos> keepGround() {
+		List<BoundingBox> ground = this.builds.entrySet().stream().filter(e -> e.getValue().ground().isPresent() && this.hasWorkLeft(e.getKey(), e.getValue()))
+			.map(e -> e.getValue().ground().orElseThrow()).toList();
+		BoundingBox bounds = this.bounds;
+		return pos -> Territory.inBounds(bounds, pos) && ground.stream().anyMatch(box -> box.isInside(pos));
 	}
 
 	/** Forgets placed blocks that are gone or replaced, so the set does not grow for good. {@code world} gives null where it cannot tell. */

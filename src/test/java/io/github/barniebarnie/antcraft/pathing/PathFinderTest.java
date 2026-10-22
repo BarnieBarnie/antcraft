@@ -404,6 +404,19 @@ class PathFinderTest {
 	}
 
 	@Test
+	void anAfloatGoalDigsInWhereThereIsNoWaterToSwimIn() {
+		// A pool under a stone lid as high as the dirt bank: its bottom is out of reach from the lid and the bank,
+		// but not from a spot dug down into the bank beside the lid.
+		GridWorld world = new GridWorld().fill(-10, -3, -10, 10, 1, 10, 'D').fill(-2, -1, -2, 2, 0, 2, 'W').fill(-2, 1, -2, 2, 1, 2, '#')
+			.forbidAllPlacing();
+		Goal.Reach bottom = new Goal.Reach(new BlockPos(1, -1, 0), 4.0);
+		Path path = PathFinder.find(world, new BlockPos(5, 2, 0), new Goal.Afloat(bottom), new PathFinder.Options(true, false, 10_000, 3));
+
+		assertTrue(path.complete(), "no way to it: " + path.steps());
+		assertTrue(path.steps().stream().anyMatch(s -> !s.breaks().isEmpty()), "did not dig: " + path.steps());
+	}
+
+	@Test
 	void walksThroughADoorInAWallWithoutBreakingIt() {
 		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 3, 10, 'B').door(2, 1, 0, Direction.Axis.X);
 		Path path = find(world, new BlockPos(4, 1, 0), FULL);

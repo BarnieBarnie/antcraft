@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.Terraform;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
@@ -399,5 +400,37 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt by the fall"));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 2, 3));
+	}
+
+	/**
+	 * Ground at y=1..2 that a terraform levels at y=2, with a hill left on it, and a bedrock wall across it but for a gap
+	 * at the far end. Digging under the wall with a golden shovel is quicker than walking round, but the ground is as the
+	 * terraform wants it and no step of it, so nothing would fill the holes: the bot walks round.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
+	public void walksRoundRatherThanDigIntoLevelledGround(GameTestHelper helper) {
+		fill(helper, 0, 0, 0, 15, 0, 15, Blocks.STONE);
+		fill(helper, 0, 1, 0, 15, 2, 15, Blocks.DIRT);
+		fill(helper, 8, 3, 0, 8, 5, 14, Blocks.BEDROCK);
+		helper.setBlock(14, 3, 14, Blocks.DIRT);
+		helper.setBlock(15, 3, 15, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(15, 3, 15))).orElseThrow();
+		colony.setRadius(16);
+		colony.setStockTargets(List.of());
+		int height = helper.absolutePos(new BlockPos(0, 2, 0)).getY();
+		colony.addBuild(Terraform.plan(helper.getLevel()::getBlockState, helper.absolutePos(new BlockPos(0, 1, 0)),
+			helper.absolutePos(new BlockPos(15, 4, 15)), height).orElseThrow());
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 3, 0);
+		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(10, 3, 0)));
+
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
+				if (!helper.getBlockState(pos).is(Blocks.DIRT)) {
+					helper.fail("dug a hole in the levelled ground at " + pos.toShortString());
+				}
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(10, 3, 0));
 	}
 }

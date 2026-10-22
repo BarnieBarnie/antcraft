@@ -4,10 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mojang.serialization.JsonOps;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import net.minecraft.SharedConstants;
@@ -16,6 +18,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
@@ -47,6 +50,15 @@ class TerraformTest {
 		}
 		world.put(new BlockPos(2, 2, 0), Blocks.SHORT_GRASS.defaultBlockState());
 		return pos -> world.getOrDefault(pos, AIR);
+	}
+
+	@Test
+	void keepsTheGroundOfTheBoxUpToTheHeight() {
+		BuildPlan plan = Terraform.plan(slope(), new BlockPos(5, 4, 1), new BlockPos(0, 0, 0), 1).orElseThrow();
+
+		assertEquals(Optional.of(new BoundingBox(0, 0, 0, 5, 1, 1)), plan.ground());
+		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, plan).getOrThrow();
+		assertEquals(plan, BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow(), "not saved");
 	}
 
 	@Test

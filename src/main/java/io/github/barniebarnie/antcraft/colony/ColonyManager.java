@@ -165,6 +165,15 @@ public class ColonyManager extends SavedData {
 		return pos -> open.stream().anyMatch(colony -> colony.test(pos));
 	}
 
+	/** Where no path may break a block, for every colony (see {@link Colony#keepGround}). */
+	public static Predicate<BlockPos> keepGround(Level level) {
+		if (!(level instanceof ServerLevel server)) {
+			return pos -> false;
+		}
+		List<Predicate<BlockPos>> ground = get(server).colonies.values().stream().map(Colony::keepGround).toList();
+		return pos -> ground.stream().anyMatch(colony -> colony.test(pos));
+	}
+
 	public List<Colony> all() {
 		return new ArrayList<>(this.colonies.values());
 	}

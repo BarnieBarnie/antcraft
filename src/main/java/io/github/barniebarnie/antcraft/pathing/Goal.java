@@ -22,7 +22,8 @@ public interface Goal {
 	/**
 	 * {@code goal}, reached swimming at the surface too, as a player fills a pond from the water: for a
 	 * block out of reach from every dry spot, such as the bottom of the middle of a deep pond. A path
-	 * to it breaks no blocks, so the bot swims out rather than dig a hole in the bank to get closer.
+	 * to it breaks blocks only where there is no way without (see {@link PathFinder#find}), so the bot
+	 * swims out rather than dig a hole in the bank to get closer.
 	 */
 	record Afloat(Goal goal) implements Goal {
 		@Override
