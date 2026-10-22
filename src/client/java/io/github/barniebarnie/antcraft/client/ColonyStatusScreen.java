@@ -287,7 +287,7 @@ public class ColonyStatusScreen extends Screen {
 			Component blocked = list(status.blocked().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.blocked", blocked), RED));
 		}
-		for (JobType type : List.of(JobType.CHOP_TREE, JobType.MINE_BRANCH)) {
+		for (JobType type : List.of(JobType.CHOP_TREE, JobType.MINE_BRANCH, JobType.MINE_VEIN)) {
 			List<BlockPos> givenUp = status.givenUp(type);
 			if (!givenUp.isEmpty()) {
 				Component positions = list(givenUp.stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());

@@ -194,6 +194,15 @@ class ColonyStatusTest {
 	}
 
 	@Test
+	void listsAGivenUpVeinUnderItsOwnKey() {
+		ColonyStatus status = new ColonyStatus(BlockPos.ZERO, 0, Map.of(), 0, 0, Map.of(), Map.of(), List.of(), List.of(), List.of(), List.of(),
+			List.of(new ColonyStatus.GivenUp(JobType.MINE_VEIN, new BlockPos(4, 30, 4))), new ColonyStatus.Room(1, ColonyStatus.StorageState.READY));
+		assertEquals(List.of(new BlockPos(4, 30, 4)), status.givenUp(JobType.MINE_VEIN));
+		assertEquals("commands.antcraft.colony.given_up_veins", ColonyStatus.givenUpKey(JobType.MINE_VEIN));
+		assertEquals("commands.antcraft.colony.given_up_branches", ColonyStatus.givenUpKey(JobType.MINE_BRANCH));
+	}
+
+	@Test
 	void roundTripsThroughItsStreamCodec() {
 		ColonyStatus status = status();
 		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));

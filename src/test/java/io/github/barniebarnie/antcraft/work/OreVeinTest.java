@@ -42,15 +42,36 @@ class OreVeinTest {
 		vein.forEach(pos -> blocks.put(pos, Blocks.IRON_ORE));
 		JobBoard board = new JobBoard();
 
-		Job job = OreVein.post(board, seen, world(blocks), 5L).orElseThrow();
+		Job job = OreVein.post(board, seen, world(blocks), 5L, item -> true).orElseThrow();
 
 		assertEquals(JobType.MINE_VEIN, job.type());
 		assertEquals(seen, job.target());
 		assertEquals(Set.copyOf(vein), Set.copyOf(job.area()));
 		assertEquals(Optional.of(Items.STONE_PICKAXE), job.tool());
+		// It records the ore it yields, for its priority and to drop it once that is no longer wanted.
+		assertEquals(Optional.of(Items.RAW_IRON), job.item());
 		// Seen again from another of its blocks, it is the same vein.
-		assertTrue(OreVein.post(board, seen.east(2), world(blocks), 6L).isEmpty());
+		assertTrue(OreVein.post(board, seen.east(2), world(blocks), 6L, item -> true).isEmpty());
 		assertEquals(1, board.jobs().size());
+	}
+
+	@Test
+	void onlyAWantedOreGetsAVeinJobAndAnOpenOneIsDroppedOnceItIsNoLongerWanted() {
+		BlockPos seen = new BlockPos(0, 10, 0);
+		Map<BlockPos, Block> blocks = Map.of(seen, Blocks.IRON_ORE, seen.above(5), Blocks.COAL_ORE);
+		JobBoard board = new JobBoard();
+
+		// The colony wants coal, not iron.
+		assertTrue(OreVein.post(board, seen, world(blocks), 5L, Items.COAL::equals).isEmpty());
+		Job coal = OreVein.post(board, seen.above(5), world(blocks), 5L, Items.COAL::equals).orElseThrow();
+		assertEquals(Optional.of(Items.COAL), coal.item());
+
+		// Coal stays wanted while mining is.
+		OreVein.dropUnwanted(board, Items.COAL::equals);
+		assertEquals(List.of(coal), board.jobs());
+		// Mining is no longer wanted: the open vein job comes off the board.
+		OreVein.dropUnwanted(board, item -> false);
+		assertTrue(board.jobs().isEmpty());
 	}
 
 	@Test

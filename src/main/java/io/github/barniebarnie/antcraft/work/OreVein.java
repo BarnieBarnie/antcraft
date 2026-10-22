@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -57,12 +58,23 @@ public final class OreVein {
 	}
 
 	/**
-	 * Posts a job for the vein of the ore at {@code seen}, declaring the pickaxe that harvests it, unless a vein job
-	 * covers any of it already.
+	 * Posts a job for the vein of the ore at {@code seen}, declaring the pickaxe that harvests it and, as its item, the ore it
+	 * yields, if the colony {@code wanted} that ore and no vein job covers any of it already.
 	 */
-	public static Optional<Job> post(JobBoard board, BlockPos seen, Function<BlockPos, BlockState> world, long now) {
+	public static Optional<Job> post(JobBoard board, BlockPos seen, Function<BlockPos, BlockState> world, long now, Predicate<Item> wanted) {
 		Block ore = world.apply(seen).getBlock();
-		return board.post(JobType.MINE_VEIN, seen, of(seen, world, MAX_SIZE), Optional.empty(), now, Optional.of(PickaxeTier.lowestFor(ore)));
+		Item yields = kind(ore);
+		if (!wanted.test(yields)) {
+			return Optional.empty();
+		}
+		return board.post(JobType.MINE_VEIN, seen, of(seen, world, MAX_SIZE), Optional.of(yields), now, Optional.of(PickaxeTier.lowestFor(ore)));
+	}
+
+	/** Takes the open vein jobs off the board whose ore is no longer {@code wanted}; given-up ones stay, so they are not posted anew. */
+	public static void dropUnwanted(JobBoard board, Predicate<Item> wanted) {
+		// A vein job from before it recorded its ore counts as yielding what mining does.
+		board.removeOpenIf(job -> job.type() == JobType.MINE_VEIN && !job.givenUp()
+			&& !job.item().map(wanted::test).orElseGet(() -> Mineshaft.yieldsWanted(wanted)));
 	}
 
 	private static Item kind(Block block) {

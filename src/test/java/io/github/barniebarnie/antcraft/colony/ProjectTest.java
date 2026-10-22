@@ -163,6 +163,27 @@ class ProjectTest {
 			.collect(Collectors.toSet()));
 	}
 
+	/** A vein job yields its own ore only, so it takes the priority of a project waiting for that ore, not for all that mining yields. */
+	@Test
+	void aVeinJobCarriesThePriorityOfTheHighestProjectWaitingForItsOre() {
+		Colony colony = colony();
+		BlockPos iron = new BlockPos(30, 40, 30);
+		BlockPos coal = new BlockPos(30, 50, 30);
+		colony.board().post(JobType.MINE_VEIN, iron, List.of(iron), Optional.of(Items.RAW_IRON), 0L, Optional.of(Items.STONE_PICKAXE));
+		colony.board().post(JobType.MINE_VEIN, coal, List.of(coal), Optional.of(Items.COAL), 0L, Optional.of(Items.WOODEN_PICKAXE));
+		Project wall = colony.addBuild("wall", plan(new BlockPos(12, 64, 12), Blocks.COBBLESTONE));
+		colony.setPriority(wall.id(), 2);
+		// A torch is made of coal.
+		Project torch = colony.addBuild("torch", plan(new BlockPos(14, 64, 14), Blocks.TORCH));
+		colony.setPriority(torch.id(), 1);
+
+		colony.planProjects(pos -> Blocks.AIR.defaultBlockState(), step -> true, Map.of(), tool -> true);
+		colony.prioritizeGatherJobs(Map.of(), book, gatherable);
+		Map<BlockPos, Integer> priorities = colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN)
+			.collect(Collectors.toMap(Job::target, Job::priority));
+		assertEquals(Map.of(iron, 0, coal, 1), priorities);
+	}
+
 	private static Map<BlockPos, Integer> buildPriorities(Colony colony) {
 		return colony.board().jobs().stream().collect(Collectors.toMap(Job::target, Job::priority));
 	}

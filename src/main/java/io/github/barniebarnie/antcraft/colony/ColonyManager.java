@@ -19,6 +19,7 @@ import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.work.OreRevisit;
+import io.github.barniebarnie.antcraft.work.OreVein;
 import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
@@ -226,7 +227,7 @@ public class ColonyManager extends SavedData {
 	/**
 	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}),
 	 * for stock targets or orders, does it pick a mineshaft site and post branch jobs, and order a pickaxe
-	 * when it has none; otherwise the open ones come off the board. It posts a job for each segment with blocks
+	 * when it has none; otherwise the open ones come off the board. Open vein jobs whose ore is no longer wanted come off too. It posts a job for each segment with blocks
 	 * left to dig (see {@link Mineshaft.Branch#segments}) of the branches at one mining level: the deepest dug one
 	 * whose ores the colony wants. Each job needs the pickaxe its level does (see {@link PickaxeTier#forBranch}).
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
@@ -240,6 +241,7 @@ public class ColonyManager extends SavedData {
 		// Plans the open orders, so at most once per survey, and only when needed.
 		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> Storage.wanted(level, colony));
 		Set<BlockPos> posted = new HashSet<>();
+		OreVein.dropUnwanted(colony.board(), wanted.get());
 		// With nothing mining yields wanted, no site is picked and no branch posted, so bots do other work.
 		if (!Mineshaft.yieldsWanted(wanted.get())) {
 			colony.board().removeOpenIf(job -> job.type() == JobType.MINE_BRANCH && !job.givenUp());

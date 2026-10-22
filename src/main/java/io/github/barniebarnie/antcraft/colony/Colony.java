@@ -601,15 +601,18 @@ public class Colony {
 	}
 
 	/**
-	 * Gives the tree and log jobs the priority of the highest project waiting for logs, and the branch and vein jobs that of the
-	 * highest one waiting for what mining yields (see {@link #priorityFor}).
+	 * Gives the tree and log jobs the priority of the highest project waiting for logs, the branch jobs that of the highest one
+	 * waiting for what mining yields, and each vein job that of the highest one waiting for its ore (see {@link #priorityFor}).
 	 */
 	public void prioritizeGatherJobs(Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
 		int trees = this.priorityFor(item -> item.builtInRegistryHolder().is(ItemTags.LOGS), stock, book, gatherable);
 		this.board.prioritize(job -> job.type() == JobType.CHOP_TREE || job.type() == JobType.CHOP_LOG, trees);
-		// ponytail: a vein counts as yielding all that mining does, as its job does not say which ore it is.
+		// A vein job from before it recorded its ore counts as yielding all that mining does.
 		int mine = this.priorityFor(Mineshaft::yields, stock, book, gatherable);
-		this.board.prioritize(job -> job.type() == JobType.MINE_BRANCH || job.type() == JobType.MINE_VEIN, mine);
+		this.board.prioritize(job -> job.type() == JobType.MINE_BRANCH || job.type() == JobType.MINE_VEIN && job.item().isEmpty(), mine);
+		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).flatMap(job -> job.item().stream()).distinct().toList()
+			.forEach(ore -> this.board.prioritize(job -> job.type() == JobType.MINE_VEIN && job.item().equals(Optional.of(ore)),
+				this.priorityFor(ore::equals, stock, book, gatherable)));
 	}
 
 	/**

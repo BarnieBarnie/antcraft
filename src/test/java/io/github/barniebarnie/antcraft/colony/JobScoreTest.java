@@ -136,4 +136,12 @@ class JobScoreTest {
 		assertEquals(4.0, bot(BlockPos.ZERO, List.of(Items.CRAFTING_TABLE), 10, Optional.empty(), NO_FETCH).score(craft).orElseThrow(), 1e-9);
 		assertTrue(bot(BlockPos.ZERO).score(craft).isEmpty());
 	}
+
+	/** A vein job's item is the ore it yields, which nobody has yet: it costs no fetch. */
+	@Test
+	void aVeinJobsItemIsItsOreNotANeed() {
+		Job vein = new Job(UUID.randomUUID(), JobType.MINE_VEIN, new BlockPos(4, 0, 0), Optional.empty(), 0L, List.of(), Optional.of(Items.RAW_IRON),
+			0, 0L, 0L, Optional.of(Items.STONE_PICKAXE), 0);
+		assertTrue(bot(BlockPos.ZERO, List.of(Items.STONE_PICKAXE), 10, Optional.empty(), NO_FETCH).score(vein).isPresent());
+	}
 }

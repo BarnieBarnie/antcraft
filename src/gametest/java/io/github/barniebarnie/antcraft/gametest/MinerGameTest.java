@@ -10,11 +10,14 @@ import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
+import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.OreVein;
 import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
@@ -76,6 +79,12 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	/** The colony wants stone: the colony mines only while it wants something mining yields. */
 	private static void wantStone(Colony colony) {
 		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
+	}
+
+	/** The colony wants stone and iron: a miner posts a vein job only for an ore the colony wants. */
+	private static void wantStoneAndIron(Colony colony) {
+		wantStone(colony);
+		colony.setStockTarget(StockTarget.of(Items.RAW_IRON, 64));
 	}
 
 	private static Container core(GameTestHelper helper, BlockPos core) {
@@ -778,7 +787,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 520)
 	public void stonePickaxeMinesIronOreInTheWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
-		wantStone(colony);
+		wantStoneAndIron(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
 		BlockPos ore = wall(helper, shaft);
@@ -848,7 +857,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 770)
 	public void minerMinesAWholeIronVeinThatShowsOneBlockInABranchWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
-		wantStone(colony);
+		wantStoneAndIron(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
 		List<BlockPos> vein = hidden(helper, shaft, wall(helper, shaft), 5);
@@ -863,11 +872,14 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** Water a vein opens into is walled off before the ore beside it is mined, so it does not flood the vein or the branch. */
-	@GameTest(maxTicks = 610)
-	public void waterAVeinOpensIntoIsWalledOff(GameTestHelper helper) {
+	/**
+	 * Water hidden in the rock beside an ore of a vein, where the miner sees it from nowhere it can stand: like a player,
+	 * it does not wall it off blind, and leaves that ore rather than break into the water.
+	 */
+	@GameTest(maxTicks = 750)
+	public void oreBesideWaterTheMinerCannotSeeIsLeft(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
-		wantStone(colony);
+		wantStoneAndIron(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
 		List<BlockPos> blocks = hidden(helper, shaft, wall(helper, shaft), 3);
@@ -879,10 +891,55 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		miner.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
 
-		helper.onEachTick(() -> vein.forEach(pos -> helper.assertTrue(helper.getLevel().getFluidState(pos).isEmpty(),
-			"water in the vein at " + relative(helper, pos).toShortString())));
+		helper.onEachTick(() -> {
+			vein.forEach(pos -> helper.assertTrue(helper.getLevel().getFluidState(pos).isEmpty(), "water in the vein at " + relative(helper, pos).toShortString()));
+			helper.assertTrue(helper.getLevel().getBlockState(water).is(Blocks.WATER), "hidden water walled off or let out");
+		});
 		helper.succeedWhen(() -> {
-			vein.forEach(pos -> helper.assertTrue(helper.getLevel().getBlockState(pos).isAir(), "iron ore left at " + relative(helper, pos).toShortString()));
+			helper.assertTrue(helper.getLevel().getBlockState(vein.getFirst()).isAir(), "the ore in the wall not mined");
+			helper.assertTrue(helper.getLevel().getBlockState(vein.get(1)).is(Blocks.IRON_ORE), "the ore beside the water mined");
+			helper.assertTrue(colony.board().jobs().stream().anyMatch(job -> job.type() == JobType.MINE_VEIN && job.isOpen() && job.tries() > 0),
+				"vein not given back to retry");
+		});
+	}
+
+	/**
+	 * Water beside the ore of a vein, which the miner cannot see from where it starts: like a player, it walls it off only
+	 * from within reach and in sight of it, walking there first, before the water floods the vein, then mines the ore.
+	 */
+	@GameTest(maxTicks = 160)
+	public void minerWallsOffWaterOnlyOnceItSeesItFromWithinReach(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		wantStoneAndIron(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		// In the wall of a branch of the top level, open to the sky, at its top; the water one further out.
+		List<BlockPos> dug = dugPath(shaft, true);
+		BlockPos cell = shaft.branches(shaft.levels().getFirst()).getFirst().cells().get(2).atY(helper.absolutePos(new BlockPos(0, 4, 0)).getY());
+		Direction out = Direction.Plane.HORIZONTAL.stream().filter(dir -> {
+			BlockPos rel = relative(helper, cell.relative(dir, 2));
+			return !dug.contains(cell.relative(dir)) && !dug.contains(cell.relative(dir, 2)) && rel.getX() >= 0 && rel.getX() < 8 && rel.getZ() >= 0 && rel.getZ() < 8;
+		}).findFirst().orElseThrow();
+		BlockPos ore = cell.relative(out);
+		BlockPos water = ore.relative(out);
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.IRON_ORE.defaultBlockState());
+		helper.getLevel().setBlockAndUpdate(water, Blocks.WATER.defaultBlockState());
+		OreVein.post(colony.board(), ore, helper.getLevel()::getBlockState, helper.getLevel().getGameTime(), item -> true);
+		// The far corner, out of reach of the water.
+		BlockPos far = relative(helper, water);
+		AntBot miner = member(helper, colony, far.getX() < 4 ? 7 : 0, 5, far.getZ() < 4 ? 7 : 0);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+
+		Goal sees = new Goal.InSight(water, 4.0, (feet, target) -> LineOfSight.sees(helper.getLevel(), feet, target));
+		helper.onEachTick(() -> {
+			helper.assertTrue(helper.getLevel().getFluidState(ore).isEmpty(), "water in the vein");
+			if (helper.getLevel().getFluidState(water).isEmpty() && !sees.isReached(miner.blockPosition())) {
+				helper.fail("water walled off out of reach or sight from " + relative(helper, miner.blockPosition()).toShortString());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getBlockState(ore).isAir(), "iron ore not mined");
 			helper.assertTrue(helper.getLevel().getFluidState(water).isEmpty() && !helper.getLevel().getBlockState(water).isAir(), "water not walled off");
 		});
 	}

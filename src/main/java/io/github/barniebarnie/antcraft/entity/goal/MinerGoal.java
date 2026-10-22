@@ -44,7 +44,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Mine work. As the executor of branch jobs for {@link WorkerGoal}, through {@link #begin} and {@link #work},
  * it gets any colony bot to dig a mineshaft branch out, posting a vein job for each ore in its walls its pickaxe
- * can harvest and digging such veins out whole (see {@link OreVein}),
+ * can harvest and the colony wants, and digging such veins out whole (see {@link OreVein}),
  * light it with torches from the core as it goes, and bring the haul to the core; a bot without a pickaxe
  * first takes the best one in the core. Before mining a level it makes sure a pickaxe good enough for the
  * ores the colony wants there is in hand or on its way. When it is full, it leaves what the core does not
@@ -78,6 +78,8 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private @Nullable UUID tierChecked;
 	/** What the core wants of its haul, worked out once per trip to unload. */
 	private @Nullable Predicate<Item> forCore;
+	/** The ores the colony wants, worked out once per job when it first sees an ore (see {@link #postVeins}). */
+	private @Nullable Predicate<Item> oresWanted;
 	/** Whether it left what the core does not want in a landing chest on this trip. */
 	private boolean unloaded;
 	/** The branch job begun through {@link #begin}, until it is done. */
@@ -143,6 +145,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 		this.job = job;
 		this.tierChecked = null;
+		this.oresWanted = null;
 		this.unreachable.clear();
 		this.cooldown = 0;
 		this.enter(State.TOOL);
@@ -302,8 +305,9 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/**
 	 * Digs out the ore vein of the job begun, from the block that showed inwards, walling off with a scaffold block any
-	 * fluid beside an ore before it breaks it. The holes stay open. Completes the job, or gives it back to retry when
-	 * ore is left it could not get at, or wall off for want of blocks.
+	 * fluid beside an ore before it breaks it. Like a player, it walls off only fluid it sees from within reach, walking
+	 * there first; an ore beside fluid it sees from nowhere, such as water hidden in the rock, is left. The holes stay open.
+	 * Completes the job, or gives it back to retry when ore is left it could not get at, or wall off.
 	 */
 	private void mineVein(ServerLevel level, Job job) {
 		List<BlockPos> left = job.area().stream()
@@ -316,8 +320,10 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		BlockPos next = left.getFirst();
 		for (Direction dir : Direction.values()) {
 			BlockPos side = next.relative(dir);
-			if (!level.getFluidState(side).isEmpty() && !this.wallOff(level, side)) {
-				this.unreachable.add(next);
+			if (!level.getFluidState(side).isEmpty()) {
+				if (!this.wallOff(level, side)) {
+					this.unreachable.add(next);
+				}
 				return;
 			}
 		}
@@ -328,29 +334,37 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		this.dig(level, next);
 	}
 
-	/** Fills the fluid at {@code pos} with a scaffold block it carries. Returns false when it has none. */
+	/**
+	 * Walls off the fluid at {@code pos} with a scaffold block it carries, once in reach and sight of it, walking there
+	 * first. Returns false when it cannot: it has no such block or finds no place it sees the fluid from.
+	 */
 	private boolean wallOff(ServerLevel level, BlockPos pos) {
 		int slot = findSlot(this.bot.getInventory(), stack -> stack.is(PathFollower.SCAFFOLD_BLOCKS) && stack.getItem() instanceof BlockItem);
-		if (slot < 0) {
+		PathFollower.Status status = slot < 0 ? PathFollower.Status.FAILED : this.approach(this.inSight(pos), pos);
+		if (status == PathFollower.Status.FAILED) {
 			return false;
 		}
-		ItemStack stack = this.bot.getInventory().getItem(slot);
-		// ponytail: placed from wherever the bot stands, like a builder walling off fluid; walk up to it if that looks wrong.
-		level.setBlockAndUpdate(pos, ((BlockItem) stack.getItem()).getBlock().defaultBlockState());
-		stack.shrink(1);
-		this.bot.getInventory().setChanged();
+		if (status == PathFollower.Status.ARRIVED) {
+			ItemStack stack = this.bot.getInventory().getItem(slot);
+			level.setBlockAndUpdate(pos, ((BlockItem) stack.getItem()).getBlock().defaultBlockState());
+			stack.shrink(1);
+			this.bot.getInventory().setChanged();
+		}
 		return true;
 	}
 
 	/**
 	 * Posts a vein job (see {@link OreVein}) for each ore in the walls and ceiling of what is dug of {@code branch} that
-	 * its pickaxe can harvest: the ores it sees, so no ore out of sight starts one.
+	 * its pickaxe can harvest and the colony wants: the ores it sees, so no ore out of sight starts one.
 	 */
 	private void postVeins(ServerLevel level, Colony colony, Mineshaft.Branch branch) {
 		for (BlockPos side : branch.walls(level::getBlockState)) {
 			BlockState state = level.getBlockState(side);
 			if (OreVein.isOre(state) && this.canHarvest(state) && !ColonyManager.isProtected(level, side)) {
-				OreVein.post(colony.board(), side, level::getBlockState, level.getGameTime());
+				if (this.oresWanted == null) {
+					this.oresWanted = Storage.wanted(level, colony);
+				}
+				OreVein.post(colony.board(), side, level::getBlockState, level.getGameTime(), this.oresWanted);
 			}
 		}
 	}
