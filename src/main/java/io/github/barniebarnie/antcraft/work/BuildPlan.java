@@ -723,7 +723,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 				continue;
 			}
 			Item item = step.item(current);
-			if (step.anySolid() || step.anyStoneStairs() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem) {
+			if (takesAnyItem(step, current, item)) {
 				other = true;
 			} else {
 				items.add(item);
@@ -734,6 +734,28 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			}
 		}
 		return new Needs(!other && items.size() == 1 ? items.stream().findFirst() : Optional.empty(), tool);
+	}
+
+	/** Whether a step left with {@code world} as it is can be done without one particular item: see {@link Needs}. */
+	private static boolean takesAnyItem(Step step, BlockState current, Item item) {
+		return step.anySolid() || step.anyStoneStairs() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem;
+	}
+
+	/**
+	 * Whether a bot could start on the plan now with {@code world} as it is: a step left needs no particular item
+	 * (see {@link Needs}), or places one the colony {@code has}.
+	 */
+	public boolean hasStepFor(Function<BlockPos, BlockState> world, Predicate<Item> has) {
+		for (Step step : this.steps) {
+			BlockState current = world.apply(step.pos());
+			if (!step.isDone(current)) {
+				Item item = step.item(current);
+				if (takesAnyItem(step, current, item) || has.test(item)) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 
 	/** Every item the plan places, with a water bucket for each waterlogged block and one flint and steel for all its fire. */

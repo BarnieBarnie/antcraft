@@ -881,12 +881,14 @@ public class Colony {
 	}
 
 	/**
-	 * Whether an open build or dig job waits for no item the colony lacks: it declares none (see {@link #declareBuildNeeds}),
-	 * or one the colony {@code has}. A bot could take it now.
+	 * Whether a bot could take an open build or dig job now: the item it declares (see {@link #declareBuildNeeds}) is one
+	 * the colony {@code has}, or, declaring none, its batch has a step left with {@code world} as it is that needs no
+	 * particular item or places one the colony has (see {@link BuildPlan#hasStepFor}).
 	 */
-	public boolean hasBuildToDo(Map<Item, Integer> has) {
+	public boolean hasBuildToDo(Function<BlockPos, BlockState> world, Map<Item, Integer> has) {
+		Predicate<Item> held = item -> has.getOrDefault(item, 0) > 0;
 		return this.board.jobs().stream().anyMatch(job -> isBuildJob(job) && job.isOpen() && !job.givenUp()
-			&& job.item().filter(item -> has.getOrDefault(item, 0) <= 0).isEmpty());
+			&& job.item().map(held::test).orElseGet(() -> this.build(job.id()).filter(batch -> batch.hasStepFor(world, held)).isPresent()));
 	}
 
 	/** Whether {@code job} is for a batch of a build plan: a build job, or a dig job of a batch that only clears blocks. */

@@ -264,7 +264,7 @@ public class ColonyManager extends SavedData {
 		}
 		if (colony.mineshaft().isEmpty()) {
 			// Bots do the builds they can first; the shaft starts once only builds waiting for items are left.
-			if (colony.hasBuildToDo(holds)) {
+			if (colony.hasBuildToDo(level::getBlockState, holds)) {
 				return;
 			}
 			// The colony has no shaft yet, so this avoids the field, storage and build plans only.

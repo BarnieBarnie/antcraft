@@ -434,6 +434,30 @@ class ColonyTest {
 		assertTrue(colony.board().jobs().isEmpty(), "given up plan posted again: " + colony.board().jobs());
 	}
 
+	@Test
+	void aBatchOfSeveralItemsHeldNoneOfIsNoBuildToDo() {
+		Colony colony = colony();
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(new BlockPos(1, 64, 1), Blocks.STONE.defaultBlockState()),
+			new BuildPlan.Step(new BlockPos(2, 64, 1), Blocks.DIRT.defaultBlockState()))));
+		colony.postBuildJobs();
+		colony.declareBuildNeeds(AIR);
+		assertFalse(colony.hasBuildToDo(AIR, Map.of()), "holds neither stone nor dirt");
+		assertFalse(colony.hasBuildToDo(AIR, Map.of(Items.OAK_PLANKS, 5)), "holds neither stone nor dirt");
+		assertTrue(colony.hasBuildToDo(AIR, Map.of(Items.DIRT, 1)), "holds the dirt");
+		assertFalse(colony.hasBuildToDo(pos -> pos.getX() == 2 ? Blocks.DIRT.defaultBlockState() : Blocks.AIR.defaultBlockState(), Map.of(Items.DIRT, 1)),
+			"the dirt is placed, the stone is left");
+	}
+
+	@Test
+	void aBatchToDigIsABuildToDoHoldingNothing() {
+		Colony colony = colony();
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(PLACED), new BuildPlan.Step(new BlockPos(1, 64, 1), Blocks.STONE.defaultBlockState()),
+			new BuildPlan.Step(new BlockPos(2, 64, 1), Blocks.DIRT.defaultBlockState()))));
+		colony.postBuildJobs();
+		colony.declareBuildNeeds(world(Blocks.STONE));
+		assertTrue(colony.hasBuildToDo(pos -> pos.equals(PLACED) ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), Map.of()));
+	}
+
 	/** Three one-block batches: stone at (1, 64, 1), dirt at (2, 64, 1) on top of it (needs 0), and planks at (3, 64, 1) on their own. */
 	private static BuildPlan stoneDirtPlanks() {
 		return new BuildPlan(
