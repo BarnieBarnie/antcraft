@@ -326,6 +326,17 @@ class MineshaftTest {
 	}
 
 	@Test
+	void aShaftWithoutBranchesGetsOneASide() {
+		var json = Mineshaft.CODEC.encodeStart(JsonOps.INSTANCE, SPIRAL).getOrThrow().getAsJsonObject();
+		json.addProperty("branches_per_side", 0);
+		Mineshaft loaded = Mineshaft.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(1, loaded.branchesPerSide());
+		assertEquals(SPIRAL.hallWork(6), loaded.hallWork(6));
+		// An old shaft: ColonyManager waits for the end of its hall to be dug.
+		assertEquals(SHAFT.hall(6).getLast(), old(TOP, List.of(6), 0, 3, 4).hall(6).getLast());
+	}
+
+	@Test
 	void siteBesideTheCoreKeepsClearOfStorageAndField() {
 		BlockPos core = new BlockPos(0, 64, 0);
 		List<Integer> levels = List.of(40);
