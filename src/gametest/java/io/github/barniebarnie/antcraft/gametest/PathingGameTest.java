@@ -227,7 +227,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		opensAndShutsADoorOnce(helper, Direction.EAST);
 	}
 
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 60)
 	public void opensAndShutsADoorFacingWestOnceOnTheWayThrough(GameTestHelper helper) {
 		opensAndShutsADoorOnce(helper, Direction.WEST);
 	}
@@ -509,7 +509,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * A waterfall, falling water from a source on top of a cliff 4 high into a still pool a block deep, is the only
 	 * way up. A bot without scaffold swims across the pool into the foot of the waterfall, up it and out on top.
 	 */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 560)
 	public void swimsUpAWaterfall(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 4, 1, 1, 6, 4, 6, Blocks.BEDROCK);

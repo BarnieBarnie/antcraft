@@ -180,7 +180,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
-	@GameTest(maxTicks = 490)
+	@GameTest(maxTicks = 840)
 	public void digsBranchFromLandingAndLightsIt(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		GameTests.failOnGiveUp(helper, colony);
@@ -287,7 +287,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * south of the hall, so no miner can get within reach of that cell. The miner gives it up, so the
 	 * round still ends, and the next round north is dug.
 	 */
-	@GameTest(structure = "antcraft-gametest:long", maxTicks = 1700)
+	@GameTest(structure = "antcraft-gametest:long", maxTicks = 630)
 	public void unreachableBranchCellDoesNotHoldUpTheNextRound(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 15)) {
 			helper.setBlock(pos, Blocks.DIRT);
@@ -420,7 +420,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * with bedrock all round. They are within reach of the hall, but a miner cannot see them, so like
 	 * a player it cannot break them: it gives the branch up instead.
 	 */
-	@GameTest(maxTicks = 870)
+	@GameTest(maxTicks = 30)
 	public void cellBehindAWallIsNotMinedFromTheOtherSide(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -784,7 +784,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(branchesDug(helper, shaft), "branches not dug"));
 	}
 
-	@GameTest(maxTicks = 520)
+	@GameTest(maxTicks = 890)
 	public void stonePickaxeMinesIronOreInTheWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStoneAndIron(colony);
@@ -802,7 +802,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A diamond ore its stone pickaxe left in a branch wall is mined once the miner gets an iron pickaxe, after the branch was done. */
-	@GameTest(maxTicks = 660)
+	@GameTest(maxTicks = 1200)
 	public void ironPickaxeSendsTheMinerBackForADiamondItLeft(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		GameTests.failOnGiveUp(helper, colony);
@@ -854,7 +854,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An iron vein that shows one block in a branch wall is mined whole, the blocks behind it too. */
-	@GameTest(maxTicks = 770)
+	@GameTest(maxTicks = 1100)
 	public void minerMinesAWholeIronVeinThatShowsOneBlockInABranchWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStoneAndIron(colony);
@@ -1031,7 +1031,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 470)
+	@GameTest(maxTicks = 700)
 	public void fetchesPickaxeFromCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);

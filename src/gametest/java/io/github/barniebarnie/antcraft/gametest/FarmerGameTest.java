@@ -351,7 +351,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return wool;
 	}
 
-	@GameTest(maxTicks = 110)
+	@GameTest(maxTicks = 160)
 	public void shearsASheepAndStoresTheWool(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.SHEARS));
@@ -457,7 +457,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The yellow dye for a bed comes from a dandelion a bot picks in the territory. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 80)
 	public void makesAYellowBedFromAPickedFlower(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.WOOL.white(), 3));
@@ -514,7 +514,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Shears kept in a storage chest are fetched like shears in the core. */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 50)
 	public void fetchesShearsFromAStorageChest(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));

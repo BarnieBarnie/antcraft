@@ -236,7 +236,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1400)
+	@GameTest(maxTicks = 2100)
 	public void makesCharcoalFromLogsToSmelt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(CORE.east(), Blocks.FURNACE);

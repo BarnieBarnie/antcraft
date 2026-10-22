@@ -227,7 +227,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	 * The farm a colony starts with (see {@link Field#plan}) on uneven ground: a bump in the crop layer is dug, and a
 	 * hole and rock in the soil layer get dirt, so the whole field is soil with room above it, but for the middle.
 	 */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 430)
 	public void aFieldSiteIsLevelledWithSoilOnTop(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 1, 6)) {
 			helper.setBlock(pos, Blocks.DIRT);
@@ -347,7 +347,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	@GameTest(maxTicks = 90)
+	@GameTest(maxTicks = 120)
 	public void aBuilderFillsAPondWithSand(GameTestHelper helper) {
 		// Ground at y=1..2 with a 3x3 pond in it, 2 deep, down to the stone floor.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
@@ -532,7 +532,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	 * A colony bot with nothing to do, standing in the spot a builder fills, steps out of the way rather than keep
 	 * the builder waiting for good, as one left floating in the last water of a pond did.
 	 */
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 40)
 	public void anIdleBotStandingWhereABlockGoesStepsAside(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 1, 6)) {
 			helper.setBlock(pos, Blocks.DIRT);

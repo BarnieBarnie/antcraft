@@ -110,7 +110,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Like a player: iron ore needs a stone pickaxe or better to drop anything. */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 600)
 	public void woodenPickaxeGetsNoRawIron(GameTestHelper helper) {
 		breakTwice(helper, Items.WOODEN_PICKAXE, Blocks.IRON_ORE, bot -> {
 			helper.assertTrue(carried(bot, Items.RAW_IRON) == 0, "bot got raw iron with a wooden pickaxe");

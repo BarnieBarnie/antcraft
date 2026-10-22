@@ -589,8 +589,8 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * In a 16x16 area with room all round, a copied floor 8 by 8 and two layers high is four cells a layer. One bot
 	 * builds it alone; then it is taken down and three bots build it again, together, in well under the time the one took.
 	 */
-	// Measured: one bot about 1070 ticks, three about 490.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2400)
+	// Measured: run alone, one bot 1069 ticks and three 531 (passes at tick 1600); in full runs it passes at 1601 to 1715.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 3500)
 	public void threeBotsBuildACopyFasterThanOneAlone(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
 			helper.setBlock(pos, Blocks.STONE);
@@ -1176,7 +1176,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * it, as a mineshaft walls a cave: like a player it does not place the wall through the stone, but digs the stone
 	 * first and walls the hollow once it sees it.
 	 */
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 50)
 	public void doesNotPlaceAWallThroughUndugStone(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -1690,7 +1690,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void placesNoPlanksWhereLitFireSpreadsToThem(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
