@@ -93,7 +93,7 @@ public final class PathFinder {
 				closestInWater = inWater;
 			}
 
-			for (Candidate move : planner.moves(node.pos)) {
+			for (Candidate move : planner.moves(node)) {
 				double cost = node.cost + move.cost;
 				if (cost < bestCost.getOrDefault(move.step.to(), BLOCKED)) {
 					bestCost.put(move.step.to(), cost);
@@ -121,13 +121,17 @@ public final class PathFinder {
 	private static final class Planner {
 		private final WorldView world;
 		private final Options options;
+		/** The node whose moves are being generated; its path so far tells which blocks it placed and broke. */
+		private Node node;
 
 		Planner(WorldView world, Options options) {
 			this.world = world;
 			this.options = options;
 		}
 
-		List<Candidate> moves(BlockPos feet) {
+		List<Candidate> moves(Node node) {
+			this.node = node;
+			BlockPos feet = node.pos;
 			List<Candidate> moves = new ArrayList<>();
 			for (Direction dir : Direction.Plane.HORIZONTAL) {
 				this.add(moves, this.walk(feet, dir));
@@ -223,6 +227,9 @@ public final class PathFinder {
 			BlockPos to = feet.above();
 			Builder b = new Builder(MoveType.PILLAR, to, JUMP_COST + PLACE_COST);
 			b.clear(to.above());
+			if (!this.hasFace(feet, b.breaks)) {
+				return null;
+			}
 			b.places.add(feet);
 			return b.build();
 		}
@@ -243,6 +250,35 @@ public final class PathFinder {
 
 		private boolean canStand(BlockPos pos) {
 			return this.world.canStandOn(pos) && !this.world.isHazard(pos);
+		}
+
+		/**
+		 * A block placed at {@code pos} has a face to be placed against, as in vanilla: a side neighbour that is a block,
+		 * not air or fluid. Blocks the path so far placed count; those it broke, or this move breaks first, do not.
+		 */
+		private boolean hasFace(BlockPos pos, List<BlockPos> breaking) {
+			for (Direction dir : Direction.values()) {
+				if (this.solid(pos.relative(dir), breaking)) {
+					return true;
+				}
+			}
+			return false;
+		}
+
+		// ponytail: walks the whole path back per neighbour, only when a block is to be placed; a per-node set if it ever shows in profiles.
+		private boolean solid(BlockPos pos, List<BlockPos> breaking) {
+			if (breaking.contains(pos)) {
+				return false;
+			}
+			for (Node n = this.node; n.step != null; n = n.parent) {
+				if (n.step.places().contains(pos)) {
+					return true;
+				}
+				if (n.step.breaks().contains(pos)) {
+					return false;
+				}
+			}
+			return !this.world.isPassable(pos) && !this.world.isHazard(pos);
 		}
 
 		private boolean breakable(BlockPos pos) {
@@ -299,7 +335,8 @@ public final class PathFinder {
 				if (Planner.this.canStand(pos)) {
 					return this;
 				}
-				if (Planner.this.options.canPlace() && Planner.this.open(pos) && Planner.this.world.mayPlace(pos)) {
+				if (Planner.this.options.canPlace() && Planner.this.open(pos) && Planner.this.world.mayPlace(pos)
+						&& Planner.this.hasFace(pos, this.breaks)) {
 					this.places.add(pos);
 					this.cost += PLACE_COST;
 				} else {

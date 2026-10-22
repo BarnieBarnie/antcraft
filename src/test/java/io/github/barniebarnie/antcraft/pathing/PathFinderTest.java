@@ -421,4 +421,42 @@ class PathFinderTest {
 
 		assertFalse(path.complete(), "went through: " + path.steps());
 	}
+
+	@Test
+	void placesNoBlockTouchingItsSupportOnlyDiagonally() {
+		// Standing on one block in the air, the step up east would place at (1,1,0), which only touches that block at an edge.
+		GridWorld world = new GridWorld().set(0, 0, 0, '#');
+		Path path = find(world, new BlockPos(1, 2, 0), FULL);
+
+		assertTrue(path.complete(), "no way up: " + path.steps());
+		assertEveryPlacementHasAFace(world, path);
+	}
+
+	@Test
+	void placesNoBlockAgainstOneItBreaksFirst() {
+		// The only face (1,1,0) could be placed against is the block the step up east breaks to stand in.
+		GridWorld world = new GridWorld().set(0, 0, 0, '#').set(0, -1, 0, 'B').set(1, 2, 0, 'D');
+		Path path = find(world, new BlockPos(1, 2, 0), FULL);
+
+		assertTrue(path.complete(), "no way up: " + path.steps());
+		assertEveryPlacementHasAFace(world, path);
+	}
+
+	/** Each block the path places has a face to place it against: a block of the world it has not broken, or one it placed before. */
+	private static void assertEveryPlacementHasAFace(GridWorld world, Path path) {
+		java.util.Set<BlockPos> placed = new java.util.HashSet<>();
+		java.util.Set<BlockPos> broken = new java.util.HashSet<>();
+		for (Step step : path.steps()) {
+			broken.addAll(step.breaks());
+			for (BlockPos pos : step.places()) {
+				boolean face = false;
+				for (Direction dir : Direction.values()) {
+					BlockPos n = pos.relative(dir);
+					face |= placed.contains(n) || !broken.contains(n) && !world.isPassable(n) && !world.isHazard(n);
+				}
+				assertTrue(face, "placed " + pos + " against nothing: " + path.steps());
+				placed.add(pos);
+			}
+		}
+	}
 }
