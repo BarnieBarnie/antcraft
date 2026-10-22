@@ -16,6 +16,7 @@ import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.StorageCategory;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -197,10 +198,36 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return Math.clamp(spare, 0, LANDING_TORCHES - held);
 	}
 
+	/**
+	 * What a haul job brings up from {@code chest} for work under way, whatever {@link #haulsFrom} leaves there: what the
+	 * open orders and builds need in the core ({@link Storage#neededInCore}) beyond what the core and storage chests hold,
+	 * up to what the chest holds, so a build opened after a miner left its stone there, or after torches went down, gets
+	 * them. Torches go down only out of what the core holds beyond those needs (see {@link #torchesFor}), so they do not
+	 * go back and forth.
+	 */
+	public static Map<Item, Integer> neededUp(ServerLevel level, Colony colony, Container chest) {
+		Container core = Storage.containerAt(level, colony.core());
+		Map<Item, Integer> up = new LinkedHashMap<>();
+		if (core == null || chest.isEmpty()) {
+			return up;
+		}
+		List<Map<Item, Integer>> stocks = new ArrayList<>(List.of(Storage.stock(core)));
+		Storage.storageChests(level, colony).values().forEach(stored -> stocks.add(Storage.stock(stored)));
+		Map<Item, Integer> stock = StockPlanner.total(stocks);
+		Storage.neededInCore(level, colony, stock).forEach((item, needed) -> {
+			int count = Math.min(needed - stock.getOrDefault(item, 0), chest.countItem(item));
+			if (count > 0) {
+				up.put(item, count);
+			}
+		});
+		return up;
+	}
+
 	/** The mineshaft landing chests a haul job should empty into the core, by position. */
 	public static List<BlockPos> chestsToHaul(ServerLevel level, Colony colony) {
 		return Storage.landingChests(level, colony).entrySet().stream()
-			.filter(chest -> holds(chest.getValue(), haulsFrom(level, colony, chest.getValue())) || torchesFor(level, colony, chest.getValue()) > 0)
+			.filter(chest -> holds(chest.getValue(), haulsFrom(level, colony, chest.getValue())) || torchesFor(level, colony, chest.getValue()) > 0
+				|| !neededUp(level, colony, chest.getValue()).isEmpty())
 			.map(Map.Entry::getKey)
 			.toList();
 	}
@@ -214,7 +241,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Container chest = Storage.containerAt(level, job.target());
 		Container core = Storage.containerAt(level, colony.core());
 		return job.type() == JobType.HAUL && chest != null && core != null && freeSlots(this.bot.getInventory()) > 0
-			&& (freeSlots(core) > 0 && holds(chest, haulsFrom(level, colony, chest)) || torchesFor(level, colony, chest) > 0);
+			&& (freeSlots(core) > 0 && (holds(chest, haulsFrom(level, colony, chest)) || !neededUp(level, colony, chest).isEmpty()) || torchesFor(level, colony, chest) > 0);
 	}
 
 	@Override
@@ -265,6 +292,12 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			} else if (this.reach(job.target())) {
 				// ponytail: torches that do not fit in the chest stay with the bot.
 				this.torches -= Storage.moveItems(inventory, chest, stack -> stack.is(Items.TORCH), this.torches);
+				// ponytail: what the bot carried of these itself, such as a miner's torches, goes into the core with them.
+				neededUp(level, colony.get(), chest).forEach((item, count) -> {
+					if (Storage.moveItems(chest, inventory, stack -> stack.is(item), count) > 0) {
+						this.hauled.add(item);
+					}
+				});
 				Predicate<ItemStack> filter = haulsFrom(level, colony.get(), chest);
 				Storage.moveItems(chest, inventory, stack -> {
 					boolean take = filter.test(stack);

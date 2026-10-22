@@ -725,6 +725,44 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A build opened while the colony's only torches sit in a landing chest gets them brought up, and only what it needs. */
+	@GameTest(maxTicks = 210)
+	public void aBuildGetsTorchesBroughtUpFromALandingChest(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = Storage.containerAt(helper.getLevel(), shaft.landingChest(shaft.levels().getLast()));
+		chest.setItem(0, new ItemStack(Items.TORCH, 16));
+		BlockPos torch = new BlockPos(1, 5, 6);
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(helper.absolutePos(torch), Blocks.TORCH.defaultBlockState()))));
+		member(helper, colony, 1, 5, 1);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.TORCH, torch);
+			helper.assertTrue(chest.countItem(Items.TORCH) == 15, "landing chest holds " + chest.countItem(Items.TORCH) + " torches, not 15");
+		});
+	}
+
+	/** A build opened while the colony's only cobblestone sits in a landing chest, where a miner left it, gets it brought up, and only what it needs. */
+	@GameTest(maxTicks = 210)
+	public void aBuildGetsCobblestoneBroughtUpFromALandingChest(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = Storage.containerAt(helper.getLevel(), shaft.landingChest(shaft.levels().getLast()));
+		chest.setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		BlockPos block = new BlockPos(1, 5, 6);
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(helper.absolutePos(block), Blocks.COBBLESTONE.defaultBlockState()))));
+		member(helper, colony, 1, 5, 1);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.COBBLESTONE, block);
+			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 63, "landing chest holds " + chest.countItem(Items.COBBLESTONE) + " cobblestone, not 63");
+		});
+	}
+
 	/** A tree job posted near a bot that carries a landing chest's load waits until the load is in the core. */
 	@GameTest(maxTicks = 460)
 	public void aBotMidHaulDeliversItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {
