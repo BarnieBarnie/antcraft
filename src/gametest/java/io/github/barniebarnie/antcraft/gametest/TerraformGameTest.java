@@ -7,6 +7,8 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.Farming;
+import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.Terraform;
@@ -217,6 +219,37 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(colony.storage().isPresent(), "no storage area");
 			boolean chest = colony.storage().get().chestSpots().stream().anyMatch(spot -> Storage.containerAt(helper.getLevel(), spot) != null);
 			helper.assertTrue(chest, "no storage chest placed");
+		});
+	}
+
+	/**
+	 * The farm a colony starts with (see {@link Field#plan}) on uneven ground: a bump in the crop layer is dug, and a
+	 * hole and rock in the soil layer get dirt, so the whole field is soil with room above it, but for the middle.
+	 */
+	@GameTest(maxTicks = 1500)
+	public void aFieldSiteIsLevelledWithSoilOnTop(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 1, 6)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		helper.setBlock(3, 2, 3, Blocks.COBBLESTONE);
+		helper.setBlock(5, 1, 5, Blocks.AIR);
+		helper.setBlock(3, 1, 5, Blocks.STONE);
+		Colony colony = colony(helper, CORE, 6);
+		core(helper, CORE).setItem(0, new ItemStack(Items.DIRT, 4));
+		Field field = new Field(helper.absolutePos(new BlockPos(4, 1, 4)));
+		colony.setField(field);
+		colony.addBuild("farm", field.plan(helper.getLevel()::getBlockState).orElseThrow());
+		member(helper, colony, 1, 3);
+		member(helper, colony, 1, 5);
+
+		helper.succeedWhen(() -> {
+			for (BlockPos soil : BlockPos.betweenClosed(2, 1, 2, 6, 1, 6)) {
+				if (!soil.equals(new BlockPos(4, 1, 4))) {
+					helper.assertTrue(Farming.isSoil(helper.getBlockState(soil)), "no soil at " + soil.toShortString() + ": " + helper.getBlockState(soil));
+					helper.assertTrue(Farming.isOpen(helper.getBlockState(soil.above())), "crop layer not clear at " + soil.above().toShortString());
+				}
+			}
+			helper.assertTrue(colony.builds().isEmpty(), "farm still listed");
 		});
 	}
 

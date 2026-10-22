@@ -443,6 +443,22 @@ class ColonyTest {
 	}
 
 	@Test
+	void fillStepsTakeTheCobblestoneTheCoreHasAndOrderDirtOtherwise() {
+		Colony colony = colony();
+		colony.addBuild("level", new BuildPlan(List.of(Terraform.fill(new BlockPos(1, 64, 1)), Terraform.fill(new BlockPos(2, 64, 1)),
+			Terraform.fill(new BlockPos(3, 64, 1))), List.of(new BuildPlan.Batch(0, 3, List.of())), BuildPlan.Kind.TERRAFORM));
+		colony.planProjects(AIR, step -> true, Map.of(Items.COBBLESTONE, 3), tool -> true);
+		assertEquals(Map.of(), colony.ordersFor(Colony.OrderPurpose.BUILD), "enough cobblestone");
+		colony.planProjects(AIR, step -> true, Map.of(Items.COBBLESTONE, 1), tool -> true);
+		assertEquals(Map.of(Items.DIRT, 2), colony.ordersFor(Colony.OrderPurpose.BUILD), "dirt for what the cobblestone does not fill");
+		// A wall of a project above it takes the cobblestone first.
+		Project wall = colony.addBuild("wall", new BuildPlan(List.of(new BuildPlan.Step(new BlockPos(1, 70, 1), Blocks.COBBLESTONE.defaultBlockState()))));
+		colony.setPriority(wall.id(), 5);
+		colony.planProjects(AIR, step -> true, Map.of(Items.COBBLESTONE, 3), tool -> true);
+		assertEquals(Map.of(Items.DIRT, 1), colony.ordersFor(Colony.OrderPurpose.BUILD));
+	}
+
+	@Test
 	void aBlockedBatchAndTheBatchesNeedingItOrderNothing() {
 		Colony colony = colony();
 		BuildPlan plan = stoneDirtPlanks();

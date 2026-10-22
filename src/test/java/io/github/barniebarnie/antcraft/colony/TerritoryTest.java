@@ -17,6 +17,14 @@ class TerritoryTest {
 	}
 
 	@Test
+	void anAreaIsInsideOnlyIfAllOfItIs() {
+		// What /antcraft colony terraform may level: any corner order, any height.
+		assertTrue(TERRITORY.contains(new BlockPos(110, 0, 110), new BlockPos(90, 200, 90)));
+		assertFalse(TERRITORY.contains(new BlockPos(95, 64, 95), new BlockPos(111, 64, 105)), "leaves on one side");
+		assertFalse(TERRITORY.contains(new BlockPos(89, 64, 95), new BlockPos(105, 64, 105)), "leaves on the other");
+	}
+
+	@Test
 	void heightDoesNotMatter() {
 		// Quarries go deep and trees grow tall, both well inside the colony.
 		assertTrue(TERRITORY.contains(new BlockPos(100, -40, 100)));

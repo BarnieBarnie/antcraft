@@ -15,6 +15,7 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.Project;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
+import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -441,6 +442,11 @@ public final class AntCraftCommands {
 		}
 		Optional<Colony> colony = nearestColony(source);
 		if (colony.isEmpty()) {
+			return 0;
+		}
+		// Outside the territory bots do not go, and trees there would be dug out rather than felled.
+		if (!Territory.of(colony.get()).contains(from, to)) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.terraform.outside", colony.get().radius()));
 			return 0;
 		}
 		Optional<BuildPlan> plan = Terraform.plan(source.getLevel()::getBlockState, from, to, y);

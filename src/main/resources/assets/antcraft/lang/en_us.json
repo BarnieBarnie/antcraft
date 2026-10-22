@@ -37,6 +37,7 @@
 	"commands.antcraft.colony.build.line_terraform": "%s. Levelling at %s: %s of %s steps left",
 	"commands.antcraft.colony.terraform.started": "Levelling %s columns at y %s: %s steps (build %s)",
 	"commands.antcraft.colony.terraform.level": "That area is level at y %s already",
+	"commands.antcraft.colony.terraform.outside": "That area leaves the colony's territory, %s blocks around the core",
 	"commands.antcraft.colony.terraform.too_big": "That area holds %s blocks; at most %s can be levelled at once",
 	"commands.antcraft.colony.build.copied": "Copied %s blocks into a build at %s (build %s)",
 	"commands.antcraft.colony.build.loaded": "Loaded structure %s into a build at %s (build %s)",

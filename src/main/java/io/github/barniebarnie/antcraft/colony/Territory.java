@@ -15,6 +15,11 @@ public record Territory(BlockPos core, int radius) {
 		return Math.abs(pos.getX() - this.core.getX()) <= this.radius && Math.abs(pos.getZ() - this.core.getZ()) <= this.radius;
 	}
 
+	/** Whether the whole box between the corners {@code from} and {@code to} is inside: the territory is a square, so both corners are. */
+	public boolean contains(BlockPos from, BlockPos to) {
+		return this.contains(from) && this.contains(to);
+	}
+
 	/** A bot with nothing to do, outside the colony, heads home. A fight or a job in progress is never cut short. */
 	public boolean shouldReturnHome(BlockPos bot, boolean fighting, boolean working) {
 		return !fighting && !working && !this.contains(bot);
