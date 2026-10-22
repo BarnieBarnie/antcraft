@@ -8,6 +8,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.Project;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -32,6 +33,7 @@ class LangKeysTest {
 	/** Key families built at runtime from a prefix and an enum value. */
 	private static final Map<String, List<String>> FAMILIES = Map.of(
 		JobType.KEY_PREFIX, Stream.of(JobType.values()).map(JobType::getSerializedName).toList(),
+		Project.KEY_PREFIX, Project.STARTER,
 		"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
 
 	@Test

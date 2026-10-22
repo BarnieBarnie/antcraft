@@ -19,6 +19,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -232,6 +233,13 @@ class ProjectTest {
 		Mineshaft shaft = shaftNeedingStairs(colony, Map.of(), true);
 		colony.removeBuild(shaft.plan());
 		assertEquals(List.of(), stairCrafts(colony).stream().filter(job -> !job.target().equals(colony.core())).toList());
+	}
+
+	@Test
+	void starterProjectNamesAreTranslatedAndPlayerNamesShownAsTyped() {
+		assertEquals(Component.translatable("project.antcraft.tools"), Project.displayName("tools"));
+		assertEquals(Component.translatable("project.antcraft.mineshaft"), Project.displayName(Colony.MINESHAFT));
+		assertEquals(Component.literal("hut"), Project.displayName("hut"));
 	}
 
 	@Test

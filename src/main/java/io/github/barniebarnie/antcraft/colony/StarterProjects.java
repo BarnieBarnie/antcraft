@@ -43,11 +43,11 @@ public final class StarterProjects {
 		int radius = colony.radius();
 		List<Project> started = new ArrayList<>();
 		List<BoundingBox> avoid = new ArrayList<>();
-		started.add(colony.addProject("tools", DefaultStock.TOOLS));
+		started.add(colony.addProject(Project.TOOLS, DefaultStock.TOOLS));
 		Field.site(core, radius, avoid, world, workable).ifPresent(field -> {
 			colony.setField(field);
 			avoid.add(field.area());
-			field.plan(world).ifPresent(plan -> started.add(colony.addBuild("farm", plan)));
+			field.plan(world).ifPresent(plan -> started.add(colony.addBuild(Project.FARM, plan)));
 		});
 		Mineshaft shaft = Mineshaft.nextTo(core, shaftLevels, avoid, view);
 		started.add(colony.setMineshaft(shaft));
@@ -55,12 +55,12 @@ public final class StarterProjects {
 		StorageArea.site(core, radius, avoid, world, workable).ifPresent(storage -> {
 			colony.setStorage(storage);
 			avoid.add(storage.area());
-			storage.plan(world).ifPresent(plan -> started.add(colony.addBuild("storage", plan)));
+			storage.plan(world).ifPresent(plan -> started.add(colony.addBuild(Project.STORAGE, plan)));
 		});
 		if (house != null) {
 			Sites.box(core, radius - house.getSize().getX(), avoid, house.getSize(), workable)
 				.flatMap(box -> RegionPlan.load(house, new BlockPos(box.minX(), box.minY(), box.minZ()), Mirror.NONE, Rotation.NONE, 0))
-				.ifPresent(plan -> started.add(colony.addBuild("house", plan)));
+				.ifPresent(plan -> started.add(colony.addBuild(Project.HOUSE, plan)));
 		}
 		// The order of the list is the priority: tools first.
 		for (int i = 0; i < started.size(); i++) {

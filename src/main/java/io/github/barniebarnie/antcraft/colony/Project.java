@@ -5,6 +5,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.network.chat.Component;
 
 /**
  * Something the colony wants done, such as "build a hut", made of build plans (by their ids in the colony) and
@@ -12,6 +13,14 @@ import net.minecraft.core.UUIDUtil;
  * {@code priority}, higher first (see {@link JobScore}). It is done once its last plan is and the colony holds its stock.
  */
 public record Project(UUID id, String name, int priority, List<UUID> plans, List<StockTarget> stock) {
+	public static final String TOOLS = "tools";
+	public static final String FARM = "farm";
+	public static final String STORAGE = "storage";
+	public static final String HOUSE = "house";
+	/** The names of the projects a colony starts by itself (see {@link StarterProjects}), which are shown translated. */
+	public static final List<String> STARTER = List.of(TOOLS, FARM, Colony.MINESHAFT, STORAGE, HOUSE);
+	public static final String KEY_PREFIX = "project.antcraft.";
+
 	public static final Codec<Project> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.STRING_CODEC.fieldOf("id").forGetter(Project::id),
 		Codec.STRING.fieldOf("name").forGetter(Project::name),
@@ -23,6 +32,14 @@ public record Project(UUID id, String name, int priority, List<UUID> plans, List
 	public Project {
 		plans = List.copyOf(plans);
 		stock = List.copyOf(stock);
+	}
+
+	/**
+	 * A project name to show: a starter project's translated, any other as typed.
+	 * ponytail: a player project named like a starter one is translated too; mark starter projects if that matters.
+	 */
+	public static Component displayName(String name) {
+		return STARTER.contains(name) ? Component.translatable(KEY_PREFIX + name) : Component.literal(name);
 	}
 
 	public Project(UUID id, String name, int priority, List<UUID> plans) {
