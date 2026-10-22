@@ -266,6 +266,52 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(givenUpAt[0] >= 0 && helper.getTick() - givenUpAt[0] > 200, "hall not given up"));
 	}
 
+	/**
+	 * A dug hall with one branch each side and two rounds of them, bedrock in the walking line of one first-round
+	 * branch: that branch is given up and its second round never posted, while the other side's second round is dug.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1200)
+	public void aBranchWithBedrockInItsWayIsGivenUpAndNotContinued(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 5, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(0, 6, 0));
+		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
+		int y = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
+		// Branches 2 long a round, so both rounds stay in the area.
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(7, 6, 5)), List.of(y), 1, 2, 4, 2);
+		colony.setMineshaft(shaft);
+		for (BuildPlan.Step step : shaft.plan().steps()) {
+			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {
+				helper.getLevel().setBlockAndUpdate(step.pos(), step.state());
+			}
+		}
+		colony.removeBuild(shaft.plan());
+		shaft.hallWork(y).orElseThrow().cells().forEach(cell -> helper.getLevel().setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState()));
+		Mineshaft.Branch blocked = shaft.branches(y, 0).get(0);
+		Mineshaft.Branch blockedNext = shaft.branches(y, 1).get(0);
+		Mineshaft.Branch otherNext = shaft.branches(y, 1).get(1);
+		// The cells run floor, then ceiling: bedrock on the floor of the second block.
+		helper.getLevel().setBlockAndUpdate(blocked.cells().get(2), Blocks.BEDROCK.defaultBlockState());
+		AntBot miner = member(helper, colony, new BlockPos(12, 6, 12));
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(Items.DIRT, 8));
+		helper.onEachTick(() -> {
+			if (blockedNext.segments().stream().anyMatch(segment -> colony.board().has(JobType.MINE_BRANCH, segment.start()))) {
+				helper.fail("the blocked branch continued at " + relative(helper, blockedNext.start()).toShortString());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.board().jobs().stream()
+				.anyMatch(job -> job.type() == JobType.MINE_BRANCH && job.givenUp() && job.target().equals(blocked.start())), "blocked branch not given up");
+			for (BlockPos cell : otherNext.cells()) {
+				BlockState state = helper.getLevel().getBlockState(cell);
+				helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "other branch not continued at " + relative(helper, cell).toShortString());
+			}
+		});
+	}
+
 	/** Every block of the test area that is not air. */
 	private static Set<BlockPos> solid(GameTestHelper helper) {
 		Set<BlockPos> solid = new HashSet<>();

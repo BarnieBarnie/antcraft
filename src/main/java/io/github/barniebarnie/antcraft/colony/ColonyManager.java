@@ -242,7 +242,8 @@ public class ColonyManager extends SavedData {
 	 * A level whose branches are all dug gets the next round of them. While the core has torches,
 	 * every dug segment with a dark torch spot gets a job too, so a miner goes back to light it.
 	 * A branch with a segment whose job was given up, its cells left out of reach, counts as dug: its job stays
-	 * on the board so it is not posted anew, until {@link Colony#recheckGivenUp} puts it back up.
+	 * on the board so it is not posted anew, until {@link Colony#recheckGivenUp} puts it back up. One given up for a
+	 * cell in its way that may not be mined, such as bedrock, is not carried on by later rounds either.
 	 * Once the colony's best pickaxe, among what it {@code holds} and its bots carry, beats the ones it
 	 * had, dug branches whose walls hold wanted ores the new one harvests get a job again (see {@link OreRevisit}).
 	 */
@@ -290,8 +291,12 @@ public class ColonyManager extends SavedData {
 				List<List<Mineshaft.Branch>> stages = new ArrayList<>();
 				shaft.hallWork(y).ifPresent(hall -> stages.add(List.of(hall)));
 				IntStream.range(0, shaft.rounds()).forEach(round -> stages.add(shaft.branches(y, round)));
+				// Branch lines, by index in a round, given up for a cell in the way: nothing beyond it is dug, so no later
+				// round carries them on.
+				Set<Integer> stopped = new HashSet<>();
 				// The first stage with blocks left to dig; the ones before it are dug, so may need lighting.
-				for (List<Mineshaft.Branch> branches : stages) {
+				for (List<Mineshaft.Branch> stage : stages) {
+					List<Mineshaft.Branch> branches = IntStream.range(0, stage.size()).filter(i -> !stopped.contains(i)).mapToObj(stage::get).toList();
 					if (torches) {
 						branches.stream().flatMap(branch -> branch.segments().stream()).filter(segment -> segment.darkTorch(level).isPresent()).forEach(post);
 					}
@@ -303,6 +308,9 @@ public class ColonyManager extends SavedData {
 							work.put(y, left);
 						}
 						break;
+					}
+					if (shaft.hallWork(y).filter(stage::contains).isEmpty()) {
+						IntStream.range(0, stage.size()).filter(i -> givenUp(stage.get(i), givenUp) && blocked(level, stage.get(i))).forEach(stopped::add);
 					}
 				}
 			}
@@ -326,6 +334,11 @@ public class ColonyManager extends SavedData {
 			}
 		}
 		return dug;
+	}
+
+	/** Whether a cell of {@code branch} is in the way and may not be mined, such as bedrock, unlike cells merely out of reach. */
+	private static boolean blocked(ServerLevel level, Mineshaft.Branch branch) {
+		return branch.cells().stream().anyMatch(pos -> !Mining.isMinable(level, pos) && !Mining.isDug(level, pos));
 	}
 
 	/** Whether a segment of {@code branch} was {@code givenUp}: the rest of it cannot be dug either, so it counts as dug. */
