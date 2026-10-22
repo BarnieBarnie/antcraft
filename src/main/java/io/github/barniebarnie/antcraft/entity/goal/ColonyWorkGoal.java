@@ -11,10 +11,12 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
@@ -26,6 +28,7 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.BucketPickup;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
@@ -40,6 +43,8 @@ public abstract class ColonyWorkGoal {
 	protected static final int UPGRADE_CHECK_TICKS = 100;
 	/** How far above and below the core {@link #nearest} looks. */
 	private static final int SCAN_HEIGHT = 4;
+	/** How long a busy bot in the spot of a block steps aside for, enough to walk a block and the block to go in. */
+	private static final int STEP_ASIDE_TICKS = 20;
 
 	protected final AntBot bot;
 	protected final PathFollower follower;
@@ -222,7 +227,8 @@ public abstract class ColonyWorkGoal {
 	 * Whether {@code state} can go at {@code pos} without boxing in a bot or mob standing there,
 	 * as for a player placing a block. If the bot itself is in the way, it steps to the middle of
 	 * its own block, out of the spot. A bot with nothing to do never moves off on its own, such as
-	 * one left floating in the last water of a pond, so one in the way is called over to this bot.
+	 * one left floating in the last water of a pond, so one in the way is called over to this bot. A busy one
+	 * steps aside to a free cell beside it for a moment and then goes on with its work.
 	 */
 	protected boolean isFreeToPlace(ServerLevel level, BlockPos pos, BlockState state) {
 		if (level.isUnobstructed(state, pos, CollisionContext.empty())) {
@@ -232,10 +238,26 @@ public abstract class ColonyWorkGoal {
 			BlockPos feet = this.bot.blockPosition();
 			this.bot.getMoveControl().setWantedPosition(feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, 1.0);
 		}
-		for (AntBot idle : level.getEntitiesOfClass(AntBot.class, new AABB(pos), other -> other != this.bot && isIdle(level, other))) {
-			idle.setWalkTarget(this.bot.blockPosition());
+		AABB spot = new AABB(pos);
+		for (AntBot other : level.getEntitiesOfClass(AntBot.class, spot, other -> other != this.bot)) {
+			if (isIdle(level, other)) {
+				other.setWalkTarget(this.bot.blockPosition());
+			} else {
+				// A walk target would end its job; a nudge leaves its goals running.
+				Direction.Plane.HORIZONTAL.stream().map(other.blockPosition()::relative)
+					.filter(cell -> canStepTo(level, other, cell, spot))
+					.min(Comparator.comparingDouble(cell -> Vec3.atBottomCenterOf(cell).distanceToSqr(other.position())))
+					.ifPresent(cell -> other.stepAside(cell, STEP_ASIDE_TICKS));
+			}
 		}
 		return false;
+	}
+
+	/** Whether {@code bot} can stand in {@code cell}, on a floor and clear of {@code spot}. */
+	private static boolean canStepTo(ServerLevel level, AntBot bot, BlockPos cell, AABB spot) {
+		AABB box = bot.getDimensions(bot.getPose()).makeBoundingBox(Vec3.atBottomCenterOf(cell));
+		return !box.intersects(spot) && level.noCollision(bot, box)
+			&& !level.getBlockState(cell.below()).getCollisionShape(level, cell.below()).isEmpty();
 	}
 
 	/** Neither at work, walking somewhere nor holding a job. */

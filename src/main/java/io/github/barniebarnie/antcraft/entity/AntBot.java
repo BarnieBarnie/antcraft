@@ -82,6 +82,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private int idleTicks;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
 	private int holdAgainstCurrentUntil = -1;
+	/** Where the bot steps aside to until {@link #stepAsideUntil}, whatever its goals want; see {@link #stepAside}. Not saved. */
+	private @Nullable BlockPos stepAsideTo;
+	private int stepAsideUntil = -1;
 	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
 	private final Set<BlockPos> scaffold = new HashSet<>();
 	/**
@@ -198,6 +201,24 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.walkTarget = target;
 		if (target == null) {
 			this.getNavigation().stop();
+		}
+	}
+
+	/**
+	 * Steps to the middle of {@code to} for the next {@code ticks} ticks, over what its goals want, such as out of a
+	 * spot another bot places a block in. Its goals keep running, so it goes back to its work after.
+	 */
+	public void stepAside(BlockPos to, int ticks) {
+		this.stepAsideTo = to;
+		this.stepAsideUntil = this.tickCount + ticks;
+	}
+
+	@Override
+	protected void customServerAiStep(ServerLevel level) {
+		super.customServerAiStep(level);
+		// After the goals and before the move control, so the step aside wins this tick.
+		if (this.stepAsideTo != null && this.tickCount < this.stepAsideUntil) {
+			this.getMoveControl().setWantedPosition(this.stepAsideTo.getX() + 0.5, this.stepAsideTo.getY(), this.stepAsideTo.getZ() + 0.5, 1.0);
 		}
 	}
 

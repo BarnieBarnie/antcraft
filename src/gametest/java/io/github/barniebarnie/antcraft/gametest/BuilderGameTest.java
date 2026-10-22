@@ -57,6 +57,7 @@ import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public class BuilderGameTest implements CustomTestMethodInvoker {
@@ -1526,6 +1527,34 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.runAfterDelay(200, pig::discard);
 		helper.succeedWhen(() -> {
 			helper.assertFalse(pig.isAlive(), "pig still there");
+			assertState(helper, 4, 1, 4, COBBLE);
+		});
+	}
+
+	/**
+	 * A colony bot on a job of its own, standing in the spot of a step: it steps aside for a moment, so the builder
+	 * places the step rather than giving it up as blocked.
+	 */
+	@GameTest(maxTicks = 60)
+	public void aBusyBotStandingWhereABlockGoesStepsAside(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		BlockPos spot = new BlockPos(4, 1, 4);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, COBBLE))));
+		AntBot busy = member(helper, colony, 4, 4);
+		member(helper, colony, 1, 4);
+
+		helper.onEachTick(() -> {
+			// At work on something of its own the whole time, as a bot holding a job is.
+			busy.setWorking(true);
+			if (helper.getBlockState(spot).is(Blocks.COBBLESTONE) && busy.getBoundingBox().intersects(new AABB(helper.absolutePos(spot)))) {
+				helper.fail("placed a block into the busy bot");
+			}
+			if (!colony.blockedSteps().isEmpty()) {
+				helper.fail("step reported blocked: " + colony.blockedSteps());
+			}
+		});
+		helper.succeedWhen(() -> {
 			assertState(helper, 4, 1, 4, COBBLE);
 		});
 	}
