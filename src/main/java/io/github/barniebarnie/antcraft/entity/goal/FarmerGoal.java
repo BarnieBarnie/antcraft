@@ -101,6 +101,8 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private long fleeceUntil;
 	/** The flower the farmer is on its way to pick. */
 	private @Nullable BlockPos flower;
+	/** Flowers the farmer found no spot to see from, skipped until it finds no other. */
+	private final Set<BlockPos> hiddenFlowers = new HashSet<>();
 	private long nextFlowerScan;
 
 	public FarmerGoal(AntBot bot) {
@@ -496,7 +498,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			Predicate<Item>[] wanted = new Predicate[1];
 			this.flower = nearest(level, colony, this.bot.blockPosition(), pos -> {
 				BlockState state = level.getBlockState(pos);
-				if (!state.is(BlockTags.SMALL_FLOWERS)) {
+				if (!state.is(BlockTags.SMALL_FLOWERS) || this.hiddenFlowers.contains(pos)) {
 					return false;
 				}
 				if (wanted[0] == null) {
@@ -505,13 +507,16 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				return wanted[0].test(state.getBlock().asItem());
 			});
 			if (this.flower == null) {
+				// Looked at again on the next scan: a wall may be gone by then.
+				this.hiddenFlowers.clear();
 				return false;
 			}
 		}
 		PathFollower.Status status = this.approach(this.inSight(this.flower), this.flower);
 		if (status == PathFollower.Status.FAILED) {
-			// ponytail: the next scan may pick the same unreachable flower; skip ones that failed if bots get stuck on them.
+			this.hiddenFlowers.add(this.flower);
 			this.flower = null;
+			this.nextFlowerScan = 0;
 			return false;
 		}
 		if (status == PathFollower.Status.ARRIVED && this.breaker.tick(level, this.flower, true)) {

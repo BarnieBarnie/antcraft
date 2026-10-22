@@ -384,6 +384,28 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The nearest dandelion is walled in with bedrock: the farmer gives it up and picks the open one further off instead of going back to it. */
+	@GameTest(maxTicks = 80)
+	public void picksAnOpenFlowerNotAWalledInOne(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WOOL.white(), 3));
+		core(helper).setItem(1, new ItemStack(Items.OAK_PLANKS, 3));
+		BlockPos walledIn = new BlockPos(3, 1, 5);
+		helper.setBlock(walledIn, Blocks.DANDELION);
+		for (BlockPos wall : List.of(walledIn.west(), walledIn.east(), walledIn.north(), walledIn.south(), walledIn.above())) {
+			helper.setBlock(wall, Blocks.BEDROCK);
+		}
+		BlockPos open = new BlockPos(6, 1, 6);
+		helper.setBlock(open, Blocks.DANDELION);
+		colony.addOrder(Items.BED.yellow(), 1);
+		farmer(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.DANDELION, walledIn);
+			helper.assertBlockNotPresent(Blocks.DANDELION, open);
+		});
+	}
+
 	/** Shears kept in a storage chest are fetched like shears in the core. */
 	@GameTest(maxTicks = 400)
 	public void fetchesShearsFromAStorageChest(GameTestHelper helper) {
