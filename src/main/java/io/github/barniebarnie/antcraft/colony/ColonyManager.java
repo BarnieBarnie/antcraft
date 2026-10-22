@@ -482,6 +482,7 @@ public class ColonyManager extends SavedData {
 			this.surveyStock(level, colony);
 			this.surveyCoreJobs(level, colony);
 			this.surveyTrees(level, colony, trees);
+			colony.prioritizeGatherJobs(Storage.held(level, colony), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable);
 		}
 	}
 }

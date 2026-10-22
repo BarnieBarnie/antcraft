@@ -39,6 +39,7 @@ import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Items;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -595,6 +596,37 @@ public class Colony {
 			});
 		}
 		crafts.forEach(item -> this.board.postFor(JobType.CRAFT, this.core, item, Optional.empty(), priorities.getOrDefault(item, 0)));
+	}
+
+	/**
+	 * Gives the tree and log jobs the priority of the highest project waiting for logs, and the branch and vein jobs that of the
+	 * highest one waiting for what mining yields (see {@link #priorityFor}).
+	 */
+	public void prioritizeGatherJobs(Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		int trees = this.priorityFor(item -> item.builtInRegistryHolder().is(ItemTags.LOGS), stock, book, gatherable);
+		this.board.prioritize(job -> job.type() == JobType.CHOP_TREE || job.type() == JobType.CHOP_LOG, trees);
+		// ponytail: a vein counts as yielding all that mining does, as its job does not say which ore it is.
+		int mine = this.priorityFor(Mineshaft::yields, stock, book, gatherable);
+		this.board.prioritize(job -> job.type() == JobType.MINE_BRANCH || job.type() == JobType.MINE_VEIN, mine);
+	}
+
+	/**
+	 * The priority of the highest project waiting for an item that is {@code wanted}, or for something {@link TaskPlanner}
+	 * plans to make or gather it from with {@code stock} and {@code book}; 0 if none is.
+	 */
+	public int priorityFor(Predicate<Item> wanted, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		for (Project project : this.projects()) {
+			for (Map.Entry<Item, Integer> waits : this.waiting.getOrDefault(project.id(), Map.of()).entrySet()) {
+				Map<Item, Integer> available = new HashMap<>(stock);
+				available.remove(waits.getKey());
+				TaskPlanner.Plan<Item> plan = TaskPlanner.plan(waits.getKey(), waits.getValue(), available, book, gatherable);
+				if (wanted.test(waits.getKey()) || plan.toGather().keySet().stream().anyMatch(wanted)
+						|| plan.crafts().stream().anyMatch(craft -> wanted.test(craft.recipe().output()))) {
+					return project.priority();
+				}
+			}
+		}
+		return 0;
 	}
 
 	/** Where each batch of {@code plan} with steps is known by on the board. */

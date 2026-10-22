@@ -8,6 +8,7 @@ import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.TreeScanner;
 import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.HashSet;
 import java.util.List;
@@ -130,6 +131,36 @@ class ProjectTest {
 		Map<Item, Integer> crafts = craftJobs(colony);
 		assertEquals(3, crafts.get(Items.CRAFTING_TABLE), crafts.toString());
 		assertEquals(5, crafts.get(Items.OAK_PLANKS), crafts.toString());
+	}
+
+	@Test
+	void gatherJobsCarryThePriorityOfTheHighestProjectWaitingForWhatTheyYield() {
+		Colony colony = colony();
+		Project low = colony.addBuild("shed", plan(new BlockPos(5, 64, 5), Blocks.OAK_PLANKS));
+		Project high = colony.addBuild("hut", plan(new BlockPos(9, 64, 9), Blocks.CRAFTING_TABLE));
+		colony.setPriority(low.id(), 1);
+		colony.setPriority(high.id(), 3);
+		List<BlockPos> trunk = List.of(new BlockPos(20, 64, 20), new BlockPos(20, 65, 20));
+		colony.board().postTree(new TreeScanner.Tree(trunk.getFirst(), trunk), Optional.empty());
+		colony.board().post(JobType.MINE_BRANCH, new BlockPos(30, 40, 30), List.of(new BlockPos(30, 40, 30)), Optional.empty(), 0L,
+			Optional.of(Items.WOODEN_PICKAXE));
+
+		// Both wait for planks, made of logs; nothing waits for what a branch yields.
+		colony.planProjects(pos -> Blocks.AIR.defaultBlockState(), step -> true, Map.of(), tool -> true);
+		colony.prioritizeGatherJobs(Map.of(), book, gatherable);
+		Map<JobType, Set<Integer>> priorities = colony.board().jobs().stream()
+			.collect(Collectors.groupingBy(Job::type, Collectors.mapping(Job::priority, Collectors.toSet())));
+		assertEquals(Set.of(3), priorities.get(JobType.CHOP_TREE), priorities.toString());
+		assertEquals(Set.of(3), priorities.get(JobType.CHOP_LOG), priorities.toString());
+		assertEquals(Set.of(0), priorities.get(JobType.MINE_BRANCH), priorities.toString());
+
+		// A project waiting for cobblestone gives the branch its priority.
+		Project wall = colony.addBuild("wall", plan(new BlockPos(12, 64, 12), Blocks.COBBLESTONE));
+		colony.setPriority(wall.id(), 2);
+		colony.planProjects(pos -> Blocks.AIR.defaultBlockState(), step -> true, Map.of(), tool -> true);
+		colony.prioritizeGatherJobs(Map.of(), book, gatherable);
+		assertEquals(Set.of(2), colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH).map(Job::priority)
+			.collect(Collectors.toSet()));
 	}
 
 	private static Map<BlockPos, Integer> buildPriorities(Colony colony) {

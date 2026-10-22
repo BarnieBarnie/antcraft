@@ -293,6 +293,11 @@ public class JobBoard {
 		this.jobs.removeIf(job -> job.isOpen() && filter.test(job));
 	}
 
+	/** Gives the jobs that match {@code which}, claimed or not, {@code priority}. */
+	public void prioritize(Predicate<Job> which, int priority) {
+		List.copyOf(this.jobs).stream().filter(which).forEach(job -> this.prioritize(job, priority));
+	}
+
 	private void prioritize(Job job, int priority) {
 		if (job.priority() != priority) {
 			this.replace(job, job.withPriority(priority));

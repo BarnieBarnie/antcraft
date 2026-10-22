@@ -612,6 +612,11 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	private static final Set<Item> YIELDS = Set.of(Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.GRANITE, Items.DIORITE, Items.ANDESITE,
 		Items.TUFF, Items.COAL, Items.RAW_COPPER, Items.RAW_IRON, Items.LAPIS_LAZULI, Items.RAW_GOLD, Items.REDSTONE, Items.DIAMOND, Items.EMERALD);
 
+	/** Whether digging a branch or vein yields {@code item}. */
+	public static boolean yields(Item item) {
+		return YIELDS.contains(item);
+	}
+
 	/** Whether the colony wants anything mining yields, so the mine is worked at all. */
 	public static boolean yieldsWanted(Predicate<Item> wanted) {
 		return YIELDS.stream().anyMatch(wanted);
