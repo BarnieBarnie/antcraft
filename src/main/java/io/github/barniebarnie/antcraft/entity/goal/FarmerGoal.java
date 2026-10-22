@@ -90,6 +90,8 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private final Set<BlockPos> hiddenGrass = new HashSet<>();
 	/** Water the farmer is filling its bucket at. */
 	private @Nullable BlockPos water;
+	/** Water the farmer found no spot to see from, skipped until it finds no other. */
+	private final Set<BlockPos> hiddenWater = new HashSet<>();
 	private long nextWaterScan;
 	/** The sheep the farmer is on its way to shear. */
 	private @Nullable Sheep sheep;
@@ -302,7 +304,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		SimpleContainer inventory = this.bot.getInventory();
 		int full = findSlot(inventory, stack -> stack.is(Items.WATER_BUCKET));
 		if (full >= 0) {
-			if (this.reach(center)) {
+			if (this.inSightOf(center) == PathFollower.Status.ARRIVED) {
 				this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 				level.setBlockAndUpdate(center, Blocks.WATER.defaultBlockState());
 				inventory.setItem(full, new ItemStack(Items.BUCKET));
@@ -328,7 +330,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return false;
 	}
 
-	/** Walks to the nearest water source and fills the bucket in {@code slot}; false when there is no water to fill it at. */
+	/** Walks to where it sees the nearest water source it can, and fills the bucket in {@code slot}; false when there is no water to fill it at. */
 	private boolean fillBucket(ServerLevel level, Colony colony, int slot) {
 		if (this.water == null || !isWaterSource(level.getBlockState(this.water))) {
 			this.water = null;
@@ -336,12 +338,19 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				return false;
 			}
 			this.nextWaterScan = level.getGameTime() + WATER_SCAN_TICKS;
-			this.water = nearest(level, colony, this.bot.blockPosition(), pos -> isWaterSource(level.getBlockState(pos)));
+			this.water = nearest(level, colony, this.bot.blockPosition(), pos -> isWaterSource(level.getBlockState(pos)) && !this.hiddenWater.contains(pos));
 			if (this.water == null) {
+				// Looked at again on the next scan: a wall may be gone by then.
+				this.hiddenWater.clear();
 				return false;
 			}
 		}
-		if (this.reach(this.water)) {
+		PathFollower.Status status = this.inSightOf(this.water);
+		if (status == PathFollower.Status.FAILED) {
+			this.hiddenWater.add(this.water);
+			this.water = null;
+			this.nextWaterScan = 0;
+		} else if (status == PathFollower.Status.ARRIVED) {
 			this.scoop(level, this.water, slot);
 			this.water = null;
 		}
@@ -411,8 +420,11 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.sheep = null;
 			return false;
 		}
-		if (this.bot.distanceToSqr(this.sheep) > SHEAR_REACH * SHEAR_REACH) {
-			if (this.travel(new Goal.Near(this.sheep.blockPosition(), 1)) == PathFollower.Status.FAILED) {
+		boolean inSight = this.bot.hasLineOfSight(this.sheep);
+		if (this.bot.distanceToSqr(this.sheep) > SHEAR_REACH * SHEAR_REACH || !inSight) {
+			PathFollower.Status status = this.travel(new Goal.Near(this.sheep.blockPosition(), 1));
+			// Next to it but not in sight of it, as through a fence or glass: a player could not shear it from there either.
+			if (status == PathFollower.Status.FAILED || status == PathFollower.Status.ARRIVED && !inSight) {
 				this.sheep = null;
 				this.cooldown = IDLE_TICKS;
 			}

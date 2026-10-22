@@ -265,6 +265,36 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The nearest water is walled in, bedrock over it and dirt round it, within reach of the ground: like a player,
+	 * the farmer does not fill its bucket there through the wall, but at the open water further off.
+	 */
+	@GameTest(maxTicks = 140)
+	public void fillsItsBucketAtOpenWaterNotWalledInWater(GameTestHelper helper) {
+		BlockPos walledIn = new BlockPos(6, 0, 2);
+		helper.setBlock(walledIn, Blocks.WATER);
+		helper.setBlock(walledIn.above(), Blocks.BEDROCK);
+		BlockPos open = new BlockPos(7, 0, 7);
+		helper.setBlock(open, Blocks.WATER);
+		Colony colony = colony(helper);
+		wantWheat(colony);
+		colony.setField(new Field(helper.absolutePos(new BlockPos(2, 0, 4))));
+		AntBot bot = farmer(helper, colony);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 32));
+		bot.getInventory().addItem(new ItemStack(Items.BUCKET));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(walledIn).is(Blocks.WATER)) {
+				helper.fail("filled its bucket at the walled-in water through the bedrock");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getBlockState(colony.field().get().center()).is(Blocks.WATER), "no water in the middle");
+			helper.assertBlockNotPresent(Blocks.WATER, open);
+		});
+	}
+
 	@GameTest(maxTicks = 400)
 	public void ordersABucketAndTheFieldWaterWaits(GameTestHelper helper) {
 		Colony colony = colony(helper);
@@ -311,6 +341,31 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(wool(core(helper)) > 0, "no wool in the core");
 			helper.assertTrue(carried(bot, Items.SHEARS) == 1, "farmer did not keep the shears");
 		});
+	}
+
+	/** A sheep in a bedrock pen two high, the farmer with shears just outside it, within shearing reach: like a player, it does not shear through the wall. */
+	@GameTest(maxTicks = 200)
+	public void leavesASheepBehindAWallAlone(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		Sheep sheep = sheep(helper);
+		for (int x = 4; x <= 6; x++) {
+			for (int z = 4; z <= 6; z++) {
+				if (x != 5 || z != 5) {
+					helper.setBlock(x, 1, z, Blocks.BEDROCK);
+					helper.setBlock(x, 2, z, Blocks.BEDROCK);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 3);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.getInventory().addItem(new ItemStack(Items.SHEARS));
+
+		helper.onEachTick(() -> {
+			if (sheep.isSheared()) {
+				helper.fail("sheared the sheep through the bedrock");
+			}
+		});
+		helper.runAfterDelay(150, helper::succeed);
 	}
 
 	/** The yellow dye for a bed comes from a dandelion a bot picks in the territory. */
