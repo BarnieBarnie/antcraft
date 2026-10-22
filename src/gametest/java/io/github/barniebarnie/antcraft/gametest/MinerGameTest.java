@@ -931,7 +931,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		miner.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
 
-		Goal sees = new Goal.InSight(water, 4.0, (feet, target) -> LineOfSight.sees(helper.getLevel(), feet, target));
+		Goal sees = new Goal.InSight(water, 4.0, (feet, target, broken) -> LineOfSight.sees(helper.getLevel(), feet, target, broken));
 		helper.onEachTick(() -> {
 			helper.assertTrue(helper.getLevel().getFluidState(ore).isEmpty(), "water in the vein");
 			if (helper.getLevel().getFluidState(water).isEmpty() && !sees.isReached(miner.blockPosition())) {

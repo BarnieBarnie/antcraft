@@ -89,7 +89,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	public MinerGoal(AntBot bot) {
 		super(bot);
-		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
+		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
 	}
 
 	/**

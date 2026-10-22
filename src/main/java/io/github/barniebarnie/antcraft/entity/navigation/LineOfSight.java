@@ -1,10 +1,16 @@
 package io.github.barniebarnie.antcraft.entity.navigation;
 
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -21,8 +27,37 @@ public final class LineOfSight {
 	private LineOfSight() {
 	}
 
-	/** Whether a bot standing at {@code feet}, in the middle of the block, sees {@code target}. */
-	public static boolean sees(BlockGetter level, BlockPos feet, BlockPos target) {
+	/**
+	 * Whether a bot standing at {@code feet}, in the middle of the block, sees {@code target}, with the blocks
+	 * {@code broken} tests true for as air, such as those a path breaks on its way there.
+	 */
+	public static boolean sees(BlockGetter world, BlockPos feet, BlockPos target, Predicate<BlockPos> broken) {
+		BlockGetter level = new BlockGetter() {
+			@Override
+			public BlockEntity getBlockEntity(BlockPos pos) {
+				return broken.test(pos) ? null : world.getBlockEntity(pos);
+			}
+
+			@Override
+			public BlockState getBlockState(BlockPos pos) {
+				return broken.test(pos) ? Blocks.AIR.defaultBlockState() : world.getBlockState(pos);
+			}
+
+			@Override
+			public FluidState getFluidState(BlockPos pos) {
+				return broken.test(pos) ? Fluids.EMPTY.defaultFluidState() : world.getFluidState(pos);
+			}
+
+			@Override
+			public int getHeight() {
+				return world.getHeight();
+			}
+
+			@Override
+			public int getMinY() {
+				return world.getMinY();
+			}
+		};
 		Vec3 eyes = new Vec3(feet.getX() + 0.5, feet.getY() + Goal.Reach.EYE_HEIGHT, feet.getZ() + 0.5);
 		Vec3 middle = Vec3.atCenterOf(target);
 		if (clear(level, eyes, middle, target)) {

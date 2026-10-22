@@ -1,9 +1,18 @@
 package io.github.barniebarnie.antcraft.pathing;
 
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 
 public interface Goal {
 	boolean isReached(BlockPos feet);
+
+	/**
+	 * Whether the goal is reached at {@code feet} once the blocks {@code broken} tests true for are gone, such as those
+	 * a path broke on its way there. Only sight cares (see {@link InSight}).
+	 */
+	default boolean isReached(BlockPos feet, Predicate<BlockPos> broken) {
+		return this.isReached(feet);
+	}
 
 	/** Estimated cost to reach the goal, in the same units as {@link PathFinder} move costs. */
 	double heuristic(BlockPos feet);
@@ -29,6 +38,11 @@ public interface Goal {
 		@Override
 		public boolean isReached(BlockPos feet) {
 			return this.goal.isReached(feet);
+		}
+
+		@Override
+		public boolean isReached(BlockPos feet, Predicate<BlockPos> broken) {
+			return this.goal.isReached(feet, broken);
 		}
 
 		@Override
@@ -68,10 +82,13 @@ public interface Goal {
 		}
 	}
 
-	/** Whether a bot standing at {@code feet} can see {@code target}: a clear line from its eyes to some part of it. */
+	/**
+	 * Whether a bot standing at {@code feet} can see {@code target}: a clear line from its eyes to some part of it,
+	 * where the blocks {@code broken} tests true for count as air.
+	 */
 	@FunctionalInterface
 	interface Sight {
-		boolean sees(BlockPos feet, BlockPos target);
+		boolean sees(BlockPos feet, BlockPos target, Predicate<BlockPos> broken);
 	}
 
 	/**
@@ -82,7 +99,12 @@ public interface Goal {
 	record InSight(BlockPos pos, double reach, Sight sight) implements Goal {
 		@Override
 		public boolean isReached(BlockPos feet) {
-			return new Reach(this.pos, this.reach).isReached(feet) && this.sight.sees(feet, this.pos);
+			return this.isReached(feet, pos -> false);
+		}
+
+		@Override
+		public boolean isReached(BlockPos feet, Predicate<BlockPos> broken) {
+			return new Reach(this.pos, this.reach).isReached(feet) && this.sight.sees(feet, this.pos, broken);
 		}
 
 		@Override

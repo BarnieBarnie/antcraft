@@ -125,7 +125,7 @@ public class LumberjackGoal implements WorkerGoal.Executor {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
-		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
+		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
 		this.follower.setScaffold(SCAFFOLD);
 		this.scaffoldCleanup = new ScaffoldCleanup(bot, this.follower, this.breaker, this::travel, () -> {
 			this.travelGoal = null;

@@ -330,11 +330,12 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			}
 			return;
 		}
-		// A block is placed where the bot sees the spot, as a player must. Not a wall or fill any solid block will do: a
-		// mineshaft walls a cave or water off before it digs the cell that opens onto it, and a terraform fills a pond
-		// under a lid it digs in through, neither of which it can see beforehand (as with fillIn).
-		// ponytail: walls and fills go in by reach only; needs the path search to see through what its path breaks, and the walls after the dig.
-		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos(), !step.anySolid())) {
+		// A block is placed where the bot sees the spot, as a player must; a wall behind stone the plan digs is put off
+		// until then (see isBehindUndug).
+		// ponytail: a wall or fill in a fluid goes in by reach only, as fillIn does: water beside a mineshaft is walled
+		// before the cell beside it is dug, so it does not flood the shaft, and a pond under a lid has no spot that sees it.
+		boolean sight = !step.anySolid() || level.getFluidState(step.pos()).isEmpty();
+		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos(), sight)) {
 			return;
 		}
 		if (step.isPlaced(current) && item == Items.BUCKET) {
@@ -489,9 +490,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** {@link #nextStep(ServerLevel, Colony, Container, BuildPlan, boolean)}, skipping the steps {@code progress} found done. */
 	private Optional<BuildPlan.Step> nextStep(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig,
 			BuildPlan.Progress progress) {
+		Map<BlockPos, BuildPlan.Step> opened = opened(plan);
 		return plan.nextStep(level::getBlockState, planned -> {
 			BlockState current = level.getBlockState(planned.pos());
-			if (dig && Digging.isForTreeJob(level, colony, planned.pos()) || leavesAlone(level, plan, planned) || this.isGivenUp(planned)) {
+			if (dig && Digging.isForTreeJob(level, colony, planned.pos()) || leavesAlone(level, plan, planned) || this.isGivenUp(planned)
+					|| isBehindUndug(level, opened, planned)) {
 				return false;
 			}
 			BuildPlan.Step step = this.withFiller(level, core, planned);
@@ -505,6 +508,37 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return this.has(core, stack -> stack.is(item))
 				|| isPoured(item) && this.has(core, BuilderGoal::isBucket) && this.source(level, colony, item) != null;
 		}, progress);
+	}
+
+	/** The steps of {@code plan} that open a cell up, such as to dig it out or put a torch in, by position. */
+	private static Map<BlockPos, BuildPlan.Step> opened(BuildPlan plan) {
+		Map<BlockPos, BuildPlan.Step> opened = new HashMap<>();
+		plan.steps().stream().filter(step -> !step.anySolid() && !step.state().isSolid()).forEach(step -> opened.put(step.pos(), step));
+		return opened;
+	}
+
+	/**
+	 * Whether {@code step} is a wall any solid block will do that the plan opens the way to only by digging out a cell
+	 * beside it, and every such cell is still to dig, such as a cave behind the stone of a mineshaft: it is put off until
+	 * then, as it cannot be seen before. Not one in a fluid, which is walled off before the cell is dug (see {@link #work}).
+	 */
+	private static boolean isBehindUndug(ServerLevel level, Map<BlockPos, BuildPlan.Step> opened, BuildPlan.Step step) {
+		BlockPos pos = step.pos();
+		if (!step.anySolid() || !level.getFluidState(pos).isEmpty()) {
+			return false;
+		}
+		boolean beside = false;
+		for (Direction side : Direction.values()) {
+			BuildPlan.Step cell = opened.get(pos.relative(side));
+			if (cell != null) {
+				BlockState state = level.getBlockState(cell.pos());
+				if (!cell.needsClearing(state) || !state.getFluidState().isEmpty()) {
+					return false;
+				}
+				beside = true;
+			}
+		}
+		return beside;
 	}
 
 	/**

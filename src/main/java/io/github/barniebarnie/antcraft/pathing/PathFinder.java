@@ -90,7 +90,7 @@ public final class PathFinder {
 				continue; // stale queue entry
 			}
 			boolean inWater = world.isWater(node.pos);
-			if ((!inWater || goal.mayEndAfloat() && planner.swimmable(node.pos)) && goal.isReached(node.pos)) {
+			if ((!inWater || goal.mayEndAfloat() && planner.swimmable(node.pos)) && goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
 				return toPath(start, node, true);
 			}
 			expanded++;
@@ -112,6 +112,20 @@ public final class PathFinder {
 			}
 		}
 		return toPath(start, closest, false);
+	}
+
+	/** Whether the path to {@code node} broke {@code pos} and left it broken, so a goal's sight sees through it. */
+	// ponytail: walks the path back per block a sight ray crosses, only once a node is within reach; a per-node set if it shows in profiles.
+	private static boolean brokenOnTheWay(Node node, BlockPos pos) {
+		for (Node n = node; n.step != null; n = n.parent) {
+			if (n.step.places().contains(pos)) {
+				return false;
+			}
+			if (n.step.breaks().contains(pos)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static Path toPath(BlockPos start, Node end, boolean complete) {

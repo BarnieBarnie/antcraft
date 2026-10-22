@@ -1114,6 +1114,37 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A wall any solid block will do, in a hollow walled in with bedrock but for one stone side the plan digs out after
+	 * it, as a mineshaft walls a cave: like a player it does not place the wall through the stone, but digs the stone
+	 * first and walls the hollow once it sees it.
+	 */
+	@GameTest(maxTicks = 300)
+	public void doesNotPlaceAWallThroughUndugStone(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		BlockPos hollow = new BlockPos(4, 1, 4);
+		BlockPos stone = hollow.west();
+		for (Direction side : Direction.values()) {
+			helper.setBlock(hollow.relative(side), side == Direction.WEST ? Blocks.STONE : Blocks.BEDROCK);
+		}
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.solid(helper.absolutePos(hollow)),
+			BuildPlan.Step.clear(helper.absolutePos(stone)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(hollow).isAir() && helper.getBlockState(stone).is(Blocks.STONE)) {
+				helper.fail("placed the wall through the undug stone");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, COBBLE);
+			helper.assertTrue(helper.getBlockState(stone).isAir(), "stone not dug");
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "blocked: " + colony.blockedSteps());
+		});
+	}
+
+	/**
 	 * A block to place high in the air, with no scaffold to pillar up with: the builder cannot get
 	 * within reach of it, so it gives the step up and reports it, rather than trying forever.
 	 */

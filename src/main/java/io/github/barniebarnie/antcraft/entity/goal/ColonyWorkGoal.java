@@ -61,7 +61,7 @@ public abstract class ColonyWorkGoal {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
-		this.sight = (feet, target) -> LineOfSight.sees(bot.level(), feet, target);
+		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
 	}
 
 	/**
