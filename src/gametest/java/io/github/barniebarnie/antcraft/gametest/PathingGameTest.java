@@ -170,6 +170,40 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Like {@link #walksThroughAClosedDoorAndShutsIt}, but the walk ends in the doorway, with the door still open
+	 * around the bot. Something other than that walk then takes the bot away (here a teleport), and the door shuts.
+	 */
+	@GameTest(maxTicks = 50)
+	public void shutsADoorItStoppedInOnceItLeaves(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 4, 1, 1, 4, 7, 6, Blocks.BEDROCK);
+		BlockPos door = new BlockPos(4, 1, 3);
+		BlockState lower = Blocks.OAK_DOOR.defaultBlockState().setValue(DoorBlock.FACING, Direction.EAST);
+		helper.setBlock(door, lower);
+		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 1, 3)));
+
+		// Waits a few ticks in the doorway first, so the walk has wholly ended before the bot leaves.
+		boolean[] left = {false};
+		int[] waited = {0};
+		helper.onEachTick(() -> {
+			if (left[0] || bot.getWalkTarget() != null || ++waited[0] < 5) {
+				return;
+			}
+			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(door)), "stopped at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)) + ", not in the doorway");
+			helper.assertTrue(helper.getBlockState(door).getValue(DoorBlock.OPEN), "shut the door on the bot");
+			BlockPos away = helper.absolutePos(new BlockPos(2, 1, 3));
+			bot.teleportTo(away.getX() + 0.5, away.getY(), away.getZ() + 0.5);
+			left[0] = true;
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(left[0], "still walking");
+			helper.assertFalse(helper.getBlockState(door).getValue(DoorBlock.OPEN), "left the door open");
+		});
+	}
+
 	@GameTest(maxTicks = 50)
 	public void bridgesGap(GameTestHelper helper) {
 		room(helper, 3);

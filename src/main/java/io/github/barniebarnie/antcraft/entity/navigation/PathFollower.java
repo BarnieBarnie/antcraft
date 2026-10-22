@@ -70,8 +70,6 @@ public class PathFollower {
 	private int replansWithoutProgress;
 
 	private final BlockBreaker breaker;
-	/** Doors and fence gates this bot opened on its way, to shut again once it is through. */
-	private final Set<BlockPos> opened = new HashSet<>();
 	private boolean mayPlace = true;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 
@@ -98,9 +96,6 @@ public class PathFollower {
 	}
 
 	public void stop() {
-		if (this.bot.level() instanceof ServerLevel level) {
-			this.closeBehind(level);
-		}
 		this.breaker.reset();
 		this.goal = null;
 		this.path = null;
@@ -110,7 +105,6 @@ public class PathFollower {
 		if (this.goal == null || !(this.bot.level() instanceof ServerLevel level)) {
 			return Status.FAILED;
 		}
-		this.closeBehind(level);
 		BlockPos feet = this.bot.blockPosition();
 		if (this.goal.isReached(feet) && (this.bot.onGround() || this.goal.mayEndAfloat() && this.bot.isInWater())) {
 			this.stop();
@@ -217,38 +211,38 @@ public class PathFollower {
 	private void open(ServerLevel level, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
 		if (LevelWorldView.isOpenable(state) && !state.getValue(BlockStateProperties.OPEN)) {
-			this.setOpen(level, pos, state, true);
-			this.opened.add(pos);
+			setOpen(this.bot, level, pos, state, true);
+			this.bot.getOpened().add(pos.immutable());
 		}
 	}
 
 	/**
-	 * Shuts the doors and gates this bot opened as soon as, shut, they would not hit it. Forgets one that is gone or
-	 * someone else shut. ponytail: runs only while following a path, so one the bot stops in stays open.
+	 * Shuts the doors and gates the bot opened as soon as, shut, they would not hit it. Forgets one that is gone or
+	 * someone else shut. The bot runs this every tick, so a door it stopped in shuts once it leaves, whatever takes it away.
 	 */
-	private void closeBehind(ServerLevel level) {
-		this.opened.removeIf(pos -> {
+	public static void closeBehind(AntBot bot, ServerLevel level) {
+		bot.getOpened().removeIf(pos -> {
 			BlockState state = level.getBlockState(pos);
 			if (!state.hasProperty(BlockStateProperties.OPEN) || !state.getValue(BlockStateProperties.OPEN)) {
 				return true;
 			}
 			VoxelShape shut = state.setValue(BlockStateProperties.OPEN, false).getCollisionShape(level, pos).move(pos);
-			if (Shapes.joinIsNotEmpty(shut, Shapes.create(this.bot.getBoundingBox()), BooleanOp.AND)) {
+			if (Shapes.joinIsNotEmpty(shut, Shapes.create(bot.getBoundingBox()), BooleanOp.AND)) {
 				return false;
 			}
-			this.setOpen(level, pos, state, false);
+			setOpen(bot, level, pos, state, false);
 			return true;
 		});
 	}
 
-	private void setOpen(ServerLevel level, BlockPos pos, BlockState state, boolean open) {
+	private static void setOpen(AntBot bot, ServerLevel level, BlockPos pos, BlockState state, boolean open) {
 		if (state.getBlock() instanceof DoorBlock door) {
-			door.setOpen(this.bot, level, state, pos, open);
+			door.setOpen(bot, level, state, pos, open);
 			return;
 		}
 		level.setBlock(pos, state.setValue(FenceGateBlock.OPEN, open), Block.UPDATE_CLIENTS);
 		level.playSound(null, pos, open ? SoundEvents.FENCE_GATE_OPEN : SoundEvents.FENCE_GATE_CLOSE, SoundSource.BLOCKS, 1.0F, 1.0F);
-		level.gameEvent(this.bot, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, pos);
+		level.gameEvent(bot, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, pos);
 	}
 
 	private void moveTo(BlockPos to) {

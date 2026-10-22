@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
 import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.HashSet;
 import java.util.List;
@@ -92,6 +93,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
 	 */
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
+	private final Set<BlockPos> opened = new HashSet<>();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -165,6 +167,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			if (this.isNoAi() == allowed) {
 				this.setNoAi(!allowed);
 			}
+			// Before the goals, which open the door ahead again this tick if the bot is still on its way through.
+			PathFollower.closeBehind(this, level);
 		}
 		super.tick();
 		BlockPos feet = this.blockPosition();
@@ -254,6 +258,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Records a scaffold block the bot placed for its work, to take down once done with it. */
 	public void addScaffold(BlockPos pos) {
 		this.scaffold.add(pos.immutable());
+	}
+
+	/**
+	 * Doors and fence gates the bot opened on its way, to shut again once it is clear of them (see
+	 * {@link PathFollower#closeBehind}). Callers change it in place. ponytail: not saved, so one open on unload stays open.
+	 */
+	public Set<BlockPos> getOpened() {
+		return this.opened;
 	}
 
 	/** Records a block placed while following a path, so other bots leave it alone while this bot is near it. */
