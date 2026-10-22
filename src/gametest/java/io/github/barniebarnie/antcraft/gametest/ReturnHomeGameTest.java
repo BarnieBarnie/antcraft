@@ -30,6 +30,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -59,7 +60,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 170)
 	public void idleMemberWalksBackIntoTerritory(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// No work here, so the bot is idle.
@@ -68,7 +69,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(territory(colony).contains(bot.blockPosition()), "bot still at " + bot.blockPosition().toShortString()));
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 370)
 	public void workingMemberIsNotPulledHome(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1);
@@ -97,7 +98,7 @@ public class ReturnHomeGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 260)
 	public void finishesFightOutsideTerritoryThenReturns(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		AntBot bot = member(helper, colony, 6, 6);

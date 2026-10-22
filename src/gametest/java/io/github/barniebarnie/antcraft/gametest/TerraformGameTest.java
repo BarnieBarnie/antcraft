@@ -34,6 +34,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -96,7 +97,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 220)
 	public void aMinerAndABuilderLevelAHillAndAHole(GameTestHelper helper) {
 		Colony colony = colonyWithMiner(helper);
 		// Ground at y=1 over x and z 2..7, a hole in it, and a hill 2 blocks high on it.
@@ -126,7 +127,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A dig batch is open to every colony bot, so a colony with neither miners nor builders levels a hill. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 1100)
 	public void botsWithoutTheMinerOrBuilderRoleDigATerraform(GameTestHelper helper) {
 		Colony colony = colony(helper, CORE, 6);
 		for (BlockPos pos : BlockPos.betweenClosed(2, 1, 2, 6, 2, 6)) {
@@ -158,7 +159,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The trees are felled by tree jobs, which the miner may help with, not dug out by the terraform's dig jobs. */
-	@GameTest(maxTicks = 2000)
+	@GameTest(maxTicks = 1600)
 	public void treesInTheAreaAreFelledThroughTreeJobsNotDugOut(GameTestHelper helper) {
 		Colony colony = colonyWithMiner(helper);
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 7)) {
@@ -187,7 +188,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 2000)
+	@GameTest(maxTicks = 60)
 	public void aColonyWithNoFlatSpotLevelsOneForItsStorage(GameTestHelper helper) {
 		// Bedrock walls keep every spot but the rows z=4..6 out; a bump and a hole spoil those.
 		for (int x = 0; x < 8; x++) {
@@ -281,7 +282,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Dirt to dig walled in with bedrock all round is within reach of the miner, but out of its sight, so it is left and reported blocked. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 150)
 	public void dirtWalledInWithBedrockIsNotDugThroughTheWall(GameTestHelper helper) {
 		Colony colony = colonyWithMiner(helper);
 		BlockPos dirt = new BlockPos(3, 1, 3);
@@ -346,7 +347,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 90)
 	public void aBuilderFillsAPondWithSand(GameTestHelper helper) {
 		// Ground at y=1..2 with a 3x3 pond in it, 2 deep, down to the stone floor.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
@@ -409,7 +410,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1000)
+	@GameTest(maxTicks = 790)
 	public void aRiverEdgeIsFilledAndWalledOff(GameTestHelper helper) {
 		// A bank of ground at y=1..2 along x 0..3, and a river 2 deep at x 4..6 between stone banks.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 3, 7)) {

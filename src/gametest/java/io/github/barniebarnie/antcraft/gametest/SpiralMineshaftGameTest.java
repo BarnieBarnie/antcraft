@@ -34,6 +34,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		// Stone up to y=4, the ground the shaft is dug into; the test area ends at y=7, 3 above the top step.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 4, 7)) {
@@ -91,7 +92,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	 * Two bots dig the top of a new shaft. The colony has no stair blocks: the bots make them from the
 	 * cobblestone they dig, with the crafting table one carries, and put one on every step.
 	 */
-	@GameTest(maxTicks = 3000)
+	@GameTest(maxTicks = 1000)
 	public void botsDigTheTopOfTheShaftAndPlaceCraftedCobblestoneStairs(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.TORCH, 8));
@@ -120,7 +121,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	 * A bot carrying a crafting table digs the top of a new shaft with an empty core: it crafts the stairs in the shaft
 	 * from the cobblestone it dug and places them, and never brings anything to the core to craft them there.
 	 */
-	@GameTest(maxTicks = 3000)
+	@GameTest(maxTicks = 820)
 	public void aBotCraftsTheStairsInTheShaftWithTheCraftingTableItCarries(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		Mineshaft shaft = shaft(helper, 3);
@@ -144,7 +145,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** With stone brick stairs in the core and no cobblestone ones, the bots put those on the steps and make none. */
-	@GameTest(maxTicks = 3000)
+	@GameTest(maxTicks = 910)
 	public void botsBuildTheStepsFromTheStoneStairsTheCoreHas(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.TORCH, 8));
@@ -177,7 +178,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	 * is dug, and only then the branches off it. The level is at y=3 because the halls of the 8x8 tests' shafts
 	 * run out of their areas, and their floors, at y=2 and y=0, are protected blocks no bot breaks.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2400)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1100)
 	public void aMinerDigsTheHallOfASpiralLevelThenTheBranchesOffIt(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 5, 15)) {
 			helper.setBlock(pos, Blocks.STONE);
@@ -229,7 +230,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** On the 2-wide stairs, a bot on its way up and one on its way down get past each other, without digging a way round. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 180)
 	public void twoBotsPassEachOtherOnTheStairs(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		Mineshaft shaft = shaft(helper, 1);

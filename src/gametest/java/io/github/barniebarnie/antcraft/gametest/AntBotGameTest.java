@@ -22,6 +22,7 @@ import net.minecraft.world.level.block.Blocks;
 public class AntBotGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		// Game tests run on a dedicated server, where bots are disabled unless opted in.
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
@@ -32,7 +33,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		method.invoke(this, helper);
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 100)
 	public void walksToTargetAndClearsIt(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 6));
@@ -44,7 +45,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 240)
 	public void killsHostileMob(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		// An unarmed bot and a husk are an even match; armed, the outcome does not depend on luck.
@@ -70,7 +71,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 100)
+	@GameTest(maxTicks = 20)
 	public void picksUpItemsIntoInventory(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		helper.spawnItem(Items.OAK_LOG, 3, 1, 3);
@@ -78,7 +79,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(bot.getInventory().countItem(Items.OAK_LOG) == 1, "log not in inventory"));
 	}
 
-	@GameTest(maxTicks = 100)
+	@GameTest(maxTicks = 20)
 	public void dropsInventoryOnDeath(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 5));

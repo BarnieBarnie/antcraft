@@ -32,6 +32,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -68,7 +69,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 40)
 	public void harvestsRipeWheatReplantsAndStoresIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wheatRow(helper, 7);
@@ -102,7 +103,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 20)
 	public void swapsToBetterHoeInCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.STONE_HOE));
@@ -116,7 +117,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 20)
 	public void ordersBetterHoeTheColonyCanMake(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -127,7 +128,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().getOrDefault(Items.STONE_HOE, 0) == 1, "orders: " + colony.orders()));
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 40)
 	public void keepsItsHoeWhenStoringProduce(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wheatRow(helper, 7);
@@ -149,7 +150,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return helper.getLevel().getBlockState(crop).is(Blocks.WHEAT) && helper.getLevel().getBlockState(crop.below()).is(Blocks.FARMLAND);
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 80)
 	public void collectsSeedsFromGrassTillsAndPlants(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wantWheat(colony);
@@ -170,7 +171,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 200)
 	public void plantsAnEmptyFieldNearTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wantWheat(colony);
@@ -186,7 +187,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 80)
 	public void fillsABucketAtNearbyWaterForTheField(GameTestHelper helper) {
 		BlockPos source = new BlockPos(7, 0, 7);
 		helper.setBlock(source, Blocks.WATER);
@@ -239,7 +240,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return wool;
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 110)
 	public void shearsASheepAndStoresTheWool(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.SHEARS));
@@ -288,7 +289,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Wool picked up after the fleece pickup ended, by walking over it, still goes to the core while the field waits for seeds. */
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 130)
 	public void storesWoolItCarriesWhileWaitingForSeeds(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wantWheat(colony);
@@ -301,7 +302,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 20)
 	public void ordersShearsWhenThereIsASheepToShear(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		sheep(helper);
@@ -340,7 +341,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 20)
 	public void storesWheatInAStorageChestWhenTheCoreIsFull(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		fillCore(helper);
@@ -378,7 +379,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Wool it has no room for does not keep the farmer from shearing. */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 40)
 	public void keepsShearingWithNoRoomForTheWool(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		fillCore(helper);
@@ -397,7 +398,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 40)
 	public void colonyBotOfAnotherRoleHarvestsAndReplantsARipeCrop(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wheatRow(helper, 7);
@@ -417,7 +418,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 	 * Ripe wheat on a ledge too high to reach from the ground: the bot pillars up with dirt to harvest it, and
 	 * takes its pillar down once done, though harvesting is no build or tree job.
 	 */
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 90)
 	public void takesDownThePillarItPlacedToReachACrop(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// A 5x5 ledge, four high, with the wheat in the middle: out of reach from the ground around it.
@@ -449,7 +450,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		return found;
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 310)
 	public void colonyBotOfAnotherRoleTillsPlantsAndWatersTheField(GameTestHelper helper) {
 		BlockPos source = new BlockPos(7, 0, 7);
 		helper.setBlock(source, Blocks.WATER);

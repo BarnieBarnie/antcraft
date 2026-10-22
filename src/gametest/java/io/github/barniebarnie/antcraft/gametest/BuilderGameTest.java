@@ -62,6 +62,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -107,7 +108,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(actual.equals(state), "expected " + state + " at " + x + "," + y + "," + z + " but found " + actual);
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 80)
 	public void buildsPlanWithMaterialsFromCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -131,7 +132,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A torch broken off a finished batch is put back while the batch after it still waits for its planks. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 230)
 	public void replacesABrokenTorchOfAFinishedBatchWhileLaterBatchesAreOpen(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
@@ -162,7 +163,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void ordersMissingMaterialsAndBuildsOnceStocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
@@ -186,7 +187,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * Stone to dig declares a pickaxe, which no bot carries and the core lacks: the bot takes the job anyway and
 	 * orders one, and fetches it once it comes instead of digging by hand for good.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 130)
 	public void ordersAPickaxeForStoneNoBotHasOneFor(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(5, 1, 5, Blocks.STONE);
@@ -230,7 +231,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A pickaxe that breaks mid-batch is replaced from the core at once, not on the next upgrade check, and the batch dug with it. */
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 210)
 	public void fetchesAnotherPickaxeAtOnceWhenItsPickaxeBreaks(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
@@ -261,7 +262,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * With no other pickaxe in the core, a builder whose pickaxe breaks hands the batch back rather than dig by hand,
 	 * and the colony orders one; made from the log in the core, it digs the rest with it.
 	 */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 580)
 	public void handsTheBatchBackAndOrdersAPickaxeWhenItsPickaxeBreaks(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_LOG, 2));
@@ -310,7 +311,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return "antcraft colony build copy " + coords(helper, 5, 1, 1) + " " + coords(helper, 6, 2, 1) + " " + coords(helper, 5, 1, 5);
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 90)
 	public void copyCommandAddsPlanThatBuilderBuilds(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -335,7 +336,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The bundled cobble_step structure: two cobblestone with east-facing stairs on one, turned to run south. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 80)
 	public void loadCommandAddsBundledStructureThatBuilderBuilds(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -357,7 +358,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The bundled cobble_step structure mirrored front to back: the stairs sit on the east cobblestone and face west. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 90)
 	public void loadCommandWithAMirrorBuildsTheStructureFlipped(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -379,7 +380,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Any colony bot takes build jobs through the worker goal, not only builders. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 90)
 	public void aColonyBotWithoutTheBuilderRoleBuildsACopy(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -403,7 +404,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Three batches of one plan that need none of the others are three jobs, taken by three bots at once. */
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 70)
 	public void threeBotsWorkOnThreeOpenBatchesOfOnePlanAtOnce(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 9));
@@ -432,7 +433,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A door and a bed are one step each, placed whole from one item, as a player would. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 80)
 	public void buildsACopiedDoorAndBedWhole(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_DOOR, 1));
@@ -464,7 +465,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A copied wall eight wide is two batches a layer, so two builders build it at the same time. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 90)
 	public void twoBuildersBuildOneCopyTogether(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 16));
@@ -581,7 +582,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return Stream.of(3, 4, 5, 6).filter(x -> helper.getBlockState(new BlockPos(x, 1, 6)).is(Blocks.COBBLESTONE)).count();
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 50)
 	public void resumesHalfDonePlanAfterSaveAndLoad(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 10));
@@ -609,7 +610,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void otherBotsDoNotBreakPlacedBlocks(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
@@ -625,7 +626,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void replacedBlocksAreNoLongerProtected(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_PLANKS, 1));
@@ -663,13 +664,13 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return solid;
 	}
 
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 1900)
 	public void digsMineshaftAndWalksBackUp(GameTestHelper helper) {
 		digsMineshaftAndWalksBackUp(helper, MinerGameTest.mine(helper));
 	}
 
 	/** A pocket of water around the stairs at y=2: the builder walls it off and fills what is in the way, so the stairs end up dry. */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 1700)
 	public void digsMineshaftThroughWaterAndLeavesItDryAndWalkable(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		// Held in by the stone around it.
@@ -680,7 +681,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A cave across the stairs at y=2: the builder bridges the floors and walls in the sides, so the stairs stay one continuous way down. */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 1700)
 	public void bridgesAndWallsACaveTheMineshaftCrosses(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		for (BlockPos pos : BlockPos.betweenClosed(0, 2, 0, 7, 2, 7)) {
@@ -725,7 +726,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * core's fillers: the walls are dirt or the cobbled deepslate it digs, never sand, which would
 	 * fall into the shaft once the cell below is dug.
 	 */
-	@GameTest(maxTicks = 3600)
+	@GameTest(maxTicks = 2200)
 	public void wallsAShaftThroughACaveWithFillersThatDoNotFall(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
@@ -745,7 +746,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * sand, and sand and dirt in the core: the walls cannot use sand, so it never takes any from the core, and puts what it carries
 	 * back once it fetches dirt for them.
 	 */
-	@GameTest(maxTicks = 3600)
+	@GameTest(maxTicks = 1500)
 	public void fetchesNoSandForAShaftsWalls(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
@@ -788,6 +789,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			core.setItem(2 + i, fillers.get(i).copy());
 		}
 		colony.setMineshaft(shaft);
+		GameTests.failOnGiveUp(helper, colony);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
 		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
@@ -823,13 +825,14 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A new colony has no torches or chests yet: the builder digs the shaft anyway and places them once they come. */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 1400)
 	public void digsMineshaftBeforeItsTorchesAndChestsAreMade(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(MinerGameTest.MINE_CORE)).orElseThrow();
 		colony.setStockTargets(List.of());
 		colony.setMineshaft(shaft);
+		GameTests.failOnGiveUp(helper, colony);
 		AntBot builder = helper.spawn(ModEntities.ANT_BOT, 1, 5, 1);
 		ColonyManager.get(helper.getLevel()).join(builder, colony);
 		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
@@ -845,7 +848,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Once the stairs reach the first landing, one builder digs its hall while the other digs on down. */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 830)
 	public void twoBuildersDigOneShaftTogether(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
@@ -886,7 +889,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * take home and stands idle in the corner of the landing, by the stairs up. The other has dug the lower hall and
 	 * must fetch the landing's chest from the core. Bots do not push each other, so it gets past.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 210)
 	public void climbsTheShaftPastAnIdleBotOnTheLanding(GameTestHelper helper) {
 		Mineshaft shaft = MinerGameTest.mine(helper);
 		helper.setBlock(MinerGameTest.MINE_CORE, ModBlocks.COLONY_CORE);
@@ -911,7 +914,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 70)
 	public void finishesAroundAStepBehindBedrockAndReportsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
@@ -935,7 +938,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * Dirt to clear walled in with bedrock on every side, within reach of where the builder stands:
 	 * like a player it cannot break what it cannot see, so it leaves the dirt and reports the step.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 180)
 	public void doesNotClearABlockBehindAWallAndReportsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
@@ -964,7 +967,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * A block to place high in the air, with no scaffold to pillar up with: the builder cannot get
 	 * within reach of it, so it gives the step up and reports it, rather than trying forever.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 170)
 	public void givesUpOnAStepItCannotReachAndReportsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -984,7 +987,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * does not need it; the batch after the dirt is posted and built all the same, while the one
 	 * after the bedrock waits.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 90)
 	public void aBlockedBatchLeavesTheBatchesThatDoNotNeedItToBeBuilt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -1010,7 +1013,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A door whose upper half would go into bedrock cannot be placed, so it is reported like a step behind bedrock. */
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 40)
 	public void reportsADoorWhoseUpperHalfIsBedrock(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_DOOR, 1));
@@ -1028,7 +1031,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 800)
+	@GameTest(maxTicks = 250)
 	public void doesABlockedStepOnceTheBedrockIsReplacedByStone(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.STONE_PICKAXE));
@@ -1051,7 +1054,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void clearsTheBlockedListOnCommand(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(4, 1, 4, Blocks.BEDROCK);
@@ -1082,7 +1085,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(new BlockPos(4, 1, 4)))));
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void scoopsAWaterSourceWithABucket(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.BUCKET));
@@ -1097,7 +1100,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 60)
 	public void fillsAWaterSourceWithoutABucketAndClearsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.DIRT));
@@ -1111,7 +1114,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void reportsLavaItCannotClearAsBlocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(pool(helper, Blocks.LAVA.defaultBlockState()));
@@ -1132,7 +1135,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.WATER.defaultBlockState())));
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void doesNotPlaceWaterWithoutABucketOrASourceAndReportsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(waterStep(helper));
@@ -1144,7 +1147,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void placesWaterFromABucketInTheCoreAndKeepsTheBucket(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
@@ -1159,7 +1162,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 70)
 	public void ordersABucketAndFillsItAtASourceToPlaceWater(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BlockPos source = new BlockPos(6, 1, 1);
@@ -1195,7 +1198,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true))));
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void placesAWaterloggedStairDryWithoutAWaterBucketAndReportsIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
@@ -1210,7 +1213,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 40)
 	public void fillsAWaterloggedStairFromABucketInTheCoreAndKeepsTheBucket(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
@@ -1226,7 +1229,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 70)
 	public void fillsAnEmptyBucketAtASourceToWaterlogAStair(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BlockPos source = new BlockPos(6, 1, 1);
@@ -1246,7 +1249,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void scoopsTheWaterOutOfAStairPlannedDry(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// Only for its stone walls, which keep the water in.
@@ -1265,7 +1268,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void reportsFireThatCannotStayAsBlockedAndKeepsItBlocked(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
@@ -1295,7 +1298,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		return ItemStack.EMPTY;
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void lightsFireOnNetherrackWithFlintAndSteelFromTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
@@ -1312,7 +1315,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void reportsFireOnStoneAsBlockedRatherThanRelightingIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
@@ -1328,7 +1331,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void ordersNoFlintAndSteelForBlockedFire(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BuildPlan.Step fire = step(helper, 4, 1, 4, Blocks.FIRE.defaultBlockState());
@@ -1340,7 +1343,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.blockedSteps().equals(List.of(fire.pos())), "step not reported: " + colony.blockedSteps()));
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void leavesFireThatWouldSpreadToPlanksUnlit(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.FLINT_AND_STEEL));
@@ -1418,7 +1421,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.blockedSteps().equals(List.of(planks.pos())), "step not reported: " + colony.blockedSteps()));
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void ordersFlintAndSteelForFireAndWaitsForIt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(4, 0, 4, Blocks.NETHERRACK);
@@ -1440,7 +1443,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 410)
 	public void waitsForAMobToLeaveTheSpot(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
@@ -1462,7 +1465,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 20)
 	public void withdrawsOrderWhenPlanIsCancelled(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BuildPlan plan = new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST)));
@@ -1482,7 +1485,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void withdrawsOrderWhenPlanFinishesWithItemsFromElsewhere(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, STAIRS_EAST))));
@@ -1523,7 +1526,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * The top of a 6-high column is out of reach from the ground: the builder pillars up with dirt
 	 * from the core, and takes the pillar down once the column stands, getting the dirt back.
 	 */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 110)
 	public void pillarsUpToBuildASixHighColumnAndLeavesNoScaffold(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
@@ -1559,7 +1562,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * A builder fetching the column's cobblestone also takes the scaffold dirt it will pillar with,
 	 * so it goes to the core once, rather than once for the cobblestone and again for the dirt.
 	 */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 110)
 	public void takesScaffoldWithTheMaterialsInOneTripToTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
@@ -1591,7 +1594,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A builder that already carries scaffold keeps it when it fetches the cobblestone for a column it must pillar up to. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 110)
 	public void keepsItsScaffoldWhenFetchingForHighSteps(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
@@ -1614,7 +1617,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** With no step high enough to pillar up to, the scaffold a builder carries goes back to the core when it fetches materials. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 40)
 	public void putsScaffoldBackWhenNoHighStepsAreLeft(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
@@ -1633,7 +1636,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * A builder sent to a walk target mid-pillar goes back to its column on its own scaffold: no
 	 * other goal takes the pillar down in between, and it takes it down itself once the column stands.
 	 */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 120)
 	public void interruptedBuilderResumesOnItsOwnScaffold(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
@@ -1654,7 +1657,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A builder saved and loaded mid-pillar goes on from its scaffold, and takes it down itself once the column stands. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 150)
 	public void reloadedBuilderResumesOnItsOwnScaffold(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 6));
@@ -1678,7 +1681,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot with scaffold left up from a build it was called away from takes it down between jobs. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 70)
 	public void takesScaffoldLeftFromABuildDownBetweenJobs(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		AntBot bot = member(helper, colony, 4, 4);
@@ -1721,7 +1724,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	 * where the column goes, so it never stands in for a column block, and taking the scaffold down
 	 * never takes a column block that is in place.
 	 */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 110)
 	public void neverMixesUpScaffoldAndPlanBlocksOfTheSameKind(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.DIRT, 22));

@@ -50,6 +50,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -170,9 +171,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 490)
 	public void digsBranchFromLandingAndLightsIt(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
 		wantStone(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
@@ -191,9 +193,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 3000)
+	@GameTest(maxTicks = 690)
 	public void minersNeverBreakTheStairsOrTorches(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
 		wantStone(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
@@ -242,9 +245,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Branches 1 long, so three rounds of them fit in the test area. */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 730)
 	public void minedOutLevelGetsFurtherBranches(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
 		wantStone(colony);
 		Mineshaft shaft = mine(helper, 1, 3);
 		dig(helper, colony, shaft);
@@ -271,7 +275,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * south of the hall, so no miner can get within reach of that cell. The miner gives it up, so the
 	 * round still ends, and the next round north is dug.
 	 */
-	@GameTest(structure = "antcraft-gametest:long", maxTicks = 2400)
+	@GameTest(structure = "antcraft-gametest:long", maxTicks = 1700)
 	public void unreachableBranchCellDoesNotHoldUpTheNextRound(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 15)) {
 			helper.setBlock(pos, Blocks.DIRT);
@@ -308,7 +312,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * x=4 and x=7. Each branch is two jobs, the second ready once the first is dug. Four bots dig the four
 	 * branches at the same time.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1500)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 990)
 	public void fourBotsDigTheBranchesOfOneLevelAtTheSameTime(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
 			helper.setBlock(pos, Blocks.DIRT);
@@ -353,7 +357,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * the first walks out with its haul while the other walks in to the second, through the same 1-wide branch:
 	 * neither keeps the other in. Both segments get dug and both miners get their haul out to the core.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 640)
 	public void twoMinersDigConsecutiveSegmentsOfOneBranchWithoutBoxingEachOtherIn(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
 			helper.setBlock(pos, Blocks.DIRT);
@@ -404,7 +408,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * with bedrock all round. They are within reach of the hall, but a miner cannot see them, so like
 	 * a player it cannot break them: it gives the branch up instead.
 	 */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 870)
 	public void cellBehindAWallIsNotMinedFromTheOtherSide(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -434,7 +438,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			.anyMatch(job -> job.target().equals(branch.start()) && job.givenUp()), "walled-in branch not given up yet"));
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 640)
 	public void branchesDugWithoutTorchesAreLitOnceTorchesReachTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -482,7 +486,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		return shaft.branches(shaft.levels().getLast()).stream().anyMatch(branch -> helper.getLevel().getBlockState(branch.start()).isAir());
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 50)
 	public void fullMinerUnloadsIntoTheLandingChestAndGoesBackToItsBranch(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -501,7 +505,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 240)
 	public void minerBringsWhatTheColonyOrderedToTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		Mineshaft shaft = mine(helper);
@@ -521,7 +525,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * Cobblestone for an ordered stone pickaxe goes up to the core; the dirt it carries along, which
 	 * nobody wants, stays in the landing chest.
 	 */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 130)
 	public void minerLeavesWhatNobodyWantsInTheLandingChestOnItsWayToTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		Mineshaft shaft = mine(helper);
@@ -544,7 +548,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 190)
 	public void haulerEmptiesTheLandingChestIntoTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		Mineshaft shaft = mine(helper);
@@ -567,7 +571,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A tree job posted near a bot that carries a landing chest's load waits until the load is in the core. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 460)
 	public void aBotMidHaulDeliversItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		Mineshaft shaft = mine(helper);
@@ -598,7 +602,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Any colony bot hauls up what the colony wants. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 190)
 	public void colonyBotOfAnotherRoleEmptiesTheLandingChestIntoTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		Mineshaft shaft = mine(helper);
@@ -635,7 +639,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		return count;
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 240)
 	public void twoHaulersEmptyDifferentLandingChests(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		// Without a storage area for the surplus, only what the colony wants comes up: more than both chests hold.
@@ -707,7 +711,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A wooden pickaxe cannot harvest iron ore, so the miner leaves it in the wall. */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 710)
 	public void woodenPickaxeLeavesIronOreInTheWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -726,7 +730,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(branchesDug(helper, shaft), "branches not dug"));
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 520)
 	public void stonePickaxeMinesIronOreInTheWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -744,9 +748,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A diamond ore its stone pickaxe left in a branch wall is mined once the miner gets an iron pickaxe, after the branch was done. */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 660)
 	public void ironPickaxeSendsTheMinerBackForADiamondItLeft(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
 		colony.setStockTarget(StockTarget.of(Items.DIAMOND, 1));
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
@@ -795,7 +800,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An iron vein that shows one block in a branch wall is mined whole, the blocks behind it too. */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 770)
 	public void minerMinesAWholeIronVeinThatShowsOneBlockInABranchWall(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -814,7 +819,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Water a vein opens into is walled off before the ore beside it is mined, so it does not flood the vein or the branch. */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 610)
 	public void waterAVeinOpensIntoIsWalledOff(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -843,7 +848,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Its wooden pickaxe harvests no ore, so the miner orders a stone one first, the step to any better one. */
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void ordersAGoodEnoughPickaxeBeforeMining(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -861,7 +866,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().containsKey(Items.STONE_PICKAXE), "orders: " + colony.orders()));
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 140)
 	public void takesAGoodEnoughPickaxeFromTheCoreBeforeMining(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -883,7 +888,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 470)
 	public void fetchesPickaxeFromCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		wantStone(colony);
@@ -896,7 +901,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> assertBranchesDug(helper, shaft, shaft.levels().getLast()));
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 20)
 	public void ordersPickaxeWhenNoneAvailable(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// A colony that wants nothing mining yields needs no pickaxe.
@@ -906,7 +911,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().containsKey(Items.WOODEN_PICKAXE), "orders: " + colony.orders()));
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 20)
 	public void minerGetsAMineshaftSiteBesideTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		wantStone(colony);
@@ -926,7 +931,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A colony that wants stone picks a mineshaft site, and its bots dig the shaft. */
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 30)
 	public void starterMinerGetsMineshaftWork(GameTestHelper helper) {
 		// The barrier under the test area cannot be dug through, so the shaft would get no levels.
 		for (BlockPos pos : BlockPos.betweenClosed(0, -1, 0, 7, -1, 7)) {
@@ -942,7 +947,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 130)
 	public void newColonyStoresCobblestone(GameTestHelper helper) {
 		Mineshaft shaft = mine(helper);
 		Colony colony = colony(helper, MINE_CORE);
@@ -964,7 +969,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Cobblestone and sticks in the core become a stone pickaxe that replaces the wooden one. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 210)
 	public void upgradesToStonePickaxe(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 3));
@@ -1003,9 +1008,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A colony that wants stone and has no pickaxe fells a tree for one, crafts it, and a bot takes it up to dig. */
-	@GameTest(maxTicks = 3000)
+	@GameTest(maxTicks = 440)
 	public void colonyMakesItsOwnPickaxe(GameTestHelper helper) {
 		Colony colony = colony(helper);
+		GameTests.failOnGiveUp(helper, colony);
 		wantStone(colony);
 		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1);
 		for (int dx = -1; dx <= 1; dx++) {
@@ -1021,9 +1027,10 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(bots.stream().anyMatch(bot -> pickaxes(bot, Items.WOODEN_PICKAXE) == 1), "no bot has a pickaxe"));
 	}
 
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 450)
 	public void anyColonyBotDigsAMineshaftBranch(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
 		wantStone(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
@@ -1044,7 +1051,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	 * The colony wants raw iron, so its one branch left at the deepest level needs a stone pickaxe. The
 	 * bot with a wooden one is nearer, but leaves it to the bot with a stone one.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void ofTwoBotsTheOneCarryingAStonePickaxeTakesTheIronLevelBranch(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
 		colony.setStockTarget(StockTarget.of(Items.RAW_IRON, 8));

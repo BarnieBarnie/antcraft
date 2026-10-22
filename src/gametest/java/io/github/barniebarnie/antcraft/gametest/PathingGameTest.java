@@ -28,6 +28,7 @@ import net.minecraft.world.level.block.Blocks;
 public class PathingGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		method.invoke(this, helper);
 	}
@@ -71,7 +72,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 100)
 	public void digsThroughWall(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 4, 1, 1, 4, 6, 6, Blocks.DIRT);
@@ -81,7 +82,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		succeedWhenAt(helper, bot, new BlockPos(6, 1, 3));
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 50)
 	public void bridgesGap(GameTestHelper helper) {
 		room(helper, 3);
 		// A pit too deep to drop into and climb out of.
@@ -93,7 +94,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 90)
 	public void pillarsUpToLedge(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 5, 1, 1, 6, 3, 6, Blocks.BEDROCK);
@@ -108,7 +109,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * As {@link #pillarsUpToLedge}, but a colony's mineshaft hall runs along z=3 at the bot's feet and a branch
 	 * leaves it at x=4, right where the bot would pillar. It gets onto the ledge without placing a block in them.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 120)
 	public void pillarsAroundMineshaftHallsAndBranches(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 5, 1, 1, 6, 3, 6, Blocks.BEDROCK);
@@ -143,7 +144,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * A bot with no role pillars up in a one-wide corridor. Another bot without scaffold blocks
 	 * then has to get past the pillar: it gives up instead of digging it out from under the first.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 60)
 	public void leavesPillarOfOtherBotAlone(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 1, 1, 1, 6, 7, 2, Blocks.BEDROCK);
@@ -176,7 +177,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot without scaffold dropped in the middle of a 5x5 pool, 2 deep, swims to the shore and climbs out. */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 200)
 	public void swimsOutOfADeepPool(GameTestHelper helper) {
 		room(helper, 2);
 		fill(helper, 1, 1, 1, 5, 2, 5, Blocks.WATER);
@@ -191,7 +192,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * checks that {@link PathFinder#SWIM_COST} matches the ticks it takes per block. Only the middle of the moat
 	 * counts, after the splash of jumping in has worn off and before the bot climbs out.
 	 */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 160)
 	public void swimCostMatchesTheTimeASwimTakes(GameTestHelper helper) {
 		room(helper, 2);
 		fill(helper, 2, 1, 1, 5, 2, 6, Blocks.WATER);
@@ -244,7 +245,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * {@link #swimsUpAWaterfall}. Times the bot rising through the middle of it and checks that
 	 * {@link PathFinder#SWIM_UP_COST} matches the ticks it takes per block.
 	 */
-	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 600)
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 440)
 	public void swimUpCostMatchesTheTimeARiseTakes(GameTestHelper helper) {
 		room(helper, 0, 16);
 		fill(helper, 4, 1, 1, 6, 10, 6, Blocks.BEDROCK);
@@ -280,7 +281,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * A channel a block wide with a water source at its upper end, so water flows down it the whole way. A bot at
 	 * the lower end swims against the current to the bank beside the source.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 420)
 	public void swimsUpstreamThroughFlowingWater(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 1, 1, 2, 6, 2, 2, Blocks.BEDROCK);
@@ -299,7 +300,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * {@code PathFollower}'s usual drop of 3, into water a block deep. Water breaks the fall: the bot drops in unhurt
 	 * and climbs out on the far bank.
 	 */
-	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 400)
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 260)
 	public void dropsFarIntoWaterUnhurt(GameTestHelper helper) {
 		int fall = PathFinder.MAX_WATER_DROP;
 		room(helper, 0, 16);

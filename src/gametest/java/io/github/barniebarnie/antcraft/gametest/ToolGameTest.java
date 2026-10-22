@@ -23,6 +23,7 @@ import org.jspecify.annotations.Nullable;
 public class ToolGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -38,7 +39,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Two stone blocks by hand take 300 ticks and drop nothing; with a stone pickaxe about 50 ticks. */
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 90)
 	public void usesPickaxeFromInventoryForStone(GameTestHelper helper) {
 		for (int y = 1; y <= 6; y++) {
 			for (int z = 1; z <= 6; z++) {
@@ -56,7 +57,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 190)
 	public void wieldsSwordFromInventoryWhenFighting(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
@@ -117,7 +118,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 90)
 	public void stonePickaxeGetsRawIron(GameTestHelper helper) {
 		breakTwice(helper, Items.STONE_PICKAXE, Blocks.IRON_ORE, bot -> {
 			// The one dropped in the world may have been picked up since.
@@ -127,7 +128,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Logs need no tool, so a lumberjack without an axe still gets them. */
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 240)
 	public void logsDropWithoutATool(GameTestHelper helper) {
 		breakTwice(helper, null, Blocks.OAK_LOG, bot -> {
 			helper.assertTrue(carried(bot, Items.OAK_LOG) >= 1, "bot did not collect the log");

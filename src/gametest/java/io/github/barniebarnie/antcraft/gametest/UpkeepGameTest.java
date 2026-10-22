@@ -30,6 +30,7 @@ public class UpkeepGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		method.invoke(this, helper);
 	}
@@ -65,7 +66,7 @@ public class UpkeepGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 300)
 	public void shearsASheepWhileTheBoardIsBusy(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.SHEARS));
@@ -77,7 +78,7 @@ public class UpkeepGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(sheep.isSheared(), "sheep not sheared"));
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 330)
 	public void storesLooseItemsWhileTheBoardIsBusy(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		ItemEntity loose = helper.spawnItem(Items.COBBLESTONE, new BlockPos(2, 1, 6));

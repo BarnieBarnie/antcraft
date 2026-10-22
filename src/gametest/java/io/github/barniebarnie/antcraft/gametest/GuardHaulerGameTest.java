@@ -35,6 +35,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		// Bedrock walls keep bots inside the test area.
 		for (int x = 0; x < 8; x++) {
@@ -69,7 +70,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 20)
 	public void aColonyBotArmsItselfWithASwordFromTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		core(helper).setItem(0, new ItemStack(Items.IRON_SWORD));
@@ -96,7 +97,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		return chests;
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 30)
 	public void haulerMovesSurplusFromAFullCoreIntoWoodChests(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
@@ -128,7 +129,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	 * A tree job posted while a bot carries what the full core cannot take across the area to storage waits
 	 * until that is stored.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 300)
 	public void aBotMidTripStoresItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// Storage in the far corner from where the bot starts, so the trip spans a few looks at the board.
@@ -177,7 +178,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		return hauler;
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 20)
 	public void haulerStoresWhatTheFullCoreCannotTake(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
@@ -191,7 +192,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 20)
 	public void storageOrdersAChestForWhatAHaulerCannotStore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
@@ -200,7 +201,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().containsKey(Items.CHEST), "no chest ordered: " + colony.orders()));
 	}
 
-	@GameTest(maxTicks = 500)
+	@GameTest(maxTicks = 80)
 	public void storageChestOrderIsWithdrawnWhenAPlayerBringsAChest(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
@@ -229,7 +230,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	 * chest has no slot in the core to be crafted into. Inside the walls the only flat site
 	 * clear of the core is the rows z=4 and z=6.
 	 */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 230)
 	public void aFullCoreGetsAStorageChest(GameTestHelper helper) {
 		BlockPos corePos = new BlockPos(2, 1, 2);
 		helper.setBlock(corePos, ModBlocks.COLONY_CORE);
@@ -317,7 +318,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Storage takes what nothing needs, and the order is crafted. */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 230)
 	public void aCoreFullOfDifferentItemsMakesRoom(GameTestHelper helper) {
 		Colony colony = coreFullOfDifferentItems(helper);
 		colony.addOrder(Items.STICK, 4);
@@ -329,7 +330,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A depositor fills the slot the hauler freed before the chest is crafted; the hauler frees another. */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 230)
 	public void aFreedSlotThatIsRefilledIsFreedAgain(GameTestHelper helper) {
 		Colony colony = coreFullOfDifferentItems(helper);
 		ItemStack deposit = distinctStacks(fullCore(helper).getContainerSize() + 1).getLast();
@@ -398,7 +399,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A hauler holds surplus out of a full core to make room for a chest; once the core has room, it puts it back. */
-	@GameTest(maxTicks = 900)
+	@GameTest(maxTicks = 20)
 	public void haulerPutsHeldItemsIntoTheCoreOnceItHasRoom(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// A storage area waiting for a chest, and no crafter to make one.
@@ -433,7 +434,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 20)
 	public void haulerBringsAMissingPickaxeBackFromStorage(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)));
@@ -449,7 +450,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 70)
 	public void haulerStoresLooseItemsInCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.spawnItem(Items.OAK_SAPLING, 5, 1, 5);

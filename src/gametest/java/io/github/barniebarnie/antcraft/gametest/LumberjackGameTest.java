@@ -50,6 +50,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -153,7 +154,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "chest has " + chest.countItem(Items.OAK_LOG) + " logs");
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 850)
 	public void takesHighPillarDownWhileStandingOnIt(GameTestHelper helper) {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 5, 8, 5);
@@ -167,7 +168,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 900)
 	public void retriesHighScaffoldOnceTheRestIsDown(GameTestHelper helper) {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 6, 2);
@@ -182,7 +183,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 570)
 	public void givesUpOnScaffoldItCannotReachEvenByPillaring(GameTestHelper helper) {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 6, 2);
@@ -196,7 +197,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 720)
 	public void scaffoldSurvivesSaveAndLoad(GameTestHelper helper) {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 6, 2);
@@ -218,7 +219,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * A bot stands on top of a scaffold pillar left from a tree it was called away from. It takes the
 	 * pillar down first, and only then takes another job: harvesting the colony's ripe wheat.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 320)
 	public void takesScaffoldLeftUpDownBeforeTakingAnotherJob(GameTestHelper helper) {
 		// No logs wanted, so harvesting is the only colony work.
 		colonyAtHome(helper).setStockTargets(List.of());
@@ -257,7 +258,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 3600)
+	@GameTest(padding = PADDING, maxTicks = 1100)
 	public void pillarsUpToWideCanopyAndLeavesNoScaffold(GameTestHelper helper) {
 		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
 			.setValue(LeavesBlock.DISTANCE, 1)
@@ -273,6 +274,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
 		}
 		AntBot bot = lumberjack(helper, 1, 6);
+		failFast(helper, bot);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 
 		helper.succeedWhen(() -> {
@@ -287,7 +289,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * block pillar, but the bot only takes one scaffold block at a time from home: it has to come
 	 * back down for more mid-tree and go up again.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 4800)
+	@GameTest(padding = PADDING, maxTicks = 4600)
 	public void restocksScaffoldMidTreeToFellATall2x2Trunk(GameTestHelper helper) {
 		BlockState leaves = Blocks.JUNGLE_LEAVES.defaultBlockState()
 			.setValue(LeavesBlock.DISTANCE, 1)
@@ -305,6 +307,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		Container chest = home(helper);
 		chest.setItem(0, new ItemStack(Items.DIRT, 16));
 		AntBot bot = lumberjack(helper, 1, 6);
+		failFast(helper, bot);
 		goal(bot).setScaffoldStock(1);
 
 		helper.succeedWhen(() -> {
@@ -317,7 +320,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An oak whose branches are joined to the trunk and to each other only at a corner. */
-	@GameTest(padding = PADDING, maxTicks = 3600)
+	@GameTest(padding = PADDING, maxTicks = 1600)
 	public void fellsBranchingOakIncludingDiagonalBranches(GameTestHelper helper) {
 		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
 			.setValue(LeavesBlock.DISTANCE, 1)
@@ -331,7 +334,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(branch.above(), leaves);
 		}
 		home(helper).setItem(0, new ItemStack(Items.DIRT, 16));
-		lumberjack(helper, 1, 5);
+		failFast(helper, lumberjack(helper, 1, 5));
 
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
@@ -340,7 +343,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 530)
 	public void chopsTreeAndStoresLogsInHomeChest(GameTestHelper helper) {
 		tree(helper, 5, 5, false);
 		lumberjack(helper, 2, 4);
@@ -354,10 +357,11 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 2400)
+	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void pillarsUpToTallTreeAndClearsPillars(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
 		AntBot bot = lumberjack(helper, 2, 4);
+		failFast(helper, bot);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 
 		helper.succeedWhen(() -> {
@@ -371,7 +375,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * A 12-log trunk whose top logs need a pillar 8 blocks high. The bot keeps its pillar up between the log jobs
 	 * of the tree, so it builds it once on the way up rather than again for every log, and takes it down at the end.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 4800)
+	@GameTest(padding = PADDING, maxTicks = 2100)
 	public void keepsItsPillarUpBetweenTheLogsOfATallTrunk(GameTestHelper helper) {
 		int logs = 12;
 		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState()
@@ -386,6 +390,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
 		}
 		AntBot bot = lumberjack(helper, 2, 4);
+		failFast(helper, bot);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 32));
 		Set<BlockPos> up = new HashSet<>();
 		int[] placed = {0};
@@ -409,11 +414,11 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 2400)
+	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void takesScaffoldFromHomeToReachTallTree(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
 		home(helper).setItem(0, new ItemStack(Items.DIRT, 16));
-		lumberjack(helper, 2, 4);
+		failFast(helper, lumberjack(helper, 2, 4));
 
 		helper.succeedWhen(() -> {
 			assertAreaCleared(helper);
@@ -422,7 +427,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 2400)
+	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void takesOnlyDirtFromHomeNotCobblestone(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
 		Container home = home(helper);
@@ -439,7 +444,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 2400)
+	@GameTest(padding = PADDING, maxTicks = 1200)
 	public void pillarsWithDirtNotCobblestoneItCarries(GameTestHelper helper) {
 		tallTree(helper, 5, 5);
 		AntBot bot = lumberjack(helper, 2, 4);
@@ -477,7 +482,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 720)
 	public void leavesDecayingLeavesForNatureToRemove(GameTestHelper helper) {
 		tree(helper, 5, 5, false);
 		lumberjack(helper, 2, 4);
@@ -523,7 +528,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * A colony lumberjack resuming a chop job whose bottom log is already gone replants at the job's
 	 * original base on the ground, not at the lowest log still standing.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 390)
 	public void colonyLumberjackReplantsResumedTreeAtItsOriginalBase(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		List<BlockPos> logs = trunk(helper, 5, 5);
@@ -565,11 +570,17 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		return ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CHEST)).orElseThrow();
 	}
 
+	/** Fails at once when the colony gives up a job, or {@code bot} stands idle while logs are left in the area. */
+	private static void failFast(GameTestHelper helper, AntBot bot) {
+		GameTests.failOnGiveUp(helper, colonyAtHome(helper));
+		GameTests.failIfIdle(helper, bot, 200, () -> BlockPos.betweenClosedStream(0, 1, 0, 7, 15, 7).anyMatch(pos -> helper.getBlockState(pos).is(BlockTags.LOGS)));
+	}
+
 	private static AntBot colonyLumberjack(GameTestHelper helper, Colony colony, int x, int z) {
 		return lumberjack(helper, x, z);
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 620)
 	public void nearerLumberjackReplantsTreeFelledWithoutSapling(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 5, 5);
@@ -605,7 +616,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * A colony tree whose lower trunk was chopped and whose leaves have decayed since: what is left
 	 * no longer looks like a tree, but its chop job remembers the logs, so a lumberjack fells the rest.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 390)
 	public void fellsTheLeaflessRestOfAColonyTree(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		List<BlockPos> logs = new ArrayList<>();
@@ -664,7 +675,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 400)
+	@GameTest(padding = PADDING, maxTicks = 50)
 	public void swapsToBetterAxeInColonyCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		Container core = home(helper);
@@ -679,7 +690,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 400)
+	@GameTest(padding = PADDING, maxTicks = 20)
 	public void ordersBetterAxeTheColonyCanMake(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		Container core = home(helper);
@@ -691,7 +702,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.orders().getOrDefault(Items.STONE_AXE, 0) == 1, "orders: " + colony.orders()));
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 560)
 	public void replantsWithSaplingFromColonyCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		Container core = home(helper);
@@ -706,7 +717,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 200)
+	@GameTest(padding = PADDING, maxTicks = 20)
 	public void dropsReplantJobsForReplantedOrUnplantableBases(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		BlockPos replanted = new BlockPos(5, 1, 5);
@@ -744,7 +755,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 580)
 	public void breaksLeavesInTheWayToReachTheLogs(GameTestHelper helper) {
 		tree(helper, 6, 6, false);
 		// The bot starts shut in by leaves, out of reach of the tree.
@@ -792,7 +803,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A scaffold block walled in with bedrock on every side: cleanup cannot see it, so it leaves it rather than breaking through. */
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 580)
 	public void cleanupLeavesScaffoldItCannotSee(GameTestHelper helper) {
 		tree(helper, 2, 6, false);
 		AntBot bot = lumberjack(helper, 6, 2);
@@ -812,7 +823,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Two colony lumberjacks fell a tall tree together, a log each at a time, and the rest of it is never posted as another tree. */
-	@GameTest(padding = PADDING, maxTicks = 2400)
+	@GameTest(padding = PADDING, maxTicks = 700)
 	public void colonyLumberjacksFellATreeTogetherWithoutPostingItAgain(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		tallTree(helper, 5, 5);
@@ -838,7 +849,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * Two bots fell a 12-log trunk together, each on its own pillar, at times on logs right above one another. Neither
 	 * breaks the log or the scaffold the other stands on: no bot falls further than a path may drop, or gets hurt.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 3600)
+	@GameTest(padding = PADDING, maxTicks = 1700)
 	public void twoBotsOnAdjacentLogsOfOneTrunkKeepTheirFooting(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		int logs = 12;
@@ -883,7 +894,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * The lumberjack stands inside a ring of dirt another bot placed as scaffolding, with the tree
 	 * outside. Digging through would be quicker, but it pillars over the ring instead.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 610)
 	public void leavesScaffoldOfOtherBotsAlone(GameTestHelper helper) {
 		tree(helper, 6, 1, false);
 		// The owner is walled in with barriers, out of reach of its scaffold, so it cannot take it down itself.
@@ -943,7 +954,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	/** At most how long three bots take to fell a {@link #darkOak} together; one bot alone takes longer. */
 	private static final int SWARM_TICKS = 500;
 
-	@GameTest(padding = PADDING, maxTicks = 800)
+	@GameTest(padding = PADDING, maxTicks = 540)
 	public void threeBotsFellOneTreeTogether(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		darkOak(helper);
@@ -967,7 +978,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 1500)
 	public void oneBotAloneFellsTheTreeSlowerThanThree(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		darkOak(helper);
@@ -1022,7 +1033,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A felled birch is replanted with a birch sapling, not the oak sapling the lumberjack carries first, so a birch forest stays birch. */
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 540)
 	public void replantsFelledBirchWithBirchSapling(GameTestHelper helper) {
 		bareTree(helper, 5, 5, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
 		AntBot bot = lumberjack(helper, 2, 4);
@@ -1036,7 +1047,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A colony lumberjack without saplings posts a birch replant job for a felled birch, and takes the birch sapling from the core, not the oak one. */
-	@GameTest(padding = PADDING, maxTicks = 1600)
+	@GameTest(padding = PADDING, maxTicks = 560)
 	public void colonyReplantsFelledBirchWithBirchSaplingFromTheCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		Container core = home(helper);
@@ -1070,7 +1081,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A colony replant job for a partly built-over 2x2 spruce site is taken with one spruce sapling in the core. */
-	@GameTest(padding = PADDING, maxTicks = 600)
+	@GameTest(padding = PADDING, maxTicks = 20)
 	public void colonyReplantsAPartlyBuiltOver2x2SiteAs1x1FromTheCore(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		Container core = home(helper);
@@ -1086,7 +1097,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A colony lumberjack knocked into a pool 2 deep, with no scaffold anywhere, swims out and fells its tree. */
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 680)
 	public void swimsOutOfAPoolAndFellsItsTree(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		for (int x = 0; x < 8; x++) {
@@ -1111,7 +1122,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 550)
 	public void colonyBotOfAnotherRoleFellsATreeFromItsJob(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 5, 5);
@@ -1131,7 +1142,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 	 * Logs a bot carries count as colony stock, which crafters cannot use, so with trees still to fell and an
 	 * order for planks it brings the first tree's logs to the core rather than keep them until the last.
 	 */
-	@GameTest(padding = PADDING, maxTicks = 2400)
+	@GameTest(padding = PADDING, maxTicks = 400)
 	public void bringsLogsToTheCoreForAnOrderWhileTreesAreLeft(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 5, 5);
@@ -1151,7 +1162,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 			"core has " + home(helper).countItem(Items.OAK_LOG) + " logs, " + countBlocks(helper, BlockTags.LOGS) + " logs standing"));
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 1200)
+	@GameTest(padding = PADDING, maxTicks = 540)
 	public void twoColonyBotsEachTakeTheTreeNearerToThem(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 2, 5);
@@ -1180,7 +1191,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(padding = PADDING, maxTicks = 800)
+	@GameTest(padding = PADDING, maxTicks = 20)
 	public void replantJobIsTakenByABotThatIsNotALumberjack(GameTestHelper helper) {
 		Colony colony = colonyAtHome(helper);
 		BlockPos base = helper.absolutePos(new BlockPos(5, 1, 5));

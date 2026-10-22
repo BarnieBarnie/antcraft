@@ -58,6 +58,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -135,7 +136,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Bots saved while colonies still gave them roles load as ordinary workers: the role is ignored. */
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 550)
 	public void aBotSavedWithARoleLoadsWithoutItAndTakesAnyJob(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
@@ -160,7 +161,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Clients pick the bot's skin by the kind of job it took last, so that has to be in the synched data. */
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 30)
 	public void theTypeOfTheJobTakenIsSynched(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
@@ -172,7 +173,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A colony is a set of identical workers: three bots take a tree, a crop and a build at once. */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 150)
 	public void threeBotsWorkATreeACropAndABuildAtOnce(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
@@ -205,7 +206,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * A project with nothing for it in the core: the colony orders what it waits for, bots fell a tree for the logs,
 	 * craft the planks and the crafting table at the core, and build it.
 	 */
-	@GameTest(maxTicks = 2400)
+	@GameTest(maxTicks = 430)
 	public void aProjectWithNoMaterialsInTheCoreIsFinishedByBotsWhoGatherAndCraftWhatItNeeds(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		tree(helper, 5, 5);
@@ -226,7 +227,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Bots without a colony only follow orders and fight: no tree felling around them. */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 350)
 	public void aBotWithoutAColonyDoesNoWorkButWalksToAGotoTarget(GameTestHelper helper) {
 		tree(helper, 5, 5);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
@@ -250,7 +251,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 200)
 	public void aColonyBotFightsAZombieThatComesNearItInsideTheRadius(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		AntBot bot = member(helper, colony, 2, 2);
@@ -335,7 +336,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
-	@GameTest(maxTicks = 1600)
+	@GameTest(maxTicks = 530)
 	public void lumberjacksSplitTreesAndStoreLogsInCore(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
@@ -356,7 +357,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 50)
 	public void jobIsFreedWhenItsBotDies(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));
@@ -392,7 +393,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1200)
+	@GameTest(maxTicks = 550)
 	public void unassignedMemberTakesUpWorkTheColonyNeeds(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.LOGS, 64)));

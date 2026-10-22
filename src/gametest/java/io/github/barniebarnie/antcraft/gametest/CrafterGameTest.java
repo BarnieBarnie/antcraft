@@ -34,6 +34,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.logTicks(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
@@ -69,7 +70,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 60)
 	public void craftsOrderFromLogsInCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		store(helper, new ItemStack(Items.OAK_LOG, 2));
@@ -87,7 +88,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 	 * survey. Now the colony keeps ticking while the bed waits for wool, and makes it once wool
 	 * and planks arrive.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 520)
 	public void ordersABedAndMakesItOnceWoolAndPlanksArrive(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.addOrder(Items.BED.red(), 1);
@@ -103,7 +104,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The default stock keeps torches for the mineshaft. */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 40)
 	public void keepsTorchesInStock(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStockTargets(DefaultStock.TARGETS.stream().filter(target -> target.matches(Items.TORCH)).toList());
@@ -113,7 +114,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(core(helper).countItem(Items.TORCH) == 4, "core has " + core(helper).countItem(Items.TORCH) + " torches"));
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 40)
 	public void activatesBotCoresFromStorage(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		store(helper, new ItemStack(ModItems.BOT_CORE));
@@ -125,7 +126,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 210)
 	public void buildsANewBotFromRawMaterials(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		store(helper,
@@ -138,7 +139,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.members().size() == 2, "members: " + colony.members().size()));
 	}
 
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 40)
 	public void craftsUpToStockTarget(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PLANKS, 4)));
@@ -151,7 +152,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 900)
+	@GameTest(maxTicks = 220)
 	public void reordersWhenStockDropsBelowTarget(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PLANKS, 4)));
@@ -190,7 +191,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(core(helper).countItem(Items.COAL) == 0, "coal left in core: " + core(helper).countItem(Items.COAL));
 	}
 
-	@GameTest(maxTicks = 900)
+	@GameTest(maxTicks = 840)
 	public void smeltsRawIronInAFurnaceNextToTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(CORE.east(), Blocks.FURNACE);
@@ -205,7 +206,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 900)
+	@GameTest(maxTicks = 860)
 	public void placesAStoredFurnaceToSmelt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		store(helper, new ItemStack(Items.RAW_IRON, 2), new ItemStack(Items.COAL, 1), new ItemStack(Items.FURNACE));
@@ -219,7 +220,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 1000)
+	@GameTest(maxTicks = 880)
 	public void craftsAFurnaceFromCobblestoneToSmelt(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		store(helper, new ItemStack(Items.RAW_IRON, 2), new ItemStack(Items.COAL, 1), new ItemStack(Items.COBBLESTONE, 8));
@@ -286,7 +287,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 500)
+	@GameTest(maxTicks = 40)
 	public void furnaceOutputWaitsWhileTheCrafterCraftsWhatFits(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(CORE.east(), Blocks.FURNACE);
@@ -304,7 +305,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 100)
+	@GameTest(maxTicks = 20)
 	public void furnaceOutputCountsAsColonyStock(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		helper.setBlock(CORE.east(), Blocks.FURNACE);
@@ -342,7 +343,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		return bot;
 	}
 
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 60)
 	public void colonyBotOfAnotherRoleCraftsAnOrderAtTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		store(helper, new ItemStack(Items.OAK_LOG, 2));
@@ -359,7 +360,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 	 * A core on a ledge too high to reach from the ground: the bot pillars up with dirt to craft the order there,
 	 * and takes its pillar down once done, though crafting is no build or tree job.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 220)
 	public void takesDownThePillarItPlacedToReachTheCore(GameTestHelper helper) {
 		// A 5x5 ledge, four high, with the core in the middle: out of reach from the ground around it.
 		BlockPos ledge = new BlockPos(5, 5, 5);
@@ -402,7 +403,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		return seen;
 	}
 
-	@GameTest(maxTicks = 300)
+	@GameTest(maxTicks = 40)
 	public void botCarryingACraftingTablePlacesItCraftsStairsAndTakesItBack(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// Far from the core, which a bot could craft at.
