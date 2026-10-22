@@ -1457,11 +1457,32 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			if (pig.isAlive() && helper.getBlockState(spot).is(Blocks.COBBLESTONE)) {
 				helper.fail("placed a block into the pig");
 			}
+			if (!colony.blockedSteps().isEmpty()) {
+				helper.fail("step reported blocked while waiting: " + colony.blockedSteps());
+			}
 		});
 		helper.runAfterDelay(200, pig::discard);
 		helper.succeedWhen(() -> {
 			helper.assertFalse(pig.isAlive(), "pig still there");
 			assertState(helper, 4, 1, 4, COBBLE);
+		});
+	}
+
+	/** A mob that never leaves the spot: the builder gives the step up after a while and reports it, rather than waiting forever. */
+	@GameTest(maxTicks = 630)
+	public void reportsAStepWhoseSpotStaysTaken(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		BlockPos spot = new BlockPos(4, 1, 4);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, COBBLE))));
+		Pig pig = helper.spawn(EntityTypes.PIG, spot);
+		pig.setNoAi(true);
+		member(helper, colony, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(pig.isAlive(), "pig gone");
+			helper.assertBlockPresent(Blocks.AIR, spot);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(spot))), "taken spot not reported: " + colony.blockedSteps());
 		});
 	}
 

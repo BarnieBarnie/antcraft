@@ -98,6 +98,12 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int STEP_REACH_TICKS = 1200;
 	/** How many times a builder finds no path to a step, a while apart, before giving it up; a path may fail for a moment, such as just after loading. */
 	private static final int STEP_TRIES = 3;
+	/**
+	 * How long a builder within reach of a step waits for its spot to be free, such as of a mob standing in it, before
+	 * giving the step up. An idle bot steps aside in a second or so and a wandering mob moves on in a few; 15 s is
+	 * well over that, and well under {@link #STEP_REACH_TICKS}.
+	 */
+	private static final int SPOT_WAIT_TICKS = 300;
 
 	/** Fluid sources found per full bucket they fill, cleared every {@link #SOURCE_SCAN_TICKS}. */
 	private final Map<Item, Optional<BlockPos>> sources = new HashMap<>();
@@ -116,6 +122,10 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private @Nullable BlockPos reaching;
 	private long reachingSince;
 	private long reachingLast;
+	/** The step whose spot it found taken, since when, and when it last looked, to give it up after {@link #SPOT_WAIT_TICKS}. */
+	private @Nullable BlockPos waiting;
+	private long waitingSince;
+	private long waitingLast;
 	/** The build or dig job begun through {@link #begin}, until it is done. */
 	private @Nullable Job job;
 	/** What became of the job begun, for {@link WorkerGoal} to report to the board. */
@@ -331,6 +341,22 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		} else if (this.isFreeToPlace(level, step.pos(), step.dry())
 			&& step.otherHalf().map(half -> this.isFreeToPlace(level, half.pos(), half.state())).orElse(true)) {
 			this.place(level, colony, step);
+		} else {
+			this.waitForSpot(level, step.pos());
+		}
+	}
+
+	/** Waits at the step at {@code pos} for its spot to be free, giving the step up for this job after {@link #SPOT_WAIT_TICKS}. */
+	private void waitForSpot(ServerLevel level, BlockPos pos) {
+		long now = level.getGameTime();
+		if (!pos.equals(this.waiting) || now - this.waitingLast > IDLE_TICKS + 1) {
+			this.waiting = pos;
+			this.waitingSince = now;
+		}
+		this.waitingLast = now;
+		if (now - this.waitingSince > SPOT_WAIT_TICKS) {
+			this.unreachable.add(pos);
+			this.waiting = null;
 		}
 	}
 
@@ -558,6 +584,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			BlockState block = Block.byItem(item).defaultBlockState();
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);
+			} else {
+				this.waitForSpot(level, pos);
 			}
 		}
 	}
