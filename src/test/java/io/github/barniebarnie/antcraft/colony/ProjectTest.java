@@ -232,6 +232,25 @@ class ProjectTest {
 	}
 
 	@Test
+	void treeJobsCarryTheOrderPriorityWhileAPlayerOrderWaitsForLogs() {
+		Colony colony = colony();
+		colony.board().postTree(new TreeScanner.Tree(TREE.getFirst(), TREE), Optional.empty());
+		// A chest the colony ordered itself, for storage, does not raise them.
+		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));
+		colony.prioritizeGatherJobs(Map.of(), book, gatherable);
+		assertEquals(Set.of(0), treePriorities(colony));
+
+		colony.addOrder(Items.CHEST, 1);
+		colony.prioritizeGatherJobs(Map.of(), book, gatherable);
+		assertEquals(Set.of(Colony.ORDER_PRIORITY), treePriorities(colony));
+	}
+
+	private static Set<Integer> treePriorities(Colony colony) {
+		return colony.board().jobs().stream().filter(job -> job.type() == JobType.CHOP_TREE || job.type() == JobType.CHOP_LOG)
+			.map(Job::priority).collect(Collectors.toSet());
+	}
+
+	@Test
 	void anOrderTheColonyPlacedItselfGivesItsCraftsNoOrderPriority() {
 		Colony colony = colony();
 		colony.orderFor(Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 1));

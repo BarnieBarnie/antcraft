@@ -604,18 +604,23 @@ public class Colony {
 				.forEach(craft -> priorities.merge(craft.recipe().output(), priority, Math::max));
 		});
 		this.projects().forEach(project -> feeds.accept(this.waiting.getOrDefault(project.id(), Map.of()), project.priority()));
-		// The part of the orders a player placed: what is ordered beyond what the colony ordered itself.
+		feeds.accept(this.playerOrders(), ORDER_PRIORITY);
+		crafts.forEach(item -> this.board.postFor(JobType.CRAFT, this.core, item, Optional.empty(), priorities.getOrDefault(item, 0)));
+	}
+
+	/** The part of the orders a player placed: what is ordered beyond what the colony ordered itself. */
+	private Map<Item, Integer> playerOrders() {
 		Map<Item, Integer> placed = new HashMap<>();
 		this.systemOrders.values().forEach(part -> part.forEach((item, count) -> placed.merge(item, count, Integer::sum)));
 		Map<Item, Integer> players = new HashMap<>();
 		this.orders.forEach((item, count) -> setCount(players, item, count - placed.getOrDefault(item, 0)));
-		feeds.accept(players, ORDER_PRIORITY);
-		crafts.forEach(item -> this.board.postFor(JobType.CRAFT, this.core, item, Optional.empty(), priorities.getOrDefault(item, 0)));
+		return players;
 	}
 
 	/**
-	 * Gives the tree and log jobs the priority of the highest project waiting for logs, the branch jobs that of the highest one
-	 * waiting for what mining yields, and each vein job that of the highest one waiting for its ore (see {@link #priorityFor}).
+	 * Gives the tree and log jobs the priority of the highest project or player's order waiting for logs, the branch jobs that of
+	 * the highest one waiting for what mining yields, and each vein job that of the highest one waiting for its ore (see
+	 * {@link #priorityFor}).
 	 */
 	public void prioritizeGatherJobs(Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
 		int trees = this.priorityFor(item -> item.builtInRegistryHolder().is(ItemTags.LOGS), stock, book, gatherable);
@@ -630,21 +635,32 @@ public class Colony {
 
 	/**
 	 * The priority of the highest project waiting for an item that is {@code wanted}, or for something {@link TaskPlanner}
-	 * plans to make or gather it from with {@code stock} and {@code book}; 0 if none is.
+	 * plans to make or gather it from with {@code stock} and {@code book}, or {@link #ORDER_PRIORITY} if a player's order
+	 * waits for it and no higher project does; 0 if none is.
 	 */
 	public int priorityFor(Predicate<Item> wanted, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		int priority = waitsFor(this.playerOrders(), wanted, stock, book, gatherable) ? ORDER_PRIORITY : 0;
 		for (Project project : this.projects()) {
-			for (Map.Entry<Item, Integer> waits : this.waiting.getOrDefault(project.id(), Map.of()).entrySet()) {
-				Map<Item, Integer> available = new HashMap<>(stock);
-				available.remove(waits.getKey());
-				TaskPlanner.Plan<Item> plan = TaskPlanner.plan(waits.getKey(), waits.getValue(), available, book, gatherable);
-				if (wanted.test(waits.getKey()) || plan.toGather().keySet().stream().anyMatch(wanted)
-						|| plan.crafts().stream().anyMatch(craft -> wanted.test(craft.recipe().output()))) {
-					return project.priority();
-				}
+			if (waitsFor(this.waiting.getOrDefault(project.id(), Map.of()), wanted, stock, book, gatherable)) {
+				return Math.max(priority, project.priority());
 			}
 		}
-		return 0;
+		return priority;
+	}
+
+	/** Whether any of {@code waiting} is {@code wanted} or planned from something that is (see {@link #priorityFor}). */
+	private static boolean waitsFor(Map<Item, Integer> waiting, Predicate<Item> wanted, Map<Item, Integer> stock,
+			TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		for (Map.Entry<Item, Integer> waits : waiting.entrySet()) {
+			Map<Item, Integer> available = new HashMap<>(stock);
+			available.remove(waits.getKey());
+			TaskPlanner.Plan<Item> plan = TaskPlanner.plan(waits.getKey(), waits.getValue(), available, book, gatherable);
+			if (wanted.test(waits.getKey()) || plan.toGather().keySet().stream().anyMatch(wanted)
+					|| plan.crafts().stream().anyMatch(craft -> wanted.test(craft.recipe().output()))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Where each batch of {@code plan} with steps is known by on the board. */
