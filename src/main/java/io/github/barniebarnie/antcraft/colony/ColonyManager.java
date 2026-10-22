@@ -285,15 +285,18 @@ public class ColonyManager extends SavedData {
 						branches.stream().flatMap(branch -> branch.segments().stream()).filter(segment -> segment.darkTorch(level).isPresent()).forEach(post);
 					}
 					List<Mineshaft.Branch> left = branches.stream()
-						.filter(branch -> !givenUp(branch, givenUp) && branch.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).toList();
-					if (!left.isEmpty()) {
-						work.put(y, left);
+						.filter(branch -> !givenUp(branch, givenUp) && branch.cells().stream().anyMatch(pos -> !Mining.isDug(level, pos))).toList();
+					// A given-up hall, say with bedrock in the way, leaves the branches off it out of reach.
+					if (!left.isEmpty() || shaft.hallWork(y).filter(hall -> branches.contains(hall) && givenUp(hall, givenUp)).isPresent()) {
+						if (!left.isEmpty()) {
+							work.put(y, left);
+						}
 						break;
 					}
 				}
 			}
 			Mineshaft.branchesToPost(work, wanted.get()).stream().flatMap(branch -> branch.segments().stream())
-				.filter(segment -> segment.cells().stream().anyMatch(pos -> Mining.isMinable(level, pos))).forEach(post);
+				.filter(segment -> segment.cells().stream().anyMatch(pos -> !Mining.isDug(level, pos))).forEach(post);
 			colony.oreRevisit().update(bestPickaxe(level, colony, holds), start -> colony.board().has(JobType.MINE_BRANCH, start),
 					() -> dugBranches(level, shaft, open, givenUp), level::getBlockState, pos -> Mining.isMinable(level, pos), wanted)
 				.forEach(start -> shaft.branch(start).ifPresent(branch -> branch.segments().forEach(post)));
@@ -307,7 +310,7 @@ public class ColonyManager extends SavedData {
 		for (int y : levels) {
 			for (int round = 0; round < shaft.rounds(); round++) {
 				shaft.branches(y, round).stream()
-					.filter(branch -> !givenUp(branch, givenUp) && branch.cells().stream().noneMatch(pos -> Mining.isMinable(level, pos)))
+					.filter(branch -> !givenUp(branch, givenUp) && branch.cells().stream().allMatch(pos -> Mining.isDug(level, pos)))
 					.forEach(dug::add);
 			}
 		}

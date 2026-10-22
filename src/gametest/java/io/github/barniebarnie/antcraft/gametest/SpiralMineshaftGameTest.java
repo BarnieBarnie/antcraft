@@ -4,6 +4,7 @@ import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -216,6 +217,53 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		});
+	}
+
+	/**
+	 * As above, with bedrock on the floor of the hall's middle block, in the way a miner walks: the miner digs the hall
+	 * up to it, then the hall job is given up and no branch off the hall is posted or dug.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 640)
+	public void aHallWithBedrockInItsWayIsGivenUpAndNoBranchOffItIsPosted(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 5, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(0, 6, 0));
+		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
+		int y = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(5, 6, 1)), List.of(y), 1, 3, 4, 1);
+		colony.setMineshaft(shaft);
+		for (BuildPlan.Step step : shaft.plan().steps()) {
+			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {
+				helper.getLevel().setBlockAndUpdate(step.pos(), step.state());
+			}
+		}
+		colony.removeBuild(shaft.plan());
+		Mineshaft.Branch hall = shaft.hallWork(y).orElseThrow();
+		// The cells run floor, then ceiling, block by block from the landing.
+		helper.getLevel().setBlockAndUpdate(hall.cells().get(2), Blocks.BEDROCK.defaultBlockState());
+		List<Mineshaft.Branch> branches = shaft.branches(y);
+		AntBot miner = member(helper, colony, new BlockPos(12, 6, 12));
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(Items.DIRT, 8));
+		long[] givenUpAt = {-1};
+		helper.onEachTick(() -> {
+			for (Mineshaft.Branch branch : branches) {
+				if (branch.segments().stream().anyMatch(segment -> colony.board().has(JobType.MINE_BRANCH, segment.start()))) {
+					helper.fail("branch posted at " + relative(helper, branch.start()).toShortString());
+				}
+				if (branch.cells().stream().anyMatch(cell -> helper.getLevel().getBlockState(cell).isAir())) {
+					helper.fail("branch dug at " + relative(helper, branch.start()).toShortString());
+				}
+			}
+			if (givenUpAt[0] < 0 && colony.board().jobs().stream()
+					.anyMatch(job -> job.type() == JobType.MINE_BRANCH && job.givenUp() && job.target().equals(hall.start()))) {
+				givenUpAt[0] = helper.getTick();
+			}
+		});
+
+		// Two surveys after it gave up, so a branch would have been posted.
+		helper.succeedWhen(() -> helper.assertTrue(givenUpAt[0] >= 0 && helper.getTick() - givenUpAt[0] > 200, "hall not given up"));
 	}
 
 	/** Every block of the test area that is not air. */

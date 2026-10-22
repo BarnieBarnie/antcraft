@@ -115,7 +115,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return job.tool().filter(tool -> ToolKind.PICKAXE.rank(ToolKind.PICKAXE.bestCarried(this.bot)) >= ToolKind.PICKAXE.rank(tool)).isPresent();
 		}
 		// A segment once the one before it is dug, so the bot can walk up to it.
-		return colony.mineshaft().filter(shaft -> shaft.segmentReady(job.target(), pos -> !Mining.isMinable(level, pos))).isPresent()
+		return colony.mineshaft().filter(shaft -> shaft.segmentReady(job.target(), pos -> Mining.isDug(level, pos))).isPresent()
 			&& !this.betterPickaxeFree(level, colony, job);
 	}
 
@@ -279,9 +279,12 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		this.postVeins(level, colony, branch.get());
 		List<BlockPos> blocks = this.toMine(level, branch.get());
 		if (blocks.isEmpty()) {
-			// Cells left that it could not reach: try again later, then give them up.
-			boolean left = branch.get().cells().stream().anyMatch(cell -> Mining.isMinable(level, cell));
-			this.endJob(left ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
+			// A cell in the way it may not mine, such as bedrock: give up, so nothing beyond it is dug. Else cells left
+			// that it could not reach: try again later, then give them up.
+			List<BlockPos> cells = branch.get().cells();
+			boolean blocked = cells.stream().anyMatch(cell -> !Mining.isMinable(level, cell) && !Mining.isDug(level, cell));
+			boolean left = cells.stream().anyMatch(cell -> Mining.isMinable(level, cell));
+			this.endJob(blocked ? WorkerGoal.Outcome.GIVE_UP : left ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
 		this.dig(level, blocks.getFirst());
@@ -377,11 +380,18 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return this.upgradeTool(level, colony, kind);
 	}
 
-	/** The branch's blocks left to dig, from the hall outwards; the ores in its walls are vein jobs (see {@link #postVeins}). */
+	/**
+	 * The branch's blocks left to dig, from the hall outwards up to the first cell in the way it may not mine; the ores
+	 * in its walls are vein jobs (see {@link #postVeins}).
+	 */
 	private List<BlockPos> toMine(ServerLevel level, Mineshaft.Branch branch) {
 		List<BlockPos> blocks = new ArrayList<>();
 		for (BlockPos cell : branch.cells()) {
-			if (Mining.isMinable(level, cell) && !this.unreachable.contains(cell)) {
+			boolean minable = Mining.isMinable(level, cell);
+			if (!minable && !Mining.isDug(level, cell)) {
+				break;
+			}
+			if (minable && !this.unreachable.contains(cell)) {
 				blocks.add(cell);
 			}
 		}

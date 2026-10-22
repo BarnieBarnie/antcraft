@@ -45,7 +45,7 @@ import org.jspecify.annotations.Nullable;
  */
 public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** What became of a job, as its executor reports it. */
-	enum Outcome { COMPLETE, RELEASE, RETRY }
+	enum Outcome { COMPLETE, RELEASE, RETRY, GIVE_UP }
 
 	/** Runs the jobs of some types for the worker goal. */
 	public interface Executor {
@@ -287,11 +287,12 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				this.last = Optional.of(done);
 			}
 			case RELEASE -> colony.board().release(this.bot.getUUID());
-			case RETRY -> {
+			case RETRY, GIVE_UP -> {
 				Executor executor = this.executors.get(done.type());
-				if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + executor.retryTicks(), executor.tries())) {
-					AntCraft.LOGGER.info("Colony at {} gave up on the {} job at {} after {} tries",
-						colony.core().toShortString(), done.type().getSerializedName(), done.target().toShortString(), executor.tries());
+				int tries = outcome == Outcome.GIVE_UP ? 0 : executor.tries();
+				if (!colony.board().retryLater(this.bot.getUUID(), level.getGameTime() + executor.retryTicks(), tries)) {
+					AntCraft.LOGGER.info("Colony at {} gave up on the {} job at {} {}", colony.core().toShortString(), done.type().getSerializedName(),
+						done.target().toShortString(), outcome == Outcome.GIVE_UP ? "with a block in the way" : "after " + tries + " tries");
 				}
 			}
 		}

@@ -28,4 +28,13 @@ public final class Mining {
 		}
 		return true;
 	}
+
+	/**
+	 * Whether a mine cell is dug: nothing a bot would mine is left and nothing blocks the way through, such as air,
+	 * a torch or water. Bedrock, a chest, a protected block or stone holding back water is not, so a hall or branch
+	 * with such a cell in its way does not count as dug.
+	 */
+	public static boolean isDug(Level level, BlockPos pos) {
+		return !isMinable(level, pos) && level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
+	}
 }

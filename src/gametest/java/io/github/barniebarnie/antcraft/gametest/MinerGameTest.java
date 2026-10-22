@@ -196,14 +196,13 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 1400)
 	public void minersNeverBreakTheStairsOrTorches(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);
-		GameTests.failOnGiveUp(helper, colony);
 		wantStone(colony);
 		Mineshaft shaft = mine(helper);
 		dig(helper, colony, shaft);
 		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.TORCH, 8));
-		// Built by a builder, in the way of a branch.
+		// Built by a builder, in the way at the end of a branch: the miner digs up to it, then gives the branch up.
 		Mineshaft.Branch first = shaft.branches(shaft.levels().getLast()).getFirst();
-		BlockPos planks = first.cells().get(3);
+		BlockPos planks = first.cells().getLast();
 		helper.getLevel().setBlockAndUpdate(planks, Blocks.OAK_PLANKS.defaultBlockState());
 		colony.protect(planks, Blocks.OAK_PLANKS);
 		for (int i = 0; i < 2; i++) {
@@ -230,8 +229,12 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			if (!helper.getLevel().getBlockState(planks).is(Blocks.OAK_PLANKS)) {
 				helper.fail("broke the builder's planks");
 			}
+			colony.board().jobs().stream().filter(job -> job.givenUp() && !job.target().equals(first.start())).findFirst()
+				.ifPresent(job -> helper.fail("gave up " + job.type() + " at " + relative(helper, job.target()).toShortString()));
 		});
 		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.board().jobs().stream().anyMatch(job -> job.givenUp() && job.target().equals(first.start())),
+				"branch with the planks not given up");
 			for (int level : shaft.levels()) {
 				for (Mineshaft.Branch branch : shaft.branches(level)) {
 					for (BlockPos cell : branch.cells()) {
