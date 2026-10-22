@@ -515,7 +515,7 @@ public final class AntCraftCommands {
 			List<BuildPlan> plans = colony.plans(project);
 			long left = plans.stream().flatMap(plan -> plan.steps().stream()).filter(step -> !step.isDone(source.getLevel().getBlockState(step.pos()))).count();
 			int n = i + 1;
-			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.line", n, Project.displayName(project.name()), project.priority(),
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.line", n, project.displayName(), project.priority(),
 				plans.size(), left, names(colony.waitingFor(project.id()))), false);
 		}
 		return projects.size();
@@ -546,7 +546,7 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		colony.get().cancelProject(project.get().id());
-		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.cancelled", n, Project.displayName(project.get().name())), false);
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.cancelled", n, project.get().displayName()), false);
 		return 1;
 	}
 
@@ -560,7 +560,7 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		colony.get().setPriority(project.get().id(), priority);
-		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.priority", n, Project.displayName(project.get().name()), priority), false);
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.priority", n, project.get().displayName(), priority), false);
 		return 1;
 	}
 

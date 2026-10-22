@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -131,8 +132,8 @@ class ColonyStatusTest {
 	void summarisesBuildsAndBlockedSteps() {
 		ColonyStatus status = status();
 		assertEquals(List.of(
-			new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false, false, List.of(new ColonyStatus.Batch(1, 2, false)), "build", 0, Map.of()),
-			new ColonyStatus.Build(new BlockPos(12, 64, 12), 1, 1, false, true, List.of(new ColonyStatus.Batch(1, 1, false)), "terraform", 0,
+			new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false, false, List.of(new ColonyStatus.Batch(1, 2, false)), Component.literal("build"), 0, Map.of()),
+			new ColonyStatus.Build(new BlockPos(12, 64, 12), 1, 1, false, true, List.of(new ColonyStatus.Batch(1, 1, false)), Component.literal("terraform"), 0,
 				Map.of())), status.builds());
 		assertEquals(List.of(new BlockPos(3, 64, 3)), status.blocked());
 	}
@@ -157,7 +158,7 @@ class ColonyStatusTest {
 		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false,
 			pos -> pos.getY() == 64 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), 1, false);
 		assertEquals(List.of(new ColonyStatus.Build(new BlockPos(10, 64, 10), 3, 4, false, false, List.of(
-			new ColonyStatus.Batch(1, 2, false), new ColonyStatus.Batch(1, 1, true), new ColonyStatus.Batch(1, 1, true)), "build", 0, Map.of())),
+			new ColonyStatus.Batch(1, 2, false), new ColonyStatus.Batch(1, 1, true), new ColonyStatus.Batch(1, 1, true)), Component.literal("build"), 0, Map.of())),
 			status.builds());
 	}
 
@@ -171,7 +172,7 @@ class ColonyStatusTest {
 
 		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false, pos -> Blocks.AIR.defaultBlockState(), 1, false);
 		ColonyStatus.Build build = status.builds().getFirst();
-		assertEquals("hut", build.project());
+		assertEquals(Component.literal("hut"), build.project());
 		assertEquals(2, build.priority());
 		assertEquals(Map.of(Items.OAK_PLANKS, 1), build.waitsFor());
 	}

@@ -22,6 +22,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerLevel;
@@ -112,12 +114,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 	 * A build plan with how many of its steps are left, whether it is the mineshaft or an area to level, and its batches in order;
 	 * and the project it is part of, with the project's priority and what it still waits for (see {@link Colony#waitingFor}).
 	 */
-	public record Build(BlockPos target, int left, int steps, boolean mineshaft, boolean terraform, List<Batch> batches, String project,
+	public record Build(BlockPos target, int left, int steps, boolean mineshaft, boolean terraform, List<Batch> batches, Component project,
 			int priority, Map<Item, Integer> waitsFor) {
 		static final StreamCodec<RegistryFriendlyByteBuf, Build> STREAM_CODEC = StreamCodec.composite(
 			BlockPos.STREAM_CODEC, Build::target, ByteBufCodecs.VAR_INT, Build::left, ByteBufCodecs.VAR_INT, Build::steps,
 			ByteBufCodecs.BOOL, Build::mineshaft, ByteBufCodecs.BOOL, Build::terraform, Batch.STREAM_CODEC.apply(ByteBufCodecs.list()), Build::batches,
-			ByteBufCodecs.STRING_UTF8, Build::project, ByteBufCodecs.VAR_INT, Build::priority, ITEM_COUNTS, Build::waitsFor,
+			ComponentSerialization.STREAM_CODEC, Build::project, ByteBufCodecs.VAR_INT, Build::priority, ITEM_COUNTS, Build::waitsFor,
 			Build::new);
 	}
 
@@ -271,7 +273,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			boolean mineshaft = colony.mineshaft().map(shaft -> shaft.plan().equals(plan)).orElse(false);
 			Optional<Project> project = colony.projects().stream().filter(p -> colony.plans(p).contains(plan)).findFirst();
 			builds.add(new Build(plan.target(), left(plan.steps(), world), plan.steps().size(), mineshaft, plan.kind() == BuildPlan.Kind.TERRAFORM,
-				batches, project.map(Project::name).orElse(""), project.map(Project::priority).orElse(0),
+				batches, project.map(Project::displayName).orElse(Component.empty()), project.map(Project::priority).orElse(0),
 				project.map(p -> colony.waitingFor(p.id())).orElse(Map.of())));
 		}
 

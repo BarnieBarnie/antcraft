@@ -1780,6 +1780,46 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A bot chopping a log from the spot of a step, on a real job: it steps aside, the builder places the step, and
+	 * the bot goes on to fell the log.
+	 */
+	@GameTest(maxTicks = 130)
+	public void aBotChoppingWhereABlockGoesStepsAsideAndFellsTheLog(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		BlockPos spot = new BlockPos(4, 1, 4);
+		BlockPos log = new BlockPos(5, 1, 4);
+		helper.setBlock(log, Blocks.OAK_LOG);
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, COBBLE))));
+		AntBot chopper = member(helper, colony, 4, 4);
+		long now = helper.getLevel().getGameTime();
+		colony.board().post(JobType.CHOP_LOG, helper.absolutePos(log));
+		helper.assertTrue(colony.board().claim(chopper.getUUID(), Set.of(JobType.CHOP_LOG), helper.absolutePos(spot), now).isPresent(), "log job not claimed");
+		member(helper, colony, 1, 4);
+
+		boolean[] placedWhileChopping = {false};
+		helper.onEachTick(() -> {
+			boolean placed = helper.getBlockState(spot).is(Blocks.COBBLESTONE);
+			if (placed && chopper.getBoundingBox().intersects(new AABB(helper.absolutePos(spot)))) {
+				helper.fail("placed a block into the chopper");
+			}
+			if (placed && !placedWhileChopping[0]) {
+				helper.assertTrue(colony.board().jobOf(chopper.getUUID()).filter(job -> job.type() == JobType.CHOP_LOG).isPresent(),
+					"the log job was over before the step was placed, so nothing stood in the way");
+				placedWhileChopping[0] = true;
+			}
+			if (!colony.blockedSteps().isEmpty()) {
+				helper.fail("step reported blocked: " + colony.blockedSteps());
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, COBBLE);
+			helper.assertBlockPresent(Blocks.AIR, log);
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.CHOP_LOG), "log job still on the board");
+		});
+	}
+
 	/** A mob that never leaves the spot: the builder gives the step up after a while and reports it, rather than waiting forever. */
 	@GameTest(maxTicks = 630)
 	public void reportsAStepWhoseSpotStaysTaken(GameTestHelper helper) {

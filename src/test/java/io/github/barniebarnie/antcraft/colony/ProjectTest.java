@@ -386,10 +386,30 @@ class ProjectTest {
 	}
 
 	@Test
-	void starterProjectNamesAreTranslatedAndPlayerNamesShownAsTyped() {
-		assertEquals(Component.translatable("project.antcraft.tools"), Project.displayName("tools"));
-		assertEquals(Component.translatable("project.antcraft.mineshaft"), Project.displayName(Colony.MINESHAFT));
-		assertEquals(Component.literal("hut"), Project.displayName("hut"));
+	void aPlayerProjectNamedLikeAStarterOneIsShownAsTyped() {
+		Colony colony = colony();
+		assertEquals(Component.literal("farm"), colony.addBuild("farm", plan(ORE, Blocks.OAK_PLANKS)).displayName());
+		assertEquals(Component.literal("hut"), colony.addBuild("hut", plan(ORE, Blocks.OAK_PLANKS)).displayName());
+	}
+
+	@Test
+	void theMineshaftIsTranslatedWhereverItIsSet() {
+		Colony colony = colony();
+		assertEquals(Component.translatable("project.antcraft.mineshaft"),
+			colony.setMineshaft(new Mineshaft(new BlockPos(0, 64, 0), List.of(44))).displayName());
+	}
+
+	@Test
+	void theStarterFlagIsSavedAndSavesFromBeforeItGoByName() {
+		Project player = new Project(UUID.randomUUID(), "farm", 0, List.of(UUID.randomUUID()));
+		var json = Project.CODEC.encodeStart(JsonOps.INSTANCE, player).getOrThrow();
+		assertEquals(Component.literal("farm"), Project.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().displayName());
+
+		String old = """
+			{"id": "00000000-0000-0000-0000-000000000007", "name": "farm", "plans": ["00000000-0000-0000-0000-000000000007"]}
+			""";
+		assertEquals(Component.translatable("project.antcraft.farm"),
+			Project.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(old)).getOrThrow().displayName());
 	}
 
 	@Test

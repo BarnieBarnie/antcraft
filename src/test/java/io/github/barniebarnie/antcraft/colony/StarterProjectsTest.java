@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -69,6 +70,14 @@ class StarterProjectsTest {
 		for (int i = 1; i < priorities.size(); i++) {
 			assertTrue(priorities.get(i) < priorities.get(i - 1), "priorities not in the list's order: " + priorities);
 		}
+	}
+
+	@Test
+	void theStarterProjectsAreShownTranslated() {
+		Colony colony = found();
+
+		assertEquals(colony.projects().stream().map(project -> Component.translatable("project.antcraft." + project.name())).toList(),
+			colony.projects().stream().map(Project::displayName).toList());
 	}
 
 	@Test

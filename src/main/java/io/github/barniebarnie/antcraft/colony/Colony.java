@@ -273,12 +273,12 @@ public class Colony {
 			Map<OrderPurpose, Map<Item, Integer>> systemOrders, Map<UUID, BatchState> batchStates, List<Project> projects) {
 		// Projects lose plans that are gone; a plan of no project, as in saves from before projects, gets one of its own.
 		projects.forEach(project -> this.projects.add(new Project(project.id(), project.name(), project.priority(),
-			project.plans().stream().filter(builds::containsKey).toList(), project.stock())));
+			project.plans().stream().filter(builds::containsKey).toList(), project.stock(), project.starter())));
 		this.projects.removeIf(Project::isEmpty);
 		builds.forEach((planId, plan) -> {
 			if (this.projects.stream().noneMatch(project -> project.plans().contains(planId))) {
-				this.projects.add(new Project(planId, mineshaft.filter(shaft -> shaft.isPlan(plan)).isPresent() ? MINESHAFT : defaultName(plan), 0,
-					List.of(planId)));
+				boolean shaft = mineshaft.filter(s -> s.isPlan(plan)).isPresent();
+				this.projects.add(new Project(planId, shaft ? MINESHAFT : defaultName(plan), 0, List.of(planId), List.of(), shaft));
 			}
 		});
 		this.batchStates = new HashMap<>(batchStates);
@@ -462,8 +462,13 @@ public class Colony {
 	}
 
 	public Project addBuild(String name, BuildPlan plan) {
+		return this.addBuild(name, plan, false);
+	}
+
+	/** {@link #addBuild(String, BuildPlan)}, as a {@link Project#starter} project if {@code starter}. */
+	public Project addBuild(String name, BuildPlan plan, boolean starter) {
 		UUID id = UUID.randomUUID();
-		Project project = new Project(id, name, 0, List.of(id));
+		Project project = new Project(id, name, 0, List.of(id), List.of(), starter);
 		this.projects.add(project);
 		this.builds.put(id, withoutOverlaps(plan));
 		this.indexBatches();
@@ -474,7 +479,12 @@ public class Colony {
 
 	/** Adds a project of no plans called {@code name} that wants {@code stock} held, at priority 0. */
 	public Project addProject(String name, List<StockTarget> stock) {
-		Project project = new Project(UUID.randomUUID(), name, 0, List.of(), stock);
+		return this.addProject(name, stock, false);
+	}
+
+	/** {@link #addProject(String, List)}, as a {@link Project#starter} project if {@code starter}. */
+	public Project addProject(String name, List<StockTarget> stock, boolean starter) {
+		Project project = new Project(UUID.randomUUID(), name, 0, List.of(), stock, starter);
 		this.projects.add(project);
 		this.lastSurvey = -1;
 		return project;
@@ -1176,7 +1186,7 @@ public class Colony {
 		this.shaftBlocks = shaft.protectedBlocks();
 		this.shaftOpen = shaft.keepOpen();
 		this.board.removeOpenIf(job -> job.type() == JobType.MINE_BRANCH);
-		return this.addBuild(MINESHAFT, shaft.plan());
+		return this.addBuild(MINESHAFT, shaft.plan(), true);
 	}
 
 	/** The crop field the colony started itself, if it needed one. */

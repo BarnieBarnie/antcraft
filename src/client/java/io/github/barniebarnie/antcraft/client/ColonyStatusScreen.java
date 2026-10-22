@@ -4,7 +4,6 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
-import io.github.barniebarnie.antcraft.colony.Project;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import java.util.ArrayList;
@@ -268,7 +267,7 @@ public class ColonyStatusScreen extends Screen {
 		for (ColonyStatus.Build build : status.builds()) {
 			String key = build.mineshaft() ? "screen.antcraft.colony_status.build_mineshaft"
 				: build.terraform() ? "screen.antcraft.colony_status.build_terraform" : "screen.antcraft.colony_status.build";
-			lines.add(new Line(Component.translatable("screen.antcraft.colony_status.project", Project.displayName(build.project()), build.priority()), WHITE));
+			lines.add(new Line(Component.translatable("screen.antcraft.colony_status.project", build.project(), build.priority()), WHITE));
 			lines.add(new Line(Component.translatable(key, build.target().toShortString(), build.left(), build.steps()), WHITE));
 			if (!build.waitsFor().isEmpty()) {
 				lines.add(new Line(Component.translatable("screen.antcraft.colony_status.waits_for", items(build.waitsFor())), GREY));
