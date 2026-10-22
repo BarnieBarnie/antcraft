@@ -1984,6 +1984,44 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Two build jobs on a ledge too high to reach or see from the ground: the builder pillars up once and does both
+	 * from up there, rather than take the pillar down after the first and build it again.
+	 */
+	@GameTest(maxTicks = 370)
+	public void buildsTwoJobsOnALedgeWithOnePillar(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// A 5x5 ledge, four high, with the steps in the middle: out of reach and sight from the ground around it.
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 3, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		colony.addBuild(new BuildPlan(List.of(step(helper, 5, 5, 4, COBBLE))));
+		colony.addBuild(new BuildPlan(List.of(step(helper, 5, 5, 5, COBBLE))));
+		AntBot builder = member(helper, colony, 1, 4);
+		builder.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 2));
+		builder.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		// Blocks placed in all and the most standing at once: equal while it never builds a pillar again.
+		int[] placed = {0, 0, 0};
+		helper.onEachTick(() -> {
+			int now = strayDirt(helper);
+			placed[0] += Math.max(0, now - placed[2]);
+			placed[1] = Math.max(placed[1], now);
+			placed[2] = now;
+			if (placed[0] > placed[1]) {
+				helper.fail("built the pillar again: placed " + placed[0] + " blocks, at most " + placed[1] + " at once");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 5, 4, COBBLE);
+			assertState(helper, 5, 5, 5, COBBLE);
+			helper.assertTrue(colony.builds().isEmpty(), "plans not finished");
+			helper.assertTrue(placed[1] > 0, "never pillared up");
+			helper.assertTrue(strayDirt(helper) == 0, strayDirt(helper) + " dirt left standing");
+			helper.assertTrue(builder.getScaffold().isEmpty(), "scaffold left: " + builder.getScaffold());
+		});
+	}
+
 	/** How many items the container holds in all. */
 	private static int itemCount(Container container) {
 		int count = 0;

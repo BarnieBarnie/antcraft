@@ -72,7 +72,7 @@ import org.jspecify.annotations.Nullable;
  * that burns where lit fire would spread to it, blocks a
  * player cannot place, such as a portal, and a fluid without a bucket or source
  * to get it from are reported too. To reach a high step it pillars up with scaffold blocks from the
- * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside.
+ * core, never where a plan puts a block, and takes the scaffolding down before it puts a plan aside, unless another build job is up on the same ledge.
  * Dig jobs, batches that only clear blocks, it digs out the same way, leaving the logs of trees on the
  * board to whoever takes their tree jobs (see {@link Digging}). A step any solid block will do, such as a terraform's
  * fill, takes whichever fill block there is, sand and gravel only where they rest on the block below
@@ -301,8 +301,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		boolean dig = isDig(job);
 		Optional<BuildPlan.Step> next = plan.flatMap(p -> this.nextStep(level, colony, core, p, dig, this.progress)).map(s -> this.withFiller(level, core, s));
 		if (next.isEmpty()) {
-			// The scaffolding comes down first, while the job is still this bot's.
-			if (!this.bot.getScaffold().isEmpty()) {
+			// The scaffolding comes down first, while the job is still this bot's, unless another build job is up on the
+			// same ledge: it stays up for that one.
+			if (!this.bot.getScaffold().isEmpty() && !this.moreBuildsFromHere(level, colony, job)) {
 				this.startCleanup();
 			} else {
 				this.putAside(level, colony, core, job, plan, dig);
@@ -349,6 +350,12 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		} else {
 			this.waitForSpot(level, step.pos());
 		}
+	}
+
+	/** Whether another open build or dig job this bot is ready for is up on the ledge it stands on its scaffold (see {@link WorkerGoal#onLedge}). */
+	private boolean moreBuildsFromHere(ServerLevel level, Colony colony, Job done) {
+		return colony.board().jobs().stream().anyMatch(job -> job.isOpen() && !job.givenUp() && !job.id().equals(done.id())
+			&& (job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA) && WorkerGoal.onLedge(this.bot, job) && this.isReady(level, colony, job));
 	}
 
 	/** Waits at the step at {@code pos} for its spot to be free, giving the step up for this job after {@link #SPOT_WAIT_TICKS}. */

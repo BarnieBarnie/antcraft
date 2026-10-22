@@ -10,8 +10,10 @@ import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,11 +22,13 @@ import java.util.UUID;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -382,14 +386,44 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	}
 
 	/**
-	 * Whether {@code job} is up near where the bot stands on its scaffold, such as on the same ledge: it keeps the
-	 * scaffold up for that job, whatever its type, rather than take it down and build it again; the work between jobs
-	 * takes it down once done.
+	 * Whether {@code job} is up on the ledge the bot stands on with its scaffold up: above its feet and close enough
+	 * across to work from a higher pillar right here, such as one it is pillaring up to, or at its feet's height and
+	 * joined to them over ground without a gap (see {@link #ledge}).
+	 * It keeps the scaffold up for that job, whatever its type, rather than take it down and build it again; the work
+	 * between jobs takes it down once done. A job as high on a ledge across a gap is not on it, so the bot takes its
+	 * pillar down before it goes.
 	 */
-	// ponytail: near and at or above its feet stands in for "on the same ledge"; a job on a ledge next door counts too.
+	// ponytail: REACH + 1 across is a guess at what a higher pillar here works from; it keeps a farmer's pillar for a crop
+	// one block further along the ledge. Taking the pillar down lowers its feet, so a job across a gap must be further.
 	static boolean onLedge(AntBot bot, Job job) {
 		BlockPos feet = bot.blockPosition();
-		return !bot.getScaffold().isEmpty() && job.target().getY() >= feet.getY() && job.target().closerThan(feet, 2 * ColonyWorkGoal.REACH);
+		BlockPos target = job.target();
+		return !bot.getScaffold().isEmpty() && target.getY() >= feet.getY() && target.closerThan(feet, 2 * ColonyWorkGoal.REACH)
+			&& (target.getY() > feet.getY() && Math.hypot(target.getX() - feet.getX(), target.getZ() - feet.getZ()) <= ColonyWorkGoal.REACH + 1
+				|| ledge(bot.level(), feet).contains(target));
+	}
+
+	/**
+	 * The cells at the height of {@code feet} joined to it over ground, each with a block under it that has a
+	 * collision shape, up to {@code 2 * REACH} away: the ledge the bot stands on, ending at a gap.
+	 */
+	// ponytail: a flood fill per call, at most ~300 cells; only while scaffold is up. Cache per tick if it shows in profiles.
+	private static Set<BlockPos> ledge(Level level, BlockPos feet) {
+		Set<BlockPos> cells = new HashSet<>(List.of(feet));
+		ArrayDeque<BlockPos> open = new ArrayDeque<>(cells);
+		while (!open.isEmpty()) {
+			BlockPos cell = open.poll();
+			for (Direction side : Direction.Plane.HORIZONTAL) {
+				BlockPos next = cell.relative(side);
+				BlockPos below = next.below();
+				if (next.closerThan(feet, 2 * ColonyWorkGoal.REACH) && !cells.contains(next)
+						&& !level.getBlockState(below).getCollisionShape(level, below).isEmpty()) {
+					cells.add(next);
+					open.add(next);
+				}
+			}
+		}
+		return cells;
 	}
 
 	/**

@@ -717,6 +717,50 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A bot on top of its pillar beside one ledge, with ripe wheat on another ledge as high across a gap: that crop
+	 * is not on its ledge, so it takes its pillar down before it goes for it, rather than leave it standing.
+	 */
+	@GameTest(maxTicks = 160)
+	public void takesItsPillarDownBeforeLeavingForACropOffItsLedge(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// Ledge A, four high, with the bot's pillar against its east side; ledge B two blocks west of it.
+		for (BlockPos pos : BlockPos.betweenClosed(4, 1, 2, 6, 4, 6)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 3, 1, 3, 5)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(0, 4, 4, Blocks.STONE);
+		helper.setBlock(1, 4, 4, Blocks.FARMLAND);
+		helper.setBlock(1, 5, 4, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 5, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(7, y, 4, Blocks.DIRT);
+			bot.addScaffold(helper.absolutePos(new BlockPos(7, y, 4)));
+		}
+		boolean[] claimed = {false};
+		helper.onEachTick(() -> {
+			if (colony.board().jobOf(bot.getUUID()).isPresent() && !claimed[0]) {
+				claimed[0] = true;
+				for (int y = 1; y <= 4; y++) {
+					if (helper.getBlockState(new BlockPos(7, y, 4)).is(Blocks.DIRT)) {
+						helper.fail("left for the crop with its pillar standing at y=" + y);
+					}
+				}
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(claimed[0], "never went for the crop");
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockNotPresent(Blocks.DIRT, 7, y, 4);
+			}
+		});
+	}
+
 	private static int dirtAboveFloor(GameTestHelper helper) {
 		int found = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
