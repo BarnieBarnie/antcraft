@@ -546,7 +546,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		BuildPlan.Clearing clearing = this.clearing(level, core, step);
 		BlockPos wall = clearing == BuildPlan.Clearing.BLOCKED ? this.fluidToWall(level, core, plan, step) : null;
 		if (wall != null) {
-			this.fillIn(level, colony, core, plan, wall);
+			this.fillIn(level, colony, core, plan, wall, pos);
 			return;
 		}
 		switch (clearing) {
@@ -558,7 +558,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 					this.scoop(level, pos, bucket);
 				}
 			}
-			case FILL -> this.fillIn(level, colony, core, plan, pos);
+			case FILL -> this.fillIn(level, colony, core, plan, pos, pos);
 			default -> {
 				if (this.reachStep(level, pos, true) && this.breaker.tick(level, pos, true)) {
 					colony.unprotect(pos);
@@ -570,8 +570,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Fills the fluid at {@code pos} with a filler block, fetching one from the core first: dirt while
 	 * neither the bot nor the core has a pickaxe, since cobblestone is slow to break by hand (see {@link BuildPlan#waterFiller}).
+	 * While {@code pos} stays taken, it waits, giving up the step at {@code step}, such as the one the fluid is walled off for.
 	 */
-	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos) {
+	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, BlockPos step) {
 		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
 		Optional<Item> filler = BuildPlan.waterFiller(item -> this.has(core, stack -> stack.is(item)), pickaxe);
 		if (filler.isEmpty()) {
@@ -585,7 +586,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			if (this.isFreeToPlace(level, pos, block)) {
 				this.put(level, pos, block, item);
 			} else {
-				this.waitForSpot(level, pos);
+				this.waitForSpot(level, step);
 			}
 		}
 	}

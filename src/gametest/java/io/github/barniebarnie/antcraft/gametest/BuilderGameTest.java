@@ -38,6 +38,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.pig.Pig;
+import net.minecraft.world.entity.animal.squid.Squid;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -1483,6 +1484,33 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(pig.isAlive(), "pig gone");
 			helper.assertBlockPresent(Blocks.AIR, spot);
 			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(spot))), "taken spot not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/** Water beside a block to dig, and a mob that never leaves the water: the wall that would hold the water back cannot go in, so the dig is reported. */
+	@GameTest(maxTicks = 630)
+	public void reportsAStepWhoseFluidWallStaysTaken(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.DIRT, 8));
+		BlockPos dig = new BlockPos(4, 1, 4);
+		BlockPos water = new BlockPos(4, 1, 5);
+		helper.setBlock(dig, Blocks.DIRT);
+		// Held in by the stone around it and the dirt to dig.
+		for (BlockPos pos : List.of(new BlockPos(3, 1, 5), new BlockPos(5, 1, 5), new BlockPos(4, 1, 6))) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(water, Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(dig)))));
+		// A squid, which does not drown there.
+		Squid squid = helper.spawn(EntityTypes.SQUID, water);
+		squid.setNoAi(true);
+		member(helper, colony, 1, 4);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(squid.isAlive(), "squid gone");
+			helper.assertBlockPresent(Blocks.WATER, water);
+			helper.assertBlockPresent(Blocks.DIRT, dig);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(dig))), "dig behind a taken wall not reported: " + colony.blockedSteps());
 		});
 	}
 
