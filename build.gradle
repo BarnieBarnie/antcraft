@@ -62,7 +62,8 @@ fabricApi {
 }
 
 // Run a subset of game tests: ./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
-// Without the property every game test runs.
+// Several patterns, comma-separated, run the union (GameTestSelectionMixin in src/gametest);
+// a pattern that matches no test fails the run. Without the property every game test runs.
 def gameTestFilter = providers.gradleProperty("gameTest")
 tasks.matching { it.name == "runGameTest" }.configureEach {
 	// Only warnings, failures and AntCraft's own lines, so build/check.log stays small.

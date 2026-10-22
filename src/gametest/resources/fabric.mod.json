@@ -22,6 +22,9 @@
 			"io.github.barniebarnie.antcraft.gametest.UpkeepGameTest"
 		]
 	},
+	"mixins": [
+		"antcraft-gametest.mixins.json"
+	],
 	"depends": {
 		"antcraft": "*"
 	}

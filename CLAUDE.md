@@ -24,6 +24,7 @@ Game tests run on a dedicated server, so they enable bots with `AntCraftConfig.s
 ./gradlew test          # unit tests
 ./gradlew runGameTest   # game tests (headless server)
 ./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*'   # only matching game tests
+./gradlew runGameTest -PgameTest='antcraft-gametest:miner_game_test*,antcraft-gametest:builder_game_test*'   # several classes
 ./gradlew build         # compile + both test suites
 ./gradlew testIsolated  # unit tests, one JVM per class, catches bootstrap-order bugs; CI runs build and this
 ./gradlew runClient     # play-test manually
@@ -36,8 +37,9 @@ Agents run builds through `scripts/check.sh` instead of `./gradlew` directly. It
 scripts/check.sh                                                     # build
 scripts/check.sh test                                                # unit tests
 scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
+scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*,antcraft-gametest:builder_game_test*'
 ```
 
-Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case>`, so `-PgameTest` takes a pattern such as `antcraft-gametest:miner_game_test*` for one class or the full id for one test. Without it, every game test runs.
+Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case>`, so `-PgameTest` takes a pattern such as `antcraft-gametest:miner_game_test*` for one class or the full id for one test. Patterns are globs (`*`, `?`); separate several with commas (no spaces) to run the tests of several classes in one run. A pattern that matches no test fails the run. Without it, every game test runs.
 
 Gradle needs write access to `~/.gradle`, so in the Claude Code sandbox run it with the sandbox disabled.
