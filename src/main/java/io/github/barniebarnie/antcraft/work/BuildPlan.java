@@ -4,6 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -634,36 +635,56 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind) {
 	 */
 	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
 			Map<Item, Integer> stairs, Map<Item, Integer> has) {
+		return shortfall(materials, holding, resting, stairs, has, new LinkedHashMap<>());
+	}
+
+	/**
+	 * {@link #shortfall(Map, Map, Map, Map, Map)}, adding the spare fill blocks and stone stairs it takes to {@code used},
+	 * so they are not there for anything else.
+	 */
+	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
+			Map<Item, Integer> stairs, Map<Item, Integer> has, Map<Item, Integer> used) {
 		Map<Item, Integer> needed = new LinkedHashMap<>();
 		materials.forEach((item, count) -> {
 			if (count > has.getOrDefault(item, 0)) {
 				needed.put(item, count - has.getOrDefault(item, 0));
 			}
 		});
-		int[] spareHolding = {spare(HOLDING_FILL_BLOCKS, materials, has)};
-		int[] spareFalling = {spare(FILL_BLOCKS, materials, has) - spareHolding[0]};
+		Map<Item, Integer> spareHolding = spare(HOLDING_FILL_BLOCKS::contains, materials, has);
+		Map<Item, Integer> spareFalling = spare(item -> FILL_BLOCKS.contains(item) && !HOLDING_FILL_BLOCKS.contains(item), materials, has);
 		Map<Item, Integer> rest = new LinkedHashMap<>(resting);
-		cover(needed, new LinkedHashMap<>(holding), spareHolding);
-		cover(needed, rest, spareFalling);
-		cover(needed, rest, spareHolding);
-		cover(needed, new LinkedHashMap<>(stairs), new int[] {spare(STONE_STAIRS, materials, has)});
+		cover(needed, new LinkedHashMap<>(holding), spareHolding, used);
+		cover(needed, rest, spareFalling, used);
+		cover(needed, rest, spareHolding, used);
+		cover(needed, new LinkedHashMap<>(stairs), spare(STONE_STAIRS::contains, materials, has), used);
 		needed.values().removeIf(count -> count <= 0);
 		return needed;
 	}
 
-	/** How many of {@code blocks} the colony {@code has} beyond what {@code materials} places as such. */
-	private static int spare(Set<Item> blocks, Map<Item, Integer> materials, Map<Item, Integer> has) {
-		return blocks.stream().mapToInt(block -> Math.max(0, has.getOrDefault(block, 0) - materials.getOrDefault(block, 0))).sum();
+	/** Which of {@code blocks} the colony {@code has} beyond what {@code materials} places as such, how many of each, in item id order. */
+	private static Map<Item, Integer> spare(Predicate<Item> blocks, Map<Item, Integer> materials, Map<Item, Integer> has) {
+		Map<Item, Integer> spare = new TreeMap<>(Comparator.comparingInt(Item::getId));
+		has.forEach((item, count) -> {
+			if (blocks.test(item) && count > materials.getOrDefault(item, 0)) {
+				spare.put(item, count - materials.getOrDefault(item, 0));
+			}
+		});
+		return spare;
 	}
 
-	/** Takes what {@code fills} still need off {@code needed} and {@code fills}, using up {@code spare[0]} fill blocks. */
-	private static void cover(Map<Item, Integer> needed, Map<Item, Integer> fills, int[] spare) {
+	/** Takes what {@code fills} still need off {@code needed} and {@code fills}, using up the {@code spare} fill blocks, which go to {@code used}. */
+	private static void cover(Map<Item, Integer> needed, Map<Item, Integer> fills, Map<Item, Integer> spare, Map<Item, Integer> used) {
 		for (Map.Entry<Item, Integer> fill : fills.entrySet()) {
-			int cover = Math.min(spare[0], Math.min(fill.getValue(), needed.getOrDefault(fill.getKey(), 0)));
-			if (cover > 0) {
-				spare[0] -= cover;
-				fill.setValue(fill.getValue() - cover);
-				needed.merge(fill.getKey(), -cover, Integer::sum);
+			int want = Math.min(fill.getValue(), needed.getOrDefault(fill.getKey(), 0));
+			for (Map.Entry<Item, Integer> block : spare.entrySet()) {
+				int cover = Math.min(want, block.getValue());
+				if (cover > 0) {
+					want -= cover;
+					block.setValue(block.getValue() - cover);
+					used.merge(block.getKey(), cover, Integer::sum);
+					fill.setValue(fill.getValue() - cover);
+					needed.merge(fill.getKey(), -cover, Integer::sum);
+				}
 			}
 		}
 	}

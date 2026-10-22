@@ -459,6 +459,34 @@ class ColonyTest {
 		assertEquals(Map.of(Items.DIRT, 1), colony.ordersFor(Colony.OrderPurpose.BUILD));
 	}
 
+	/** A plan of {@code count} steps in a row at height {@code y}, each made by {@code step}. */
+	private static BuildPlan row(int y, int count, Function<BlockPos, BuildPlan.Step> step) {
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		for (int x = 0; x < count; x++) {
+			steps.add(step.apply(new BlockPos(x, y, 1)));
+		}
+		return new BuildPlan(steps, List.of(new BuildPlan.Batch(0, count, List.of())), BuildPlan.Kind.TERRAFORM);
+	}
+
+	@Test
+	void fillBlocksOneProjectUsesAreNotThereForTheNextOne() {
+		Colony colony = colony();
+		colony.addBuild("first", row(64, 10, Terraform::fill));
+		colony.addBuild("second", row(65, 10, Terraform::fill));
+		colony.planProjects(AIR, step -> true, Map.of(Items.COBBLESTONE, 10), tool -> true);
+		assertEquals(Map.of(Items.DIRT, 10), colony.ordersFor(Colony.OrderPurpose.BUILD), "the cobblestone fills only the first");
+	}
+
+	@Test
+	void stoneStairsOnePlanUsesAreNotThereForTheNextOne() {
+		Colony colony = colony();
+		Function<BlockPos, BuildPlan.Step> stairs = pos -> BuildPlan.Step.stoneStairs(pos, Blocks.COBBLESTONE_STAIRS.defaultBlockState());
+		colony.addBuild("first", row(64, 3, stairs));
+		colony.addBuild("second", row(65, 3, stairs));
+		colony.planProjects(AIR, step -> true, Map.of(Items.STONE_BRICK_STAIRS, 3), tool -> true);
+		assertEquals(Map.of(Items.COBBLESTONE_STAIRS, 3), colony.ordersFor(Colony.OrderPurpose.BUILD), "the stone brick stairs cover only the first");
+	}
+
 	@Test
 	void aBlockedBatchAndTheBatchesNeedingItOrderNothing() {
 		Colony colony = colony();
