@@ -280,10 +280,10 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		List<BlockPos> blocks = this.toMine(level, branch.get());
 		if (blocks.isEmpty()) {
 			// A cell in the way it may not mine, such as bedrock: give up, so nothing beyond it is dug. Else cells left
-			// that it could not reach: try again later, then give them up.
+			// that it could not reach, or a torch spot it could not see: try again later, then give them up.
 			List<BlockPos> cells = branch.get().cells();
 			boolean blocked = cells.stream().anyMatch(cell -> !Mining.isMinable(level, cell) && !Mining.isDug(level, cell));
-			boolean left = cells.stream().anyMatch(cell -> Mining.isMinable(level, cell));
+			boolean left = cells.stream().anyMatch(cell -> Mining.isMinable(level, cell)) || branch.get().darkTorch(level).filter(this.unreachable::contains).isPresent();
 			this.endJob(blocked ? WorkerGoal.Outcome.GIVE_UP : left ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
@@ -400,10 +400,12 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/**
 	 * Puts a torch on the first dug torch spot that is still dark, fetching torches from the core if
-	 * it has none. Returns true while busy with that.
+	 * it has none. Returns true while busy with that. Like a player, it places the torch only where it
+	 * sees the spot; one it finds no such place for is left for this job.
 	 */
 	private boolean light(ServerLevel level, Colony colony, Mineshaft.Branch branch) {
-		Optional<BlockPos> dark = branch.darkTorch(level);
+		// ponytail: only the first dark spot; one left out of sight leaves the spots behind it dark for this job too.
+		Optional<BlockPos> dark = branch.darkTorch(level).filter(pos -> !this.unreachable.contains(pos));
 		if (dark.isEmpty()) {
 			return false;
 		}
@@ -416,7 +418,12 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.DEPOSIT);
 			return true;
 		}
-		if (this.near(dark.get())) {
+		PathFollower.Status status = this.approach(this.inSight(dark.get()), dark.get());
+		if (status == PathFollower.Status.FAILED) {
+			this.unreachable.add(dark.get());
+			return false;
+		}
+		if (status == PathFollower.Status.ARRIVED) {
 			level.setBlockAndUpdate(dark.get(), Blocks.TORCH.defaultBlockState());
 			Storage.take(this.bot.getInventory(), Items.TORCH, 1);
 			colony.protect(dark.get(), Blocks.TORCH);

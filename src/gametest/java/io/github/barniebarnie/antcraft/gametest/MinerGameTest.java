@@ -441,6 +441,48 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			.anyMatch(job -> job.target().equals(branch.start()) && job.givenUp()), "walled-in branch not given up yet"));
 	}
 
+	/**
+	 * The branches are dug, but the first block of one of the deepest level's is bedrock and the rest is walled in with
+	 * bedrock all round, so its torch spot is within reach of the hall but out of sight: like a player, the miner does not
+	 * put a torch there through the wall.
+	 */
+	@GameTest(maxTicks = 40)
+	public void torchIsNotPlacedThroughAWall(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		shaft.levels().forEach(y -> shaft.branches(y)
+			.forEach(branch -> branch.cells().forEach(cell -> helper.getLevel().setBlockAndUpdate(cell, Blocks.AIR.defaultBlockState()))));
+		Mineshaft.Branch walled = shaft.branches(shaft.levels().getLast()).getFirst();
+		walled.cells().subList(0, 2).forEach(cell -> helper.getLevel().setBlockAndUpdate(cell, Blocks.BEDROCK.defaultBlockState()));
+		for (BlockPos cell : walled.cells().subList(2, walled.cells().size())) {
+			for (Direction dir : Direction.values()) {
+				if (!walled.cells().contains(cell.relative(dir))) {
+					helper.getLevel().setBlockAndUpdate(cell.relative(dir), Blocks.BEDROCK.defaultBlockState());
+				}
+			}
+		}
+		BlockPos torch = walled.torches().getFirst();
+		AntBot miner = member(helper, colony, 1, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		miner.getInventory().addItem(new ItemStack(Items.TORCH, 8));
+
+		boolean[] tried = {false};
+		helper.onEachTick(() -> {
+			if (helper.getLevel().getBlockState(torch).is(Blocks.TORCH)) {
+				helper.fail("torch placed through the bedrock at " + relative(helper, torch).toShortString());
+			}
+			if (colony.board().jobOf(miner.getUUID()).map(Job::target).filter(walled.start()::equals).isPresent()) {
+				tried[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(tried[0], "walled-in branch not taken up yet");
+			helper.assertFalse(colony.board().jobOf(miner.getUUID()).map(Job::target).filter(walled.start()::equals).isPresent(), "still on the walled-in branch");
+		});
+	}
+
 	@GameTest(maxTicks = 640)
 	public void branchesDugWithoutTorchesAreLitOnceTorchesReachTheCore(GameTestHelper helper) {
 		Colony colony = colony(helper, MINE_CORE);

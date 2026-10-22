@@ -1312,6 +1312,35 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The nearest source is walled in with stone, top included, within reach of the builder: like a player, it fills its bucket at the open one instead. */
+	@GameTest(maxTicks = 70)
+	public void doesNotScoopAWaterSourceBehindAWall(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos walled = new BlockPos(1, 1, 6);
+		BlockPos open = new BlockPos(6, 1, 1);
+		for (BlockPos source : List.of(walled, open)) {
+			for (Direction side : Direction.Plane.HORIZONTAL) {
+				helper.setBlock(source.relative(side), Blocks.STONE);
+			}
+			helper.setBlock(source, Blocks.WATER);
+		}
+		helper.setBlock(walled.above(), Blocks.STONE);
+		core(helper).setItem(0, new ItemStack(Items.OAK_STAIRS));
+		core(helper).setItem(1, new ItemStack(Items.BUCKET));
+		colony.addBuild(waterloggedStairStep(helper));
+		member(helper, colony, 1, 4);
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(walled).is(Blocks.WATER)) {
+				helper.fail("scooped the walled-in source through the stone");
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertState(helper, 4, 1, 4, STAIRS_EAST.setValue(BlockStateProperties.WATERLOGGED, true));
+			helper.assertBlockNotPresent(Blocks.WATER, open);
+		});
+	}
+
 	@GameTest(maxTicks = 30)
 	public void scoopsTheWaterOutOfAStairPlannedDry(GameTestHelper helper) {
 		Colony colony = colony(helper);

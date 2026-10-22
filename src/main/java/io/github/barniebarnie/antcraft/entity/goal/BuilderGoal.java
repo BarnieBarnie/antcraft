@@ -107,6 +107,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	/** Fluid sources found per full bucket they fill, cleared every {@link #SOURCE_SCAN_TICKS}. */
 	private final Map<Item, Optional<BlockPos>> sources = new HashMap<>();
+	/** Sources it found no spot to see from, skipped until no other source is left. */
+	private final Set<BlockPos> hiddenSources = new HashSet<>();
 	private long nextSourceScan;
 	private final ScaffoldCleanup scaffoldCleanup;
 	/** Taking its scaffolding down, before putting a plan aside or once it has no job. */
@@ -499,7 +501,10 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}, progress);
 	}
 
-	/** Fills an empty bucket to pour {@code bucket}'s fluid with at the nearest source, fetching the empty bucket from the core first. */
+	/**
+	 * Fills an empty bucket to pour {@code bucket}'s fluid with at the nearest source it can see, as a player must, fetching
+	 * the empty bucket from the core first.
+	 */
 	private void fill(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, Item bucket) {
 		int empty = findSlot(this.bot.getInventory(), BuilderGoal::isBucket);
 		BlockPos source = this.source(level, colony, bucket);
@@ -507,9 +512,15 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.fetch(level, colony, core, plan, Items.BUCKET);
 		} else if (source == null) {
 			this.cooldown = IDLE_TICKS;
-		} else if (this.near(source)) {
-			this.scoop(level, source, empty);
-			this.sources.remove(bucket);
+		} else {
+			PathFollower.Status status = this.approach(this.inSight(source), source);
+			if (status == PathFollower.Status.FAILED) {
+				this.hiddenSources.add(source);
+				this.sources.remove(bucket);
+			} else if (status == PathFollower.Status.ARRIVED) {
+				this.scoop(level, source, empty);
+				this.sources.remove(bucket);
+			}
 		}
 	}
 
@@ -519,15 +530,22 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.sources.clear();
 			this.nextSourceScan = level.getGameTime() + SOURCE_SCAN_TICKS;
 		}
-		return this.sources.computeIfAbsent(bucket, key -> Optional.ofNullable(source(level, colony, this.bot.blockPosition(), key))).orElse(null);
+		return this.sources.computeIfAbsent(bucket, key -> {
+			Optional<BlockPos> found = Optional.ofNullable(source(level, colony, this.bot.blockPosition(), key, this.hiddenSources));
+			if (found.isEmpty()) {
+				// Looked at again on the next scan: a wall may be gone by then.
+				this.hiddenSources.clear();
+			}
+			return found;
+		}).orElse(null);
 	}
 
-	/** The fluid source in the territory nearest {@code from} that fills an empty bucket into {@code bucket}; never one a plan places, so a builder does not undo its own work. */
-	private static @Nullable BlockPos source(ServerLevel level, Colony colony, BlockPos from, Item bucket) {
+	/** The fluid source in the territory nearest {@code from} that fills an empty bucket into {@code bucket}; never one a plan places, so a builder does not undo its own work, nor one in {@code skip}. */
+	private static @Nullable BlockPos source(ServerLevel level, Colony colony, BlockPos from, Item bucket, Set<BlockPos> skip) {
 		Set<BlockPos> planned = planned(colony);
 		return nearest(level, colony, from, pos -> {
 			FluidState fluid = level.getFluidState(pos);
-			return fluid.isSource() && fluid.getType().getBucket() == bucket && level.getBlockState(pos).getBlock() instanceof LiquidBlock && !planned.contains(pos);
+			return fluid.isSource() && fluid.getType().getBucket() == bucket && level.getBlockState(pos).getBlock() instanceof LiquidBlock && !planned.contains(pos) && !skip.contains(pos);
 		});
 	}
 
@@ -633,7 +651,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			Item item = step.item(level.getBlockState(step.pos()));
 			return isPossible(level, step) && !leavesAlone(level, plan, step) && clearing(level, step, hasBucket, hasFiller) != BuildPlan.Clearing.BLOCKED
 				&& (!isPoured(item) || canPour.computeIfAbsent(item,
-					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket) != null));
+					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket, Set.of()) != null));
 		};
 	}
 
