@@ -26,10 +26,10 @@ public record Field(BlockPos center) {
 		center = center.immutable();
 	}
 
-	/** The soil and the crop layer above it. */
+	/** The soil and the layers {@link #plan} clears above it. */
 	public BoundingBox area() {
 		return new BoundingBox(this.center.getX() - RADIUS, this.center.getY(), this.center.getZ() - RADIUS,
-			this.center.getX() + RADIUS, this.center.getY() + 1, this.center.getZ() + RADIUS);
+			this.center.getX() + RADIUS, this.center.getY() + CLEAR_HEIGHT, this.center.getZ() + RADIUS);
 	}
 
 	/** Where crops go (above the soil) that do not have one yet. The middle is left for water. */
@@ -49,7 +49,7 @@ public record Field(BlockPos center) {
 	 * {@code avoid} areas (such as the mineshaft).
 	 *
 	 * @param isSoil whether a block can be tilled (or already is farmland)
-	 * @param isOpen whether the block above soil leaves room for a crop
+	 * @param isOpen whether a block above soil is open, checked for the layers {@link #plan} clears
 	 */
 	public static Optional<Field> choose(BlockPos core, int radius, List<BoundingBox> avoid, Predicate<BlockPos> isSoil, Predicate<BlockPos> isOpen) {
 		return Sites.nearest(core, radius - RADIUS, avoid, pos -> new Field(pos.below()), Field::area, field -> field.isFlat(isSoil, isOpen));
@@ -109,8 +109,13 @@ public record Field(BlockPos center) {
 
 	private boolean isFlat(Predicate<BlockPos> isSoil, Predicate<BlockPos> isOpen) {
 		for (BlockPos soil : BlockPos.betweenClosed(this.center.offset(-RADIUS, 0, -RADIUS), this.center.offset(RADIUS, 0, RADIUS))) {
-			if (!isSoil.test(soil) || !isOpen.test(soil.above())) {
+			if (!isSoil.test(soil)) {
 				return false;
+			}
+			for (int up = 1; up <= CLEAR_HEIGHT; up++) {
+				if (!isOpen.test(soil.above(up))) {
+					return false;
+				}
 			}
 		}
 		return true;

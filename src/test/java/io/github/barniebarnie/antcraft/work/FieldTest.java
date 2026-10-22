@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.HashSet;
@@ -132,5 +133,28 @@ class FieldTest {
 			: pos.equals(leaves) ? Blocks.OAK_LEAVES.defaultBlockState() : Blocks.AIR.defaultBlockState()).orElseThrow();
 
 		assertEquals(List.of(BuildPlan.Step.clear(leaves)), plan.steps());
+	}
+
+	@Test
+	void groundWithABlockTwoAboveItIsNotChosen() {
+		Set<BlockPos> soil = flatSoil(20);
+		Field first = choose(soil, 10, List.of()).orElseThrow();
+		BlockPos above = first.center().above(2);
+
+		Field field = Field.choose(CORE, 10, List.of(), soil::contains, pos -> !soil.contains(pos) && !pos.equals(above)).orElseThrow();
+
+		assertNotEquals(first, field, "field under " + above);
+	}
+
+	@Test
+	void aSiteWithAnUnworkableBlockTwoAboveTheSoilIsNotChosen() {
+		java.util.function.Function<BlockPos, net.minecraft.world.level.block.state.BlockState> world =
+			pos -> pos.getY() <= 0 ? Blocks.DIRT.defaultBlockState() : Blocks.AIR.defaultBlockState();
+		Field first = Field.site(CORE, 10, List.of(), world, pos -> true).orElseThrow();
+		BlockPos protectedBlock = first.center().above(2);
+
+		Field field = Field.site(CORE, 10, List.of(), world, pos -> !pos.equals(protectedBlock)).orElseThrow();
+
+		assertNotEquals(first, field, "field under " + protectedBlock);
 	}
 }
