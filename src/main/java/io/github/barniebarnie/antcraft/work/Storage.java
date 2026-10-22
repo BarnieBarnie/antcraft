@@ -191,7 +191,7 @@ public final class Storage {
 	public static Map<Item, Integer> neededInCore(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
 		List<Map<Item, Integer>> needs = new ArrayList<>();
 		needs.add(Stockkeeping.neededForOrders(colony.orders(), stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
-		colony.builds().forEach(plan -> needs.add(plan.materials(level::getBlockState)));
+		colony.openBuilds().forEach(plan -> needs.add(plan.materials(level::getBlockState)));
 		return StockPlanner.total(needs);
 	}
 

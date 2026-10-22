@@ -29,6 +29,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -430,6 +431,61 @@ class ColonyTest {
 		colony.postBuildJobs();
 		assertTrue(colony.blockedSteps().isEmpty());
 		assertTrue(colony.board().jobs().isEmpty(), "given up plan posted again: " + colony.board().jobs());
+	}
+
+	/** Three one-block batches: stone at (1, 64, 1), dirt at (2, 64, 1) on top of it (needs 0), and planks at (3, 64, 1) on their own. */
+	private static BuildPlan stoneDirtPlanks() {
+		return new BuildPlan(
+			List.of(new BuildPlan.Step(new BlockPos(1, 64, 1), Blocks.STONE.defaultBlockState()),
+				new BuildPlan.Step(new BlockPos(2, 64, 1), Blocks.DIRT.defaultBlockState()),
+				new BuildPlan.Step(new BlockPos(3, 64, 1), Blocks.OAK_PLANKS.defaultBlockState())),
+			List.of(new BuildPlan.Batch(0, 1, List.of()), new BuildPlan.Batch(1, 2, List.of(0)), new BuildPlan.Batch(2, 3, List.of())));
+	}
+
+	@Test
+	void aBlockedBatchAndTheBatchesNeedingItOrderNothing() {
+		Colony colony = colony();
+		BuildPlan plan = stoneDirtPlanks();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		colony.reportBlocked(batchJob(colony, plan, 0).id(), List.of(new BlockPos(1, 64, 1)));
+		Map<Item, Integer> placed = colony.planProjects(AIR, step -> true, Map.of(), tool -> true);
+		assertEquals(Map.of(Items.OAK_PLANKS, 1), placed);
+		assertEquals(Map.of(Items.OAK_PLANKS, 1), colony.ordersFor(Colony.OrderPurpose.BUILD));
+		assertEquals(List.of(Map.of(Items.OAK_PLANKS, 1)), colony.openBuilds().stream().map(open -> open.materials(AIR)).toList());
+	}
+
+	@Test
+	void clearingBlockedStepsGivesUpOnlyTheBatchesWaitingOnThem() {
+		Colony colony = colony();
+		BuildPlan plan = stoneDirtPlanks();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		assertTrue(colony.keepOpen().test(new BlockPos(1, 64, 1)));
+		colony.reportBlocked(batchJob(colony, plan, 0).id(), List.of(new BlockPos(1, 64, 1)));
+		assertEquals(1, colony.clearBlocked());
+		colony.recheckBlocked(world(Blocks.AIR), (batch, step) -> true);
+		colony.postBuildJobs();
+
+		assertTrue(colony.blockedSteps().isEmpty());
+		assertEquals(List.of(plan), colony.builds(), "plan given up with a batch still to do");
+		assertEquals(Set.of(plan.batch(2)), openBatches(colony));
+		Predicate<BlockPos> open = colony.keepOpen();
+		assertFalse(open.test(new BlockPos(1, 64, 1)), "given up step still kept open");
+		assertFalse(open.test(new BlockPos(2, 64, 1)), "step needing a given up one still kept open");
+		assertTrue(open.test(new BlockPos(3, 64, 1)));
+		colony.planProjects(AIR, step -> true, Map.of(), tool -> true);
+		assertEquals(Map.of(Items.OAK_PLANKS, 1), colony.ordersFor(Colony.OrderPurpose.BUILD));
+
+		// Given up for good: the batches stay out once saved and loaded, and the plan is done with the rest.
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		loaded.postBuildJobs();
+		assertEquals(Set.of(plan.batch(2)), openBatches(loaded));
+		Job last = batchJob(loaded, plan, 2);
+		loaded.finishBatch(last.id());
+		assertTrue(loaded.builds().isEmpty());
+		loaded.postBuildJobs();
+		assertTrue(loaded.board().jobs().stream().noneMatch(job -> loaded.build(job.id()).isPresent()), "finished plan still posted: " + loaded.board().jobs());
 	}
 
 	@Test

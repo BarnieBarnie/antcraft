@@ -90,7 +90,9 @@ public class Colony {
 		/** Worked through as far as it goes, it waits for items; the batches that need it may start. */
 		WAITING,
 		/** Finished: not posted again unless its blocks are broken since (see {@link Colony#recheckDone}). */
-		DONE;
+		DONE,
+		/** Given up with its blocked steps (see {@link Colony#clearBlocked}): never posted again, nor the batches that need it. */
+		GIVEN_UP;
 
 		static final Codec<BatchState> CODEC = StringRepresentable.fromEnum(BatchState::values);
 
@@ -310,19 +312,50 @@ public class Colony {
 
 	/**
 	 * The batches of the plan with id {@code id} that wait on blocked steps, by index: those with
-	 * blocked steps of their own, and those that need such a batch, directly or through others.
+	 * blocked steps of their own or given up (see {@link #clearBlocked}), and those that need such a
+	 * batch, directly or through others.
 	 */
 	private Set<Integer> blockedBatches(UUID id, BuildPlan plan) {
 		Set<UUID> jobs = new HashSet<>();
 		this.blockedSteps.forEach(blocked -> jobs.add(blocked.plan()));
+		return this.heldUp(id, plan, job -> jobs.contains(job) || this.batchStates.get(job) == BatchState.GIVEN_UP);
+	}
+
+	/** The batches of the plan with id {@code id} given up, and those that need one, directly or through others. */
+	private Set<Integer> givenUpBatches(UUID id, BuildPlan plan) {
+		return this.heldUp(id, plan, job -> this.batchStates.get(job) == BatchState.GIVEN_UP);
+	}
+
+	/** The batches of the plan with id {@code id} whose job is {@code held}, and those that need one, directly or through others. */
+	private Set<Integer> heldUp(UUID id, BuildPlan plan, Predicate<UUID> held) {
 		Set<Integer> blocked = new HashSet<>();
 		// A batch needs only batches before it, so one pass in order finds every batch held up.
 		for (int i = 0; i < plan.batches().size(); i++) {
-			if (jobs.contains(this.batchId(id, plan, i)) || !blocked.isEmpty() && plan.batches().get(i).needs().stream().anyMatch(blocked::contains)) {
+			if (held.test(this.batchId(id, plan, i)) || !blocked.isEmpty() && plan.batches().get(i).needs().stream().anyMatch(blocked::contains)) {
 				blocked.add(i);
 			}
 		}
 		return blocked;
+	}
+
+	/** {@code plan}, with id {@code id}, without its {@linkplain #blockedBatches blocked batches}: what there is to build of it now. */
+	private BuildPlan unblocked(UUID id, BuildPlan plan) {
+		Set<Integer> blocked = this.blockedBatches(id, plan);
+		return blocked.isEmpty() ? plan : new BuildPlan(IntStream.range(0, plan.batches().size()).filter(i -> !blocked.contains(i))
+			.boxed().flatMap(i -> plan.batch(i).steps().stream()).toList(), List.of(), plan.kind());
+	}
+
+	/** The {@link #builds()} without their {@linkplain #blockedBatches blocked batches}, whose materials wait until they are freed. */
+	public List<BuildPlan> openBuilds() {
+		return this.builds.entrySet().stream().filter(e -> this.hasWorkLeft(e.getKey(), e.getValue()))
+			.map(e -> this.unblocked(e.getKey(), e.getValue())).toList();
+	}
+
+	/** Whether every batch of the plan with id {@code id} is done or given up, or needs one given up. */
+	private boolean isFinished(UUID id, BuildPlan plan) {
+		Set<Integer> finished = this.givenUpBatches(id, plan);
+		finished.addAll(this.batches(id, plan, BatchState.DONE));
+		return finished.size() == plan.batches().size();
 	}
 
 	/** {@link #blockedBatches(UUID, BuildPlan)} of {@code plan}, which the colony builds; none if it does not. */
@@ -469,7 +502,9 @@ public class Colony {
 		Map<Item, Integer> total = new HashMap<>();
 		ToolKind pickaxes = ToolKind.PICKAXE;
 		for (Project project : this.projects()) {
-			List<BuildPlan> plans = project.plans().stream().filter(id -> this.hasWorkLeft(id, this.builds.get(id))).map(this.builds::get).toList();
+			// Blocked batches order nothing until they are freed.
+			List<BuildPlan> plans = project.plans().stream().filter(id -> this.hasWorkLeft(id, this.builds.get(id)))
+				.map(id -> this.unblocked(id, this.builds.get(id))).toList();
 			Map<Item, Integer> materials = StockPlanner.total(plans.stream().map(plan -> plan.materials(world, possible)).toList());
 			// Steps any solid block will do take whichever fill block the colony has: a terraform's fill sand too, a mineshaft's wall only one that holds.
 			Map<Item, Integer> holding = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, false)).toList());
@@ -659,7 +694,7 @@ public class Colony {
 		}
 		this.batchStates.put(job, BatchState.DONE);
 		BuildPlan plan = this.builds.get(batch.plan());
-		if (this.batches(batch.plan(), plan, BatchState.DONE).size() == plan.batches().size()) {
+		if (this.isFinished(batch.plan(), plan)) {
 			this.removePlan(batch.plan());
 		} else {
 			this.postBuildJobs();
@@ -880,12 +915,24 @@ public class Colony {
 		return this.board.reopenGivenUp() + freed.size();
 	}
 
-	/** Gives up on every blocked step and the plans waiting on them. Returns how many steps there were. */
+	/**
+	 * Gives up on every blocked step, the batches they are in and the batches that need those, for good. The rest of
+	 * their plans goes on; a plan with nothing else left is dropped. Returns how many steps there were.
+	 */
 	public int clearBlocked() {
 		int count = this.blockedSteps.size();
-		this.blockedSteps.stream().map(blocked -> this.planOf(blocked.plan())).distinct().filter(this.builds::containsKey).toList()
-			.forEach(this::removePlan);
+		Set<UUID> plans = new HashSet<>();
+		for (Blocked blocked : this.blockedSteps) {
+			if (this.batchJobs.containsKey(blocked.plan())) {
+				this.batchStates.put(blocked.plan(), BatchState.GIVEN_UP);
+				plans.add(this.planOf(blocked.plan()));
+			}
+		}
 		this.blockedSteps.clear();
+		// Their steps are no longer kept open.
+		plans.forEach(this.stepSets::remove);
+		plans.stream().filter(id -> this.isFinished(id, this.builds.get(id))).toList().forEach(this::removePlan);
+		this.postBuildJobs();
 		this.lastSurvey = -1;
 		return count;
 	}
@@ -927,7 +974,9 @@ public class Colony {
 			if (this.hasWorkLeft(id, plan)) {
 				open.add(this.stepSets.computeIfAbsent(id, planId -> {
 					this.stepSetsCollected++;
-					return plan.steps().stream().map(BuildPlan.Step::pos).collect(Collectors.toUnmodifiableSet());
+					Set<Integer> givenUp = this.givenUpBatches(planId, plan);
+					return IntStream.range(0, plan.batches().size()).filter(i -> !givenUp.contains(i))
+						.boxed().flatMap(i -> plan.batch(i).steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toUnmodifiableSet());
 				}));
 			}
 		});

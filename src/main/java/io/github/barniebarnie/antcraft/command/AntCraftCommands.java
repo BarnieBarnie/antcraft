@@ -455,7 +455,7 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
-	/** Gives up on the build steps builders reported blocked, and the plans waiting on them. */
+	/** Gives up on the build steps builders reported blocked, and the batches waiting on them; the rest of their plans goes on. */
 	private static int clearBlocked(CommandSourceStack source) {
 		if (!checkMayEdit(source, ColonyActions.Edit.CLEAR_BLOCKED)) {
 			return 0;
