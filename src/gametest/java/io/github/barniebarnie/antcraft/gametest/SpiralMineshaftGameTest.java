@@ -57,10 +57,14 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		return (Container) helper.getBlockEntity(CORE, BlockEntity.class);
 	}
 
-	/** A spiral from the ground at y=5 down to a landing at {@code level}, filling the test area's 6x6 middle. */
+	/**
+	 * A spiral from the ground at y=5 down to a landing at {@code level}, filling the test area's 6x6 middle. With the
+	 * shortest hall, 3 long, and one round of 1-long branches: the hall floors and branch cells are protected and kept
+	 * open for every colony, so the default 12-long hall and 64 blocks of branches each side would reach into other tests.
+	 */
 	private static Mineshaft shaft(GameTestHelper helper, int level) {
 		int y = helper.absolutePos(new BlockPos(0, level, 0)).getY();
-		return new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y));
+		return new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1);
 	}
 
 	private static AntBot member(GameTestHelper helper, Colony colony, BlockPos at) {
@@ -243,12 +247,23 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		AntBot down = member(helper, colony, relative(helper, top));
 		up.setWalkTarget(top);
 		down.setWalkTarget(bottom);
+		// Where each bot was as its walk ended. Once there it may go off to work between jobs, such as after an item
+		// another test dropped in the colony's radius, so the two need not both be at their targets on the same tick.
+		BlockPos[] ended = new BlockPos[2];
+		helper.onEachTick(() -> {
+			if (ended[0] == null && up.getWalkTarget() == null) {
+				ended[0] = up.blockPosition();
+			}
+			if (ended[1] == null && down.getWalkTarget() == null) {
+				ended[1] = down.blockPosition();
+			}
+		});
 
 		helper.succeedWhen(() -> {
 			// A walk ends next to its target.
-			helper.assertTrue(up.getWalkTarget() == null && up.blockPosition().distManhattan(top) <= 1,
+			helper.assertTrue(ended[0] != null && ended[0].distManhattan(top) <= 1,
 				"the bot going up is at " + relative(helper, up.blockPosition()));
-			helper.assertTrue(down.getWalkTarget() == null && down.blockPosition().distManhattan(bottom) <= 1,
+			helper.assertTrue(ended[1] != null && ended[1].distManhattan(bottom) <= 1,
 				"the bot going down is at " + relative(helper, down.blockPosition()));
 			helper.assertTrue(solid(helper).equals(dug), "blocks changed on the way");
 		});
