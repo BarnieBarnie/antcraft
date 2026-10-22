@@ -30,8 +30,11 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.gameevent.BlockPositionSource;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.gameevent.GameEventListener;
@@ -145,6 +148,54 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		succeedWhenAt(helper, bot, new BlockPos(6, 1, 1));
+	}
+
+	/**
+	 * A bedrock ceiling at y=4 with a hatch: a shut oak trapdoor over a ladder. A bot with no blocks climbs the ladder,
+	 * opens the trapdoor, climbs out onto the ceiling and shuts the trapdoor behind it.
+	 */
+	@GameTest(maxTicks = 110)
+	public void climbsALadderUpThroughAShutTrapdoorAndShutsIt(GameTestHelper helper) {
+		BlockPos hatch = hatch(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 5, 1)));
+
+		succeedWhenThroughTheHatch(helper, bot, new BlockPos(3, 5, 1), hatch);
+	}
+
+	/** Like {@link #climbsALadderUpThroughAShutTrapdoorAndShutsIt}, but down from the ceiling to the floor. */
+	@GameTest(maxTicks = 110)
+	public void climbsALadderDownThroughAShutTrapdoorAndShutsIt(GameTestHelper helper) {
+		BlockPos hatch = hatch(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 5, 1);
+		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 1, 1)));
+
+		succeedWhenThroughTheHatch(helper, bot, new BlockPos(3, 1, 1), hatch);
+	}
+
+	/** A bedrock ceiling at y=4 over the room, with a shut oak trapdoor at (3, 4, 3) over a ladder facing north. */
+	private static BlockPos hatch(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 4, 1, 6, 4, 6, Blocks.BEDROCK);
+		fill(helper, 3, 1, 4, 3, 3, 4, Blocks.BEDROCK);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(3, y, 3, Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH));
+		}
+		BlockPos hatch = new BlockPos(3, 4, 3);
+		helper.setBlock(hatch, Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, Direction.NORTH).setValue(TrapDoorBlock.HALF, Half.TOP));
+		return hatch;
+	}
+
+	private static void succeedWhenThroughTheHatch(GameTestHelper helper, AntBot bot, BlockPos relativeTarget, BlockPos hatch) {
+		BlockPos target = helper.absolutePos(relativeTarget);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(helper.getBlockState(hatch).is(Blocks.OAK_TRAPDOOR), "the trapdoor is gone");
+			helper.assertFalse(helper.getBlockState(hatch).getValue(TrapDoorBlock.OPEN), "left the trapdoor open");
+			for (int y = 1; y <= 3; y++) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.LADDER), "the ladder is gone at y " + y);
+			}
+		});
 	}
 
 	/** A bedrock wall across the room with a closed oak door in it: the bot opens the door, walks through and shuts it behind it. */

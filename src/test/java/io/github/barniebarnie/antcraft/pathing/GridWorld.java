@@ -11,7 +11,8 @@ import net.minecraft.core.Direction;
  * In-memory block world for pathfinder tests. Unset positions are air.
  * '#' = stone (30 ticks to break), 'D' = dirt (10 ticks), 'B' = bedrock (unbreakable), 'L' = lava,
  * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces),
- * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis).
+ * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis),
+ * 'H' = a ladder (climbed, unbreakable), 'T' = a trapdoor over a ladder (stood on shut, climbed through open).
  */
 final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
@@ -84,7 +85,13 @@ final class GridWorld implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		char c = this.at(pos);
-		return c == '#' || c == 'D' || c == 'B' || c == 'S';
+		return c == '#' || c == 'D' || c == 'B' || c == 'S' || c == 'T';
+	}
+
+	@Override
+	public boolean isClimbable(BlockPos pos) {
+		char c = this.at(pos);
+		return c == 'H' || c == 'T';
 	}
 
 	@Override

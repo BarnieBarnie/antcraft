@@ -14,9 +14,11 @@ import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
@@ -149,19 +151,22 @@ public class PathFollower {
 		if (step.type() == MoveType.PILLAR) {
 			this.pillar(level, world, step);
 		} else {
-			if (step.type() == MoveType.WALK) {
-				// And the doorway it stands in: shut, the panel may still be in its way out.
-				for (BlockPos pos : List.of(feet, feet.above(), step.to(), step.to().above())) {
-					this.open(level, pos);
-				}
+			// The door or hatch ahead, and the one it stands in: shut, the panel may still be in its way out.
+			for (BlockPos pos : List.of(feet, feet.above(), step.to(), step.to().above())) {
+				this.open(level, pos);
 			}
-			this.moveTo(step.to());
+			if (step.type() == MoveType.CLIMB_UP || step.type() == MoveType.CLIMB_DOWN) {
+				this.climb(step);
+			} else {
+				this.moveTo(step.to());
+			}
 			if (step.type() != MoveType.SWIM && this.bot.isInWater()) {
 				this.bot.getJumpControl().jump(); // rise and climb out onto the bank
 			}
 		}
 
-		boolean landed = step.type() == MoveType.SWIM ? this.bot.isInWater() || this.bot.onGround() : this.bot.onGround();
+		// On a ladder counts as landed: a bot walking into one climbs as it bumps into the wall.
+		boolean landed = this.bot.onGround() || this.bot.onClimbable() || step.type() == MoveType.SWIM && this.bot.isInWater();
 		if (this.bot.blockPosition().equals(step.to()) && landed && this.centered(step.to())) {
 			this.stepIndex++;
 			this.stepTicks = 0;
@@ -212,8 +217,8 @@ public class PathFollower {
 	}
 
 	/**
-	 * Opens a shut wooden door or fence gate the bot is walking through, as a player would, and keeps one it opened
-	 * from being shut behind it until it has walked through.
+	 * Opens a shut wooden door, fence gate or trapdoor the bot is walking or climbing through, as a player would, and
+	 * keeps one it opened from being shut behind it until it has passed.
 	 */
 	private void open(ServerLevel level, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
@@ -257,13 +262,30 @@ public class PathFollower {
 			door.setOpen(bot, level, state, pos, open);
 			return;
 		}
-		level.setBlock(pos, state.setValue(FenceGateBlock.OPEN, open), Block.UPDATE_CLIENTS);
-		level.playSound(null, pos, open ? SoundEvents.FENCE_GATE_OPEN : SoundEvents.FENCE_GATE_CLOSE, SoundSource.BLOCKS, 1.0F, 1.0F);
+		level.setBlock(pos, state.setValue(BlockStateProperties.OPEN, open), Block.UPDATE_CLIENTS);
+		SoundEvent sound = state.getBlock() instanceof FenceGateBlock
+			? open ? SoundEvents.FENCE_GATE_OPEN : SoundEvents.FENCE_GATE_CLOSE
+			: open ? SoundEvents.WOODEN_TRAPDOOR_OPEN : SoundEvents.WOODEN_TRAPDOOR_CLOSE;
+		level.playSound(null, pos, sound, SoundSource.BLOCKS, 1.0F, 1.0F);
 		level.gameEvent(bot, open ? GameEvent.BLOCK_OPEN : GameEvent.BLOCK_CLOSE, pos);
 	}
 
 	private void moveTo(BlockPos to) {
 		this.bot.getMoveControl().setWantedPosition(to.getX() + 0.5, to.getY(), to.getZ() + 0.5, SPEED);
+	}
+
+	/**
+	 * Climbs up or down a ladder: steers to the middle of it without the move control, which overshoots, as a bot on a
+	 * ladder that bumps into a wall climbs up it. Jumps to climb up; slides down by itself.
+	 */
+	private void climb(Step step) {
+		BlockPos to = step.to();
+		Vec3 v = this.bot.getDeltaMovement();
+		double dx = to.getX() + 0.5 - this.bot.getX(), dz = to.getZ() + 0.5 - this.bot.getZ();
+		this.bot.setDeltaMovement(Mth.clamp(dx * 0.5, -0.15, 0.15), v.y, Mth.clamp(dz * 0.5, -0.15, 0.15));
+		if (step.type() == MoveType.CLIMB_UP) {
+			this.bot.getJumpControl().jump(); // a mob on a ladder climbs while it jumps
+		}
 	}
 
 	private boolean centered(BlockPos pos) {

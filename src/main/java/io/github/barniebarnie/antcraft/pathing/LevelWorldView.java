@@ -16,7 +16,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.phys.shapes.BooleanOp;
@@ -104,15 +106,35 @@ public class LevelWorldView implements WorldView {
 
 	/**
 	 * A wooden door or a fence gate, open or shut, walked through along the way it faces. Iron doors stay shut, and
-	 * trapdoors are left out: one in a floor or ceiling is a different move. ponytail: add trapdoors when a path needs one.
+	 * trapdoors are climbed through instead (see {@link #isClimbable}).
 	 */
 	static boolean canOpen(BlockState state, Direction dir) {
-		return isOpenable(state) && state.getValue(HorizontalDirectionalBlock.FACING).getAxis() == dir.getAxis();
+		return isOpenable(state) && !(state.getBlock() instanceof TrapDoorBlock)
+			&& state.getValue(HorizontalDirectionalBlock.FACING).getAxis() == dir.getAxis();
 	}
 
-	/** A wooden door or a fence gate, which bots open by hand. */
+	/** A wooden door, fence gate or trapdoor, which bots open by hand. */
 	public static boolean isOpenable(BlockState state) {
-		return DoorBlock.isWoodenDoor(state) || state.getBlock() instanceof FenceGateBlock;
+		return DoorBlock.isWoodenDoor(state) || state.getBlock() instanceof FenceGateBlock || isHatch(state);
+	}
+
+	/** A trapdoor opened by hand: any but iron. */
+	private static boolean isHatch(BlockState state) {
+		return state.getBlock() instanceof TrapDoorBlock && !state.is(Blocks.IRON_TRAPDOOR);
+	}
+
+	/**
+	 * A ladder or vine, not scaffolding, which bots stand on rather than climb. Also a trapdoor opened by hand over a ladder
+	 * facing the same way: vanilla climbs one that is open, and a bot opens it to climb through.
+	 */
+	@Override
+	public boolean isClimbable(BlockPos pos) {
+		BlockState state = this.level.getBlockState(pos);
+		if (isHatch(state)) {
+			BlockState below = this.level.getBlockState(pos.below());
+			return below.is(Blocks.LADDER) && below.getValue(LadderBlock.FACING) == state.getValue(TrapDoorBlock.FACING);
+		}
+		return state.is(BlockTags.CLIMBABLE) && !state.is(Blocks.SCAFFOLDING);
 	}
 
 	@Override

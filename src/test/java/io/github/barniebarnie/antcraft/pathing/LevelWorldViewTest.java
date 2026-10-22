@@ -47,4 +47,10 @@ class LevelWorldViewTest {
 		assertFalse(LevelWorldView.canOpen(Blocks.OAK_TRAPDOOR.defaultBlockState(), Direction.EAST));
 		assertFalse(LevelWorldView.canOpen(Blocks.OAK_FENCE.defaultBlockState(), Direction.EAST));
 	}
+
+	@Test
+	void aTrapdoorOpensByHandButAnIronOneDoesNot() {
+		assertTrue(LevelWorldView.isOpenable(Blocks.OAK_TRAPDOOR.defaultBlockState()));
+		assertFalse(LevelWorldView.isOpenable(Blocks.IRON_TRAPDOOR.defaultBlockState()));
+	}
 }

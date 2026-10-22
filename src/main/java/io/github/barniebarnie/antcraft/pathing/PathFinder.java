@@ -39,6 +39,9 @@ public final class PathFinder {
 	 */
 	public static final double SWIM_UP_COST = 8.0;
 
+	/** Climbing a block up or down a ladder: vanilla climbs at 0.2 blocks a tick and slides down at 0.15. */
+	public static final double CLIMB_COST = 6.0;
+
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
 	public record Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop) {
@@ -164,6 +167,8 @@ public final class PathFinder {
 				this.add(moves, this.enterColumn(feet, dir));
 			}
 			this.add(moves, this.surface(feet));
+			this.add(moves, this.climb(feet, MoveType.CLIMB_UP));
+			this.add(moves, this.climb(feet, MoveType.CLIMB_DOWN));
 			this.add(moves, this.pillar(feet));
 			this.add(moves, this.digDown(feet));
 			return moves;
@@ -243,8 +248,21 @@ public final class PathFinder {
 			return this.world.isWater(pos) && this.open(pos.above());
 		}
 
+		/** One block up or down a ladder, from one climbable block to the next, or down into one. Breaks nothing on the way. */
+		private Candidate climb(BlockPos feet, MoveType type) {
+			boolean up = type == MoveType.CLIMB_UP;
+			BlockPos to = up ? feet.above() : feet.below();
+			boolean held = up ? this.world.isClimbable(feet) && this.world.isClimbable(to) && this.climbable(to.above()) : this.world.isClimbable(to);
+			return held ? new Candidate(new Step(type, to, List.of(), List.of()), CLIMB_COST) : null;
+		}
+
+		/** Open, or a ladder or hatch a bot climbs through. */
+		private boolean climbable(BlockPos pos) {
+			return this.open(pos) || this.world.isClimbable(pos);
+		}
+
 		private Candidate pillar(BlockPos feet) {
-			if (!this.options.canPlace() || !this.world.mayPlace(feet)) {
+			if (this.world.isClimbable(feet) || !this.options.canPlace() || !this.world.mayPlace(feet)) {
 				return null;
 			}
 			BlockPos to = feet.above();
@@ -259,7 +277,7 @@ public final class PathFinder {
 
 		private Candidate digDown(BlockPos feet) {
 			BlockPos below = feet.below();
-			if (this.world.isPassable(below) || !this.canStand(below.below())) {
+			if (this.world.isPassable(below) || this.world.isClimbable(below) || !this.canStand(below.below())) {
 				return null;
 			}
 			Builder b = new Builder(MoveType.DIG_DOWN, below, FALL_COST_PER_BLOCK);
@@ -332,7 +350,7 @@ public final class PathFinder {
 
 			/** The bot must be able to occupy this block, breaking it if needed. */
 			Builder clear(BlockPos pos) {
-				if (Planner.this.open(pos)) {
+				if (Planner.this.climbable(pos)) {
 					return this;
 				}
 				if (Planner.this.breakable(pos)) {

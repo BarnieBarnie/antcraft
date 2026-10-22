@@ -233,6 +233,37 @@ class PathFinderTest {
 	}
 
 	@Test
+	void climbsALadderRatherThanPillarBesideIt() {
+		// A wall three high with a ladder on its west face; the goal is on top of the wall.
+		GridWorld world = GridWorld.flat(5).fill(2, 1, -5, 2, 3, 5, '#').fill(1, 1, 0, 1, 3, 0, 'H');
+		Path path = find(world, new BlockPos(2, 4, 0), FULL);
+
+		assertTrue(path.complete());
+		assertEquals(List.of(MoveType.WALK, MoveType.CLIMB_UP, MoveType.CLIMB_UP, MoveType.STEP_UP), types(path));
+		assertTrue(path.steps().stream().allMatch(s -> s.places().isEmpty() && s.breaks().isEmpty()), "built or dug: " + path.steps());
+	}
+
+	@Test
+	void climbsALadderUpThroughAHatch() {
+		// A bedrock ceiling at y=4 with a trapdoor in it over a ladder.
+		GridWorld world = GridWorld.flat(5).fill(-5, 4, -5, 5, 4, 5, 'B').fill(1, 1, 0, 1, 3, 0, 'H').set(1, 4, 0, 'T');
+		Path path = find(world, new BlockPos(2, 5, 0), WALK_ONLY);
+
+		assertTrue(path.complete());
+		assertEquals(List.of(MoveType.WALK, MoveType.CLIMB_UP, MoveType.CLIMB_UP, MoveType.CLIMB_UP, MoveType.STEP_UP), types(path));
+	}
+
+	@Test
+	void climbsALadderDownThroughAHatch() {
+		GridWorld world = GridWorld.flat(5).fill(-5, 4, -5, 5, 4, 5, 'B').fill(1, 1, 0, 1, 3, 0, 'H').set(1, 4, 0, 'T');
+		Path path = PathFinder.find(world, new BlockPos(2, 5, 0), new Goal.Block(START), WALK_ONLY);
+
+		assertTrue(path.complete());
+		// Down through the hatch and the ladder, then off it the last block or two.
+		assertEquals(List.of(MoveType.WALK, MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN), types(path).subList(0, 4));
+	}
+
+	@Test
 	void digsDownToLowerGoal() {
 		GridWorld world = GridWorld.flat(5).fill(-5, -5, -5, 5, -1, 5, 'D');
 		Path path = find(world, new BlockPos(0, -2, 0), FULL);

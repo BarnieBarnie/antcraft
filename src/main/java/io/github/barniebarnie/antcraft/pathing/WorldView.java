@@ -31,6 +31,14 @@ public interface WorldView {
 	}
 
 	/**
+	 * A bot holds on here to climb up or down, and may walk into it: a ladder or vine, or a wooden trapdoor in a floor
+	 * or ceiling over one, which it opens to climb through and walks on shut.
+	 */
+	default boolean isClimbable(BlockPos pos) {
+		return false;
+	}
+
+	/**
 	 * A bot moving {@code dir} walks up onto this stair block without jumping, because the side it enters by
 	 * is low, such as the front of the mineshaft's stairs. False for any other block.
 	 */
