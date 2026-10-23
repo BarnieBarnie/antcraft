@@ -119,6 +119,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private @Nullable UUID progressJob;
 	/** Steps of job {@link #progressJob} it found no way to, left for the colony to recheck once the rest is done. */
 	private final Set<BlockPos> unreachable = new HashSet<>();
+	/**
+	 * Cells to dig and wall off it found no spot to see together with their fluid from, given up only until it digs a
+	 * block next to one, which may open a view (see {@link #digAndWall}).
+	 */
+	private final Set<BlockPos> noView = new HashSet<>();
 	/** How often it found no path to each step of the job so far. */
 	private final Map<BlockPos, Integer> failures = new HashMap<>();
 	/** The step it is on its way to, since when, and when it last went for it, to give it up after {@link #STEP_REACH_TICKS}. */
@@ -412,6 +417,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	private void forgetUnreachable() {
 		this.unreachable.clear();
+		this.noView.clear();
 		this.failures.clear();
 	}
 
@@ -508,7 +514,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			}
 			BuildPlan.Step step = this.withFiller(level, core, planned);
 			if (step.needsClearing(current)) {
-				return WORKABLE.contains(this.clearing(level, core, step)) || !this.fluidsToWall(level, core, step).isEmpty();
+				// A dig beside a fluid needs a filler block for each wall, or it is reported rather than fetched forever.
+				List<BlockPos> walls = this.fluidsToWall(level, core, step);
+				return WORKABLE.contains(this.clearing(level, core, step)) || !walls.isEmpty() && this.filler(core, walls.size()).isPresent();
 			}
 			Item item = step.item(current);
 			if (!isPossible(level, step)) {
@@ -660,6 +668,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			default -> {
 				if (this.reachStep(level, pos) && this.breaker.tick(level, pos, true)) {
 					colony.unprotect(pos);
+					this.dug(pos);
 				}
 			}
 		}
@@ -671,8 +680,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * It fills only where it sees {@code pos}, from the water where no dry spot does (see {@link #reachStep}). While {@code pos} stays taken it waits, and gives the step up after a while.
 	 */
 	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos) {
-		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
-		Optional<Item> filler = BuildPlan.waterFiller(item -> this.has(core, stack -> stack.is(item)), pickaxe);
+		Optional<Item> filler = this.filler(core, 1);
 		if (filler.isEmpty()) {
 			return;
 		}
@@ -693,11 +701,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * Breaks the block at {@code pos} that holds back the fluid at {@code walls}, and in the same tick walls the fluid off
 	 * with filler blocks, before it can flow in: as a player digging into water it could not see through the rock, it
 	 * stands where it sees the block and, once that is gone, the fluid behind it, both within reach. Filler blocks as in
-	 * {@link #fillIn}, one per wall, fetched first.
+	 * {@link #fillIn}, one per wall, fetched first. With no spot that sees both, the block is given up until the bot
+	 * digs another next to it, which may open a view, such as the block above a tunnel too low to see through.
 	 */
 	private void digAndWall(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, List<BlockPos> walls) {
-		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
-		Optional<Item> filler = BuildPlan.waterFiller(item -> this.has(core, stack -> stack.is(item)), pickaxe);
+		Optional<Item> filler = this.filler(core, walls.size());
 		if (filler.isEmpty()) {
 			return;
 		}
@@ -711,6 +719,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		walls.forEach(wall -> goals.add(new Goal.InSight(wall, REACH, through)));
 		BlockState block = Block.byItem(item).defaultBlockState();
 		if (!this.reachStep(level, pos, new All(goals))) {
+			if (this.unreachable.contains(pos)) {
+				this.noView.add(pos);
+			}
 			return;
 		}
 		if (!walls.stream().allMatch(wall -> this.isFreeToPlace(level, wall, block))) {
@@ -719,7 +730,26 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		} else if (this.breaker.tick(level, pos, true)) {
 			colony.unprotect(pos);
 			walls.forEach(wall -> this.put(level, wall, block, item));
+			this.dug(pos);
 		}
+	}
+
+	/** The filler block to wall {@code count} fluids off with, which the bot and the core hold that many of between them (see {@link BuildPlan#waterFiller}). */
+	private Optional<Item> filler(@Nullable Container core, int count) {
+		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
+		return BuildPlan.waterFiller(item -> this.bot.getInventory().countItem(item) + (core == null ? 0 : core.countItem(item)) >= count, pickaxe);
+	}
+
+	/** Tries the cells next to {@code pos} it found no view for again, now that the block at {@code pos} is gone. */
+	private void dug(BlockPos pos) {
+		this.noView.removeIf(cell -> {
+			boolean near = cell.closerThan(pos, 2);
+			if (near) {
+				this.unreachable.remove(cell);
+				this.failures.remove(cell);
+			}
+			return near;
+		});
 	}
 
 	/** {@code sight}, with the block at {@code broken} as air, such as one about to be broken. A record, so goals compare by value. */

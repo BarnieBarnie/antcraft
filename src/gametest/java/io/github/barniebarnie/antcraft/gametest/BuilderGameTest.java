@@ -1237,6 +1237,80 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Bedrock from 3, 1, 2 to 6, 3, 6 and under the floor west of it, so only what a test carves out of it is open. */
+	private static void bedrockBox(GameTestHelper helper) {
+		for (int x = 0; x <= 6; x++) {
+			for (int z = 0; z <= 7; z++) {
+				for (int y = x <= 3 ? 0 : 1; y <= 3; y++) {
+					if (x >= 3 && z >= 2 && z <= 6 || y == 0) {
+						helper.setBlock(x, y, z, Blocks.BEDROCK);
+					}
+				}
+			}
+		}
+	}
+
+	/**
+	 * Stone to dig at the end of a tunnel one block high, under glass the plan digs after it, and water north of the stone:
+	 * from no spot does the builder see both the stone and, through it, the water, so it cannot dig the stone and wall the
+	 * water in one tick. It digs the glass first, and then the stone from where it sees both.
+	 */
+	@GameTest(maxTicks = 190)
+	public void digsANeighbourForAViewOfWaterBehindACell(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		bedrockBox(helper);
+		BlockPos stone = new BlockPos(4, 1, 4);
+		BlockPos water = stone.north();
+		BlockPos glass = new BlockPos(3, 2, 4);
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		helper.setBlock(glass, Blocks.GLASS);
+		helper.setBlock(stone, Blocks.STONE);
+		helper.setBlock(water, Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(
+			BuildPlan.Step.clear(helper.absolutePos(stone)),
+			BuildPlan.Step.clear(helper.absolutePos(glass)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(stone).getFluidState().isEmpty()) {
+				helper.fail("water ran into the dug cell");
+			}
+			if (!colony.blockedSteps().isEmpty()) {
+				helper.fail("reported: " + colony.blockedSteps());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getBlockState(glass).isAir(), "glass not dug");
+			helper.assertTrue(helper.getBlockState(stone).isAir(), "stone not dug");
+			helper.assertBlockPresent(Blocks.COBBLESTONE, water);
+		});
+	}
+
+	/**
+	 * Stone to dig with water on two sides, and one cobblestone in the core: the builder cannot wall both off as it digs,
+	 * so it reports the step rather than fetch filler the core does not have, forever.
+	 */
+	@GameTest(maxTicks = 40)
+	public void reportsADigWithTooLittleFillerToWallItsWater(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		bedrockBox(helper);
+		BlockPos stone = new BlockPos(4, 1, 4);
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		helper.setBlock(3, 2, 4, Blocks.AIR);
+		helper.setBlock(stone, Blocks.STONE);
+		helper.setBlock(stone.north(), Blocks.WATER);
+		helper.setBlock(stone.east(), Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(stone)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.STONE, stone);
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(stone))), "dig short of filler not reported: " + colony.blockedSteps());
+		});
+	}
+
 	/**
 	 * A block to place high in the air, with no scaffold to pillar up with: the builder cannot get
 	 * within reach of it, so it gives the step up and reports it, rather than trying forever.
