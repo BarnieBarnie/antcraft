@@ -2437,11 +2437,11 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot standing on a lone cobblestone scaffold block five blocks up, with nothing else under it and no blocks or
-	 * pickaxe to dig down with, does not take that block down from under itself: it would fall further than a path
-	 * may drop and get hurt. It leaves the block up.
+	 * A bot standing on a lone cobblestone scaffold block five blocks up, with nothing else under it, no blocks or
+	 * pickaxe to dig down with, none in the core, and too little health to take the fall well, does not take that
+	 * block down from under itself: the fall would cost it half its health or more. It leaves the block up.
 	 */
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 300)
 	public void doesNotTakeDownScaffoldItWouldFallFarFrom(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		BlockPos floating = new BlockPos(4, 5, 4);
@@ -2449,13 +2449,49 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		bot.addScaffold(helper.absolutePos(floating));
-		bot.setHealth(bot.getMaxHealth());
+		bot.setHealth(4);
 
-		helper.runAfterDelay(150, () -> {
+		// Long enough to break the cobblestone by hand.
+		helper.runAfterDelay(250, () -> {
 			helper.assertBlockPresent(Blocks.COBBLESTONE, floating);
-			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
+			helper.assertTrue(bot.getHealth() == 4, "fell and got hurt: " + bot.getHealth());
 			helper.assertTrue(bot.getScaffold().isEmpty(), "still taking it down: " + bot.getScaffold());
 			helper.succeed();
+		});
+	}
+
+	/**
+	 * A bot standing on a lone cobblestone scaffold block five blocks up, with no blocks or pickaxe to dig down with,
+	 * and the dirt in the core walled in out of its reach, does not stay up there: it breaks the block by hand and
+	 * takes the short fall, which costs it little of its health.
+	 */
+	@GameTest(maxTicks = 440)
+	public void breaksAFloatingBlockByHandWithNoReachableCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.DIRT, 8));
+		for (int x = 0; x <= 2; x++) {
+			for (int y = 1; y <= 2; y++) {
+				for (int z = 0; z <= 2; z++) {
+					if (!new BlockPos(x, y, z).equals(CORE)) {
+						helper.setBlock(x, y, z, Blocks.STONE);
+					}
+				}
+			}
+		}
+		BlockPos floating = new BlockPos(4, 5, 4);
+		helper.setBlock(floating, Blocks.COBBLESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.addScaffold(helper.absolutePos(floating));
+		bot.setHealth(bot.getMaxHealth());
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockNotPresent(Blocks.COBBLESTONE, floating);
+			helper.assertTrue(bot.isAlive(), "died");
+			helper.assertTrue(bot.getHealth() > bot.getMaxHealth() / 2, "hurt badly: " + bot.getHealth());
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+			helper.assertTrue(bot.onGround() && bot.getY() < helper.absolutePos(new BlockPos(0, 2, 0)).getY(), "not down on the floor");
+			helper.assertTrue(core(helper).getItem(0).getCount() == 8, "took dirt from the walled-in core");
 		});
 	}
 

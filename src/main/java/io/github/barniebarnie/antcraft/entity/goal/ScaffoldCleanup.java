@@ -15,6 +15,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,7 +31,8 @@ import org.jspecify.annotations.Nullable;
  * only blocks in sight. One it stands on with a drop below further than a path may take it towers down
  * from, placing a scaffold block under it before taking it down; carrying none, it digs down, breaking that block
  * for its own block and placing it one lower. When breaking it gives no block it may place, it fetches some from its
- * home once, and leaves the block up only when it gets none there. Left afloat, such as in a pool under a rim too high to
+ * home once. Getting none there, it breaks the block by hand and takes the fall when that costs it less than half its
+ * health, and otherwise leaves the block up. Left afloat, such as in a pool under a rim too high to
  * jump onto, it climbs out to dry ground, placing blocks to step on, and takes those down from the bank. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
@@ -175,11 +177,16 @@ final class ScaffoldCleanup {
 					// Carrying none, it digs down: breaks this one for its block and places that under it in the same
 					// tick, before it falls. If breaking it gives no block to place, it fetches some from home, once.
 					if (!dropsScaffold(level, next)) {
-						if (this.fetched || !this.homeHoldsScaffold(level)) {
-							this.abandoned.add(next);
-						} else {
+						if (!this.fetched && this.homeHoldsScaffold(level)) {
 							this.fetched = true;
 							this.fetching = true;
+						} else if (this.takesTheFall(level, next)) {
+							// No blocks to be had: like a player, it breaks the block by hand and takes the short fall.
+							if (this.breaker.tick(level, next, true)) {
+								placed.remove(next);
+							}
+						} else {
+							this.abandoned.add(next);
 						}
 					} else if (this.breaker.tick(level, next, true)) {
 						placed.remove(next);
@@ -258,6 +265,16 @@ final class ScaffoldCleanup {
 			this.stopTravel.run();
 			this.follower.setMayPlace(false);
 		}
+	}
+
+	/**
+	 * Whether the bot standing on {@code pos} may break it and fall: the fall must cost it less than half the health it
+	 * has, so a short fall at good health is taken, and a long one, or any at low health, is not.
+	 */
+	private boolean takesTheFall(ServerLevel level, BlockPos pos) {
+		double over = fallUnder(level, pos) - this.bot.getAttributeValue(Attributes.SAFE_FALL_DISTANCE);
+		double damage = Math.max(0, Math.ceil(over * this.bot.getAttributeValue(Attributes.FALL_DAMAGE_MULTIPLIER)));
+		return damage * 2 < this.bot.getHealth();
 	}
 
 	/** How far the bot standing on {@code pos} falls once that block is gone. */
