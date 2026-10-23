@@ -210,6 +210,33 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
+	 * The pickaxes a haul job brings up from {@code chest} to the core, by item: all but the best one, which stays as the
+	 * spare (see {@link #pickaxeFor}), so ones a miner swapped out there (see {@code ColonyWorkGoal}) do not pile up.
+	 */
+	public static Map<Item, Integer> extraPickaxes(Container chest) {
+		Map<Item, Integer> pickaxes = new LinkedHashMap<>();
+		Item best = null;
+		for (int i = 0; i < chest.getContainerSize(); i++) {
+			ItemStack stack = chest.getItem(i);
+			if (stack.is(ItemTags.PICKAXES)) {
+				pickaxes.merge(stack.getItem(), stack.getCount(), Integer::sum);
+				if (best == null || ToolKind.PICKAXE.rank(stack.getItem()) > ToolKind.PICKAXE.rank(best)) {
+					best = stack.getItem();
+				}
+			}
+		}
+		if (best != null) {
+			pickaxes.computeIfPresent(best, (item, count) -> count > 1 ? count - 1 : null);
+		}
+		return pickaxes;
+	}
+
+	/** Whether {@code chest} holds anything a haul job takes up as a matter of course: what {@link #haulsFrom} takes, or {@link #extraPickaxes}. */
+	private static boolean holdsHaul(ServerLevel level, Colony colony, Container chest) {
+		return holds(chest, haulsFrom(level, colony, chest)) || !extraPickaxes(chest).isEmpty();
+	}
+
+	/**
 	 * Torches a haul job brings down to {@code chest} from the core: none until it holds fewer than half of
 	 * {@link #LANDING_TORCHES}, then what tops it up, out of what the core holds beyond the needs of its open
 	 * orders and builds.
@@ -252,7 +279,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** The mineshaft landing chests a haul job should empty into the core, by position. */
 	public static List<BlockPos> chestsToHaul(ServerLevel level, Colony colony) {
 		return Storage.landingChests(level, colony).entrySet().stream()
-			.filter(chest -> holds(chest.getValue(), haulsFrom(level, colony, chest.getValue())) || !toBringDown(level, colony, chest.getValue()).isEmpty()
+			.filter(chest -> holdsHaul(level, colony, chest.getValue()) || !toBringDown(level, colony, chest.getValue()).isEmpty()
 				|| !neededUp(level, colony, chest.getValue()).isEmpty())
 			.map(Map.Entry::getKey)
 			.toList();
@@ -267,7 +294,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Container chest = Storage.containerAt(level, job.target());
 		Container core = Storage.containerAt(level, colony.core());
 		return job.type() == JobType.HAUL && chest != null && core != null && freeSlots(this.bot.getInventory()) > 0
-			&& (freeSlots(core) > 0 && (holds(chest, haulsFrom(level, colony, chest)) || !neededUp(level, colony, chest).isEmpty()) || !toBringDown(level, colony, chest).isEmpty());
+			&& (freeSlots(core) > 0 && (holdsHaul(level, colony, chest) || !neededUp(level, colony, chest).isEmpty()) || !toBringDown(level, colony, chest).isEmpty());
 	}
 
 	@Override
@@ -321,6 +348,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				Map<Item, Integer> down = this.down;
 				down.forEach((item, count) -> this.haul(item, count - Storage.moveItems(inventory, chest, stack -> stack.is(item), count)));
 				neededUp(level, colony.get(), chest).forEach((item, count) -> this.haul(item, Storage.moveItems(chest, inventory, stack -> stack.is(item), count)));
+				extraPickaxes(chest).forEach((item, count) -> this.haul(item, Storage.moveItems(chest, inventory, stack -> stack.is(item), count)));
 				Predicate<ItemStack> filter = haulsFrom(level, colony.get(), chest);
 				for (int i = 0; i < chest.getContainerSize(); i++) {
 					ItemStack stack = chest.getItem(i);
@@ -342,7 +370,7 @@ public class HaulerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.haulLoaded = false;
 			this.hauled.clear();
 			// Another trip while there is more and room for it.
-			if (chest == null || !holds(chest, haulsFrom(level, colony.get(), chest)) || freeSlots(core) == 0 || freeSlots(inventory) == 0) {
+			if (chest == null || !holdsHaul(level, colony.get(), chest) || freeSlots(core) == 0 || freeSlots(inventory) == 0) {
 				this.endHaul(WorkerGoal.Outcome.COMPLETE);
 			}
 		}

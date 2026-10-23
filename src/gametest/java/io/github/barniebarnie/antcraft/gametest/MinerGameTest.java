@@ -893,6 +893,28 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A landing chest with two pickaxes, such as one a miner swapped out for the spare, keeps the better one and gets the other hauled up to the core. */
+	@GameTest(maxTicks = 200)
+	public void haulerBringsAnExtraPickaxeUpFromALandingChest(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = landingChest(helper, shaft);
+		chest.setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
+		chest.setItem(1, new ItemStack(Items.STONE_PICKAXE));
+		member(helper, colony, 1, 5, 1);
+
+		helper.onEachTick(() -> {
+			if (chest.countItem(Items.STONE_PICKAXE) == 0) {
+				helper.fail("took the better pickaxe out of the landing chest");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.WOODEN_PICKAXE) == 1, "extra pickaxe not in the core");
+			helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 0, "extra pickaxe left in the landing chest");
+		});
+	}
+
 	/** A tree job posted near a bot that carries a landing chest's load waits until the load is in the core. */
 	@GameTest(maxTicks = 460)
 	public void aBotMidHaulDeliversItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {
