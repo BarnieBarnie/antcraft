@@ -516,9 +516,10 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			}
 			BuildPlan.Step step = this.withFiller(level, core, planned);
 			if (step.needsClearing(current)) {
-				// A dig beside a fluid needs a filler block for each wall, or it is reported rather than fetched forever.
+				// A dig beside a fluid needs a filler block for each wall and a block that breaks, or it is reported rather than fetched forever.
 				List<BlockPos> walls = this.fluidsToWall(level, core, step);
-				return WORKABLE.contains(this.clearing(level, core, step)) || !walls.isEmpty() && this.fillers(core, walls.size()).isPresent();
+				return WORKABLE.contains(this.clearing(level, core, step))
+					|| !walls.isEmpty() && !isUnbreakable(level, step.pos()) && this.fillers(core, walls.size()).isPresent();
 			}
 			Item item = step.item(current);
 			if (!isPossible(level, step)) {

@@ -1313,6 +1313,35 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Bedrock to clear with water on two sides and filler enough for both walls in the core: it is reported, and the
+	 * water is not walled off with the colony's filler for a dig that cannot happen.
+	 */
+	@GameTest(maxTicks = 30)
+	public void reportsBedrockToClearBesideWater(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		bedrockBox(helper);
+		BlockPos bedrock = new BlockPos(4, 1, 4);
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		helper.setBlock(3, 2, 4, Blocks.AIR);
+		helper.setBlock(bedrock.north(), Blocks.WATER);
+		helper.setBlock(bedrock.east(), Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(bedrock)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (helper.getBlockState(bedrock.north()).getFluidState().isEmpty() || helper.getBlockState(bedrock.east()).getFluidState().isEmpty()) {
+				helper.fail("walled off the water beside bedrock");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.BEDROCK, bedrock);
+			helper.assertTrue(core(helper).countItem(Items.COBBLESTONE) == 2, "filler taken from the core");
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(bedrock))), "bedrock beside water not reported: " + colony.blockedSteps());
+		});
+	}
+
 	/** As {@link #reportsADigWithTooLittleFillerToWallItsWater}, but once it is reported a second cobblestone goes in the core: the dig is retried and done. */
 	@GameTest(maxTicks = 260)
 	public void retriesADigReportedForTooLittleFillerOnceThereIsEnough(GameTestHelper helper) {
