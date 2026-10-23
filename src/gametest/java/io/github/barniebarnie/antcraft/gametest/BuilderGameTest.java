@@ -2170,6 +2170,38 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A bot afloat in a pool one block deep under a rim two blocks up, which it cannot jump out of, with its scaffold
+	 * over the water out of reach: it swims over and takes it down from the water rather than dig into the bank.
+	 */
+	@GameTest(maxTicks = 140)
+	public void takesScaffoldDownFromTheWaterWithoutDiggingTheBank(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// A stone bank at y=1..2, with a pool along x 1..6, z 4..5: water at y=1, air above.
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
+			boolean pool = pos.getX() >= 1 && pos.getX() <= 6 && pos.getZ() >= 4 && pos.getZ() <= 5;
+			if (!pos.equals(CORE)) {
+				helper.setBlock(pos, !pool ? Blocks.STONE : pos.getY() == 1 ? Blocks.WATER : Blocks.AIR);
+			}
+		}
+		helper.setBlock(6, 2, 5, Blocks.DIRT);
+		AntBot bot = member(helper, colony, 1, 4);
+		bot.addScaffold(helper.absolutePos(new BlockPos(6, 2, 5)));
+
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
+				boolean pool = pos.getX() >= 1 && pos.getX() <= 6 && pos.getZ() >= 4 && pos.getZ() <= 5;
+				if (!pool && !pos.equals(CORE) && !helper.getBlockState(pos).is(Blocks.STONE)) {
+					helper.fail("dug into the bank at " + pos.toShortString());
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
+			helper.assertBlockNotPresent(Blocks.DIRT, 6, 2, 5);
+		});
+	}
+
 	/** Fails once a block of {@code pillar} is gone while the column's top block is not in place. */
 	private static void assertScaffoldKeptUntilColumnStands(GameTestHelper helper, Set<BlockPos> pillar) {
 		if (helper.getBlockState(new BlockPos(5, 6, 5)).is(Blocks.COBBLESTONE)) {

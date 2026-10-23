@@ -64,9 +64,20 @@ final class ScaffoldCleanup {
 		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
 	}
 
-	/** Where the bot can take the block at {@code pos} down: within reach, and in sight of it. */
+	/**
+	 * Where the bot can take the block at {@code pos} down: within reach, and in sight of it. For one over water, or a
+	 * bot in water, that may be swimming at the surface, so a bot in a pool it cannot climb out of swims to its scaffold
+	 * rather than dig into the bank.
+	 */
 	private Goal inSight(BlockPos pos) {
-		return new Goal.InSight(pos, REACH, this.sight);
+		Goal goal = new Goal.InSight(pos, REACH, this.sight);
+		boolean wet = this.bot.isInWater() || !this.bot.level().getFluidState(pos).isEmpty() || !this.bot.level().getFluidState(pos.below()).isEmpty();
+		return wet ? new Goal.Afloat(goal) : goal;
+	}
+
+	/** Whether the bot is at a spot where {@code goal} is reached: standing, or swimming for one that may end afloat. */
+	private boolean at(Goal goal, BlockPos feet) {
+		return goal.isReached(feet) && (this.bot.onGround() || goal.mayEndAfloat() && this.bot.isInWater());
 	}
 
 	/** Starts afresh, such as for a new tree: every block is tried again, with all retries. */
@@ -116,7 +127,7 @@ final class ScaffoldCleanup {
 			return true;
 		}
 		Goal reach = this.inSight(next);
-		if (reach.isReached(feet) && this.bot.onGround()) {
+		if (this.at(reach, feet)) {
 			this.stopTravel.run();
 			if (next.equals(feet.below()) && fallUnder(level, next) > PathFollower.MAX_DROP) {
 				// Taking it down from under itself would drop the bot further than a path may. It towers down instead:
@@ -167,7 +178,7 @@ final class ScaffoldCleanup {
 	private void retry(BlockPos feet) {
 		BlockPos target = this.retrying;
 		Goal reach = this.inSight(target);
-		if (!this.bot.getScaffold().contains(target) || (reach.isReached(feet) && this.bot.onGround())) {
+		if (!this.bot.getScaffold().contains(target) || this.at(reach, feet)) {
 			this.unreachable.clear();
 			this.endRetry();
 		} else if (this.travel.apply(reach) == PathFollower.Status.FAILED) {
