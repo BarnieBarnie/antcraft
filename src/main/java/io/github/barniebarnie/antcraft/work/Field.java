@@ -55,9 +55,6 @@ public record Field(BlockPos center) {
 		return Sites.nearest(core, radius - RADIUS, avoid, pos -> new Field(pos.below()), Field::area, field -> field.isFlat(isSoil, isOpen));
 	}
 
-	/** How far from the core a new colony looks for its field (see {@link #site}). */
-	private static final int SITE_REACH = 8;
-
 	/** How many blocks above the soil {@link #plan} clears: the crop layer and the one above, room to walk and light. */
 	private static final int CLEAR_HEIGHT = 2;
 
@@ -98,7 +95,7 @@ public record Field(BlockPos center) {
 	 */
 	public static Optional<Field> site(BlockPos core, int radius, List<BoundingBox> avoid, Function<BlockPos, BlockState> world,
 			Predicate<BlockPos> workable) {
-		return Sites.cheapest(core, Math.min(SITE_REACH, radius - RADIUS), avoid, pos -> new Field(pos.below()), Field::area, field -> {
+		return Sites.cheapest(core, radius - RADIUS, avoid, pos -> new Field(pos.below()), Field::area, field -> {
 			for (BlockPos pos : BlockPos.betweenClosed(field.area().minX(), field.area().minY(), field.area().minZ(),
 					field.area().maxX(), field.area().maxY(), field.area().maxZ())) {
 				if (!workable.test(pos)) {

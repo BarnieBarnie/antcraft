@@ -25,6 +25,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
@@ -239,6 +240,8 @@ public class Colony {
 	private Optional<StorageArea> storage;
 	/** The pit dug for cobblestone while the mineshaft yields nothing yet (see {@link #updateQuarry}), once the colony picked a site. */
 	private Optional<Quarry> quarry = Optional.empty();
+	/** Searches left to skip, by what the site is for, after a search found no room; not saved, so a reload only searches sooner. */
+	private final Map<String, Integer> siteSkips = new HashMap<>();
 	/** The parts of {@link #orders} the colony placed itself, by purpose, which are withdrawn once no longer needed. */
 	private final Map<OrderPurpose, Map<Item, Integer>> systemOrders = new EnumMap<>(OrderPurpose.class);
 	/** Steps builders could not do, such as behind bedrock; their plans wait without a job until a recheck finds them workable. */
@@ -1251,10 +1254,32 @@ public class Colony {
 			return;
 		}
 		if (this.quarry.isEmpty()) {
-			this.quarry = Quarry.site(this.core, this.radius, this.occupied(), world, workable);
+			this.quarry = this.findSite("quarry", () -> Quarry.site(this.core, this.radius, this.occupied(), world, workable));
 		}
 		int priority = this.projects.stream().filter(project -> project.name().equals(MINESHAFT)).mapToInt(Project::priority).findFirst().orElse(0);
 		this.quarry.flatMap(quarry -> quarry.plan(world)).ifPresent(plan -> this.setPriority(this.addBuild(Project.QUARRY, plan, true).id(), priority));
+	}
+
+	/** How many searches for a site are skipped after one found no room: a search can scan the whole territory. */
+	private static final int SITE_SKIPS = 10;
+
+	/**
+	 * Runs {@code search} for a site for {@code what}, unless one found nothing within the last {@link #SITE_SKIPS} calls;
+	 * a skipped search finds nothing. Room seldom opens up, and a search that finds none scans the whole territory.
+	 */
+	<T> Optional<T> findSite(String what, Supplier<Optional<T>> search) {
+		int skips = this.siteSkips.getOrDefault(what, 0);
+		if (skips > 0) {
+			this.siteSkips.put(what, skips - 1);
+			return Optional.empty();
+		}
+		Optional<T> site = search.get();
+		if (site.isEmpty()) {
+			this.siteSkips.put(what, SITE_SKIPS);
+		} else {
+			this.siteSkips.remove(what);
+		}
+		return site;
 	}
 
 	public UUID id() {

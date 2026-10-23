@@ -165,4 +165,17 @@ class FieldTest {
 
 		assertNotEquals(first, field, "field under " + protectedBlock);
 	}
+
+	@Test
+	void aSiteIsFoundFurtherOutWhenTheGroundNearTheCoreIsTaken() {
+		java.util.function.Function<BlockPos, net.minecraft.world.level.block.state.BlockState> world =
+			pos -> pos.getY() <= 0 ? Blocks.DIRT.defaultBlockState() : Blocks.AIR.defaultBlockState();
+		// Other sites take every column a field within 8 blocks of the core would use.
+		BoundingBox taken = new BoundingBox(-10, -5, -10, 10, 5, 10);
+
+		Field field = Field.site(CORE, 32, List.of(taken), world, pos -> true).orElseThrow();
+
+		assertFalse(overlaps(field, new BoundingBox(-10, -64, -10, 10, 64, 10)), "field at " + field.center());
+		assertTrue(Math.abs(field.center().getX()) + Field.RADIUS <= 32 && Math.abs(field.center().getZ()) + Field.RADIUS <= 32);
+	}
 }

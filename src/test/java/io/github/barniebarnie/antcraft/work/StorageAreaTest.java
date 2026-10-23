@@ -76,4 +76,22 @@ class StorageAreaTest {
 	void levelsNoSpotWithBlocksTheBotsCannotWork() {
 		assertEquals(Optional.empty(), StorageArea.levelling(CORE, 10, List.of(), bumpy(), pos -> false));
 	}
+
+	/** Other sites take every column a storage area within 8 blocks of the core would use. */
+	private static final BoundingBox TAKEN = new BoundingBox(-10, -5, -10, 10, 5, 10);
+
+	@Test
+	void aSiteIsFoundFurtherOutWhenTheGroundNearTheCoreIsTaken() {
+		StorageArea area = StorageArea.site(CORE, 32, List.of(TAKEN), bumpy(), pos -> true).orElseThrow();
+
+		assertFalse(Sites.sharesColumns(area.area(), TAKEN), "area at " + area.area());
+		assertTrue(area.area().maxX() <= 32 && area.area().minX() >= -32 && area.area().maxZ() <= 32 && area.area().minZ() >= -32, area.area().toString());
+	}
+
+	@Test
+	void aSpotToLevelIsFoundFurtherOutWhenTheGroundNearTheCoreIsTaken() {
+		BuildPlan plan = StorageArea.levelling(CORE, 32, List.of(TAKEN), bumpy(), pos -> true).orElseThrow();
+
+		assertTrue(plan.steps().stream().allMatch(step -> !TAKEN.isInside(step.pos().atY(0))), plan.steps().toString());
+	}
 }

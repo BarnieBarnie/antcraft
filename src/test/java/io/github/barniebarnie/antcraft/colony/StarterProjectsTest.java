@@ -142,6 +142,26 @@ class StarterProjectsTest {
 		assertTrue(colony.projects().stream().noneMatch(p -> p.name().equals("quarry")), "quarry open beside a running shaft");
 	}
 
+	@Test
+	void aColonyWithNoRoomForAQuarryDoesNotSearchTheTerritoryAgainEverySurvey() {
+		Colony colony = found();
+		int[] looks = {0};
+		// No block may be dug, so no quarry fits anywhere.
+		colony.updateQuarry(true, WORLD, pos -> {
+			looks[0]++;
+			return false;
+		});
+		assertTrue(colony.quarry().isEmpty());
+		int first = looks[0];
+
+		colony.updateQuarry(true, WORLD, pos -> {
+			looks[0]++;
+			return false;
+		});
+
+		assertEquals(first, looks[0], "searched the territory again");
+	}
+
 	private static void assertNoSharedColumns(Colony colony) {
 		List<BoundingBox> areas = new ArrayList<>();
 		areas.add(colony.field().orElseThrow().area());

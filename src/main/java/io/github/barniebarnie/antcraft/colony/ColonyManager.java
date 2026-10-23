@@ -220,7 +220,8 @@ public class ColonyManager extends SavedData {
 			}
 		}
 		if (colony.field().isEmpty() && crops == 0 && FIELD_YIELDS.stream().anyMatch(Storage.wanted(level, colony))) {
-			Field.choose(core, r, colony.occupied(), pos -> Territory.inBounds(colony.bounds(), pos) && Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos)))
+			colony.findSite("field", () -> Field.choose(core, r, colony.occupied(),
+				pos -> Territory.inBounds(colony.bounds(), pos) && Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos))))
 				.ifPresent(colony::setField);
 		}
 		colony.field().ifPresent(field -> {
@@ -382,16 +383,20 @@ public class ColonyManager extends SavedData {
 		if (core == null || free > NEARLY_FULL_FREE_SLOTS) {
 			return;
 		}
-		Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), colony.occupied(),
-			pos -> Territory.inBounds(colony.bounds(), pos) && level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
-			pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
-		if (site.isPresent()) {
-			colony.setStorage(site.get());
-		} else if (!colony.hasTerraform()) {
-			// No flat spot: the colony levels one, and picks it once it is flat.
-			StorageArea.levelling(colony.core(), colony.radius(), colony.occupied(), level::getBlockState, pos -> isWorkable(level, colony, pos))
-				.ifPresent(colony::addBuild);
-		}
+		colony.findSite("storage", () -> {
+			Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), colony.occupied(),
+				pos -> Territory.inBounds(colony.bounds(), pos) && level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
+				pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
+			if (site.isPresent()) {
+				colony.setStorage(site.get());
+			} else if (!colony.hasTerraform()) {
+				// No flat spot: the colony levels one, and picks it once it is flat.
+				StorageArea.levelling(colony.core(), colony.radius(), colony.occupied(), level::getBlockState, pos -> isWorkable(level, colony, pos))
+					.ifPresent(colony::addBuild);
+			}
+			// Nothing found unless a site or a spot to level is: while one is levelled, it is searched for every survey.
+			return colony.storage().isPresent() || colony.hasTerraform() ? Optional.of(true) : Optional.empty();
+		});
 	}
 
 	/** Whether bots can dig or fill the block at {@code pos} for a site the colony levels: no fluid, unbreakable block, container or colony block. */
