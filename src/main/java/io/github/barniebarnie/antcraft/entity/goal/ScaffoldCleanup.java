@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Set;
@@ -13,6 +14,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -27,7 +29,8 @@ import org.jspecify.annotations.Nullable;
  * left behind, and so is one it cannot see from anywhere in reach, since like a player it breaks
  * only blocks in sight. One it stands on with a drop below further than a path may take it towers down
  * from, placing a scaffold block under it before taking it down; carrying none, it digs down, breaking that block
- * for its own block and placing it one lower, and leaves it up only when breaking it gives no scaffold block. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
+ * for its own block and placing it one lower. When breaking it gives no block it may place, it fetches some from its
+ * home once, and leaves the block up only when it gets none there. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -36,6 +39,8 @@ final class ScaffoldCleanup {
 	 * new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
 	 */
 	private static final int RETRIES = 8;
+	/** How many scaffold blocks it fetches from home to tower down with. */
+	private static final int FETCH = 8;
 
 	private final AntBot bot;
 	private final PathFollower follower;
@@ -54,6 +59,9 @@ final class ScaffoldCleanup {
 	/** The scaffold block cleanup is pillaring up to, or null when not retrying one. */
 	private @Nullable BlockPos retrying;
 	private int retriesLeft = RETRIES;
+	/** Whether it is on its way to fetch scaffold blocks from home, and whether it went once since {@link #reset}. */
+	private boolean fetching;
+	private boolean fetched;
 
 	ScaffoldCleanup(AntBot bot, PathFollower follower, BlockBreaker breaker, Function<Goal, PathFollower.Status> travel, Runnable stopTravel) {
 		this.bot = bot;
@@ -86,11 +94,14 @@ final class ScaffoldCleanup {
 		this.abandoned.clear();
 		this.retrying = null;
 		this.retriesLeft = RETRIES;
+		this.fetching = false;
+		this.fetched = false;
 	}
 
 	/** Stops pillaring up to a block, such as when the bot turns to other work. */
 	void cancelRetry() {
 		this.retrying = null;
+		this.fetching = false;
 	}
 
 	/**
@@ -105,6 +116,10 @@ final class ScaffoldCleanup {
 		placed.removeIf(pos -> keep.test(pos) || !level.getBlockState(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.SCAFFOLD_BLOCKS));
 		if (this.retrying != null) {
 			this.retry(feet);
+			return false;
+		}
+		if (this.fetching) {
+			this.fetch(level, feet);
 			return false;
 		}
 		BlockPos next = placed.stream()
@@ -137,9 +152,14 @@ final class ScaffoldCleanup {
 					this.abandoned.add(next);
 				} else if (!this.follower.placeBlock(level, under)) {
 					// Carrying none, it digs down: breaks this one for its block and places that under it in the same
-					// tick, before it falls. Leaves it up if breaking it gives no scaffold block.
+					// tick, before it falls. If breaking it gives no block to place, it fetches some from home, once.
 					if (!dropsScaffold(level, next)) {
-						this.abandoned.add(next);
+						if (this.fetched || !this.homeHoldsScaffold(level)) {
+							this.abandoned.add(next);
+						} else {
+							this.fetched = true;
+							this.fetching = true;
+						}
 					} else if (this.breaker.tick(level, next, true)) {
 						placed.remove(next);
 						this.follower.placeBlock(level, under);
@@ -156,12 +176,37 @@ final class ScaffoldCleanup {
 		return false;
 	}
 
-	/** Whether breaking the block at {@code pos} with what the bot holds gives it a scaffold block to place, with room in its pack. */
+	/** Whether breaking the block at {@code pos} with what the bot holds gives it a block its follower places, with room in its pack. */
 	private boolean dropsScaffold(ServerLevel level, BlockPos pos) {
 		BlockState state = level.getBlockState(pos);
 		ItemStack tool = this.bot.getMainHandItem();
 		return Tools.canHarvest(tool, state) && ColonyWorkGoal.freeSlots(this.bot.getInventory()) > 0
-			&& Block.getDrops(state, level, pos, level.getBlockEntity(pos), this.bot, tool).stream().anyMatch(drop -> drop.is(PathFollower.SCAFFOLD_BLOCKS));
+			&& Block.getDrops(state, level, pos, level.getBlockEntity(pos), this.bot, tool).stream().anyMatch(drop -> drop.is(this.follower.scaffold()));
+	}
+
+	/** Whether the bot's home holds blocks its follower places. */
+	private boolean homeHoldsScaffold(ServerLevel level) {
+		BlockPos home = this.bot.getHome();
+		Container core = home == null ? null : Storage.containerAt(level, home);
+		return core != null && PathFollower.scaffoldCount(core, this.follower.scaffold()) > 0;
+	}
+
+	/** Goes to the bot's home and takes {@link #FETCH} blocks its follower places; gives up when it cannot get there. */
+	private void fetch(ServerLevel level, BlockPos feet) {
+		BlockPos home = this.bot.getHome();
+		Container core = home == null ? null : Storage.containerAt(level, home);
+		if (core == null) {
+			this.fetching = false;
+			return;
+		}
+		Goal reach = this.inSight(home);
+		if (this.at(reach, feet)) {
+			this.stopTravel.run();
+			Storage.moveItems(core, this.bot.getInventory(), stack -> stack.is(this.follower.scaffold()), FETCH);
+			this.fetching = false;
+		} else if (this.travel.apply(reach) == PathFollower.Status.FAILED) {
+			this.fetching = false;
+		}
 	}
 
 	/** How far the bot standing on {@code pos} falls once that block is gone. */

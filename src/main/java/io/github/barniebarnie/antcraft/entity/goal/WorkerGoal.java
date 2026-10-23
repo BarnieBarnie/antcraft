@@ -41,7 +41,9 @@ import org.jspecify.annotations.Nullable;
  * With no job to take it does the work between jobs (see {@link ColonyWorkGoal#upkeep}): it arms itself from the
  * core, swaps a tool it carries for a better one, takes down scaffolding left up, unloads a full pack, stores
  * produce and shears sheep, and keeps the core and storage, picking up loose items. While scaffolding is up it
- * takes only jobs that take it down when done, or jobs up on the ledge it stands on (see {@link #onLedge}). A job
+ * takes only jobs up on the ledge it stands on (see {@link #onLedge}), ones its executor kept the scaffolding up
+ * for, and the build, dig or tree job it was called away from, whose executor takes it down when done; for any
+ * other job it takes the scaffolding down first. A job
  * that turns up meanwhile takes the bot from that, but not from carrying a load to the core or storage, which it
  * finishes first. Only with none of it to do is the bot idle.
  * <p>
@@ -85,7 +87,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return LumberjackGoal.TREE_TRIES;
 		}
 	}
-	/** Jobs whose executor takes down all the bot's scaffolding when done, so a bot with some up may take them. */
+	/** Jobs whose executor takes down all the bot's scaffolding when done, so a bot called away from one may take it up again with scaffolding up. */
 	private static final Set<JobType> CLEARS_SCAFFOLD = EnumSet.of(JobType.CHOP_TREE, JobType.BUILD, JobType.CLEAR_AREA);
 	/** How often an idle bot looks at the board. */
 	private static final int CHECK_TICKS = 10;
@@ -123,6 +125,8 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	/** Fetches the tool the job declares once the bot carries none of its kind, such as after its own broke. */
 	private final ColonyWorkGoal toolFetch;
 	private boolean fetchingTool;
+	/** The job the bot was called away from, such as by a walk target, which it may take again with its scaffolding up. */
+	private @Nullable UUID interrupted;
 
 	public WorkerGoal(AntBot bot, LumberjackGoal lumberjack, FarmerGoal farmer, MinerGoal miner, CrafterGoal crafter, HaulerGoal hauler,
 			BuilderGoal builder) {
@@ -186,6 +190,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	public void stop() {
 		if (this.job != null && this.bot.level() instanceof ServerLevel level) {
 			this.colony(level).ifPresent(colony -> colony.board().release(this.bot.getUUID()));
+			this.interrupted = this.job.id();
 		}
 		this.job = null;
 		this.busy = false;
@@ -358,10 +363,11 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			Optional<Job> held = board.jobOf(id);
 			if (held.isEmpty()) {
 				// Scaffolding left up, such as from a job the bot was called away from, comes down before other work
-				// (see BuilderGoal); only jobs that take scaffolding down at their end may come first.
+				// (see BuilderGoal); only jobs up on its ledge, ones kept up for, and the job it was called away from
+				// (whose executor takes it down at its end) may come first.
 				boolean scaffoldUp = !this.bot.getScaffold().isEmpty();
 				JobScore score = this.score(level, colony);
-				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()) || onLedge(this.bot, open)
+				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()) && open.id().equals(this.interrupted) || onLedge(this.bot, open)
 						|| this.executors.get(open.type()).keepsScaffoldFor(open))
 					&& this.executors.get(open.type()).isReady(level, colony, open), score);
 				if (best.isEmpty()) {

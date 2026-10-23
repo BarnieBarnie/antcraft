@@ -39,6 +39,7 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.pig.Pig;
@@ -2443,6 +2444,86 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
 			helper.assertTrue(bot.onGround() && bot.getY() < helper.absolutePos(new BlockPos(0, 2, 0)).getY(), "not down on the floor");
 			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "fell and got hurt: " + bot.getHealth());
+		});
+	}
+
+	/**
+	 * A bot on a lone cobblestone scaffold block four up, with no pickaxe to dig down with and no blocks to tower down
+	 * with, and dirt in the core on a stone stand within reach: it fetches dirt from the core and towers down, rather
+	 * than stay up there, and gets down unhurt.
+	 */
+	@GameTest(maxTicks = 460)
+	public void fetchesBlocksToGetDownFromACobblestoneBlockWithNoPickaxe(GameTestHelper helper) {
+		getsDownFromACobblestoneBlockWithDirtInTheCore(helper, ItemStack.EMPTY);
+	}
+
+	/**
+	 * As {@link #fetchesBlocksToGetDownFromACobblestoneBlockWithNoPickaxe}, with a pickaxe: the cobblestone it would dig
+	 * down with is no block it pillars with, so it fetches dirt rather than break the block and fall.
+	 */
+	@GameTest(maxTicks = 100)
+	public void fetchesBlocksToGetDownFromACobblestoneBlockItDoesNotPillarWith(GameTestHelper helper) {
+		getsDownFromACobblestoneBlockWithDirtInTheCore(helper, new ItemStack(Items.STONE_PICKAXE));
+	}
+
+	private static void getsDownFromACobblestoneBlockWithDirtInTheCore(GameTestHelper helper, ItemStack tool) {
+		BlockPos core = new BlockPos(1, 3, 1);
+		helper.setBlock(1, 1, 1, Blocks.STONE);
+		helper.setBlock(1, 2, 1, Blocks.STONE);
+		helper.setBlock(core, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(core)).orElseThrow();
+		colony.setRadius(6);
+		colony.setStockTargets(List.of());
+		((Container) helper.getBlockEntity(core, BlockEntity.class)).setItem(0, new ItemStack(Items.DIRT, 8));
+		BlockPos floating = new BlockPos(3, 4, 1);
+		helper.setBlock(floating, Blocks.COBBLESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 5, 1);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.addScaffold(helper.absolutePos(floating));
+		bot.setItemInHand(InteractionHand.MAIN_HAND, tool);
+		bot.setHealth(bot.getMaxHealth());
+		helper.onEachTick(() -> {
+			if (bot.getHealth() < bot.getMaxHealth()) {
+				helper.fail("fell and got hurt: " + bot.getHealth());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockNotPresent(Blocks.COBBLESTONE, floating);
+			helper.assertTrue(strayDirt(helper) == 0, strayDirt(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold still recorded: " + bot.getScaffold());
+			helper.assertTrue(bot.onGround() && bot.getY() < helper.absolutePos(new BlockPos(0, 2, 0)).getY(), "not down on the floor");
+		});
+	}
+
+	/**
+	 * A bot on top of its pillar with a build job on the floor across the area: that job is not on its ledge, so it
+	 * takes its pillar down before it claims the job, rather than leave the pillar standing until the job ends.
+	 */
+	@GameTest(maxTicks = 220)
+	public void takesItsPillarDownBeforeLeavingForABuildOffItsLedge(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 5, 6);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(6, y, 6, Blocks.DIRT);
+			bot.addScaffold(helper.absolutePos(new BlockPos(6, y, 6)));
+		}
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 1));
+		colony.addBuild(new BuildPlan(List.of(step(helper, 1, 1, 6, COBBLE))));
+		boolean[] claimed = {false};
+		helper.onEachTick(() -> {
+			if (colony.board().jobOf(bot.getUUID()).isPresent() && !claimed[0]) {
+				claimed[0] = true;
+				helper.assertTrue(strayDirt(helper) == 0, "left for the build with " + strayDirt(helper) + " of its pillar standing");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(claimed[0], "never went for the build");
+			assertState(helper, 1, 1, 6, COBBLE);
+			helper.assertTrue(strayDirt(helper) == 0, strayDirt(helper) + " dirt left standing");
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
 		});
 	}
 }

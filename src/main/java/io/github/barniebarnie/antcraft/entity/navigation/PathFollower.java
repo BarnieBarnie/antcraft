@@ -91,6 +91,11 @@ public class PathFollower {
 		this.scaffold = scaffold;
 	}
 
+	/** Which blocks paths and {@link #placeBlock} may place as scaffolding. */
+	public TagKey<Item> scaffold() {
+		return this.scaffold;
+	}
+
 	public void start(Goal goal) {
 		this.stop();
 		this.goal = goal;
