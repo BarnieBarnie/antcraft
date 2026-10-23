@@ -47,6 +47,7 @@ import net.minecraft.world.entity.animal.squid.Squid;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -1309,6 +1310,71 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.STONE, stone);
 			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(stone))), "dig short of filler not reported: " + colony.blockedSteps());
+		});
+	}
+
+	/** As {@link #reportsADigWithTooLittleFillerToWallItsWater}, but once it is reported a second cobblestone goes in the core: the dig is retried and done. */
+	@GameTest(maxTicks = 260)
+	public void retriesADigReportedForTooLittleFillerOnceThereIsEnough(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		bedrockBox(helper);
+		BlockPos stone = new BlockPos(4, 1, 4);
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		helper.setBlock(3, 2, 4, Blocks.AIR);
+		helper.setBlock(stone, Blocks.STONE);
+		helper.setBlock(stone.north(), Blocks.WATER);
+		helper.setBlock(stone.east(), Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(stone)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		boolean[] reported = {false};
+
+		helper.onEachTick(() -> {
+			if (!reported[0] && !colony.blockedSteps().isEmpty()) {
+				reported[0] = true;
+				core(helper).setItem(1, new ItemStack(Items.COBBLESTONE, 1));
+			}
+			if (!helper.getBlockState(stone).getFluidState().isEmpty()) {
+				helper.fail("water ran into the dug cell");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(reported[0], "dig never reported");
+			helper.assertTrue(helper.getBlockState(stone).isAir(), "stone not dug");
+			helper.assertBlockPresent(Blocks.COBBLESTONE, stone.north());
+			helper.assertBlockPresent(Blocks.COBBLESTONE, stone.east());
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "still reported: " + colony.blockedSteps());
+		});
+	}
+
+	/** Stone to dig with water on two sides, and one dirt and one cobblestone in the core: it walls one off with each. */
+	@GameTest(maxTicks = 60)
+	public void wallsWaterOffWithMixedFiller(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		core(helper).setItem(1, new ItemStack(Items.DIRT, 1));
+		bedrockBox(helper);
+		BlockPos stone = new BlockPos(4, 1, 4);
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		helper.setBlock(3, 2, 4, Blocks.AIR);
+		helper.setBlock(stone, Blocks.STONE);
+		helper.setBlock(stone.north(), Blocks.WATER);
+		helper.setBlock(stone.east(), Blocks.WATER);
+		colony.addBuild(new BuildPlan(List.of(BuildPlan.Step.clear(helper.absolutePos(stone)))));
+		member(helper, colony, 1, 4).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(stone).getFluidState().isEmpty()) {
+				helper.fail("water ran into the dug cell");
+			}
+			if (!colony.blockedSteps().isEmpty()) {
+				helper.fail("reported: " + colony.blockedSteps());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getBlockState(stone).isAir(), "stone not dug");
+			Set<Block> walls = Set.of(helper.getBlockState(stone.north()).getBlock(), helper.getBlockState(stone.east()).getBlock());
+			helper.assertTrue(walls.equals(Set.of(Blocks.COBBLESTONE, Blocks.DIRT)), "walls: " + walls);
 		});
 	}
 

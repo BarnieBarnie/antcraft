@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -24,6 +25,7 @@ import java.util.UUID;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -516,7 +518,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			if (step.needsClearing(current)) {
 				// A dig beside a fluid needs a filler block for each wall, or it is reported rather than fetched forever.
 				List<BlockPos> walls = this.fluidsToWall(level, core, step);
-				return WORKABLE.contains(this.clearing(level, core, step)) || !walls.isEmpty() && this.filler(core, walls.size()).isPresent();
+				return WORKABLE.contains(this.clearing(level, core, step)) || !walls.isEmpty() && this.fillers(core, walls.size()).isPresent();
 			}
 			Item item = step.item(current);
 			if (!isPossible(level, step)) {
@@ -652,7 +654,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		BuildPlan.Clearing clearing = this.clearing(level, core, step);
 		List<BlockPos> walls = clearing == BuildPlan.Clearing.BLOCKED ? this.fluidsToWall(level, core, step) : List.of();
 		if (!walls.isEmpty()) {
-			this.digAndWall(level, colony, core, plan, pos, walls);
+			this.digAndWall(level, colony, core, pos, walls);
 			return;
 		}
 		switch (clearing) {
@@ -680,11 +682,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * It fills only where it sees {@code pos}, from the water where no dry spot does (see {@link #reachStep}). While {@code pos} stays taken it waits, and gives the step up after a while.
 	 */
 	private void fillIn(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos) {
-		Optional<Item> filler = this.filler(core, 1);
+		Optional<List<Item>> filler = this.fillers(core, 1);
 		if (filler.isEmpty()) {
 			return;
 		}
-		Item item = filler.get();
+		Item item = filler.get().getFirst();
 		if (this.bot.getInventory().countItem(item) == 0) {
 			this.fetch(level, colony, core, plan, item);
 		} else if (this.reachStep(level, pos)) {
@@ -701,43 +703,60 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * Breaks the block at {@code pos} that holds back the fluid at {@code walls}, and in the same tick walls the fluid off
 	 * with filler blocks, before it can flow in: as a player digging into water it could not see through the rock, it
 	 * stands where it sees the block and, once that is gone, the fluid behind it, both within reach. Filler blocks as in
-	 * {@link #fillIn}, one per wall, fetched first. With no spot that sees both, the block is given up until the bot
+	 * {@link #fillIn}, one per wall, of mixed kinds where one runs short, all fetched at once first. With no spot that sees both, the block is given up until the bot
 	 * digs another next to it, which may open a view, such as the block above a tunnel too low to see through.
 	 */
-	private void digAndWall(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BlockPos pos, List<BlockPos> walls) {
-		Optional<Item> filler = this.filler(core, walls.size());
-		if (filler.isEmpty()) {
+	private void digAndWall(ServerLevel level, Colony colony, @Nullable Container core, BlockPos pos, List<BlockPos> walls) {
+		Optional<List<Item>> fillers = this.fillers(core, walls.size());
+		if (fillers.isEmpty()) {
 			return;
 		}
-		Item item = filler.get();
-		if (this.bot.getInventory().countItem(item) < walls.size()) {
-			this.fetch(level, colony, core, plan, item);
+		List<Item> items = fillers.get();
+		SimpleContainer inventory = this.bot.getInventory();
+		if (items.stream().anyMatch(item -> inventory.countItem(item) < Collections.frequency(items, item))) {
+			// Takes all of them at once: a fetch of one kind would put another it carries back as spare. The core holds the rest, or fillers were empty.
+			if (core != null && this.reach(colony.core())) {
+				items.stream().distinct().forEach(item -> Storage.moveItems(core, inventory, stack -> stack.is(item),
+					Math.max(0, Collections.frequency(items, item) - inventory.countItem(item))));
+			}
 			return;
 		}
 		Goal.Sight through = new Through(this.sight, pos);
 		List<Goal> goals = new ArrayList<>(List.of(this.inSight(pos)));
 		walls.forEach(wall -> goals.add(new Goal.InSight(wall, REACH, through)));
-		BlockState block = Block.byItem(item).defaultBlockState();
+		List<BlockState> blocks = items.stream().map(item -> Block.byItem(item).defaultBlockState()).toList();
 		if (!this.reachStep(level, pos, new All(goals))) {
 			if (this.unreachable.contains(pos)) {
 				this.noView.add(pos);
 			}
 			return;
 		}
-		if (!walls.stream().allMatch(wall -> this.isFreeToPlace(level, wall, block))) {
+		if (!IntStream.range(0, walls.size()).allMatch(i -> this.isFreeToPlace(level, walls.get(i), blocks.get(i)))) {
 			// A wall that cannot go in, such as where a mob stays in the water, gives the dig up after a while.
 			this.waitForSpot(level, pos);
 		} else if (this.breaker.tick(level, pos, true)) {
 			colony.unprotect(pos);
-			walls.forEach(wall -> this.put(level, wall, block, item));
+			IntStream.range(0, walls.size()).forEach(i -> this.put(level, walls.get(i), blocks.get(i), items.get(i)));
 			this.dug(pos);
 		}
 	}
 
-	/** The filler block to wall {@code count} fluids off with, which the bot and the core hold that many of between them (see {@link BuildPlan#waterFiller}). */
-	private Optional<Item> filler(@Nullable Container core, int count) {
+	/**
+	 * A filler block for each of {@code count} fluids to wall off, of the kinds the bot and the core hold between them, the
+	 * one {@link BuildPlan#waterFiller} prefers first and others where that runs short; empty if they hold fewer than {@code count}.
+	 */
+	private Optional<List<Item>> fillers(@Nullable Container core, int count) {
 		boolean pickaxe = this.has(core, stack -> stack.is(ItemTags.PICKAXES));
-		return BuildPlan.waterFiller(item -> this.bot.getInventory().countItem(item) + (core == null ? 0 : core.countItem(item)) >= count, pickaxe);
+		List<Item> fillers = new ArrayList<>();
+		while (fillers.size() < count) {
+			Optional<Item> next = BuildPlan.waterFiller(item -> this.bot.getInventory().countItem(item) + (core == null ? 0 : core.countItem(item))
+				> Collections.frequency(fillers, item), pickaxe);
+			if (next.isEmpty()) {
+				return Optional.empty();
+			}
+			fillers.add(next.get());
+		}
+		return Optional.of(fillers);
 	}
 
 	/** Tries the cells next to {@code pos} it found no view for again, now that the block at {@code pos} is gone. */
@@ -785,7 +804,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * itself, in a cell beside, is filled in so too, as it is not seen before (see {@link #isBehindUndug}). Empty if there are none, or no filler at hand.
 	 */
 	private List<BlockPos> fluidsToWall(ServerLevel level, @Nullable Container core, BuildPlan.Step step) {
-		if (!step.isClear() || !level.getFluidState(step.pos()).isEmpty() || !this.has(core, BuilderGoal::isFiller)) {
+		return fluidsToWall(level, step, this.has(core, BuilderGoal::isFiller));
+	}
+
+	private static List<BlockPos> fluidsToWall(ServerLevel level, BuildPlan.Step step, boolean hasFiller) {
+		if (!step.isClear() || !level.getFluidState(step.pos()).isEmpty() || !hasFiller) {
 			return List.of();
 		}
 		List<BlockPos> walls = new ArrayList<>();
@@ -810,21 +833,30 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Whether a bot could do a step now, with the buckets and filler blocks the colony holds, its bots'
 	 * included: such as once a blocking block is gone, or once there is a full bucket in the core or a
-	 * source to fill one at for a fluid. Never for a block a player cannot place, so that step stays reported.
+	 * source to fill one at for a fluid, or a filler block for each fluid to wall off as a block beside it is dug. Never for a
+	 * block a player cannot place, so that step stays reported.
 	 */
 	public static BiPredicate<BuildPlan, BuildPlan.Step> workable(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
 		Map<Item, Integer> held = Storage.held(level, colony);
 		boolean hasBucket = held.getOrDefault(Items.BUCKET, 0) > 0;
-		boolean hasFiller = FILLERS.stream().anyMatch(item -> held.getOrDefault(item, 0) > 0);
+		int fillers = FILLERS.stream().mapToInt(item -> held.getOrDefault(item, 0)).sum();
+		boolean hasFiller = fillers > 0;
 		// ponytail: looks for a source once per fluid and recheck, from the core rather than per step.
 		Map<Item, Boolean> canPour = new HashMap<>();
 		return (plan, step) -> {
 			Item item = step.item(level.getBlockState(step.pos()));
-			return isPossible(level, step) && !leavesAlone(level, plan, step) && clearing(level, step, hasBucket, hasFiller) != BuildPlan.Clearing.BLOCKED
+			return isPossible(level, step) && !leavesAlone(level, plan, step)
+				&& (clearing(level, step, hasBucket, hasFiller) != BuildPlan.Clearing.BLOCKED || isWallable(level, step, fillers))
 				&& (!isPoured(item) || canPour.computeIfAbsent(item,
 					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket, Set.of()) != null));
 		};
+	}
+
+	/** Whether {@code step}'s block can be dug and its fluids walled off as it goes (see {@link #digAndWall}) with {@code fillers} filler blocks. */
+	private static boolean isWallable(ServerLevel level, BuildPlan.Step step, int fillers) {
+		int walls = fluidsToWall(level, step, fillers > 0).size();
+		return walls > 0 && walls <= fillers && !isUnbreakable(level, step.pos());
 	}
 
 	private static BuildPlan.Clearing clearing(ServerLevel level, BuildPlan.Step step, boolean hasBucket, boolean hasFiller) {
