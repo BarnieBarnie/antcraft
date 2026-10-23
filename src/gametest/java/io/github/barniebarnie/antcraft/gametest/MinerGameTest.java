@@ -763,6 +763,136 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A bot carrying torches of its own that brings up the one a build needs from a landing chest puts only that one in the core. */
+	@GameTest(maxTicks = 190)
+	public void aHaulerCarryingTorchesBringsUpOnlyTheAskedCount(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		Container chest = Storage.containerAt(helper.getLevel(), shaft.landingChest(shaft.levels().getLast()));
+		chest.setItem(0, new ItemStack(Items.TORCH, 16));
+		BlockPos torch = new BlockPos(1, 5, 6);
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(helper.absolutePos(torch), Blocks.TORCH.defaultBlockState()))));
+		AntBot bot = member(helper, colony, 1, 5, 1);
+		bot.getInventory().addItem(new ItemStack(Items.TORCH, 16));
+		// Straight on to the haul job, as a miner from its branch, before it stores its torches between jobs.
+		long now = helper.getLevel().getGameTime();
+		BlockPos landing = shaft.landingChest(shaft.levels().getLast());
+		colony.board().post(JobType.HAUL, landing);
+		helper.assertTrue(colony.board().claim(bot.getUUID(), Set.of(JobType.HAUL), landing, now).isPresent(), "haul job not claimed");
+
+		helper.onEachTick(() -> {
+			if (core(helper, MINE_CORE).countItem(Items.TORCH) > 1) {
+				helper.fail("core holds " + core(helper, MINE_CORE).countItem(Items.TORCH) + " torches, the hauler's own with the one asked");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.TORCH, torch);
+			helper.assertTrue(chest.countItem(Items.TORCH) == 15, "landing chest holds " + chest.countItem(Items.TORCH) + " torches, not 15");
+		});
+	}
+
+	/** Torches brought down to a landing chest that filled up meanwhile go back to the core in the same haul job. */
+	@GameTest(maxTicks = 210)
+	public void torchesThatDoNotFitAFullLandingChestGoBackToTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.TORCH, 64));
+		colony.setStockTarget(StockTarget.of(Items.TORCH, 64));
+		// Full of what the colony does not want, but for the slot each chest leaves for torches.
+		List<Container> chests = shaft.levels().stream().map(y -> Storage.containerAt(helper.getLevel(), shaft.landingChest(y))).toList();
+		chests.forEach(chest -> {
+			for (int i = 1; i < chest.getContainerSize(); i++) {
+				chest.setItem(i, new ItemStack(Items.DIRT, 64));
+			}
+		});
+		AntBot bot = member(helper, colony, 1, 5, 1);
+
+		boolean[] filled = {false};
+		helper.onEachTick(() -> {
+			if (!filled[0] && bot.getInventory().countItem(Items.TORCH) > 0) {
+				// The chests fill up while the bot is on its way down.
+				chests.forEach(chest -> chest.setItem(0, new ItemStack(Items.DIRT, 64)));
+				filled[0] = true;
+			}
+			if (bot.getInventory().countItem(Items.TORCH) > 0 && colony.board().jobOf(bot.getUUID()).isEmpty()) {
+				helper.fail("bot kept " + bot.getInventory().countItem(Items.TORCH) + " torches after its haul job");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(filled[0], "no torches taken down");
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.TORCH) == 64, "core holds " + core(helper, MINE_CORE).countItem(Items.TORCH) + " torches");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.HAUL), "haul job left for a full chest");
+		});
+	}
+
+	/** A miner whose pickaxe breaks at the deepest level takes the spare in the landing chest there rather than climbing out to the core. */
+	@GameTest(maxTicks = 620)
+	public void minerWhosePickaxeBreaksTakesASpareFromTheLandingChest(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		GameTests.failOnGiveUp(helper, colony);
+		wantStone(colony);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
+		shaft.levels().forEach(y -> Storage.containerAt(helper.getLevel(), shaft.landingChest(y)).setItem(0, new ItemStack(Items.TORCH, 16)));
+		int deepest = shaft.levels().getLast();
+		Container chest = Storage.containerAt(helper.getLevel(), shaft.landingChest(deepest));
+		chest.setItem(1, new ItemStack(Items.WOODEN_PICKAXE));
+		BlockPos landing = relative(helper, shaft.landing(deepest));
+		AntBot miner = member(helper, colony, landing.getX(), landing.getY(), landing.getZ());
+		miner.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		int surface = helper.absolutePos(MINE_CORE).getY();
+
+		boolean[] broke = {false};
+		helper.onEachTick(() -> {
+			if (!broke[0] && anyBranchDug(helper, shaft)) {
+				// Its pickaxe breaks: gone from hand and pack.
+				if (miner.getMainHandItem().is(Items.WOODEN_PICKAXE)) {
+					miner.setItemSlot(net.minecraft.world.entity.EquipmentSlot.MAINHAND, ItemStack.EMPTY);
+				}
+				miner.getInventory().removeItemType(Items.WOODEN_PICKAXE, 1);
+				broke[0] = true;
+			}
+			if (miner.getBlockY() >= surface) {
+				helper.fail("miner climbed out of the shaft");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(broke[0], "pickaxe never broke");
+			assertBranchesDug(helper, shaft, deepest);
+			helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 0, "spare left in the landing chest");
+		});
+	}
+
+	/** A bot brings a spare pickaxe down from the core to a landing chest, leaving the one an open job declares in the core. */
+	@GameTest(maxTicks = 100)
+	public void haulerKeepsASparePickaxeInALandingChest(GameTestHelper helper) {
+		Colony colony = colony(helper, MINE_CORE);
+		Mineshaft shaft = mine(helper);
+		dig(helper, colony, shaft);
+		core(helper, MINE_CORE).setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		core(helper, MINE_CORE).setItem(1, new ItemStack(Items.STONE_PICKAXE));
+		// An open job no bot here can take, which declares a stone pickaxe.
+		BlockPos ore = helper.absolutePos(new BlockPos(7, 1, 7));
+		helper.getLevel().setBlockAndUpdate(ore, Blocks.IRON_ORE.defaultBlockState());
+		colony.board().post(JobType.MINE_VEIN, ore, List.of(ore), Optional.empty(), helper.getLevel().getGameTime(), Optional.of(Items.STONE_PICKAXE));
+		member(helper, colony, 1, 5, 1);
+		List<Container> chests = shaft.levels().stream().map(y -> Storage.containerAt(helper.getLevel(), shaft.landingChest(y))).toList();
+
+		helper.onEachTick(() -> {
+			if (core(helper, MINE_CORE).countItem(Items.STONE_PICKAXE) == 0) {
+				helper.fail("took the pickaxe an open job declares out of the core");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(chests.stream().mapToInt(chest -> chest.countItem(Items.STONE_PICKAXE)).sum() == 1, "no spare pickaxe in a landing chest");
+			helper.assertTrue(core(helper, MINE_CORE).countItem(Items.STONE_PICKAXE) == 1, "core holds no stone pickaxe");
+		});
+	}
+
 	/** A tree job posted near a bot that carries a landing chest's load waits until the load is in the core. */
 	@GameTest(maxTicks = 460)
 	public void aBotMidHaulDeliversItsLoadBeforeItTakesATreeJob(GameTestHelper helper) {

@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 import net.minecraft.server.level.ServerLevel;
@@ -103,15 +104,28 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	 * declares, or any tool when it carries none.
 	 */
 	public Optional<Item> toTake(ServerLevel level, AntBot bot, @Nullable Item current, Map<Item, Integer> stock, Colony colony) {
-		List<Item> waiting = colony.members().stream().filter(id -> !id.equals(bot.getUUID()))
+		Item need = colony.board().jobOf(bot.getUUID()).flatMap(Job::tool).filter(this.tiers::contains)
+			.orElse(current == null ? this.tiers.getFirst() : null);
+		return ToolUpgrade.toTake(this.tiers, current, stock, this.waiting(level, colony, bot.getUUID()), this.open(colony), need);
+	}
+
+	/** What of {@code stock} no member's job waits for and no open job declares (see {@link ToolUpgrade#unreserved}): tools to spare. */
+	public Map<Item, Integer> unclaimed(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
+		return ToolUpgrade.unreserved(this.tiers, ToolUpgrade.unreserved(this.tiers, stock, this.waiting(level, colony, null)), this.open(colony));
+	}
+
+	/** The tools of this kind the claimed jobs of members other than {@code except} declare and they lack. */
+	private List<Item> waiting(ServerLevel level, Colony colony, @Nullable UUID except) {
+		return colony.members().stream().filter(id -> !id.equals(except))
 			.flatMap(id -> colony.board().jobOf(id).flatMap(Job::tool).filter(this.tiers::contains)
 				.filter(tool -> level.getEntity(id) instanceof AntBot other && this.rank(this.bestCarried(other)) < this.rank(tool)).stream())
 			.toList();
-		List<Item> open = colony.board().jobs().stream().filter(job -> job.isOpen() && !job.givenUp())
+	}
+
+	/** The tools of this kind open jobs declare. */
+	private List<Item> open(Colony colony) {
+		return colony.board().jobs().stream().filter(job -> job.isOpen() && !job.givenUp())
 			.flatMap(job -> job.tool().filter(this.tiers::contains).stream()).toList();
-		Item need = colony.board().jobOf(bot.getUUID()).flatMap(Job::tool).filter(this.tiers::contains)
-			.orElse(current == null ? this.tiers.getFirst() : null);
-		return ToolUpgrade.toTake(this.tiers, current, stock, waiting, open, need);
 	}
 
 	/** What the colony {@linkplain Storage#spare holds} beyond the tool of this kind each member works with. */

@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.Comparator;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
@@ -55,6 +56,8 @@ public abstract class ColonyWorkGoal {
 	protected int cooldown;
 	/** The better tool the bot is on its way to fetch from the core, or null. */
 	private @Nullable Item upgrade;
+	/** Where the bot fetches {@link #upgrade} from: the core or a mineshaft landing chest. */
+	private BlockPos upgradeFrom = BlockPos.ZERO;
 	private long nextUpgradeCheck;
 
 	protected ColonyWorkGoal(AntBot bot) {
@@ -119,8 +122,8 @@ public abstract class ColonyWorkGoal {
 	}
 
 	/**
-	 * Now and then looks for a better {@code kind} of tool: it fetches one from the core, leaving
-	 * the ones it replaces there, or orders the best one the colony can make. Returns true while the
+	 * Now and then looks for a better {@code kind} of tool: it fetches one from the core, or from a mineshaft landing
+	 * chest that is nearer or holds one when the core does not, leaving the ones it replaces there, or orders the best one the colony can make. Returns true while the
 	 * bot is busy fetching one, so the caller skips its own work this tick.
 	 */
 	protected boolean upgradeTool(ServerLevel level, Colony colony, ToolKind kind) {
@@ -145,14 +148,30 @@ public abstract class ColonyWorkGoal {
 			}
 			this.nextUpgradeCheck = level.getGameTime() + UPGRADE_CHECK_TICKS;
 			Optional<Item> better = kind.findUpgrade(level, this.bot, core, colony, needs);
-			if (better.isEmpty()) {
+			BlockPos from = better.isPresent() ? colony.core() : null;
+			// A mineshaft landing chest nearer than the core, or holding one when the core does not, such as the spare
+			// pickaxe haulers keep there, saves a miner whose own broke the climb out.
+			// ponytail: straight-line distance, as MinerGoal.nearerThanCore.
+			BlockPos at = this.bot.blockPosition();
+			for (Map.Entry<BlockPos, Container> chest : Storage.landingChests(level, colony).entrySet()) {
+				Optional<Item> there = kind.toTake(level, this.bot, kind.bestCarried(this.bot), Storage.stock(chest.getValue()), colony);
+				if (there.isPresent() && (from == null || chest.getKey().distSqr(at) < from.distSqr(at))) {
+					better = there;
+					from = chest.getKey();
+				}
+			}
+			if (better.isEmpty() || from == null) {
 				return false;
 			}
 			this.upgrade = better.get();
+			this.upgradeFrom = from;
 			this.resetMovement();
 		}
-		if (this.reach(colony.core())) {
-			kind.swap(this.bot, core, this.upgrade);
+		if (this.reach(this.upgradeFrom)) {
+			Container storage = Storage.containerAt(level, this.upgradeFrom);
+			if (storage != null) {
+				kind.swap(this.bot, storage, this.upgrade);
+			}
 			this.upgrade = null;
 			this.resetMovement();
 		}
