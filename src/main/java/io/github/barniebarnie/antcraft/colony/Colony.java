@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import com.google.common.collect.Sets;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -170,7 +171,7 @@ public class Colony {
 	/** What the colony builds and works: the mineshaft, build plans and their progress, the projects they make up, the field and the storage area. */
 	private record Works(Optional<Mineshaft> mineshaft, Map<UUID, BuildPlan> builds, List<Placed> placed, List<Blocked> blockedSteps,
 			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage, List<Project> projects,
-			List<BoundingBox> keptGround, Optional<Quarry> quarry) {
+			List<BoundingBox> keptGround, Optional<Quarry> quarry, List<BlockPos> veinCells) {
 		static final MapCodec<Works> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
 			// Old saves may still have a "quarry" of the old kind, a box mined layer by layer; it is ignored.
 			Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Works::mineshaft),
@@ -183,7 +184,8 @@ public class Colony {
 			// Saves from before projects get a project for each plan.
 			Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(Works::projects),
 			BoundingBox.CODEC.listOf().optionalFieldOf("kept_ground", List.of()).forGetter(Works::keptGround),
-			Quarry.CODEC.optionalFieldOf("open_quarry").forGetter(Works::quarry)
+			Quarry.CODEC.optionalFieldOf("open_quarry").forGetter(Works::quarry),
+			BlockPos.CODEC.listOf().optionalFieldOf("vein_cells", List.of()).forGetter(Works::veinCells)
 		).apply(i, Works::new));
 	}
 
@@ -191,7 +193,7 @@ public class Colony {
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
 		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects),
-			List.copyOf(c.keptGround), c.quarry))
+			List.copyOf(c.keptGround), c.quarry, List.copyOf(c.veinCells)))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -206,6 +208,8 @@ public class Colony {
 	/** The mineshaft's stair floors and torches, which bots leave standing. */
 	private Set<BlockPos> shaftBlocks;
 	private Set<BlockPos> shaftOpen;
+	/** The holes miners dug out ore veins through, off the mine's branches (see {@link #mineCells}). */
+	private final Set<BlockPos> veinCells = new HashSet<>();
 	private final List<StockTarget> stock;
 	/** The projects the colony works on, in the order they were added; see {@link #projects}. */
 	private final List<Project> projects = new ArrayList<>();
@@ -254,6 +258,7 @@ public class Colony {
 			works.batchStates(), works.projects());
 		this.keptGround.addAll(works.keptGround());
 		this.quarry = works.quarry();
+		this.veinCells.addAll(works.veinCells());
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
@@ -1180,9 +1185,14 @@ public class Colony {
 		this.protectedBlocks.remove(pos);
 	}
 
-	/** Where bots walk in the mine: its stairs, halls and every round of branches; none before it has a site. */
+	/** Where bots walk in the mine: its stairs, halls, every round of branches and the vein pockets dug off them; none before it has a site. */
 	public Set<BlockPos> mineCells() {
-		return this.shaftOpen;
+		return Sets.union(this.shaftOpen, this.veinCells);
+	}
+
+	/** Adds the cells of a vein job's area to the mine, once a miner is done with it; any still solid hold no bot or mob. */
+	public void dugVein(Collection<BlockPos> area) {
+		this.veinCells.addAll(area);
 	}
 
 	/** Where the colony mines, once it has picked a site. */
@@ -1196,6 +1206,7 @@ public class Colony {
 		this.mineshaft = Optional.of(shaft);
 		this.shaftBlocks = shaft.protectedBlocks();
 		this.shaftOpen = shaft.keepOpen();
+		this.veinCells.clear();
 		this.board.removeOpenIf(job -> job.type() == JobType.MINE_BRANCH);
 		return this.addBuild(MINESHAFT, shaft.plan(), true);
 	}

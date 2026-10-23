@@ -287,6 +287,9 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		if (done == null) {
 			return;
 		}
+		if (done.type() == JobType.MINE_VEIN) {
+			colony.dugVein(done.area());
+		}
 		switch (outcome) {
 			case COMPLETE -> {
 				colony.board().complete(done.id());

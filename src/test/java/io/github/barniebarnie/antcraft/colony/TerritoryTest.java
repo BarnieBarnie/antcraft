@@ -75,6 +75,14 @@ class TerritoryTest {
 	}
 
 	@Test
+	void mayTargetMobsInTheMine() {
+		// Bots defend the members mining far branches, past the radius.
+		Territory territory = new Territory(new BlockPos(100, 64, 100), 10, null, Set.of(new BlockPos(150, -30, 100)));
+		assertTrue(territory.mayTarget(new BlockPos(150, -30, 100)));
+		assertFalse(territory.mayTarget(new BlockPos(150, 64, 100)), "on the surface above the mine");
+	}
+
+	@Test
 	void boundsClipTheSquareSideways() {
 		// Game tests clip each colony to its test area, so it cannot reach into the tests beside it.
 		Territory clipped = new Territory(new BlockPos(100, 64, 100), 10, new BoundingBox(95, 60, 95, 102, 67, 102), Set.of());

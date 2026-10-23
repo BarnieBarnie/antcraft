@@ -627,6 +627,25 @@ class ColonyTest {
 	}
 
 	@Test
+	void aDugVeinPocketPastTheRadiusIsPartOfTheMine() {
+		// A miner left idle in the pocket of a vein it dug off a far branch is in the mine, not lost outside the colony.
+		Colony colony = colony();
+		colony.setMineshaft(SHAFT);
+		BlockPos pocket = new BlockPos(Colony.DEFAULT_RADIUS + 40, 60, 0);
+		assertTrue(Territory.of(colony).shouldReturnHome(pocket, false, false), "before it is dug");
+		colony.dugVein(List.of(pocket));
+		assertFalse(Territory.of(colony).shouldReturnHome(pocket, false, false));
+		assertTrue(colony.mineCells().containsAll(SHAFT.keepOpen()), "the shaft's own cells still count");
+
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertFalse(Territory.of(loaded).shouldReturnHome(pocket, false, false), "after a reload");
+
+		// A new mine leaves the old one, its pockets too.
+		colony.setMineshaft(new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false));
+		assertTrue(Territory.of(colony).shouldReturnHome(pocket, false, false), "after the mine moved");
+	}
+
+	@Test
 	void boundsLimitWhereTheMineshaftIsProtectedAndKeptOpen() {
 		// Game tests clip each colony to its test area, so its cells do not reach into the tests beside it.
 		Colony colony = colony();

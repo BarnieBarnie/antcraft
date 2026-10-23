@@ -42,10 +42,10 @@ public record Territory(BlockPos core, int radius, @Nullable BoundingBox bounds,
 	}
 
 	/**
-	 * Bots only start fights with mobs inside the colony, wherever the bot stands.
-	 * Mobs that attack a bot are fought back regardless.
+	 * Bots only start fights with mobs inside the colony or its mine, wherever the bot stands, so they defend the
+	 * members mining far branches. Mobs that attack a bot are fought back regardless.
 	 */
 	public boolean mayTarget(BlockPos target) {
-		return this.contains(target);
+		return this.contains(target) || this.mine.contains(target);
 	}
 }

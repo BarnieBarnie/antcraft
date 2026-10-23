@@ -1008,6 +1008,8 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 			vein.forEach(pos -> helper.assertTrue(helper.getLevel().getBlockState(pos).isAir(), "iron ore left at " + relative(helper, pos).toShortString()));
 			int iron = Storage.colonyStock(helper.getLevel(), colony).getOrDefault(Items.RAW_IRON, 0) + miner.getInventory().countItem(Items.RAW_IRON);
 			helper.assertTrue(iron == 5, "raw iron: " + iron);
+			// The pocket is part of the mine, so a bot left idle there stays.
+			helper.assertTrue(colony.mineCells().containsAll(vein), "the dug vein is not part of the mine");
 		});
 	}
 
