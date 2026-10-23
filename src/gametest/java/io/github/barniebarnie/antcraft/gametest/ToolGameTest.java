@@ -99,6 +99,25 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Bedrock cannot be broken, so the breaker never reports it broken: callers would act as if it were gone (#246). */
+	@GameTest(maxTicks = 30)
+	public void neverReportsBedrockBroken(GameTestHelper helper) {
+		BlockPos bedrock = new BlockPos(3, 1, 3);
+		helper.setBlock(bedrock, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_PICKAXE));
+		BlockBreaker breaker = new BlockBreaker(bot);
+		helper.onEachTick(() -> {
+			if (breaker.tick(helper.getLevel(), helper.absolutePos(bedrock), true)) {
+				helper.fail("reported the bedrock broken");
+			}
+		});
+		helper.runAfterDelay(20, () -> {
+			helper.assertBlockPresent(Blocks.BEDROCK, bedrock);
+			helper.succeed();
+		});
+	}
+
 	private static int carried(AntBot bot, Item item) {
 		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
 	}

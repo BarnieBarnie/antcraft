@@ -26,7 +26,8 @@ public class BlockBreaker {
 	/**
 	 * Works on breaking {@code pos} for one tick; drops land in the world.
 	 *
-	 * @return true once the block is broken, or if it cannot be broken (so callers do not wait forever)
+	 * @return true once the block is broken; never for one that cannot be broken, such as bedrock, so callers that
+	 *     may meet one check it themselves and give up rather than act as if it were gone
 	 */
 	public boolean tick(ServerLevel level, BlockPos pos) {
 		return this.tick(level, pos, false);
@@ -44,7 +45,7 @@ public class BlockBreaker {
 			this.total = LevelWorldView.breakTicks(level.getBlockState(pos), level, pos, this.bot.getMainHandItem());
 			if (this.total < 0) {
 				this.target = null;
-				return true;
+				return false;
 			}
 		}
 
