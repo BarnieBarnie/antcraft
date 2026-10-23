@@ -116,6 +116,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private final ScaffoldCleanup scaffoldCleanup;
 	/** Taking its scaffolding down, before putting a plan aside or once it has no job. */
 	private boolean cleaning;
+	/** Whether it tried to climb out of the water it is in between jobs; once per time it is afloat, so one stuck does not keep trying. */
+	private boolean climbedOut;
 	/** What the builder found done of the batch of build job {@link #progressJob}, so it does not look at those blocks every tick. */
 	private BuildPlan.Progress progress = new BuildPlan.Progress();
 	private @Nullable UUID progressJob;
@@ -163,6 +165,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Work between jobs, for any bot: taking down scaffolding a job left up, such as one it was called away from,
 	 * from any job, as every block a path places is scaffold. Never a block a plan placed, which the colony protects.
+	 * A bot left afloat, such as in a pool under a rim too high to jump onto, climbs out the same way, once each time.
 	 */
 	@Override
 	protected boolean betweenJobs(ServerLevel level, Colony colony) {
@@ -170,7 +173,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.cleanUp(level, colony);
 			return true;
 		}
-		if (!this.bot.getScaffold().isEmpty()) {
+		if (!this.bot.isInWater()) {
+			this.climbedOut = false;
+		}
+		if (!this.bot.getScaffold().isEmpty() || this.bot.isInWater() && !this.climbedOut) {
+			this.climbedOut |= this.bot.isInWater();
 			this.startCleanup();
 			return true;
 		}

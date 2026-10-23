@@ -74,6 +74,7 @@ public class PathFollower {
 
 	private final BlockBreaker breaker;
 	private boolean mayPlace = true;
+	private boolean mayBreak = true;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 
 	public PathFollower(AntBot bot) {
@@ -84,6 +85,11 @@ public class PathFollower {
 	/** Whether paths may place scaffold blocks; applies from the next path planned. */
 	public void setMayPlace(boolean mayPlace) {
 		this.mayPlace = mayPlace;
+	}
+
+	/** Whether paths may break blocks in the way; applies from the next path planned. */
+	public void setMayBreak(boolean mayBreak) {
+		this.mayBreak = mayBreak;
 	}
 
 	/** Which blocks paths may place as scaffolding; {@link #SCAFFOLD_BLOCKS} unless set. */
@@ -191,7 +197,7 @@ public class PathFollower {
 		ServerLevel level = (ServerLevel) this.bot.level();
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level))
 			.from(this.bot.blockPosition());
-		PathFinder.Options options = new PathFinder.Options(true, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
+		PathFinder.Options options = new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
 		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
 		this.stepIndex = 0;
 		this.stepTicks = 0;

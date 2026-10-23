@@ -2375,6 +2375,86 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The #243 pool: a stone bank at y=1..2 with a pool along x 1..6, z 4..5, water at y=1 under air. Fails at once
+	 * when the bank is dug into.
+	 */
+	private static void poolUnderARim(GameTestHelper helper) {
+		poolUnderARim(helper, 4);
+	}
+
+	/** A pool like the #243 one along z {@code z} and {@code z + 1}. */
+	private static void poolUnderARim(GameTestHelper helper, int z) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
+			boolean pool = pos.getX() >= 1 && pos.getX() <= 6 && pos.getZ() >= z && pos.getZ() <= z + 1;
+			if (!pos.equals(CORE)) {
+				helper.setBlock(pos, !pool ? Blocks.STONE : pos.getY() == 1 ? Blocks.WATER : Blocks.AIR);
+			}
+		}
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
+				boolean pool = pos.getX() >= 1 && pos.getX() <= 6 && pos.getZ() >= z && pos.getZ() <= z + 1;
+				if (!pool && !pos.equals(CORE) && !helper.getBlockState(pos).is(Blocks.STONE)) {
+					helper.fail("dug into the bank at " + pos.toShortString());
+				}
+			}
+		});
+	}
+
+	/**
+	 * An idle bot dropped into the #243 pool with no job and no scaffold up, carrying dirt: it climbs out on blocks it
+	 * places in the water, without digging the bank, and takes those down from the bank.
+	 */
+	@GameTest(maxTicks = 80)
+	public void idleBotClimbsOutOfAPoolWithoutDiggingTheBank(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		poolUnderARim(helper);
+		AntBot bot = member(helper, colony, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getY() >= helper.absolutePos(BlockPos.ZERO).getY() + 3 && bot.onGround() && !bot.isInWater(),
+				"still in the pool at " + relative(helper, bot.blockPosition()).toShortString());
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
+		});
+	}
+
+	/**
+	 * An idle bot carrying no blocks in a pool like the #243 one beside the core, which holds dirt: it takes dirt from the
+	 * core from the water and climbs out on it, without digging the bank.
+	 */
+	@GameTest(maxTicks = 90)
+	public void idleBotFetchesBlocksToClimbOutOfAPool(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		poolUnderARim(helper, 2);
+		core(helper).setItem(0, new ItemStack(Items.DIRT, 4));
+		AntBot bot = member(helper, colony, 3, 3);
+		bot.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_PICKAXE));
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getY() >= helper.absolutePos(BlockPos.ZERO).getY() + 3 && bot.onGround() && !bot.isInWater(),
+				"still in the pool at " + relative(helper, bot.blockPosition()).toShortString());
+			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
+		});
+	}
+
+	/**
+	 * An idle bot in the #243 pool with no blocks to climb out on, and none in the core, stays afloat rather than dig
+	 * into the bank, though its pickaxe would make short work of it.
+	 */
+	@GameTest(maxTicks = 120)
+	public void idleBotWithNoBlocksDoesNotDigOutOfAPool(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		poolUnderARim(helper);
+		AntBot bot = member(helper, colony, 3, 4);
+		bot.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.DIAMOND_PICKAXE));
+
+		helper.runAtTickTime(100, () -> {
+			helper.assertTrue(bot.isInWater(), "left the pool without blocks at " + relative(helper, bot.blockPosition()).toShortString());
+			helper.succeed();
+		});
+	}
+
 	/** Fails once a block of {@code pillar} is gone while the column's top block is not in place. */
 	private static void assertScaffoldKeptUntilColumnStands(GameTestHelper helper, Set<BlockPos> pillar) {
 		if (helper.getBlockState(new BlockPos(5, 6, 5)).is(Blocks.COBBLESTONE)) {

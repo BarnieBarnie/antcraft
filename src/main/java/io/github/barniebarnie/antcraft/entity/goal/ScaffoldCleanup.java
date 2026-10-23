@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity.goal;
 
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
@@ -33,7 +34,9 @@ import org.jspecify.annotations.Nullable;
  * for its own block and placing it one lower. When breaking it gives no block it may place, it fetches some from its
  * home once. Getting none there, it breaks the block by hand and takes the fall when that costs it less than half its
  * health, and otherwise leaves the block up. Left afloat, such as in a pool under a rim too high to
- * jump onto, it climbs out to dry ground, placing blocks to step on, and takes those down from the bank. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
+ * jump onto, it climbs out to dry ground, placing blocks to step on but never digging into the bank, and takes those
+ * down from the bank. Carrying no blocks to place, it fetches some from home first if it can get there without digging,
+ * and with none to be had it reports itself stuck and stays afloat. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -106,6 +109,7 @@ final class ScaffoldCleanup {
 		this.fetched = false;
 		this.shore = null;
 		this.climbed = false;
+		this.follower.setMayBreak(true);
 	}
 
 	/** Stops pillaring up to a block, such as when the bot turns to other work. */
@@ -113,6 +117,7 @@ final class ScaffoldCleanup {
 		this.retrying = null;
 		this.fetching = false;
 		this.shore = null;
+		this.follower.setMayBreak(true);
 	}
 
 	/**
@@ -131,6 +136,9 @@ final class ScaffoldCleanup {
 		}
 		if (this.fetching) {
 			this.fetch(level, feet);
+			if (!this.fetching) {
+				this.follower.setMayBreak(true);
+			}
 			return false;
 		}
 		if (this.shore != null) {
@@ -155,9 +163,16 @@ final class ScaffoldCleanup {
 			}
 			if (!this.climbed && this.bot.isInWater()) {
 				// Done afloat, maybe in a pool it cannot jump out of: it climbs out, and the blocks it places come down after.
+				// It never digs into the bank for it, nor on the way to fetch blocks to climb with.
+				this.stopTravel.run();
+				this.follower.setMayBreak(false);
+				if (PathFollower.scaffoldCount(this.bot.getInventory(), this.follower.scaffold()) == 0 && !this.fetched && this.homeHoldsScaffold(level)) {
+					this.fetched = true;
+					this.fetching = true;
+					return false;
+				}
 				this.climbed = true;
 				this.shore = this.shore(feet);
-				this.stopTravel.run();
 				this.follower.setMayPlace(true);
 				return false;
 			}
@@ -258,12 +273,21 @@ final class ScaffoldCleanup {
 		};
 	}
 
-	/** Travels to the nearest dry ground; once there, or with no way, cleanup goes on with what it placed on the way. */
+	/**
+	 * Travels to the nearest dry ground; once there, or with no way, cleanup goes on with what it placed on the way.
+	 * With no way it reports itself stuck afloat.
+	 */
 	private void climbOut(Goal shore) {
-		if (this.travel.apply(shore) != PathFollower.Status.RUNNING) {
+		PathFollower.Status status = this.travel.apply(shore);
+		if (status != PathFollower.Status.RUNNING) {
+			if (status == PathFollower.Status.FAILED && this.bot.isInWater()) {
+				AntCraft.LOGGER.info("Bot {} is stuck in water at {}: it found no way out without digging",
+					this.bot.getUUID(), this.bot.blockPosition().toShortString());
+			}
 			this.shore = null;
 			this.stopTravel.run();
 			this.follower.setMayPlace(false);
+			this.follower.setMayBreak(true);
 		}
 	}
 
