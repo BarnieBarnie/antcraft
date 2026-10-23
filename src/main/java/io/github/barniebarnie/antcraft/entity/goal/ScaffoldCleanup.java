@@ -30,7 +30,8 @@ import org.jspecify.annotations.Nullable;
  * only blocks in sight. One it stands on with a drop below further than a path may take it towers down
  * from, placing a scaffold block under it before taking it down; carrying none, it digs down, breaking that block
  * for its own block and placing it one lower. When breaking it gives no block it may place, it fetches some from its
- * home once, and leaves the block up only when it gets none there. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
+ * home once, and leaves the block up only when it gets none there. Left afloat, such as in a pool under a rim too high to
+ * jump onto, it climbs out to dry ground, placing blocks to step on, and takes those down from the bank. Shared by trees and builds, and by the work between jobs that takes down what any path placed.
  */
 final class ScaffoldCleanup {
 	private static final double REACH = 4.0;
@@ -39,6 +40,8 @@ final class ScaffoldCleanup {
 	 * new scaffolding that has to come down as well, so this bound keeps cleanup from looping.
 	 */
 	private static final int RETRIES = 8;
+	/** How far it looks for dry ground to climb out onto once done afloat. */
+	private static final int SHORE = 16;
 	/** How many scaffold blocks it fetches from home to tower down with. */
 	private static final int FETCH = 8;
 
@@ -62,6 +65,9 @@ final class ScaffoldCleanup {
 	/** Whether it is on its way to fetch scaffold blocks from home, and whether it went once since {@link #reset}. */
 	private boolean fetching;
 	private boolean fetched;
+	/** Dry ground near where it was left afloat, which it is climbing out onto, or null; and whether it tried once since {@link #reset}. */
+	private @Nullable Goal shore;
+	private boolean climbed;
 
 	ScaffoldCleanup(AntBot bot, PathFollower follower, BlockBreaker breaker, Function<Goal, PathFollower.Status> travel, Runnable stopTravel) {
 		this.bot = bot;
@@ -96,12 +102,15 @@ final class ScaffoldCleanup {
 		this.retriesLeft = RETRIES;
 		this.fetching = false;
 		this.fetched = false;
+		this.shore = null;
+		this.climbed = false;
 	}
 
 	/** Stops pillaring up to a block, such as when the bot turns to other work. */
 	void cancelRetry() {
 		this.retrying = null;
 		this.fetching = false;
+		this.shore = null;
 	}
 
 	/**
@@ -122,6 +131,10 @@ final class ScaffoldCleanup {
 			this.fetch(level, feet);
 			return false;
 		}
+		if (this.shore != null) {
+			this.climbOut(this.shore);
+			return false;
+		}
 		BlockPos next = placed.stream()
 			.filter(pos -> !this.unreachable.contains(pos) && !this.abandoned.contains(pos))
 			.max(Comparator.<BlockPos, Boolean>comparing(pos -> this.inSight(pos).isReached(feet)).thenComparingInt(BlockPos::getY))
@@ -134,6 +147,14 @@ final class ScaffoldCleanup {
 			if (retry != null) {
 				this.retriesLeft--;
 				this.retrying = retry;
+				this.stopTravel.run();
+				this.follower.setMayPlace(true);
+				return false;
+			}
+			if (!this.climbed && this.bot.isInWater()) {
+				// Done afloat, maybe in a pool it cannot jump out of: it climbs out, and the blocks it places come down after.
+				this.climbed = true;
+				this.shore = this.shore(feet);
 				this.stopTravel.run();
 				this.follower.setMayPlace(true);
 				return false;
@@ -206,6 +227,36 @@ final class ScaffoldCleanup {
 			this.fetching = false;
 		} else if (this.travel.apply(reach) == PathFollower.Status.FAILED) {
 			this.fetching = false;
+		}
+	}
+
+	/**
+	 * Dry ground within {@link #SHORE} of {@code from}: not over water, nor over its own scaffold, such as a block it
+	 * placed in the water to climb out by.
+	 */
+	private Goal shore(BlockPos from) {
+		Goal near = new Goal.Near(from, SHORE);
+		return new Goal() {
+			@Override
+			public boolean isReached(BlockPos feet) {
+				BlockPos below = feet.below();
+				return near.isReached(feet) && ScaffoldCleanup.this.bot.level().getFluidState(below).isEmpty()
+					&& !ScaffoldCleanup.this.bot.getScaffold().contains(below);
+			}
+
+			@Override
+			public double heuristic(BlockPos feet) {
+				return 0;
+			}
+		};
+	}
+
+	/** Travels to the nearest dry ground; once there, or with no way, cleanup goes on with what it placed on the way. */
+	private void climbOut(Goal shore) {
+		if (this.travel.apply(shore) != PathFollower.Status.RUNNING) {
+			this.shore = null;
+			this.stopTravel.run();
+			this.follower.setMayPlace(false);
 		}
 	}
 

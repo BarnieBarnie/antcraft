@@ -308,9 +308,10 @@ public class PathFollower {
 		if (world.canStandOn(below)) {
 			return; // placed; wait to land on it
 		}
-		if (this.bot.onGround()) {
-			this.bot.getJumpControl().jump();
-		} else if (this.bot.getY() >= below.getY() + 1.0) {
+		if (this.bot.onGround() || this.bot.isInWater()) {
+			this.bot.getJumpControl().jump(); // afloat, it swims up until high enough to place in the water under it
+		}
+		if (this.bot.getY() >= below.getY() + 1.0) {
 			if (!this.placeBlock(level, below)) {
 				this.path = null;
 			}

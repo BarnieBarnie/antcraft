@@ -2313,10 +2313,11 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A bot afloat in a pool one block deep under a rim two blocks up, which it cannot jump out of, with its scaffold
-	 * over the water out of reach: it swims over and takes it down from the water rather than dig into the bank.
+	 * over the water out of reach: it swims over and takes it down from the water rather than dig into the bank, and
+	 * then climbs out on a block it places in the water, again without digging the bank.
 	 */
-	@GameTest(maxTicks = 140)
-	public void takesScaffoldDownFromTheWaterWithoutDiggingTheBank(GameTestHelper helper) {
+	@GameTest(maxTicks = 220)
+	public void takesScaffoldDownFromTheWaterAndClimbsOutWithoutDiggingTheBank(GameTestHelper helper) {
 		Colony colony = colony(helper);
 		// A stone bank at y=1..2, with a pool along x 1..6, z 4..5: water at y=1, air above.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 2, 7)) {
@@ -2340,6 +2341,8 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScaffold().isEmpty(), "scaffold left: " + bot.getScaffold());
 			helper.assertBlockNotPresent(Blocks.DIRT, 6, 2, 5);
+			helper.assertTrue(bot.getY() >= helper.absolutePos(BlockPos.ZERO).getY() + 3 && !bot.isInWater(),
+				"still in the pool at " + relative(helper, bot.blockPosition()).toShortString());
 		});
 	}
 
