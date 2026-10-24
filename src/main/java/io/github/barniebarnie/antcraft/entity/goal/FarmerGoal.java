@@ -357,7 +357,9 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				return false;
 			}
 			this.nextWaterScan = level.getGameTime() + WATER_SCAN_TICKS;
-			this.water = nearest(level, colony, this.bot.blockPosition(), pos -> isWaterSource(level.getBlockState(pos)) && !this.hiddenWater.contains(pos));
+			this.water = nearest(level, colony, this.bot.blockPosition(), pos -> isWaterSource(level.getBlockState(pos)) && !this.hiddenWater.contains(pos)
+				// Not a source a build placed, such as a cobblestone generator's.
+				&& !colony.isProtected(level::getBlockState, pos));
 			if (this.water == null) {
 				// Looked at again on the next scan: a wall may be gone by then.
 				this.hiddenWater.clear();

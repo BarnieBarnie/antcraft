@@ -24,6 +24,11 @@ public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional
 	/** Bonus for a job of the same type within {@link #STICKY_RANGE} blocks of the last finished one. */
 	static final double STICKY_BONUS = 8;
 	static final double STICKY_RANGE = 4;
+	/**
+	 * Bonus for a cobblestone generator job, so a bot mines cobblestone there before a branch of the same priority and
+	 * the mineshaft is left for ores.
+	 */
+	static final double GENERATOR_BONUS = 32;
 
 	/** The job's cost for this bot, or empty if it cannot take it: a full bot for a job that yields items, or a need nothing satisfies. */
 	public OptionalDouble score(Job job) {
@@ -47,6 +52,9 @@ public record JobScore(BlockPos pos, List<Item> carried, int freeSlots, Optional
 			return OptionalDouble.empty();
 		}
 		cost -= PRIORITY_WEIGHT * job.priority();
+		if (job.type() == JobType.MINE_GENERATOR) {
+			cost -= GENERATOR_BONUS;
+		}
 		if (this.last.filter(l -> l.type() == job.type() && l.target().closerThan(job.target(), STICKY_RANGE + 0.5)).isPresent()) {
 			cost -= STICKY_BONUS;
 		}

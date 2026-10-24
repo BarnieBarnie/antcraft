@@ -74,6 +74,14 @@ class JobScoreTest {
 	}
 
 	@Test
+	void aGeneratorBeatsANearerBranchOfTheSamePriorityForCobblestone() {
+		JobScore bot = bot(BlockPos.ZERO, List.of(Items.STONE_PICKAXE), 10, Optional.empty(), NO_FETCH);
+		double generator = bot.score(job(JobType.MINE_GENERATOR, new BlockPos(20, 0, 0), Optional.of(Items.WOODEN_PICKAXE), 1)).orElseThrow();
+		double branch = bot.score(job(JobType.MINE_BRANCH, new BlockPos(5, 0, 0), Optional.of(Items.WOODEN_PICKAXE), 1)).orElseThrow();
+		assertTrue(generator < branch, generator + " vs " + branch);
+	}
+
+	@Test
 	void fullBotCannotTakeAJobThatYieldsItems() {
 		JobScore full = bot(BlockPos.ZERO, List.of(), 0, Optional.empty(), NO_FETCH);
 		assertTrue(full.score(job(JobType.CHOP_TREE, new BlockPos(3, 0, 0))).isEmpty());

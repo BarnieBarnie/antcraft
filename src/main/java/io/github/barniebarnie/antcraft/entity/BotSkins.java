@@ -24,7 +24,7 @@ public final class BotSkins {
 		}
 		String skin = switch (job.get()) {
 			case CHOP_TREE, CHOP_LOG, REPLANT -> "lumberjack";
-			case MINE_BRANCH, MINE_VEIN, CLEAR_AREA -> "miner";
+			case MINE_BRANCH, MINE_VEIN, MINE_GENERATOR, CLEAR_AREA -> "miner";
 			case HARVEST_CROP, PLANT_CROP -> "farmer";
 			case BUILD -> "builder";
 			case CRAFT, ACTIVATE_BOT -> "crafter";

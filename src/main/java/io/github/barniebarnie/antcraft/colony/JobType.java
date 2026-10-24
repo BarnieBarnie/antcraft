@@ -39,7 +39,12 @@ public enum JobType implements StringRepresentable {
 	/** Chop the log at the job target, one of a tree's, so several bots fell a tree together. */
 	CHOP_LOG,
 	/** Dig out the ore vein a miner saw a block of at the job target, the job's area (see {@link io.github.barniebarnie.antcraft.work.OreVein}). */
-	MINE_VEIN;
+	MINE_VEIN,
+	/**
+	 * Mine the cobblestone that forms at the job target, the mining block of a built cobblestone generator, from the
+	 * spot in front of it, and store it in the core (see {@link Colony#postGeneratorJobs}).
+	 */
+	MINE_GENERATOR;
 
 	public static final Codec<JobType> CODEC = StringRepresentable.fromEnum(JobType::values);
 	/** Prefix of the lang keys that name the job types, shared by the colony screen and the commands. */
@@ -49,7 +54,7 @@ public enum JobType implements StringRepresentable {
 
 	/** Whether the work fills the bot's inventory, such as digging, chopping and harvesting. */
 	public boolean yieldsItems() {
-		return this == CHOP_TREE || this == CHOP_LOG || this == MINE_BRANCH || this == MINE_VEIN || this == HARVEST_CROP || this == CLEAR_AREA;
+		return this == CHOP_TREE || this == CHOP_LOG || this == MINE_BRANCH || this == MINE_VEIN || this == MINE_GENERATOR || this == HARVEST_CROP || this == CLEAR_AREA;
 	}
 
 	public String translationKey() {

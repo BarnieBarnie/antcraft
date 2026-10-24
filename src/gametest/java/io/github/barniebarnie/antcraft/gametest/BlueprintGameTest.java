@@ -16,8 +16,10 @@ import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.BuildGhost;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.colony.SiteRules;
+import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
@@ -54,6 +56,7 @@ import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public class BlueprintGameTest implements CustomTestMethodInvoker {
@@ -445,6 +448,54 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		core.setItem(2, new ItemStack(Items.LAVA_BUCKET));
 		PlacedBlueprint generator = placeGenerator(helper, colony, Rotation.CLOCKWISE_180, Mirror.NONE);
 		succeedWhenItGeneratesCobblestone(helper, colony, generator, () -> { });
+	}
+
+	/**
+	 * Once the generator stands and the colony wants cobblestone, a bot with a pickaxe stands in front of the mining block
+	 * and mines the cobblestone as it forms, into the core, until the stock target is met; then it stops, leaving the
+	 * cobblestone that formed last in place. The generator's other blocks and fluids stay as built (see {@link #placeGenerator}).
+	 */
+	@GameTest(maxTicks = 1000)
+	public void aBotMinesCobblestoneAtTheGeneratorUntilTheStockTargetIsMet(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		// Just what the generator takes, so the core holds no cobblestone once it stands.
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 32));
+		core.setItem(1, new ItemStack(Items.WATER_BUCKET));
+		core.setItem(2, new ItemStack(Items.LAVA_BUCKET));
+		PlacedBlueprint placed = placeGenerator(helper, colony, Rotation.NONE, Mirror.LEFT_RIGHT);
+		AntBot bot = helper.getLevel().getEntitiesOfClass(AntBot.class, new AABB(helper.absolutePos(BlockPos.ZERO)).inflate(16)).stream()
+			.filter(member -> colony.members().contains(member.getUUID())).findFirst().orElseThrow();
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		BlockPos mine = placed.workSpots().get(0);
+		int target = 5;
+		boolean[] wanted = {false};
+		long[] metAt = {-1};
+		helper.onEachTick(() -> {
+			if (!wanted[0] && generator(colony).finished()) {
+				helper.assertValueEqual(core.countItem(Items.COBBLESTONE), 0, "cobblestone left in the core once built");
+				colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, target));
+				wanted[0] = true;
+			}
+			if (!wanted[0]) {
+				return;
+			}
+			if (core.countItem(Items.COBBLESTONE) > target) {
+				helper.fail("mined on past the target: " + core.countItem(Items.COBBLESTONE) + " in the core");
+			}
+			if (metAt[0] < 0 && core.countItem(Items.COBBLESTONE) == target) {
+				metAt[0] = helper.getTick();
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(metAt[0] >= 0, "the core holds " + core.countItem(Items.COBBLESTONE) + " of " + target + " cobblestone");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.COBBLESTONE), 0, "cobblestone the bot carries");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.MINE_GENERATOR), "generator job left up");
+			// Long enough for cobblestone to form again and the bot to leave it.
+			helper.assertTrue(helper.getTick() - metAt[0] >= 60, "not long since the target was met");
+			helper.assertTrue(helper.getLevel().getBlockState(mine).is(Blocks.COBBLESTONE), "the last cobblestone formed was mined");
+		});
 	}
 
 	/** Without lava in the core, the builder fills the empty bucket at a lava pool nearby, and the generator is built all the same. */

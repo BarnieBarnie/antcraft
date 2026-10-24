@@ -222,7 +222,8 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}),
+	 * Mines on demand: only while the colony wants something mining yields (see {@link Mineshaft#yieldsWanted}), cobblestone
+	 * aside once a generator makes it (see {@link Colony#wantedFromMining}),
 	 * for stock targets or orders, does it pick a mineshaft site, once no build job a bot could take now is open
 	 * (see {@link Colony#hasBuildToDo}), and post branch jobs, and order a pickaxe
 	 * when it has none; otherwise the open ones come off the board. Open vein jobs whose ore is no longer wanted come off too. It posts a job for each segment with blocks
@@ -238,7 +239,8 @@ public class ColonyManager extends SavedData {
 	 */
 	private void surveyMine(ServerLevel level, Colony colony, Map<Item, Integer> holds) {
 		// Plans the open orders, so at most once per survey, and only when needed.
-		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> Storage.wanted(level, colony));
+		// Not for cobblestone once a generator makes it (see Colony#wantedFromMining).
+		Supplier<Predicate<Item>> wanted = Suppliers.memoize(() -> colony.wantedFromMining(Storage.wanted(level, colony)));
 		Set<BlockPos> posted = new HashSet<>();
 		OreVein.dropUnwanted(colony.board(), wanted.get());
 		// With nothing mining yields wanted, no site is picked and no branch posted, so bots do other work.
@@ -482,7 +484,9 @@ public class ColonyManager extends SavedData {
 			this.surveyBuilds(level, colony, have);
 			this.surveyMine(level, colony, held);
 			// After the mine, so the shaft is picked first and its branch jobs close the quarry.
-			colony.updateQuarry(Storage.wanted(level, colony).test(Items.COBBLESTONE), level::getBlockState, pos -> isWorkable(level, colony, pos));
+			boolean shortOfCobblestone = Storage.wanted(level, colony).test(Items.COBBLESTONE);
+			colony.updateQuarry(shortOfCobblestone && colony.generatorMiningBlocks().isEmpty(), level::getBlockState, pos -> isWorkable(level, colony, pos));
+			colony.postGeneratorJobs(shortOfCobblestone);
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
 			this.surveyCoreJobs(level, colony);

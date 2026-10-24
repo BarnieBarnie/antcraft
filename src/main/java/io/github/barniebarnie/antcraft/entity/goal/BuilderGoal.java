@@ -742,12 +742,13 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}).orElse(null);
 	}
 
-	/** The fluid source in the territory nearest {@code from} that fills an empty bucket into {@code bucket}; never one a plan places, so a builder does not undo its own work, nor one in {@code skip}. */
+	/** The fluid source in the territory nearest {@code from} that fills an empty bucket into {@code bucket}; never one a plan places or placed, such as a cobblestone generator's, so a builder does not undo its own work, nor one in {@code skip}. */
 	private static @Nullable BlockPos source(ServerLevel level, Colony colony, BlockPos from, Item bucket, Set<BlockPos> skip) {
 		Set<BlockPos> planned = planned(colony);
 		Predicate<BlockPos> fills = pos -> {
 			FluidState fluid = level.getFluidState(pos);
-			return fluid.isSource() && fluid.getType().getBucket() == bucket && level.getBlockState(pos).getBlock() instanceof LiquidBlock && !planned.contains(pos) && !skip.contains(pos);
+			return fluid.isSource() && fluid.getType().getBucket() == bucket && level.getBlockState(pos).getBlock() instanceof LiquidBlock && !planned.contains(pos) && !skip.contains(pos)
+				&& !colony.isProtected(level::getBlockState, pos);
 		};
 		if (bucket != Items.LAVA_BUCKET) {
 			return nearest(level, colony, from, fills);

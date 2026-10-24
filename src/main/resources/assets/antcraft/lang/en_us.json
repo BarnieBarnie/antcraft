@@ -148,6 +148,7 @@
 	"job.antcraft.chop_log": "chopping a log",
 	"job.antcraft.mine_branch": "mining a branch",
 	"job.antcraft.mine_vein": "mining an ore vein",
+	"job.antcraft.mine_generator": "mining a cobblestone generator",
 	"job.antcraft.harvest_crop": "harvesting a crop",
 	"job.antcraft.replant": "replanting a tree",
 	"job.antcraft.build": "building",

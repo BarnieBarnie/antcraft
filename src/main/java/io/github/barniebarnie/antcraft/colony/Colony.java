@@ -563,6 +563,43 @@ public class Colony {
 		return this.blueprints.stream().filter(placed -> placed.finished() && placed.role().equals(Optional.of(role))).toList();
 	}
 
+	/** The mining blocks of the built cobblestone generators: their first work spot, where cobblestone forms. */
+	public List<BlockPos> generatorMiningBlocks() {
+		return this.finishedBlueprints(Blueprint.Role.GENERATOR).stream().filter(placed -> placed.workSpots().size() >= 2)
+			.map(placed -> placed.workSpots().getFirst()).toList();
+	}
+
+	/** Whether {@code pos} is the mining block of a built cobblestone generator; a loop, as paths ask this of every block. */
+	private boolean isGeneratorMiningBlock(BlockPos pos) {
+		for (PlacedBlueprint placed : this.blueprints) {
+			if (placed.finished() && placed.role().equals(Optional.of(Blueprint.Role.GENERATOR)) && placed.workSpots().size() >= 2
+					&& placed.workSpots().getFirst().equals(pos)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * What of {@code wanted} the colony mines for, in the mineshaft or quarry: all of it, but cobblestone once it has a
+	 * built cobblestone generator, which makes it instead, so the mineshaft is dug for ores.
+	 */
+	public Predicate<Item> wantedFromMining(Predicate<Item> wanted) {
+		boolean generator = !this.generatorMiningBlocks().isEmpty();
+		return item -> wanted.test(item) && !(generator && item == Items.COBBLESTONE);
+	}
+
+	/**
+	 * Posts a {@link JobType#MINE_GENERATOR} job, which needs a pickaxe, at the mining block of each built cobblestone
+	 * generator while the colony is {@code shortOfCobblestone}, for its stock targets or orders; one per generator, so
+	 * one bot mines each. Otherwise the open ones come off the board; a bot on one ends it once the colony has enough.
+	 */
+	public void postGeneratorJobs(boolean shortOfCobblestone) {
+		List<BlockPos> blocks = shortOfCobblestone ? this.generatorMiningBlocks() : List.of();
+		this.board.removeOpenIf(job -> job.type() == JobType.MINE_GENERATOR && !blocks.contains(job.target()));
+		blocks.forEach(pos -> this.board.post(JobType.MINE_GENERATOR, pos, Optional.of(Items.WOODEN_PICKAXE)));
+	}
+
 	/** The placed blueprint {@code plan} builds or levels the site of, if any. */
 	public Optional<PlacedBlueprint> blueprintOf(BuildPlan plan) {
 		Optional<UUID> id = this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst();
@@ -795,6 +832,9 @@ public class Colony {
 		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).flatMap(job -> job.item().stream()).distinct().toList()
 			.forEach(ore -> this.board.prioritize(job -> job.type() == JobType.MINE_VEIN && job.item().equals(Optional.of(ore)),
 				this.priorityFor(ore::equals, stock, book, gatherable)));
+		// At most that of the branches, so a branch for ores a higher project waits for comes first; at the same priority
+		// the generator scores better (see JobScore).
+		this.board.prioritize(job -> job.type() == JobType.MINE_GENERATOR, this.priorityFor(Items.COBBLESTONE::equals, stock, book, gatherable));
 	}
 
 	/**
@@ -1241,7 +1281,8 @@ public class Colony {
 		if (!Territory.inBounds(this.bounds, pos)) {
 			return false;
 		}
-		if (this.shaftBlocks.contains(pos)) {
+		// A generator's mining block too, mined or formed again, which only its generator job breaks.
+		if (this.shaftBlocks.contains(pos) || this.isGeneratorMiningBlock(pos)) {
 			return true;
 		}
 		if (!this.protectedBlocks.containsKey(pos)) {
