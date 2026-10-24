@@ -106,6 +106,46 @@ class BuildPlanTest {
 		assertFalse(new BuildPlan(List.of(wet, new BuildPlan.Step(lava.west(), stone))).waitsForWalls(at(world()), wet), "a waterlogged block waits");
 	}
 
+	/**
+	 * A big plan split into cells can put a fluid's wall in another cell, one the fluid's cell does not need: the fluid
+	 * still waits for it, whichever batch it is in, and tells which walls of other batches it waits for.
+	 */
+	@Test
+	void aFluidWaitsForItsWallInAnotherCell() {
+		BlockState stone = Blocks.COBBLESTONE.defaultBlockState();
+		// An 8 by 1 floor of stone with water over its fourth block, against the edge of the first cell.
+		List<BuildPlan.Step> steps = new ArrayList<>();
+		for (int x = 0; x < 8; x++) {
+			steps.add(new BuildPlan.Step(new BlockPos(x, 0, 0), stone));
+		}
+		BlockPos water = new BlockPos(3, 1, 0);
+		BuildPlan.Step pour = new BuildPlan.Step(water, Blocks.WATER.defaultBlockState());
+		steps.add(pour);
+		steps.add(new BuildPlan.Step(water.east(), stone));
+		BuildPlan plan = new BuildPlan(steps).inCells();
+		int cell = -1;
+		for (int i = 0; i < plan.batches().size(); i++) {
+			if (plan.batch(i).steps().contains(pour)) {
+				cell = i;
+			}
+		}
+		BuildPlan batch = plan.batch(cell);
+		BuildPlan.Step wall = new BuildPlan.Step(water.east(), stone);
+		assertFalse(batch.steps().contains(wall), "the wall is in the fluid's cell: " + plan.batches());
+
+		Map<BlockPos, BlockState> world = world();
+		for (int x = 0; x < 8; x++) {
+			world.put(new BlockPos(x, 0, 0), stone);
+		}
+		assertTrue(batch.waitsForWalls(at(world), pour), "poured before its wall in another cell");
+		assertEquals(List.of(wall), batch.missingWalls(at(world), pour));
+		assertEquals(List.of(wall), batch.walls());
+		world.put(water.east(), stone);
+		assertFalse(batch.waitsForWalls(at(world), pour), "walls stand");
+		// A batch without fluids carries no walls of others.
+		assertEquals(List.of(), plan.batch(cell == 0 ? 1 : 0).walls());
+	}
+
 	@Test
 	void stepsAnySolidBlockWillDoAreListedApart() {
 		BuildPlan plan = new BuildPlan(List.of(Terraform.fill(A), Terraform.fill(B), BuildPlan.Step.solid(C),

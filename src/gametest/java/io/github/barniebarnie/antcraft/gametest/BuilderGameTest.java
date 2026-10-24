@@ -1566,6 +1566,66 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A plan eight blocks wide, so it is split into two cells (see {@link BuildPlan#inCells}): water at (3, 1, 6) in the
+	 * first, walled in by stone on three sides, and its east wall at (4, 1, 6) in the second, which the first does not need.
+	 */
+	private static BuildPlan waterAtACellEdge(GameTestHelper helper) {
+		for (BlockPos pos : List.of(new BlockPos(2, 1, 6), new BlockPos(3, 1, 5), new BlockPos(3, 1, 7))) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		List<BuildPlan.Step> steps = new ArrayList<>(List.of(step(helper, 0, 1, 6, COBBLE), step(helper, 3, 1, 6, Blocks.WATER.defaultBlockState())));
+		for (int x = 4; x < 8; x++) {
+			steps.add(step(helper, x, 1, 6, COBBLE));
+		}
+		BuildPlan plan = new BuildPlan(steps).inCells();
+		helper.assertValueEqual(plan.batches().size(), 2, "cells");
+		return plan;
+	}
+
+	/**
+	 * Water whose wall is in another cell of a big plan waits for it, rather than flowing out where it is still missing. The
+	 * cobblestone for the wall comes only later, so the water's cell is worked first.
+	 */
+	@GameTest(maxTicks = 260)
+	public void aFluidWaitsForItsWallInAnotherCell(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE));
+		colony.addBuild(waterAtACellEdge(helper));
+		member(helper, colony, 2, 3);
+		GameTests.failOnGiveUp(helper, colony);
+		helper.runAfterDelay(100, () -> core(helper).setItem(2, new ItemStack(Items.COBBLESTONE, 4)));
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(0, 1, 0)), helper.absolutePos(new BlockPos(7, 2, 7)))) {
+				if (helper.getLevel().getFluidState(pos).is(Fluids.FLOWING_WATER)) {
+					helper.fail("water leaked to " + TestPositions.relative(helper, pos).toShortString());
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished; blocked: " + colony.blockedSteps());
+			helper.assertBlockPresent(Blocks.WATER, new BlockPos(3, 1, 6));
+			assertState(helper, 4, 1, 6, COBBLE);
+		});
+	}
+
+	/** Water whose wall in another cell is blocked, by bedrock standing where it goes, is reported with it (see #275). */
+	@GameTest(maxTicks = 100)
+	public void reportsAFluidWhoseWallInAnotherCellIsBlocked(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE, 5));
+		colony.addBuild(waterAtACellEdge(helper));
+		helper.setBlock(4, 1, 6, Blocks.BEDROCK);
+		member(helper, colony, 2, 3);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.blockedSteps().containsAll(List.of(helper.absolutePos(new BlockPos(4, 1, 6)), helper.absolutePos(new BlockPos(3, 1, 6)))),
+				"not both reported: " + colony.blockedSteps());
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 6));
+		});
+	}
+
 	/** A fluid source at (4, 1, 4), walled in by stone so it does not spread. */
 	private static BuildPlan pool(GameTestHelper helper, BlockState fluid) {
 		for (Direction side : Direction.Plane.HORIZONTAL) {

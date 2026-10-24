@@ -965,7 +965,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * Whether a bot could do a step now, with the buckets and filler blocks the colony holds, its bots'
 	 * included: such as once a blocking block is gone, or once there is a full bucket in the core or a
 	 * source to fill one at for a fluid, or a filler block for each fluid to wall off as a block beside it is dug. Never for a
-	 * block a player cannot place, so that step stays reported, nor for a fluid waiting for a wall of its batch still to place.
+	 * block a player cannot place, so that step stays reported, nor for a fluid waiting for a wall of its plan still to place.
 	 */
 	public static BiPredicate<BuildPlan, BuildPlan.Step> workable(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
@@ -1034,7 +1034,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Whether {@code plan} waits for materials, for a fluid to settle or, for a {@code dig} job, for
 	 * a tree in it to be felled, rather than being left only with steps it cannot do. A fluid waits
-	 * for an empty bucket only while there is a source to fill it at.
+	 * for an empty bucket only while there is a source to fill it at, and for a wall of another batch while it is not blocked.
 	 */
 	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
 		return plan.nextStep(level::getBlockState, step -> {
@@ -1046,12 +1046,26 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				return false;
 			}
 			Item item = step.item(current);
-			// A fluid waiting for its walls waits only as long as they do, which they tell for themselves.
-			return step.needsClearing(current)
-				? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
-				: isPossible(level, step) && !plan.waitsForWalls(level::getBlockState, step)
-					&& (!isPoured(item) || this.source(level, colony, item) != null);
+			// A fluid waiting for its walls in its batch waits only as long as they do, which they tell for themselves.
+			if (step.needsClearing(current)) {
+				return this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE;
+			}
+			if (!isPossible(level, step)) {
+				return false;
+			}
+			return plan.waitsForWalls(level::getBlockState, step) ? waitsForOtherBatches(level, colony, plan, step)
+				: !isPoured(item) || this.source(level, colony, item) != null;
 		}).isPresent();
+	}
+
+	/**
+	 * Whether the fluid of {@code step} waits for a wall of another batch of its plan (see {@link BuildPlan#walls}) that is
+	 * not reported blocked: that batch's builder places it in time. One reported blocked leaves the fluid to be reported too.
+	 */
+	private static boolean waitsForOtherBatches(ServerLevel level, Colony colony, BuildPlan plan, BuildPlan.Step step) {
+		List<BlockPos> blocked = colony.blockedSteps();
+		return plan.missingWalls(level::getBlockState, step).stream()
+			.anyMatch(wall -> plan.walls().contains(wall) && !blocked.contains(wall.pos()));
 	}
 
 	/** Whether a block of {@code plan} is still to clear once a fluid there settles, so the plan is not worked through yet. */

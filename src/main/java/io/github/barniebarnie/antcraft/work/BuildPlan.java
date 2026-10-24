@@ -74,8 +74,10 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * progress: a step is done once the world matches it, so a plan resumes wherever it was left.
  * A terraform's {@code ground} is the ground it levels, up to the height, which paths leave standing
  * while the plan has work left, as no step of the plan would fill a hole in ground already right.
+ * A batch taken as a plan of its own (see {@link #batch}) carries as {@code walls} the blocks of the other batches beside and
+ * under its fluids, which are not saved: a whole plan has none.
  */
-public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Optional<BoundingBox> ground) {
+public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Optional<BoundingBox> ground, List<Step> walls) {
 	/** Saves from before batches hold only the steps, as one batch. */
 	public static final Codec<BuildPlan> CODEC = Codec.withAlternative(
 		RecordCodecBuilder.create(i -> i.group(
@@ -123,6 +125,12 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			steps = steps.stream().filter(step -> !isSecondHalf(step.state())).toList();
 		}
 		steps = List.copyOf(steps);
+		walls = List.copyOf(walls);
+	}
+
+	/** A plan with no {@link #walls} of other batches, as every whole plan is. */
+	public BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Optional<BoundingBox> ground) {
+		this(steps, batches, kind, ground, List.of());
 	}
 
 	public BuildPlan(List<Step> steps, List<Batch> batches) {
@@ -177,10 +185,37 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		}
 	}
 
-	/** Batch {@code index} as a plan of its own, of the same kind, to be worked through by one builder. */
+	/**
+	 * Batch {@code index} as a plan of its own, of the same kind, to be worked through by one builder. It carries as
+	 * {@link #walls} the blocks of the other batches beside and under its fluids, so they wait for those too (see
+	 * {@link #waitsForWalls}).
+	 */
 	public BuildPlan batch(int index) {
 		Batch batch = this.batches.get(index);
-		return new BuildPlan(this.steps.subList(batch.from(), batch.to()), List.of(), this.kind, this.ground);
+		List<Step> steps = this.steps.subList(batch.from(), batch.to());
+		Set<BlockPos> around = steps.stream().filter(BuildPlan::isFluid).flatMap(step -> around(step.pos()))
+			.collect(Collectors.toSet());
+		List<Step> walls = around.isEmpty() ? List.of() : IntStream.range(0, this.steps.size())
+			.filter(i -> i < batch.from() || i >= batch.to())
+			.mapToObj(this.steps::get)
+			.filter(wall -> around.contains(wall.pos()) && isWall(wall))
+			.toList();
+		return new BuildPlan(steps, List.of(), this.kind, this.ground, walls);
+	}
+
+	/** Whether {@code step} pours a fluid, rather than placing a waterlogged block or clearing. */
+	private static boolean isFluid(Step step) {
+		return !step.isClear() && step.state().getBlock() instanceof LiquidBlock;
+	}
+
+	/** Whether {@code step} places a block a fluid beside or over it waits for. */
+	private static boolean isWall(Step step) {
+		return !step.isClear() && !(step.state().getBlock() instanceof LiquidBlock);
+	}
+
+	/** The blocks beside and under {@code pos}, where a fluid poured there would flow out. */
+	private static Stream<BlockPos> around(BlockPos pos) {
+		return Stream.concat(Direction.Plane.HORIZONTAL.stream().map(pos::relative), Stream.of(pos.below()));
 	}
 
 	/** Columns per side of a cell at most (see {@link #inCells}). */
@@ -539,18 +574,24 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	}
 
 	/**
-	 * Whether {@code step} pours a fluid while a block this plan places beside or under it is not in {@code world} yet:
-	 * poured first, it would flow out where a wall is still missing, as lava flows out of a cobblestone generator, so it
-	 * waits. A block placed over it, or a waterlogged block (placed dry, then filled), does not wait.
+	 * Whether {@code step} pours a fluid while a block this plan places beside or under it, or one of its {@link #walls} from
+	 * another batch, is not in {@code world} yet: poured first, it would flow out where a wall is still missing, as lava flows
+	 * out of a cobblestone generator, so it waits. A block placed over it, or a waterlogged block (placed dry, then filled),
+	 * does not wait.
 	 */
 	public boolean waitsForWalls(Function<BlockPos, BlockState> world, Step step) {
-		if (step.isClear() || !(step.state().getBlock() instanceof LiquidBlock)) {
-			return false;
+		return !this.missingWalls(world, step).isEmpty();
+	}
+
+	/** The blocks {@code step}'s fluid waits for (see {@link #waitsForWalls}), this plan's first, then its {@link #walls}. */
+	public List<Step> missingWalls(Function<BlockPos, BlockState> world, Step step) {
+		if (!isFluid(step)) {
+			return List.of();
 		}
-		Set<BlockPos> around = Stream.concat(Direction.Plane.HORIZONTAL.stream().map(step.pos()::relative), Stream.of(step.pos().below()))
-			.collect(Collectors.toSet());
-		return this.steps.stream().anyMatch(wall -> around.contains(wall.pos()) && !wall.isClear()
-			&& !(wall.state().getBlock() instanceof LiquidBlock) && !wall.isPlaced(world.apply(wall.pos())));
+		Set<BlockPos> around = around(step.pos()).collect(Collectors.toSet());
+		return Stream.concat(this.steps.stream(), this.walls.stream())
+			.filter(wall -> around.contains(wall.pos()) && isWall(wall) && !wall.isPlaced(world.apply(wall.pos())))
+			.toList();
 	}
 
 	/** The first step the world does not match yet. */
