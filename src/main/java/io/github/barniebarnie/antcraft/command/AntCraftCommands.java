@@ -207,7 +207,12 @@ public final class AntCraftCommands {
 												TemplateMirrorArgument.getMirror(ctx, "mirror"), OptionalInt.of(IntegerArgumentType.getInteger(ctx, "palette"))))))))))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
-							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
+							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n")))))
+					// Operators only, as every build subcommand: the requires above.
+					.then(Commands.literal("restore").requires(OPERATOR)
+						.executes(ctx -> restoreFluids(ctx.getSource(), Optional.empty()))
+						.then(Commands.argument("at", BlockPosArgument.blockPos())
+							.executes(ctx -> restoreFluids(ctx.getSource(), Optional.of(BlockPosArgument.getBlockPos(ctx, "at")))))))
 				.then(Commands.literal("project").requires(OPERATOR)
 					.then(Commands.literal("list").executes(ctx -> listProjects(ctx.getSource())))
 					.then(Commands.literal("cancel")
@@ -276,6 +281,7 @@ public final class AntCraftCommands {
 		if (status.room().coreFull()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), false);
 		}
+		status.restoreOff().forEach(off -> source.sendSuccess(off::describe, false));
 		// Placements an older save's given-up levelling dropped, named as colony blocked clear names them.
 		found.get().droppedUnlevelled().forEach(placed -> sendUnlevelled(source, placed));
 		return status.members();
@@ -675,6 +681,28 @@ public final class AntCraftCommands {
 		colony.removeBuild(plan);
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.cancelled", n, plan.target().toShortString()), false);
 		return 1;
+	}
+
+	/**
+	 * Turns back on pouring back the water and lava of the nearest colony's built blueprints whose restore the player
+	 * turned off by cancelling or giving it up: the one whose area holds {@code at}, or all of them.
+	 */
+	private static int restoreFluids(CommandSourceStack source, Optional<BlockPos> at) {
+		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_RESTORE)) {
+			return 0;
+		}
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		List<PlacedBlueprint> restored = found.get().restoreFluidsAgain(at);
+		if (restored.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.build.none_to_restore"));
+			return 0;
+		}
+		restored.forEach(placed -> source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.restored",
+			placed.displayName(), placed.at().toShortString()), true));
+		return restored.size();
 	}
 
 	/** Lists the projects, highest priority first, with what each still waits for, as the last survey found. */

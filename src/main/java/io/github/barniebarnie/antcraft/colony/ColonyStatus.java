@@ -36,12 +36,40 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * A snapshot of what a colony is doing: its bots, jobs, stock, orders and builds, the build steps that are
- * blocked, the trees and branches given up on as out of reach, and the room left in its core. {@code /antcraft colony info}
+ * blocked, the trees and branches given up on as out of reach, the room left in its core, who may change it, and the built
+ * blueprints whose water and lava builders no longer pour back. {@code /antcraft colony info}
  * prints it and the colony status screen shows it, so the two cannot disagree.
  */
 public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
-		List<Build> builds, List<Blocked> blocked, List<GivenUp> givenUp, Room room, Access access) {
+		List<Build> builds, List<Blocked> blocked, List<GivenUp> givenUp, Room room, Access access, List<RestoreOff> restoreOff) {
+
+	/** A status with no blueprint's restore turned off. */
+	public ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int idle, int radius, Map<JobType, Integer> openJobs,
+			Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders, List<Build> builds, List<Blocked> blocked, List<GivenUp> givenUp,
+			Room room, Access access) {
+		this(core, members, bots, idle, radius, openJobs, claimedJobs, stock, orders, builds, blocked, givenUp, room, access, List.of());
+	}
+
+	/**
+	 * A built blueprint, by name and lowest corner, whose water and lava builders no longer pour back once gone, since the
+	 * player cancelled or gave up such a restore (see {@link Colony#restoreFluids}); {@code colony build restore} turns it on again.
+	 */
+	public record RestoreOff(Component name, BlockPos at) {
+		static final StreamCodec<RegistryFriendlyByteBuf, RestoreOff> STREAM_CODEC = StreamCodec.composite(
+			ComponentSerialization.STREAM_CODEC, RestoreOff::name, BlockPos.STREAM_CODEC, RestoreOff::at, RestoreOff::new);
+
+		/** The blueprint's name and corner, as {@code colony info} and the colony screen say its restore is off. */
+		public Component describe() {
+			return Component.translatable("commands.antcraft.colony.restore_off", this.name, this.at.toShortString());
+		}
+	}
+
+	/** Who may change the colony and which restores are off: one field of {@link #STREAM_CODEC}, which takes at most 14. */
+	private record Tail(Access access, List<RestoreOff> restoreOff) {
+		static final StreamCodec<RegistryFriendlyByteBuf, Tail> STREAM_CODEC = StreamCodec.composite(
+			Access.STREAM_CODEC, Tail::access, RestoreOff.STREAM_CODEC.apply(ByteBufCodecs.list()), Tail::restoreOff, Tail::new);
+	}
 
 	/** The names of the colony's owner, if it has one, and of the players it trusts (see {@link ColonyActions#mayAct}). */
 	public record Access(Optional<String> owner, List<String> trusted) {
@@ -146,9 +174,6 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 
 	/** A build step builders could not do, and why (see {@link Colony#blockReason}). */
 	public record Blocked(BlockPos pos, Colony.BlockReason reason) {
-		static final StreamCodec<ByteBuf, Blocked> STREAM_CODEC = StreamCodec.composite(
-			BlockPos.STREAM_CODEC, Blocked::pos, enumCodec(Colony.BlockReason.values()), Blocked::reason, Blocked::new);
-
 		/** The step's position, followed by why it is blocked where that is worth telling, such as no lava found or no way there. */
 		public Component describe() {
 			String pos = this.pos.toShortString();
@@ -156,6 +181,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 				case NO_LAVA -> Component.translatable("commands.antcraft.colony.blocked_step.no_lava", pos);
 				case NO_WATER -> Component.translatable("commands.antcraft.colony.blocked_step.no_water", pos);
 				case UNREACHABLE -> Component.translatable("commands.antcraft.colony.blocked_step.unreachable", pos);
+				case WALL_BLOCKED -> Component.translatable("commands.antcraft.colony.blocked_step.wall_blocked", pos);
 				case OTHER -> Component.literal(pos);
 			};
 		}
@@ -174,6 +200,9 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			Build::new);
 	}
 
+	// Here, not in Blocked: built first, Blocked's codec would load this class, which reads it while still null.
+	private static final StreamCodec<ByteBuf, Blocked> BLOCKED = StreamCodec.composite(
+		BlockPos.STREAM_CODEC, Blocked::pos, enumCodec(Colony.BlockReason.values()), Blocked::reason, Blocked::new);
 	// Here, not in Bot: Bot is built before ColonyStatus is loaded, and would see this class's codecs half made.
 	private static final StreamCodec<ByteBuf, Bot> BOT = StreamCodec.composite(
 		ByteBufCodecs.STRING_UTF8, Bot::name, ByteBufCodecs.optional(enumCodec(JobType.values())), Bot::job, ByteBufCodecs.BOOL, Bot::idle,
@@ -194,11 +223,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		Stock.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::stock,
 		Order.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::orders,
 		Build.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::builds,
-		Blocked.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
+		BLOCKED.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
 		GivenUp.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
 		Room.STREAM_CODEC, ColonyStatus::room,
-		Access.STREAM_CODEC, ColonyStatus::access,
-		ColonyStatus::new);
+		Tail.STREAM_CODEC, status -> new Tail(status.access, status.restoreOff),
+		(core, members, bots, idle, radius, open, claimed, stock, orders, builds, blocked, givenUp, room, tail) -> new ColonyStatus(core, members,
+			bots, idle, radius, open, claimed, stock, orders, builds, blocked, givenUp, room, tail.access(), tail.restoreOff()));
 
 	private static <E extends Enum<E>> StreamCodec<ByteBuf, E> enumCodec(E[] values) {
 		return ByteBufCodecs.idMapper(i -> values[i], Enum::ordinal);
@@ -389,6 +419,8 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 
 		return new ColonyStatus(colony.core(), colony.members().size(), loaded, idle, colony.radius(), open, claimed, stocks, orders, builds,
 			colony.blockedSteps().stream().map(pos -> new Blocked(pos, colony.blockReason(pos))).toList(), givenUp, new Room(coreFreeSlots, storage),
-			new Access(colony.owner().map(names), colony.trusted().stream().map(names).toList()));
+			new Access(colony.owner().map(names), colony.trusted().stream().map(names).toList()),
+			colony.blueprints().stream().filter(placed -> placed.finished() && !placed.restoreFluids())
+				.map(placed -> new RestoreOff(placed.displayName(), placed.at())).toList());
 	}
 }

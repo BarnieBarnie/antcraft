@@ -1155,7 +1155,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				} else {
 					// Those it found no way to are not retried every survey, only now and then (see Colony#recheckBlocked).
 					Map<BlockPos, Colony.BlockReason> reasons = new LinkedHashMap<>();
-					blocked.forEach(step -> reasons.put(step.pos(), this.blockReason(level, colony, core, p, step)));
+					blocked.forEach(step -> reasons.put(step.pos(), this.blockReason(level, colony, core, job.id(), p, step)));
 					colony.reportBlocked(job.id(), reasons);
 				}
 			});
@@ -1166,15 +1166,19 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Why {@code step} of {@code plan} is left undone: unreachable if this bot found no way to it, no lava or water found
+	 * Why {@code step} of {@code plan}, the batch of build job {@code job}, is left undone: unreachable if this bot found no
+	 * way to it, waiting for a wall a blocked batch holds up (see {@link Colony#waitsForHeldUpWall}), no lava or water found
 	 * for a fluid to pour with no full bucket at hand and no source in reach to fill one at, or else for some other reason.
 	 */
-	private Colony.BlockReason blockReason(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BuildPlan.Step step) {
+	private Colony.BlockReason blockReason(ServerLevel level, Colony colony, @Nullable Container core, UUID job, BuildPlan plan, BuildPlan.Step step) {
 		if (this.isGivenUp(step)) {
 			return Colony.BlockReason.UNREACHABLE;
 		}
 		BlockState current = level.getBlockState(step.pos());
 		Item item = step.item(current);
+		if (!step.needsClearing(current) && colony.waitsForHeldUpWall(job, step, level::getBlockState)) {
+			return Colony.BlockReason.WALL_BLOCKED;
+		}
 		if (step.needsClearing(current) || !isPoured(item) || plan.waitsForWalls(level::getBlockState, step)
 				|| this.has(core, stack -> stack.is(item)) || this.source(level, colony, item) != null) {
 			return Colony.BlockReason.OTHER;

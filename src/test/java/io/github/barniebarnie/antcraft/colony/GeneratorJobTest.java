@@ -303,6 +303,83 @@ class GeneratorJobTest {
 		assertEquals(List.of(), colony.builds(), "added again");
 	}
 
+	/**
+	 * A restore the player turned off by cancelling it is shown as off in the colony's status, and turned on again
+	 * ({@code colony build restore}), after which builders pour the lava back again. A position outside the generator
+	 * turns on nothing.
+	 */
+	@Test
+	void aRestoreTurnedOffIsShownAsOffAndTurnedOnAgain() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		finishAll(colony);
+		BlockPos mine = placed.workSpots().getFirst();
+		Function<BlockPos, BlockState> dry = world(Map.of(mine, Blocks.COBBLESTONE.defaultBlockState()));
+		assertEquals(List.of(), status(colony, dry).restoreOff(), "off before it was turned off");
+		colony.restoreFluids(dry);
+		// The restore plan stays marked as one once saved and loaded.
+		colony = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		colony.removeBuild(colony.builds().getFirst());
+		assertEquals(List.of(new ColonyStatus.RestoreOff(placed.displayName(), placed.at())), status(colony, dry).restoreOff());
+
+		assertEquals(List.of(), colony.restoreFluidsAgain(Optional.of(placed.area().getCenter().offset(0, 0, 40))), "outside it");
+		assertEquals(1, colony.restoreFluidsAgain(Optional.of(mine)).size(), "turned on");
+		assertEquals(List.of(), status(colony, dry).restoreOff(), "still shown off");
+		colony.restoreFluids(dry);
+		assertEquals(List.of(BuildPlan.Step.clear(mine)), colony.builds().getFirst().steps(), "not restored again");
+		assertEquals(List.of(), colony.restoreFluidsAgain(Optional.empty()), "turned on twice");
+	}
+
+	/** A player's own plan wholly on a generator's fluid spots, cancelled or given up, is no restore: the restore stays on. */
+	@Test
+	void cancellingAPlayersOwnPlanOnAFluidSpotLeavesTheRestoreOn() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		finishAll(colony);
+		BlockPos mine = placed.workSpots().getFirst();
+		Function<BlockPos, BlockState> dry = world(Map.of(mine, Blocks.COBBLESTONE.defaultBlockState()));
+		BuildPlan own = new BuildPlan(List.of(BuildPlan.Step.clear(mine)));
+		colony.addBuild("mine it", own);
+		colony.removeBuild(own);
+		Project project = colony.addBuild("mine it again", own);
+		colony.cancelProject(project.id());
+		colony.addBuild("and again", own);
+		colony.postBuildJobs();
+		Job job = colony.board().jobs().stream().filter(j -> colony.build(j.id()).isPresent()).findFirst().orElseThrow();
+		colony.reportBlocked(job.id(), List.of(mine));
+		colony.clearBlocked();
+
+		assertTrue(colony.blueprints().stream().allMatch(PlacedBlueprint::restoreFluids), "restore turned off");
+		colony.restoreFluids(dry);
+		assertEquals(List.of(BuildPlan.Step.clear(mine)), colony.builds().getFirst().steps(), "not restored");
+	}
+
+	private static ColonyStatus status(Colony colony, Function<BlockPos, BlockState> world) {
+		return ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false, world, 1, false);
+	}
+
+	/**
+	 * The stage that mines a generator's mining block to pour its lava back wants a pickaxe, as other digging of stone does:
+	 * its job declares one and, with none in the colony, its project orders one, so no builder mines it by hand.
+	 */
+	@Test
+	void theGeneratorClearStepAsksForAPickaxe() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		finishAll(colony);
+		BlockPos mine = placed.workSpots().getFirst();
+		Function<BlockPos, BlockState> dry = world(Map.of(mine, Blocks.COBBLESTONE.defaultBlockState()));
+		colony.restoreFluids(dry);
+		assertEquals(List.of(BuildPlan.Step.clear(mine)), colony.builds().getFirst().steps());
+
+		assertTrue(colony.planProjects(dry, step -> true, Map.of(), tool -> false).containsKey(Items.WOODEN_PICKAXE)
+			|| colony.orders().containsKey(Items.WOODEN_PICKAXE), "pickaxe ordered");
+		colony.postBuildJobs();
+		colony.declareBuildNeeds(dry, step -> true, tool -> true);
+		assertTrue(colony.board().jobs().stream().anyMatch(job -> colony.build(job.id()).isPresent() && job.tool().equals(Optional.of(Items.WOODEN_PICKAXE))),
+			"pickaxe declared");
+	}
+
 	/** The world of {@code blocks}, air elsewhere. */
 	private static Function<BlockPos, BlockState> world(Map<BlockPos, BlockState> blocks) {
 		return pos -> blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());

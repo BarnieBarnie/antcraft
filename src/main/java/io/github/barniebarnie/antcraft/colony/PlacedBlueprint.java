@@ -36,12 +36,14 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * @param lava where the structure pours lava sources, such as a generator's, which builders pour back once gone
  * @param waiting the structure's plan while the colony levels the site first; it is added to the project once the levelling is done
  * @param finished whether the structure is built
- * @param restoreFluids whether builders pour its water and lava back once gone; off for good once the player cancels or
- *     gives up such a plan (see {@link Colony#restoreFluids})
+ * @param restoreFluids whether builders pour its water and lava back once gone; off once the player cancels or gives up
+ *     such a plan (see {@link Colony#restoreFluids}), until {@code colony build restore} turns it on again
+ * @param restoring the id of the last plan the colony added to pour its fluids back, so only cancelling that plan, not a
+ *     player's own plan at the same spots, turns the restore off
  */
 public record PlacedBlueprint(UUID project, Identifier blueprint, String name, BlockPos at, Rotation rotation, Mirror mirror, BoundingBox area,
 		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, List<BlockPos> lava, Optional<BuildPlan> waiting, boolean finished,
-		boolean restoreFluids) {
+		boolean restoreFluids, Optional<UUID> restoring) {
 	public static final Codec<PlacedBlueprint> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.STRING_CODEC.fieldOf("project").forGetter(PlacedBlueprint::project),
 		Identifier.CODEC.fieldOf("blueprint").forGetter(PlacedBlueprint::blueprint),
@@ -57,8 +59,16 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 		BlockPos.CODEC.listOf().optionalFieldOf("lava", List.of()).forGetter(PlacedBlueprint::lava),
 		BuildPlan.CODEC.optionalFieldOf("waiting").forGetter(PlacedBlueprint::waiting),
 		Codec.BOOL.optionalFieldOf("finished", false).forGetter(PlacedBlueprint::finished),
-		Codec.BOOL.optionalFieldOf("restore_fluids", true).forGetter(PlacedBlueprint::restoreFluids)
+		Codec.BOOL.optionalFieldOf("restore_fluids", true).forGetter(PlacedBlueprint::restoreFluids),
+		UUIDUtil.STRING_CODEC.optionalFieldOf("restoring").forGetter(PlacedBlueprint::restoring)
 	).apply(i, PlacedBlueprint::new));
+
+	/** A blueprint no plan has poured the fluids of yet. */
+	public PlacedBlueprint(UUID project, Identifier blueprint, String name, BlockPos at, Rotation rotation, Mirror mirror, BoundingBox area,
+			Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, List<BlockPos> lava,
+			Optional<BuildPlan> waiting, boolean finished, boolean restoreFluids) {
+		this(project, blueprint, name, at, rotation, mirror, area, role, chests, workSpots, water, lava, waiting, finished, restoreFluids, Optional.empty());
+	}
 
 	public PlacedBlueprint {
 		chests = List.copyOf(chests);
@@ -74,13 +84,13 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 
 	PlacedBlueprint withProject(UUID project, Optional<BuildPlan> waiting) {
 		return new PlacedBlueprint(project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, this.lava, waiting, this.finished, this.restoreFluids);
+			this.workSpots, this.water, this.lava, waiting, this.finished, this.restoreFluids, this.restoring);
 	}
 
 	/** This with {@code water} and {@code lava} where its structure pours those sources. */
 	PlacedBlueprint withFluids(List<BlockPos> water, List<BlockPos> lava) {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, water, lava, this.waiting, this.finished, this.restoreFluids);
+			this.workSpots, water, lava, this.waiting, this.finished, this.restoreFluids, this.restoring);
 	}
 
 	/** This with where {@code structure}, its structure's plan, pours water and lava sources. */
@@ -96,7 +106,19 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 	/** This with builders no longer pouring its water and lava back. */
 	PlacedBlueprint withoutFluidRestore() {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, this.lava, this.waiting, this.finished, false);
+			this.workSpots, this.water, this.lava, this.waiting, this.finished, false, Optional.empty());
+	}
+
+	/** This with builders pouring its water and lava back again once gone. */
+	PlacedBlueprint withFluidRestore() {
+		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
+			this.workSpots, this.water, this.lava, this.waiting, this.finished, true, Optional.empty());
+	}
+
+	/** This with {@code plan} the plan that pours its fluids back now. */
+	PlacedBlueprint restoringWith(UUID plan) {
+		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
+			this.workSpots, this.water, this.lava, this.waiting, this.finished, this.restoreFluids, Optional.of(plan));
 	}
 
 	/**
@@ -114,6 +136,6 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 
 	PlacedBlueprint built() {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, this.lava, Optional.empty(), true, this.restoreFluids);
+			this.workSpots, this.water, this.lava, Optional.empty(), true, this.restoreFluids, this.restoring);
 	}
 }

@@ -29,6 +29,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
@@ -327,6 +328,36 @@ class ColonyTest {
 		assertFalse(colony.isHeldUp(last, new BlockPos(4, 64, 1)), "its own batch");
 		assertFalse(colony.isHeldUp(last, new BlockPos(9, 64, 9)), "in no batch");
 		assertFalse(colony.isHeldUp(UUID.randomUUID(), new BlockPos(3, 64, 1)), "no such job");
+	}
+
+	/**
+	 * A fluid whose wall another batch places, that batch needing a blocked one, is reported with its own reason, so the
+	 * player sees why it waits: not while the wall's batch is merely not done yet.
+	 */
+	@Test
+	void aFluidHeldUpByABlockedWallBatchDescribesItselfWithAReason() {
+		Colony colony = colony();
+		BlockPos at = new BlockPos(3, 64, 6);
+		BuildPlan.Step blocked = new BuildPlan.Step(new BlockPos(6, 64, 2), Blocks.COBBLESTONE.defaultBlockState());
+		BuildPlan.Step water = new BuildPlan.Step(at, Blocks.WATER.defaultBlockState());
+		BuildPlan.Step wall = new BuildPlan.Step(at.east(), Blocks.COBBLESTONE.defaultBlockState());
+		BuildPlan plan = new BuildPlan(List.of(blocked, water, wall), List.of(new BuildPlan.Batch(0, 1, List.of()),
+			new BuildPlan.Batch(1, 2, List.of()), new BuildPlan.Batch(2, 3, List.of(0))));
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		UUID fluid = batchJob(colony, plan, 1).id();
+		Function<BlockPos, BlockState> world = pos -> Blocks.AIR.defaultBlockState();
+		assertFalse(colony.waitsForHeldUpWall(fluid, water, world), "wall's batch merely not done yet");
+
+		Job first = batchJob(colony, plan, 0);
+		colony.board().complete(first.id());
+		colony.reportBlocked(first.id(), List.of(blocked.pos()));
+		assertTrue(colony.waitsForHeldUpWall(fluid, water, world), "wall's batch needs a blocked batch");
+
+		colony.reportBlocked(fluid, Map.of(at, Colony.BlockReason.WALL_BLOCKED));
+		assertEquals(Colony.BlockReason.WALL_BLOCKED, colony.blockReason(at));
+		assertEquals(Component.translatable("commands.antcraft.colony.blocked_step.wall_blocked", at.toShortString()),
+			new ColonyStatus.Blocked(at, colony.blockReason(at)).describe());
 	}
 
 	@Test

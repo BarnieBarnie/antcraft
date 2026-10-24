@@ -303,6 +303,7 @@ public class ColonyStatusScreen extends Screen {
 		if (status.room().coreFull()) {
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), RED));
 		}
+		status.restoreOff().forEach(off -> lines.add(new Line(off.describe(), GREY)));
 		return lines;
 	}
 

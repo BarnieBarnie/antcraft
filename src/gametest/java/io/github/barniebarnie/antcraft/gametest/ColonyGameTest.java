@@ -805,6 +805,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.assertFalse(antcraft.getChild("status").canUse(asPlayer), "non-operator player may use /antcraft status");
 		helper.assertFalse(antcraft.getChild("colony").getChild("info").canUse(asPlayer), "non-operator player may use colony info");
 		helper.assertFalse(antcraft.getChild("colony").getChild("order").canUse(asPlayer), "non-operator player may use colony order");
+		helper.assertFalse(antcraft.getChild("colony").getChild("build").getChild("restore").canUse(asPlayer), "non-operator player may use colony build restore");
 		helper.assertTrue(antcraft.getChild("colony").getChild("trust").canUse(asPlayer), "owner may not use colony trust");
 		helper.assertTrue(antcraft.getChild("colony").getChild("trust").getChild("list").canUse(asPlayer), "owner may not use colony trust list");
 		helper.getLevel().getServer().getCommands().performPrefixedCommand(player, "antcraft colony order minecraft:stick 4");

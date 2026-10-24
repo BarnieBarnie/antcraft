@@ -1648,6 +1648,7 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		member(helper, colony, 2, 3);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(colony.blockedSteps().containsAll(List.of(blocked.pos(), water.pos())), "not both reported: " + colony.blockedSteps());
+			helper.assertValueEqual(colony.blockReason(water.pos()), Colony.BlockReason.WALL_BLOCKED, "the water's reason");
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 6));
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 6));
 		});

@@ -56,7 +56,9 @@ public final class ColonyActions {
 		/** Drop a project with its builds ({@code colony project cancel}). */
 		PROJECT_CANCEL,
 		/** Set a project's priority ({@code colony project priority}). */
-		PROJECT_PRIORITY;
+		PROJECT_PRIORITY,
+		/** Pour back a built blueprint's water and lava again once the player turned that off ({@code colony build restore}). */
+		BUILD_RESTORE;
 
 		/**
 		 * Whether this edit commands bots, and so needs bots allowed on the server. Each new edit has to answer this here.
@@ -65,7 +67,7 @@ public final class ColonyActions {
 		boolean commandsBots() {
 			return switch (this) {
 				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS, MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL,
-					PROJECT_PRIORITY -> false;
+					PROJECT_PRIORITY, BUILD_RESTORE -> false;
 			};
 		}
 
@@ -73,7 +75,7 @@ public final class ColonyActions {
 		public boolean fromScreen() {
 			return switch (this) {
 				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS -> true;
-				case MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
+				case MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY, BUILD_RESTORE -> false;
 			};
 		}
 	}
@@ -187,7 +189,7 @@ public final class ColonyActions {
 				colony.setRadius(count);
 				yield true;
 			}
-			case MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
+			case MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY, BUILD_RESTORE -> false;
 		};
 	}
 

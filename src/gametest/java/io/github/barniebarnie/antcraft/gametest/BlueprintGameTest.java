@@ -704,6 +704,30 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		succeedWhenItsFluidsAreBack(helper, generator, () -> helper.assertBlockNotPresent(Blocks.LAVA, pool));
 	}
 
+	/**
+	 * The player cancels the plan that pours a built generator's lava back: colony info says its restore is off, and
+	 * colony build restore turns it on again, after which info no longer says so and the colony plans the restore again.
+	 */
+	@GameTest(maxTicks = 5)
+	public void buildRestoreTurnsACancelledRestoreOnAgain(GameTestHelper helper) {
+		PlacedBlueprint generator = builtGenerator(helper, new ItemStack(Items.BUCKET));
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(CORE)).orElseThrow();
+		helper.getLevel().setBlockAndUpdate(generator.lava().getFirst(), Blocks.AIR.defaultBlockState());
+		colony.restoreFluids(helper.getLevel()::getBlockState);
+		helper.assertValueEqual(colony.builds().size(), 1, "restore plans");
+		colony.removeBuild(colony.builds().getFirst());
+		helper.assertFalse(generator(colony).restoreFluids(), "restore still on once cancelled");
+		helper.assertTrue(says(command(helper, "antcraft colony info"), "commands.antcraft.colony.restore_off"), "info does not say the restore is off");
+
+		helper.assertTrue(says(command(helper, "antcraft colony build restore"), "commands.antcraft.colony.build.restored"), "not restored");
+		helper.assertTrue(generator(colony).restoreFluids(), "restore still off");
+		helper.assertFalse(says(command(helper, "antcraft colony info"), "commands.antcraft.colony.restore_off"), "info still says the restore is off");
+		helper.assertTrue(says(command(helper, "antcraft colony build restore"), "commands.antcraft.colony.build.none_to_restore"), "restored twice");
+		colony.restoreFluids(helper.getLevel()::getBlockState);
+		helper.assertValueEqual(colony.builds().size(), 1, "restore plans once on again");
+		helper.succeed();
+	}
+
 	/** A cobblestone generator built at once (see {@link #placeGenerator}) for a colony whose core holds {@code item}. */
 	private static PlacedBlueprint builtGenerator(GameTestHelper helper, ItemStack item) {
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));

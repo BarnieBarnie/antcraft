@@ -142,7 +142,9 @@ public class Colony {
 		/** A lava step with no lava bucket at hand and no lava source in reach to fill one at. */
 		NO_LAVA,
 		/** A water step with no water bucket at hand and no water source in reach to fill one at. */
-		NO_WATER;
+		NO_WATER,
+		/** A fluid waiting for a wall that another batch places, which waits on a blocked batch (see {@link #waitsForHeldUpWall}). */
+		WALL_BLOCKED;
 
 		public static final Codec<BlockReason> CODEC = StringRepresentable.fromEnum(BlockReason::values);
 
@@ -520,6 +522,16 @@ public class Colony {
 		return blocked.stream().anyMatch(i -> i != ref.index() && plan.batch(i).steps().stream().anyMatch(step -> step.pos().equals(pos)));
 	}
 
+	/**
+	 * Whether the fluid of {@code step}, in the batch of build job {@code job}, waits for a wall that another batch of its
+	 * plan places (see {@link BuildPlan#walls}) and that is {@linkplain #isHeldUp held up}: the fluid is reported with
+	 * {@link BlockReason#WALL_BLOCKED}, as it waits until the player frees the blocked batch.
+	 */
+	public boolean waitsForHeldUpWall(UUID job, BuildPlan.Step step, Function<BlockPos, BlockState> world) {
+		return this.build(job).filter(batch -> batch.missingWalls(world, step).stream()
+			.anyMatch(wall -> batch.walls().contains(wall) && this.isHeldUp(job, wall.pos()))).isPresent();
+	}
+
 	/** A batch of a plan, by the plan's id and the batch's index. */
 	private record BatchRef(UUID plan, int index) {
 	}
@@ -699,7 +711,9 @@ public class Colony {
 			FluidSteps steps = fluidSteps(placed, world);
 			draining |= steps.draining();
 			if (!steps.steps().isEmpty()) {
-				this.addBuild(placed.blueprint().toString(), new BuildPlan(steps.steps()));
+				// Marked, so cancelling just this plan turns the restore off (see stopFluidRestore).
+				UUID plan = this.addBuild(placed.blueprint().toString(), new BuildPlan(steps.steps())).id();
+				this.blueprints.replaceAll(other -> other == placed ? placed.restoringWith(plan) : other);
 				planned.addAll(spots);
 			}
 		}
@@ -742,17 +756,36 @@ public class Colony {
 	}
 
 	/**
-	 * Stops pouring back the fluids of each built blueprint {@code plan}, cancelled or given up by the player, pours back
-	 * (see {@link #restoreFluids}): one whose steps are all at its water, lava or generator mining block. A player who
-	 * empties a farm or generator on purpose keeps it empty so.
+	 * Stops pouring back the fluids of the built blueprint whose restore is the plan with id {@code plan}, cancelled or
+	 * given up by the player (see {@link PlacedBlueprint#restoring}), until {@link #restoreFluidsAgain} turns it on. A
+	 * player who empties a farm or generator on purpose keeps it empty so; a player's own plan at the same spots is no
+	 * restore, and cancelling it leaves the restore on.
 	 */
-	private void stopFluidRestore(@Nullable BuildPlan plan) {
-		if (plan == null || plan.steps().isEmpty()) {
-			return;
-		}
-		Set<BlockPos> steps = plan.steps().stream().map(BuildPlan.Step::pos).collect(Collectors.toSet());
-		this.blueprints.replaceAll(placed -> placed.finished() && placed.restoreFluids() && placed.fluidSpots().containsAll(steps)
+	private void stopFluidRestore(UUID plan) {
+		Optional<UUID> id = Optional.of(plan);
+		this.blueprints.replaceAll(placed -> placed.finished() && placed.restoreFluids() && placed.restoring().equals(id)
 			? placed.withoutFluidRestore() : placed);
+	}
+
+	/**
+	 * Turns back on pouring back the fluids of each built blueprint whose restore the player turned off (see
+	 * {@link #stopFluidRestore}): the one whose area holds {@code inside}, or every such blueprint without it. The colony
+	 * looks for what is gone at once. Returns the blueprints turned on, as they are now.
+	 */
+	public List<PlacedBlueprint> restoreFluidsAgain(Optional<BlockPos> inside) {
+		List<PlacedBlueprint> turnedOn = new ArrayList<>();
+		this.blueprints.replaceAll(placed -> {
+			if (!placed.finished() || placed.restoreFluids() || inside.filter(pos -> !placed.area().isInside(pos)).isPresent()) {
+				return placed;
+			}
+			PlacedBlueprint on = placed.withFluidRestore();
+			turnedOn.add(on);
+			return on;
+		});
+		if (!turnedOn.isEmpty()) {
+			this.lastSurvey = -1;
+		}
+		return turnedOn;
 	}
 
 	/** Whether {@code state}, if known, is not a source of {@code fluid}. */
@@ -884,7 +917,7 @@ public class Colony {
 	/** Drops the project with id {@code id} and its plans, with their open jobs (see {@link #removeBuild}). */
 	public void cancelProject(UUID id) {
 		this.projects.stream().filter(project -> project.id().equals(id)).findFirst().ifPresent(project -> project.plans().forEach(plan -> {
-			this.stopFluidRestore(this.builds.get(plan));
+			this.stopFluidRestore(plan);
 			this.removePlan(plan);
 		}));
 		this.projects.removeIf(project -> project.id().equals(id));
@@ -1179,8 +1212,10 @@ public class Colony {
 
 	/** Drops the plan, finished or cancelled, with the open jobs of its batches; the next survey withdraws what it ordered. */
 	public void removeBuild(BuildPlan plan) {
-		this.stopFluidRestore(plan);
-		this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst().ifPresent(this::removePlan);
+		this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst().ifPresent(id -> {
+			this.stopFluidRestore(id);
+			this.removePlan(id);
+		});
 	}
 
 	/** Drops the finished plan with id {@code id}, keeping its ground, if any, for good (see {@link #keepGround}). */
@@ -1511,7 +1546,7 @@ public class Colony {
 			}
 		}
 		this.blockedSteps.clear();
-		plans.forEach(plan -> this.stopFluidRestore(this.builds.get(plan)));
+		plans.forEach(this::stopFluidRestore);
 		// Their steps are no longer kept open.
 		plans.forEach(this.stepSets::remove);
 		List<PlacedBlueprint> unlevelled = this.blueprints.stream().filter(placed -> !placed.finished() && placed.waiting().isPresent()
