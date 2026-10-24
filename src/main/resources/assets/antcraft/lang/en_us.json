@@ -26,6 +26,7 @@
 	"commands.antcraft.colony.blocked": "Build steps the colony cannot do: %s",
 	"commands.antcraft.colony.blocked_step.no_lava": "%s (no lava found)",
 	"commands.antcraft.colony.blocked_step.no_water": "%s (no water found)",
+	"commands.antcraft.colony.blocked_step.unreachable": "%s (no way there)",
 	"commands.antcraft.colony.blocked.cleared": "Gave up on %s blocked build steps",
 	"commands.antcraft.colony.blocked.unlevelled": "Dropped %s at %s, %s, %s: its site could not be levelled. Place it again once the ground is clear",
 	"commands.antcraft.colony.given_up": "Trees given up on, logs out of reach: %s",

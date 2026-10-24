@@ -149,13 +149,14 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		static final StreamCodec<ByteBuf, Blocked> STREAM_CODEC = StreamCodec.composite(
 			BlockPos.STREAM_CODEC, Blocked::pos, enumCodec(Colony.BlockReason.values()), Blocked::reason, Blocked::new);
 
-		/** The step's position, followed by why it is blocked where that is worth telling, such as no lava found. */
+		/** The step's position, followed by why it is blocked where that is worth telling, such as no lava found or no way there. */
 		public Component describe() {
 			String pos = this.pos.toShortString();
 			return switch (this.reason) {
 				case NO_LAVA -> Component.translatable("commands.antcraft.colony.blocked_step.no_lava", pos);
 				case NO_WATER -> Component.translatable("commands.antcraft.colony.blocked_step.no_water", pos);
-				case OTHER, UNREACHABLE -> Component.literal(pos);
+				case UNREACHABLE -> Component.translatable("commands.antcraft.colony.blocked_step.unreachable", pos);
+				case OTHER -> Component.literal(pos);
 			};
 		}
 	}

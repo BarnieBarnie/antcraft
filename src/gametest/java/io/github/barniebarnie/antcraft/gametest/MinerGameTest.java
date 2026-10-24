@@ -320,6 +320,50 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Stone up to y=4 and a ladder shaft from (1, 5, 1) down to a landing at y=1, whose hall the miner digs east along
+	 * z=1. A small cave opens off the hall at x=3..4, z=2..3, with a lava source sunk in its floor at (3, 0, 3): more than
+	 * the scan height below the core and beside no cell of the mine, so only a bot that saw it knows it is there. Once
+	 * the miner has seen it from the hall, a lava order is filled there.
+	 */
+	@GameTest(maxTicks = 1500)
+	public void lavaAMinerSawFromAHallIsUsedForALavaOrder(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 2, 4, 2, 3)) {
+			helper.setBlock(pos, Blocks.AIR);
+		}
+		BlockPos pool = new BlockPos(3, 0, 3);
+		helper.setBlock(pool.below(), Blocks.STONE);
+		helper.setBlock(pool, Blocks.LAVA);
+		BlockPos corePos = new BlockPos(6, 5, 6);
+		Colony colony = colony(helper, corePos);
+		wantStone(colony);
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1);
+		dig(helper, colony, shaft);
+		helper.assertFalse(Direction.stream().map(side -> helper.absolutePos(pool).relative(side)).anyMatch(colony.mineCells()::contains),
+			"the lava is beside the mine");
+		AntBot miner = member(helper, colony, 5, 5, 5);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		// Once the miner has seen the lava, the colony wants a bucket of it.
+		boolean[] ordered = {false};
+		helper.onEachTick(() -> {
+			if (!ordered[0] && colony.seenLava().contains(helper.absolutePos(pool))) {
+				ordered[0] = true;
+				core(helper, corePos).setItem(0, new ItemStack(Items.BUCKET));
+				colony.addOrder(Items.LAVA_BUCKET, 1);
+			}
+			helper.assertFalse(miner.isInLava() || miner.isOnFire(), "miner in lava or on fire at " + relative(helper, miner.blockPosition()).toShortString());
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper, corePos).countItem(Items.LAVA_BUCKET) == 1, "no lava bucket in the core");
+			helper.assertBlockNotPresent(Blocks.LAVA, pool);
+		});
+	}
+
+	/**
 	 * In a 16x16 area: one level at y=1, its hall heading east along z=8 with two branches a side, 7 long, at
 	 * x=4 and x=7. Each branch is two jobs, the second ready once the first is dug. Four bots dig the four
 	 * branches at the same time.

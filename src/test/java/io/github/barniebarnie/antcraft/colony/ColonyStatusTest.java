@@ -217,7 +217,7 @@ class ColonyStatusTest {
 		assertEquals(List.of(new ColonyStatus.Blocked(new BlockPos(3, 64, 3), Colony.BlockReason.OTHER)), status.blocked());
 	}
 
-	/** A step blocked for want of lava says so after its position; one blocked otherwise is just its position. */
+	/** A step blocked for want of lava or water, or with no way there, says so after its position; one blocked otherwise is just its position. */
 	@Test
 	void aBlockedStepTellsWhyWhereItKnows() {
 		BlockPos pos = new BlockPos(3, 64, 3);
@@ -225,6 +225,8 @@ class ColonyStatusTest {
 			new ColonyStatus.Blocked(pos, Colony.BlockReason.NO_LAVA).describe());
 		assertEquals(Component.translatable("commands.antcraft.colony.blocked_step.no_water", pos.toShortString()),
 			new ColonyStatus.Blocked(pos, Colony.BlockReason.NO_WATER).describe());
+		assertEquals(Component.translatable("commands.antcraft.colony.blocked_step.unreachable", pos.toShortString()),
+			new ColonyStatus.Blocked(pos, Colony.BlockReason.UNREACHABLE).describe());
 		assertEquals(Component.literal(pos.toShortString()), new ColonyStatus.Blocked(pos, Colony.BlockReason.OTHER).describe());
 	}
 

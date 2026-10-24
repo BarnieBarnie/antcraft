@@ -431,6 +431,20 @@ class ColonyTest {
 		assertEquals(Colony.BlockReason.NO_LAVA, loaded.blockReason(PLACED));
 	}
 
+	/** Lava sources bots saw are remembered, saved, and forgotten once gone, so lava fetching finds those out of the scan's range. */
+	@Test
+	void lavaSeenIsRememberedAndSaved() {
+		Colony colony = colony();
+		BlockPos lava = new BlockPos(9, 20, 9);
+		colony.sawLava(lava);
+		colony.sawLava(PLACED);
+		assertEquals(Set.of(lava, PLACED), colony.seenLava());
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertEquals(Set.of(lava, PLACED), loaded.seenLava());
+		loaded.forgetLava(PLACED);
+		assertEquals(Set.of(lava), loaded.seenLava());
+	}
+
 	@Test
 	void oldSavesKeepTheirUnreachableSteps() {
 		String json = """

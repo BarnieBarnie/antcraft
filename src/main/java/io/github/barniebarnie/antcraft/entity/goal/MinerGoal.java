@@ -30,6 +30,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -40,6 +41,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -70,12 +72,16 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int BRANCH_TRIES = 3;
 	/** How long after it is posted a branch waits for a free member with a good enough pickaxe, before a bot with a weaker one takes it. */
 	private static final int BETTER_PICKAXE_TICKS = 200;
+	/** How far around it a miner in the mine looks for lava to remember (see {@link #lookForLava}). */
+	private static final int LAVA_SIGHT = 8;
 	private enum State { TOOL, WORK, DEPOSIT }
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
 	/** What it can see, to break only blocks in sight; one for good, as goals compare by value. */
 	private final Goal.Sight sight;
 	private State state = State.TOOL;
+	/** Where it last looked for lava from (see {@link #lookForLava}). */
+	private @Nullable BlockPos lookedForLava;
 	/** The job it last checked its pickaxe for, so it checks once per job. */
 	private @Nullable UUID tierChecked;
 	/** What the core wants of its haul, worked out once per trip to unload. */
@@ -169,6 +175,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return false;
 		}
 		this.bot.setWorking(this.job != null);
+		this.lookForLava(level, colony.get());
 		if (this.cooldown > 0) {
 			this.cooldown--;
 			return true;
@@ -305,6 +312,27 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return;
 		}
 		this.dig(level, blocks.getFirst());
+	}
+
+	/**
+	 * Each time it steps onto another cell of the mine, such as in a hall or a branch, remembers the lava sources it sees
+	 * from there within {@link #LAVA_SIGHT} blocks (see {@link Colony#sawLava}), so builders find them to fill buckets at.
+	 */
+	private void lookForLava(ServerLevel level, Colony colony) {
+		BlockPos feet = this.bot.blockPosition();
+		if (feet.equals(this.lookedForLava)) {
+			return;
+		}
+		this.lookedForLava = feet;
+		if (!colony.mineCells().contains(feet)) {
+			return;
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-LAVA_SIGHT, -LAVA_SIGHT, -LAVA_SIGHT), feet.offset(LAVA_SIGHT, LAVA_SIGHT, LAVA_SIGHT))) {
+			FluidState fluid = level.getFluidState(pos);
+			if (fluid.isSource() && fluid.is(FluidTags.LAVA) && !colony.seenLava().contains(pos) && LineOfSight.sees(level, feet, pos, p -> false)) {
+				colony.sawLava(pos);
+			}
+		}
 	}
 
 	/** Breaks {@code next} once in reach and sight of it, walking there first; a block it finds no way to is left. */

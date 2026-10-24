@@ -201,7 +201,7 @@ public class Colony {
 	/** What the colony builds and works: the mineshaft, build plans and their progress, the projects they make up, the field and the storage area. */
 	private record Works(Optional<Mineshaft> mineshaft, Map<UUID, BuildPlan> builds, List<Placed> placed, List<Blocked> blockedSteps,
 			Map<UUID, BatchState> batchStates, Optional<Field> field, Optional<StorageArea> storage, List<Project> projects,
-			List<BoundingBox> keptGround, Optional<Quarry> quarry, List<BlockPos> veinCells) {
+			List<BoundingBox> keptGround, Optional<Quarry> quarry, List<BlockPos> veinCells, List<BlockPos> seenLava) {
 		static final MapCodec<Works> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
 			// Old saves may still have a "quarry" of the old kind, a box mined layer by layer; it is ignored.
 			Mineshaft.CODEC.optionalFieldOf("mineshaft").forGetter(Works::mineshaft),
@@ -215,7 +215,8 @@ public class Colony {
 			Project.CODEC.listOf().optionalFieldOf("projects", List.of()).forGetter(Works::projects),
 			BoundingBox.CODEC.listOf().optionalFieldOf("kept_ground", List.of()).forGetter(Works::keptGround),
 			Quarry.CODEC.optionalFieldOf("open_quarry").forGetter(Works::quarry),
-			BlockPos.CODEC.listOf().optionalFieldOf("vein_cells", List.of()).forGetter(Works::veinCells)
+			BlockPos.CODEC.listOf().optionalFieldOf("vein_cells", List.of()).forGetter(Works::veinCells),
+			BlockPos.CODEC.listOf().optionalFieldOf("seen_lava", List.of()).forGetter(Works::seenLava)
 		).apply(i, Works::new));
 	}
 
@@ -238,7 +239,7 @@ public class Colony {
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
 		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects),
-			List.copyOf(c.keptGround), c.quarry, List.copyOf(c.veinCells))),
+			List.copyOf(c.keptGround), c.quarry, List.copyOf(c.veinCells), List.copyOf(c.seenLava))),
 		Access.CODEC.forGetter(c -> new Access(c.owner, List.copyOf(c.trusted))),
 		Placements.CODEC.forGetter(c -> new Placements(List.copyOf(c.blueprints)))
 	).apply(i, Colony::new));
@@ -261,6 +262,8 @@ public class Colony {
 	private Set<BlockPos> shaftOpen;
 	/** The holes miners dug out ore veins through, off the mine's branches (see {@link #mineCells}). */
 	private final Set<BlockPos> veinCells = new HashSet<>();
+	/** Lava sources bots saw, such as from the mine's halls and branches, where builders fill buckets (see {@link #sawLava}). */
+	private final Set<BlockPos> seenLava = new LinkedHashSet<>();
 	private final List<StockTarget> stock;
 	/** The projects the colony works on, in the order they were added; see {@link #projects}. */
 	private final List<Project> projects = new ArrayList<>();
@@ -316,6 +319,7 @@ public class Colony {
 		this.keptGround.addAll(works.keptGround());
 		this.quarry = works.quarry();
 		this.veinCells.addAll(works.veinCells());
+		this.seenLava.addAll(works.seenLava());
 		this.owner = access.owner();
 		this.trusted.addAll(access.trusted());
 		access.owner().ifPresent(this.trusted::remove);
@@ -1547,6 +1551,21 @@ public class Colony {
 	/** Where bots walk in the mine: its stairs, halls, every round of branches and the vein pockets dug off them; none before it has a site. */
 	public Set<BlockPos> mineCells() {
 		return Sets.union(this.shaftOpen, this.veinCells);
+	}
+
+	/** Remembers a lava source a bot saw, so lava fetching finds it, also where it does not look itself, such as off the mine's halls. */
+	public void sawLava(BlockPos pos) {
+		this.seenLava.add(pos.immutable());
+	}
+
+	/** Forgets a lava source a bot saw, once it is gone. */
+	public void forgetLava(BlockPos pos) {
+		this.seenLava.remove(pos);
+	}
+
+	/** The lava sources bots saw and that were not forgotten since (see {@link #sawLava}). */
+	public Set<BlockPos> seenLava() {
+		return Collections.unmodifiableSet(this.seenLava);
 	}
 
 	/** Adds the cells of a vein job's area to the mine, once a miner is done with it; any still solid hold no bot or mob. */

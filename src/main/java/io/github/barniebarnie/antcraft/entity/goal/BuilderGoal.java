@@ -757,8 +757,19 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (bucket != Items.LAVA_BUCKET) {
 			return nearest(level, colony, from, fills);
 		}
-		// Lava also in the mine, beside the cells dug out, and only where a bot can fill a bucket safe from it.
+		// Lava also in the mine, beside the cells dug out, and lava bots saw (see Colony.sawLava), and only where a bot can
+		// fill a bucket safe from it. Seen lava that is gone is forgotten.
 		Set<BlockPos> found = new HashSet<>(all(level, colony, fills));
+		for (BlockPos pos : List.copyOf(colony.seenLava())) {
+			if (!level.isLoaded(pos)) {
+				continue;
+			}
+			if (!level.getFluidState(pos).isSourceOfType(Fluids.LAVA)) {
+				colony.forgetLava(pos);
+			} else if (fills.test(pos)) {
+				found.add(pos);
+			}
+		}
 		for (BlockPos cell : colony.mineCells()) {
 			for (Direction side : Direction.values()) {
 				BlockPos pos = cell.relative(side);
