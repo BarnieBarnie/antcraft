@@ -57,8 +57,9 @@ public final class PathFinder {
 	}
 
 	/**
-	 * Plans a path from {@code start} to {@code goal}. A path never ends in water: a bot swims only to
-	 * get somewhere dry, and a partial path stops on the nearest shore rather than out in the water.
+	 * Plans a path from {@code start} to {@code goal}. A path never ends hanging on a ladder, where a bot does not
+	 * stand to work, nor in water: a bot swims only to get somewhere dry, and a partial path stops on the nearest shore
+	 * rather than out in the water.
 	 * Only a goal that {@link Goal#mayEndAfloat may end afloat} is reached swimming at the surface too, and
 	 * a path to one breaks a block only where there is no way without: the bot swims out rather than dig down
 	 * into the bank, but digs in to water with none at the surface to swim in, such as a pond under a lid.
@@ -75,7 +76,7 @@ public final class PathFinder {
 	}
 
 	private static Path search(WorldView world, BlockPos start, Goal goal, Options options) {
-		Planner planner = new Planner(world, options, goal.mayEndAfloat());
+		Planner planner = new Planner(world, options, goal);
 		Map<BlockPos, Double> bestCost = new HashMap<>();
 		PriorityQueue<Entry> open = new PriorityQueue<>((a, b) -> Double.compare(a.priority, b.priority));
 
@@ -95,7 +96,7 @@ public final class PathFinder {
 			boolean inWater = world.isWater(node.pos);
 			// Afloat in water whose cover the path broke, such as a pond under a lid it dug into, counts as at the surface.
 			boolean afloat = planner.swimmable(node.pos) || inWater && brokenOnTheWay(node, node.pos.above());
-			if ((!inWater || goal.mayEndAfloat() && afloat) && goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
+			if ((!inWater && !planner.hanging(node.pos) || goal.mayEndAfloat() && afloat) && goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
 				return toPath(start, node, true);
 			}
 			expanded++;
@@ -151,13 +152,16 @@ public final class PathFinder {
 		private final Options options;
 		/** Whether a path may dig down into water (see {@link #digDown}): only one that may end afloat, so others never wade into a hidden pocket. */
 		private final boolean intoWater;
+		/** The goal, which may keep the path from breaking some blocks (see {@link Goal#mayBreak}). */
+		private final Goal goal;
 		/** The node whose moves are being generated; its path so far tells which blocks it placed and broke. */
 		private Node node;
 
-		Planner(WorldView world, Options options, boolean intoWater) {
+		Planner(WorldView world, Options options, Goal goal) {
 			this.world = world;
 			this.options = options;
-			this.intoWater = intoWater;
+			this.intoWater = goal.mayEndAfloat();
+			this.goal = goal;
 		}
 
 		List<Candidate> moves(Node node) {
@@ -276,6 +280,11 @@ public final class PathFinder {
 			return this.canStand(climbable) && this.canStand(climbable.below());
 		}
 
+		/** In a ladder or other climbable block with nothing to stand on under it, where a bot holds on rather than stands. */
+		boolean hanging(BlockPos feet) {
+			return this.world.isClimbable(feet) && !this.canStand(feet.below());
+		}
+
 		/** Open, or a ladder or hatch a bot climbs through. */
 		private boolean climbable(BlockPos pos) {
 			return this.open(pos) || this.world.isClimbable(pos);
@@ -364,10 +373,11 @@ public final class PathFinder {
 
 		/**
 		 * Whether a path may break the block at {@code pos}: never one beside a fluid, which would flow in, but for
-		 * {@code overWater} one with water only under it, which stays put.
+		 * {@code overWater} one with water only under it, which stays put. Nor one the goal keeps the path from breaking
+		 * from where it stands.
 		 */
 		private boolean breakable(BlockPos pos, boolean overWater) {
-			if (!this.options.canBreak() || this.world.isHazard(pos) || this.world.breakTicks(pos) < 0) {
+			if (!this.options.canBreak() || !this.goal.mayBreak(this.node.pos, pos) || this.world.isHazard(pos) || this.world.breakTicks(pos) < 0) {
 				return false;
 			}
 			for (Direction dir : Direction.values()) {

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
@@ -505,6 +506,79 @@ class PathFinderTest {
 
 		assertTrue(path.complete(), "no way up: " + path.steps());
 		assertEveryPlacementHasAFace(world, path);
+	}
+
+	@Test
+	void aPathEndsWhereTheBotStandsNotHalfwayDownALadder() {
+		// A ladder down through a hatch to a chamber at y=1..2, the block to reach beside it. The block is in reach from
+		// the ladder at y=3 already, but a bot only arrives on its feet, so the path goes on down to the floor.
+		GridWorld world = GridWorld.flat(5).fill(-5, 1, -5, 5, 4, 5, '#').fill(1, 1, 0, 1, 3, 0, 'H').set(1, 4, 0, 'T')
+			.fill(2, 1, 0, 2, 2, 0, ' ');
+		Path path = PathFinder.find(world, new BlockPos(2, 5, 0), new Goal.Reach(new BlockPos(3, 1, 0), 4.0), WALK_ONLY);
+
+		assertTrue(path.complete(), "no way down: " + path.steps());
+		assertTrue(world.canStandOn(path.end().below()), "ends at " + path.end() + ", not standing: " + path.steps());
+	}
+
+	/** A tunnel at y=1..2 along z=0 from x=0 to x=6 in dirt, its last cell (x=6) still dirt; the area is the tunnel's cells. */
+	private static final Predicate<BlockPos> TUNNEL = pos -> pos.getZ() == 0 && pos.getX() >= 0 && pos.getX() <= 6
+		&& pos.getY() >= 1 && pos.getY() <= 2;
+
+	/** Dirt from y=1 up to {@code groundTop} round {@link #TUNNEL}. */
+	private static GridWorld tunnel(int groundTop) {
+		return GridWorld.flat(10).fill(-10, 1, -10, 10, groundTop, 10, 'D').fill(0, 1, 0, 5, 2, 0, ' ');
+	}
+
+	@Test
+	void aGoalWithinAnAreaBreaksOnlyBlocksOfTheAreaFromInsideIt() {
+		// A roof over the tunnel but at its west end, so the way in is a drop at x=0. Standing on the roof right above
+		// the dirt cell, digging straight down is cheaper than going round, but breaks the roof.
+		GridWorld world = tunnel(3).set(0, 3, 0, ' ');
+		Goal.Within goal = new Goal.Within(new Goal.Block(new BlockPos(6, 1, 0)), TUNNEL);
+		BlockPos start = new BlockPos(6, 4, 0);
+		assertTrue(PathFinder.find(world, start, goal.goal(), FULL).steps().stream().anyMatch(step -> step.breaks().stream().anyMatch(TUNNEL.negate())),
+			"without the area the path breaks nothing outside it either");
+
+		Path path = PathFinder.find(world, start, goal, FULL);
+
+		assertTrue(path.complete(), "no way in: " + path.steps());
+		assertBreaksOnlyFromWithin(start, path, TUNNEL);
+	}
+
+	@Test
+	void aGoalWithinAnAreaDoesNotDigIntoItFromAbove() {
+		// No roof: the dirt cell's top is open to the sky, so digging straight down breaks only cells of the area, but
+		// from outside it.
+		GridWorld world = tunnel(2);
+		Goal.Within goal = new Goal.Within(new Goal.Block(new BlockPos(6, 1, 0)), TUNNEL);
+		BlockPos start = new BlockPos(6, 3, 0);
+		assertTrue(PathFinder.find(world, start, goal.goal(), FULL).steps().getFirst().type() == MoveType.DIG_DOWN,
+			"without the area the path does not dig down either");
+
+		Path path = PathFinder.find(world, start, goal, FULL);
+
+		assertTrue(path.complete(), "no way in: " + path.steps());
+		assertBreaksOnlyFromWithin(start, path, TUNNEL);
+	}
+
+	@Test
+	void aGoalWithinAnAreaIsReachedOnlyStandingInIt() {
+		Goal goal = new Goal.Within(new Goal.Near(new BlockPos(6, 1, 0), 2), TUNNEL);
+
+		assertTrue(goal.isReached(new BlockPos(5, 1, 0)));
+		assertFalse(goal.isReached(new BlockPos(6, 3, 0)), "reached from above the area");
+	}
+
+	/** Every block the path breaks is in the area, broken from a spot in it. */
+	private static void assertBreaksOnlyFromWithin(BlockPos start, Path path, Predicate<BlockPos> area) {
+		BlockPos from = start;
+		for (Step step : path.steps()) {
+			for (BlockPos pos : step.breaks()) {
+				assertTrue(area.test(pos), "broke " + pos + " outside the area: " + path.steps());
+				assertTrue(area.test(from), "broke " + pos + " from " + from + ", outside the area: " + path.steps());
+			}
+			from = step.to();
+		}
 	}
 
 	/** Each block the path places has a face to place it against: a block of the world it has not broken, or one it placed before. */

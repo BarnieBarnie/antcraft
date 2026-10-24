@@ -320,27 +320,28 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * Stone up to y=4 and a ladder shaft from (1, 5, 1) down to a landing at y=1, whose hall the miner digs east along
-	 * z=1. A small cave opens off the hall at x=3..4, z=2..3, with a lava source sunk in its floor at (3, 0, 3): more than
-	 * the scan height below the core and beside no cell of the mine, so only a bot that saw it knows it is there. Once
-	 * the miner has seen it from the hall, a lava order is filled there.
+	 * Stone up to y=4 and a ladder shaft from (1, 5, 3) down to a landing at y=1, whose hall the miner digs east along
+	 * z=3, with branches 3 long, so the miner walks into the hall to reach their far ends. A small cave opens off the
+	 * hall at x=3..4, z=4..5, with a lava source sunk in its floor at (3, 0, 5): more than the scan height below the core
+	 * and beside no cell of the mine, so only a bot that saw it knows it is there. Once the miner has seen it from the
+	 * hall, a lava order is filled there.
 	 */
-	@GameTest(maxTicks = 1500)
+	@GameTest(maxTicks = 1300)
 	public void lavaAMinerSawFromAHallIsUsedForALavaOrder(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
-		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 2, 4, 2, 3)) {
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 4, 4, 2, 5)) {
 			helper.setBlock(pos, Blocks.AIR);
 		}
-		BlockPos pool = new BlockPos(3, 0, 3);
+		BlockPos pool = new BlockPos(3, 0, 5);
 		helper.setBlock(pool.below(), Blocks.STONE);
 		helper.setBlock(pool, Blocks.LAVA);
 		BlockPos corePos = new BlockPos(6, 5, 6);
 		Colony colony = colony(helper, corePos);
 		wantStone(colony);
 		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 3)), List.of(y), 1, 3, Mineshaft.DEFAULT_TORCH_SPACING, 1);
 		dig(helper, colony, shaft);
 		helper.assertFalse(Direction.stream().map(side -> helper.absolutePos(pool).relative(side)).anyMatch(colony.mineCells()::contains),
 			"the lava is beside the mine");
@@ -360,6 +361,83 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper, corePos).countItem(Items.LAVA_BUCKET) == 1, "no lava bucket in the core");
 			helper.assertBlockNotPresent(Blocks.LAVA, pool);
+		});
+	}
+
+	/**
+	 * Stone up to y=4 and a ladder shaft from (1, 5, 1) down to a landing at y=1, whose hall the miner digs east along
+	 * z=1. The miner starts on the ground right above the end of the hall: it climbs down the ladder rather than dig its
+	 * own way down, so it breaks no block that is not a cell of the mine.
+	 */
+	@GameTest(maxTicks = 300)
+	public void minerClimbsDownTheLadderRatherThanDigItsOwnWayToTheHall(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(6, 5, 6));
+		GameTests.failOnGiveUp(helper, colony);
+		wantStone(colony);
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1);
+		dig(helper, colony, shaft);
+		Mineshaft.Branch hall = shaft.hallWork(y).orElseThrow();
+		AntBot miner = member(helper, colony, 5, 5, 1);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(0, 1, 0)), helper.absolutePos(new BlockPos(7, 4, 7)))) {
+				if (helper.getLevel().getBlockState(pos).isAir() && !colony.mineCells().contains(pos)) {
+					helper.fail("broke " + relative(helper, pos).toShortString() + ", outside the mine");
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (BlockPos cell : hall.cells()) {
+				helper.assertTrue(helper.getLevel().getBlockState(cell).isAir(), "hall not dug at " + relative(helper, cell).toShortString());
+			}
+		});
+	}
+
+	/**
+	 * In a 16x16 area: stone only 2 high, so a level at y=1 has no roof but the sky, and its hall heading east along
+	 * z=8 has one branch a side at x=4. The miner starts on the stone right above the north branch: it digs each
+	 * branch cell standing in the mine, as from the hall, not from the surface above it.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 500)
+	public void minerDigsABranchFromInsideNotFromTheSurfaceAboveIt(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 0, 15)) {
+			helper.setBlock(pos, Blocks.DIRT);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = colony(helper, new BlockPos(6, 3, 2));
+		GameTests.failOnGiveUp(helper, colony);
+		wantStone(colony);
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 4, 4, 1, Mineshaft.Layout.STAIRCASE);
+		dig(helper, colony, shaft);
+		List<BlockPos> cells = shaft.branches(y).stream().flatMap(branch -> branch.cells().stream()).toList();
+		AntBot miner = member(helper, colony, 4, 3, 5);
+		miner.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		helper.assertTrue(cells.contains(miner.blockPosition().below()), "the miner is not above a branch");
+
+		Set<BlockPos> solid = new HashSet<>(cells.stream().filter(cell -> !helper.getLevel().getBlockState(cell).isAir()).toList());
+		helper.onEachTick(() -> {
+			for (BlockPos cell : List.copyOf(solid)) {
+				if (helper.getLevel().getBlockState(cell).isAir()) {
+					solid.remove(cell);
+					if (!colony.mineCells().contains(miner.blockPosition())) {
+						helper.fail("broke " + relative(helper, cell).toShortString() + " standing outside the mine at " + relative(helper, miner.blockPosition()).toShortString());
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (BlockPos cell : cells) {
+				BlockState state = helper.getLevel().getBlockState(cell);
+				helper.assertTrue(state.isAir() || state.is(Blocks.TORCH), "branch not dug at " + relative(helper, cell).toShortString());
+			}
 		});
 	}
 

@@ -22,6 +22,11 @@ public interface Goal {
 		return false;
 	}
 
+	/** Whether a path to this goal may break the block at {@code pos} standing at {@code feet}: any it can, unless the goal says (see {@link Within}). */
+	default boolean mayBreak(BlockPos feet, BlockPos pos) {
+		return true;
+	}
+
 	static double estimate(BlockPos from, BlockPos to) {
 		int horizontal = Math.abs(from.getX() - to.getX()) + Math.abs(from.getZ() - to.getZ());
 		int vertical = Math.abs(from.getY() - to.getY());
@@ -53,6 +58,44 @@ public interface Goal {
 		@Override
 		public boolean mayEndAfloat() {
 			return true;
+		}
+
+		@Override
+		public boolean mayBreak(BlockPos feet, BlockPos pos) {
+			return this.goal.mayBreak(feet, pos);
+		}
+	}
+
+	/**
+	 * {@code goal}, reached standing in the {@code area}, and by a path that breaks only blocks of the area, from a spot in
+	 * it: as a miner keeps to its mine, entering through the shaft rather than digging its own way down, and digging out
+	 * a branch from inside it, not from above. Goals compare by value, so keep one {@code area} per bot rather than a
+	 * fresh lambda per call.
+	 */
+	record Within(Goal goal, Predicate<BlockPos> area) implements Goal {
+		@Override
+		public boolean isReached(BlockPos feet) {
+			return this.area.test(feet) && this.goal.isReached(feet);
+		}
+
+		@Override
+		public boolean isReached(BlockPos feet, Predicate<BlockPos> broken) {
+			return this.area.test(feet) && this.goal.isReached(feet, broken);
+		}
+
+		@Override
+		public double heuristic(BlockPos feet) {
+			return this.goal.heuristic(feet);
+		}
+
+		@Override
+		public boolean mayEndAfloat() {
+			return this.goal.mayEndAfloat();
+		}
+
+		@Override
+		public boolean mayBreak(BlockPos feet, BlockPos pos) {
+			return this.area.test(feet) && this.area.test(pos) && this.goal.mayBreak(feet, pos);
 		}
 	}
 

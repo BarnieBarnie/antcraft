@@ -125,6 +125,11 @@ public class PathFollower {
 			this.stop();
 			return Status.ARRIVED;
 		}
+		if (this.path != null && this.path.complete() && this.stepIndex >= this.path.steps().size() && this.goal.isReached(feet)
+				&& ++this.stepTicks <= this.stepBudget) {
+			// At the end of the path but not on its feet yet, such as still sliding down the last block of a ladder: wait to land.
+			return Status.RUNNING;
+		}
 		if (this.path == null || this.stepIndex >= this.path.steps().size() || ++this.stepTicks > this.stepBudget) {
 			if (!this.replan()) {
 				this.stop();
@@ -170,6 +175,10 @@ public class PathFollower {
 			}
 			if (step.type() == MoveType.CLIMB_UP || step.type() == MoveType.CLIMB_DOWN) {
 				this.climb(step);
+			} else if (step.type() == MoveType.WALK && this.bot.onClimbable()) {
+				// Off a ladder, steered like a climb: turning to walk away, the move control would bump into the wall, and
+				// climb up it. Not before it has slid down to the floor it walks on, or its head bumps into the top of the way out.
+				this.climb(this.bot.getY() > step.to().getY() + 0.2 ? new Step(MoveType.CLIMB_DOWN, feet, List.of(), List.of()) : step);
 			} else {
 				this.moveTo(step.to());
 			}

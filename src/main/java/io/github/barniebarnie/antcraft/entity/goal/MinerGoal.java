@@ -53,7 +53,8 @@ import org.jspecify.annotations.Nullable;
  * ores the colony wants there is in hand or on its way. It stores its haul after each branch and when it is
  * full. Down in the shaft it leaves all but what open orders need, their ingredients included, in the nearest
  * landing chest, which it sees there, for haulers to bring up, and climbs out to the core only with what
- * orders need; nearer the core than any landing chest, it stores it all in the core. Like a player,
+ * orders need; nearer the core than any landing chest, it stores it all in the core. It digs a branch standing in
+ * the mine, by a way that breaks only cells of the mine: down the shaft, not a hole of its own (see {@link #inMine}). Like a player,
  * it only breaks a block it can see from within reach, not one behind a wall. A branch with cells it cannot
  * get within reach and sight of goes back on the board to retry later, and is given up after a few tries. A
  * bot whose pickaxe is not good enough for a branch leaves it a while to a free member that carries one.
@@ -77,8 +78,10 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private enum State { TOOL, WORK, DEPOSIT }
 
 	private final Set<BlockPos> unreachable = new HashSet<>();
-	/** What it can see, to break only blocks in sight; one for good, as goals compare by value. */
-	private final Goal.Sight sight;
+	/** The cells of the colony's mine, kept up to date each tick it works (see {@link #inMine}). */
+	private Set<BlockPos> mineCells = Set.of();
+	/** Whether a block is a cell of the mine; one for good, as goals compare by value. */
+	private final Predicate<BlockPos> inMine = pos -> this.mineCells.contains(pos);
 	private State state = State.TOOL;
 	/** Where it last looked for lava from (see {@link #lookForLava}). */
 	private @Nullable BlockPos lookedForLava;
@@ -99,7 +102,6 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 
 	public MinerGoal(AntBot bot) {
 		super(bot);
-		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
 	}
 
 	/**
@@ -175,6 +177,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return false;
 		}
 		this.bot.setWorking(this.job != null);
+		this.mineCells = colony.get().mineCells();
 		this.lookForLava(level, colony.get());
 		if (this.cooldown > 0) {
 			this.cooldown--;
@@ -311,7 +314,15 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.endJob(blocked ? WorkerGoal.Outcome.GIVE_UP : left ? WorkerGoal.Outcome.RETRY : WorkerGoal.Outcome.COMPLETE);
 			return;
 		}
-		this.dig(level, blocks.getFirst());
+		this.dig(level, blocks.getFirst(), this.inMine(this.inSight(blocks.getFirst())));
+	}
+
+	/**
+	 * {@code goal}, reached standing in the mine by a path that breaks only cells of the mine, from inside it: so a miner
+	 * climbs down the shaft rather than dig its own way down, and digs a branch out from inside it, not from above.
+	 */
+	private Goal inMine(Goal goal) {
+		return new Goal.Within(goal, this.inMine);
 	}
 
 	/**
@@ -335,9 +346,8 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 	}
 
-	/** Breaks {@code next} once in reach and sight of it, walking there first; a block it finds no way to is left. */
-	private void dig(ServerLevel level, BlockPos next) {
-		Goal reach = new Goal.InSight(next, REACH, this.sight);
+	/** Breaks {@code next} once {@code reach} is reached, in reach and sight of it, walking there first; a block it finds no way to is left. */
+	private void dig(ServerLevel level, BlockPos next, Goal reach) {
 		if (reach.isReached(this.bot.blockPosition()) && this.bot.onGround()) {
 			this.breaker.tick(level, next, true);
 		} else if (this.travel(reach) == PathFollower.Status.FAILED) {
@@ -373,7 +383,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.unreachable.add(next);
 			return;
 		}
-		this.dig(level, next);
+		this.dig(level, next, this.inSight(next));
 	}
 
 	/**
@@ -481,7 +491,7 @@ public class MinerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.enter(State.DEPOSIT);
 			return true;
 		}
-		PathFollower.Status status = this.approach(this.inSight(dark.get()), dark.get());
+		PathFollower.Status status = this.approach(this.inMine(this.inSight(dark.get())), dark.get());
 		if (status == PathFollower.Status.FAILED) {
 			this.unreachable.add(dark.get());
 			return false;
