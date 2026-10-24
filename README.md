@@ -1,6 +1,6 @@
 # AntCraft
 
-A Fabric mod for Minecraft that adds colonies of virtual bots. They gather materials, run farms and build structures together, working toward a shared goal like an ant colony.
+A Fabric mod for Minecraft that adds colonies of virtual bots. You plan, the colony does the chores: pick a building from a library of blueprints, see it as a ghost where it will stand and place it, and the bots level the site, gather or craft the materials and build it. A warehouse becomes the colony's storage, a farm its field and a cobblestone generator a source of stone; between builds the bots fell trees, dig the mine, craft what the colony is short of and keep its stores, like an ant colony.
 
 The bots are in-game entities and are not linked to real accounts. This is a hobby project, made for fun in your own worlds.
 
@@ -9,11 +9,19 @@ The bots are in-game entities and are not linked to real accounts. This is a hob
 AntCraft must be installed on the server and on every player's client: it adds items, screens and network messages that a client without it cannot handle. It cannot be used as a cheat client on other people's servers, since bots only exist on a server that has the mod installed.
 
 - **Singleplayer / LAN:** enabled by default.
-- **Dedicated servers:** disabled by default. The server owner must explicitly set `enabled = true` in the config.
-- Bot commands are restricted to operators. Owners can cap the bot count and whitelist who may spawn bots.
+- **Dedicated servers:** disabled by default. The server owner must explicitly set `enableOnDedicatedServer = true` in the config.
+- The `/antcraft` commands are restricted to operators. Server owners can cap the bot count per dimension (`maxBotsPerLevel`).
 - Each colony belongs to the player who placed its core. Only that player, the players an operator trusts with the colony (`/antcraft colony trust`) and operators may view or change it from the colony screen, and a Bot Core's bot joins only a colony its player may change, so other players on a shared server cannot order, build or plan in your colony.
 
 ## Usage
+
+**Getting started:**
+
+1. Craft a Colony Core and place it: you own the colony, and an operator can let other players help (`/antcraft colony trust`).
+2. Craft a Bot Core and use it within 32 blocks of the core; the bot joins the colony. Craft more for more hands, or order them from the colony (see Crafts below).
+3. The colony makes its starter tool kit and, once it wants stone or ores, digs a mineshaft beside the core. Everything else is your plan.
+4. Craft a Blueprint, pick a building with it, and place it: a warehouse for storage, a farm for crops, a cobblestone generator, or a building of your own from a data pack. The colony builds it and puts it to use.
+5. Ask for more with orders and stock targets on the colony screen (`K`).
 
 **Crafting a Bot Core** (shaped):
 
@@ -52,7 +60,7 @@ Bots use the best tool or weapon they carry, and tools wear out.
 
 **Builds.** A build is a list of blocks to clear or place, made with `/antcraft colony build copy`, loaded from a structure file with `/antcraft colony build load`, or by the colony itself for its mineshaft. Builders claim builds, fetch the blocks from the core, and the colony orders what is missing (including a pickaxe for digging, buckets and flint and steel). They place blocks the way a player would: water and lava are poured from buckets (filled at a source nearby when the core has none) once the blocks the build puts beside and under them stand, so they do not flow out, waterlogged blocks are placed dry and then filled, doors, beds and tall plants go in whole from one item, and fire is lit with flint and steel. Lava is fetched from a source in the colony or beside the mine's dug-out cells, filled from a spot on solid ground where no lava is in, under or next to the bot, such as the rim of a pool; a source with no such spot is skipped. An order for a full bucket, such as `/antcraft colony order minecraft:lava_bucket 1`, is gathered the same way by an idle bot with an empty bucket and stored in the core; with no source in reach the bot stays put and a step waiting on lava stays reported. To reach high blocks they pillar up on scaffold blocks from the core, and take the scaffolding down again before they move on. Blocks a builder placed are protected: no other bot breaks them. Steps the colony cannot do, such as an unbreakable block in the way, a block out of reach, a block with no item (like a portal), fire with nothing to stay on, or a fluid with no bucket and no source nearby, are reported in `colony info` and the colony screen; the builders carry on with the rest, and `/antcraft colony blocked clear` gives up on those steps.
 
-**Blueprints.** The colony keeps a library of buildings it knows: blueprints, loaded with the server's data and again on `/reload`. The mod bundles `antcraft:starter_house`, `antcraft:cobble_step`, `antcraft:warehouse` (a storage building, see Storage below), `antcraft:farm` (a crop farm, see Crops) and `antcraft:cobble_generator` (a cobblestone generator, see below), and a data pack can add more. A blueprint is a file `data/<namespace>/blueprint/<name>.json`, and its id is that of the file (`<namespace>:<name>`):
+**Blueprints.** The colony keeps a library of buildings it knows: blueprints, loaded with the server's data and again on `/reload`. The mod bundles `antcraft:starter_house` (a small house), `antcraft:cobble_step` (a cobblestone step), `antcraft:warehouse` (a storage building, see Storage below), `antcraft:farm` (a crop farm, see Crops) and `antcraft:cobble_generator` (a cobblestone generator, see below), and a data pack can add more. A blueprint is a file `data/<namespace>/blueprint/<name>.json`, and its id is that of the file (`<namespace>:<name>`):
 
 ```json
 {
@@ -118,6 +126,9 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft colony build list` | Numbered list of the colony's builds with the steps left; the mineshaft is labelled |
 | `/antcraft colony build cancel <n>` | Drops build `<n>` from the list (not the mineshaft: move that with `colony mineshaft`) |
 | `/antcraft colony build place <blueprint> <at> [rotation] [mirror]` | Places a blueprint (see Blueprints above), such as `antcraft:starter_house`, for the nearest colony to build, with the lowest corner of the (mirrored and turned) structure at `<at>`; tab completion lists the loaded blueprints. `[rotation]` and `[mirror]` are as for `build load`. Refused, with the reason, for a player who is neither the colony's owner nor trusted, an unknown blueprint, or a site outside the territory or over the core, the mineshaft, another build or blocks builders placed. The colony levels uneven ground under the site first, then builds the structure; both are listed under the blueprint's name and cancelled as a build or project |
+| `/antcraft colony project list` | Numbered list of the colony's projects (the tool kit, the mineshaft, placed blueprints and other builds) with their priority, builds, steps left and what they wait for |
+| `/antcraft colony project cancel <n>` | Drops project `<n>` with its builds (not the mineshaft) |
+| `/antcraft colony project priority <n> <priority>` | Sets the priority of project `<n>`, from -100 to 100 (not the mineshaft); higher goes first |
 | `/antcraft colony terraform <from> <to> <y>` | Levels the box between `<from>` and `<to>` at height `<y>`: bots dig everything above it, fill the holes up to it with dirt, cobblestone, sand or gravel from the core, and fell the trees in it through tree jobs. Ponds and the edge of a river in it are filled from the bank inwards; water above the height builders clear, walling off the water outside the box so it does not flow back in. Lava in it is left alone and reported as blocked. Listed and cancelled as a build |
 | `/antcraft colony blocked clear` | Gives up on the build steps builders reported blocked, and the batches waiting on them |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
@@ -143,7 +154,8 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | M2 | Pathfinding that digs, pillars and bridges; lumberjack role chops trees and deposits logs (done) |
 | M3 | Colony core block with storage and a shared job board; multiple bots claim tasks (done) |
 | M4 | Miner, farmer, hauler and guard roles; hierarchical tasks ("build house" requires "gather 64 logs"); bots craft new bots (done) |
-| M5 | Blueprint builder: load `.nbt` structures / Litematica schematics, compute material lists and build order (in progress: `colony build copy`, loading `.nbt` structures with `colony build load`, placing blueprints with `colony build place`, build plans split into batches for several builders, the mineshaft and `colony terraform` are done; importing Litematica files and material lists for imported structures are left) |
+| M5 | Blueprint builder: load `.nbt` structures / Litematica schematics, compute material lists and build order (in progress: `colony build copy`, loading `.nbt` structures with `colony build load`, build plans split into batches for several builders, fluids poured once their walls stand, the ladder mineshaft and `colony terraform` are done; importing Litematica files and material lists for imported structures are left) |
+| Planner | The player plans, the colony runs the chores (in progress: colony owners and trusted players, a blueprint library with roles, chest spots and work spots, `colony build place`, the Blueprint item with its picker, the placement ghost, ghosts of placed builds that cancel on click, the warehouse, farm and cobblestone generator blueprints, and new colonies that start only the tool kit and mineshaft are done; bots working the cobblestone generator is left) |
 | M6 | AI architect: blueprints designed outside the game (e.g. by an LLM) in a documented JSON format, imported and validated in-game, then built by the colony |
 
 ## Architecture (planned)
@@ -152,6 +164,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 - **Navigation**: custom A* over block costs (walk, dig, place, climb).
 - **Task system**: a colony-wide job board (blackboard pattern). Bots are generalists: each picks the job that suits it best by distance, what it carries and priority. Jobs can spawn sub-jobs.
 - **Colony**: storage, member list, and a goal queue, persisted as world saved data.
+- **Planner**: players place blueprints; a blueprint's role (storage, farm, generator) and its chest and work spots tell the colony how to use the building once it stands. The client draws placement and build ghosts from what the server sends it.
 - **Bot creation**: bots are crafted, not spawned from nothing. A player crafts the first bot; once the colony has the materials, bots can craft and activate new bots themselves, so the colony grows over time.
 - **Combat**: bots defend themselves and the colony against hostile mobs, arming themselves with swords from the core. A patrol job may follow if it turns out to be needed.
 - **Blueprints**: designed outside the game and imported as files. No network or API calls from inside Minecraft.
