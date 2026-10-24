@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.network.chat.Component;
@@ -18,6 +19,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -27,8 +29,11 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * the ground under it first when it is uneven (see {@link Terraform}), then has the colony build the structure there.
  */
 public final class BlueprintPlacement {
-	/** How far below the ground under a site the levelling fills holes from. */
-	static final int FILL_DEPTH = 2;
+	/**
+	 * How far below the layer a site stands on the levelling fills holes from: none, as the structure needs only that layer
+	 * to stand on, and filling deeper would fill the air under thin ground for nothing.
+	 */
+	static final int FILL_DEPTH = 0;
 
 	private BlueprintPlacement() {
 	}
@@ -42,6 +47,8 @@ public final class BlueprintPlacement {
 		UNKNOWN_BLUEPRINT,
 		/** The blueprint names a structure the server does not have. */
 		NO_STRUCTURE,
+		/** The blueprint names a palette its structure does not have. */
+		NO_PALETTE,
 		/** The structure holds nothing to build. */
 		NOTHING_TO_BUILD,
 		/** The site leaves the colony's territory. */
@@ -110,14 +117,33 @@ public final class BlueprintPlacement {
 			return site;
 		}
 		PlacedBlueprint placed = site.right().orElseThrow();
-		Optional<BuildPlan> structure = RegionPlan.load(template.orElseThrow(), at, mirror, rotation, 0);
-		if (structure.isEmpty()) {
-			return Either.left(Refusal.NOTHING_TO_BUILD);
+		Either<Refusal, BuildPlan> structure = structure(template.orElseThrow(), blueprint.orElseThrow(), at, rotation, mirror);
+		if (structure.left().isPresent()) {
+			return Either.left(structure.left().get());
 		}
-		BoundingBox area = placed.area();
+		return Either.right(colony.placeBlueprint(placed, levelling(level::getBlockState, placed.area()), structure.right().orElseThrow()));
+	}
+
+	/**
+	 * The plan that builds {@code blueprint} from {@code template} at {@code at}, mirrored then turned, in the palette the
+	 * blueprint names: refused if the structure has no such palette or nothing to build.
+	 */
+	public static Either<Refusal, BuildPlan> structure(StructureTemplate template, Blueprint blueprint, BlockPos at, Rotation rotation, Mirror mirror) {
+		if (blueprint.palette() >= RegionPlan.paletteCount(template)) {
+			return Either.left(Refusal.NO_PALETTE);
+		}
+		return RegionPlan.load(template, at, mirror, rotation, blueprint.palette())
+			.<Either<Refusal, BuildPlan>>map(Either::right).orElse(Either.left(Refusal.NOTHING_TO_BUILD));
+	}
+
+	/**
+	 * The plan that levels the site {@code area} in {@code world}, or empty if it is level already: everything in the area
+	 * is cleared, and holes in the layer it stands on are filled, down to {@link #FILL_DEPTH} below that layer, so flat ground
+	 * with air or a cave under it needs nothing.
+	 */
+	public static Optional<BuildPlan> levelling(Function<BlockPos, BlockState> world, BoundingBox area) {
 		int ground = area.minY() - 1;
-		Optional<BuildPlan> levelling = Terraform.plan(level::getBlockState, new BlockPos(area.minX(), ground - FILL_DEPTH, area.minZ()),
+		return Terraform.plan(world, new BlockPos(area.minX(), ground - FILL_DEPTH, area.minZ()),
 			new BlockPos(area.maxX(), area.maxY(), area.maxZ()), ground);
-		return Either.right(colony.placeBlueprint(placed, levelling, structure.get()));
 	}
 }

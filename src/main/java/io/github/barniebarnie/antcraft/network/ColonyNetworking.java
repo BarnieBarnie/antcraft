@@ -344,7 +344,8 @@ public final class ColonyNetworking {
 	 */
 	public static BlueprintBlocksReply blocks(MinecraftServer server, BlueprintBlocksRequest request) {
 		return new BlueprintBlocksReply(Blueprints.get(request.blueprint())
-			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), server.getStructureTemplateManager().get(blueprint.structure())).sendable())
+			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), server.getStructureTemplateManager().get(blueprint.structure()), blueprint.palette())
+				.sendable())
 			.orElse(new BlueprintBlocks(request.blueprint(), Vec3i.ZERO, List.of())));
 	}
 

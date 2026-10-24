@@ -577,9 +577,14 @@ public final class AntCraftCommands {
 		if (colony.isEmpty()) {
 			return 0;
 		}
-		int count = colony.get().clearBlocked();
-		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.cleared", count), false);
-		return count;
+		Colony.Cleared cleared = colony.get().clearBlocked();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.cleared", cleared.steps()), false);
+		for (PlacedBlueprint placed : cleared.unlevelled()) {
+			BlockPos at = placed.at();
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.unlevelled", placed.displayName(),
+				at.getX(), at.getY(), at.getZ()), false);
+		}
+		return cleared.steps();
 	}
 
 	private static int cancelBuild(CommandSourceStack source, int n) {

@@ -61,7 +61,7 @@ class BlueprintSummaryTest {
 	}
 
 	private static BlueprintBlocks bundledBlocks(String name) throws IOException {
-		return BlueprintBlocks.of(id(name), Optional.of(VanillaData.structure(blueprint(name).structure().getPath())));
+		return BlueprintBlocks.of(id(name), Optional.of(VanillaData.structure(blueprint(name).structure().getPath())), blueprint(name).palette());
 	}
 
 	private static RegistryFriendlyByteBuf buffer() {
@@ -106,7 +106,7 @@ class BlueprintSummaryTest {
 			Optional.empty());
 		assertEquals(Vec3i.ZERO, missing.size());
 		assertEquals(Map.of(), missing.materials());
-		assertEquals(new BlueprintBlocks(id("lost"), Vec3i.ZERO, List.of()), BlueprintBlocks.of(id("lost"), Optional.empty()));
+		assertEquals(new BlueprintBlocks(id("lost"), Vec3i.ZERO, List.of()), BlueprintBlocks.of(id("lost"), Optional.empty(), 0));
 	}
 
 	/** A cube of {@code side} filled with {@code kinds} different block states, none air. */

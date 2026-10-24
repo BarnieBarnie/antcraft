@@ -673,6 +673,10 @@ public class Colony {
 			if (placed.finished() || project.isEmpty()) {
 				continue;
 			}
+			if (placed.waiting().isPresent() && !this.givenUpBatches(id, this.builds.get(id)).isEmpty()) {
+				// The levelling was given up: the structure does not start on an unlevelled site, and goes with the project.
+				continue;
+			}
 			if (placed.waiting().isPresent()) {
 				UUID structure = UUID.randomUUID();
 				this.builds.put(structure, withoutOverlaps(placed.waiting().get()));
@@ -1323,10 +1327,23 @@ public class Colony {
 	}
 
 	/**
-	 * Gives up on every blocked step, the batches they are in and the batches that need those, for good. The rest of
-	 * their plans goes on; a plan with nothing else left is dropped. Returns how many steps there were.
+	 * What {@link #clearBlocked} gave up on.
+	 *
+	 * @param steps how many blocked steps there were
+	 * @param unlevelled the placed blueprints whose site levelling was given up, dropped rather than built on an unlevelled site
 	 */
-	public int clearBlocked() {
+	public record Cleared(int steps, List<PlacedBlueprint> unlevelled) {
+		public Cleared {
+			unlevelled = List.copyOf(unlevelled);
+		}
+	}
+
+	/**
+	 * Gives up on every blocked step, the batches they are in and the batches that need those, for good. The rest of
+	 * their plans goes on; a plan with nothing else left is dropped. A placed blueprint whose site levelling is given up
+	 * is dropped with its project, so it is not built on an unlevelled site; the player may place it again.
+	 */
+	public Cleared clearBlocked() {
 		int count = this.blockedSteps.size();
 		Set<UUID> plans = new HashSet<>();
 		for (Blocked blocked : this.blockedSteps) {
@@ -1338,10 +1355,14 @@ public class Colony {
 		this.blockedSteps.clear();
 		// Their steps are no longer kept open.
 		plans.forEach(this.stepSets::remove);
-		plans.stream().filter(id -> this.isFinished(id, this.builds.get(id))).toList().forEach(this::finishPlan);
+		List<PlacedBlueprint> unlevelled = this.blueprints.stream().filter(placed -> !placed.finished() && placed.waiting().isPresent()
+			&& this.projects.stream().anyMatch(project -> project.id().equals(placed.project()) && project.plans().stream().anyMatch(plans::contains)))
+			.toList();
+		unlevelled.forEach(placed -> this.cancelProject(placed.project()));
+		plans.stream().filter(this.builds::containsKey).filter(id -> this.isFinished(id, this.builds.get(id))).toList().forEach(this::finishPlan);
 		this.postBuildJobs();
 		this.lastSurvey = -1;
-		return count;
+		return new Cleared(count, unlevelled);
 	}
 
 	private List<Placed> placed() {

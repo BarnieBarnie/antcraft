@@ -1,11 +1,14 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Terraform;
@@ -13,6 +16,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -186,5 +197,118 @@ class BlueprintPlacementTest {
 		assertEquals(List.of(), colony.blueprints());
 		// The site is free again.
 		assertTrue(site(colony, AT).right().isPresent());
+	}
+
+	/** A 2x1x1 template with two palettes: cobblestone and oak planks in palette 0, stone and spruce planks in palette 1. */
+	private static StructureTemplate twoPalettes() {
+		ListTag palettes = new ListTag();
+		for (List<BlockState> palette : List.of(List.of(Blocks.COBBLESTONE.defaultBlockState(), Blocks.OAK_PLANKS.defaultBlockState()),
+				List.of(Blocks.STONE.defaultBlockState(), Blocks.SPRUCE_PLANKS.defaultBlockState()))) {
+			ListTag states = new ListTag();
+			palette.forEach(state -> states.add(NbtUtils.writeBlockState(state)));
+			palettes.add(states);
+		}
+		ListTag blocks = new ListTag();
+		for (int x = 0; x < 2; x++) {
+			CompoundTag block = new CompoundTag();
+			block.put("pos", ints(x, 0, 0));
+			block.putInt("state", x);
+			blocks.add(block);
+		}
+		CompoundTag tag = new CompoundTag();
+		tag.put("size", ints(2, 1, 1));
+		tag.put("palettes", palettes);
+		tag.put("blocks", blocks);
+		tag.put("entities", new ListTag());
+		StructureTemplate template = new StructureTemplate();
+		template.load(BuiltInRegistries.BLOCK, tag);
+		return template;
+	}
+
+	private static ListTag ints(int... values) {
+		ListTag list = new ListTag();
+		for (int value : values) {
+			list.add(IntTag.valueOf(value));
+		}
+		return list;
+	}
+
+	private static Blueprint withPalette(int palette) {
+		return new Blueprint(HUT, "blueprint.antcraft.hut", Optional.empty(), List.of(), List.of(), palette);
+	}
+
+	@Test
+	void aBlueprintWithAPaletteOtherThanZeroPlacesThatPalette() {
+		BuildPlan plan = BlueprintPlacement.structure(twoPalettes(), withPalette(1), AT, Rotation.NONE, Mirror.NONE).right().orElseThrow();
+		assertEquals(List.of(Blocks.STONE.defaultBlockState(), Blocks.SPRUCE_PLANKS.defaultBlockState()),
+			plan.steps().stream().map(BuildPlan.Step::state).toList());
+		assertEquals(List.of(AT, AT.east()), plan.steps().stream().map(BuildPlan.Step::pos).toList());
+		BuildPlan first = BlueprintPlacement.structure(twoPalettes(), withPalette(0), AT, Rotation.NONE, Mirror.NONE).right().orElseThrow();
+		assertEquals(List.of(Blocks.COBBLESTONE.defaultBlockState(), Blocks.OAK_PLANKS.defaultBlockState()),
+			first.steps().stream().map(BuildPlan.Step::state).toList());
+	}
+
+	@Test
+	void aBlueprintWithAPaletteItsStructureLacksIsRefused() {
+		assertEquals(Optional.of(BlueprintPlacement.Refusal.NO_PALETTE),
+			BlueprintPlacement.structure(twoPalettes(), withPalette(2), AT, Rotation.NONE, Mirror.NONE).left());
+	}
+
+	@Test
+	void theGhostShowsTheBlueprintsPalette() {
+		assertEquals(List.of(new BlueprintSummary.Block(BlockPos.ZERO, Blocks.STONE.defaultBlockState()),
+				new BlueprintSummary.Block(new BlockPos(1, 0, 0), Blocks.SPRUCE_PLANKS.defaultBlockState())),
+			BlueprintBlocks.of(HUT, Optional.of(twoPalettes()), 1).blocks());
+		assertEquals(List.of(), BlueprintBlocks.of(HUT, Optional.of(twoPalettes()), 2).blocks());
+	}
+
+	/** Stone at {@code ground}, but at {@code holes}; air everywhere else, above and below, as over a cave or the game test floor. */
+	private static Function<BlockPos, BlockState> floor(int ground, List<BlockPos> holes) {
+		return pos -> pos.getY() == ground && !holes.contains(pos) ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState();
+	}
+
+	@Test
+	void aSiteOnAFlatFloorWithAirBelowIsNotLevelled() {
+		BoundingBox area = new BoundingBox(8, 64, 8, 10, 65, 11);
+		assertEquals(Optional.empty(), BlueprintPlacement.levelling(floor(63, List.of()), area));
+	}
+
+	@Test
+	void theLevellingFillsOnlyTheGroundTheStructureStandsOn() {
+		BoundingBox area = new BoundingBox(8, 64, 8, 10, 65, 11);
+		BlockPos hole = new BlockPos(9, 63, 9);
+		BuildPlan plan = BlueprintPlacement.levelling(floor(63, List.of(hole)), area).orElseThrow();
+		// Only the hole in the layer under the structure, not the air below it.
+		assertEquals(List.of(Terraform.fill(hole)), plan.steps());
+		assertEquals(0, BlueprintPlacement.FILL_DEPTH);
+	}
+
+	@Test
+	void givingUpTheLevellingDropsThePlacementRatherThanBuildOnAnUnlevelledSite() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, levelling(AT));
+		colony.postBuildJobs();
+		Job job = colony.board().jobs().stream().filter(j -> j.isOpen() && colony.build(j.id()).isPresent()).findFirst().orElseThrow();
+		BuildPlan.Step step = colony.build(job.id()).orElseThrow().steps().getFirst();
+		colony.reportBlocked(job.id(), List.of(step.pos()));
+
+		Colony.Cleared cleared = colony.clearBlocked();
+		assertEquals(1, cleared.steps());
+		assertEquals(List.of(placed), cleared.unlevelled());
+		finishAll(colony);
+		assertFalse(colony.builds().stream().anyMatch(plan -> plan.kind() == BuildPlan.Kind.BUILD), "structure started: " + colony.builds());
+		assertEquals(List.of(), colony.blueprints());
+		assertTrue(colony.projects().stream().noneMatch(project -> project.id().equals(placed.project())), "project left: " + colony.projects());
+	}
+
+	@Test
+	void givingUpABlockedStepOfTheStructureKeepsThePlacement() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Optional.empty());
+		colony.postBuildJobs();
+		Job job = colony.board().jobs().stream().filter(j -> j.isOpen() && colony.build(j.id()).isPresent()).findFirst().orElseThrow();
+		colony.reportBlocked(job.id(), List.of(AT));
+		assertEquals(List.of(), colony.clearBlocked().unlevelled());
+		assertEquals(List.of(placed.project()), colony.blueprints().stream().map(PlacedBlueprint::project).toList());
 	}
 }

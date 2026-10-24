@@ -18,7 +18,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 /**
  * The blocks of a blueprint's structure, which a client asks for when it previews the blueprint
  * ({@link io.github.barniebarnie.antcraft.network.ColonyNetworking.BlueprintBlocksRequest}) rather than getting those of
- * every blueprint with the list. The blocks are the structure's own (palette 0), relative to its origin, unturned, without
+ * every blueprint with the list. The blocks are the structure's own, of the palette the blueprint builds, relative to its origin, unturned, without
  * air and inside its size, kept in layer order (by y, then z, then x); turn them with
  * {@link io.github.barniebarnie.antcraft.work.RegionPlan#placed} and {@link BlockState#mirror}/{@link BlockState#rotate}
  * as a placement does.
@@ -73,11 +73,14 @@ public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.B
 		blocks = blocks.stream().filter(block -> inside(size, block.pos())).sorted(LAYER_ORDER).toList();
 	}
 
-	/** The blocks of {@code template} other than air, or none when the server does not have the structure. */
-	public static BlueprintBlocks of(Identifier id, Optional<StructureTemplate> template) {
+	/**
+	 * The blocks of palette {@code palette} of {@code template} other than air, or none when the server does not have the
+	 * structure or the structure has no such palette.
+	 */
+	public static BlueprintBlocks of(Identifier id, Optional<StructureTemplate> template, int palette) {
 		Vec3i size = template.map(StructureTemplate::getSize).orElse(Vec3i.ZERO);
-		List<BlueprintSummary.Block> blocks = template.filter(structure -> !structure.palettes.isEmpty())
-			.map(structure -> structure.palettes.getFirst().blocks().stream()
+		List<BlueprintSummary.Block> blocks = template.filter(structure -> palette >= 0 && palette < structure.palettes.size())
+			.map(structure -> structure.palettes.get(palette).blocks().stream()
 				.filter(info -> !info.state().isAir())
 				.map(info -> new BlueprintSummary.Block(info.pos(), info.state()))
 				.toList())

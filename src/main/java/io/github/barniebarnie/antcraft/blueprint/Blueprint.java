@@ -25,19 +25,26 @@ import net.minecraft.world.level.block.Rotation;
  * @param role what the colony uses it for, if anything
  * @param chests where its chests stand
  * @param workSpots blocks a bot stands on or works at, such as farm plots or a generator's mining block
+ * @param palette which of the structure's palettes (block variants, as {@code colony build load} takes) it builds, 0 if not given
  */
-public record Blueprint(Identifier structure, String name, Optional<Role> role, List<BlockPos> chests, List<BlockPos> workSpots) {
+public record Blueprint(Identifier structure, String name, Optional<Role> role, List<BlockPos> chests, List<BlockPos> workSpots, int palette) {
 	public static final Codec<Blueprint> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Identifier.CODEC.fieldOf("structure").forGetter(Blueprint::structure),
 		Codec.STRING.fieldOf("name").forGetter(Blueprint::name),
 		Role.CODEC.optionalFieldOf("role").forGetter(Blueprint::role),
 		BlockPos.CODEC.listOf().optionalFieldOf("chests", List.of()).forGetter(Blueprint::chests),
-		BlockPos.CODEC.listOf().optionalFieldOf("work_spots", List.of()).forGetter(Blueprint::workSpots)
+		BlockPos.CODEC.listOf().optionalFieldOf("work_spots", List.of()).forGetter(Blueprint::workSpots),
+		Codec.intRange(0, Integer.MAX_VALUE).optionalFieldOf("palette", 0).forGetter(Blueprint::palette)
 	).apply(instance, Blueprint::new));
 
 	public Blueprint {
 		chests = List.copyOf(chests);
 		workSpots = List.copyOf(workSpots);
+	}
+
+	/** A blueprint that builds its structure's first palette. */
+	public Blueprint(Identifier structure, String name, Optional<Role> role, List<BlockPos> chests, List<BlockPos> workSpots) {
+		this(structure, name, role, chests, workSpots, 0);
 	}
 
 	/** Reads a blueprint file; an error names what is wrong, such as a missing field or an unknown role. */

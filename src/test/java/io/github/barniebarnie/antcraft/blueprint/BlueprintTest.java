@@ -64,7 +64,8 @@ class BlueprintTest {
 				"name": "blueprint.antcraft.farm_plot",
 				"role": "farm",
 				"chests": [[0, 1, 0]],
-				"work_spots": [[1, 1, 2], [2, 1, 2]]
+				"work_spots": [[1, 1, 2], [2, 1, 2]],
+				"palette": 2
 			}
 			""").getOrThrow();
 		assertEquals(id("farm_plot"), blueprint.structure());
@@ -72,6 +73,12 @@ class BlueprintTest {
 		assertEquals(Optional.of(Blueprint.Role.FARM), blueprint.role());
 		assertEquals(List.of(new BlockPos(0, 1, 0)), blueprint.chests());
 		assertEquals(List.of(new BlockPos(1, 1, 2), new BlockPos(2, 1, 2)), blueprint.workSpots());
+		assertEquals(2, blueprint.palette());
+	}
+
+	@Test
+	void aNegativePaletteFails() {
+		assertTrue(parse("{\"structure\": \"antcraft:x\", \"name\": \"n\", \"palette\": -1}").isError());
 	}
 
 	@Test
@@ -82,6 +89,7 @@ class BlueprintTest {
 		assertEquals(Optional.empty(), blueprint.role());
 		assertEquals(List.of(), blueprint.chests());
 		assertEquals(List.of(), blueprint.workSpots());
+		assertEquals(0, blueprint.palette());
 	}
 
 	@Test
@@ -121,7 +129,7 @@ class BlueprintTest {
 	@Test
 	void encodesBackToTheSameBlueprint() {
 		Blueprint blueprint = new Blueprint(id("x"), "n", Optional.of(Blueprint.Role.GENERATOR),
-			List.of(new BlockPos(1, 0, 0)), List.of(new BlockPos(0, 0, 2)));
+			List.of(new BlockPos(1, 0, 0)), List.of(new BlockPos(0, 0, 2)), 1);
 		JsonElement json = Blueprint.CODEC.encodeStart(JsonOps.INSTANCE, blueprint).getOrThrow();
 		assertTrue(json.getAsJsonObject().has("work_spots"), json.toString());
 		assertEquals(blueprint, Blueprint.parse(json).getOrThrow());

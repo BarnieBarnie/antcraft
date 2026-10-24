@@ -81,7 +81,7 @@ public record BlueprintSummary(Identifier id, String name, Optional<Blueprint.Ro
 
 	/** The summary of {@code blueprint}, with the size and materials of {@code template} if the server has its structure. */
 	public static BlueprintSummary of(Identifier id, Blueprint blueprint, Optional<StructureTemplate> template) {
-		return of(id, blueprint, BlueprintBlocks.of(id, template));
+		return of(id, blueprint, BlueprintBlocks.of(id, template, blueprint.palette()));
 	}
 
 	/** The summary of {@code blueprint}, whose structure has {@code blocks}. */

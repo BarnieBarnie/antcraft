@@ -491,7 +491,7 @@ class ColonyTest {
 	void clearingBlockedStepsGivesUpTheirPlans() {
 		Colony colony = colony();
 		blockedPlan(colony, BuildPlan.Step.clear(PLACED));
-		assertEquals(1, colony.clearBlocked());
+		assertEquals(1, colony.clearBlocked().steps());
 		colony.recheckBlocked(world(Blocks.AIR), (batch, step) -> true);
 		colony.postBuildJobs();
 		assertTrue(colony.blockedSteps().isEmpty());
@@ -596,7 +596,7 @@ class ColonyTest {
 		colony.postBuildJobs();
 		assertTrue(colony.keepOpen().test(new BlockPos(1, 64, 1)));
 		colony.reportBlocked(batchJob(colony, plan, 0).id(), List.of(new BlockPos(1, 64, 1)));
-		assertEquals(1, colony.clearBlocked());
+		assertEquals(1, colony.clearBlocked().steps());
 		colony.recheckBlocked(world(Blocks.AIR), (batch, step) -> true);
 		colony.postBuildJobs();
 

@@ -251,6 +251,38 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The cobble_step blueprint placed on a stone floor one block thick with air under it: the site is flat, so the
+	 * colony builds the structure at once, without levelling. With a hole in the floor, only that hole is filled, not the
+	 * air below it.
+	 */
+	@GameTest(maxTicks = 5)
+	public void aBlueprintOnAFlatFloorWithAirBelowIsNotLevelled(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		// A stone floor one block thick, with air under it in place of the test platform's barrier.
+		for (int x = 3; x <= 6; x++) {
+			for (int z = 3; z <= 7; z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+				for (int y = -3; y <= -1; y++) {
+					helper.setBlock(x, y, z, Blocks.AIR);
+				}
+			}
+		}
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> flat = BlueprintPlacement.place(helper.getLevel(), colony, true, COBBLE_STEP,
+			helper.absolutePos(new BlockPos(4, 1, 4)), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(flat.right().isPresent(), "not placed: " + flat.left());
+		helper.assertValueEqual(colony.builds().stream().map(BuildPlan::kind).toList(), List.of(BuildPlan.Kind.BUILD), "builds on flat ground");
+
+		helper.setBlock(5, 0, 6, Blocks.AIR);
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> holed = BlueprintPlacement.place(helper.getLevel(), colony, true, COBBLE_STEP,
+			helper.absolutePos(new BlockPos(4, 1, 6)), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(holed.right().isPresent(), "not placed: " + holed.left());
+		BuildPlan levelling = colony.builds().stream().filter(plan -> plan.kind() == BuildPlan.Kind.TERRAFORM).findFirst().orElseThrow();
+		helper.assertValueEqual(levelling.steps().stream().map(BuildPlan.Step::pos).toList(), List.of(helper.absolutePos(new BlockPos(5, 0, 6))),
+			"levelling steps");
+		helper.succeed();
+	}
+
 	/** Only the colony's owner and the players it trusts may place blueprints for it; the client's request is checked like the command. */
 	@GameTest(maxTicks = 5)
 	public void aPlayerWhoIsNotOwnerOrTrustedCannotPlaceABlueprint(GameTestHelper helper) {
