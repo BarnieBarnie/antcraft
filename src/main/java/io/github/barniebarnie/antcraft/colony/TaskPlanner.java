@@ -83,7 +83,43 @@ public final class TaskPlanner {
 	 */
 	static final int EXPANSION_BUDGET = 20_000;
 
+	/** How many plans made lately are kept (see {@link #plan}). */
+	static final int KEPT_PLANS = 256;
+	/** The plans made lately, the least recently used first. */
+	private static final Map<PlanKey, Plan<?>> KEPT = new LinkedHashMap<>(KEPT_PLANS, 0.75f, true) {
+		@Override
+		protected boolean removeEldestEntry(Map.Entry<PlanKey, Plan<?>> eldest) {
+			return this.size() > KEPT_PLANS;
+		}
+	};
+
+	/** What a plan is made from; the recipe book and gatherables compare as their own objects do, by identity unless they say otherwise. */
+	private record PlanKey(Object item, int count, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable) {
+	}
+
+	/**
+	 * How to get {@code count} of {@code item} from {@code stock}: what to craft in which order, and what to gather.
+	 * Many bots plan the same orders from the same stock, such as every hauler asking what the core keeps for them, so the
+	 * last {@link #KEPT_PLANS} plans are kept and a plan for the same item, count, stock, recipe book and gatherables is
+	 * not searched for again. A book must not change its recipes once it has planned.
+	 */
+	@SuppressWarnings("unchecked")
 	public static <I> Plan<I> plan(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
+		PlanKey key = new PlanKey(item, count, Map.copyOf(stock), book, gatherable);
+		synchronized (KEPT) {
+			Plan<?> kept = KEPT.get(key);
+			if (kept != null) {
+				return (Plan<I>) kept;
+			}
+		}
+		Plan<I> plan = search(item, count, stock, book, gatherable);
+		synchronized (KEPT) {
+			KEPT.put(key, plan);
+		}
+		return plan;
+	}
+
+	private static <I> Plan<I> search(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		State<I> state = new State<>(new HashMap<>(stock));
 		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0}).need(state, item, count, new HashSet<>(), true);
 		// Map.copyOf would iterate in an order that differs between runs.

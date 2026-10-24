@@ -32,6 +32,8 @@ public class LevelWorldView implements WorldView {
 	private final SimpleContainer inventory;
 	private final ItemStack hand;
 	private final Set<BlockPos> keep;
+	/** The level's blocks, looked up fast (see {@link LoadedBlocks}). */
+	private final LoadedBlocks blocks;
 	/** Where colonies want no scaffold, looked up once per view, the first time a path asks. */
 	private @Nullable Predicate<BlockPos> keepOpen;
 	/** Ground colonies level, looked up once per view, the first time a path asks. */
@@ -45,6 +47,7 @@ public class LevelWorldView implements WorldView {
 		this.inventory = inventory;
 		this.hand = hand;
 		this.keep = keep;
+		this.blocks = new LoadedBlocks(level);
 	}
 
 	/**
@@ -68,20 +71,20 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean isPassable(BlockPos pos) {
-		BlockState state = this.level.getBlockState(pos);
+		BlockState state = this.blocks.get(pos);
 		return state.getCollisionShape(this.level, pos).isEmpty() && state.getFluidState().isEmpty();
 	}
 
 	@Override
 	public boolean canStandOn(BlockPos pos) {
-		BlockState state = this.level.getBlockState(pos);
+		BlockState state = this.blocks.get(pos);
 		// Farmland is a little lower than a full block, and a stair half a block lower at the front, but both are walkable.
 		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.is(Blocks.FARMLAND) || state.getBlock() instanceof StairBlock;
 	}
 
 	@Override
 	public boolean stairUp(BlockPos pos, Direction dir) {
-		return stairUp(this.level.getBlockState(pos), dir);
+		return stairUp(this.blocks.get(pos), dir);
 	}
 
 	/**
@@ -102,7 +105,7 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean canOpen(BlockPos pos, Direction dir) {
-		return canOpen(this.level.getBlockState(pos), dir);
+		return canOpen(this.blocks.get(pos), dir);
 	}
 
 	/**
@@ -131,9 +134,9 @@ public class LevelWorldView implements WorldView {
 	 */
 	@Override
 	public boolean isClimbable(BlockPos pos) {
-		BlockState state = this.level.getBlockState(pos);
+		BlockState state = this.blocks.get(pos);
 		if (isHatch(state)) {
-			BlockState below = this.level.getBlockState(pos.below());
+			BlockState below = this.blocks.get(pos.below());
 			return below.is(Blocks.LADDER) && below.getValue(LadderBlock.FACING) == state.getValue(TrapDoorBlock.FACING);
 		}
 		return state.is(BlockTags.CLIMBABLE);
@@ -141,12 +144,12 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean isBedrock(BlockPos pos) {
-		return this.level.getBlockState(pos).is(Blocks.BEDROCK);
+		return this.blocks.get(pos).is(Blocks.BEDROCK);
 	}
 
 	@Override
 	public boolean isHazard(BlockPos pos) {
-		BlockState state = this.level.getBlockState(pos);
+		BlockState state = this.blocks.get(pos);
 		return !state.getFluidState().isEmpty()
 			|| state.is(BlockTags.FIRE)
 			|| state.is(Blocks.MAGMA_BLOCK)
@@ -161,13 +164,13 @@ public class LevelWorldView implements WorldView {
 	/** Water a bot can swim through: no collision box, and not a bubble column, which drags it along. */
 	@Override
 	public boolean isWater(BlockPos pos) {
-		BlockState state = this.level.getBlockState(pos);
+		BlockState state = this.blocks.get(pos);
 		return state.getFluidState().is(FluidTags.WATER) && !state.is(Blocks.BUBBLE_COLUMN) && state.getCollisionShape(this.level, pos).isEmpty();
 	}
 
 	@Override
 	public float breakTicks(BlockPos pos) {
-		BlockState state = this.level.getBlockState(pos);
+		BlockState state = this.blocks.get(pos);
 		// Leave containers, other block entities, blocks the caller keeps, what colony builders built, ground a colony
 		// levels and what players build with alone.
 		if (state.hasBlockEntity() || this.keep.contains(pos) || ColonyManager.isProtected(this.level, pos) || isBuilt(state)) {

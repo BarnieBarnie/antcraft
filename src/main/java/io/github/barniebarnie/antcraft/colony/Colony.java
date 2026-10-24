@@ -41,6 +41,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
+import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.OreRevisit;
 import io.github.barniebarnie.antcraft.work.Quarry;
@@ -319,6 +320,13 @@ public class Colony {
 	private final OreRevisit oreRevisit = new OreRevisit();
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
+	/** What {@link #orderPlans} planned last, and from what; not saved. */
+	private @Nullable OrderPlans orderPlans;
+
+	/** The open orders, the stock and the recipes {@link #orderPlans} planned from, and what it planned. */
+	private record OrderPlans(Map<Item, Integer> orders, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
+		Map<Item, TaskPlanner.Plan<Item>> plans) {
+	}
 	/** Whether {@link #lookUpFluids} ran since the colony was loaded. */
 	private boolean fluidsLookedUp;
 	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
@@ -1838,6 +1846,27 @@ public class Colony {
 	/** Items to craft, with how many are still to be made. */
 	public Map<Item, Integer> orders() {
 		return this.orders;
+	}
+
+	/**
+	 * The plan of each open order (see {@link TaskPlanner#plan}) from {@code stock}, each without the item it is for, as
+	 * what the core holds of that is not counted toward it. Every idle bot asks whether each open craft job is ready, which
+	 * takes these plans, so they are planned once for as long as the orders, the stock and the recipes are the same.
+	 */
+	public Map<Item, TaskPlanner.Plan<Item>> orderPlans(Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book) {
+		OrderPlans last = this.orderPlans;
+		if (last != null && last.book() == book && last.orders().equals(this.orders) && last.stock().equals(stock)) {
+			return last.plans();
+		}
+		Map<Item, TaskPlanner.Plan<Item>> plans = new LinkedHashMap<>();
+		for (Map.Entry<Item, Integer> order : this.orders.entrySet()) {
+			Map<Item, Integer> without = new HashMap<>(stock);
+			without.remove(order.getKey());
+			plans.put(order.getKey(), TaskPlanner.plan(order.getKey(), order.getValue(), without, book, Gatherables::isGatherable));
+		}
+		Map<Item, TaskPlanner.Plan<Item>> planned = Collections.unmodifiableMap(plans);
+		this.orderPlans = new OrderPlans(new LinkedHashMap<>(this.orders), new HashMap<>(stock), book, planned);
+		return planned;
 	}
 
 	public void addOrder(Item item, int count) {

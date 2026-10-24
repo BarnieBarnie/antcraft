@@ -6,9 +6,11 @@ import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.LevelTreeView;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import java.lang.reflect.Method;
@@ -95,6 +97,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getWalkTarget() == null, "still walking, at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			helper.assertTrue(bot.blockPosition().distManhattan(target) <= 1, "stopped at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 		});
+	}
+
+	/**
+	 * Path searches and colony surveys read blocks through {@link LoadedBlocks}: the blocks of loaded chunks as the level
+	 * has them, and nothing of a chunk that is not loaded, which stays unloaded, rather than holding up the tick loading it.
+	 */
+	@GameTest(maxTicks = 5)
+	public void loadedBlocksReadsLoadedChunksOnlyAndLoadsNone(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		helper.setBlock(2, 1, 2, Blocks.OAK_LOG);
+		LoadedBlocks blocks = new LoadedBlocks(level);
+		for (BlockPos pos : List.of(new BlockPos(2, 1, 2), new BlockPos(2, 0, 2), new BlockPos(5, 3, 5))) {
+			BlockPos at = helper.absolutePos(pos);
+			helper.assertValueEqual(blocks.loaded(at), level.getBlockState(at), "state at " + pos.toShortString());
+			helper.assertValueEqual(blocks.get(at), level.getBlockState(at), "state got at " + pos.toShortString());
+		}
+		BlockPos far = helper.absolutePos(new BlockPos(2, 1, 2)).offset(200_000, 0, 200_000);
+		int x = SectionPos.blockToSectionCoord(far.getX());
+		int z = SectionPos.blockToSectionCoord(far.getZ());
+		helper.assertFalse(level.hasChunk(x, z), "the far chunk is loaded already");
+		helper.assertTrue(blocks.loaded(far) == null, "a state for a chunk that is not loaded");
+		helper.assertFalse(new LevelTreeView(level).isLog(far), "a log in a chunk that is not loaded");
+		helper.assertFalse(level.hasChunk(x, z), "the far chunk was loaded");
+		helper.succeed();
 	}
 
 	@GameTest(maxTicks = 100)

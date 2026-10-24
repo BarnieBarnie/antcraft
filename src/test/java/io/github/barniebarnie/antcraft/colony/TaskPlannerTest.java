@@ -45,6 +45,35 @@ class TaskPlannerTest {
 		return plan.crafts().stream().map(c -> c.recipe().output()).toList();
 	}
 
+	/**
+	 * Many bots plan the same orders from the same stock, such as every hauler asking what the core keeps for them; a
+	 * plan made lately for the same item, count, stock, recipes and gatherables is not searched for again.
+	 */
+	@Test
+	void aPlanMadeLatelyFromTheSameStockIsNotSearchedForAgain() {
+		int[] lookups = {0};
+		TaskPlanner.RecipeBook<String> counting = item -> {
+			lookups[0]++;
+			return BOOK.recipesFor(item);
+		};
+		Predicate<String> gatherable = GATHERABLE::contains;
+		Map<String, Integer> stock = new HashMap<>(Map.of("oak_log", 2));
+		TaskPlanner.Plan<String> first = TaskPlanner.plan("wooden_pickaxe", 1, stock, counting, gatherable);
+		int searched = lookups[0];
+		assertTrue(searched > 0);
+
+		assertEquals(first, TaskPlanner.plan("wooden_pickaxe", 1, new HashMap<>(Map.of("oak_log", 2)), counting, gatherable));
+		assertEquals(searched, lookups[0], "searched again for the same plan");
+		// The stock the first plan was made from changes after: the plan is not taken for it.
+		stock.put("oak_log", 0);
+		TaskPlanner.Plan<String> none = TaskPlanner.plan("wooden_pickaxe", 1, stock, counting, gatherable);
+		assertTrue(lookups[0] > searched, "not searched for other stock");
+		assertEquals(plan("wooden_pickaxe", 1, Map.of("oak_log", 0)), none);
+		int after = lookups[0];
+		TaskPlanner.plan("wooden_pickaxe", 2, stock, counting, gatherable);
+		assertTrue(lookups[0] > after, "not searched for another count");
+	}
+
 	@Test
 	void nothingToDoWhenInStock() {
 		TaskPlanner.Plan<String> plan = plan("stick", 4, Map.of("stick", 10));

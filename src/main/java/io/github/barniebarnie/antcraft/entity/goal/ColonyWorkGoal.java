@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
@@ -89,12 +90,14 @@ public abstract class ColonyWorkGoal {
 		if (!colony.mineCells().contains(feet)) {
 			return;
 		}
+		long begin = TickProfiler.SERVER.begin();
 		for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-LAVA_SIGHT, -LAVA_SIGHT, -LAVA_SIGHT), feet.offset(LAVA_SIGHT, LAVA_SIGHT, LAVA_SIGHT))) {
 			FluidState fluid = level.getFluidState(pos);
 			if (fluid.isSource() && fluid.is(FluidTags.LAVA) && !colony.seenLava().contains(pos) && LineOfSight.sees(level, feet, pos, p -> false)) {
 				colony.sawLava(pos);
 			}
 		}
+		TickProfiler.SERVER.end("lava.look", begin);
 	}
 
 	/**

@@ -3,6 +3,7 @@
 	"package": "io.github.barniebarnie.antcraft.gametest.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"server": [
+		"BenchmarkSelectionMixin",
 		"GameTestSelectionMixin"
 	],
 	"injectors": {

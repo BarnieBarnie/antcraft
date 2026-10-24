@@ -9,6 +9,8 @@ import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
 import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
+import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
@@ -206,11 +208,13 @@ public class ColonyManager extends SavedData {
 		BlockPos core = colony.core();
 		int r = colony.radius();
 		Territory territory = Territory.of(colony);
+		LoadedBlocks blocks = new LoadedBlocks(level);
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -CROP_SCAN_HEIGHT, -r), core.offset(r, CROP_SCAN_HEIGHT, r))) {
 			if (!territory.contains(pos)) {
 				continue;
 			}
-			if (Farming.isRipe(level.getBlockState(pos))) {
+			BlockState state = blocks.loaded(pos);
+			if (state != null && Farming.isRipe(state)) {
 				colony.board().post(JobType.HARVEST_CROP, pos);
 			}
 		}
@@ -485,10 +489,19 @@ public class ColonyManager extends SavedData {
 		return logs;
 	}
 
+	/**
+	 * Whether a colony last surveyed at {@code lastSurvey} (-1 for never) is due for its survey at {@code now}: every
+	 * {@link #SURVEY_INTERVAL} ticks, while its core is {@code loaded}. The survey looks at the blocks of its territory,
+	 * which would load or generate the chunks of a colony the players left far behind, holding up the tick each time.
+	 */
+	static boolean surveyDue(long lastSurvey, long now, boolean loaded) {
+		return loaded && (lastSurvey < 0 || now - lastSurvey >= SURVEY_INTERVAL);
+	}
+
 	public void tick(ServerLevel level) {
 		long now = level.getGameTime();
 		for (Colony colony : this.colonies.values()) {
-			if (colony.lastSurvey >= 0 && now - colony.lastSurvey < SURVEY_INTERVAL) {
+			if (!surveyDue(colony.lastSurvey, now, level.isLoaded(colony.core()))) {
 				continue;
 			}
 			colony.lastSurvey = now;
@@ -500,8 +513,11 @@ public class ColonyManager extends SavedData {
 			// A block of a finished batch broken since, such as a torch off the mineshaft stairs, is built again.
 			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			// A built farm's water or generator's water and lava gone since is poured back.
+			long fluids = TickProfiler.SERVER.begin();
 			colony.lookUpFluids(placed -> structure(level, placed));
-			if (colony.restoreFluids(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null)) {
+			boolean draining = colony.restoreFluids(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
+			TickProfiler.SERVER.end("survey.fluids", fluids);
+			if (draining) {
 				// The next stage of a generator's restore waits only for its water to drain.
 				colony.lastSurvey = now - SURVEY_INTERVAL + DRAIN_TICKS;
 			}
@@ -511,22 +527,23 @@ public class ColonyManager extends SavedData {
 			// Replanted since, or built over.
 			colony.board().removeOpenIf(job -> job.type() == JobType.REPLANT
 				&& job.blocks().stream().noneMatch(spot -> Replanting.isPlantable(level, spot)));
-			this.surveyCrops(level, colony);
+			TickProfiler.time("survey.crops", () -> this.surveyCrops(level, colony));
 			Map<Item, Integer> held = Storage.held(level, colony);
 			Map<Item, Integer> have = new HashMap<>(held);
 			// Builds first, so the mine sees the build jobs open now (see surveyMine).
-			List<TreeScanner.Tree> nearby = trees(colony, trees);
-			this.surveyBuilds(level, colony, have, nearby);
-			this.surveyMine(level, colony, held);
+			List<TreeScanner.Tree> nearby = TickProfiler.time("survey.treeScan", () -> trees(colony, trees));
+			TickProfiler.time("survey.builds", () -> this.surveyBuilds(level, colony, have, nearby));
+			TickProfiler.time("survey.mine", () -> this.surveyMine(level, colony, held));
 			// After the mine, so the shaft is picked first and its branch jobs close the quarry.
 			boolean shortOfCobblestone = Storage.wanted(level, colony).test(Items.COBBLESTONE);
 			colony.updateQuarry(shortOfCobblestone && colony.generatorMiningBlocks().isEmpty(), level::getBlockState, pos -> isWorkable(level, colony, pos));
 			colony.postGeneratorJobs(shortOfCobblestone);
 			this.surveyStorage(level, colony, have);
-			this.surveyStock(level, colony);
-			this.surveyCoreJobs(level, colony);
-			this.surveyTrees(level, colony, nearby);
-			colony.prioritizeGatherJobs(Storage.held(level, colony), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable);
+			TickProfiler.time("survey.stock", () -> this.surveyStock(level, colony));
+			TickProfiler.time("survey.coreJobs", () -> this.surveyCoreJobs(level, colony));
+			TickProfiler.time("survey.trees", () -> this.surveyTrees(level, colony, nearby));
+			TickProfiler.time("survey.gatherJobs",
+				() -> colony.prioritizeGatherJobs(Storage.held(level, colony), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
 		}
 	}
 }

@@ -65,12 +65,23 @@ fabricApi {
 // Several patterns, comma-separated, run the union (GameTestSelectionMixin in src/gametest);
 // a pattern that matches no test fails the run. Without the property every game test runs.
 def gameTestFilter = providers.gradleProperty("gameTest")
+// The bot benchmark (BenchmarkGameTest) is manual-only, so every other run leaves it out:
+// ./gradlew runGameTest -Pbenchmark runs it alone (with -PgameTest, whatever that selects, benchmark included).
+def benchmark = providers.gradleProperty("benchmark")
 tasks.matching { it.name == "runGameTest" }.configureEach {
 	// Only warnings, failures and AntCraft's own lines, so build/check.log stays small.
 	// log4j2.configurationFile wins over the log4j.configurationFile that Loom's launch config sets.
 	jvmArgs "-Dlog4j2.configurationFile=${file('src/gametest/log4j2.xml')}"
+	if (benchmark.isPresent()) {
+		jvmArgs "-Dantcraft.benchmark=true"
+		// A fresh world, so colonies of earlier runs, saved with it, do not run along and runs compare.
+		def world = file('build/run/gameTest/world')
+		doFirst { world.deleteDir() }
+	}
 	if (gameTestFilter.isPresent()) {
 		jvmArgs "-Dfabric-api.gametest.filter=${gameTestFilter.get()}"
+	} else if (benchmark.isPresent()) {
+		jvmArgs "-Dfabric-api.gametest.filter=antcraft-gametest:benchmark_game_test*"
 	}
 }
 

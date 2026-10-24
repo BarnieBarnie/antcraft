@@ -14,6 +14,7 @@ import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
 import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -162,6 +163,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	@Override
 	public void tick() {
+		long begin = TickProfiler.SERVER.begin();
+		this.botTick();
+		TickProfiler.SERVER.end("bot.tick", begin);
+	}
+
+	private void botTick() {
 		if (this.level() instanceof ServerLevel level) {
 			// Bots on a server that has not opted in stand still instead of being deleted,
 			// so enabling the mod again later restores them.

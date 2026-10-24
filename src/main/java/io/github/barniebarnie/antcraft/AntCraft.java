@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -33,7 +34,10 @@ public class AntCraft implements ModInitializer {
 		AntCraftCommands.register();
 		Blueprints.register();
 		ColonyNetworking.register();
-		ServerTickEvents.END_LEVEL_TICK.register(level -> ColonyManager.get(level).tick(level));
+		ServerTickEvents.END_LEVEL_TICK.register(level -> TickProfiler.time("colony.survey", () -> ColonyManager.get(level).tick(level)));
+		// The whole server tick, around the ghosts sent at its end (ColonyNetworking registers first).
+		ServerTickEvents.START_SERVER_TICK.register(server -> TickProfiler.SERVER.startTick());
+		ServerTickEvents.END_SERVER_TICK.register(server -> TickProfiler.SERVER.endTick());
 		LOGGER.info("AntCraft loaded");
 	}
 }

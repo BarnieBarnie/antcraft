@@ -21,6 +21,7 @@ import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
@@ -72,6 +73,7 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * /antcraft status
+ * /antcraft profile start|stop|report   (server tick time, per part of the bots' and colonies' work)
  * /antcraft goto &lt;pos&gt; [bots]   (defaults to the nearest bot)
  * /antcraft stop [bots]
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
@@ -113,6 +115,10 @@ public final class AntCraftCommands {
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(AntCraftCommands::operatorOrPlayer)
 			.then(Commands.literal("status").requires(OPERATOR).executes(AntCraftCommands::status))
+			.then(Commands.literal("profile").requires(OPERATOR)
+				.then(Commands.literal("start").executes(ctx -> profile(ctx.getSource(), true)))
+				.then(Commands.literal("stop").executes(ctx -> profile(ctx.getSource(), false)))
+				.then(Commands.literal("report").executes(ctx -> profileReport(ctx.getSource()))))
 			.then(Commands.literal("goto").requires(OPERATOR)
 				.then(Commands.argument("pos", BlockPosArgument.blockPos())
 					.executes(ctx -> walkTo(ctx, nearestBot(ctx.getSource())))
@@ -782,6 +788,24 @@ public final class AntCraftCommands {
 		source.sendSuccess(() -> Component.translatable(
 			"commands.antcraft.status", allowed ? "enabled" : "disabled", count, AntCraftConfig.maxBotsPerLevel()), false);
 		return count;
+	}
+
+	/** Starts the tick profiler afresh, or stops it, keeping what it measured for the report. */
+	private static int profile(CommandSourceStack source, boolean start) {
+		if (start) {
+			TickProfiler.SERVER.start();
+		} else {
+			TickProfiler.SERVER.stop();
+		}
+		source.sendSuccess(() -> Component.translatable(start ? "commands.antcraft.profile.start" : "commands.antcraft.profile.stop"), false);
+		return 1;
+	}
+
+	/** What the tick profiler measured: the average and worst server tick, then each part, the costliest first. */
+	private static int profileReport(CommandSourceStack source) {
+		TickProfiler.Report report = TickProfiler.SERVER.report();
+		report.lines().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
+		return (int) report.ticks();
 	}
 
 	private static int walkTo(CommandContext<CommandSourceStack> ctx, List<AntBot> bots) {

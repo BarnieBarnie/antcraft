@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.colony.JobBoard;
 import io.github.barniebarnie.antcraft.colony.JobScore;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayDeque;
@@ -172,7 +173,9 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return false;
 		}
 		this.nextCheck = level.getGameTime() + CHECK_TICKS;
+		long begin = TickProfiler.SERVER.begin();
 		this.busy = this.colony(level).map(colony -> this.nextOrUpkeep(level, colony)).orElse(false);
+		TickProfiler.SERVER.end("bot.findWork", begin);
 		return this.busy;
 	}
 
@@ -227,7 +230,9 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 					return;
 				}
 			}
+			long begin = TickProfiler.SERVER.begin();
 			this.busy = this.upkeep.upkeep(level, colony.get()) || this.startUpkeep(level, colony.get());
+			TickProfiler.SERVER.end("bot.upkeep", begin);
 			return;
 		}
 		if (this.job != null && this.lostTool(level, colony.get())) {
@@ -235,13 +240,19 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			return;
 		}
 		if (this.active != null) {
+			long begin = TickProfiler.SERVER.begin();
 			this.busy = this.active.work(level);
+			if (TickProfiler.SERVER.running()) {
+				TickProfiler.SERVER.end("bot.work." + this.active.getClass().getSimpleName(), begin);
+			}
 			this.active.takeOutcome().ifPresent(outcome -> this.report(level, colony.get(), outcome));
 		} else {
 			this.busy = false;
 		}
 		if (!this.busy) {
+			long begin = TickProfiler.SERVER.begin();
 			this.busy = this.nextOrUpkeep(level, colony.get());
+			TickProfiler.SERVER.end("bot.findWork", begin);
 		}
 	}
 
@@ -367,9 +378,11 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 				// (whose executor takes it down at its end) may come first.
 				boolean scaffoldUp = !this.bot.getScaffold().isEmpty();
 				JobScore score = this.score(level, colony);
+				long begin = TickProfiler.SERVER.begin();
 				Optional<Job> best = board.best(now, open -> (!scaffoldUp || CLEARS_SCAFFOLD.contains(open.type()) && open.id().equals(this.interrupted) || onLedge(this.bot, open)
 						|| this.executors.get(open.type()).keepsScaffoldFor(open))
-					&& this.executors.get(open.type()).isReady(level, colony, open), score);
+					&& this.isReady(level, colony, open), score);
+				TickProfiler.SERVER.end("bot.jobChoice", begin);
 				if (best.isEmpty()) {
 					return false;
 				}
@@ -392,6 +405,16 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 			}
 			board.complete(held.get().id());
 		}
+	}
+
+	/** Whether the executor of {@code job} could start on it now, timed per job type while profiling. */
+	private boolean isReady(ServerLevel level, Colony colony, Job job) {
+		long begin = TickProfiler.SERVER.begin();
+		boolean ready = this.executors.get(job.type()).isReady(level, colony, job);
+		if (TickProfiler.SERVER.running()) {
+			TickProfiler.SERVER.end("bot.isReady." + job.type().getSerializedName(), begin);
+		}
+		return ready;
 	}
 
 	/**

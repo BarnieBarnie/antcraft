@@ -5,9 +5,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A* over block positions for a 1x2 bot. Positions are feet positions. Costs are
@@ -63,61 +65,143 @@ public final class PathFinder {
 	 * Only a goal that {@link Goal#mayEndAfloat may end afloat} is reached swimming at the surface too, and
 	 * a path to one breaks a block only where there is no way without: the bot swims out rather than dig down
 	 * into the bank, but digs in to water with none at the surface to swim in, such as a pond under a lid.
+	 * {@code live} must not change during the search (see {@link CachedWorldView}).
 	 */
-	public static Path find(WorldView world, BlockPos start, Goal goal, Options options) {
-		if (goal.mayEndAfloat() && options.canBreak()) {
-			// ponytail: a second search where the first finds no way; one search with a cost per break if it shows in profiles.
-			Path swim = search(world, start, goal, new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop()));
-			if (swim.complete()) {
-				return swim;
-			}
+	public static Path find(WorldView live, BlockPos start, Goal goal, Options options) {
+		Search search = search(live, start, goal, options);
+		while (search.path().isEmpty()) {
+			search.run(Integer.MAX_VALUE);
 		}
-		return search(world, start, goal, options);
+		return search.path().get();
 	}
 
-	private static Path search(WorldView world, BlockPos start, Goal goal, Options options) {
-		Planner planner = new Planner(world, options, goal);
-		Map<BlockPos, Double> bestCost = new HashMap<>();
-		PriorityQueue<Entry> open = new PriorityQueue<>((a, b) -> Double.compare(a.priority, b.priority));
+	/**
+	 * The search {@link #find} runs, to run a slice of nodes at a time (see {@link Search#run}), such as when bots share
+	 * each tick's nodes (see {@link PathBudget}). {@code live} must not change while it runs, as {@link CachedWorldView}
+	 * remembers its answers: between ticks it may, and the path then holds what the world was as the search started.
+	 */
+	public static Search search(WorldView live, BlockPos start, Goal goal, Options options) {
+		return new Search(new CachedWorldView(live), start, goal, options);
+	}
 
-		Node startNode = new Node(start, 0, null, null);
-		open.add(new Entry(startNode, goal.heuristic(start)));
-		bestCost.put(start, 0.0);
-		Node closest = startNode;
-		double closestHeuristic = goal.heuristic(start);
-		boolean closestInWater = world.isWater(start);
-		int expanded = 0;
+	/**
+	 * A search for a path, run a slice of nodes at a time until it has found one (see {@link #find}). For a goal that may
+	 * end afloat and a bot that may break blocks, a search without breaking first, and only where it finds no way, one
+	 * with.
+	 */
+	// ponytail: a second search where the first finds no way; one search with a cost per break if it shows in profiles.
+	public static final class Search {
+		private final WorldView world;
+		private final BlockPos start;
+		private final Goal goal;
+		private final Options options;
+		private Phase phase;
+		/** Whether {@link #phase} is the search without breaking, to be followed by one with. */
+		private boolean swimFirst;
+		/** The nodes the searches before {@link #phase} expanded. */
+		private int expandedBefore;
+		private @Nullable Path path;
 
-		while (!open.isEmpty() && expanded < options.maxNodes()) {
-			Node node = open.poll().node;
-			if (node.cost > bestCost.getOrDefault(node.pos, BLOCKED)) {
-				continue; // stale queue entry
-			}
-			boolean inWater = world.isWater(node.pos);
-			// Afloat in water whose cover the path broke, such as a pond under a lid it dug into, counts as at the surface.
-			boolean afloat = planner.swimmable(node.pos) || inWater && brokenOnTheWay(node, node.pos.above());
-			if ((!inWater && !planner.hanging(node.pos) || goal.mayEndAfloat() && afloat) && goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
-				return toPath(start, node, true);
-			}
-			expanded++;
+		private Search(WorldView world, BlockPos start, Goal goal, Options options) {
+			this.world = world;
+			this.start = start;
+			this.goal = goal;
+			this.options = options;
+			this.swimFirst = goal.mayEndAfloat() && options.canBreak();
+			this.phase = new Phase(world, start, goal,
+				this.swimFirst ? new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop()) : options);
+		}
 
-			double h = goal.heuristic(node.pos);
-			if (closestInWater && !inWater || inWater == closestInWater && h < closestHeuristic) {
-				closest = node;
-				closestHeuristic = h;
-				closestInWater = inWater;
-			}
+		/** The path, once the search has found it: a complete one, or one toward the goal once it ran out of nodes. */
+		public Optional<Path> path() {
+			return Optional.ofNullable(this.path);
+		}
 
-			for (Candidate move : planner.moves(node)) {
-				double cost = node.cost + move.cost;
-				if (cost < bestCost.getOrDefault(move.step.to(), BLOCKED)) {
-					bestCost.put(move.step.to(), cost);
-					Node next = new Node(move.step.to(), cost, node, move.step);
-					open.add(new Entry(next, cost + goal.heuristic(next.pos)));
+		/** Expands up to {@code nodes} more nodes. Returns how many it expanded. */
+		public int run(int nodes) {
+			int expanded = 0;
+			while (this.path == null && expanded < nodes) {
+				int before = this.phase.expanded;
+				Path found = this.phase.run(nodes - expanded);
+				expanded += this.phase.expanded - before;
+				if (found == null) {
+					continue;
+				}
+				if (this.swimFirst && !found.complete()) {
+					this.swimFirst = false;
+					this.expandedBefore = found.expanded();
+					this.phase = new Phase(this.world, this.start, this.goal, this.options);
+				} else {
+					this.path = new Path(found.start(), found.steps(), found.complete(), found.cost(), this.expandedBefore + found.expanded());
 				}
 			}
+			return expanded;
 		}
-		return toPath(start, closest, false);
+	}
+
+	/** One A* search, run a slice at a time. */
+	private static final class Phase {
+		private final WorldView world;
+		private final BlockPos start;
+		private final Goal goal;
+		private final Options options;
+		private final Planner planner;
+		private final Map<BlockPos, Double> bestCost = new HashMap<>();
+		private final PriorityQueue<Entry> open = new PriorityQueue<>((a, b) -> Double.compare(a.priority, b.priority));
+		private Node closest;
+		private double closestHeuristic;
+		private boolean closestInWater;
+		private int expanded;
+
+		Phase(WorldView world, BlockPos start, Goal goal, Options options) {
+			this.world = world;
+			this.start = start;
+			this.goal = goal;
+			this.options = options;
+			this.planner = new Planner(world, options, goal);
+			Node startNode = new Node(start, 0, null, null);
+			this.open.add(new Entry(startNode, goal.heuristic(start)));
+			this.bestCost.put(start, 0.0);
+			this.closest = startNode;
+			this.closestHeuristic = goal.heuristic(start);
+			this.closestInWater = world.isWater(start);
+		}
+
+		/** Expands up to {@code nodes} more nodes; the path once found or out of nodes, else null. */
+		@Nullable Path run(int nodes) {
+			int limit = this.expanded + Math.min(nodes, this.options.maxNodes() - this.expanded);
+			while (!this.open.isEmpty() && this.expanded < limit) {
+				Node node = this.open.poll().node;
+				if (node.cost > this.bestCost.getOrDefault(node.pos, BLOCKED)) {
+					continue; // stale queue entry
+				}
+				boolean inWater = this.world.isWater(node.pos);
+				// Afloat in water whose cover the path broke, such as a pond under a lid it dug into, counts as at the surface.
+				boolean afloat = this.planner.swimmable(node.pos) || inWater && brokenOnTheWay(node, node.pos.above());
+				if ((!inWater && !this.planner.hanging(node.pos) || this.goal.mayEndAfloat() && afloat)
+						&& this.goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
+					return toPath(this.start, node, true, this.expanded);
+				}
+				this.expanded++;
+
+				double h = this.goal.heuristic(node.pos);
+				if (this.closestInWater && !inWater || inWater == this.closestInWater && h < this.closestHeuristic) {
+					this.closest = node;
+					this.closestHeuristic = h;
+					this.closestInWater = inWater;
+				}
+
+				for (Candidate move : this.planner.moves(node)) {
+					double cost = node.cost + move.cost;
+					if (cost < this.bestCost.getOrDefault(move.step.to(), BLOCKED)) {
+						this.bestCost.put(move.step.to(), cost);
+						Node next = new Node(move.step.to(), cost, node, move.step);
+						this.open.add(new Entry(next, cost + this.goal.heuristic(next.pos)));
+					}
+				}
+			}
+			return this.open.isEmpty() || this.expanded >= this.options.maxNodes() ? toPath(this.start, this.closest, false, this.expanded) : null;
+		}
 	}
 
 	/** Whether the path to {@code node} broke {@code pos} and left it broken, so a goal's sight sees through it. */
@@ -134,13 +218,13 @@ public final class PathFinder {
 		return false;
 	}
 
-	private static Path toPath(BlockPos start, Node end, boolean complete) {
+	private static Path toPath(BlockPos start, Node end, boolean complete, int expanded) {
 		List<Step> steps = new ArrayList<>();
 		for (Node n = end; n.step != null; n = n.parent) {
 			steps.add(n.step);
 		}
 		Collections.reverse(steps);
-		return new Path(start, List.copyOf(steps), complete, end.cost);
+		return new Path(start, List.copyOf(steps), complete, end.cost, expanded);
 	}
 
 	private record Candidate(Step step, double cost) {

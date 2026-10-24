@@ -28,6 +28,7 @@ Game tests run on a dedicated server, so they enable bots with `AntCraftConfig.s
 ./gradlew build         # compile + both test suites
 ./gradlew testIsolated  # unit tests, one JVM per class, catches bootstrap-order bugs; CI runs build and this
 ./gradlew runClient     # play-test manually
+./gradlew runGameTest -Pbenchmark   # the 30-bot benchmark only (manual-only, left out of every other run); logs average and worst tick time
 scripts/nightly.sh      # every game test twice on origin/main, files an issue per failing test (systemd timer at 03:00)
 ```
 
@@ -38,6 +39,7 @@ scripts/check.sh                                                     # build
 scripts/check.sh test                                                # unit tests
 scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
 scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*,antcraft-gametest:builder_game_test*'
+scripts/check.sh runGameTest -Pbenchmark                             # then: grep -A30 'Benchmark:' build/check.log
 ```
 
 Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case>`, so `-PgameTest` takes a pattern such as `antcraft-gametest:miner_game_test*` for one class or the full id for one test. Patterns are globs (`*`, `?`); separate several with commas (no spaces) to run the tests of several classes in one run. A one-letter word inside a method name loses its underscore (`buildsACopy` is `builds_acopy`, not `builds_a_copy`), so to run one test, match part of its id, such as `antcraft-gametest:builder_game_test*fluid_wall*`. A pattern that matches no test fails the run. Without it, every game test runs.

@@ -33,6 +33,42 @@ class PathFinderTest {
 		assertEquals(new BlockPos(5, 1, 0), path.end());
 	}
 
+	/** A path says how many nodes its search expanded, which the per-tick pathfinding budget counts (see PathBudget). */
+	@Test
+	void aPathTellsHowManyNodesItsSearchExpanded() {
+		// Walled in: the search gives up once it has expanded its nodes.
+		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 3, 2, 10, '#');
+		Path stuck = find(world, new BlockPos(6, 1, 0), new PathFinder.Options(false, false, 50, 3));
+		assertFalse(stuck.complete());
+		assertEquals(50, stuck.expanded());
+		Path straight = find(GridWorld.flat(10), new BlockPos(2, 1, 0), WALK_ONLY);
+		assertTrue(straight.expanded() >= 2 && straight.expanded() < 50, "expanded " + straight.expanded());
+	}
+
+	/**
+	 * A search run a slice of nodes at a time, as bots share each tick's nodes (see PathBudget), expands no more than
+	 * each slice and finds the path a search run at once does, also for a goal that may end afloat (two searches).
+	 */
+	@Test
+	void aSearchRunInSlicesFindsThePathASearchRunAtOnceFinds() {
+		GridWorld world = GridWorld.flat(12).fill(3, 1, -5, 3, 2, 5, '#').fill(-4, 0, -4, -2, 0, -2, 'W');
+		for (Goal goal : List.of(new Goal.Block(new BlockPos(8, 1, 0)), new Goal.Block(new BlockPos(3, 1, 0)), new Goal.Afloat(new Goal.Near(new BlockPos(-3, 0, -3), 0)))) {
+			Path whole = PathFinder.find(world, START, goal, FULL);
+			PathFinder.Search search = PathFinder.search(world, START, goal, FULL);
+			int slices = 0;
+			while (search.path().isEmpty()) {
+				int expanded = search.run(7);
+				assertTrue(expanded <= 7, "expanded " + expanded + " in a slice of 7");
+				slices++;
+			}
+			Path sliced = search.path().orElseThrow();
+			assertTrue(slices > 1, "found in one slice");
+			assertEquals(whole.steps(), sliced.steps());
+			assertEquals(whole.complete(), sliced.complete());
+			assertEquals(whole.expanded(), sliced.expanded());
+		}
+	}
+
 	@Test
 	void alreadyAtGoalGivesEmptyCompletePath() {
 		Path path = find(GridWorld.flat(5), START, WALK_ONLY);

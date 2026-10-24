@@ -6,10 +6,13 @@ import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.MoveType;
 import io.github.barniebarnie.antcraft.pathing.Path;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.pathing.Step;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -67,6 +70,10 @@ public class PathFollower {
 	private final AntBot bot;
 	private @Nullable Goal goal;
 	private @Nullable Path path;
+	/** The search for the next path, while it waits for nodes (see {@link PathBudget}). */
+	private PathFinder.@Nullable Search search;
+	/** The world {@link #search} plans in. */
+	private @Nullable LevelWorldView searchWorld;
 	private int stepIndex;
 	private int stepTicks;
 	private int stepBudget;
@@ -113,6 +120,8 @@ public class PathFollower {
 		this.breaker.reset();
 		this.goal = null;
 		this.path = null;
+		this.search = null;
+		this.searchWorld = null;
 		this.bot.setShiftKeyDown(false);
 	}
 
@@ -124,6 +133,13 @@ public class PathFollower {
 		if (this.goal.isReached(feet) && (this.bot.onGround() || this.goal.mayEndAfloat() && this.bot.isInWater())) {
 			this.stop();
 			return Status.ARRIVED;
+		}
+		if (this.search != null) {
+			if (!this.search(level)) {
+				this.stop();
+				return Status.FAILED;
+			}
+			return Status.RUNNING;
 		}
 		if (this.path != null && this.path.complete() && this.stepIndex >= this.path.steps().size() && this.goal.isReached(feet)
 				&& ++this.stepTicks <= this.stepBudget) {
@@ -198,6 +214,10 @@ public class PathFollower {
 		return Status.RUNNING;
 	}
 
+	/**
+	 * Plans a new path, unless the bot made no progress on the last {@link #MAX_REPLANS_WITHOUT_PROGRESS}. Returns false
+	 * when it gives up or finds no way at all; the search may go on over the next ticks (see {@link #search}).
+	 */
 	private boolean replan() {
 		if (this.replansWithoutProgress++ >= MAX_REPLANS_WITHOUT_PROGRESS) {
 			return false;
@@ -207,11 +227,36 @@ public class PathFollower {
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level))
 			.from(this.bot.blockPosition());
 		PathFinder.Options options = new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
-		this.path = PathFinder.find(world, this.bot.blockPosition(), this.goal, options);
+		this.path = null;
+		this.search = PathFinder.search(world, this.bot.blockPosition(), this.goal, options);
+		this.searchWorld = world;
+		return this.search(level);
+	}
+
+	/**
+	 * Runs the search begun for as many nodes as this tick has left for paths (see {@link PathBudget}): with many bots
+	 * planning at once, the bot waits where it stands for the next tick's. Once found, follows the path. Returns false
+	 * when the search found no way at all.
+	 */
+	private boolean search(ServerLevel level) {
+		PathFinder.Search search = this.search;
+		LevelWorldView world = this.searchWorld;
+		long tick = level.getServer().getTickCount();
+		int nodes = PathBudget.SERVER.available(tick);
+		if (search == null || world == null || nodes <= 0) {
+			return true;
+		}
+		PathBudget.SERVER.spend(tick, TickProfiler.time("path.find", () -> search.run(nodes)));
+		Optional<Path> found = search.path();
+		if (found.isEmpty()) {
+			return true;
+		}
+		this.search = null;
+		this.path = found.get();
 		this.stepIndex = 0;
 		this.stepTicks = 0;
 		this.stepBudget = this.budgetFor(world);
-		return !this.path.steps().isEmpty() || this.goal.isReached(this.bot.blockPosition());
+		return !this.path.steps().isEmpty() || this.goal == null || this.goal.isReached(this.bot.blockPosition());
 	}
 
 	/**

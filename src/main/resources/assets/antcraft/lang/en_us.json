@@ -9,6 +9,8 @@
 	"commands.antcraft.status": "AntCraft is %s. Bots in this dimension: %s / %s",
 	"commands.antcraft.goto": "Sent %s bot(s) to %s",
 	"commands.antcraft.stop": "Stopped %s bot(s)",
+	"commands.antcraft.profile.start": "Profiling server ticks; /antcraft profile report shows where the time goes",
+	"commands.antcraft.profile.stop": "Stopped profiling; /antcraft profile report shows what was measured",
 	"commands.antcraft.no_bots": "No bots found",
 	"block.antcraft.colony_core": "Colony Core",
 	"commands.antcraft.colony.none": "No colony within %s blocks",

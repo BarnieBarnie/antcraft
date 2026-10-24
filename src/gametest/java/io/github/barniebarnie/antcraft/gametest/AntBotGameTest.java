@@ -4,14 +4,17 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.monster.Creeper;
@@ -120,6 +123,31 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		bot.kill(helper.getLevel());
 
 		helper.succeedWhen(() -> helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(3, 1, 3), 2.0));
+	}
+
+	/**
+	 * An operator's {@code /antcraft profile start} measures server ticks and the bots' parts of them until {@code stop};
+	 * a player who is not an operator may not use it.
+	 */
+	@GameTest(maxTicks = 20)
+	public void profileCommandMeasuresServerTicksForOperatorsOnly(GameTestHelper helper) {
+		MinecraftServer server = helper.getLevel().getServer();
+		CommandSourceStack operator = server.createCommandSourceStack().withLevel(helper.getLevel()).withSuppressedOutput();
+		CommandSourceStack player = helper.makeMockServerPlayerInLevel().createCommandSourceStack().withSuppressedOutput();
+		helper.assertFalse(server.getCommands().getDispatcher().getRoot().getChild("antcraft").getChild("profile").canUse(player),
+			"non-operator player may use /antcraft profile");
+		helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		server.getCommands().performPrefixedCommand(operator, "antcraft profile start");
+		helper.assertTrue(TickProfiler.SERVER.running(), "profiler not started");
+		helper.runAfterDelay(5, () -> {
+			TickProfiler.Report report = TickProfiler.SERVER.report();
+			helper.assertTrue(report.ticks() >= 4, "measured " + report.ticks() + " ticks");
+			helper.assertTrue(report.parts().stream().anyMatch(part -> part.name().equals("bot.tick")), "no bot ticks in " + report.lines());
+			server.getCommands().performPrefixedCommand(operator, "antcraft profile report");
+			server.getCommands().performPrefixedCommand(operator, "antcraft profile stop");
+			helper.assertFalse(TickProfiler.SERVER.running(), "profiler not stopped");
+			helper.succeed();
+		});
 	}
 
 	@GameTest(maxTicks = 20)

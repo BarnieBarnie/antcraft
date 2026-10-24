@@ -14,7 +14,6 @@ import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -208,21 +207,16 @@ public class CrafterGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	public static Map<Item, TaskPlanner.Plan<Item>> orderPlans(ServerLevel level, Colony colony, Container core) {
 		GameRecipeBook book = GameRecipeBook.of(level.getServer());
 		AbstractFurnaceBlockEntity furnace = Storage.colonyFurnace(level, colony.core());
-		Map<Item, TaskPlanner.Plan<Item>> plans = new LinkedHashMap<>();
-		for (Map.Entry<Item, Integer> order : colony.orders().entrySet()) {
-			Map<Item, Integer> stock = Storage.stock(core);
-			if (furnace != null) {
-				for (int slot : new int[] {FURNACE_INPUT, FURNACE_FUEL, FURNACE_RESULT}) {
-					ItemStack stack = furnace.getItem(slot);
-					if (!stack.isEmpty()) {
-						stock.merge(stack.getItem(), stack.getCount(), Integer::sum);
-					}
+		Map<Item, Integer> stock = Storage.stock(core);
+		if (furnace != null) {
+			for (int slot : new int[] {FURNACE_INPUT, FURNACE_FUEL, FURNACE_RESULT}) {
+				ItemStack stack = furnace.getItem(slot);
+				if (!stack.isEmpty()) {
+					stock.merge(stack.getItem(), stack.getCount(), Integer::sum);
 				}
 			}
-			stock.remove(order.getKey());
-			plans.put(order.getKey(), TaskPlanner.plan(order.getKey(), order.getValue(), stock, book, Gatherables::isGatherable));
 		}
-		return plans;
+		return colony.orderPlans(stock, book);
 	}
 
 	/**

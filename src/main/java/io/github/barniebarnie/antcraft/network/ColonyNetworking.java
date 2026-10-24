@@ -16,6 +16,7 @@ import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -346,7 +347,7 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(CancelBuild.TYPE, CancelBuild.STREAM_CODEC);
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
 			if (server.getTickCount() % GHOST_INTERVAL == 0) {
-				server.getPlayerList().getPlayers().forEach(player -> sendGhosts(player, false));
+				TickProfiler.time("ghosts", () -> server.getPlayerList().getPlayers().forEach(player -> sendGhosts(player, false)));
 			}
 		});
 		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> SENT_GHOSTS.remove(handler.getPlayer().getUUID()));

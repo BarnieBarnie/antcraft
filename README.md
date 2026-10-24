@@ -113,6 +113,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft status` | Shows whether bots are enabled, and the bot count |
 | `/antcraft goto <pos> [bots]` | Sends bots to a position. Without `[bots]`, the nearest bot within 64 blocks |
 | `/antcraft stop [bots]` | Cancels the walk target |
+| `/antcraft profile start\|stop\|report` | Measures where server tick time goes: `start` forgets what was measured and starts, `stop` stops, `report` lists the ticks measured with their average and worst time, then each part of the bots' and colonies' work (pathfinding `path.find`, a bot's job choice `bot.jobChoice` and its ready checks per job type `bot.isReady.<job>`, its work per kind `bot.work.<goal>`, work between jobs `bot.upkeep`, a colony's survey `colony.survey` and its parts `survey.*`, the lava look-out `lava.look`, the build ghosts sent to players `ghosts`) with its time per tick, worst tick and calls, the costliest first. Parts nest, such as pathfinding inside a bot's work, so they do not add up to the tick |
 | `/antcraft colony info` | Members, idle members and jobs, the owner and trusted players, each bot with its current job, for each order what is still to gather or missing, blocked build steps and trees given up on |
 | `/antcraft colony trust <player> [colony]` | Lets a player change the colony as its owner can. The colony's owner may run this, `untrust` and `trust list` without operator rights; trusted players may change the colony but not whom it trusts. Acts on the nearest colony within 64 blocks that you may trust (your own, or any for operators), so another player's colony nearer does not get in the way, or on the colony whose core is at `[colony]` (within 64 blocks), to pick one of two colonies close together; a named colony you may not trust is refused |
 | `/antcraft colony untrust <player> [colony]` | Takes that back |
@@ -135,6 +136,8 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft colony terraform <from> <to> <y>` | Levels the box between `<from>` and `<to>` at height `<y>`: bots dig everything above it, fill the holes up to it with dirt, cobblestone, sand or gravel from the core, and fell the trees in it through tree jobs. Ponds and the edge of a river in it are filled from the bank inwards; water above the height builders clear, walling off the water outside the box so it does not flow back in. Lava in it is left alone and reported as blocked. Listed and cancelled as a build |
 | `/antcraft colony blocked clear` | Gives up on the build steps builders reported blocked, and the batches waiting on them. A placed blueprint whose site levelling is given up is dropped, and named, rather than built on an unlevelled site |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
+
+**Server load:** a colony of 30 bots keeps well within the server's 50 ms a tick (see the bot benchmark under Development). All bots together expand at most 2000 path nodes a tick (`PathBudget`): a bot whose path search runs out of them waits where it stands and goes on with it the next tick, so many bots planning at once, such as each failing to reach an item no bot can get to, spread their searches over several ticks rather than stall one. A search asks the world about each block once, and reads blocks from the loaded chunks without asking the chunk source each time. A colony whose core is in an unloaded chunk, such as one the players left far behind, is not surveyed until its core is loaded again, and the survey's crop and tree scans skip unloaded chunks rather than load them. Plans for orders are kept while the orders and the stock they are planned from stay the same, so every idle bot asking whether a craft job is ready, and every hauler asking what the core keeps, does not plan them anew.
 
 **Colony screen:** press `K` near a colony to see its bots with their current jobs, jobs, stock, orders and builds, blocked build steps and trees given up on. The screen can also change the colony without commands: order items or cancel your part of an order (orders the colony placed itself stay), set or remove stock targets, and change the radius. Those edits only change the colony's data, so they work, on the screen and with the matching `/antcraft colony order|cancel|stock|radius` commands, even where bots are not enabled; commands that command bots (`goto`, `stop`) need bots enabled. The screen shows the colony's owner and trusted players. The server checks every request, reads as well as changes: the owner and trusted players may view and change their colony from anywhere within 64 blocks of it, and operators any colony, or only operators with `colonyActionsRequireOp=true`; anyone else gets "no colony" (the screen shows the nearest colony they may use). A colony saved before colonies had owners has none yet: anyone within 64 blocks may use it, and the first to open the screen there claims it. The `/antcraft` commands, including `colony info`, stay operator-only either way, except `colony trust`, `colony trust list` and `colony untrust`, which the colony's owner may also use (unless `colonyActionsRequireOp=true`).
 
@@ -185,6 +188,15 @@ Requires JDK 25.
 ```
 
 Development is test-first. See [CLAUDE.md](CLAUDE.md) for the workflow.
+
+The bot benchmark (`BenchmarkGameTest`) runs a colony of 30 bots in a 48x48 area for 3600 ticks of mixed work: felling trees, building a farm and a warehouse, digging the mineshaft and mining it, harvesting a wheat field, crafting and hauling, with a player watching. It logs the average and worst server tick and where the time went (as `/antcraft profile report` does), and fails if the average tick reaches 50 ms. The layout and ores are fixed and the world is deleted first, so runs compare, though the bots' choices and the machine's load still vary from run to run. It is left out of every other game test run:
+
+```sh
+./gradlew runGameTest -Pbenchmark          # or: scripts/check.sh runGameTest -Pbenchmark
+grep -A30 'Benchmark:' build/check.log      # the report, when run through scripts/check.sh
+```
+
+The game test server runs ticks back to back rather than 20 a second, so the 3600 ticks take well under a minute.
 
 The bot skins, one per kind of job (see `BotSkins`), are drawn by `tools/skins.py` (needs Pillow). To add or tweak a skin, edit its entry in `SKINS` and regenerate them all:
 
