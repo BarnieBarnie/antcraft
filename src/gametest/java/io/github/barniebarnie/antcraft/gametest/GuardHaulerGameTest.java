@@ -1,9 +1,13 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import com.mojang.datafixers.util.Either;
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -30,6 +34,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.AABB;
 
@@ -566,6 +572,41 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core(helper).countItem(Items.STONE_PICKAXE) == 1, "pickaxe not in the core");
 			helper.assertTrue(chest.countItem(Items.STONE_PICKAXE) == 0, "pickaxe still in storage");
+		});
+	}
+
+	/**
+	 * An existing colony with a saved storage area whose chest holds a pickaxe builds a warehouse: the old chest stays
+	 * storage, so the pickaxe still counts and a bot brings it to the core for the colony's pickaxe target.
+	 */
+	@GameTest(maxTicks = 20)
+	public void theOldStorageAreaStaysStorageOnceAWarehouseIsBuilt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(List.of(StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)));
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
+		helper.setBlock(STORAGE, Blocks.CHEST);
+		Container old = (Container) helper.getBlockEntity(STORAGE, BlockEntity.class);
+		old.setItem(0, new ItemStack(Items.STONE_PICKAXE));
+		// The warehouse, 5 wide and 3 deep, beside the old area; built at once, as builders would.
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("warehouse"),
+			helper.absolutePos(new BlockPos(2, 1, 1)), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		for (int round = 0; round < 50 && !colony.builds().isEmpty(); round++) {
+			colony.postBuildJobs();
+			colony.builds().forEach(plan -> plan.steps().forEach(step -> helper.getLevel().setBlockAndUpdate(step.pos(), step.state())));
+			colony.board().jobs().stream().filter(job -> job.isOpen() && colony.build(job.id()).isPresent()).toList().forEach(job -> {
+				colony.finishBatch(job.id());
+				colony.board().complete(job.id());
+			});
+		}
+		helper.assertValueEqual(colony.blueprints().stream().map(PlacedBlueprint::finished).toList(), List.of(true), "warehouse finished");
+		helper.assertTrue(Storage.storageChests(helper.getLevel(), colony).containsKey(helper.absolutePos(STORAGE)),
+			"the old chest is no storage");
+		ColonyManager.get(helper.getLevel()).join(helper.spawn(ModEntities.ANT_BOT, 1, 1, 5), colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.STONE_PICKAXE) == 1, "pickaxe not in the core");
+			helper.assertTrue(old.countItem(Items.STONE_PICKAXE) == 0, "pickaxe still in the old chest");
 		});
 	}
 

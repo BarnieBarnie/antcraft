@@ -28,6 +28,7 @@ import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -94,7 +95,7 @@ class WarehouseTest {
 	}
 
 	@Test
-	void aBuiltWarehouseTurnedAndMirroredIsTheColonyStorageInPlaceOfThePickedArea() {
+	void aBuiltWarehouseTurnedAndMirroredIsTheColonyStorageAheadOfThePickedArea() {
 		for (Mirror mirror : Mirror.values()) {
 			for (Rotation rotation : Rotation.values()) {
 				Colony colony = colony();
@@ -105,9 +106,12 @@ class WarehouseTest {
 
 				finishAll(colony);
 				StorageArea storage = colony.storage().orElseThrow();
-				assertEquals(blueprint.chestsAt(structure.getSize(), AT, mirror, rotation), storage.chestSpots(), mirror + " " + rotation);
-				assertEquals(new HashSet<>(chestsBuilt(AT, mirror, rotation)), new HashSet<>(storage.chestSpots()), mirror + " " + rotation);
-				assertEquals(placed.area(), storage.area());
+				List<BlockPos> warehouse = storage.chestSpots().subList(0, storage.chestSpots().size() - picked.chestSpots().size());
+				assertEquals(blueprint.chestsAt(structure.getSize(), AT, mirror, rotation), warehouse, mirror + " " + rotation);
+				assertEquals(new HashSet<>(chestsBuilt(AT, mirror, rotation)), new HashSet<>(warehouse), mirror + " " + rotation);
+				// The chests of the picked area stay storage, after the warehouse's, so what they hold is not stranded.
+				assertEquals(picked.chestSpots(), storage.chestSpots().subList(warehouse.size(), storage.chestSpots().size()));
+				assertEquals(BoundingBox.encapsulatingBoxes(List.of(placed.area(), picked.area())).orElseThrow(), storage.area());
 			}
 		}
 	}

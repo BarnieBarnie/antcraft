@@ -1410,15 +1410,22 @@ public class Colony {
 
 	/**
 	 * Where haulers keep the colony's storage chests: the chests of every built warehouse (a placed blueprint with role
-	 * {@link Blueprint.Role#STORAGE}), oldest first; with none built, the area the colony picked itself, once it has.
+	 * {@link Blueprint.Role#STORAGE}), oldest first, then those of the area the colony picked itself before warehouses, if
+	 * it has one. The picked area stays storage once a warehouse stands, so what its chests hold is still counted and fetched;
+	 * its chests come last, so haulers fill the warehouses first.
 	 */
 	public Optional<StorageArea> storage() {
 		List<PlacedBlueprint> warehouses = this.finishedBlueprints(Blueprint.Role.STORAGE);
 		if (warehouses.isEmpty()) {
 			return this.storage;
 		}
-		List<BlockPos> chests = warehouses.stream().flatMap(placed -> placed.chests().stream()).toList();
-		return BoundingBox.encapsulatingBoxes(warehouses.stream().map(PlacedBlueprint::area).toList()).map(area -> StorageArea.of(area, chests));
+		List<BlockPos> chests = new ArrayList<>(warehouses.stream().flatMap(placed -> placed.chests().stream()).toList());
+		List<BoundingBox> areas = new ArrayList<>(warehouses.stream().map(PlacedBlueprint::area).toList());
+		this.storage.ifPresent(picked -> {
+			chests.addAll(picked.chestSpots());
+			areas.add(picked.area());
+		});
+		return BoundingBox.encapsulatingBoxes(areas).map(area -> StorageArea.of(area, chests));
 	}
 
 	public void setStorage(StorageArea storage) {
