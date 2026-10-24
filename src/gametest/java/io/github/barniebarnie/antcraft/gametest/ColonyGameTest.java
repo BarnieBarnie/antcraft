@@ -43,7 +43,13 @@ import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.PlainTextContents;
+import net.minecraft.network.chat.contents.TranslatableContents;
+import java.util.ArrayList;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -513,6 +519,125 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/**
+	 * An owner with two colonies close together trusts a player with the one they name by its core, not the nearer one,
+	 * and takes it back the same way; naming another player's colony is refused.
+	 */
+	@GameTest(maxTicks = 5)
+	public void anOwnerWithTwoColoniesTrustsAPlayerWithTheOneTheyName(GameTestHelper helper) {
+		Colony near = placeCore(helper);
+		Colony named = otherColony(helper, new BlockPos(6, 1, 6));
+		Colony foreign = otherColony(helper, new BlockPos(6, 1, 1));
+		foreign.setOwner(UUID.randomUUID());
+		ServerPlayer owner = helper.makeMockServerPlayerInLevel();
+		owner.setPos(Vec3.atCenterOf(helper.absolutePos(new BlockPos(2, 1, 2))));
+		near.setOwner(owner.getUUID());
+		named.setOwner(owner.getUUID());
+		CommandSourceStack asOwner = owner.createCommandSourceStack().withSuppressedOutput();
+		String namedCore = coords(named.core());
+
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust Alice " + namedCore);
+		helper.assertValueEqual(named.trusted().size(), 1, "trusted players of the named colony after trust");
+		helper.assertValueEqual(near.trusted(), Set.of(), "trusted players of the nearer colony");
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony untrust Alice " + namedCore);
+		helper.assertValueEqual(named.trusted(), Set.of(), "trusted players of the named colony after untrust");
+
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust Alice " + coords(foreign.core()));
+		helper.assertValueEqual(foreign.trusted(), Set.of(), "trusted players of another player's colony named by the owner");
+		helper.assertValueEqual(near.trusted(), Set.of(), "trusted players of the nearer colony after naming another player's");
+		helper.succeed();
+	}
+
+	/**
+	 * An owner who is not an operator lists the players their colony trusts, the nearest or the one they name; listing
+	 * another player's colony, even one that trusts them, is refused and names nobody.
+	 */
+	@GameTest(maxTicks = 5)
+	public void aNonOperatorOwnerListsTheirColonysTrustedPlayers(GameTestHelper helper) {
+		Colony own = placeCore(helper);
+		Colony foreign = otherColony(helper, new BlockPos(6, 1, 6));
+		foreign.setOwner(UUID.randomUUID());
+		ServerPlayer owner = helper.makeMockServerPlayerInLevel();
+		owner.setPos(Vec3.atCenterOf(helper.absolutePos(new BlockPos(2, 1, 2))));
+		own.setOwner(owner.getUUID());
+		helper.assertFalse(ColonyActions.isOp(owner), "the owner is an operator");
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(owner.createCommandSourceStack().withSuppressedOutput(), "antcraft colony trust Alice");
+		foreign.trust(owner.getUUID());
+		helper.assertValueEqual(own.trusted().size(), 1, "trusted players after the owner's trust");
+		// The test server has not seen Alice, so it may name her by her id.
+		Predicate<List<String>> namesAlice = lines -> lines.contains("Alice") || lines.contains(own.trusted().iterator().next().toString());
+
+		List<String> listed = new ArrayList<>();
+		CommandSourceStack asOwner = owner.createCommandSourceStack().withSource(recorder(listed));
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust list");
+		helper.assertTrue(listed.contains("commands.antcraft.colony.owner") && namesAlice.test(listed),
+			"the owner's list does not name Alice: " + listed);
+
+		listed.clear();
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust list " + coords(own.core()));
+		helper.assertTrue(namesAlice.test(listed), "the named colony's list does not name Alice: " + listed);
+
+		listed.clear();
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust list " + coords(foreign.core()));
+		helper.assertTrue(listed.contains("commands.antcraft.colony.trust.not_allowed"), "another player's colony was not refused: " + listed);
+		helper.assertFalse(listed.contains("commands.antcraft.colony.owner"), "another player's colony was listed: " + listed);
+		helper.succeed();
+	}
+
+	private static Colony otherColony(GameTestHelper helper, BlockPos core) {
+		helper.setBlock(core, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(core))
+			.orElseThrow(() -> new AssertionError("no colony founded at " + core));
+		colony.setRadius(6);
+		colony.setStockTargets(List.of());
+		return colony;
+	}
+
+	private static String coords(BlockPos pos) {
+		return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+	}
+
+	/** A command source that adds the translation keys and plain text of each message, arguments included, to {@code into}. */
+	private static CommandSource recorder(List<String> into) {
+		return new CommandSource() {
+			@Override
+			public void sendSystemMessage(Component message) {
+				collect(message, into);
+			}
+
+			@Override
+			public boolean acceptsSuccess() {
+				return true;
+			}
+
+			@Override
+			public boolean acceptsFailure() {
+				return true;
+			}
+
+			@Override
+			public boolean shouldInformAdmins() {
+				return false;
+			}
+		};
+	}
+
+	private static void collect(Component message, List<String> into) {
+		if (message.getContents() instanceof TranslatableContents translatable) {
+			into.add(translatable.getKey());
+			for (Object arg : translatable.getArgs()) {
+				if (arg instanceof Component component) {
+					collect(component, into);
+				} else {
+					into.add(String.valueOf(arg));
+				}
+			}
+		} else if (message.getContents() instanceof PlainTextContents plain) {
+			into.add(plain.text());
+		}
+		message.getSiblings().forEach(sibling -> collect(sibling, into));
+	}
+
 	@GameTest
 	public void botActivatedNearCoreJoinsColony(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
@@ -681,6 +806,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.assertFalse(antcraft.getChild("colony").getChild("info").canUse(asPlayer), "non-operator player may use colony info");
 		helper.assertFalse(antcraft.getChild("colony").getChild("order").canUse(asPlayer), "non-operator player may use colony order");
 		helper.assertTrue(antcraft.getChild("colony").getChild("trust").canUse(asPlayer), "owner may not use colony trust");
+		helper.assertTrue(antcraft.getChild("colony").getChild("trust").getChild("list").canUse(asPlayer), "owner may not use colony trust list");
 		helper.getLevel().getServer().getCommands().performPrefixedCommand(player, "antcraft colony order minecraft:stick 4");
 		helper.assertValueEqual(colony.orders(), Map.of(), "orders after a non-operator's command");
 		helper.succeed();

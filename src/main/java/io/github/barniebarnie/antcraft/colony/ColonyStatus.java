@@ -282,6 +282,12 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			player -> playerName(level, player));
 	}
 
+	/** Who owns {@code colony} and whom it trusts, by name, as {@link #access()} of its status names them. */
+	public static Access access(ServerLevel level, Colony colony) {
+		return new Access(colony.owner().map(player -> playerName(level, player)),
+			colony.trusted().stream().map(player -> playerName(level, player)).toList());
+	}
+
 	/** The name of {@code player} if the server knows it, else its UUID. */
 	private static String playerName(ServerLevel level, UUID player) {
 		ServerPlayer online = level.getServer().getPlayerList().getPlayer(player);

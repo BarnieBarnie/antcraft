@@ -81,7 +81,8 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony build place &lt;blueprint&gt; &lt;at&gt; [rotation] [mirror] [palette]
  * /antcraft colony project list|cancel &lt;n&gt;|priority &lt;n&gt; &lt;priority&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
- * /antcraft colony trust|untrust &lt;player&gt;   (also the colony's owner, not only operators)
+ * /antcraft colony trust|untrust &lt;player&gt; [colony]   (also the colony's owner, not only operators)
+ * /antcraft colony trust list [colony]   (also the colony's owner)
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
@@ -108,7 +109,7 @@ public final class AntCraftCommands {
 	}
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext) {
-		// Every subcommand is for operators but trust and untrust, which a colony's owner may use too (checked when run).
+		// Every subcommand is for operators but trust (with trust list) and untrust, which a colony's owner may use too (checked when run).
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(AntCraftCommands::operatorOrPlayer)
 			.then(Commands.literal("status").requires(OPERATOR).executes(AntCraftCommands::status))
@@ -124,11 +125,21 @@ public final class AntCraftCommands {
 			.then(Commands.literal("colony").requires(AntCraftCommands::operatorOrPlayer)
 				.then(Commands.literal("info").requires(OPERATOR).executes(ctx -> colonyInfo(ctx.getSource())))
 				.then(Commands.literal("trust").requires(AntCraftCommands::operatorOrPlayer)
+					.then(Commands.literal("list")
+						.executes(ctx -> listTrusted(ctx.getSource(), Optional.empty()))
+						.then(Commands.argument("colony", BlockPosArgument.blockPos())
+							.executes(ctx -> listTrusted(ctx.getSource(), Optional.of(BlockPosArgument.getBlockPos(ctx, "colony"))))))
 					.then(Commands.argument("players", GameProfileArgument.gameProfile())
-						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), true))))
+						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), Optional.empty(), true))
+						.then(Commands.argument("colony", BlockPosArgument.blockPos())
+							.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"),
+								Optional.of(BlockPosArgument.getBlockPos(ctx, "colony")), true)))))
 				.then(Commands.literal("untrust").requires(AntCraftCommands::operatorOrPlayer)
 					.then(Commands.argument("players", GameProfileArgument.gameProfile())
-						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), false))))
+						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), Optional.empty(), false))
+						.then(Commands.argument("colony", BlockPosArgument.blockPos())
+							.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"),
+								Optional.of(BlockPosArgument.getBlockPos(ctx, "colony")), false)))))
 				.then(Commands.literal("blocked").requires(OPERATOR)
 					.then(Commands.literal("clear").executes(ctx -> clearBlocked(ctx.getSource()))))
 				.then(Commands.literal("order").requires(OPERATOR)
@@ -271,22 +282,58 @@ public final class AntCraftCommands {
 	}
 
 	/**
-	 * Trusts {@code players} with the nearest colony the source may trust ({@link ColonyActions#mayTrust}: its owner, or
-	 * any for operators), or no longer does if not {@code trust}, so another player's colony nearer does not get in the
-	 * way. With colonies in range but none the source may trust, it is refused.
+	 * The colony the source may trust players with ({@link ColonyActions#mayTrust}: its owner, or any for operators): the
+	 * one whose core is at {@code named}, or else the nearest such colony, so another player's colony nearer does not get
+	 * in the way. Either must lie within {@link #COLONY_RANGE}. A colony the source may not trust is refused, with a
+	 * message, as is no colony.
 	 */
-	private static int trust(CommandSourceStack source, Collection<NameAndId> players, boolean trust) {
+	private static Optional<Colony> colonyToTrust(CommandSourceStack source, Optional<BlockPos> named) {
 		ServerPlayer player = source.getPlayer();
 		BlockPos at = BlockPos.containing(source.getPosition());
 		ColonyManager colonies = ColonyManager.get(source.getLevel());
 		// The console and command blocks run as operators.
-		Optional<Colony> found = colonies.nearest(at, COLONY_RANGE, colony -> player == null || ColonyActions.mayTrust(colony, player));
+		Predicate<Colony> mayTrust = colony -> player == null || ColonyActions.mayTrust(colony, player);
+		if (named.isPresent()) {
+			Optional<Colony> colony = colonies.byCore(named.get()).filter(found -> found.core().closerThan(at, COLONY_RANGE));
+			if (colony.isEmpty()) {
+				source.sendFailure(Component.translatable("commands.antcraft.colony.none_at", named.get().toShortString(), COLONY_RANGE));
+				return Optional.empty();
+			}
+			if (!mayTrust.test(colony.get())) {
+				source.sendFailure(Component.translatable("commands.antcraft.colony.trust.not_allowed"));
+				return Optional.empty();
+			}
+			return colony;
+		}
+		Optional<Colony> found = colonies.nearest(at, COLONY_RANGE, mayTrust);
 		if (found.isEmpty()) {
 			if (colonies.nearest(at, COLONY_RANGE).isPresent()) {
 				source.sendFailure(Component.translatable("commands.antcraft.colony.trust.not_allowed"));
 			} else {
 				source.sendFailure(Component.translatable("commands.antcraft.colony.none", COLONY_RANGE));
 			}
+		}
+		return found;
+	}
+
+	/** Names the owner and the trusted players of the colony the source may trust (see {@link #colonyToTrust}). */
+	private static int listTrusted(CommandSourceStack source, Optional<BlockPos> named) {
+		Optional<Colony> found = colonyToTrust(source, named);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		ColonyStatus.Access access = ColonyStatus.access(source.getLevel(), found.get());
+		source.sendSuccess(access::describe, false);
+		return access.trusted().size();
+	}
+
+	/**
+	 * Trusts {@code players} with the colony the source may trust (see {@link #colonyToTrust}), or no longer does if not
+	 * {@code trust}.
+	 */
+	private static int trust(CommandSourceStack source, Collection<NameAndId> players, Optional<BlockPos> named, boolean trust) {
+		Optional<Colony> found = colonyToTrust(source, named);
+		if (found.isEmpty()) {
 			return 0;
 		}
 		int changed = 0;
