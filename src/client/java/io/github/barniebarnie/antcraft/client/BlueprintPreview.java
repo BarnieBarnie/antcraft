@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -111,13 +112,14 @@ public final class BlueprintPreview {
 		mirror = Mirror.NONE;
 	}
 
-	/** Draws the ghost at the block {@code hit} looks at; called where the client collects gizmos for the frame. */
-	static void draw(Minecraft client, HitResult hit) {
+	/** Draws the ghost at the block the player looks at; called where the client collects what to draw for the frame. */
+	static void draw(Minecraft client, LevelRenderContext context) {
+		HitResult hit = client.hitResult;
 		if (client.player == null || !(hit instanceof BlockHitResult block) || hit.getType() != HitResult.Type.BLOCK) {
 			return;
 		}
 		held(client.player).flatMap(chosen -> ghost(chosen, block.getBlockPos(), block.getDirection())).ifPresent(ghost ->
-			GhostRenderer.draw(ghost.blocks(), ghost.refusal(rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
+			GhostRenderer.submit(context, ghost.blocks(), ghost.refusal(rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
 	}
 
 	/**

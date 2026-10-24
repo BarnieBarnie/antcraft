@@ -12,7 +12,7 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import java.util.List;
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.entity.EntityRenderers;
@@ -39,10 +39,10 @@ public class AntCraftClient implements ClientModInitializer {
 		KeyMapping mirrorBlueprint = KeyMappingHelper.registerKeyMapping(
 			new KeyMapping("key.antcraft.mirror_blueprint", InputConstants.Type.KEYBOARD, InputConstants.KEY_M, CATEGORY));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> BlueprintPreview.tick(client, rotateBlueprint, mirrorBlueprint));
-		// Before the frame's gizmos are handed to the renderer, so the ghost shows in the same frame.
-		LevelExtractionEvents.AFTER_BLOCK_OUTLINE_EXTRACTION.register((context, hit) -> {
-			PlacedGhosts.draw(Minecraft.getInstance());
-			BlueprintPreview.draw(Minecraft.getInstance(), hit);
+		// With the frame's other submits, so the translucent ghost blocks are sorted with the rest of the world's.
+		LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
+			PlacedGhosts.draw(Minecraft.getInstance(), context);
+			BlueprintPreview.draw(Minecraft.getInstance(), context);
 		});
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BuildGhosts.TYPE, (ghosts, context) -> PlacedGhosts.set(ghosts.builds()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PlacedGhosts.reset());

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -41,14 +42,14 @@ public final class PlacedGhosts {
 		CONFIRM.reset();
 	}
 
-	/** Draws every ghost, the one armed to cancel in red; called where the client collects gizmos for the frame. */
-	static void draw(Minecraft client) {
+	/** Draws every ghost, the one armed to cancel in red; called where the client collects what to draw for the frame. */
+	static void draw(Minecraft client, LevelRenderContext context) {
 		if (client.level == null) {
 			return;
 		}
 		Optional<UUID> armed = CONFIRM.armed(client.level.getGameTime());
 		for (BuildGhost ghost : ghosts) {
-			GhostRenderer.draw(ghost.blocks(), armed.equals(Optional.of(ghost.project())) ? GhostRenderer.REFUSED : GhostRenderer.PLANNED);
+			GhostRenderer.submit(context, ghost.blocks(), armed.equals(Optional.of(ghost.project())) ? GhostRenderer.REFUSED : GhostRenderer.PLANNED);
 		}
 	}
 
