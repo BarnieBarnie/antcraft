@@ -66,7 +66,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 	 */
 	private static Mineshaft shaft(GameTestHelper helper, int level) {
 		int y = helper.absolutePos(new BlockPos(0, level, 0)).getY();
-		return new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1);
+		return new Mineshaft(helper.absolutePos(new BlockPos(1, 5, 1)), List.of(y), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1, Mineshaft.Layout.SPIRAL);
 	}
 
 	private static AntBot member(GameTestHelper helper, Colony colony, BlockPos at) {
@@ -188,7 +188,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		// The colony mines only while it wants something mining yields.
 		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
 		int y = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(5, 6, 1)), List.of(y), 1, 3, 4, 1);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(5, 6, 1)), List.of(y), 1, 3, 4, 1, Mineshaft.Layout.SPIRAL);
 		colony.setMineshaft(shaft);
 		for (BuildPlan.Step step : shaft.plan().steps()) {
 			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {
@@ -231,7 +231,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper, new BlockPos(0, 6, 0));
 		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
 		int y = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(5, 6, 1)), List.of(y), 1, 3, 4, 1);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(5, 6, 1)), List.of(y), 1, 3, 4, 1, Mineshaft.Layout.SPIRAL);
 		colony.setMineshaft(shaft);
 		for (BuildPlan.Step step : shaft.plan().steps()) {
 			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {
@@ -279,7 +279,7 @@ public class SpiralMineshaftGameTest implements CustomTestMethodInvoker {
 		colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, 1000));
 		int y = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
 		// Branches 2 long a round, so both rounds stay in the area.
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(7, 6, 5)), List.of(y), 1, 2, 4, 2);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(7, 6, 5)), List.of(y), 1, 2, 4, 2, Mineshaft.Layout.SPIRAL);
 		colony.setMineshaft(shaft);
 		for (BuildPlan.Step step : shaft.plan().steps()) {
 			if (!step.isDone(helper.getLevel().getBlockState(step.pos()))) {

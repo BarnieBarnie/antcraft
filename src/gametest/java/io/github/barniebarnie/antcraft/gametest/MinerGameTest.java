@@ -111,7 +111,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		}
 		int y3 = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
 		int y1 = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		return new Mineshaft(helper.absolutePos(new BlockPos(3, 5, 3)), List.of(y3, y1), 1, branchLength, 4, rounds, false);
+		return new Mineshaft(helper.absolutePos(new BlockPos(3, 5, 3)), List.of(y3, y1), 1, branchLength, 4, rounds, Mineshaft.Layout.STAIRCASE);
 	}
 
 	/** Digs the stairs and halls as a builder would. */
@@ -303,7 +303,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper, new BlockPos(6, 3, 2));
 		wantStone(colony);
 		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 4, 4, 2, false);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 4, 4, 2, Mineshaft.Layout.STAIRCASE);
 		helper.assertTrue(shaft.branches(y).getFirst().cells().contains(helper.absolutePos(walledOff)), "walled-off cell not in the south branch");
 		dig(helper, colony, shaft);
 		AntBot miner = member(helper, colony, 5, 3, 3);
@@ -335,7 +335,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper, new BlockPos(6, 3, 2));
 		wantStone(colony);
 		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 2, 7, 4, 1, false);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 2, 7, 4, 1, Mineshaft.Layout.STAIRCASE);
 		dig(helper, colony, shaft);
 		List<Mineshaft.Branch> branches = shaft.branches(y);
 		helper.assertTrue(branches.size() == 4 && branches.stream().allMatch(branch -> branch.segments().size() == 2), "not 4 branches of 2 segments");
@@ -381,7 +381,7 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper, new BlockPos(6, 3, 2));
 		colony.addOrder(Items.COBBLESTONE, 1000);
 		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 7, 4, 1, false);
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 7)), List.of(y), 1, 7, 4, 1, Mineshaft.Layout.STAIRCASE);
 		dig(helper, colony, shaft);
 		// The other branch is dug already, so both miners work the one left.
 		Mineshaft.Branch branch = shaft.branches(y).getFirst();

@@ -293,13 +293,13 @@ public class ColonyManager extends SavedData {
 		colony.board().jobs().stream().filter(job -> job.type() == JobType.MINE_BRANCH && job.givenUp()).forEach(job -> givenUp.add(job.target()));
 		colony.mineshaft().ifPresent(shaft -> {
 			Map<Integer, List<Mineshaft.Branch>> work = new HashMap<>();
-			// The builder has dug the way there, so miners can walk to the hall (of a spiral) or the branches (of an old shaft).
+			// The builder has dug the way there, so miners can walk to the hall (of a spiral or ladder shaft) or the branches (of an old shaft).
 			List<Integer> open = shaft.levels().stream().filter(y -> {
 				BlockPos reached = shaft.hallWork(y).isPresent() ? shaft.landing(y) : shaft.hall(y).getLast();
 				return level.getBlockState(reached).getCollisionShape(level, reached).isEmpty();
 			}).toList();
 			for (int y : open) {
-				// A spiral's hall first, then the branches off it.
+				// A spiral or ladder shaft's hall first, then the branches off it.
 				List<List<Mineshaft.Branch>> stages = new ArrayList<>();
 				shaft.hallWork(y).ifPresent(hall -> stages.add(List.of(hall)));
 				IntStream.range(0, shaft.rounds()).forEach(round -> stages.add(shaft.branches(y, round)));

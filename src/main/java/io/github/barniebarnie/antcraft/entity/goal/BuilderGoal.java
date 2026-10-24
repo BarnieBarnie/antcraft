@@ -53,6 +53,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -348,7 +350,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		}
 		// A block is placed where the bot sees the spot, as a player must; a wall behind stone the plan digs is put off
 		// until then (see isBehindUndug).
-		if (this.restockScaffold(colony, core, step) || !this.reachStep(level, step.pos())) {
+		if (this.restockScaffold(colony, core, step) || !this.placesWhereItStands(level, step) && !this.reachStep(level, step.pos())) {
 			return;
 		}
 		if (step.isPlaced(current) && item == Items.BUCKET) {
@@ -364,6 +366,21 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		} else {
 			this.waitForSpot(level, step.pos());
 		}
+	}
+
+	/**
+	 * Whether {@code step} places a ladder or a trapdoor in the space the bot stands in, at its feet or head, that leaves
+	 * room for it when it stands in the middle, such as a ladder on the wall or a hatch overhead: a player places one
+	 * there, as the builder of a ladder shaft must, with no other spot in the 1x1 column to stand. Other steps are reached
+	 * from a spot beside them.
+	 */
+	private boolean placesWhereItStands(ServerLevel level, BuildPlan.Step step) {
+		BlockPos feet = this.bot.blockPosition();
+		if (!step.state().is(BlockTags.CLIMBABLE) && !step.state().is(BlockTags.TRAPDOORS) || !feet.equals(step.pos()) && !feet.above().equals(step.pos())) {
+			return false;
+		}
+		AABB bot = this.bot.getDimensions(this.bot.getPose()).makeBoundingBox(Vec3.atBottomCenterOf(feet));
+		return step.dry().getCollisionShape(level, step.pos()).toAabbs().stream().noneMatch(box -> box.move(step.pos()).intersects(bot));
 	}
 
 	/** Whether another open build or dig job this bot is ready for is up on the ledge it stands on its scaffold (see {@link WorkerGoal#onLedge}). */
@@ -806,7 +823,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * The fluids beside or above the block of clear step {@code step} that hold it standing (see
+	 * The fluids beside or above the block that step {@code step} digs out (see {@link #isDug}) that hold it standing (see
 	 * {@link BuildPlan.Step#clearing}), such as water in the rock beside a mineshaft or in a hall that is dug later: the
 	 * builder walls them off with filler blocks as it breaks the block, so they cannot flow in. Water the plan clears
 	 * itself, in a cell beside, is filled in so too, as it is not seen before (see {@link #isBehindUndug}). Empty if there are none, or no filler at hand.
@@ -816,7 +833,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	private static List<BlockPos> fluidsToWall(ServerLevel level, BuildPlan.Step step, boolean hasFiller) {
-		if (!step.isClear() || !level.getFluidState(step.pos()).isEmpty() || !hasFiller) {
+		if (!isDug(level, step) || !level.getFluidState(step.pos()).isEmpty() || !hasFiller) {
 			return List.of();
 		}
 		List<BlockPos> walls = new ArrayList<>();
@@ -867,11 +884,20 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		return walls > 0 && walls <= fillers && !isUnbreakable(level, step.pos());
 	}
 
+	/**
+	 * Whether {@code step} digs its block out and leaves the spot open to the fluids beside it: a clear step, or one that
+	 * places a block that does not fill its spot, such as a ladder in a mineshaft, where a block stands in the way that
+	 * has to be broken first. A full block put in place of the one broken shuts the fluid out again.
+	 */
+	private static boolean isDug(ServerLevel level, BuildPlan.Step step) {
+		return step.isClear() || step.needsClearing(level.getBlockState(step.pos())) && !step.state().isCollisionShapeFullBlock(level, step.pos());
+	}
+
 	private static BuildPlan.Clearing clearing(ServerLevel level, BuildPlan.Step step, boolean hasBucket, boolean hasFiller) {
 		BlockPos pos = step.pos();
 		BuildPlan.Clearing clearing = BuildPlan.Clearing.BREAK;
-		// A wrong block in a place step is simply replaced, fluid or not, so only clear steps mind fluids.
-		if (step.isClear()) {
+		// A wrong block in a place step is simply replaced, fluid or not, so only steps that dig a block out mind fluids.
+		if (isDug(level, step)) {
 			FluidState fluid = level.getFluidState(pos);
 			boolean settling = !fluid.isEmpty() && level.getFluidTicks().hasScheduledTick(pos, fluid.getType());
 			clearing = step.clearing(level::getBlockState, settling, hasBucket, hasFiller);

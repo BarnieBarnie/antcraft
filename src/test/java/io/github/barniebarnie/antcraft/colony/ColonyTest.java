@@ -50,8 +50,8 @@ class ColonyTest {
 		Bootstrap.bootStrap();
 		// The vanilla tags, such as which blocks are dug with a pickaxe.
 		VanillaData.recipeBook();
-		SHAFT = new Mineshaft(new BlockPos(2, 64, 2), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
-		TWO_LEVELS = new Mineshaft(new BlockPos(2, 64, 2), List.of(62, 60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
+		SHAFT = new Mineshaft(new BlockPos(2, 64, 2), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
+		TWO_LEVELS = new Mineshaft(new BlockPos(2, 64, 2), List.of(62, 60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 	}
 
 	private static Colony colony() {
@@ -656,7 +656,7 @@ class ColonyTest {
 		assertEquals(List.of(SHAFT.plan()), colony.builds());
 		assertTrue(colony.isProtected(AIR, SHAFT.stairs().getLast().below()));
 
-		Mineshaft moved = new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
+		Mineshaft moved = new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(moved);
 		assertEquals(List.of(moved.plan()), colony.builds());
 		assertFalse(colony.isProtected(AIR, SHAFT.stairs().getLast().below()));
@@ -677,7 +677,7 @@ class ColonyTest {
 		assertFalse(Territory.of(loaded).shouldReturnHome(pocket, false, false), "after a reload");
 
 		// A new mine leaves the old one, its pockets too.
-		colony.setMineshaft(new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false));
+		colony.setMineshaft(new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE));
 		assertTrue(Territory.of(colony).shouldReturnHome(pocket, false, false), "after the mine moved");
 	}
 
@@ -899,7 +899,7 @@ class ColonyTest {
 		Colony colony = halfwayDown();
 		// The stairs from y=62 on down to y=60 run into something no builder can clear.
 		colony.reportBlocked(batchJob(colony, 2).id(), List.of(TWO_LEVELS.stairs().get(3)));
-		Mineshaft shallower = new Mineshaft(TWO_LEVELS.top(), List.of(62), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
+		Mineshaft shallower = new Mineshaft(TWO_LEVELS.top(), List.of(62), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		assertEquals(Optional.of(shallower), colony.mineshaft());
 		assertEquals(List.of(shallower.plan()), colony.builds());
 		assertEquals(List.of(), colony.blockedSteps());
@@ -935,7 +935,7 @@ class ColonyTest {
 			assertEquals(Set.of(TWO_LEVELS.plan().batch(1), TWO_LEVELS.plan().batch(2)), openBatches(c), "progress lost");
 			// So a blocked stair is matched to the shaft, which drops the level it leads to.
 			c.reportBlocked(batchJob(c, 2).id(), List.of(TWO_LEVELS.stairs().get(3)));
-			Mineshaft shallower = new Mineshaft(TWO_LEVELS.top(), List.of(62), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
+			Mineshaft shallower = new Mineshaft(TWO_LEVELS.top(), List.of(62), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 			assertEquals(Optional.of(shallower), c.mineshaft());
 			assertEquals(List.of(shallower.plan()), c.builds());
 		}
@@ -956,7 +956,7 @@ class ColonyTest {
 	@Test
 	void movingTheMineshaftClearsTheOpenBatchesOfTheOldOne() {
 		Colony colony = halfwayDown();
-		Mineshaft moved = new Mineshaft(new BlockPos(10, 64, 10), List.of(62, 60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
+		Mineshaft moved = new Mineshaft(new BlockPos(10, 64, 10), List.of(62, 60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(moved);
 		assertEquals(Set.of(), openBatches(colony), "old batches left open");
 		colony.postBuildJobs();

@@ -534,7 +534,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		// An old shaft whose level at y=1 lands at (7, 1, 3), with its hall running west along z=3.
 		int level = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
 		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(7, 5, 3)), List.of(level), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
-			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(shaft);
 		colony.removeBuild(shaft.plan());
 		Set<BlockPos> open = new HashSet<>();

@@ -470,7 +470,7 @@ class BuildPlanTest {
 	/** The stairs to the first of the default levels of a deep shaft, dug in stone: the biggest batch a builder works through. */
 	private static BuildPlan deepStairs() {
 		return new Mineshaft(new BlockPos(0, 64, 0), List.of(16, -16, -58), Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH,
-			Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false).plan().batch(0);
+			Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE).plan().batch(0);
 	}
 
 	/** Stone below y=64, air above, with {@code changed} on top. */

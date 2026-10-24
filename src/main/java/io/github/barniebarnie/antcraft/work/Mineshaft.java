@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -20,30 +21,37 @@ import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
 
 /**
- * The colony mine, from {@code top} (the north-west corner of the first step, at ground level)
- * down to a landing at each mining level. A new ({@code spiral}) shaft is a 2-wide staircase that
- * spirals round a solid 2x2 column, 6x6 in all: each height is a flat 2x2 corner with the rows
- * either side of it, and each side has one 2-wide step down, onto a stair block, so bots pass each
- * other and walk up without jumping. Its corners are its landings, each with a chest. An old shaft,
- * which colonies that dug one keep, is a 1-wide staircase round a 2x2 column, a stair per height.
- * From each landing a hall leads away from the column, and branches run off both sides of the
- * hall every {@link #BRANCH_SPACING} blocks. Builders dig the stairs (and an old shaft's halls);
- * miners dig a new shaft's halls and the branches. Once every branch at a level is dug, the next
- * round of branches carries each one further out, up to {@code rounds} rounds, so a level keeps
- * yielding ore without the hall growing. Every step has three blocks of headroom, so any bot can
- * walk up and down without scaffold.
+ * The colony mine, from {@code top} at ground level down to a landing at each mining level, in one of
+ * three {@link Layout}s. A new shaft is a {@link Layout#LADDER} shaft: a 1x1 column under {@code top}
+ * with a ladder on its south wall at every height, entered through a hatch in the ground, with a small
+ * chamber beside the column at each level that holds the landing chest and a torch. Colonies that dug
+ * a {@link Layout#SPIRAL} keep it: a 2-wide staircase that spirals round a solid 2x2 column, 6x6 in
+ * all, {@code top} its north-west corner, where each height is a flat 2x2 corner with the rows either
+ * side of it and each side has one 2-wide step down, onto a stair block. Its corners are its landings,
+ * each with a chest. An old {@link Layout#STAIRCASE} shaft is a 1-wide staircase round a 2x2 column, a
+ * stair per height. From each landing a hall leads away from the column, and branches run off both
+ * sides of the hall every {@link #BRANCH_SPACING} blocks. Builders dig the column or stairs (and an old
+ * shaft's halls); miners dig the other layouts' halls and the branches. Once every branch at a level is
+ * dug, the next round of branches carries each one further out, up to {@code rounds} rounds, so a level
+ * keeps yielding ore without the hall growing. Every step of the stairs has three blocks of headroom,
+ * so any bot can walk up and down without scaffold; bots climb the ladder shaft, and pass each other
+ * on it, as they do not push each other.
  */
-public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing, int rounds, boolean spiral) {
+public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing, int rounds, Layout layout) {
 	public static final int BRANCH_SPACING = 3;
 	public static final int DEFAULT_BRANCHES_PER_SIDE = 4;
 	public static final int DEFAULT_BRANCH_LENGTH = 16;
@@ -63,6 +71,25 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	private static final List<BlockPos> CYCLE = List.of(new BlockPos(0, 0, 0), new BlockPos(1, 0, 0), new BlockPos(1, 0, 1), new BlockPos(0, 0, 1));
 	/** How wide a spiral shaft is: a 2-wide staircase either side of its 2x2 column. */
 	private static final int SPIRAL_SIZE = 6;
+	/** The way the ladders of a ladder shaft face, and its hatch: away from the south wall they hang on. */
+	private static final Direction LADDER_FACING = Direction.NORTH;
+
+	/** How a shaft gets down to its levels (see {@link Mineshaft}). */
+	public enum Layout implements StringRepresentable {
+		/** The old 1-wide staircase round a 2x2 column, which colonies that dug one keep. */
+		STAIRCASE,
+		/** The 2-wide staircase round a 2x2 column, 6x6 in all, which colonies that dug one keep. */
+		SPIRAL,
+		/** A 1x1 column of ladders with a landing chamber at each level: what new shafts are. */
+		LADDER;
+
+		public static final Codec<Layout> CODEC = StringRepresentable.fromEnum(Layout::values);
+
+		@Override
+		public String getSerializedName() {
+			return this.name().toLowerCase(Locale.ROOT);
+		}
+	}
 
 	/**
 	 * A height of the spiral, one corner further round than the height above it: the {@code cells}
@@ -84,7 +111,10 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return IntStream.range(0, xz.length / 2).mapToObj(i -> new BlockPos(xz[2 * i], 0, xz[2 * i + 1])).toList();
 	}
 
-	/** Saves from before the spiral are of old shafts, which keep their layout. */
+	/**
+	 * Saves from before the ladder shaft have no layout but say whether they are a spiral; those from before the
+	 * spiral are of old shafts. Either keeps its layout.
+	 */
 	public static final Codec<Mineshaft> CODEC = RecordCodecBuilder.create(i -> i.group(
 		BlockPos.CODEC.fieldOf("top").forGetter(Mineshaft::top),
 		Codec.INT.listOf().fieldOf("levels").forGetter(Mineshaft::levels),
@@ -92,8 +122,11 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		Codec.INT.optionalFieldOf("branch_length", DEFAULT_BRANCH_LENGTH).forGetter(Mineshaft::branchLength),
 		Codec.INT.optionalFieldOf("torch_spacing", DEFAULT_TORCH_SPACING).forGetter(Mineshaft::torchSpacing),
 		Codec.INT.optionalFieldOf("rounds", DEFAULT_ROUNDS).forGetter(Mineshaft::rounds),
-		Codec.BOOL.optionalFieldOf("spiral", false).forGetter(Mineshaft::spiral)
-	).apply(i, Mineshaft::new));
+		// Only a ladder shaft says, so the older layouts save as they did and older versions of the mod still read them.
+		Layout.CODEC.optionalFieldOf("layout").forGetter(shaft -> Optional.of(shaft.layout()).filter(layout -> layout == Layout.LADDER)),
+		Codec.BOOL.optionalFieldOf("spiral", false).forGetter(shaft -> shaft.layout() == Layout.SPIRAL)
+	).apply(i, (top, levels, perSide, length, spacing, rounds, layout, spiral) ->
+		new Mineshaft(top, levels, perSide, length, spacing, rounds, layout.orElse(spiral ? Layout.SPIRAL : Layout.STAIRCASE))));
 
 	/** A tunnel a miner digs, 2 high and 1 wide; {@code cells} run from the hall outwards. */
 	public record Branch(BlockPos start, List<BlockPos> cells, List<BlockPos> torches) {
@@ -166,9 +199,9 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return List.copyOf(spaced);
 	}
 
-	/** A new shaft: the spiral. */
+	/** A new shaft: the ladder shaft. */
 	public Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing, int rounds) {
-		this(top, levels, branchesPerSide, branchLength, torchSpacing, rounds, true);
+		this(top, levels, branchesPerSide, branchLength, torchSpacing, rounds, Layout.LADDER);
 	}
 
 	public Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide, int branchLength, int torchSpacing) {
@@ -181,7 +214,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 
 	/**
 	 * The site the colony picks by itself, for a new shaft: on a side of the core clear of the
-	 * {@code avoid} areas (field, storage), where the 6x6 column runs into no fluid or bedrock down
+	 * {@code avoid} areas (field, storage), where the column runs into no fluid or bedrock down
 	 * to the first level, and no hall does. Deeper down the builder walls fluid off. Failing such a
 	 * spot, the first one clear of the areas. Levels the column cannot be dug down to for bedrock are
 	 * left out. Other blocks that cannot be broken, such as barriers, do not move the site.
@@ -204,11 +237,12 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	static List<BlockPos> candidates(BlockPos core) {
 		List<BlockPos> spots = new ArrayList<>();
 		for (int r = 2; r <= SITE_RANGE; r += SITE_STEP) {
-			// The shaft is 6 wide from its top's corner, so a ring's west and north sides are 5 blocks further out.
-			int near = -r - (SPIRAL_SIZE - 1);
-			spots.addAll(List.of(core.offset(r, 0, r), core.offset(near, 0, near), core.offset(r, 0, near), core.offset(near, 0, r)));
-			for (int t = near + SITE_STEP; t <= r - SITE_STEP; t += SITE_STEP) {
-				spots.addAll(List.of(core.offset(r, 0, t), core.offset(near, 0, t), core.offset(t, 0, r), core.offset(t, 0, near)));
+			// A new shaft's area reaches a block past its top each way, so the top of a spot is a block further out than the ring.
+			int far = r + 1;
+			int near = -r - 1;
+			spots.addAll(List.of(core.offset(far, 0, far), core.offset(near, 0, near), core.offset(far, 0, near), core.offset(near, 0, far)));
+			for (int t = near + SITE_STEP; t <= far - SITE_STEP; t += SITE_STEP) {
+				spots.addAll(List.of(core.offset(far, 0, t), core.offset(near, 0, t), core.offset(t, 0, far), core.offset(t, 0, near)));
 			}
 		}
 		return spots;
@@ -231,20 +265,33 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return this.withLevels(this.levels.stream().filter(y -> y > bedrock).toList());
 	}
 
-	/** The blocks of the column the stairs are dug from, from just below the ground down to {@code bottom}. */
+	/**
+	 * The blocks of the column the stairs are dug from, from just below the ground down to {@code bottom}; of a ladder
+	 * shaft, its column with the walls round it.
+	 */
 	private Stream<BlockPos> column(int bottom) {
 		int size = this.size();
+		BlockPos corner = this.corner();
 		return IntStream.rangeClosed(bottom, this.top.getY() - 1).boxed()
-			.flatMap(y -> IntStream.range(0, size * size).mapToObj(i -> this.top.offset(i % size, 0, i / size).atY(y)));
+			.flatMap(y -> IntStream.range(0, size * size).mapToObj(i -> corner.offset(i % size, 0, i / size).atY(y)));
 	}
 
-	/** How wide the column is. */
+	/** How wide the column is, with a ladder shaft's walls. */
 	private int size() {
-		return this.spiral ? SPIRAL_SIZE : 2;
+		return switch (this.layout) {
+			case STAIRCASE -> 2;
+			case SPIRAL -> SPIRAL_SIZE;
+			case LADDER -> 3;
+		};
+	}
+
+	/** The north-west corner of the column: the top, but for a ladder shaft, whose walls are round it. */
+	private BlockPos corner() {
+		return this.layout == Layout.LADDER ? this.top.offset(-1, 0, -1) : this.top;
 	}
 
 	private Mineshaft withLevels(List<Integer> levels) {
-		return new Mineshaft(this.top, levels, this.branchesPerSide, this.branchLength, this.torchSpacing, this.rounds, this.spiral);
+		return new Mineshaft(this.top, levels, this.branchesPerSide, this.branchLength, this.torchSpacing, this.rounds, this.layout);
 	}
 
 	/**
@@ -267,7 +314,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			}
 			// Each level has its stairs batch, then, in an old shaft, its hall batch; see plan().
 			int batch = IntStream.range(0, plan.batches().size()).filter(b -> plan.batches().get(b).to() > step).findFirst().orElseThrow();
-			int perLevel = this.spiral ? 1 : 2;
+			int perLevel = this.layout == Layout.STAIRCASE ? 2 : 1;
 			int level = batch / perLevel;
 			if (level >= this.levels.size()) {
 				continue;
@@ -281,11 +328,12 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return this.withLevels(IntStream.range(0, reached).filter(k -> !halls.contains(k)).mapToObj(this.levels::get).toList());
 	}
 
-	/** The column the stairs wind down, from the bottom floor to the top of the entrance. */
+	/** The column the stairs wind down, or the ladder shaft with its walls and chambers, from the bottom floor to the top of the entrance. */
 	public BoundingBox area() {
 		int bottom = this.levels.isEmpty() ? this.top.getY() : this.levels.getLast();
+		BlockPos corner = this.corner();
 		int far = this.size() - 1;
-		return new BoundingBox(this.top.getX(), bottom - 1, this.top.getZ(), this.top.getX() + far, this.top.getY() + 2, this.top.getZ() + far);
+		return new BoundingBox(corner.getX(), bottom - 1, corner.getZ(), corner.getX() + far, this.top.getY() + 2, corner.getZ() + far);
 	}
 
 	/** How many heights the stairs go down below the top. */
@@ -296,11 +344,16 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	/**
 	 * Feet positions of the steps, per height, top first: one stair of an old shaft, or a corner of
 	 * the spiral with the rows either side. The deepest height has no row on to a step below it.
+	 * Of a ladder shaft, the cells of its column, from the hatch down.
 	 */
 	private List<List<BlockPos>> heights() {
 		List<List<BlockPos>> heights = new ArrayList<>();
+		if (this.layout == Layout.LADDER) {
+			IntStream.rangeClosed(1, this.depth()).forEach(k -> heights.add(List.of(this.top.below(k))));
+			return heights;
+		}
 		for (int k = 0; k <= this.depth(); k++) {
-			if (!this.spiral) {
+			if (this.layout == Layout.STAIRCASE) {
 				heights.add(List.of(this.top.offset(CYCLE.get(k % CYCLE.size())).below(k)));
 				continue;
 			}
@@ -312,7 +365,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return heights;
 	}
 
-	/** Feet positions of the steps, top first. */
+	/** Feet positions of the steps, top first; of a ladder shaft, the cells bots climb, the hatch first. */
 	public List<BlockPos> stairs() {
 		return this.heights().stream().flatMap(List::stream).toList();
 	}
@@ -320,7 +373,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	/** The stair blocks of the spiral, by position: the floor of each row a step up leads onto, facing up. */
 	private Map<BlockPos, BlockState> stairBlocks() {
 		Map<BlockPos, BlockState> blocks = new HashMap<>();
-		if (this.spiral) {
+		if (this.layout == Layout.SPIRAL) {
 			for (int k = 0; k < this.depth(); k++) {
 				Turn turn = TURNS.get(k % TURNS.size());
 				BlockState stair = Blocks.COBBLESTONE_STAIRS.defaultBlockState().setValue(StairBlock.FACING, turn.up());
@@ -332,10 +385,18 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return blocks;
 	}
 
-	/** The step at a mining level that its hall leaves from: an old shaft's stair, or the spiral's corner cell on the outer face. */
+	/**
+	 * The step at a mining level that its hall leaves from: an old shaft's stair, the spiral's corner cell on the outer
+	 * face, or the ladder shaft's chamber beside the column, east of it at the first level and every other one after,
+	 * west at the others, so a chamber is never right under the one above.
+	 */
 	public BlockPos landing(int level) {
 		int k = this.top.getY() - level;
-		return this.spiral ? this.top.offset(TURNS.get(k % TURNS.size()).landing()).below(k) : this.stairs().get(k);
+		return switch (this.layout) {
+			case STAIRCASE -> this.stairs().get(k);
+			case SPIRAL -> this.top.offset(TURNS.get(k % TURNS.size()).landing()).below(k);
+			case LADDER -> this.top.atY(level).relative(this.levels.indexOf(level) % 2 == 0 ? Direction.EAST : Direction.WEST);
+		};
 	}
 
 	/**
@@ -347,11 +408,14 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	}
 
 	private Direction chestSide(int level) {
-		return this.landing(level).getZ() == this.top.getZ() ? Direction.NORTH : Direction.SOUTH;
+		return this.layout == Layout.LADDER || this.landing(level).getZ() == this.top.getZ() ? Direction.NORTH : Direction.SOUTH;
 	}
 
-	/** Away from the column, on the side the landing's stair is on. */
+	/** Away from the column, on the side the landing's stair, or the ladder shaft's chamber, is on. */
 	private Direction out(int level) {
+		if (this.layout == Layout.LADDER) {
+			return this.landing(level).getX() > this.top.getX() ? Direction.EAST : Direction.WEST;
+		}
 		return this.landing(level).getX() == this.top.getX() ? Direction.WEST : Direction.EAST;
 	}
 
@@ -370,7 +434,11 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 */
 	public List<BlockPos> torches() {
 		Set<BlockPos> torches = new LinkedHashSet<>();
-		if (this.spiral) {
+		if (this.layout == Layout.LADDER) {
+			// One in each landing chamber; the column has no floor for one.
+			return this.levels.stream().map(this::landing).toList();
+		}
+		if (this.layout == Layout.SPIRAL) {
 			// A height of the spiral is about 4 stairs of an old shaft long.
 			int every = Math.max(1, this.torchSpacing / TURNS.size());
 			for (int k = 0; k <= this.depth(); k++) {
@@ -411,6 +479,9 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 */
 	// ponytail: one batch per hall; split it per branch pair if a level ever needs more hands.
 	public BuildPlan plan() {
+		if (this.layout == Layout.LADDER) {
+			return this.ladderPlan();
+		}
 		Map<BlockPos, BuildPlan.Step> steps = new LinkedHashMap<>();
 		List<BuildPlan.Batch> batches = new ArrayList<>();
 		// The stairs batch before the one being dug, if any.
@@ -435,7 +506,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			if (i == 0 || !this.levels.contains(y)) {
 				continue;
 			}
-			if (this.spiral) {
+			if (this.layout == Layout.SPIRAL) {
 				steps.put(this.landingChest(y), new BuildPlan.Step(this.landingChest(y), this.chest(y)));
 				above = this.batch(batches, steps.size(), above);
 				continue;
@@ -452,6 +523,49 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			this.batch(batches, steps.size(), above);
 		}
 		return new BuildPlan(List.copyOf(steps.values()), batches);
+	}
+
+	/**
+	 * Digs the ladder shaft's column from the top down, a ladder at every height, and at each level its chamber with a
+	 * torch and the landing chest; the walls round each cell are made solid first, as in {@link #plan()}, so each
+	 * ladder has a block behind it and no fluid comes in. Each stretch down to a level is a batch. The first one clears
+	 * the entrance, and puts the hatch in once the top ladder is up: the builder digs its way down through the ground
+	 * the hatch goes in, as a shut hatch over no ladder is no way in, and climbs out through the hatch, as a bot cannot
+	 * climb off the top of a ladder into the open.
+	 */
+	private BuildPlan ladderPlan() {
+		Map<BlockPos, BuildPlan.Step> steps = new LinkedHashMap<>();
+		List<BuildPlan.Batch> batches = new ArrayList<>();
+		List<Integer> above = List.of();
+		Set<BlockPos> torches = Set.copyOf(this.torches());
+		Set<BlockPos> open = this.unwalled();
+		this.dig(steps, this.top.above(), torches, open);
+		this.dig(steps, this.top, torches, open);
+		BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, LADDER_FACING);
+		int y = this.hatch().getY() - 1;
+		for (int level : this.levels) {
+			for (; y >= level; y--) {
+				this.place(steps, this.top.atY(y), ladder, open);
+				if (y == this.hatch().getY() - 1) {
+					this.place(steps, this.hatch(), Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, LADDER_FACING)
+						.setValue(TrapDoorBlock.HALF, Half.TOP), open);
+				}
+			}
+			BlockPos landing = this.landing(level);
+			this.dig(steps, landing.above(), torches, open);
+			this.dig(steps, landing, torches, open);
+			steps.put(this.landingChest(level), new BuildPlan.Step(this.landingChest(level), this.chest(level)));
+			above = this.batch(batches, steps.size(), above);
+		}
+		if (batches.isEmpty()) {
+			this.batch(batches, steps.size(), above);
+		}
+		return new BuildPlan(List.copyOf(steps.values()), batches);
+	}
+
+	/** Where a ladder shaft's hatch goes: in the ground, over the top ladder. */
+	private BlockPos hatch() {
+		return this.top.below();
 	}
 
 	/**
@@ -500,10 +614,19 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		steps.put(step.pos(), step);
 	}
 
-	/** What the plan never walls in: what it digs out or puts stair blocks in, the halls, the landing chests and the branches. */
+	/**
+	 * What the plan never walls in: what it digs out or puts stair blocks in, the ladder shaft's column, hatch and
+	 * chambers, the halls, the landing chests and the branches.
+	 */
 	private Set<BlockPos> unwalled() {
 		Set<BlockPos> open = new HashSet<>(this.stairBlocks().keySet());
-		this.stairs().forEach(stair -> IntStream.range(0, 3).forEach(up -> open.add(stair.above(up))));
+		if (this.layout == Layout.LADDER) {
+			open.addAll(this.stairs());
+			open.addAll(List.of(this.hatch(), this.top, this.top.above()));
+			this.levels.forEach(level -> open.addAll(List.of(this.landing(level), this.landing(level).above())));
+		} else {
+			this.stairs().forEach(stair -> IntStream.range(0, 3).forEach(up -> open.add(stair.above(up))));
+		}
 		for (int level : this.levels) {
 			List<BlockPos> hall = this.hall(level);
 			hall.forEach(cell -> open.addAll(List.of(cell, cell.above())));
@@ -522,10 +645,23 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		return open;
 	}
 
-	/** What no bot may break: the floors of the stairs and halls, and the builder's torches. */
+	/**
+	 * What no bot may break: the floors of the stairs and halls, and the builder's torches; of a ladder shaft, the
+	 * ladders, the walls behind them, the column's floor and the chamber floors, but not the ground the hatch goes in,
+	 * which the builder digs through first, and which is protected once it is placed, like any block a plan places.
+	 */
 	public Set<BlockPos> protectedBlocks() {
 		Set<BlockPos> blocks = new HashSet<>(this.torches());
-		this.stairs().forEach(stair -> blocks.add(stair.below()));
+		if (this.layout == Layout.LADDER) {
+			List<BlockPos> column = this.stairs().stream().filter(cell -> !cell.equals(this.hatch())).toList();
+			column.forEach(cell -> blocks.addAll(List.of(cell, cell.relative(LADDER_FACING.getOpposite()))));
+			if (!column.isEmpty()) {
+				blocks.add(column.getLast().below());
+			}
+			this.levels.forEach(level -> blocks.add(this.landing(level).below()));
+		} else {
+			this.stairs().forEach(stair -> blocks.add(stair.below()));
+		}
 		for (int level : this.levels) {
 			this.hall(level).forEach(cell -> blocks.add(cell.below()));
 		}
@@ -563,11 +699,11 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	}
 
 	/**
-	 * The hall at a mining level of the spiral as mining work, like a branch, dug before the
-	 * branches off it; none in an old shaft, whose plan digs its halls.
+	 * The hall at a mining level of the spiral or ladder shaft as mining work, like a branch, dug
+	 * before the branches off it; none in an old shaft, whose plan digs its halls.
 	 */
 	public Optional<Branch> hallWork(int level) {
-		if (!this.spiral) {
+		if (this.layout == Layout.STAIRCASE) {
 			return Optional.empty();
 		}
 		List<BlockPos> hall = this.hall(level);

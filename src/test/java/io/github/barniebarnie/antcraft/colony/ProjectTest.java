@@ -324,7 +324,8 @@ class ProjectTest {
 
 	/** A new spiral shaft with its first batch posted, the stairs it needs ordered and their crafts posted. */
 	private static Mineshaft shaftNeedingStairs(Colony colony, Map<Item, Integer> has, boolean onSpot) {
-		Mineshaft shaft = new Mineshaft(new BlockPos(2, 64, 2), List.of(60));
+		Mineshaft shaft = new Mineshaft(new BlockPos(2, 64, 2), List.of(60), Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH,
+			Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.SPIRAL);
 		colony.setMineshaft(shaft);
 		colony.postBuildJobs();
 		colony.planProjects(STONE, step -> true, has, tool -> true);
@@ -383,6 +384,20 @@ class ProjectTest {
 		Mineshaft shaft = shaftNeedingStairs(colony, Map.of(), true);
 		colony.removeBuild(shaft.plan());
 		assertEquals(List.of(), stairCrafts(colony).stream().filter(job -> !job.target().equals(colony.core())).toList());
+	}
+
+	@Test
+	void theColonyOrdersTheLaddersANewShaftNeedsBeyondWhatTheCoreHas() {
+		// A ladder at y=62, 61 and 60, under the hatch at y=63.
+		Mineshaft shaft = new Mineshaft(new BlockPos(2, 64, 2), List.of(60));
+		for (int has = 0; has <= 3; has++) {
+			Colony colony = colony();
+			Project project = colony.setMineshaft(shaft);
+			colony.postBuildJobs();
+			colony.planProjects(STONE, step -> true, Map.of(Items.LADDER, has), tool -> true);
+			assertEquals(has == 3 ? null : 3 - has, colony.waitingFor(project.id()).get(Items.LADDER), "with " + has + " ladders");
+			assertEquals(has == 3 ? null : 3 - has, colony.orders().get(Items.LADDER), "with " + has + " ladders");
+		}
 	}
 
 	@Test

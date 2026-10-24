@@ -96,7 +96,7 @@ class BlueprintPlacementTest {
 	@Test
 	void aSiteOverTheMineshaftIsRefused() {
 		Colony colony = colony();
-		Mineshaft shaft = new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, false);
+		Mineshaft shaft = new Mineshaft(new BlockPos(10, 64, 10), List.of(60), 1, 3, 4, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(shaft);
 		assertRefused(BlueprintPlacement.Refusal.OVERLAPS_MINESHAFT, site(colony, AT));
 	}

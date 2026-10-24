@@ -57,7 +57,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	private static Colony colonyWithMiner(GameTestHelper helper) {
 		Colony colony = colony(helper, CORE, 6);
 		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 1, 6)), List.of(), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
-			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(shaft);
 		colony.removeBuild(shaft.plan());
 		return colony;
@@ -382,7 +382,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		Colony colony = colony(helper, corePos, 12);
 		// A mineshaft of no levels, taken as dug, so the bots have only the terraform to do.
 		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 4, 15)), List.of(), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
-			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(shaft);
 		colony.removeBuild(shaft.plan());
 		core(helper, corePos).setItem(0, new ItemStack(Items.DIRT, 64));
@@ -413,7 +413,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	/** A mineshaft of no levels at (x, y, z), taken as dug, so the bots have only the terraform to do. */
 	private static void dugShaft(GameTestHelper helper, Colony colony, int x, int y, int z) {
 		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(x, y, z)), List.of(), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
-			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(shaft);
 		colony.removeBuild(shaft.plan());
 	}
@@ -497,7 +497,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		BlockPos corePos = new BlockPos(0, 3, 1);
 		Colony colony = colony(helper, corePos, 6);
 		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(0, 3, 6)), List.of(), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
-			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, false);
+			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
 		colony.setMineshaft(shaft);
 		colony.removeBuild(shaft.plan());
 		core(helper, corePos).setItem(0, new ItemStack(Items.COBBLESTONE, 64));
