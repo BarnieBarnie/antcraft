@@ -261,18 +261,22 @@ public final class AntCraftCommands {
 	}
 
 	/**
-	 * Trusts {@code players} with the nearest colony, or no longer does if not {@code trust}. Its owner and operators may
-	 * ({@link ColonyActions#mayTrust}); anyone else is refused.
+	 * Trusts {@code players} with the nearest colony the source may trust ({@link ColonyActions#mayTrust}: its owner, or
+	 * any for operators), or no longer does if not {@code trust}, so another player's colony nearer does not get in the
+	 * way. With colonies in range but none the source may trust, it is refused.
 	 */
 	private static int trust(CommandSourceStack source, Collection<NameAndId> players, boolean trust) {
-		Optional<Colony> found = nearestColony(source);
-		if (found.isEmpty()) {
-			return 0;
-		}
 		ServerPlayer player = source.getPlayer();
+		BlockPos at = BlockPos.containing(source.getPosition());
+		ColonyManager colonies = ColonyManager.get(source.getLevel());
 		// The console and command blocks run as operators.
-		if (player != null && !ColonyActions.mayTrust(found.get(), player)) {
-			source.sendFailure(Component.translatable("commands.antcraft.colony.trust.not_allowed"));
+		Optional<Colony> found = colonies.nearest(at, COLONY_RANGE, colony -> player == null || ColonyActions.mayTrust(colony, player));
+		if (found.isEmpty()) {
+			if (colonies.nearest(at, COLONY_RANGE).isPresent()) {
+				source.sendFailure(Component.translatable("commands.antcraft.colony.trust.not_allowed"));
+			} else {
+				source.sendFailure(Component.translatable("commands.antcraft.colony.none", COLONY_RANGE));
+			}
 			return 0;
 		}
 		int changed = 0;

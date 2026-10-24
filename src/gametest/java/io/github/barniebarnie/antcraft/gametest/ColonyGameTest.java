@@ -486,6 +486,33 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/**
+	 * An owner standing by another player's colony trusts a player with their own colony, a little further away: the
+	 * trust command acts on the nearest colony the owner may trust, not the nearest colony.
+	 */
+	@GameTest(maxTicks = 5)
+	public void anOwnersTrustCommandActsOnTheirOwnColonyWithAnotherNearer(GameTestHelper helper) {
+		Colony own = placeCore(helper);
+		BlockPos otherCore = new BlockPos(6, 1, 6);
+		helper.setBlock(otherCore, ModBlocks.COLONY_CORE);
+		Colony other = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(otherCore))
+			.orElseThrow(() -> new AssertionError("no other colony founded"));
+		other.setRadius(6);
+		other.setStockTargets(List.of());
+		other.setOwner(UUID.randomUUID());
+		ServerPlayer owner = helper.makeMockServerPlayerInLevel();
+		owner.setPos(Vec3.atCenterOf(helper.absolutePos(new BlockPos(6, 1, 5))));
+		own.setOwner(owner.getUUID());
+		CommandSourceStack asOwner = owner.createCommandSourceStack().withSuppressedOutput();
+
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust Alice");
+		helper.assertValueEqual(own.trusted().size(), 1, "trusted players of the owner's colony after trust");
+		helper.assertValueEqual(other.trusted(), Set.of(), "trusted players of the other player's colony");
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony untrust Alice");
+		helper.assertValueEqual(own.trusted(), Set.of(), "trusted players of the owner's colony after untrust");
+		helper.succeed();
+	}
+
 	@GameTest
 	public void botActivatedNearCoreJoinsColony(GameTestHelper helper) {
 		Colony colony = placeCore(helper);

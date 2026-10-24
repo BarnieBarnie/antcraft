@@ -114,7 +114,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft goto <pos> [bots]` | Sends bots to a position. Without `[bots]`, the nearest bot within 64 blocks |
 | `/antcraft stop [bots]` | Cancels the walk target |
 | `/antcraft colony info` | Members, idle members and jobs, the owner and trusted players, each bot with its current job, for each order what is still to gather or missing, blocked build steps and trees given up on |
-| `/antcraft colony trust <player>` | Lets a player change the colony as its owner can. The colony's owner may run this and `untrust` without operator rights; trusted players may change the colony but not whom it trusts |
+| `/antcraft colony trust <player>` | Lets a player change the colony as its owner can. The colony's owner may run this and `untrust` without operator rights; trusted players may change the colony but not whom it trusts. Acts on the nearest colony within 64 blocks that you may trust (your own, or any for operators), so another player's colony nearer does not get in the way |
 | `/antcraft colony untrust <player>` | Takes that back |
 | `/antcraft colony order <item> <count>` | Asks the colony to craft something, e.g. `antcraft:bot_core 2` |
 | `/antcraft colony cancel <item>` | Cancels an order |
