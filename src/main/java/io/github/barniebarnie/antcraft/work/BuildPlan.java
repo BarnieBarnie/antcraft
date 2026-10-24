@@ -648,12 +648,19 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 
 	/**
 	 * The blocks a step any solid block will do takes when the colony lacks the step's own, such as
-	 * for a terraform's fill: cheap fillers, and sand and gravel, which sink to the bottom of water.
+	 * for a terraform's fill: cheap fillers, and sand and gravel, which sink to the bottom of water. In the order a
+	 * stand-in is taken (see {@link #fetchList}), so it is the same every run: sand and gravel first, which only such a
+	 * step takes, then the {@link #HOLDING_FILL_BLOCKS}.
 	 */
-	public static final Set<Item> FILL_BLOCKS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE, Items.SAND, Items.RED_SAND, Items.GRAVEL);
+	public static final Set<Item> FILL_BLOCKS = Collections.unmodifiableSequencedSet(new LinkedHashSet<>(List.of(Items.SAND, Items.RED_SAND,
+		Items.GRAVEL, Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE)));
 
-	/** The {@link #FILL_BLOCKS} that hold where they are placed, for a step whose block must not fall (see {@link Step#mayFall}). */
-	public static final Set<Item> HOLDING_FILL_BLOCKS = Set.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE);
+	/**
+	 * The {@link #FILL_BLOCKS} that hold where they are placed, for a step whose block must not fall (see {@link Step#mayFall}),
+	 * in the order a stand-in is taken: dirt, cobblestone, cobbled deepslate.
+	 */
+	public static final Set<Item> HOLDING_FILL_BLOCKS = Collections.unmodifiableSequencedSet(new LinkedHashSet<>(List.of(Items.DIRT,
+		Items.COBBLESTONE, Items.COBBLED_DEEPSLATE)));
 
 	/**
 	 * Which of the {@link #HOLDING_FILL_BLOCKS} the colony {@code has} to fill water with that is broken next, such as

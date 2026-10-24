@@ -27,6 +27,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -158,6 +159,79 @@ public class LadderMineshaftGameTest implements CustomTestMethodInvoker {
 			assertDug(helper, shaft);
 			BlockState hatch = helper.getLevel().getBlockState(shaft.stairs().getFirst());
 			helper.assertTrue(hatch.is(Blocks.SPRUCE_TRAPDOOR), "the hatch is " + hatch);
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
+		});
+	}
+
+	/** A spruce tree on the ground at y=5: four logs from {@code (x, 5, z)} up, leaves round the top. */
+	private static void spruce(GameTestHelper helper, int x, int z) {
+		BlockState leaves = Blocks.SPRUCE_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1);
+		for (BlockPos pos : BlockPos.betweenClosed(x - 1, 8, z - 1, x + 1, 8, z + 1)) {
+			helper.setBlock(pos, leaves);
+		}
+		helper.setBlock(x, 9, z, leaves);
+		for (int y = 5; y <= 8; y++) {
+			helper.setBlock(x, y, z, Blocks.SPRUCE_LOG);
+		}
+	}
+
+	/**
+	 * As above, but the colony has no wood at all and only a spruce tree grows nearby: the bots fell it for spruce logs
+	 * and make the hatch a spruce trapdoor, never ordering an oak one, which no tree nearby grows.
+	 */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 560)
+	public void aColonyWithOnlySpruceNearbyPutsASpruceTrapdoorHatchOnItsShaft(GameTestHelper helper) {
+		stone(helper, 4);
+		spruce(helper, 1, 6);
+		Colony colony = colony(helper, CORE);
+		core(helper, CORE).setItem(0, new ItemStack(Items.LADDER, 16));
+		core(helper, CORE).setItem(2, new ItemStack(Items.TORCH, 4));
+		core(helper, CORE).setItem(3, new ItemStack(Items.CHEST, 1));
+		Mineshaft shaft = shaft(helper, new BlockPos(3, 5, 3), 3);
+		colony.setMineshaft(shaft);
+		for (BlockPos at : List.of(new BlockPos(7, 5, 0), new BlockPos(7, 5, 7))) {
+			member(helper, colony, at).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		}
+		helper.onEachTick(() -> {
+			if (colony.orders().containsKey(Items.OAK_TRAPDOOR)) {
+				helper.fail("ordered an oak trapdoor: " + colony.orders());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			assertDug(helper, shaft);
+			BlockState hatch = helper.getLevel().getBlockState(shaft.stairs().getFirst());
+			helper.assertTrue(hatch.is(Blocks.SPRUCE_TRAPDOOR), "the hatch is " + hatch);
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
+		});
+	}
+
+	/**
+	 * The core holds a birch trapdoor and no oak one: the builder takes it for the hatch on the same trip as its ladders,
+	 * so it carries it from the first time it carries ladders, and never comes back to the core for it.
+	 */
+	@GameTest(maxTicks = 330)
+	public void theBuilderTakesAStandInHatchOnTheSameTripAsItsLadders(GameTestHelper helper) {
+		stone(helper, 4);
+		Colony colony = colony(helper, CORE);
+		core(helper, CORE).setItem(0, new ItemStack(Items.LADDER, 16));
+		core(helper, CORE).setItem(1, new ItemStack(Items.BIRCH_TRAPDOOR, 1));
+		core(helper, CORE).setItem(2, new ItemStack(Items.TORCH, 4));
+		core(helper, CORE).setItem(3, new ItemStack(Items.CHEST, 1));
+		Mineshaft shaft = shaft(helper, new BlockPos(3, 5, 3), 3);
+		colony.setMineshaft(shaft);
+		AntBot builder = member(helper, colony, new BlockPos(7, 5, 7));
+		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		helper.onEachTick(() -> {
+			if (builder.getInventory().countItem(Items.LADDER) > 0 && core(helper, CORE).countItem(Items.BIRCH_TRAPDOOR) > 0) {
+				helper.fail("took the ladders without the birch trapdoor");
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			assertDug(helper, shaft);
+			BlockState hatch = helper.getLevel().getBlockState(shaft.stairs().getFirst());
+			helper.assertTrue(hatch.is(Blocks.BIRCH_TRAPDOOR), "the hatch is " + hatch);
 			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
 		});
 	}

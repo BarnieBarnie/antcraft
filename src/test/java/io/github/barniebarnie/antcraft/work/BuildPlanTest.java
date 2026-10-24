@@ -792,4 +792,24 @@ class BuildPlanTest {
 		assertEquals(Map.of(Items.LADDER, 3, Items.SPRUCE_TRAPDOOR, 2, Items.COBBLESTONE, 1, Items.DIRT, 1),
 			BuildPlan.fetchList(Items.LADDER, 3, both, Map.of(), core, 10, standIns), "not a stand-in the plan places as such");
 	}
+
+	/**
+	 * Which fill block stands in for a step's own block is the same every run: the fill blocks are taken in a fixed
+	 * order, sand and gravel first where the step may fall, then dirt, cobblestone and cobbled deepslate.
+	 */
+	@Test
+	void theFillStandInFetchedIsTheSameEveryRun() {
+		assertEquals(List.of(Items.SAND, Items.RED_SAND, Items.GRAVEL, Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE),
+			List.copyOf(BuildPlan.FILL_BLOCKS));
+		assertEquals(List.of(Items.DIRT, Items.COBBLESTONE, Items.COBBLED_DEEPSLATE), List.copyOf(BuildPlan.HOLDING_FILL_BLOCKS));
+		Map<Item, Integer> needed = new LinkedHashMap<>();
+		needed.put(Items.LADDER, 3);
+		needed.put(Items.STONE, 1);
+		Map<Item, Integer> core = new HashMap<>(Map.of(Items.LADDER, 10));
+		BuildPlan.FILL_BLOCKS.forEach(item -> core.put(item, 1));
+		assertEquals(Map.of(Items.LADDER, 3, Items.SAND, 1),
+			BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 10, Map.of(Items.STONE, BuildPlan.FILL_BLOCKS)));
+		assertEquals(Map.of(Items.LADDER, 3, Items.DIRT, 1),
+			BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 10, Map.of(Items.STONE, BuildPlan.HOLDING_FILL_BLOCKS)), "where it must hold");
+	}
 }

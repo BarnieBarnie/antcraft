@@ -392,7 +392,7 @@ public class ColonyManager extends SavedData {
 		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for. A pickaxe
 		// is ordered until one is made, not just while none is coming, or the order would withdraw itself. A hatch the colony
 		// has no wood for is of a wood that grows nearby.
-		Map<Item, Integer> wood = nearbyWood(level, trees);
+		Map<Item, Integer> wood = nearbyWood(trees, level::getBlockState);
 		Map<Item, Integer> materials = colony.planProjects(level::getBlockState, step -> BuilderGoal.isPossible(level, step), have,
 			tool -> kind.rank(pickaxe) >= kind.rank(tool),
 			item -> ToolUpgrade.makeableNow(item, have, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable),
@@ -473,10 +473,15 @@ public class ColonyManager extends SavedData {
 		return TreeScanner.findAll(trees, colony.core(), colony.radius()).stream().filter(tree -> territory.contains(tree.base())).toList();
 	}
 
-	/** A stack of logs of each kind of {@code trees}, to see what the colony can make from wood that grows nearby. */
-	private static Map<Item, Integer> nearbyWood(ServerLevel level, List<TreeScanner.Tree> trees) {
+	/**
+	 * A stack of logs of each kind of {@code trees}, to see what the colony can make from wood that grows nearby: of every
+	 * log of each tree, as a tree may be of more than one wood, and only those whose item is a log, so a mangrove whose
+	 * roots a data pack counts as logs grows mangrove wood.
+	 */
+	static Map<Item, Integer> nearbyWood(List<TreeScanner.Tree> trees, Function<BlockPos, BlockState> world) {
 		Map<Item, Integer> logs = new HashMap<>();
-		trees.forEach(tree -> logs.put(level.getBlockState(tree.logs().getFirst()).getBlock().asItem(), 64));
+		trees.stream().flatMap(tree -> tree.logs().stream()).map(pos -> world.apply(pos).getBlock().asItem())
+			.filter(item -> item.builtInRegistryHolder().is(ItemTags.LOGS)).forEach(item -> logs.put(item, 64));
 		return logs;
 	}
 

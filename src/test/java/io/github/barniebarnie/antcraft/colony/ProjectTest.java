@@ -416,6 +416,26 @@ class ProjectTest {
 		assertEquals(Map.of(Items.BIRCH_TRAPDOOR, 1), hatchOrders(Map.of(Items.BIRCH_PLANKS, 6), spruce), "what it can make now first");
 	}
 
+	/**
+	 * The wood a mangrove grows is mangrove, though the lowest blocks of the tree are its roots, which a data pack may
+	 * count as logs; and a tree of two woods, such as an oak whose branch touches a birch, grows both.
+	 */
+	@Test
+	void aMangroveTreeCountsAsMangroveWood() {
+		BlockPos root = new BlockPos(0, 64, 0);
+		BlockPos trunk = root.above();
+		Map<BlockPos, BlockState> blocks = Map.of(root, Blocks.MANGROVE_ROOTS.defaultBlockState(), trunk, Blocks.MANGROVE_LOG.defaultBlockState(),
+			trunk.above(), Blocks.MANGROVE_LOG.defaultBlockState());
+		TreeScanner.Tree mangrove = new TreeScanner.Tree(root, List.of(root, trunk, trunk.above()));
+		assertEquals(Map.of(Items.MANGROVE_LOG, 64), ColonyManager.nearbyWood(List.of(mangrove), blocks::get));
+
+		BlockPos oak = new BlockPos(5, 64, 0);
+		BlockPos birch = new BlockPos(6, 65, 0);
+		Map<BlockPos, BlockState> both = Map.of(oak, Blocks.OAK_LOG.defaultBlockState(), birch, Blocks.BIRCH_LOG.defaultBlockState());
+		assertEquals(Map.of(Items.OAK_LOG, 64, Items.BIRCH_LOG, 64),
+			ColonyManager.nearbyWood(List.of(new TreeScanner.Tree(oak, List.of(oak, birch))), both::get), "both woods of a mixed tree");
+	}
+
 	@Test
 	void stoneStairsTheColonyHasLeaveNothingToCraftOnTheSpot() {
 		Colony colony = colony();
