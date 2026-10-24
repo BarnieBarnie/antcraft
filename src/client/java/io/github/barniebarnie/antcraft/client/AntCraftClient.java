@@ -52,6 +52,7 @@ public class AntCraftClient implements ClientModInitializer {
 		BlueprintItem.setPlacer(BlueprintPreview::place);
 		BlueprintItem.setPicker(BlueprintPickerScreen::open);
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BlueprintList.TYPE, (list, context) -> ClientBlueprints.set(list.blueprints()));
+		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BlueprintBlocksReply.TYPE, (reply, context) -> ClientBlueprints.receive(reply.blocks()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBlueprints.set(List.of()));
 		// Replies that arrive after the screen closed are dropped.
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.StatusReply.TYPE, (reply, context) -> {

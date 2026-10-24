@@ -3,11 +3,13 @@ package io.github.barniebarnie.antcraft.gametest;
 import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
@@ -83,7 +85,7 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
-	/** The list the server sends clients holds every bundled blueprint, with its structure's size and blocks for the picker and preview. */
+	/** The list the server sends clients holds every bundled blueprint, with its structure's size and materials for the picker. */
 	@GameTest(maxTicks = 5)
 	public void theBlueprintListForClientsHoldsEveryBundledBlueprint(GameTestHelper helper) {
 		ColonyNetworking.BlueprintList list = ColonyNetworking.BlueprintList.of(helper.getLevel().getServer());
@@ -92,8 +94,26 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		for (String name : List.of("starter_house", "cobble_step")) {
 			BlueprintSummary summary = list.blueprints().stream().filter(blueprint -> blueprint.id().equals(AntCraft.id(name))).findFirst().orElseThrow();
 			helper.assertValueEqual(summary.name(), "blueprint.antcraft." + name, "name of " + name);
-			helper.assertTrue(summary.size().getX() > 0 && !summary.blocks().isEmpty() && !summary.materials().isEmpty(), name + " has no size or blocks: " + summary);
+			helper.assertTrue(summary.size().getX() > 0 && !summary.materials().isEmpty(), name + " has no size or materials: " + summary);
 		}
+		helper.succeed();
+	}
+
+	/**
+	 * A client previewing a blueprint asks for its blocks and gets the structure's, with its size; for an id the server
+	 * does not know it gets none, so its ghost is refused as having no structure.
+	 */
+	@GameTest(maxTicks = 5)
+	public void aClientAskingForABlueprintsBlocksGetsThem(GameTestHelper helper) {
+		MinecraftServer server = helper.getLevel().getServer();
+		BlueprintBlocks step = ColonyNetworking.blocks(server, new ColonyNetworking.BlueprintBlocksRequest(COBBLE_STEP)).blocks();
+		helper.assertValueEqual(step.id(), COBBLE_STEP, "id of the reply");
+		helper.assertValueEqual(step.size(), new Vec3i(2, 2, 1), "size of the cobble step");
+		helper.assertValueEqual(step.blocks().stream().filter(block -> block.state().is(Blocks.OAK_STAIRS)).map(BlueprintSummary.Block::pos).toList(),
+			List.of(new BlockPos(0, 1, 0)), "stairs of the cobble step");
+		helper.assertValueEqual(step.blocks().size(), 3, "blocks of the cobble step");
+		BlueprintBlocks castle = ColonyNetworking.blocks(server, new ColonyNetworking.BlueprintBlocksRequest(AntCraft.id("castle"))).blocks();
+		helper.assertValueEqual(castle, new BlueprintBlocks(AntCraft.id("castle"), Vec3i.ZERO, List.of()), "blocks of an unknown blueprint");
 		helper.succeed();
 	}
 

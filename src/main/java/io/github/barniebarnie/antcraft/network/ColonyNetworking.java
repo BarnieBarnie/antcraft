@@ -12,7 +12,9 @@ import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.colony.SiteRules;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
+import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.core.Vec3i;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -46,6 +49,12 @@ import net.minecraft.world.level.block.Rotation;
  * Changes are checked by the server like any client input, and answered with a fresh status.
  */
 public final class ColonyNetworking {
+	/**
+	 * The most bytes the game takes in one custom payload to a client
+	 * ({@code ClientboundCustomPayloadPacket.MAX_PAYLOAD_SIZE}); a larger one disconnects the player.
+	 */
+	public static final int PAYLOAD_LIMIT = 1_048_576;
+
 	/** How often, in ticks, the server looks whether a player's ghosts changed. */
 	static final int GHOST_INTERVAL = 20;
 
@@ -167,6 +176,33 @@ public final class ColonyNetworking {
 		}
 	}
 
+	/**
+	 * Client previewing blueprint {@code blueprint} asks for its blocks, which the list leaves out so it stays small
+	 * however many and large the blueprints are.
+	 */
+	public record BlueprintBlocksRequest(Identifier blueprint) implements CustomPacketPayload {
+		public static final Type<BlueprintBlocksRequest> TYPE = new Type<>(AntCraft.id("blueprint_blocks_request"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintBlocksRequest> STREAM_CODEC =
+			Identifier.STREAM_CODEC.map(BlueprintBlocksRequest::new, BlueprintBlocksRequest::blueprint).cast();
+
+		@Override
+		public Type<BlueprintBlocksRequest> type() {
+			return TYPE;
+		}
+	}
+
+	/** The blocks of the blueprint a client asked for; none, with a zero size, for one the server does not have. */
+	public record BlueprintBlocksReply(BlueprintBlocks blocks) implements CustomPacketPayload {
+		public static final Type<BlueprintBlocksReply> TYPE = new Type<>(AntCraft.id("blueprint_blocks"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintBlocksReply> STREAM_CODEC =
+			BlueprintBlocks.STREAM_CODEC.map(BlueprintBlocksReply::new, BlueprintBlocksReply::blocks);
+
+		@Override
+		public Type<BlueprintBlocksReply> type() {
+			return TYPE;
+		}
+	}
+
 	/** The blueprints the server loaded, sent to each player on joining and after every data reload. */
 	public record BlueprintList(List<BlueprintSummary> blueprints) implements CustomPacketPayload {
 		public static final Type<BlueprintList> TYPE = new Type<>(AntCraft.id("blueprint_list"));
@@ -232,6 +268,8 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.clientboundPlay().register(SiteRulesReply.TYPE, SiteRulesReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BlueprintList.TYPE, BlueprintList.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(BlueprintBlocksRequest.TYPE, BlueprintBlocksRequest.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(BlueprintBlocksReply.TYPE, BlueprintBlocksReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BuildGhosts.TYPE, BuildGhosts.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(CancelBuild.TYPE, CancelBuild.STREAM_CODEC);
 		ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -255,6 +293,8 @@ public final class ColonyNetworking {
 			}
 		});
 		ServerPlayNetworking.registerGlobalReceiver(ChooseBlueprint.TYPE, (request, context) -> handle(context.player(), request));
+		ServerPlayNetworking.registerGlobalReceiver(BlueprintBlocksRequest.TYPE, (request, context) ->
+			context.responseSender().sendPacket(blocks(context.player().level().getServer(), request)));
 		ServerPlayNetworking.registerGlobalReceiver(SiteRulesRequest.TYPE, (request, context) ->
 			context.responseSender().sendPacket(siteRules(context.player().level(), Requester.of(context.player()))));
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
@@ -295,6 +335,17 @@ public final class ColonyNetworking {
 	 */
 	public static boolean handle(ServerPlayer player, ChooseBlueprint request) {
 		return BlueprintItem.choose(player.getItemInHand(request.hand()), request.blueprint());
+	}
+
+	/**
+	 * The reply to a request for a blueprint's blocks: those of its structure as {@code server} has it now, none for a
+	 * blueprint or structure it does not have, and none but the size for one too large to send
+	 * ({@link BlueprintBlocks#sendable()}). Any player may ask, as any player gets the list.
+	 */
+	public static BlueprintBlocksReply blocks(MinecraftServer server, BlueprintBlocksRequest request) {
+		return new BlueprintBlocksReply(Blueprints.get(request.blueprint())
+			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), server.getStructureTemplateManager().get(blueprint.structure())).sendable())
+			.orElse(new BlueprintBlocks(request.blueprint(), Vec3i.ZERO, List.of())));
 	}
 
 	/**

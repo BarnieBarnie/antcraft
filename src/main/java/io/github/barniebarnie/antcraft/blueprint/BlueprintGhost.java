@@ -16,9 +16,9 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * A blueprint as the client previews it before placing: standing at {@code at}, its lowest corner, mirrored then turned the
  * way a placement is (see {@link BlueprintPlacement#place}), so the ghost shows what the colony would build.
  */
-public record BlueprintGhost(BlueprintSummary blueprint, BlockPos at, Rotation rotation, Mirror mirror) {
+public record BlueprintGhost(BlueprintBlocks blueprint, BlockPos at, Rotation rotation, Mirror mirror) {
 	/** The ghost of {@code blueprint} centred sideways on {@code target}, standing on its level (see {@link #origin}). */
-	public static BlueprintGhost centredOn(BlueprintSummary blueprint, BlockPos target, Rotation rotation, Mirror mirror) {
+	public static BlueprintGhost centredOn(BlueprintBlocks blueprint, BlockPos target, Rotation rotation, Mirror mirror) {
 		return new BlueprintGhost(blueprint, origin(blueprint.size(), target, rotation), rotation, mirror);
 	}
 

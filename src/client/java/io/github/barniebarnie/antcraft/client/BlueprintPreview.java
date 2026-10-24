@@ -51,9 +51,12 @@ public final class BlueprintPreview {
 		return Optional.empty();
 	}
 
-	/** The ghost of {@code chosen} against {@code face} of {@code looked}, as shown now, if the client has the blueprint. */
+	/**
+	 * The ghost of {@code chosen} against {@code face} of {@code looked}, as shown now, if the client has the blueprint's
+	 * blocks; asks the server for them the first time.
+	 */
 	static Optional<BlueprintGhost> ghost(ChosenBlueprint chosen, BlockPos looked, Direction face) {
-		return ClientBlueprints.get(chosen.id()).map(blueprint -> BlueprintGhost.centredOn(blueprint, BlueprintGhost.target(looked, face), rotation, mirror));
+		return ClientBlueprints.blocks(chosen.id()).map(blueprint -> BlueprintGhost.centredOn(blueprint, BlueprintGhost.target(looked, face), rotation, mirror));
 	}
 
 	/** Each client tick: the turn and mirror keys, and asking for the rules while a Blueprint is held. */

@@ -37,8 +37,8 @@ class BlueprintGhostTest {
 	}
 
 	/** A 3 by 1 by 2 blueprint: stairs facing north at its origin, stone in its far corner. */
-	private static BlueprintSummary summary() {
-		return new BlueprintSummary(Identifier.fromNamespaceAndPath("antcraft", "step"), "blueprint.antcraft.step", Optional.empty(), SIZE,
+	private static BlueprintBlocks summary() {
+		return new BlueprintBlocks(Identifier.fromNamespaceAndPath("antcraft", "step"), SIZE,
 			List.of(new BlueprintSummary.Block(BlockPos.ZERO, stairs(Direction.NORTH)),
 				new BlueprintSummary.Block(new BlockPos(2, 0, 1), Blocks.STONE.defaultBlockState())));
 	}
@@ -89,8 +89,8 @@ class BlueprintGhostTest {
 		assertEquals(new BlockPos(18, 70, 19), BlueprintGhost.origin(size, target, Rotation.CLOCKWISE_180));
 		// Turned a quarter, it is 3 wide and 5 deep.
 		assertEquals(new BlockPos(19, 70, 18), BlueprintGhost.origin(size, target, Rotation.CLOCKWISE_90));
-		BlueprintGhost ghost = BlueprintGhost.centredOn(new BlueprintSummary(Identifier.fromNamespaceAndPath("antcraft", "hut"), "blueprint.antcraft.hut",
-			Optional.empty(), size, List.of()), target, Rotation.COUNTERCLOCKWISE_90, Mirror.NONE);
+		BlueprintGhost ghost = BlueprintGhost.centredOn(new BlueprintBlocks(Identifier.fromNamespaceAndPath("antcraft", "hut"),
+			size, List.of()), target, Rotation.COUNTERCLOCKWISE_90, Mirror.NONE);
 		assertEquals(new BoundingBox(19, 70, 18, 21, 71, 22), ghost.area());
 	}
 
@@ -124,8 +124,7 @@ class BlueprintGhostTest {
 
 	@Test
 	void aGhostOfABlueprintWithoutAStructureIsRefused() {
-		BlueprintSummary empty = new BlueprintSummary(Identifier.fromNamespaceAndPath("antcraft", "gone"), "blueprint.antcraft.gone", Optional.empty(),
-			Vec3i.ZERO, List.of());
+		BlueprintBlocks empty = new BlueprintBlocks(Identifier.fromNamespaceAndPath("antcraft", "gone"), Vec3i.ZERO, List.of());
 		assertEquals(Optional.of(BlueprintPlacement.Refusal.NO_STRUCTURE),
 			new BlueprintGhost(empty, AT, Rotation.NONE, Mirror.NONE).refusal(Optional.of(rules())));
 	}
