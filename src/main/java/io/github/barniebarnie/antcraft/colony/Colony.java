@@ -8,6 +8,7 @@ import com.mojang.datafixers.util.Either;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -190,16 +191,29 @@ public class Colony {
 		).apply(i, Works::new));
 	}
 
+	/** Who may change the colony: the player who placed its core, and the players they trust. Colonies saved before owners have none. */
+	private record Access(Optional<UUID> owner, List<UUID> trusted) {
+		static final MapCodec<Access> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+			UUIDUtil.CODEC.optionalFieldOf("owner").forGetter(Access::owner),
+			UUIDUtil.CODEC.listOf().optionalFieldOf("trusted", List.of()).forGetter(Access::trusted)
+		).apply(i, Access::new));
+	}
+
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
 		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects),
-			List.copyOf(c.keptGround), c.quarry, List.copyOf(c.veinCells)))
+			List.copyOf(c.keptGround), c.quarry, List.copyOf(c.veinCells))),
+		Access.CODEC.forGetter(c -> new Access(c.owner, List.copyOf(c.trusted)))
 	).apply(i, Colony::new));
 
 	private final UUID id;
 	private final BlockPos core;
 	private final Set<UUID> members;
+	/** The player who placed the core, if known; see {@link ColonyActions#mayAct}. */
+	private Optional<UUID> owner = Optional.empty();
+	/** Players the owner lets change the colony, besides the owner. */
+	private final Set<UUID> trusted = new LinkedHashSet<>();
 	private final JobBoard board;
 	private int radius;
 	/** The game test area this colony is clipped to (see {@link Territory}); not saved, and null outside game tests. */
@@ -255,13 +269,16 @@ public class Colony {
 	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
 	private long lastGivenUpRecheck = -1;
 
-	private Colony(Basics basics, Wants wants, Works works) {
+	private Colony(Basics basics, Wants wants, Works works, Access access) {
 		this(basics.id(), basics.core(), basics.members(), basics.board(), basics.radius(), wants.orders(), works.mineshaft(), wants.stock(),
 			works.builds(), works.placed(), works.field(), works.storage(), wants.buildOrders(), works.blockedSteps(), wants.systemOrders(),
 			works.batchStates(), works.projects());
 		this.keptGround.addAll(works.keptGround());
 		this.quarry = works.quarry();
 		this.veinCells.addAll(works.veinCells());
+		this.owner = access.owner();
+		this.trusted.addAll(access.trusted());
+		access.owner().ifPresent(this.trusted::remove);
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
@@ -316,6 +333,36 @@ public class Colony {
 		this.indexBatches();
 		List.copyOf(this.builds.keySet()).forEach(this::settleEmpty);
 		protectedBlocks.forEach(placed -> this.protectedBlocks.put(placed.pos(), placed.block().orElse(null)));
+	}
+
+	/** The player who placed the core, or empty for a colony founded otherwise or saved before owners. */
+	public Optional<UUID> owner() {
+		return this.owner;
+	}
+
+	public void setOwner(UUID owner) {
+		this.owner = Optional.of(owner);
+		this.trusted.remove(owner);
+	}
+
+	/** The players besides the owner who may change the colony. */
+	public Set<UUID> trusted() {
+		return Collections.unmodifiableSet(this.trusted);
+	}
+
+	/** Whether {@code player} is the owner or trusted. */
+	public boolean isOwnerOrTrusted(UUID player) {
+		return this.owner.filter(player::equals).isPresent() || this.trusted.contains(player);
+	}
+
+	/** @return whether {@code player} was not trusted before; the owner never is */
+	public boolean trust(UUID player) {
+		return this.owner.filter(player::equals).isEmpty() && this.trusted.add(player);
+	}
+
+	/** @return whether {@code player} was trusted */
+	public boolean untrust(UUID player) {
+		return this.trusted.remove(player);
 	}
 
 	/** What a project of just {@code plan} is called when nobody named it. */

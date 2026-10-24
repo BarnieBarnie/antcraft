@@ -2,13 +2,17 @@ package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -76,19 +80,51 @@ public final class ColonyActions {
 	}
 
 	/**
-	 * Whether a player at {@code from} may change {@code colony}: anyone in range, or only operators if
-	 * {@code requireOp}. Colonies have no owners yet.
+	 * Whether {@code player} at {@code from} may change {@code colony}: its owner and the players it trusts, from
+	 * anywhere, and operators. A colony with no owner yet, saved before colonies had owners, keeps the old rule: anyone
+	 * in range (until one of them {@linkplain #claim claims} it). With {@code requireOp} only operators may.
+	 * Everything that changes a colony on a player's behalf checks this, the colony screen and placing blueprints alike.
 	 */
-	public static boolean mayAct(Colony colony, BlockPos from, boolean isOp, boolean requireOp) {
-		return (isOp || !requireOp) && colony.core().closerThan(from, AntCraftCommands.COLONY_RANGE);
+	public static boolean mayAct(Colony colony, UUID player, BlockPos from, boolean isOp, boolean requireOp) {
+		if (isOp) {
+			return true;
+		}
+		if (requireOp) {
+			return false;
+		}
+		return colony.owner().isPresent() ? colony.isOwnerOrTrusted(player) : colony.core().closerThan(from, AntCraftCommands.COLONY_RANGE);
+	}
+
+	/** {@link #mayAct} for {@code player} where they stand, with the server's config. */
+	public static boolean mayAct(Colony colony, Player player) {
+		return mayAct(colony, player.getUUID(), player.blockPosition(), isOp(player), AntCraftConfig.colonyActionsRequireOp());
+	}
+
+	/** Whether {@code player} has the permission level the {@code /antcraft} commands need. */
+	public static boolean isOp(Player player) {
+		return Commands.LEVEL_GAMEMASTERS.check(player.permissions());
 	}
 
 	/**
-	 * Whether a player at {@code from} may read {@code colony}'s status on the colony screen. This is the same rule as
+	 * Whether {@code player} at {@code from} may read {@code colony}'s status on the colony screen. This is the same rule as
 	 * {@link #mayAct}, so a screen that would refuse every change does not show the colony either.
 	 */
-	public static boolean mayView(Colony colony, BlockPos from, boolean isOp, boolean requireOp) {
-		return mayAct(colony, from, isOp, requireOp);
+	public static boolean mayView(Colony colony, UUID player, BlockPos from, boolean isOp, boolean requireOp) {
+		return mayAct(colony, player, from, isOp, requireOp);
+	}
+
+	/**
+	 * Makes {@code player} the owner of {@code colony} if it has none yet and they {@linkplain #mayAct may act} on it.
+	 * The colony screen calls this, so the first player to use it on a colony saved before owners claims it.
+	 *
+	 * @return whether the colony got its owner
+	 */
+	public static boolean claim(Colony colony, UUID player, BlockPos from, boolean isOp, boolean requireOp) {
+		if (colony.owner().isPresent() || !mayAct(colony, player, from, isOp, requireOp)) {
+			return false;
+		}
+		colony.setOwner(player);
+		return true;
 	}
 
 	/**

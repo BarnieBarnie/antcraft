@@ -36,6 +36,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.IdentifierArgument;
 import net.minecraft.commands.arguments.ResourceOrTagKeyArgument;
 import net.minecraft.commands.arguments.TemplateMirrorArgument;
@@ -51,6 +52,7 @@ import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -70,6 +72,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation] [mirror] [palette]|cancel &lt;n&gt;
  * /antcraft colony project list|cancel &lt;n&gt;|priority &lt;n&gt; &lt;priority&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
+ * /antcraft colony trust|untrust &lt;player&gt;
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
@@ -103,6 +106,12 @@ public final class AntCraftCommands {
 					.executes(ctx -> stop(ctx.getSource(), bots(ctx)))))
 			.then(Commands.literal("colony")
 				.then(Commands.literal("info").executes(ctx -> colonyInfo(ctx.getSource())))
+				.then(Commands.literal("trust")
+					.then(Commands.argument("players", GameProfileArgument.gameProfile())
+						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), true))))
+				.then(Commands.literal("untrust")
+					.then(Commands.argument("players", GameProfileArgument.gameProfile())
+						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), false))))
 				.then(Commands.literal("blocked")
 					.then(Commands.literal("clear").executes(ctx -> clearBlocked(ctx.getSource()))))
 				.then(Commands.literal("order")
@@ -190,6 +199,7 @@ public final class AntCraftCommands {
 		ColonyStatus status = ColonyStatus.of(source.getLevel(), found.get());
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.info",
 			status.core().toShortString(), status.members(), status.jobs(), status.claimed(), status.radius(), status.idle()), false);
+		source.sendSuccess(() -> status.access().describe(), false);
 		status.bots().values().forEach(bot -> source.sendSuccess(() -> botLine(bot), false));
 
 		List<String> low = status.stock().stream().filter(ColonyStatus.Stock::isShort)
@@ -216,6 +226,28 @@ public final class AntCraftCommands {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), false);
 		}
 		return status.members();
+	}
+
+	/** Trusts {@code players} with the nearest colony, or no longer does if not {@code trust}. */
+	private static int trust(CommandSourceStack source, Collection<NameAndId> players, boolean trust) {
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		int changed = 0;
+		for (NameAndId player : players) {
+			boolean done = trust ? found.get().trust(player.id()) : found.get().untrust(player.id());
+			String key = trust
+				? (done ? "commands.antcraft.colony.trust" : "commands.antcraft.colony.trust.unchanged")
+				: (done ? "commands.antcraft.colony.untrust" : "commands.antcraft.colony.untrust.unchanged");
+			if (done) {
+				changed++;
+				source.sendSuccess(() -> Component.translatable(key, player.name()), true);
+			} else {
+				source.sendFailure(Component.translatable(key, player.name()));
+			}
+		}
+		return changed;
 	}
 
 	private static Either<TagKey<Item>, Item> stockMatch(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {

@@ -27,6 +27,8 @@ import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.state.BlockState;
@@ -38,7 +40,24 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
-		List<Build> builds, List<BlockPos> blocked, List<GivenUp> givenUp, Room room) {
+		List<Build> builds, List<BlockPos> blocked, List<GivenUp> givenUp, Room room, Access access) {
+
+	/** The names of the colony's owner, if it has one, and of the players it trusts (see {@link ColonyActions#mayAct}). */
+	public record Access(Optional<String> owner, List<String> trusted) {
+		static final StreamCodec<ByteBuf, Access> STREAM_CODEC = StreamCodec.composite(
+			ByteBufCodecs.optional(ByteBufCodecs.STRING_UTF8), Access::owner, ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), Access::trusted,
+			Access::new);
+
+		/** Who owns the colony and whom it trusts, as {@code colony info} and the colony screen say it. */
+		public Component describe() {
+			if (this.owner.isEmpty()) {
+				return Component.translatable("commands.antcraft.colony.no_owner");
+			}
+			Component trusted = this.trusted.isEmpty() ? Component.translatable("commands.antcraft.colony.nobody")
+				: Component.literal(String.join(", ", this.trusted));
+			return Component.translatable("commands.antcraft.colony.owner", this.owner.get(), trusted);
+		}
+	}
 
 	/** Why the storage area cannot take what the core has no room for, if it cannot. */
 	public enum StorageState {
@@ -146,6 +165,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
 		GivenUp.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
 		Room.STREAM_CODEC, ColonyStatus::room,
+		Access.STREAM_CODEC, ColonyStatus::access,
 		ColonyStatus::new);
 
 	private static <E extends Enum<E>> StreamCodec<ByteBuf, E> enumCodec(E[] values) {
@@ -199,7 +219,17 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		Map<Item, Integer> stock = core == null ? Map.of() : Storage.held(level, colony);
 		int freeSlots = core == null ? 0 : freeSlots(core);
 		boolean chestWithRoom = Storage.storageChests(level, colony).values().stream().anyMatch(chest -> freeSlots(chest) > 0);
-		return of(colony, bots, stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable, level::getBlockState, freeSlots, chestWithRoom);
+		return of(colony, bots, stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable, level::getBlockState, freeSlots, chestWithRoom,
+			player -> playerName(level, player));
+	}
+
+	/** The name of {@code player} if the server knows it, else its UUID. */
+	private static String playerName(ServerLevel level, UUID player) {
+		ServerPlayer online = level.getServer().getPlayerList().getPlayer(player);
+		if (online != null) {
+			return online.getGameProfile().name();
+		}
+		return level.getServer().services().nameToIdCache().get(player).map(NameAndId::name).orElse(player.toString());
 	}
 
 	private static int freeSlots(Container container) {
@@ -219,6 +249,13 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 	 */
 	public static ColonyStatus of(Colony colony, Map<UUID, Bot> bots, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
 			Predicate<Item> gatherable, Function<BlockPos, BlockState> world, int coreFreeSlots, boolean chestWithRoom) {
+		return of(colony, bots, stock, book, gatherable, world, coreFreeSlots, chestWithRoom, UUID::toString);
+	}
+
+	/** As above, naming the colony's owner and trusted players with {@code names}. */
+	public static ColonyStatus of(Colony colony, Map<UUID, Bot> bots, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
+			Predicate<Item> gatherable, Function<BlockPos, BlockState> world, int coreFreeSlots, boolean chestWithRoom,
+			Function<UUID, String> names) {
 		Map<UUID, Bot> loaded = new LinkedHashMap<>();
 		int idle = 0;
 		for (UUID member : colony.members()) {
@@ -282,6 +319,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			: StorageState.READY;
 
 		return new ColonyStatus(colony.core(), colony.members().size(), loaded, idle, colony.radius(), open, claimed, stocks, orders, builds,
-			colony.blockedSteps(), givenUp, new Room(coreFreeSlots, storage));
+			colony.blockedSteps(), givenUp, new Room(coreFreeSlots, storage),
+			new Access(colony.owner().map(names), colony.trusted().stream().map(names).toList()));
 	}
 }

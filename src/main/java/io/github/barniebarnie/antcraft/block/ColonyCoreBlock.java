@@ -29,13 +29,21 @@ public class ColonyCoreBlock extends BaseEntityBlock {
 		}
 	}
 
-	/** A colony a player founds starts its starter projects; one placed otherwise, such as by a test, starts with none. */
+	/**
+	 * A colony a player founds starts its starter projects and is owned by that player; one placed otherwise, such as
+	 * by a test, starts with no projects and no owner.
+	 */
 	@Override
 	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity by, ItemStack stack) {
 		super.setPlacedBy(level, pos, state, by, stack);
 		if (level instanceof ServerLevel serverLevel) {
 			ColonyManager manager = ColonyManager.get(serverLevel);
-			manager.byCore(pos).ifPresent(colony -> manager.startProjects(serverLevel, colony));
+			manager.byCore(pos).ifPresent(colony -> {
+				if (by instanceof Player player) {
+					colony.setOwner(player.getUUID());
+				}
+				manager.startProjects(serverLevel, colony);
+			});
 		}
 	}
 

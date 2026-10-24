@@ -8,9 +8,9 @@ import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import java.util.Optional;
+import java.util.UUID;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -21,7 +21,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Payloads between the colony status screen and the server. Each payload is a record here,
- * registered in {@link #register()}; the server answers for the colony nearest the player, if the player may view it.
+ * registered in {@link #register()}; the server answers for the nearest colony the player may view.
  * Changes are checked by the server like any client input, and answered with a fresh status.
  */
 public final class ColonyNetworking {
@@ -68,13 +68,23 @@ public final class ColonyNetworking {
 	}
 
 	/**
-	 * Who sent a request and what they may do: the player's position, whether they are an operator, whether only
+	 * Who sent a request and what they may do: the player and their position, whether they are an operator, whether only
 	 * operators may act on colonies, and whether bots are allowed on the server. Built once per received payload.
 	 */
-	public record Requester(BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed) {
+	public record Requester(UUID player, BlockPos from, boolean isOp, boolean requireOp, boolean botsAllowed) {
 		static Requester of(ServerPlayer player) {
-			return new Requester(player.blockPosition(), ColonyNetworking.isOp(player), AntCraftConfig.colonyActionsRequireOp(),
+			return new Requester(player.getUUID(), player.blockPosition(), ColonyActions.isOp(player), AntCraftConfig.colonyActionsRequireOp(),
 				AntCraftConfig.botsAllowed(player.level().getServer()));
+		}
+
+		/** {@link ColonyActions#mayAct} for this requester. */
+		public boolean mayAct(Colony colony) {
+			return ColonyActions.mayAct(colony, this.player, this.from, this.isOp, this.requireOp);
+		}
+
+		/** {@link ColonyActions#claim}s {@code colony} for this requester if it has no owner yet. */
+		void claim(Colony colony) {
+			ColonyActions.claim(colony, this.player, this.from, this.isOp, this.requireOp);
 		}
 	}
 
@@ -94,14 +104,10 @@ public final class ColonyNetworking {
 		});
 	}
 
-	/** The same level the {@code /antcraft} commands need. */
-	private static boolean isOp(ServerPlayer player) {
-		return Commands.LEVEL_GAMEMASTERS.check(player.permissions());
-	}
-
 	private static Optional<Colony> colony(ServerLevel level, Requester requester, BlockPos core) {
-		return ColonyManager.get(level).byCore(core)
-			.filter(colony -> ColonyActions.mayAct(colony, requester.from(), requester.isOp(), requester.requireOp()));
+		Optional<Colony> colony = ColonyManager.get(level).byCore(core);
+		colony.ifPresent(requester::claim);
+		return colony.filter(requester::mayAct);
 	}
 
 	/**
@@ -121,12 +127,14 @@ public final class ColonyNetworking {
 	}
 
 	/**
-	 * The reply to a status request from {@code requester}: the nearest colony in range, or none if the player may
-	 * not view it ({@link ColonyActions#mayView}, the same rule as for changes).
+	 * The reply to a status request from {@code requester}: the nearest colony in range the player may view, or none
+	 * if there is none ({@link ColonyActions#mayView}, the same rule as for changes). A colony with no owner yet becomes the
+	 * requester's if they may act on it ({@link ColonyActions#claim}).
 	 */
 	public static StatusReply reply(ServerLevel level, Requester requester) {
-		return new StatusReply(ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE)
-			.filter(colony -> ColonyActions.mayView(colony, requester.from(), requester.isOp(), requester.requireOp()))
-			.map(colony -> ColonyStatus.of(level, colony)));
+		Optional<Colony> nearest = ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE,
+			colony -> ColonyActions.mayView(colony, requester.player(), requester.from(), requester.isOp(), requester.requireOp()));
+		nearest.ifPresent(requester::claim);
+		return new StatusReply(nearest.map(colony -> ColonyStatus.of(level, colony)));
 	}
 }

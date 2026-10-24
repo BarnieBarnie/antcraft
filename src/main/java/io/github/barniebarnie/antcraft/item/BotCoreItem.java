@@ -37,7 +37,7 @@ public class BotCoreItem extends Item {
 		BlockPos pos = context.getClickedPos();
 		BlockPos spawnPos = level.getBlockState(pos).getCollisionShape(level, pos).isEmpty() ? pos : pos.relative(context.getClickedFace());
 		ItemStack stack = context.getItemInHand();
-		if (BotActivation.activate(level, spawnPos) == null) {
+		if (BotActivation.activate(level, spawnPos, player) == null) {
 			return InteractionResult.FAIL;
 		}
 		stack.consume(1, player);

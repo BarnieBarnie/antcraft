@@ -4,10 +4,12 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.gameevent.GameEvent;
 import org.jspecify.annotations.Nullable;
 
@@ -22,13 +24,36 @@ public final class BotActivation {
 
 	/** Spawns a bot at {@code pos}, names it and lets it join the nearest colony. */
 	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos) {
+		return activate(level, pos, colony -> true);
+	}
+
+	/**
+	 * Spawns a bot at {@code pos} for {@code player}, who used a Bot Core: it joins the nearest colony that
+	 * {@code player} may act on ({@link ColonyActions#mayAct}, counting from where the bot stands), or none. With no
+	 * player, such as a Bot Core used by a machine, it joins none.
+	 */
+	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player) {
+		return activate(level, pos, mayJoin(player, pos));
+	}
+
+	/** Which colonies a bot activated at {@code pos} by {@code player} may join; see {@link #activate(ServerLevel, BlockPos, Player)}. */
+	public static Predicate<Colony> mayJoin(@Nullable Player player, BlockPos pos) {
+		if (player == null) {
+			return colony -> false;
+		}
+		boolean isOp = ColonyActions.isOp(player);
+		boolean requireOp = AntCraftConfig.colonyActionsRequireOp();
+		return colony -> ColonyActions.mayAct(colony, player.getUUID(), pos, isOp, requireOp);
+	}
+
+	private static @Nullable AntBot activate(ServerLevel level, BlockPos pos, Predicate<Colony> mayJoin) {
 		AntBot bot = ModEntities.ANT_BOT.spawn(level, pos, EntitySpawnReason.MOB_SUMMONED);
 		if (bot == null) {
 			return null;
 		}
 		bot.setCustomName(Component.literal("Ant " + bot.getUUID().toString().substring(0, 4)));
 		ColonyManager colonies = ColonyManager.get(level);
-		colonies.nearest(pos, ColonyManager.JOIN_DISTANCE).ifPresent(colony -> colonies.join(bot, colony));
+		colonies.nearest(pos, ColonyManager.JOIN_DISTANCE, mayJoin).ifPresent(colony -> colonies.join(bot, colony));
 		level.gameEvent(null, GameEvent.ENTITY_PLACE, pos);
 		return bot;
 	}

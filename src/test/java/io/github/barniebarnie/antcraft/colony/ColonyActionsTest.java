@@ -33,34 +33,87 @@ class ColonyActionsTest {
 			Map.of(), List.of(), Map.of());
 	}
 
-	@Test
-	void onlyPlayersInRangeMayAct() {
+	private static final UUID OWNER = UUID.randomUUID();
+	private static final UUID FRIEND = UUID.randomUUID();
+	private static final UUID STRANGER = UUID.randomUUID();
+	private static final BlockPos NEAR = CORE.offset(10, 0, 10);
+	private static final BlockPos FAR = CORE.offset(100, 0, 0);
+
+	private static Colony owned() {
 		Colony colony = colony();
-		assertTrue(ColonyActions.mayAct(colony, CORE.offset(10, 0, 10), false, false));
-		assertFalse(ColonyActions.mayAct(colony, CORE.offset(100, 0, 0), false, false));
-		assertFalse(ColonyActions.mayAct(colony, CORE.offset(100, 0, 0), true, false));
+		colony.setOwner(OWNER);
+		colony.trust(FRIEND);
+		return colony;
+	}
+
+	@Test
+	void theOwnerAndTrustedPlayersMayActFromAnywhere() {
+		Colony colony = owned();
+		assertTrue(ColonyActions.mayAct(colony, OWNER, NEAR, false, false));
+		assertTrue(ColonyActions.mayAct(colony, OWNER, FAR, false, false));
+		assertTrue(ColonyActions.mayAct(colony, FRIEND, NEAR, false, false));
+		assertTrue(ColonyActions.mayAct(colony, FRIEND, FAR, false, false));
+	}
+
+	@Test
+	void otherPlayersMayNotActEvenNearby() {
+		Colony colony = owned();
+		assertFalse(ColonyActions.mayAct(colony, STRANGER, NEAR, false, false));
+		assertFalse(ColonyActions.mayAct(colony, STRANGER, CORE, false, false));
+		colony.untrust(FRIEND);
+		assertFalse(ColonyActions.mayAct(colony, FRIEND, NEAR, false, false), "untrusted player");
+	}
+
+	@Test
+	void operatorsMayActOnAnyColony() {
+		assertTrue(ColonyActions.mayAct(owned(), STRANGER, NEAR, true, false));
+		assertTrue(ColonyActions.mayAct(owned(), STRANGER, FAR, true, false));
+		assertTrue(ColonyActions.mayAct(colony(), STRANGER, FAR, true, false), "ownerless colony out of range");
+	}
+
+	@Test
+	void ownerlessColoniesLetAnyoneInRangeAct() {
+		Colony colony = colony();
+		assertTrue(ColonyActions.mayAct(colony, STRANGER, NEAR, false, false));
+		assertFalse(ColonyActions.mayAct(colony, STRANGER, FAR, false, false));
 	}
 
 	@Test
 	void onlyOperatorsMayActWhenTheConfigSaysSo() {
-		Colony colony = colony();
-		assertFalse(ColonyActions.mayAct(colony, CORE, false, true));
-		assertTrue(ColonyActions.mayAct(colony, CORE, true, true));
+		assertFalse(ColonyActions.mayAct(colony(), STRANGER, CORE, false, true));
+		assertFalse(ColonyActions.mayAct(owned(), OWNER, CORE, false, true));
+		assertFalse(ColonyActions.mayAct(owned(), FRIEND, CORE, false, true));
+		assertTrue(ColonyActions.mayAct(owned(), STRANGER, CORE, true, true));
 	}
 
 	@Test
 	void viewingFollowsTheSameRuleAsActing() {
-		Colony colony = colony();
-		BlockPos near = CORE.offset(10, 0, 10);
-		BlockPos far = CORE.offset(100, 0, 0);
-		for (boolean isOp : new boolean[] {false, true}) {
-			for (boolean requireOp : new boolean[] {false, true}) {
-				String which = "isOp=" + isOp + " requireOp=" + requireOp;
-				assertEquals(isOp || !requireOp, ColonyActions.mayView(colony, near, isOp, requireOp), "in range, " + which);
-				assertFalse(ColonyActions.mayView(colony, far, isOp, requireOp), "out of range, " + which);
-				assertEquals(ColonyActions.mayAct(colony, near, isOp, requireOp), ColonyActions.mayView(colony, near, isOp, requireOp), which);
+		Colony colony = owned();
+		for (UUID player : List.of(OWNER, FRIEND, STRANGER)) {
+			for (BlockPos from : List.of(NEAR, FAR)) {
+				for (boolean isOp : new boolean[] {false, true}) {
+					for (boolean requireOp : new boolean[] {false, true}) {
+						String which = player + " from " + from + " isOp=" + isOp + " requireOp=" + requireOp;
+						assertEquals(ColonyActions.mayAct(colony, player, from, isOp, requireOp),
+							ColonyActions.mayView(colony, player, from, isOp, requireOp), which);
+					}
+				}
 			}
 		}
+	}
+
+	@Test
+	void theFirstPlayerWhoMayActClaimsAnOwnerlessColony() {
+		Colony colony = colony();
+		assertFalse(ColonyActions.claim(colony, STRANGER, FAR, false, false), "claimed from out of range");
+		assertEquals(Optional.empty(), colony.owner());
+		assertFalse(ColonyActions.claim(colony, STRANGER, NEAR, false, true), "non-operator claimed with only operators allowed");
+		assertEquals(Optional.empty(), colony.owner());
+
+		assertTrue(ColonyActions.claim(colony, OWNER, NEAR, false, false));
+		assertEquals(Optional.of(OWNER), colony.owner());
+		assertFalse(ColonyActions.claim(colony, STRANGER, NEAR, true, false), "an operator took over an owned colony");
+		assertEquals(Optional.of(OWNER), colony.owner());
 	}
 
 	@Test

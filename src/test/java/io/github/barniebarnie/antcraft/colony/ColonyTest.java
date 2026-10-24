@@ -97,6 +97,42 @@ class ColonyTest {
 	}
 
 	@Test
+	void ownerAndTrustedPlayersSurviveSaveAndLoad() {
+		Colony colony = colony();
+		UUID owner = UUID.randomUUID();
+		UUID friend = UUID.randomUUID();
+		colony.setOwner(owner);
+		colony.trust(friend);
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertEquals(Optional.of(owner), loaded.owner());
+		assertEquals(Set.of(friend), loaded.trusted());
+	}
+
+	@Test
+	void coloniesSavedWithoutAnOwnerLoadOwnerless() {
+		String json = """
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0]}
+			""";
+		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json)).getOrThrow();
+		assertEquals(Optional.empty(), colony.owner());
+		assertTrue(colony.trusted().isEmpty());
+	}
+
+	@Test
+	void trustingTheOwnerOrAPlayerTwiceChangesNothing() {
+		Colony colony = colony();
+		UUID owner = UUID.randomUUID();
+		UUID friend = UUID.randomUUID();
+		colony.setOwner(owner);
+		assertFalse(colony.trust(owner), "trusted the owner");
+		assertTrue(colony.trust(friend));
+		assertFalse(colony.trust(friend), "trusted twice");
+		assertTrue(colony.untrust(friend));
+		assertFalse(colony.untrust(friend), "untrusted a player not trusted");
+		assertTrue(colony.trusted().isEmpty());
+	}
+
+	@Test
 	void oldSavesProtectWhateverIsThereOnFirstCheck() {
 		String json = """
 			{"id": [1, 2, 3, 4], "core": [0, 64, 0], "protected": [[5, 64, 5]]}

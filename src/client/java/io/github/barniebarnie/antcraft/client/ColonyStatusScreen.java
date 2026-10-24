@@ -224,6 +224,7 @@ public class ColonyStatusScreen extends Screen {
 		}
 		ColonyStatus status = reply.status().get();
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.colony", status.core().toShortString(), status.radius()), WHITE));
+		lines.add(new Line(status.access().describe(), WHITE));
 
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.bots", status.members(), status.idle()), YELLOW));
 		status.bots().values().forEach(bot -> lines.add(new Line(

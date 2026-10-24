@@ -138,8 +138,13 @@ public class ColonyManager extends SavedData {
 	}
 
 	public Optional<Colony> nearest(BlockPos pos, int maxDistance) {
+		return this.nearest(pos, maxDistance, colony -> true);
+	}
+
+	/** The nearest colony within {@code maxDistance} of {@code pos} that passes {@code filter}. */
+	public Optional<Colony> nearest(BlockPos pos, int maxDistance, Predicate<Colony> filter) {
 		return this.colonies.values().stream()
-			.filter(colony -> colony.core().closerThan(pos, maxDistance))
+			.filter(colony -> colony.core().closerThan(pos, maxDistance) && filter.test(colony))
 			.min(Comparator.comparingDouble(colony -> colony.core().distSqr(pos)));
 	}
 

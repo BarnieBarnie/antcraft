@@ -30,6 +30,8 @@ class ColonyStatusTest {
 	private static final UUID MINER = UUID.randomUUID();
 	private static final UUID IDLE_MINER = UUID.randomUUID();
 	private static final UUID UNLOADED = UUID.randomUUID();
+	private static final UUID OWNER = UUID.randomUUID();
+	private static final UUID FRIEND = UUID.randomUUID();
 
 	@BeforeAll
 	static void bootstrap() {
@@ -42,6 +44,8 @@ class ColonyStatusTest {
 			Map.of(), Optional.empty(), List.of(StockTarget.of(Items.OAK_LOG, 32), StockTarget.of(Items.TORCH, 8), StockTarget.of(Items.COBBLESTONE, 64)),
 			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
 		colony.reportBlocked(UUID.randomUUID(), List.of(new BlockPos(3, 64, 3)));
+		colony.setOwner(OWNER);
+		colony.trust(FRIEND);
 		colony.board().post(JobType.CHOP_TREE, new BlockPos(5, 64, 5));
 		colony.board().post(JobType.CHOP_TREE, new BlockPos(6, 64, 6));
 		colony.board().post(JobType.MINE_BRANCH, new BlockPos(7, 64, 7));
@@ -70,7 +74,21 @@ class ColonyStatusTest {
 		// The first step is placed already.
 		// The core is full, and the colony has no storage area.
 		return ColonyStatus.of(colony, bots, stock, item -> List.of(), Items.OAK_LOG::equals,
-			pos -> pos.getY() == 64 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), 0, false);
+			pos -> pos.getY() == 64 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState(), 0, false,
+			player -> player.equals(OWNER) ? "Alice" : "Bob");
+	}
+
+	@Test
+	void namesTheOwnerAndTrustedPlayers() {
+		assertEquals(new ColonyStatus.Access(Optional.of("Alice"), List.of("Bob")), status().access());
+	}
+
+	@Test
+	void aColonyWithoutAnOwnerNamesNone() {
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20,
+			Map.of(), Optional.empty(), List.of(), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false, pos -> Blocks.AIR.defaultBlockState(), 1, false);
+		assertEquals(new ColonyStatus.Access(Optional.empty(), List.of()), status.access());
 	}
 
 	/** A colony with a storage area if {@code site}. */
@@ -202,7 +220,8 @@ class ColonyStatusTest {
 	@Test
 	void listsAGivenUpVeinUnderItsOwnKey() {
 		ColonyStatus status = new ColonyStatus(BlockPos.ZERO, 0, Map.of(), 0, 0, Map.of(), Map.of(), List.of(), List.of(), List.of(), List.of(),
-			List.of(new ColonyStatus.GivenUp(JobType.MINE_VEIN, new BlockPos(4, 30, 4))), new ColonyStatus.Room(1, ColonyStatus.StorageState.READY));
+			List.of(new ColonyStatus.GivenUp(JobType.MINE_VEIN, new BlockPos(4, 30, 4))), new ColonyStatus.Room(1, ColonyStatus.StorageState.READY),
+			new ColonyStatus.Access(Optional.empty(), List.of()));
 		assertEquals(List.of(new BlockPos(4, 30, 4)), status.givenUp(JobType.MINE_VEIN));
 		assertEquals("commands.antcraft.colony.given_up_veins", ColonyStatus.givenUpKey(JobType.MINE_VEIN));
 		assertEquals("commands.antcraft.colony.given_up_branches", ColonyStatus.givenUpKey(JobType.MINE_BRANCH));

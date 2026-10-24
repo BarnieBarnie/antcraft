@@ -32,7 +32,7 @@ public final class AntCraftConfig {
 	/**
 	 * {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from,
 	 * at least {@link Mineshaft#MIN_LEVEL_GAP} apart.
-	 * {@code colonyActionsRequireOp} limits the colony screen, both viewing and changes, to operators; otherwise anyone near the colony may use it.
+	 * {@code colonyActionsRequireOp} limits the colony screen, both viewing and changes, to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
 	 * {@code replantMatchWaitTicks} is how long a felled 1x1 tree waits for a sapling of its own kind before any sapling will do.
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
