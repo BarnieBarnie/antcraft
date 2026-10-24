@@ -4,10 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.StorageArea;
+import io.github.barniebarnie.antcraft.work.VanillaData;
 import io.netty.buffer.Unpooled;
 import java.util.List;
 import java.util.Map;
@@ -147,6 +149,28 @@ class ColonyStatusTest {
 		ColonyStatus farmed = wantsWheat(true);
 		assertTrue(farmed.stock().stream().noneMatch(ColonyStatus.Stock::needsFarm), "needs a farm with a field: " + farmed.stock());
 		assertTrue(farmed.orders().stream().noneMatch(ColonyStatus.Order::needsFarm), "needs a farm with a field: " + farmed.orders());
+	}
+
+	/** Whether the stock target {@code target} of a colony with no field, holding nothing, says it needs a farm, planned against the game's recipes. */
+	private static boolean needsFarm(StockTarget target) {
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20,
+			Map.of(), Optional.empty(), List.of(target), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable(),
+			pos -> Blocks.AIR.defaultBlockState(), 1, false);
+		return status.stock().getFirst().needsFarm();
+	}
+
+	@Test
+	void aFoodTargetTheColonyCanMeetWithoutWheatDoesNotNeedAFarm() {
+		// Bread takes wheat, but baked potatoes take gathered potatoes and fuel.
+		assertFalse(needsFarm(new StockTarget(Either.left(DefaultStock.COLONY_FOOD), 16, List.of(Items.BREAD, Items.BAKED_POTATO))));
+	}
+
+	@Test
+	void aFoodTargetOnlyWheatMeetsNeedsAFarm() {
+		assertTrue(needsFarm(StockTarget.of(Items.BREAD, 16)));
+		// The mod's tags are not bound in unit tests, so bread is all this target can be met with.
+		assertTrue(needsFarm(StockTarget.of(DefaultStock.COLONY_FOOD, 16, Items.BREAD)));
 	}
 
 	@Test

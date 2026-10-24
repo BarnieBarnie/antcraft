@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.colony;
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.Holder;
@@ -53,6 +54,20 @@ public record StockTarget(Either<TagKey<Item>, Item> match, int count, List<Item
 		return this.match.map(
 			tag -> StreamSupport.stream(BuiltInRegistries.ITEM.getTagOrEmpty(tag).spliterator(), false).map(Holder::value).toList(),
 			List::of);
+	}
+
+	/**
+	 * Every item that could meet the target: the {@linkplain #makeOptions make options} first, then whatever
+	 * else it matches, such as carrots for a food target that makes bread.
+	 */
+	public List<Item> options() {
+		List<Item> options = new ArrayList<>(this.makeOptions());
+		this.match.ifLeft(tag -> BuiltInRegistries.ITEM.getTagOrEmpty(tag).forEach(holder -> {
+			if (!options.contains(holder.value())) {
+				options.add(holder.value());
+			}
+		}));
+		return options;
 	}
 
 	/** {@code #namespace:tag} or {@code namespace:item}, as typed in commands. */

@@ -218,6 +218,28 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		return plan.toGather().keySet().stream().anyMatch(Field.YIELDS::contains);
 	}
 
+	/**
+	 * Whether only a farm lets the colony get {@code count} more of what {@code target} wants: a plan for one of its
+	 * {@linkplain StockTarget#options options} gathers what a field yields, and no other option can be had without it.
+	 * An option the colony can neither craft nor gather, such as cooked beef, is no way to meet it.
+	 */
+	private static boolean onlyAFarmMeets(StockTarget target, int count, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
+			Predicate<Item> gatherable) {
+		boolean farm = false;
+		for (Item item : target.options()) {
+			// As for an order: what is held already counts in have.
+			Map<Item, Integer> available = new HashMap<>(stock);
+			available.remove(item);
+			TaskPlanner.Plan<Item> plan = TaskPlanner.plan(item, count, available, book, gatherable);
+			if (gathersFieldYields(plan)) {
+				farm = true;
+			} else if (plan.missing().isEmpty()) {
+				return false;
+			}
+		}
+		return farm;
+	}
+
 	/** How many of {@code steps} the world does not match yet. */
 	private static int left(List<BuildPlan.Step> steps, Function<BlockPos, BlockState> world) {
 		return (int) steps.stream().filter(step -> !step.isDone(world.apply(step.pos()))).count();
@@ -302,13 +324,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		List<Stock> stocks = new ArrayList<>();
 		for (StockTarget target : colony.stockTargets()) {
 			int have = StockPlanner.have(target.toPlannerTarget(), stock);
-			boolean needsFarm = noField && have < target.count() && target.makeOptions().stream().findFirst()
-				.map(item -> {
-					// As for an order: what is held already counts in have.
-					Map<Item, Integer> available = new HashMap<>(stock);
-					available.remove(item);
-					return gathersFieldYields(TaskPlanner.plan(item, target.count() - have, available, book, gatherable));
-				}).orElse(false);
+			boolean needsFarm = noField && have < target.count() && onlyAFarmMeets(target, target.count() - have, stock, book, gatherable);
 			stocks.add(new Stock(target.name(), have, target.count(), needsFarm));
 		}
 		// Stable, so short items keep the order of their targets.

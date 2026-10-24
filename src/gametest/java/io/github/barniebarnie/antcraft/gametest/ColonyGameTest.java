@@ -376,6 +376,21 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/**
+	 * A new colony with no field and no food does not say its food target needs a farm: bread takes wheat, but the
+	 * target takes any colony food, such as carrots bots gather. A target only bread meets does.
+	 */
+	@GameTest
+	public void aNewColonysFoodTargetDoesNotNeedAFarm(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		StockTarget food = DefaultStock.TARGETS.stream().filter(target -> target.match().left().equals(Optional.of(DefaultStock.COLONY_FOOD)))
+			.findFirst().orElseThrow();
+		colony.setStockTargets(List.of(food, StockTarget.of(Items.BREAD, 16)));
+		helper.assertValueEqual(ColonyStatus.of(helper.getLevel(), colony).stock(), List.of(
+			new ColonyStatus.Stock("#antcraft:colony_food", 0, 16, false), new ColonyStatus.Stock("minecraft:bread", 0, 16, true)), "stock");
+		helper.succeed();
+	}
+
 	/** Checks whom a Bot Core's bot may join rather than spawning one, which would join the ownerless colonies of tests nearby. */
 	@GameTest
 	public void botCoreBotsJoinOnlyColoniesTheirPlayerMayActOn(GameTestHelper helper) {

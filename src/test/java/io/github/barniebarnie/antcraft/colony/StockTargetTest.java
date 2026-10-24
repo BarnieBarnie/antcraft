@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
+import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,6 +62,16 @@ class StockTargetTest {
 				"#antcraft:colony_food", "#antcraft:lumberjack_scaffold_blocks","#minecraft:head_armor", "#minecraft:chest_armor", "#minecraft:leg_armor", "#minecraft:foot_armor")) {
 			assertTrue(names.contains(expected), "defaults lack " + expected + ": " + names);
 		}
+	}
+
+	@Test
+	void optionsAreTheMakeOptionsThenTheRestOfTheTag() {
+		VanillaData.bindTags();
+		List<Item> options = StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE, Items.WOODEN_PICKAXE).options();
+		assertEquals(List.of(Items.STONE_PICKAXE, Items.WOODEN_PICKAXE), options.subList(0, 2));
+		assertTrue(options.contains(Items.GOLDEN_PICKAXE), "lacks the tag's other members: " + options);
+		assertEquals(Set.copyOf(options).size(), options.size(), "lists an item twice: " + options);
+		assertEquals(List.of(Items.STICK), StockTarget.of(Items.STICK, 16).options());
 	}
 
 	@Test
