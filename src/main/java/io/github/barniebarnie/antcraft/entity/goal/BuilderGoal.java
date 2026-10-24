@@ -100,6 +100,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Takes scaffold blocks from the core for a high step when carrying fewer than this. */
 	private static final int RESTOCK_BELOW = 8;
 	private static final int SCAFFOLD_STOCK = 16;
+	/** Slots a fetch leaves free of what the batch needs later, for scaffold and what the builder digs. */
+	private static final int FETCH_FREE_SLOTS = 3;
 	/** A step this many blocks above the bot's feet or more is out of reach from where it stands, so it takes scaffold first. */
 	private static final int SCAFFOLD_HEIGHT = 4;
 	/** How long a builder keeps trying to get to a step before giving it up, should its path never fail outright. */
@@ -1216,7 +1218,8 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Takes as many of {@code item} from the core as the plan still needs, leaving there whatever
+	 * Takes as many of {@code item} from the core as the plan still needs, and on the same trip what the plan needs of
+	 * every other item, as far as its free slots go (see {@link BuildPlan#fetchList}), leaving there whatever
 	 * the bot carries that the plan does not need, such as sand when only steps that must hold are
 	 * left to fill (see {@link BuildPlan#wantedFillBlocks}). The colony survey orders what the core lacks.
 	 * While the plan has steps left to pillar up to, it keeps its scaffold blocks and tops them up
@@ -1247,7 +1250,10 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			boolean pillaring = this.hasHighSteps(level, plan);
 			Predicate<ItemStack> spare = stack -> !needed.containsKey(stack.getItem()) && !stack.is(ItemTags.PICKAXES) && !fills.contains(stack.getItem());
 			Storage.moveItems(inventory, core, stack -> spare.test(stack) && !(pillaring && stack.is(SCAFFOLD)));
-			Storage.moveItems(core, inventory, stack -> stack.is(item), count);
+			// The rest of what the batch needs comes along on the same trip, such as the torches and the chest of a shaft
+			// level fetched with its ladders, leaving room for what it digs.
+			BuildPlan.fetchList(item, count, needed, Storage.stock(inventory), Storage.stock(core), freeSlots(inventory) - FETCH_FREE_SLOTS)
+				.forEach((kind, taken) -> Storage.moveItems(core, inventory, stack -> stack.is(kind), taken));
 			if (pillaring) {
 				int stock = SCAFFOLD_STOCK + needed.entrySet().stream()
 					.filter(entry -> entry.getKey().getDefaultInstance().is(SCAFFOLD)).mapToInt(Map.Entry::getValue).sum();

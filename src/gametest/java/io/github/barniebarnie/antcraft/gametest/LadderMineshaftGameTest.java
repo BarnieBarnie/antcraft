@@ -186,7 +186,7 @@ public class LadderMineshaftGameTest implements CustomTestMethodInvoker {
 	 * at y=6, one behind the ladder: the builder walls the column so every ladder has a block behind it and no water
 	 * comes in.
 	 */
-	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 5000)
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 1600)
 	public void theBuilderWallsTheColumnWhereItCrossesACaveAndWater(GameTestHelper helper) {
 		stone(helper, 12);
 		for (BlockPos pos : BlockPos.betweenClosed(2, 8, 2, 4, 9, 4)) {

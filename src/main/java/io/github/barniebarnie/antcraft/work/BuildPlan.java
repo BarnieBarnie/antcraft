@@ -894,4 +894,32 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		}
 		return materials;
 	}
+
+	/**
+	 * What a builder takes from the core in one trip: {@code count} of {@code first}, the item it went for, then of every
+	 * other item the batch still {@code needed} what it does not {@code carried} already, as far as the core has it
+	 * ({@code inCore}), in the order of the steps, while it fills no more than {@code room} free slots. The first item is
+	 * taken room or not.
+	 */
+	public static Map<Item, Integer> fetchList(Item first, int count, Map<Item, Integer> needed, Map<Item, Integer> carried,
+			Map<Item, Integer> inCore, int room) {
+		Map<Item, Integer> list = new LinkedHashMap<>();
+		list.put(first, count);
+		int slots = slots(first, count);
+		for (Map.Entry<Item, Integer> entry : needed.entrySet()) {
+			Item item = entry.getKey();
+			int take = Math.min(entry.getValue() - carried.getOrDefault(item, 0), inCore.getOrDefault(item, 0));
+			if (item == first || take <= 0 || slots + slots(item, take) > room) {
+				continue;
+			}
+			list.put(item, take);
+			slots += slots(item, take);
+		}
+		return list;
+	}
+
+	private static int slots(Item item, int count) {
+		int stack = item.getDefaultMaxStackSize();
+		return (count + stack - 1) / stack;
+	}
 }

@@ -698,4 +698,37 @@ class BuildPlanTest {
 		assertEquals(Optional.of(Items.DIRT), BuildPlan.waterFiller(Set.of(Items.DIRT)::contains, true));
 		assertEquals(Optional.empty(), BuildPlan.waterFiller(Set.of(Items.SAND)::contains, false));
 	}
+
+	/** What a batch that places ladders, torches and a chest, such as a ladder shaft's level through a cave, needs. */
+	private static Map<Item, Integer> ladderTorchesAndChest() {
+		BlockState ladder = Blocks.LADDER.defaultBlockState();
+		BlockState torch = Blocks.TORCH.defaultBlockState();
+		return new BuildPlan(List.of(new BuildPlan.Step(A, ladder), new BuildPlan.Step(A.below(), ladder), new BuildPlan.Step(B, torch),
+			new BuildPlan.Step(C, ladder), new BuildPlan.Step(D, Blocks.CHEST.defaultBlockState()), new BuildPlan.Step(D.above(), torch)))
+			.materials(at(world()));
+	}
+
+	/** A builder fetching ladders takes the torches and the chest the batch needs on the same trip, the ladders first. */
+	@Test
+	void theFetchListHoldsEveryItemTheBatchNeeds() {
+		Map<Item, Integer> core = Map.of(Items.LADDER, 10, Items.TORCH, 10, Items.CHEST, 1, Items.COBBLESTONE, 64);
+
+		Map<Item, Integer> list = BuildPlan.fetchList(Items.LADDER, 3, ladderTorchesAndChest(), Map.of(), core, 10);
+
+		assertEquals(Map.of(Items.LADDER, 3, Items.TORCH, 2, Items.CHEST, 1), list);
+		assertEquals(Items.LADDER, list.keySet().iterator().next(), "the item asked for first");
+	}
+
+	/** What the bot carries already or the core lacks is not on the list, and the rest only as far as its free slots go. */
+	@Test
+	void theFetchListLeavesOutWhatIsCarriedOrMissingAndWhatHasNoRoom() {
+		Map<Item, Integer> needed = ladderTorchesAndChest();
+		Map<Item, Integer> core = Map.of(Items.LADDER, 10, Items.TORCH, 10, Items.CHEST, 1);
+
+		assertEquals(Map.of(Items.LADDER, 3, Items.TORCH, 1), BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(Items.CHEST, 1),
+			Map.of(Items.LADDER, 10, Items.TORCH, 1), 10), "one torch in the core, the chest carried");
+		assertEquals(Map.of(Items.LADDER, 3, Items.TORCH, 1), BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(Items.TORCH, 1), core, 2),
+			"room for the ladders and one more kind");
+		assertEquals(Map.of(Items.LADDER, 3), BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 0), "the item asked for, room or not");
+	}
 }
