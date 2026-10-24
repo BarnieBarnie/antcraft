@@ -66,4 +66,13 @@ public final class GhostLayout {
 	public static int tint(int rgb) {
 		return ARGB.color(ALPHA, ARGB.srgbLerp(PALE, ARGB.opaque(rgb), 0xFFFFFFFF) & 0xFFFFFF);
 	}
+
+	/**
+	 * The colour a tinted face (grass top, leaves, vines) of a ghost tinted {@code rgb} is multiplied by: the ghost's
+	 * {@link #tint(int)} multiplied by the block's own colour {@code blockColor} where it stands, such as the biome's grass
+	 * colour. The block colour's alpha is ignored, so the face is as see-through as the rest of the ghost.
+	 */
+	public static int tint(int rgb, int blockColor) {
+		return ARGB.multiply(tint(rgb), ARGB.opaque(blockColor));
+	}
 }

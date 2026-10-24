@@ -78,4 +78,22 @@ class GhostLayoutTest {
 		assertTrue(ARGB.green(tint) > 0x40 && ARGB.green(tint) < 0xFF);
 		assertEquals(ARGB.green(tint), ARGB.blue(tint));
 	}
+
+	@Test
+	void aBiomeColourIsMixedUnderTheGhostTint() {
+		int plain = GhostLayout.tint(0x80C0FF);
+		// Plains grass, as a biome colour source gives it: no alpha of its own.
+		int grass = 0x91BD59;
+		int tint = GhostLayout.tint(0x80C0FF, grass);
+		// Still as see-through as any ghost block.
+		assertEquals(GhostLayout.ALPHA, ARGB.alpha(tint));
+		// Each channel is the ghost tint multiplied by the biome colour, so grass shows green under the pale blue.
+		assertEquals(ARGB.red(plain) * ARGB.red(grass) / 255, ARGB.red(tint), 1);
+		assertEquals(ARGB.green(plain) * ARGB.green(grass) / 255, ARGB.green(tint), 1);
+		assertEquals(ARGB.blue(plain) * ARGB.blue(grass) / 255, ARGB.blue(tint), 1);
+		assertTrue(ARGB.green(tint) > ARGB.red(tint) && ARGB.green(tint) > ARGB.blue(tint), "green");
+		// A white biome colour, as for an untinted layer, leaves the ghost tint as it is.
+		assertEquals(plain, GhostLayout.tint(0x80C0FF, 0xFFFFFFFF));
+		assertEquals(plain, GhostLayout.tint(0x80C0FF, 0xFFFFFF));
+	}
 }
