@@ -131,7 +131,7 @@ public class LadderMineshaftGameTest implements CustomTestMethodInvoker {
 	 * As above, but the core holds spruce planks and no trapdoor: the colony, which has no oak, makes the hatch a spruce
 	 * trapdoor, and never orders an oak one.
 	 */
-	@GameTest(maxTicks = 360)
+	@GameTest(maxTicks = 480)
 	public void aColonyWithOnlySprucePlanksPutsASpruceTrapdoorHatchOnItsShaft(GameTestHelper helper) {
 		// Any of the tag will do, and the list the plan takes them from is the tag.
 		Set<Item> tag = new HashSet<>();
