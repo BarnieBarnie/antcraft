@@ -72,6 +72,30 @@ class ColonyActionsTest {
 	}
 
 	@Test
+	void theOwnerMayChangeWhomTheColonyTrusts() {
+		assertTrue(ColonyActions.mayTrust(owned(), OWNER, false, false));
+	}
+
+	@Test
+	void trustedPlayersAndStrangersMayNotChangeWhomTheColonyTrusts() {
+		assertFalse(ColonyActions.mayTrust(owned(), FRIEND, false, false), "trusted player");
+		assertFalse(ColonyActions.mayTrust(owned(), STRANGER, false, false), "stranger");
+		assertFalse(ColonyActions.mayTrust(colony(), STRANGER, false, false), "anyone, on a colony with no owner");
+	}
+
+	@Test
+	void operatorsMayChangeWhomAnyColonyTrusts() {
+		assertTrue(ColonyActions.mayTrust(owned(), STRANGER, true, false));
+		assertTrue(ColonyActions.mayTrust(owned(), STRANGER, true, true), "with colonyActionsRequireOp");
+		assertTrue(ColonyActions.mayTrust(colony(), STRANGER, true, false), "colony with no owner");
+	}
+
+	@Test
+	void withRequireOpTheOwnerMayNotChangeWhomTheColonyTrusts() {
+		assertFalse(ColonyActions.mayTrust(owned(), OWNER, false, true));
+	}
+
+	@Test
 	void ownerlessColoniesLetAnyoneInRangeAct() {
 		Colony colony = colony();
 		assertTrue(ColonyActions.mayAct(colony, STRANGER, NEAR, false, false));

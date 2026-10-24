@@ -1,5 +1,13 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import com.mojang.brigadier.tree.CommandNode;
+import com.mojang.datafixers.util.Either;
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
+import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import io.github.barniebarnie.antcraft.colony.BotActivation;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
@@ -441,6 +449,43 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/**
+	 * An owner who is not an operator trusts a player with their colony and takes it back with the colony commands; the
+	 * trusted player can place a blueprint in between, but may not change whom the colony trusts.
+	 */
+	@GameTest(maxTicks = 5)
+	public void aNonOperatorOwnerTrustsAndUntrustsAPlayer(GameTestHelper helper) {
+		Colony colony = placeCore(helper);
+		ServerPlayer owner = helper.makeMockServerPlayerInLevel();
+		owner.setPos(Vec3.atCenterOf(helper.absolutePos(new BlockPos(4, 1, 4))));
+		colony.setOwner(owner.getUUID());
+		helper.assertFalse(ColonyActions.isOp(owner), "the owner is an operator");
+		CommandSourceStack asOwner = owner.createCommandSourceStack().withSuppressedOutput();
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		ColonyNetworking.PlaceBlueprint place = new ColonyNetworking.PlaceBlueprint(colony.core(), AntCraft.id("cobble_step"), near, Rotation.NONE, Mirror.NONE);
+
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony trust Alice");
+		helper.assertValueEqual(colony.trusted().size(), 1, "trusted players after the owner's trust");
+		UUID alice = colony.trusted().iterator().next();
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed =
+			ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(alice, near, false, false, true), place);
+		helper.assertTrue(placed.right().isPresent(), "the trusted player's placement refused: " + placed.left());
+
+		ServerPlayer friend = helper.makeMockServerPlayerInLevel();
+		friend.setPos(Vec3.atCenterOf(near));
+		colony.trust(friend.getUUID());
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(friend.createCommandSourceStack().withSuppressedOutput(), "antcraft colony untrust Alice");
+		helper.assertTrue(colony.trusted().contains(alice), "a trusted player untrusted another");
+		colony.untrust(friend.getUUID());
+
+		helper.getLevel().getServer().getCommands().performPrefixedCommand(asOwner, "antcraft colony untrust Alice");
+		helper.assertValueEqual(colony.trusted(), Set.of(), "trusted players after the owner's untrust");
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> refused =
+			ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(alice, near, false, false, true), place);
+		helper.assertValueEqual(refused.left(), Optional.of(BlueprintPlacement.Refusal.NOT_ALLOWED), "the untrusted player's placement");
+		helper.succeed();
+	}
+
 	@GameTest
 	public void botActivatedNearCoreJoinsColony(GameTestHelper helper) {
 		Colony colony = placeCore(helper);
@@ -600,6 +645,15 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			.withSuppressedOutput();
 		helper.assertFalse(helper.getLevel().getServer().getCommands().getDispatcher().getRoot().getChild("antcraft").canUse(player),
 			"non-operator may use /antcraft, including colony info");
+		// A player may use /antcraft colony trust and untrust, to trust players with their own colony, but nothing else.
+		ServerPlayer serverPlayer = helper.makeMockServerPlayerInLevel();
+		colony.setOwner(serverPlayer.getUUID());
+		CommandSourceStack asPlayer = serverPlayer.createCommandSourceStack().withSuppressedOutput();
+		CommandNode<CommandSourceStack> antcraft = helper.getLevel().getServer().getCommands().getDispatcher().getRoot().getChild("antcraft");
+		helper.assertFalse(antcraft.getChild("status").canUse(asPlayer), "non-operator player may use /antcraft status");
+		helper.assertFalse(antcraft.getChild("colony").getChild("info").canUse(asPlayer), "non-operator player may use colony info");
+		helper.assertFalse(antcraft.getChild("colony").getChild("order").canUse(asPlayer), "non-operator player may use colony order");
+		helper.assertTrue(antcraft.getChild("colony").getChild("trust").canUse(asPlayer), "owner may not use colony trust");
 		helper.getLevel().getServer().getCommands().performPrefixedCommand(player, "antcraft colony order minecraft:stick 4");
 		helper.assertValueEqual(colony.orders(), Map.of(), "orders after a non-operator's command");
 		helper.succeed();

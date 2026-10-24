@@ -11,13 +11,13 @@ AntCraft must be installed on the server and on every player's client: it adds i
 - **Singleplayer / LAN:** enabled by default.
 - **Dedicated servers:** disabled by default. The server owner must explicitly set `enableOnDedicatedServer = true` in the config.
 - The `/antcraft` commands are restricted to operators. Server owners can cap the bot count per dimension (`maxBotsPerLevel`).
-- Each colony belongs to the player who placed its core. Only that player, the players an operator trusts with the colony (`/antcraft colony trust`) and operators may view or change it from the colony screen, and a Bot Core's bot joins only a colony its player may change, so other players on a shared server cannot order, build or plan in your colony.
+- Each colony belongs to the player who placed its core. Only that player, the players they trust with the colony (`/antcraft colony trust`) and operators may view or change it from the colony screen, and a Bot Core's bot joins only a colony its player may change, so other players on a shared server cannot order, build or plan in your colony.
 
 ## Usage
 
 **Getting started:**
 
-1. Craft a Colony Core and place it: you own the colony, and an operator can let other players help (`/antcraft colony trust`).
+1. Craft a Colony Core and place it: you own the colony, and can let other players help with `/antcraft colony trust <player>` (no operator rights needed).
 2. Craft a Bot Core and use it within 32 blocks of the core; the bot joins the colony. Craft more for more hands, or order them from the colony (see Crafts below).
 3. The colony makes its starter tool kit and, once it wants stone or ores, digs a mineshaft beside the core. Everything else is your plan.
 4. Craft a Blueprint, pick a building with it, and place it: a warehouse for storage, a farm for crops, a cobblestone generator, or a building of your own from a data pack. The colony builds it and puts it to use.
@@ -105,7 +105,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 
 **Trees:** a bot on a tree job fells a natural tree (logs touching natural leaves, so your log houses are safe), takes down any scaffold blocks it placed to get up there, picks up the drops, replants a sapling, and brings the logs to the colony core. Before each tree it tops up to 16 scaffold blocks from the core, so it can pillar up to logs it cannot reach from the ground. It leaves the canopy to decay by itself (only breaking leaves in its way). When it has no sapling to replant it posts a replant job, which a bot takes once a sapling lies near the stump or the colony core holds one. A tree is replanted with a sapling of its own kind: a 2x2 tree, like dark oak, only once all four saplings of its kind are there, a 1x1 tree with any sapling if none of its own kind turned up within two minutes (`replantMatchWaitTicks`). A 2x2 site with a spot built over cannot grow its tree back, so it gets a 1x1 tree on one open spot instead. A tree with logs it cannot reach, even with scaffold, is tried again every 30 seconds, and given up after five tries; `colony info` and the colony screen list the trees given up on.
 
-**Commands** (operators only):
+**Commands** (operators only, but a colony's owner may also use `colony trust` and `colony untrust` on it):
 
 | Command | Effect |
 |---------|--------|
@@ -113,7 +113,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft goto <pos> [bots]` | Sends bots to a position. Without `[bots]`, the nearest bot within 64 blocks |
 | `/antcraft stop [bots]` | Cancels the walk target |
 | `/antcraft colony info` | Members, idle members and jobs, the owner and trusted players, each bot with its current job, for each order what is still to gather or missing, blocked build steps and trees given up on |
-| `/antcraft colony trust <player>` | Lets a player change the colony as its owner can |
+| `/antcraft colony trust <player>` | Lets a player change the colony as its owner can. The colony's owner may run this and `untrust` without operator rights; trusted players may change the colony but not whom it trusts |
 | `/antcraft colony untrust <player>` | Takes that back |
 | `/antcraft colony order <item> <count>` | Asks the colony to craft something, e.g. `antcraft:bot_core 2` |
 | `/antcraft colony cancel <item>` | Cancels an order |
@@ -133,7 +133,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft colony blocked clear` | Gives up on the build steps builders reported blocked, and the batches waiting on them |
 | `/antcraft colony radius <blocks>` | How far from the core the colony looks for trees and crops (default 32) |
 
-**Colony screen:** press `K` near a colony to see its bots with their current jobs, jobs, stock, orders and builds, blocked build steps and trees given up on. The screen can also change the colony without commands: order items or cancel your part of an order (orders the colony placed itself stay), set or remove stock targets, and change the radius. Those edits only change the colony's data, so they work, on the screen and with the matching `/antcraft colony order|cancel|stock|radius` commands, even where bots are not enabled; commands that command bots (`goto`, `stop`) need bots enabled. The screen shows the colony's owner and trusted players. The server checks every request, reads as well as changes: the owner and trusted players may view and change their colony from anywhere within 64 blocks of it, and operators any colony, or only operators with `colonyActionsRequireOp=true`; anyone else gets "no colony" (the screen shows the nearest colony they may use). A colony saved before colonies had owners has none yet: anyone within 64 blocks may use it, and the first to open the screen there claims it. The `/antcraft` commands, including `colony info` and `colony trust`, stay operator-only either way.
+**Colony screen:** press `K` near a colony to see its bots with their current jobs, jobs, stock, orders and builds, blocked build steps and trees given up on. The screen can also change the colony without commands: order items or cancel your part of an order (orders the colony placed itself stay), set or remove stock targets, and change the radius. Those edits only change the colony's data, so they work, on the screen and with the matching `/antcraft colony order|cancel|stock|radius` commands, even where bots are not enabled; commands that command bots (`goto`, `stop`) need bots enabled. The screen shows the colony's owner and trusted players. The server checks every request, reads as well as changes: the owner and trusted players may view and change their colony from anywhere within 64 blocks of it, and operators any colony, or only operators with `colonyActionsRequireOp=true`; anyone else gets "no colony" (the screen shows the nearest colony they may use). A colony saved before colonies had owners has none yet: anyone within 64 blocks may use it, and the first to open the screen there claims it. The `/antcraft` commands, including `colony info`, stay operator-only either way, except `colony trust` and `colony untrust`, which the colony's owner may also use (unless `colonyActionsRequireOp=true`).
 
 **Config** (`config/antcraft.properties`):
 

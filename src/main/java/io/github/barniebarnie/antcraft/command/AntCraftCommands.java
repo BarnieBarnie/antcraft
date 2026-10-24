@@ -33,6 +33,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -77,7 +78,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony build place &lt;blueprint&gt; &lt;at&gt; [rotation] [mirror]
  * /antcraft colony project list|cancel &lt;n&gt;|priority &lt;n&gt; &lt;priority&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
- * /antcraft colony trust|untrust &lt;player&gt;
+ * /antcraft colony trust|untrust &lt;player&gt;   (also the colony's owner, not only operators)
  */
 public final class AntCraftCommands {
 	private static final double NEAREST_RANGE = 64.0;
@@ -92,44 +93,52 @@ public final class AntCraftCommands {
 	private AntCraftCommands() {
 	}
 
+	private static final Predicate<CommandSourceStack> OPERATOR = Commands.hasPermission(Commands.LEVEL_GAMEMASTERS);
+
+	/** Operators, and any player, who may run the commands an owner may use on their own colony. */
+	private static boolean operatorOrPlayer(CommandSourceStack source) {
+		return OPERATOR.test(source) || source.isPlayer();
+	}
+
 	public static void register() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> register(dispatcher, buildContext));
 	}
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext) {
+		// Every subcommand is for operators but trust and untrust, which a colony's owner may use too (checked when run).
 		dispatcher.register(Commands.literal("antcraft")
-			.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
-			.then(Commands.literal("status").executes(AntCraftCommands::status))
-			.then(Commands.literal("goto")
+			.requires(AntCraftCommands::operatorOrPlayer)
+			.then(Commands.literal("status").requires(OPERATOR).executes(AntCraftCommands::status))
+			.then(Commands.literal("goto").requires(OPERATOR)
 				.then(Commands.argument("pos", BlockPosArgument.blockPos())
 					.executes(ctx -> walkTo(ctx, nearestBot(ctx.getSource())))
 					.then(Commands.argument("bots", EntityArgument.entities())
 						.executes(ctx -> walkTo(ctx, bots(ctx))))))
-			.then(Commands.literal("stop")
+			.then(Commands.literal("stop").requires(OPERATOR)
 				.executes(ctx -> stop(ctx.getSource(), nearestBot(ctx.getSource())))
 				.then(Commands.argument("bots", EntityArgument.entities())
 					.executes(ctx -> stop(ctx.getSource(), bots(ctx)))))
-			.then(Commands.literal("colony")
-				.then(Commands.literal("info").executes(ctx -> colonyInfo(ctx.getSource())))
-				.then(Commands.literal("trust")
+			.then(Commands.literal("colony").requires(AntCraftCommands::operatorOrPlayer)
+				.then(Commands.literal("info").requires(OPERATOR).executes(ctx -> colonyInfo(ctx.getSource())))
+				.then(Commands.literal("trust").requires(AntCraftCommands::operatorOrPlayer)
 					.then(Commands.argument("players", GameProfileArgument.gameProfile())
 						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), true))))
-				.then(Commands.literal("untrust")
+				.then(Commands.literal("untrust").requires(AntCraftCommands::operatorOrPlayer)
 					.then(Commands.argument("players", GameProfileArgument.gameProfile())
 						.executes(ctx -> trust(ctx.getSource(), GameProfileArgument.getGameProfiles(ctx, "players"), false))))
-				.then(Commands.literal("blocked")
+				.then(Commands.literal("blocked").requires(OPERATOR)
 					.then(Commands.literal("clear").executes(ctx -> clearBlocked(ctx.getSource()))))
-				.then(Commands.literal("order")
+				.then(Commands.literal("order").requires(OPERATOR)
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.then(Commands.argument("count", IntegerArgumentType.integer(1, ColonyActions.MAX_COUNT))
 							.executes(ctx -> order(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value(), IntegerArgumentType.getInteger(ctx, "count"))))))
-				.then(Commands.literal("mineshaft")
+				.then(Commands.literal("mineshaft").requires(OPERATOR)
 					.then(Commands.argument("pos", BlockPosArgument.blockPos())
 						.executes(ctx -> setMineshaft(ctx.getSource(), BlockPosArgument.getBlockPos(ctx, "pos")))))
-				.then(Commands.literal("radius")
+				.then(Commands.literal("radius").requires(OPERATOR)
 					.then(Commands.argument("blocks", IntegerArgumentType.integer(ColonyActions.MIN_RADIUS, ColonyActions.MAX_RADIUS))
 						.executes(ctx -> setRadius(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "blocks")))))
-				.then(Commands.literal("stock")
+				.then(Commands.literal("stock").requires(OPERATOR)
 					.executes(ctx -> listStock(ctx.getSource()))
 					.then(Commands.literal("set")
 						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
@@ -138,7 +147,7 @@ public final class AntCraftCommands {
 					.then(Commands.literal("remove")
 						.then(Commands.argument("match", ResourceOrTagKeyArgument.resourceOrTagKey(Registries.ITEM))
 							.executes(ctx -> removeStock(ctx.getSource(), stockMatch(ctx))))))
-				.then(Commands.literal("build")
+				.then(Commands.literal("build").requires(OPERATOR)
 					.then(Commands.literal("list").executes(ctx -> listBuilds(ctx.getSource())))
 					.then(Commands.literal("copy")
 						.then(Commands.argument("from", BlockPosArgument.blockPos())
@@ -180,7 +189,7 @@ public final class AntCraftCommands {
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
-				.then(Commands.literal("project")
+				.then(Commands.literal("project").requires(OPERATOR)
 					.then(Commands.literal("list").executes(ctx -> listProjects(ctx.getSource())))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
@@ -190,13 +199,13 @@ public final class AntCraftCommands {
 							.then(Commands.argument("priority", IntegerArgumentType.integer(-MAX_PRIORITY, MAX_PRIORITY))
 								.executes(ctx -> setProjectPriority(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"),
 									IntegerArgumentType.getInteger(ctx, "priority")))))))
-				.then(Commands.literal("terraform")
+				.then(Commands.literal("terraform").requires(OPERATOR)
 					.then(Commands.argument("from", BlockPosArgument.blockPos())
 						.then(Commands.argument("to", BlockPosArgument.blockPos())
 							.then(Commands.argument("y", IntegerArgumentType.integer())
 								.executes(ctx -> terraform(ctx.getSource(), BlockPosArgument.getLoadedBlockPos(ctx, "from"),
 									BlockPosArgument.getLoadedBlockPos(ctx, "to"), IntegerArgumentType.getInteger(ctx, "y")))))))
-				.then(Commands.literal("cancel")
+				.then(Commands.literal("cancel").requires(OPERATOR)
 					.then(Commands.argument("item", ItemArgument.item(buildContext))
 						.executes(ctx -> cancel(ctx.getSource(), ItemArgument.getItem(ctx, "item").item().value()))))));
 	}
@@ -251,23 +260,32 @@ public final class AntCraftCommands {
 		return status.members();
 	}
 
-	/** Trusts {@code players} with the nearest colony, or no longer does if not {@code trust}. */
+	/**
+	 * Trusts {@code players} with the nearest colony, or no longer does if not {@code trust}. Its owner and operators may
+	 * ({@link ColonyActions#mayTrust}); anyone else is refused.
+	 */
 	private static int trust(CommandSourceStack source, Collection<NameAndId> players, boolean trust) {
 		Optional<Colony> found = nearestColony(source);
 		if (found.isEmpty()) {
 			return 0;
 		}
+		ServerPlayer player = source.getPlayer();
+		// The console and command blocks run as operators.
+		if (player != null && !ColonyActions.mayTrust(found.get(), player)) {
+			source.sendFailure(Component.translatable("commands.antcraft.colony.trust.not_allowed"));
+			return 0;
+		}
 		int changed = 0;
-		for (NameAndId player : players) {
-			boolean done = trust ? found.get().trust(player.id()) : found.get().untrust(player.id());
+		for (NameAndId other : players) {
+			boolean done = trust ? found.get().trust(other.id()) : found.get().untrust(other.id());
 			String key = trust
 				? (done ? "commands.antcraft.colony.trust" : "commands.antcraft.colony.trust.unchanged")
 				: (done ? "commands.antcraft.colony.untrust" : "commands.antcraft.colony.untrust.unchanged");
 			if (done) {
 				changed++;
-				source.sendSuccess(() -> Component.translatable(key, player.name()), true);
+				source.sendSuccess(() -> Component.translatable(key, other.name()), true);
 			} else {
-				source.sendFailure(Component.translatable(key, player.name()));
+				source.sendFailure(Component.translatable(key, other.name()));
 			}
 		}
 		return changed;
