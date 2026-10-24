@@ -54,6 +54,14 @@ public final class VanillaData {
 	}
 
 	/**
+	 * Binds the vanilla tags, such as {@code FluidTags.LAVA}, by loading the data pack once, for tests whose code checks
+	 * tags. Without it a test passes only when an earlier test in the same JVM loaded the data.
+	 */
+	public static void bindTags() {
+		recipeBook();
+	}
+
+	/**
 	 * The items in AntCraft's {@code antcraft:gatherable} tag. Only the vanilla data pack is loaded,
 	 * so the tag is read from the mod's resources here.
 	 */

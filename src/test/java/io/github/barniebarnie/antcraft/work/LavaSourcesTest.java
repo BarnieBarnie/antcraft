@@ -31,6 +31,8 @@ class LavaSourcesTest {
 	static void bootstrap() {
 		SharedConstants.tryDetectVersion();
 		Bootstrap.bootStrap();
+		// LavaSources checks FluidTags.LAVA.
+		VanillaData.bindTags();
 		AIR = Blocks.AIR.defaultBlockState();
 		STONE = Blocks.STONE.defaultBlockState();
 		LAVA = Blocks.LAVA.defaultBlockState();
