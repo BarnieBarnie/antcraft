@@ -41,7 +41,7 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int idle, int radius,
 		Map<JobType, Integer> openJobs, Map<JobType, Integer> claimedJobs, List<Stock> stock, List<Order> orders,
-		List<Build> builds, List<BlockPos> blocked, List<GivenUp> givenUp, Room room, Access access) {
+		List<Build> builds, List<Blocked> blocked, List<GivenUp> givenUp, Room room, Access access) {
 
 	/** The names of the colony's owner, if it has one, and of the players it trusts (see {@link ColonyActions#mayAct}). */
 	public record Access(Optional<String> owner, List<String> trusted) {
@@ -144,6 +144,22 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			ByteBufCodecs.VAR_INT, Batch::left, ByteBufCodecs.VAR_INT, Batch::steps, ByteBufCodecs.BOOL, Batch::blocked, Batch::new);
 	}
 
+	/** A build step builders could not do, and why (see {@link Colony#blockReason}). */
+	public record Blocked(BlockPos pos, Colony.BlockReason reason) {
+		static final StreamCodec<ByteBuf, Blocked> STREAM_CODEC = StreamCodec.composite(
+			BlockPos.STREAM_CODEC, Blocked::pos, enumCodec(Colony.BlockReason.values()), Blocked::reason, Blocked::new);
+
+		/** The step's position, followed by why it is blocked where that is worth telling, such as no lava found. */
+		public Component describe() {
+			String pos = this.pos.toShortString();
+			return switch (this.reason) {
+				case NO_LAVA -> Component.translatable("commands.antcraft.colony.blocked_step.no_lava", pos);
+				case NO_WATER -> Component.translatable("commands.antcraft.colony.blocked_step.no_water", pos);
+				case OTHER, UNREACHABLE -> Component.literal(pos);
+			};
+		}
+	}
+
 	/**
 	 * A build plan with how many of its steps are left, whether it is the mineshaft or an area to level, and its batches in order;
 	 * and the project it is part of, with the project's priority and what it still waits for (see {@link Colony#waitingFor}).
@@ -177,7 +193,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		Stock.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::stock,
 		Order.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::orders,
 		Build.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::builds,
-		BlockPos.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
+		Blocked.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::blocked,
 		GivenUp.STREAM_CODEC.apply(ByteBufCodecs.list()), ColonyStatus::givenUp,
 		Room.STREAM_CODEC, ColonyStatus::room,
 		Access.STREAM_CODEC, ColonyStatus::access,
@@ -365,7 +381,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			: StorageState.READY;
 
 		return new ColonyStatus(colony.core(), colony.members().size(), loaded, idle, colony.radius(), open, claimed, stocks, orders, builds,
-			colony.blockedSteps(), givenUp, new Room(coreFreeSlots, storage),
+			colony.blockedSteps().stream().map(pos -> new Blocked(pos, colony.blockReason(pos))).toList(), givenUp, new Room(coreFreeSlots, storage),
 			new Access(colony.owner().map(names), colony.trusted().stream().map(names).toList()));
 	}
 }

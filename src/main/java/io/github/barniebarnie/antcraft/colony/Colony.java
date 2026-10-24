@@ -77,7 +77,7 @@ public class Colony {
 	/** Saves from before blocked steps kept their plan hold only positions; their plans are gone, so the next recheck drops them. */
 	private static final Codec<List<Blocked>> BLOCKED = Codec.withAlternative(
 		Blocked.CODEC.listOf(),
-		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Blocked(new UUID(0, 0), pos, false)).toList(),
+		BlockPos.CODEC.listOf().xmap(positions -> positions.stream().map(pos -> new Blocked(new UUID(0, 0), pos, BlockReason.OTHER)).toList(),
 			blocked -> blocked.stream().map(Blocked::pos).toList()));
 	private static final Codec<Map<OrderPurpose, Map<Item, Integer>>> SYSTEM_ORDERS = Codec.unboundedMap(OrderPurpose.CODEC, ITEM_COUNTS);
 
@@ -127,17 +127,42 @@ public class Colony {
 		).apply(i, Placed::new));
 	}
 
+	/** Why a builder could not do a step, where it can tell. */
+	public enum BlockReason implements StringRepresentable {
+		/** The step itself cannot be done, such as behind bedrock. */
+		OTHER,
+		/** The builder found no way to the step. */
+		UNREACHABLE,
+		/** A lava step with no lava bucket at hand and no lava source in reach to fill one at. */
+		NO_LAVA,
+		/** A water step with no water bucket at hand and no water source in reach to fill one at. */
+		NO_WATER;
+
+		public static final Codec<BlockReason> CODEC = StringRepresentable.fromEnum(BlockReason::values);
+
+		@Override
+		public String getSerializedName() {
+			return this.name().toLowerCase(Locale.ROOT);
+		}
+	}
+
 	/**
 	 * A step that a builder could not do, of the batch of build job {@code plan} (named so before
-	 * plans had batches); {@code unreachable} if it found no way to the step, rather than the step
-	 * itself being impossible.
+	 * plans had batches), and why. Saves from before the reason say only whether it was unreachable,
+	 * which is still written for them.
 	 */
-	record Blocked(UUID plan, BlockPos pos, boolean unreachable) {
+	record Blocked(UUID plan, BlockPos pos, BlockReason reason) {
 		static final Codec<Blocked> CODEC = RecordCodecBuilder.create(i -> i.group(
 			UUIDUtil.STRING_CODEC.fieldOf("plan").forGetter(Blocked::plan),
 			BlockPos.CODEC.fieldOf("pos").forGetter(Blocked::pos),
-			Codec.BOOL.optionalFieldOf("unreachable", false).forGetter(Blocked::unreachable)
-		).apply(i, Blocked::new));
+			Codec.BOOL.optionalFieldOf("unreachable", false).forGetter(Blocked::unreachable),
+			BlockReason.CODEC.optionalFieldOf("reason", BlockReason.OTHER).forGetter(Blocked::reason)
+		).apply(i, (plan, pos, unreachable, reason) -> new Blocked(plan, pos, unreachable ? BlockReason.UNREACHABLE : reason)));
+
+		/** Whether the builder found no way to the step, rather than the step itself being impossible. */
+		boolean unreachable() {
+			return this.reason == BlockReason.UNREACHABLE;
+		}
 	}
 
 	/*
@@ -735,7 +760,8 @@ public class Colony {
 	 * for builds ({@link OrderPurpose#BUILD}): what its plans still have to place beyond what the colony {@code has}, and
 	 * the pickaxe its blocks in the way need when the colony {@code hasTool} none as good, and its stock short of what
 	 * the colony {@code has}, the last option of each target (the cheapest, such as a wooden pickaxe). A project takes
-	 * from {@code has} before those below it. A project with no plans left whose stock the colony has is done. Steps that are not {@code possible} for a builder order nothing. Returns what the plans
+	 * from {@code has} before those below it. An empty bucket is ordered too while an order waits for a full one, such as
+	 * a lava bucket, and the colony {@code has} none to fill. A project with no plans left whose stock the colony has is done. Steps that are not {@code possible} for a builder order nothing. Returns what the plans
 	 * still have to place, which is there for nothing else.
 	 */
 	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
@@ -758,7 +784,7 @@ public class Colony {
 			Map<Item, Integer> spares = new HashMap<>();
 			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, stairs, left, spares));
 			// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
-			if (needed.keySet().removeIf(item -> item instanceof BucketItem && item != Items.BUCKET) && left.getOrDefault(Items.BUCKET, 0) <= 0) {
+			if (needed.keySet().removeIf(Colony::isFullBucket) && left.getOrDefault(Items.BUCKET, 0) <= 0) {
 				needed.put(Items.BUCKET, 1);
 			}
 			plans.stream().flatMap(plan -> plan.needs(world, possible).tool().stream()).filter(hasTool.negate())
@@ -786,6 +812,10 @@ public class Colony {
 			// One bucket or pickaxe does for every project.
 			needed.forEach((item, count) -> total.merge(item, count, item == Items.BUCKET || pickaxes.tiers().contains(item) ? Math::max : Integer::sum));
 		}
+		// So do orders for a full bucket, such as lava: without an empty bucket to fill they would wait for ever.
+		if (this.orders.keySet().stream().anyMatch(Colony::isFullBucket) && has.getOrDefault(Items.BUCKET, 0) <= 0) {
+			total.merge(Items.BUCKET, 1, Math::max);
+		}
 		// A better pickaxe ordered also counts for the projects that need a worse one.
 		int better = 0;
 		for (Item tier : pickaxes.tiers().reversed()) {
@@ -799,6 +829,11 @@ public class Colony {
 		}
 		this.orderFor(OrderPurpose.BUILD, total);
 		return placed;
+	}
+
+	/** Whether {@code item} is a full bucket, which cannot be crafted, only filled at a source. */
+	private static boolean isFullBucket(Item item) {
+		return item instanceof BucketItem && item != Items.BUCKET;
 	}
 
 	/**
@@ -1158,9 +1193,14 @@ public class Colony {
 		return this.blockedSteps.stream().map(Blocked::pos).toList();
 	}
 
-	/** Where builders found no way to a step; see {@link #reportBlocked(UUID, Collection, Collection)}. */
+	/** Where builders found no way to a step; see {@link #reportBlocked(UUID, Map)}. */
 	public List<BlockPos> unreachableSteps() {
 		return this.blockedSteps.stream().filter(Blocked::unreachable).map(Blocked::pos).toList();
+	}
+
+	/** Why builders could not do the step at {@code pos}: the reason of the first blocked step there, {@link BlockReason#OTHER} if none. */
+	public BlockReason blockReason(BlockPos pos) {
+		return this.blockedSteps.stream().filter(b -> b.pos().equals(pos)).map(Blocked::reason).findFirst().orElse(BlockReason.OTHER);
 	}
 
 	/** {@link #reportBlocked(UUID, Collection, Collection)} with every step reachable. */
@@ -1168,26 +1208,35 @@ public class Colony {
 		this.reportBlocked(job, steps, List.of());
 	}
 
+	/** {@link #reportBlocked(UUID, Map)} with the steps in {@code unreachable} found unreachable and the rest blocked otherwise. */
+	public void reportBlocked(UUID job, Collection<BlockPos> steps, Collection<BlockPos> unreachable) {
+		Map<BlockPos, BlockReason> reasons = new LinkedHashMap<>();
+		steps.forEach(pos -> reasons.put(pos, unreachable.contains(pos) ? BlockReason.UNREACHABLE : BlockReason.OTHER));
+		this.reportBlocked(job, reasons);
+	}
+
 	/**
 	 * Records the steps of the batch of build job {@code job} that a builder cannot do; the batch,
 	 * and the batches that need it, wait without jobs until a recheck frees it, while the plan's
 	 * other batches go on. The mineshaft does not wait: it drops the
 	 * levels the steps keep builders from (see {@link Mineshaft#reachable}) and goes on without them.
-	 * Of those, the steps in {@code unreachable} are ones the builder found no way to.
+	 * Each step comes with why it is blocked.
 	 */
-	public void reportBlocked(UUID job, Collection<BlockPos> steps, Collection<BlockPos> unreachable) {
+	public void reportBlocked(UUID job, Map<BlockPos, BlockReason> blocked) {
 		BatchRef batch = this.batchJobs.get(job);
 		Optional<Mineshaft> shaft = this.mineshaft
 			.filter(mine -> batch != null && this.builds.get(batch.plan()).equals(mine.plan()))
-			.map(mine -> mine.reachable(steps))
+			.map(mine -> mine.reachable(blocked.keySet()))
 			.filter(reachable -> !reachable.equals(this.mineshaft.get()));
 		if (shaft.isPresent()) {
 			this.setMineshaft(shaft.get());
 			return;
 		}
-		steps.stream().map(pos -> new Blocked(job, pos.immutable(), unreachable.contains(pos)))
-			.filter(b -> this.blockedSteps.stream().noneMatch(old -> old.plan().equals(b.plan()) && old.pos().equals(b.pos())))
-			.forEach(this.blockedSteps::add);
+		blocked.forEach((pos, reason) -> {
+			if (this.blockedSteps.stream().noneMatch(old -> old.plan().equals(job) && old.pos().equals(pos))) {
+				this.blockedSteps.add(new Blocked(job, pos.immutable(), reason));
+			}
+		});
 	}
 
 	/**

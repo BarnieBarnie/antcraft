@@ -235,7 +235,7 @@ public final class AntCraftCommands {
 			}
 		}
 		if (!status.blocked().isEmpty()) {
-			String blocked = String.join(", ", status.blocked().stream().map(BlockPos::toShortString).toList());
+			Component blocked = ComponentUtils.formatList(status.blocked(), Component.literal(", "), ColonyStatus.Blocked::describe);
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked", blocked), false);
 		}
 		for (JobType type : ColonyStatus.GIVEN_UP_TYPES) {

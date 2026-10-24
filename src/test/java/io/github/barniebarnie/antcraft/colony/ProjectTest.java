@@ -87,6 +87,18 @@ class ProjectTest {
 			"no logs gathered for the sticks: " + gather);
 	}
 
+	/** A full bucket cannot be crafted, only filled at a source, so an order for one gets the colony an empty bucket to fill. */
+	@Test
+	void anOrderForALavaBucketOrdersAnEmptyBucketTheColonyLacks() {
+		Colony colony = colony();
+		colony.addOrder(Items.LAVA_BUCKET, 2);
+		colony.planProjects(WORLD, step -> true, Map.of(), tool -> true);
+		assertEquals(Map.of(Items.LAVA_BUCKET, 2, Items.BUCKET, 1), colony.orders());
+
+		colony.planProjects(WORLD, step -> true, Map.of(Items.BUCKET, 1), tool -> true);
+		assertEquals(Map.of(Items.LAVA_BUCKET, 2), colony.orders());
+	}
+
 	@Test
 	void aPickaxeTheColonyHasIsNotOrdered() {
 		Colony colony = colony();

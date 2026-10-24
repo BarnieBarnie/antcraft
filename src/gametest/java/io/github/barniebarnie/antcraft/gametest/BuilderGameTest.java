@@ -4,6 +4,7 @@ import static io.github.barniebarnie.antcraft.gametest.TestPositions.relative;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -1795,6 +1796,26 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(reported[0] >= 0 && helper.getTick() - reported[0] >= 20, "not reported long enough");
 			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
 			helper.assertTrue(core(helper).countItem(Items.BUCKET) + bot.getInventory().countItem(Items.BUCKET) == 1, "bucket lost");
+		});
+	}
+
+	/** The colony's status says why a lava step is blocked, so the player knows to bring lava, rather than just where it is. */
+	@GameTest(maxTicks = 25)
+	public void aLavaStepWithNoLavaInRangeShowsNoLavaFoundInTheStatus(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.BUCKET));
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(new BlockPos(4, 1, 4).relative(side), Blocks.STONE);
+		}
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.LAVA.defaultBlockState()))));
+		member(helper, colony, 1, 4);
+
+		BlockPos lava = helper.absolutePos(new BlockPos(4, 1, 4));
+		helper.succeedWhen(() -> {
+			List<ColonyStatus.Blocked> blocked = ColonyStatus.of(helper.getLevel(), colony).blocked();
+			helper.assertValueEqual(blocked, List.of(new ColonyStatus.Blocked(lava, Colony.BlockReason.NO_LAVA)), "blocked steps in the status");
+			helper.assertValueEqual(blocked.getFirst().describe(),
+				Component.translatable("commands.antcraft.colony.blocked_step.no_lava", lava.toShortString()), "what the status says");
 		});
 	}
 

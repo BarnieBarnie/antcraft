@@ -214,7 +214,18 @@ class ColonyStatusTest {
 			new ColonyStatus.Build(new BlockPos(10, 64, 10), 1, 2, false, false, List.of(new ColonyStatus.Batch(1, 2, false)), Component.literal("build"), 0, Map.of()),
 			new ColonyStatus.Build(new BlockPos(12, 64, 12), 1, 1, false, true, List.of(new ColonyStatus.Batch(1, 1, false)), Component.literal("terraform"), 0,
 				Map.of())), status.builds());
-		assertEquals(List.of(new BlockPos(3, 64, 3)), status.blocked());
+		assertEquals(List.of(new ColonyStatus.Blocked(new BlockPos(3, 64, 3), Colony.BlockReason.OTHER)), status.blocked());
+	}
+
+	/** A step blocked for want of lava says so after its position; one blocked otherwise is just its position. */
+	@Test
+	void aBlockedStepTellsWhyWhereItKnows() {
+		BlockPos pos = new BlockPos(3, 64, 3);
+		assertEquals(Component.translatable("commands.antcraft.colony.blocked_step.no_lava", pos.toShortString()),
+			new ColonyStatus.Blocked(pos, Colony.BlockReason.NO_LAVA).describe());
+		assertEquals(Component.translatable("commands.antcraft.colony.blocked_step.no_water", pos.toShortString()),
+			new ColonyStatus.Blocked(pos, Colony.BlockReason.NO_WATER).describe());
+		assertEquals(Component.literal(pos.toShortString()), new ColonyStatus.Blocked(pos, Colony.BlockReason.OTHER).describe());
 	}
 
 	@Test

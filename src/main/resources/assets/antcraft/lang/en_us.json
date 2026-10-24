@@ -23,6 +23,8 @@
 	"commands.antcraft.colony.bot": "  %s: %s",
 	"commands.antcraft.colony.order_line": "Order: %s %s. To gather: %s. Missing: %s",
 	"commands.antcraft.colony.blocked": "Build steps the colony cannot do: %s",
+	"commands.antcraft.colony.blocked_step.no_lava": "%s (no lava found)",
+	"commands.antcraft.colony.blocked_step.no_water": "%s (no water found)",
 	"commands.antcraft.colony.blocked.cleared": "Gave up on %s blocked build steps",
 	"commands.antcraft.colony.given_up": "Trees given up on, logs out of reach: %s",
 	"commands.antcraft.colony.given_up_branches": "Mine branches given up on, out of reach: %s",

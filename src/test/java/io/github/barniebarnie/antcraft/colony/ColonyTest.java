@@ -417,6 +417,34 @@ class ColonyTest {
 	}
 
 	@Test
+	void aStepBlockedForWantOfLavaSaysSoAndIsSaved() {
+		Colony colony = colony();
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(PLACED, Blocks.LAVA.defaultBlockState()))));
+		colony.postBuildJobs();
+		UUID id = colony.board().jobs().getFirst().id();
+		colony.board().complete(id);
+		colony.reportBlocked(id, Map.of(PLACED, Colony.BlockReason.NO_LAVA));
+		assertEquals(Colony.BlockReason.NO_LAVA, colony.blockReason(PLACED));
+		assertTrue(colony.unreachableSteps().isEmpty(), "taken for unreachable: " + colony.unreachableSteps());
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertEquals(List.of(PLACED), loaded.blockedSteps());
+		assertEquals(Colony.BlockReason.NO_LAVA, loaded.blockReason(PLACED));
+	}
+
+	@Test
+	void oldSavesKeepTheirUnreachableSteps() {
+		String json = """
+			{"id": [1, 2, 3, 4], "core": [0, 64, 0], "blocked_steps": [
+				{"plan": "00000000-0000-0000-0000-000000000001", "pos": [5, 64, 5], "unreachable": true},
+				{"plan": "00000000-0000-0000-0000-000000000001", "pos": [1, 2, 3]}]}
+			""";
+		Colony colony = Colony.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString(json)).getOrThrow();
+		assertEquals(List.of(PLACED), colony.unreachableSteps());
+		assertEquals(Colony.BlockReason.UNREACHABLE, colony.blockReason(PLACED));
+		assertEquals(Colony.BlockReason.OTHER, colony.blockReason(new BlockPos(1, 2, 3)));
+	}
+
+	@Test
 	void unreachableStepsAreSaved() {
 		Colony colony = colony();
 		unreachablePlan(colony, BuildPlan.Step.clear(PLACED));
@@ -1080,7 +1108,7 @@ class ColonyTest {
 			List.of(StockTarget.of(Items.TORCH, 16), StockTarget.of(ItemTags.PICKAXES, 2, Items.STONE_PICKAXE)), builds,
 			List.of(new Colony.Placed(new BlockPos(1, 64, 1), Optional.of(Blocks.OAK_PLANKS))), Optional.of(new Field(new BlockPos(10, 64, 10))),
 			Optional.of(new StorageArea(new BlockPos(-5, 64, -5))), Map.of(Items.TORCH, 1),
-			List.of(new Colony.Blocked(SECOND_PLAN, new BlockPos(6, 64, 5), false)),
+			List.of(new Colony.Blocked(SECOND_PLAN, new BlockPos(6, 64, 5), Colony.BlockReason.OTHER)),
 			Map.of(Colony.OrderPurpose.BUILD, Map.of(Items.OAK_STAIRS, 3), Colony.OrderPurpose.STORAGE, Map.of(Items.CHEST, 2)),
 			Map.of(FIRST_PLAN, Colony.BatchState.WAITING));
 	}

@@ -290,7 +290,7 @@ public class ColonyStatusScreen extends Screen {
 			}
 		}
 		if (!status.blocked().isEmpty()) {
-			Component blocked = list(status.blocked().stream().<Component>map(pos -> Component.literal(pos.toShortString())).toList());
+			Component blocked = list(status.blocked().stream().map(ColonyStatus.Blocked::describe).toList());
 			lines.add(new Line(Component.translatable("commands.antcraft.colony.blocked", blocked), RED));
 		}
 		for (JobType type : ColonyStatus.GIVEN_UP_TYPES) {

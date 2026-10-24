@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -1124,14 +1125,34 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 					colony.finishBatch(job.id());
 				} else {
 					// Those it found no way to are not retried every survey, only now and then (see Colony#recheckBlocked).
-					colony.reportBlocked(job.id(), blocked.stream().map(BuildPlan.Step::pos).toList(),
-						blocked.stream().filter(this::isGivenUp).map(BuildPlan.Step::pos).toList());
+					Map<BlockPos, Colony.BlockReason> reasons = new LinkedHashMap<>();
+					blocked.forEach(step -> reasons.put(step.pos(), this.blockReason(level, colony, core, p, step)));
+					colony.reportBlocked(job.id(), reasons);
 				}
 			});
 			// Once the colony finds the steps workable again, say a player opened the way, they are tried afresh.
 			this.forgetUnreachable();
 			this.endJob(level, WorkerGoal.Outcome.COMPLETE);
 		}
+	}
+
+	/**
+	 * Why {@code step} of {@code plan} is left undone: unreachable if this bot found no way to it, no lava or water found
+	 * for a fluid to pour with no full bucket at hand and no source in reach to fill one at, or else for some other reason.
+	 */
+	private Colony.BlockReason blockReason(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, BuildPlan.Step step) {
+		if (this.isGivenUp(step)) {
+			return Colony.BlockReason.UNREACHABLE;
+		}
+		BlockState current = level.getBlockState(step.pos());
+		Item item = step.item(current);
+		if (step.needsClearing(current) || !isPoured(item) || plan.waitsForWalls(level::getBlockState, step)
+				|| this.has(core, stack -> stack.is(item)) || this.source(level, colony, item) != null) {
+			return Colony.BlockReason.OTHER;
+		}
+		return item == Items.LAVA_BUCKET ? Colony.BlockReason.NO_LAVA
+			: item == Items.WATER_BUCKET ? Colony.BlockReason.NO_WATER
+			: Colony.BlockReason.OTHER;
 	}
 
 	/**
