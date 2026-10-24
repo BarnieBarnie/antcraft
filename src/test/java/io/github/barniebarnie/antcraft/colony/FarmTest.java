@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -29,6 +30,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -172,7 +174,7 @@ class FarmTest {
 	}
 
 	@Test
-	void theFieldWaterIsTheWaterOfEveryBuiltFarmOldestFirstElseTheLaidOutFieldsMiddle() {
+	void theFarmerPoursWaterOnlyOnTheFieldTheColonyLaidOutNotOnABuiltFarm() {
 		Colony colony = colony();
 		Field laidOut = new Field(new BlockPos(-8, 63, -8));
 		colony.setField(laidOut);
@@ -182,11 +184,10 @@ class FarmTest {
 		assertEquals(List.of(laidOut.center()), colony.fieldWater(), "while the farms are being built");
 
 		finishAll(colony);
-		List<BlockPos> expected = new ArrayList<>(built(AT, Mirror.NONE, Rotation.NONE, Blocks.WATER));
-		expected.addAll(built(second, Mirror.FRONT_BACK, Rotation.CLOCKWISE_90, Blocks.WATER));
-		assertEquals(expected, colony.fieldWater());
+		// Builders pour a built farm's water back (see restoreFluids), so the farmer leaves it alone.
+		assertEquals(List.of(), colony.fieldWater());
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
-		assertEquals(expected, loaded.fieldWater(), "once loaded");
+		assertEquals(List.of(), loaded.fieldWater(), "once loaded");
 	}
 
 	@Test
@@ -198,11 +199,11 @@ class FarmTest {
 		// As saved before placed blueprints kept their water.
 		saved.getAsJsonObject().getAsJsonArray("blueprints").forEach(placed -> placed.getAsJsonObject().remove("water"));
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, saved).getOrThrow();
-		assertEquals(List.of(), loaded.fieldWater(), "the old save has water");
+		assertEquals(List.of(), placed(loaded).water(), "the old save has water");
 
 		loaded.lookUpFluids(placed -> Optional.of(plan(placed.at(), placed.mirror(), placed.rotation())));
 		List<BlockPos> water = built(AT, Mirror.FRONT_BACK, Rotation.CLOCKWISE_90, Blocks.WATER);
-		assertEquals(water, loaded.fieldWater());
+		assertEquals(water, placed(loaded).water());
 		assertTrue(loaded.isProtected(pos -> Blocks.AIR.defaultBlockState(), water.getFirst()), "water gone");
 	}
 
@@ -219,6 +220,53 @@ class FarmTest {
 		colony.restoreFluids(pos -> pos.equals(water) ? Blocks.AIR.defaultBlockState() : Blocks.DIRT.defaultBlockState());
 		assertEquals(1, colony.builds().size(), "one plan: " + colony.builds());
 		assertEquals(List.of(new BuildPlan.Step(water, Blocks.WATER.defaultBlockState())), colony.builds().getFirst().steps());
+	}
+
+	@Test
+	void aWaterRestoreThePlayerCancelledIsNotAddedAgain() {
+		Colony colony = colony();
+		place(colony, AT, Mirror.NONE, Rotation.NONE);
+		finishAll(colony);
+		Function<BlockPos, BlockState> gone = pos -> Blocks.AIR.defaultBlockState();
+		colony.restoreFluids(gone);
+		assertEquals(1, colony.builds().size(), "one plan: " + colony.builds());
+
+		colony.removeBuild(colony.builds().getFirst());
+		colony.restoreFluids(gone);
+		assertEquals(List.of(), colony.builds(), "added again");
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		loaded.restoreFluids(gone);
+		assertEquals(List.of(), loaded.builds(), "added again once loaded");
+	}
+
+	@Test
+	void aWaterRestoreThePlayerGaveUpIsNotAddedAgain() {
+		Colony colony = colony();
+		place(colony, AT, Mirror.NONE, Rotation.NONE);
+		finishAll(colony);
+		BlockPos water = built(AT, Mirror.NONE, Rotation.NONE, Blocks.WATER).getFirst();
+		Function<BlockPos, BlockState> gone = pos -> Blocks.AIR.defaultBlockState();
+		colony.restoreFluids(gone);
+		colony.postBuildJobs();
+		Job job = colony.board().jobs().stream().filter(j -> j.isOpen() && colony.build(j.id()).isPresent()).findFirst().orElseThrow();
+		colony.reportBlocked(job.id(), List.of(water));
+
+		assertEquals(1, colony.clearBlocked().steps());
+		assertEquals(List.of(), colony.builds(), "the restore is given up");
+		colony.restoreFluids(gone);
+		assertEquals(List.of(), colony.builds(), "added again");
+	}
+
+	@Test
+	void aPlanAtAFarmsFirstPlotDoesNotHoldBackItsWater() {
+		Colony colony = colony();
+		place(colony, AT, Mirror.NONE, Rotation.NONE);
+		finishAll(colony);
+		BlockPos plot = placed(colony).workSpots().getFirst();
+		colony.addBuild("path", new BuildPlan(List.of(new BuildPlan.Step(plot, Blocks.DIRT.defaultBlockState()))));
+
+		colony.restoreFluids(pos -> Blocks.AIR.defaultBlockState());
+		assertEquals(2, colony.builds().size(), "no water plan: " + colony.builds());
 	}
 
 	private static PlacedBlueprint placed(Colony colony) {

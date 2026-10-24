@@ -308,8 +308,8 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Waters the colony field with a bucket where its water is gone (see {@link Colony#fieldWater}), such as the middle of
-	 * the field the colony laid out or a built farm's water: it pours a water bucket, fills an empty
+	 * Waters the colony field with a bucket where its water is gone (see {@link Colony#fieldWater}), the middle of the field
+	 * the colony laid out (builders pour a built farm's water back): it pours a water bucket, fills an empty
 	 * one at the nearest water in the territory, or fetches one from the core or a storage chest. Without any bucket in
 	 * the colony it orders one. Returns true while busy, so the caller skips its own work this tick.
 	 * ponytail: the field is planted while the water waits; farmland under a crop stays tilled when

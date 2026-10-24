@@ -98,7 +98,7 @@ public final class BlueprintPlacement {
 		}
 		Blueprint print = blueprint.get();
 		return Either.right(new PlacedBlueprint(new UUID(0, 0), id, print.name(), at, rotation, mirror, area, print.role(),
-			print.chestsAt(extent, at, mirror, rotation), print.workSpotsAt(extent, at, mirror, rotation), List.of(), List.of(), Optional.empty(), false));
+			print.chestsAt(extent, at, mirror, rotation), print.workSpotsAt(extent, at, mirror, rotation), List.of(), List.of(), Optional.empty(), false, true));
 	}
 
 	/**

@@ -669,7 +669,7 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 	 * back as it is: the builder scoops up the water with the empty bucket in the core, mines the mining block, pours the
 	 * water back and fills the bucket at a lava pool nearby for the lava, and cobblestone forms in the mining block again.
 	 */
-	@GameTest(maxTicks = 1400)
+	@GameTest(maxTicks = 1260)
 	public void aBuiltGeneratorsLavaIsPouredBackOnceGoneWithLavaFetchedFromAPool(GameTestHelper helper) {
 		PlacedBlueprint generator = builtGenerator(helper, new ItemStack(Items.BUCKET));
 		BlockPos lava = generator.lava().getFirst();

@@ -63,6 +63,8 @@ public class ColonyManager extends SavedData {
 	/** Bot Cores activated this close to a colony core join that colony. */
 	public static final int JOIN_DISTANCE = 32;
 	private static final int SURVEY_INTERVAL = 100;
+	/** How soon the colony looks again when a generator's restore waits for its scooped-up water to drain (see {@link Colony#restoreFluids}). */
+	private static final int DRAIN_TICKS = 10;
 	/** How far above and below the core crops are looked for. */
 	private static final int CROP_SCAN_HEIGHT = 4;
 	/** Jobs whose bot has not reported for this long are freed for others. */
@@ -494,7 +496,10 @@ public class ColonyManager extends SavedData {
 			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			// A built farm's water or generator's water and lava gone since is poured back.
 			colony.lookUpFluids(placed -> structure(level, placed));
-			colony.restoreFluids(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
+			if (colony.restoreFluids(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null)) {
+				// The next stage of a generator's restore waits only for its water to drain.
+				colony.lastSurvey = now - SURVEY_INTERVAL + DRAIN_TICKS;
+			}
 			LevelTreeView trees = new LevelTreeView(level);
 			// A log job goes once its log does; a tree job stays to pick up the drops and replant the tree.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_LOG && job.blocks().stream().noneMatch(trees::isLog));

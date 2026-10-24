@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonElement;
@@ -263,6 +264,43 @@ class GeneratorJobTest {
 			restored(colony, Map.of()), "both poured back, water first");
 		assertEquals(List.of(new BuildPlan.Step(lava, Blocks.LAVA.defaultBlockState())),
 			restored(colony, Map.of(water, Blocks.WATER.defaultBlockState(), channel, flowing)), "lava poured through the mined block");
+	}
+
+	/**
+	 * While the water a builder scooped up still flows beside the mining block, restoreFluids says so, so the colony looks
+	 * again soon instead of at its next survey; otherwise it does not.
+	 */
+	@Test
+	void aGeneratorWaitingForItsWaterToDrainAsksForASurveySoon() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		finishAll(colony);
+		BlockPos lava = placed.lava().getFirst();
+		BlockPos mine = placed.workSpots().getFirst();
+		BlockPos channel = mine.offset(mine.subtract(lava));
+		BlockState flowing = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1);
+
+		assertTrue(colony.restoreFluids(world(Map.of(channel, flowing, mine, Blocks.COBBLESTONE.defaultBlockState()))), "draining");
+		assertEquals(List.of(), colony.builds());
+		assertFalse(colony.restoreFluids(world(Map.of(mine, Blocks.COBBLESTONE.defaultBlockState()))), "dry");
+		assertEquals(List.of(BuildPlan.Step.clear(mine)), colony.builds().getFirst().steps());
+	}
+
+	/** A player who cancels a stage of the restore of a generator's lava keeps it empty. */
+	@Test
+	void aLavaRestoreThePlayerCancelledIsNotAddedAgain() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		finishAll(colony);
+		BlockPos mine = placed.workSpots().getFirst();
+		Function<BlockPos, BlockState> dry = world(Map.of(mine, Blocks.COBBLESTONE.defaultBlockState()));
+		colony.restoreFluids(dry);
+		assertEquals(List.of(BuildPlan.Step.clear(mine)), colony.builds().getFirst().steps());
+
+		colony.removeBuild(colony.builds().getFirst());
+		colony.restoreFluids(dry);
+		colony.restoreFluids(world(Map.of()));
+		assertEquals(List.of(), colony.builds(), "added again");
 	}
 
 	/** The world of {@code blocks}, air elsewhere. */

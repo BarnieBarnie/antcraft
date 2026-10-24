@@ -675,23 +675,34 @@ public class Colony {
 
 	/**
 	 * Adds a plan to pour back the water and lava of each built blueprint that {@code world} shows gone, such as a farm's
-	 * water or a generator's lava, unless a plan is at them already. {@code world} gives null where it cannot tell, such
-	 * as in unloaded chunks; such fluids are taken as still there. See {@link #fluidSteps} for the steps.
+	 * water or a generator's lava, unless a plan is at them already or the player cancelled or gave up such a plan before
+	 * (see {@link #stopFluidRestore}). {@code world} gives null where it cannot tell, such as in unloaded chunks; such
+	 * fluids are taken as still there. See {@link #fluidSteps} for the steps. Returns whether a generator waits for the
+	 * water scooped out of it to drain before its mining block is mined, which takes a few ticks, so the caller can look
+	 * again soon instead of at the next survey.
 	 */
-	public void restoreFluids(Function<BlockPos, @Nullable BlockState> world) {
+	public boolean restoreFluids(Function<BlockPos, @Nullable BlockState> world) {
 		Set<BlockPos> planned = this.builds.values().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos)
 			.collect(Collectors.toSet());
+		boolean draining = false;
 		for (PlacedBlueprint placed : List.copyOf(this.blueprints)) {
-			List<BlockPos> spots = Stream.of(placed.water(), placed.lava(), placed.workSpots().stream().limit(1).toList()).flatMap(List::stream).toList();
-			if (!placed.finished() || spots.stream().anyMatch(planned::contains)) {
+			Set<BlockPos> spots = placed.fluidSpots();
+			if (!placed.finished() || !placed.restoreFluids() || spots.stream().anyMatch(planned::contains)) {
 				continue;
 			}
-			List<BuildPlan.Step> steps = fluidSteps(placed, world);
-			if (!steps.isEmpty()) {
-				this.addBuild(placed.blueprint().toString(), new BuildPlan(steps));
+			FluidSteps steps = fluidSteps(placed, world);
+			draining |= steps.draining();
+			if (!steps.steps().isEmpty()) {
+				this.addBuild(placed.blueprint().toString(), new BuildPlan(steps.steps()));
 				planned.addAll(spots);
 			}
 		}
+		return draining;
+	}
+
+	/** The steps {@link #fluidSteps} found, and whether it waits for water to drain beside a generator's mining block. */
+	private record FluidSteps(List<BuildPlan.Step> steps, boolean draining) {
+		static final FluidSteps NONE = new FluidSteps(List.of(), false);
 	}
 
 	/**
@@ -701,27 +712,41 @@ public class Colony {
 	 * each: its water is scooped up first, so none flows beside the mining block, then once no fluid is left beside it
 	 * the mining block is mined, and then both are poured back.
 	 */
-	private static List<BuildPlan.Step> fluidSteps(PlacedBlueprint placed, Function<BlockPos, @Nullable BlockState> world) {
+	private static FluidSteps fluidSteps(PlacedBlueprint placed, Function<BlockPos, @Nullable BlockState> world) {
 		List<BlockPos> water = placed.water().stream().filter(pos -> isGone(world.apply(pos), Blocks.WATER)).toList();
 		List<BlockPos> lava = placed.lava().stream().filter(pos -> isGone(world.apply(pos), Blocks.LAVA)).toList();
 		if (!lava.isEmpty() && placed.role().equals(Optional.of(Blueprint.Role.GENERATOR)) && !placed.workSpots().isEmpty()) {
 			BlockPos mine = placed.workSpots().getFirst();
 			BlockState block = world.apply(mine);
 			if (block == null) {
-				return List.of();
+				return FluidSteps.NONE;
 			}
 			if (!block.canBeReplaced()) {
 				List<BlockPos> standing = placed.water().stream().filter(pos -> !water.contains(pos)).toList();
 				if (!standing.isEmpty()) {
-					return standing.stream().map(BuildPlan.Step::clear).toList();
+					return new FluidSteps(standing.stream().map(BuildPlan.Step::clear).toList(), false);
 				}
 				boolean wet = Stream.of(Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST).map(mine::relative)
 					.map(world).anyMatch(state -> state == null || !state.getFluidState().isEmpty());
-				return wet ? List.of() : List.of(BuildPlan.Step.clear(mine));
+				return wet ? new FluidSteps(List.of(), true) : new FluidSteps(List.of(BuildPlan.Step.clear(mine)), false);
 			}
 		}
-		return Stream.concat(water.stream().map(pos -> new BuildPlan.Step(pos, Blocks.WATER.defaultBlockState())),
-			lava.stream().map(pos -> new BuildPlan.Step(pos, Blocks.LAVA.defaultBlockState()))).toList();
+		return new FluidSteps(Stream.concat(water.stream().map(pos -> new BuildPlan.Step(pos, Blocks.WATER.defaultBlockState())),
+			lava.stream().map(pos -> new BuildPlan.Step(pos, Blocks.LAVA.defaultBlockState()))).toList(), false);
+	}
+
+	/**
+	 * Stops pouring back the fluids of each built blueprint {@code plan}, cancelled or given up by the player, pours back
+	 * (see {@link #restoreFluids}): one whose steps are all at its water, lava or generator mining block. A player who
+	 * empties a farm or generator on purpose keeps it empty so.
+	 */
+	private void stopFluidRestore(@Nullable BuildPlan plan) {
+		if (plan == null || plan.steps().isEmpty()) {
+			return;
+		}
+		Set<BlockPos> steps = plan.steps().stream().map(BuildPlan.Step::pos).collect(Collectors.toSet());
+		this.blueprints.replaceAll(placed -> placed.finished() && placed.restoreFluids() && placed.fluidSpots().containsAll(steps)
+			? placed.withoutFluidRestore() : placed);
 	}
 
 	/** Whether {@code state}, if known, is not a source of {@code fluid}. */
@@ -852,8 +877,10 @@ public class Colony {
 
 	/** Drops the project with id {@code id} and its plans, with their open jobs (see {@link #removeBuild}). */
 	public void cancelProject(UUID id) {
-		this.projects.stream().filter(project -> project.id().equals(id)).findFirst()
-			.ifPresent(project -> project.plans().forEach(this::removePlan));
+		this.projects.stream().filter(project -> project.id().equals(id)).findFirst().ifPresent(project -> project.plans().forEach(plan -> {
+			this.stopFluidRestore(this.builds.get(plan));
+			this.removePlan(plan);
+		}));
 		this.projects.removeIf(project -> project.id().equals(id));
 		this.waiting.remove(id);
 	}
@@ -1145,6 +1172,7 @@ public class Colony {
 
 	/** Drops the plan, finished or cancelled, with the open jobs of its batches; the next survey withdraws what it ordered. */
 	public void removeBuild(BuildPlan plan) {
+		this.stopFluidRestore(plan);
 		this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst().ifPresent(this::removePlan);
 	}
 
@@ -1476,6 +1504,7 @@ public class Colony {
 			}
 		}
 		this.blockedSteps.clear();
+		plans.forEach(plan -> this.stopFluidRestore(this.builds.get(plan)));
 		// Their steps are no longer kept open.
 		plans.forEach(this.stepSets::remove);
 		List<PlacedBlueprint> unlevelled = this.blueprints.stream().filter(placed -> !placed.finished() && placed.waiting().isPresent()
@@ -1641,15 +1670,11 @@ public class Colony {
 	}
 
 	/**
-	 * Where the farmer keeps water for the field: the water of every built farm, oldest first, which it pours back once
-	 * gone; with none built, the middle of the field the colony laid out itself, if it has one.
+	 * Where the farmer keeps water for the field: the middle of the field the colony laid out itself, if it has one and
+	 * no farm is built. A built farm's water is poured back by builders (see {@link #restoreFluids}), not by the farmer.
 	 */
 	public List<BlockPos> fieldWater() {
-		List<PlacedBlueprint> farms = this.finishedBlueprints(Blueprint.Role.FARM);
-		if (farms.isEmpty()) {
-			return this.field.flatMap(Field::water).stream().toList();
-		}
-		return farms.stream().flatMap(placed -> placed.water().stream()).toList();
+		return this.finishedBlueprints(Blueprint.Role.FARM).isEmpty() ? this.field.flatMap(Field::water).stream().toList() : List.of();
 	}
 
 	public void setField(Field field) {

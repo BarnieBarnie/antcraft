@@ -4,8 +4,10 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
@@ -34,9 +36,12 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * @param lava where the structure pours lava sources, such as a generator's, which builders pour back once gone
  * @param waiting the structure's plan while the colony levels the site first; it is added to the project once the levelling is done
  * @param finished whether the structure is built
+ * @param restoreFluids whether builders pour its water and lava back once gone; off for good once the player cancels or
+ *     gives up such a plan (see {@link Colony#restoreFluids})
  */
 public record PlacedBlueprint(UUID project, Identifier blueprint, String name, BlockPos at, Rotation rotation, Mirror mirror, BoundingBox area,
-		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, List<BlockPos> lava, Optional<BuildPlan> waiting, boolean finished) {
+		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, List<BlockPos> lava, Optional<BuildPlan> waiting, boolean finished,
+		boolean restoreFluids) {
 	public static final Codec<PlacedBlueprint> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.STRING_CODEC.fieldOf("project").forGetter(PlacedBlueprint::project),
 		Identifier.CODEC.fieldOf("blueprint").forGetter(PlacedBlueprint::blueprint),
@@ -51,7 +56,8 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 		BlockPos.CODEC.listOf().optionalFieldOf("water", List.of()).forGetter(PlacedBlueprint::water),
 		BlockPos.CODEC.listOf().optionalFieldOf("lava", List.of()).forGetter(PlacedBlueprint::lava),
 		BuildPlan.CODEC.optionalFieldOf("waiting").forGetter(PlacedBlueprint::waiting),
-		Codec.BOOL.optionalFieldOf("finished", false).forGetter(PlacedBlueprint::finished)
+		Codec.BOOL.optionalFieldOf("finished", false).forGetter(PlacedBlueprint::finished),
+		Codec.BOOL.optionalFieldOf("restore_fluids", true).forGetter(PlacedBlueprint::restoreFluids)
 	).apply(i, PlacedBlueprint::new));
 
 	public PlacedBlueprint {
@@ -68,13 +74,13 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 
 	PlacedBlueprint withProject(UUID project, Optional<BuildPlan> waiting) {
 		return new PlacedBlueprint(project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, this.lava, waiting, this.finished);
+			this.workSpots, this.water, this.lava, waiting, this.finished, this.restoreFluids);
 	}
 
 	/** This with {@code water} and {@code lava} where its structure pours those sources. */
 	PlacedBlueprint withFluids(List<BlockPos> water, List<BlockPos> lava) {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, water, lava, this.waiting, this.finished);
+			this.workSpots, water, lava, this.waiting, this.finished, this.restoreFluids);
 	}
 
 	/** This with where {@code structure}, its structure's plan, pours water and lava sources. */
@@ -87,8 +93,27 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 			.map(BuildPlan.Step::pos).toList();
 	}
 
+	/** This with builders no longer pouring its water and lava back. */
+	PlacedBlueprint withoutFluidRestore() {
+		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
+			this.workSpots, this.water, this.lava, this.waiting, this.finished, false);
+	}
+
+	/**
+	 * Where a plan to pour back its fluids has steps: its water and lava, and for a generator its mining block, which is
+	 * mined to pour the lava through.
+	 */
+	Set<BlockPos> fluidSpots() {
+		Set<BlockPos> spots = new HashSet<>(this.water);
+		spots.addAll(this.lava);
+		if (this.role.equals(Optional.of(Blueprint.Role.GENERATOR)) && !this.workSpots.isEmpty()) {
+			spots.add(this.workSpots.getFirst());
+		}
+		return spots;
+	}
+
 	PlacedBlueprint built() {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, this.lava, Optional.empty(), true);
+			this.workSpots, this.water, this.lava, Optional.empty(), true, this.restoreFluids);
 	}
 }
