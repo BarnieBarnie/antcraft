@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.registry;
 
 import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.item.BotCoreItem;
 import net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;
 import net.minecraft.core.Registry;
@@ -28,6 +29,14 @@ public final class ModItems {
 		new BlockItem(ModBlocks.COLONY_CORE, new Item.Properties().setId(COLONY_CORE_KEY).useBlockDescriptionPrefix())
 	);
 
+	public static final ResourceKey<Item> BLUEPRINT_KEY = ResourceKey.create(Registries.ITEM, AntCraft.id("blueprint"));
+
+	public static final Item BLUEPRINT = Registry.register(
+		BuiltInRegistries.ITEM,
+		BLUEPRINT_KEY,
+		new BlueprintItem(new Item.Properties().setId(BLUEPRINT_KEY).stacksTo(1))
+	);
+
 	private ModItems() {
 	}
 
@@ -35,6 +44,7 @@ public final class ModItems {
 		CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.TOOLS_AND_UTILITIES).register(output -> {
 			output.accept(BOT_CORE);
 			output.accept(COLONY_CORE);
+			output.accept(BLUEPRINT);
 		});
 	}
 }

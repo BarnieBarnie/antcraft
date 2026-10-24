@@ -3,12 +3,15 @@ package io.github.barniebarnie.antcraft.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.client.render.AntBotRenderer;
+import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import java.util.List;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.renderer.entity.EntityRenderers;
 
@@ -29,6 +32,9 @@ public class AntCraftClient implements ClientModInitializer {
 				}
 			}
 		});
+		BlueprintItem.setPicker(BlueprintPickerScreen::open);
+		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BlueprintList.TYPE, (list, context) -> ClientBlueprints.set(list.blueprints()));
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBlueprints.set(List.of()));
 		// Replies that arrive after the screen closed are dropped.
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.StatusReply.TYPE, (reply, context) -> {
 			if (context.client().gui.screen() instanceof ColonyStatusScreen screen) {

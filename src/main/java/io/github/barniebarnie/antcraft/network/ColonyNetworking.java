@@ -10,8 +10,12 @@ import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
+import io.github.barniebarnie.antcraft.item.BlueprintItem;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
@@ -22,13 +26,15 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 
 /**
- * Payloads between the colony status screen and the server. Each payload is a record here,
+ * Payloads between the client (the colony status screen, the blueprint picker) and the server. Each payload is a record here,
  * registered in {@link #register()}; the server answers for the nearest colony the player may view.
  * Changes are checked by the server like any client input, and answered with a fresh status.
  */
@@ -92,6 +98,41 @@ public final class ColonyNetworking {
 		}
 	}
 
+	/** The blueprints the server loaded, sent to each player on joining and after every data reload. */
+	public record BlueprintList(List<BlueprintSummary> blueprints) implements CustomPacketPayload {
+		public static final Type<BlueprintList> TYPE = new Type<>(AntCraft.id("blueprint_list"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintList> STREAM_CODEC =
+			BlueprintSummary.STREAM_CODEC.apply(ByteBufCodecs.list()).map(BlueprintList::new, BlueprintList::blueprints);
+
+		public BlueprintList {
+			blueprints = List.copyOf(blueprints);
+		}
+
+		/** The blueprints {@code server} has loaded. */
+		public static BlueprintList of(MinecraftServer server) {
+			return new BlueprintList(BlueprintSummary.all(server));
+		}
+
+		@Override
+		public Type<BlueprintList> type() {
+			return TYPE;
+		}
+	}
+
+	/** Client asks to set the Blueprint item in {@code hand} to blueprint {@code blueprint}, chosen in the picker. */
+	public record ChooseBlueprint(InteractionHand hand, Identifier blueprint) implements CustomPacketPayload {
+		public static final Type<ChooseBlueprint> TYPE = new Type<>(AntCraft.id("choose_blueprint"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, ChooseBlueprint> STREAM_CODEC = StreamCodec.composite(
+			ByteBufCodecs.idMapper(i -> InteractionHand.values()[i], InteractionHand::ordinal), ChooseBlueprint::hand,
+			Identifier.STREAM_CODEC, ChooseBlueprint::blueprint,
+			ChooseBlueprint::new);
+
+		@Override
+		public Type<ChooseBlueprint> type() {
+			return TYPE;
+		}
+	}
+
 	/**
 	 * Who sent a request and what they may do: the player and their position, whether they are an operator, whether only
 	 * operators may act on colonies, and whether bots are allowed on the server. Built once per received payload.
@@ -117,7 +158,16 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(StatusRequest.TYPE, StatusRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(EditRequest.TYPE, EditRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(PlaceBlueprint.TYPE, PlaceBlueprint.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(ChooseBlueprint.TYPE, ChooseBlueprint.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(BlueprintList.TYPE, BlueprintList.STREAM_CODEC);
+		// On joining and after every data reload, so the picker lists what the server has loaded now.
+		ServerLifecycleEvents.SYNC_DATA_PACK_CONTENTS.register((player, joined) -> {
+			if (ServerPlayNetworking.canSend(player, BlueprintList.TYPE)) {
+				ServerPlayNetworking.send(player, BlueprintList.of(player.level().getServer()));
+			}
+		});
+		ServerPlayNetworking.registerGlobalReceiver(ChooseBlueprint.TYPE, (request, context) -> handle(context.player(), request));
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			context.responseSender().sendPacket(reply(player.level(), Requester.of(player)));
@@ -143,6 +193,16 @@ public final class ColonyNetworking {
 		Optional<Colony> colony = ColonyManager.get(level).byCore(core);
 		colony.ifPresent(requester::claim);
 		return colony.filter(requester::mayAct);
+	}
+
+	/**
+	 * Sets the Blueprint item in the hand the request names to the chosen blueprint, unless the player holds no Blueprint
+	 * there or the server has no blueprint by that id.
+	 *
+	 * @return whether the item was set
+	 */
+	public static boolean handle(ServerPlayer player, ChooseBlueprint request) {
+		return BlueprintItem.choose(player.getItemInHand(request.hand()), request.blueprint());
 	}
 
 	/**

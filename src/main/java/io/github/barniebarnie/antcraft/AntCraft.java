@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
+import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import net.fabricmc.api.ModInitializer;
@@ -27,6 +28,7 @@ public class AntCraft implements ModInitializer {
 		AntCraftConfig.load();
 		ModBlocks.register();
 		ModEntities.register();
+		ModComponents.register();
 		ModItems.register();
 		AntCraftCommands.register();
 		Blueprints.register();

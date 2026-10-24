@@ -3,7 +3,7 @@
 	"id": "antcraft",
 	"version": "${version}",
 	"name": "AntCraft",
-	"description": "Colonies of virtual bots that gather resources and build structures together. Singleplayer by default; dedicated servers must opt in.",
+	"description": "Colonies of virtual bots that gather resources and build structures together. Install on both the server and every client. Singleplayer by default; dedicated servers must opt in.",
 	"authors": [
 		"BarnieBarnie"
 	],

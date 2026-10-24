@@ -3,7 +3,15 @@ package io.github.barniebarnie.antcraft.gametest;
 import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
+import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
+import io.github.barniebarnie.antcraft.item.BlueprintItem;
+import io.github.barniebarnie.antcraft.registry.ModItems;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.TooltipFlag;
 import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
@@ -62,6 +70,45 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(helper.getLevel().getServer().getStructureTemplateManager().get(blueprint.get().structure()).isPresent(),
 				"no structure " + blueprint.get().structure());
 		}
+		helper.succeed();
+	}
+
+	/** The list the server sends clients holds every bundled blueprint, with its structure's size and blocks for the picker and preview. */
+	@GameTest(maxTicks = 5)
+	public void theBlueprintListForClientsHoldsEveryBundledBlueprint(GameTestHelper helper) {
+		ColonyNetworking.BlueprintList list = ColonyNetworking.BlueprintList.of(helper.getLevel().getServer());
+		List<Identifier> ids = list.blueprints().stream().map(BlueprintSummary::id).toList();
+		helper.assertValueEqual(ids, Blueprints.ids(), "listed blueprints");
+		for (String name : List.of("starter_house", "cobble_step")) {
+			BlueprintSummary summary = list.blueprints().stream().filter(blueprint -> blueprint.id().equals(AntCraft.id(name))).findFirst().orElseThrow();
+			helper.assertValueEqual(summary.name(), "blueprint.antcraft." + name, "name of " + name);
+			helper.assertTrue(summary.size().getX() > 0 && !summary.blocks().isEmpty() && !summary.materials().isEmpty(), name + " has no size or blocks: " + summary);
+		}
+		helper.succeed();
+	}
+
+	/** Choosing in the picker sets the Blueprint item in the player's hand, which then names the blueprint in its tooltip. */
+	@GameTest(maxTicks = 5)
+	public void choosingABlueprintSetsTheHeldItem(GameTestHelper helper) {
+		ServerPlayer player = helper.makeMockServerPlayerInLevel();
+		ItemStack stack = new ItemStack(ModItems.BLUEPRINT);
+		player.setItemInHand(InteractionHand.MAIN_HAND, stack);
+		player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(Items.PAPER));
+		Item.TooltipContext context = Item.TooltipContext.of(helper.getLevel());
+		helper.assertTrue(says(stack.getTooltipLines(context, player, TooltipFlag.NORMAL), "item.antcraft.blueprint.none"), "no blueprint chosen yet");
+
+		helper.assertFalse(ColonyNetworking.handle(player, new ColonyNetworking.ChooseBlueprint(InteractionHand.MAIN_HAND, AntCraft.id("castle"))),
+			"an unknown blueprint was chosen");
+		helper.assertFalse(ColonyNetworking.handle(player, new ColonyNetworking.ChooseBlueprint(InteractionHand.OFF_HAND, COBBLE_STEP)),
+			"paper was set to a blueprint");
+		helper.assertValueEqual(BlueprintItem.chosen(player.getItemInHand(InteractionHand.MAIN_HAND)), Optional.empty(), "chosen before");
+
+		helper.assertTrue(ColonyNetworking.handle(player, new ColonyNetworking.ChooseBlueprint(InteractionHand.MAIN_HAND, COBBLE_STEP)), "not chosen");
+		ItemStack held = player.getItemInHand(InteractionHand.MAIN_HAND);
+		helper.assertValueEqual(BlueprintItem.chosen(held), Optional.of(new ChosenBlueprint(COBBLE_STEP, "blueprint.antcraft.cobble_step")), "chosen");
+		List<Component> tooltip = held.getTooltipLines(context, player, TooltipFlag.NORMAL);
+		helper.assertTrue(says(tooltip, "item.antcraft.blueprint.chosen") && says(tooltip, "blueprint.antcraft.cobble_step"),
+			"tooltip does not name the blueprint: " + tooltip);
 		helper.succeed();
 	}
 

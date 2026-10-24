@@ -35,6 +35,15 @@ class CoreRecipesTest {
 				grid("bot_core.json"));
 	}
 
+	@Test
+	void blueprintTakesPaperAndACopperIngot() throws IOException {
+		JsonObject recipe = JsonParser.parseString(Files.readString(RECIPES.resolve("blueprint.json"))).getAsJsonObject();
+		assertEquals("minecraft:crafting_shapeless", recipe.get("type").getAsString());
+		assertEquals(List.of("minecraft:paper", "minecraft:copper_ingot"),
+				recipe.getAsJsonArray("ingredients").asList().stream().map(ingredient -> ingredient.getAsString()).toList());
+		assertEquals("antcraft:blueprint", recipe.getAsJsonObject("result").get("id").getAsString());
+	}
+
 	/** The item in each slot of a 3x3 shaped recipe, row by row, with "" for an empty slot. */
 	private static List<String> grid(String file) throws IOException {
 		JsonObject recipe = JsonParser.parseString(Files.readString(RECIPES.resolve(file))).getAsJsonObject();
