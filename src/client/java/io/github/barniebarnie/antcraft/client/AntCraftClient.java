@@ -40,7 +40,13 @@ public class AntCraftClient implements ClientModInitializer {
 			new KeyMapping("key.antcraft.mirror_blueprint", InputConstants.Type.KEYBOARD, InputConstants.KEY_M, CATEGORY));
 		ClientTickEvents.END_CLIENT_TICK.register(client -> BlueprintPreview.tick(client, rotateBlueprint, mirrorBlueprint));
 		// Before the frame's gizmos are handed to the renderer, so the ghost shows in the same frame.
-		LevelExtractionEvents.AFTER_BLOCK_OUTLINE_EXTRACTION.register((context, hit) -> BlueprintPreview.draw(Minecraft.getInstance(), hit));
+		LevelExtractionEvents.AFTER_BLOCK_OUTLINE_EXTRACTION.register((context, hit) -> {
+			PlacedGhosts.draw(Minecraft.getInstance());
+			BlueprintPreview.draw(Minecraft.getInstance(), hit);
+		});
+		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BuildGhosts.TYPE, (ghosts, context) -> PlacedGhosts.set(ghosts.builds()));
+		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PlacedGhosts.reset());
+		BlueprintItem.setGhostClicker(PlacedGhosts::click);
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.SiteRulesReply.TYPE, (reply, context) -> BlueprintPreview.setRules(reply.rules()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> BlueprintPreview.reset());
 		BlueprintItem.setPlacer(BlueprintPreview::place);

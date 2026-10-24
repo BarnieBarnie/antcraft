@@ -21,6 +21,8 @@ public final class GhostRenderer {
 	public static final int VALID = 0x80C0FF;
 	/** A ghost the server would refuse: red. */
 	public static final int REFUSED = 0xFF4040;
+	/** A placed build's blocks still to be built: amber. */
+	public static final int PLANNED = 0xFFC040;
 	/** At most this many blocks are drawn, so a huge structure cannot stall the frame. */
 	public static final int MAX_BLOCKS = 4096;
 	private static final int FILL_ALPHA = 0x50;

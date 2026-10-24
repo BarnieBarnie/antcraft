@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.network;
 import io.github.barniebarnie.antcraft.AntCraft;
 import com.mojang.datafixers.util.Either;
 import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
+import io.github.barniebarnie.antcraft.colony.BuildGhost;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
@@ -14,13 +15,18 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -40,6 +46,12 @@ import net.minecraft.world.level.block.Rotation;
  * Changes are checked by the server like any client input, and answered with a fresh status.
  */
 public final class ColonyNetworking {
+	/** How often, in ticks, the server looks whether a player's ghosts changed. */
+	static final int GHOST_INTERVAL = 20;
+
+	/** The ghosts each player was sent last, so they are only sent again once they change. */
+	private static final Map<UUID, BuildGhosts> SENT_GHOSTS = new ConcurrentHashMap<>();
+
 	private ColonyNetworking() {
 	}
 
@@ -122,6 +134,39 @@ public final class ColonyNetworking {
 		}
 	}
 
+	/**
+	 * What is left to build of the player-placed builds of the nearest colony the player may act on, sent while it changes
+	 * (see {@link #sendGhosts}); empty when there is none in range.
+	 */
+	public record BuildGhosts(List<BuildGhost> builds) implements CustomPacketPayload {
+		public static final Type<BuildGhosts> TYPE = new Type<>(AntCraft.id("build_ghosts"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, BuildGhosts> STREAM_CODEC =
+			BuildGhost.STREAM_CODEC.apply(ByteBufCodecs.list()).map(BuildGhosts::new, BuildGhosts::builds);
+
+		public BuildGhosts {
+			builds = List.copyOf(builds);
+		}
+
+		@Override
+		public Type<BuildGhosts> type() {
+			return TYPE;
+		}
+	}
+
+	/** Client asks to cancel the placed build of project {@code project} of the colony with its core at {@code core}, clicked as a ghost. */
+	public record CancelBuild(BlockPos core, UUID project) implements CustomPacketPayload {
+		public static final Type<CancelBuild> TYPE = new Type<>(AntCraft.id("cancel_build"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, CancelBuild> STREAM_CODEC = StreamCodec.composite(
+			BlockPos.STREAM_CODEC, CancelBuild::core,
+			UUIDUtil.STREAM_CODEC, CancelBuild::project,
+			CancelBuild::new);
+
+		@Override
+		public Type<CancelBuild> type() {
+			return TYPE;
+		}
+	}
+
 	/** The blueprints the server loaded, sent to each player on joining and after every data reload. */
 	public record BlueprintList(List<BlueprintSummary> blueprints) implements CustomPacketPayload {
 		public static final Type<BlueprintList> TYPE = new Type<>(AntCraft.id("blueprint_list"));
@@ -187,6 +232,22 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.clientboundPlay().register(SiteRulesReply.TYPE, SiteRulesReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BlueprintList.TYPE, BlueprintList.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(BuildGhosts.TYPE, BuildGhosts.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(CancelBuild.TYPE, CancelBuild.STREAM_CODEC);
+		ServerTickEvents.END_SERVER_TICK.register(server -> {
+			if (server.getTickCount() % GHOST_INTERVAL == 0) {
+				server.getPlayerList().getPlayers().forEach(player -> sendGhosts(player, false));
+			}
+		});
+		ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> SENT_GHOSTS.remove(handler.getPlayer().getUUID()));
+		ServerPlayNetworking.registerGlobalReceiver(CancelBuild.TYPE, (request, context) -> {
+			ServerPlayer player = context.player();
+			player.sendOverlayMessage(handle(player.level(), Requester.of(player), request).map(
+				refusal -> refusal.copy().withStyle(ChatFormatting.RED),
+				cancelled -> Component.translatable("commands.antcraft.colony.build.ghost_cancelled", cancelled.displayName())));
+			// The ghost goes at once rather than at the next look.
+			sendGhosts(player, true);
+		});
 		// On joining and after every data reload, so the picker lists what the server has loaded now.
 		ServerLifecycleEvents.SYNC_DATA_PACK_CONTENTS.register((player, joined) -> {
 			if (ServerPlayNetworking.canSend(player, BlueprintList.TYPE)) {
@@ -265,6 +326,56 @@ public final class ColonyNetworking {
 		requester.claim(colony.get());
 		boolean mayAct = ColonyActions.mayEdit(ColonyActions.Edit.BUILD_PLACE, requester.botsAllowed()) && requester.mayAct(colony.get());
 		return BlueprintPlacement.place(level, colony.get(), mayAct, request.blueprint(), request.at(), request.rotation(), request.mirror());
+	}
+
+	/**
+	 * Sends {@code player} the ghosts of the nearest colony they may act on, if their client takes them and they changed
+	 * since the last were sent, or always if {@code force}.
+	 */
+	private static void sendGhosts(ServerPlayer player, boolean force) {
+		if (!ServerPlayNetworking.canSend(player, BuildGhosts.TYPE)) {
+			return;
+		}
+		BuildGhosts ghosts = ghosts(player.level(), Requester.of(player));
+		BuildGhosts last = SENT_GHOSTS.put(player.getUUID(), ghosts);
+		if (force || !ghosts.equals(last)) {
+			ServerPlayNetworking.send(player, ghosts);
+		}
+	}
+
+	/**
+	 * The ghosts for {@code requester}: what is left to build of the player-placed builds of the nearest colony in range
+	 * they may act on ({@link ColonyActions#mayAct}, as for {@link #siteRules}), or none.
+	 */
+	public static BuildGhosts ghosts(ServerLevel level, Requester requester) {
+		return new BuildGhosts(ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE, requester::mayAct)
+			.map(colony -> BuildGhost.of(colony, level::getBlockState))
+			.orElse(List.of()));
+	}
+
+	/**
+	 * Cancels a placed build for {@code requester}, as {@code /antcraft colony build cancel} does: refused with the reason
+	 * unless there is a colony at the request's core, the requester may act on it, and it is still building a blueprint
+	 * placed with that project.
+	 *
+	 * @return the reason it was refused, or the cancelled build
+	 */
+	public static Either<Component, PlacedBlueprint> handle(ServerLevel level, Requester requester, CancelBuild request) {
+		Optional<Colony> colony = ColonyManager.get(level).byCore(request.core());
+		if (colony.isEmpty()) {
+			return Either.left(BlueprintPlacement.Refusal.NO_COLONY.message());
+		}
+		if (!ColonyActions.mayEdit(ColonyActions.Edit.BUILD_CANCEL, requester.botsAllowed()) || !requester.mayAct(colony.get())) {
+			return Either.left(Component.translatable("commands.antcraft.colony.build.cancel.not_allowed"));
+		}
+		Optional<PlacedBlueprint> placed = colony.get().blueprints().stream()
+			.filter(blueprint -> !blueprint.finished() && blueprint.project().equals(request.project()))
+			.findFirst();
+		if (placed.isEmpty()) {
+			return Either.left(Component.translatable("commands.antcraft.colony.build.cancel.gone"));
+		}
+		colony.get().cancelProject(request.project());
+		return Either.right(placed.get());
 	}
 
 	/**

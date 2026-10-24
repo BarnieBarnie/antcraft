@@ -13,6 +13,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.TooltipFlag;
 import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
+import io.github.barniebarnie.antcraft.colony.BuildGhost;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
@@ -272,6 +273,56 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		helper.assertValueEqual(trusted.rules(), Optional.of(SiteRules.of(colony)), "a trusted player's rules");
 		helper.assertValueEqual(trusted.rules().orElseThrow().check(new BoundingBox(helper.absolutePos(new BlockPos(5, 1, 5)))),
 			Optional.of(BlueprintPlacement.Refusal.OVERLAPS_BUILD), "a site over the build");
+		helper.succeed();
+	}
+
+	/**
+	 * The colony's players see what is left to build of a placed blueprint as ghosts: each block it still has to place,
+	 * gone once it stands. A stranger sees none of it and may not cancel it; a trusted player cancels it by its ghost.
+	 */
+	@GameTest(maxTicks = 5)
+	public void ghostsShowWhatIsLeftToBuildAndCancelThePlacedBuild(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setOwner(UUID.randomUUID());
+		for (int x = 3; x <= 6; x++) {
+			for (int z = 3; z <= 5; z++) {
+				helper.setBlock(x, 1, z, Blocks.STONE);
+			}
+		}
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true, COBBLE_STEP,
+			helper.absolutePos(new BlockPos(4, 2, 4)), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		UUID project = placed.right().orElseThrow().project();
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		UUID stranger = UUID.randomUUID();
+		ColonyNetworking.Requester requester = new ColonyNetworking.Requester(stranger, near, false, false, true);
+
+		// Colonies of tests running alongside, with no owner, may be in range; this one's builds are not sent.
+		helper.assertFalse(ColonyNetworking.ghosts(helper.getLevel(), requester).builds().stream().anyMatch(ghost -> ghost.project().equals(project)),
+			"a stranger got the ghosts");
+		Either<Component, PlacedBlueprint> refused = ColonyNetworking.handle(helper.getLevel(), requester,
+			new ColonyNetworking.CancelBuild(colony.core(), project));
+		helper.assertTrue(refused.left().isPresent(), "a stranger cancelled the build");
+		helper.assertValueEqual(colony.blueprints().size(), 1, "placed blueprints");
+
+		colony.trust(stranger);
+		List<BuildGhost> ghosts = ColonyNetworking.ghosts(helper.getLevel(), requester).builds();
+		helper.assertValueEqual(ghosts.stream().map(BuildGhost::project).toList(), List.of(project), "ghosts");
+		List<BlockPos> left = ghosts.getFirst().blocks().stream().map(BlueprintSummary.Block::pos).toList();
+		helper.assertValueEqual(left, List.of(helper.absolutePos(new BlockPos(4, 2, 4)), helper.absolutePos(new BlockPos(5, 2, 4)),
+			helper.absolutePos(new BlockPos(4, 3, 4))), "blocks left to place");
+
+		helper.setBlock(4, 2, 4, Blocks.COBBLESTONE);
+		List<BlockPos> after = ColonyNetworking.ghosts(helper.getLevel(), requester).builds().getFirst().blocks().stream()
+			.map(BlueprintSummary.Block::pos).toList();
+		helper.assertValueEqual(after, left.subList(1, 3), "blocks left once one stands");
+
+		Either<Component, PlacedBlueprint> cancelled = ColonyNetworking.handle(helper.getLevel(), requester,
+			new ColonyNetworking.CancelBuild(colony.core(), project));
+		helper.assertTrue(cancelled.right().isPresent(), "a trusted player's cancel refused: " + cancelled.left());
+		helper.assertValueEqual(colony.blueprints(), List.of(), "placed blueprints");
+		helper.assertValueEqual(colony.builds(), List.of(), "builds");
+		helper.assertValueEqual(ColonyNetworking.ghosts(helper.getLevel(), requester).builds(), List.of(), "ghosts once cancelled");
 		helper.succeed();
 	}
 
