@@ -274,8 +274,8 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		fill(helper, new ItemStack(Items.STICK, 64));
 		int cobblestone = core(helper).countItem(Items.COBBLESTONE);
 		AntBot crafter = crafter(helper, colony);
-		// A full core gets a storage area, and a bot with room would take surplus out for a chest, freeing a slot
-		// (see GuardHaulerGameTest); this one keeps a pack full of scaffold blocks, so it has no room for that.
+		// A bot with room would take surplus out of a full core for a storage chest, freeing a slot (see
+		// GuardHaulerGameTest); this one keeps a pack full of scaffold blocks, so it has no room for that.
 		for (int i = 0; i < crafter.getInventory().getContainerSize() - 1; i++) {
 			crafter.getInventory().addItem(new ItemStack(Items.DIRT, 64));
 		}

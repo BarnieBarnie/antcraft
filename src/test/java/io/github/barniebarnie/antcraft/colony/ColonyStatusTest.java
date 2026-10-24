@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.netty.buffer.Unpooled;
 import java.util.List;
@@ -110,11 +111,42 @@ class ColonyStatusTest {
 	void reportsAFullCoreAndWhyThereIsNoStorage() {
 		ColonyStatus.Room room = status().room();
 		assertTrue(room.coreFull());
-		assertEquals(ColonyStatus.StorageState.NO_SITE, room.storage());
-		assertEquals(new ColonyStatus.Room(0, ColonyStatus.StorageState.NO_SITE), room(false, 0, false));
+		assertEquals(ColonyStatus.StorageState.NO_WAREHOUSE, room.storage());
+		assertEquals(new ColonyStatus.Room(0, ColonyStatus.StorageState.NO_WAREHOUSE), room(false, 0, false));
 		assertEquals(new ColonyStatus.Room(0, ColonyStatus.StorageState.NO_CHEST), room(true, 0, false));
 		assertEquals(new ColonyStatus.Room(3, ColonyStatus.StorageState.READY), room(true, 3, true));
 		assertFalse(room(true, 3, true).coreFull());
+	}
+
+	@Test
+	void aFullCoreWithNoStorageSaysToPlaceAWarehouse() {
+		assertEquals("commands.antcraft.colony.storage.no_warehouse", ColonyStatus.StorageState.NO_WAREHOUSE.key());
+	}
+
+	/** A colony that wants wheat and holds none: a stock target of 10 and an order of 5. With {@code field}, it has a field. */
+	private static ColonyStatus wantsWheat(boolean field) {
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20,
+			Map.of(), Optional.empty(), List.of(StockTarget.of(Items.WHEAT, 10), StockTarget.of(Items.OAK_LOG, 10)), Map.of(), List.of(), Optional.empty(),
+			Optional.empty(), Map.of(), List.of(), Map.of());
+		colony.addOrder(Items.WHEAT, 5);
+		colony.addOrder(Items.COBBLESTONE, 5);
+		if (field) {
+			colony.setField(new Field(new BlockPos(5, 63, 5)));
+		}
+		return ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> item == Items.WHEAT || item == Items.OAK_LOG || item == Items.COBBLESTONE,
+			pos -> Blocks.AIR.defaultBlockState(), 1, false);
+	}
+
+	@Test
+	void aStockTargetOrOrderForWheatSaysItNeedsAFarmWhileTheColonyHasNoField() {
+		ColonyStatus status = wantsWheat(false);
+		assertEquals(List.of(new ColonyStatus.Stock("minecraft:wheat", 0, 10, true), new ColonyStatus.Stock("minecraft:oak_log", 0, 10, false)), status.stock());
+		assertEquals(List.of(new ColonyStatus.Order(Items.WHEAT, 5, Map.of(), Map.of(Items.WHEAT, 5), Map.of(), true),
+			new ColonyStatus.Order(Items.COBBLESTONE, 5, Map.of(), Map.of(Items.COBBLESTONE, 5), Map.of(), false)), status.orders());
+
+		ColonyStatus farmed = wantsWheat(true);
+		assertTrue(farmed.stock().stream().noneMatch(ColonyStatus.Stock::needsFarm), "needs a farm with a field: " + farmed.stock());
+		assertTrue(farmed.orders().stream().noneMatch(ColonyStatus.Order::needsFarm), "needs a farm with a field: " + farmed.orders());
 	}
 
 	@Test
@@ -251,5 +283,8 @@ class ColonyStatusTest {
 		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.fromRegistryOfRegistries(BuiltInRegistries.REGISTRY));
 		ColonyStatus.STREAM_CODEC.encode(buf, status);
 		assertEquals(status, ColonyStatus.STREAM_CODEC.decode(buf));
+		ColonyStatus needsFarm = wantsWheat(false);
+		ColonyStatus.STREAM_CODEC.encode(buf, needsFarm);
+		assertEquals(needsFarm, ColonyStatus.STREAM_CODEC.decode(buf));
 	}
 }

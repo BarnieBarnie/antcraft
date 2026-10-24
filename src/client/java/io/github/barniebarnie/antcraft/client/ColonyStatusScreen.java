@@ -241,6 +241,9 @@ public class ColonyStatusScreen extends Screen {
 				new Act(Component.translatable("screen.antcraft.colony_status.remove"), () -> this.edit(ColonyActions.Edit.REMOVE_STOCK, stock.name(), 0)));
 			Component text = Component.translatable("screen.antcraft.colony_status.stock_line", stock.have(), stock.want(), stock.name());
 			lines.add(new Line(text, stock.isShort() ? RED : GREY, acts));
+			if (stock.needsFarm()) {
+				lines.add(new Line(Component.translatable("screen.antcraft.colony_status.needs_farm"), RED));
+			}
 		}
 
 		lines.add(new Line(Component.translatable("screen.antcraft.colony_status.orders"), YELLOW));
@@ -256,6 +259,9 @@ public class ColonyStatusScreen extends Screen {
 			String id = BuiltInRegistries.ITEM.getKey(order.item()).toString();
 			List<Act> acts = order.byPlayer() > 0 ? List.of(new Act(Component.translatable("screen.antcraft.colony_status.remove"), () -> this.edit(ColonyActions.Edit.CANCEL, id, 0))) : List.of();
 			lines.add(new Line(text, WHITE, acts));
+			if (order.needsFarm()) {
+				lines.add(new Line(Component.translatable("screen.antcraft.colony_status.needs_farm"), RED));
+			}
 			if (!order.toGather().isEmpty()) {
 				lines.add(new Line(Component.translatable("screen.antcraft.colony_status.gather", items(order.toGather())), GREY));
 			}

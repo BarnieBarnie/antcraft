@@ -58,21 +58,20 @@ class StarterProjectsTest {
 	}
 
 	private static Colony found() {
-		return found(WORLD);
-	}
-
-	private static Colony found(Function<BlockPos, BlockState> world) {
 		Colony colony = new Colony(UUID.randomUUID(), CORE, List.of(), new JobBoard(), Colony.DEFAULT_RADIUS, Map.of(), Optional.empty(),
 			DefaultStock.TARGETS, Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
-		StarterProjects.start(colony, world, VIEW, pos -> true, List.of(CORE.getY() - 20), VanillaData.structure("starter_house"));
+		StarterProjects.start(colony, VIEW, List.of(CORE.getY() - 20));
 		return colony;
 	}
 
 	@Test
-	void aNewColonyHasTheFiveStarterProjectsToolsFirst() {
+	void aNewColonyStartsOnlyTheToolKitAndTheMineshaftToolsFirst() {
 		Colony colony = found();
 
-		assertEquals(List.of("tools", "farm", "mineshaft", "storage", "house"), colony.projects().stream().map(Project::name).toList());
+		assertEquals(List.of("tools", "mineshaft"), colony.projects().stream().map(Project::name).toList());
+		// The player places a farm and a warehouse: the colony lays out no field and picks no storage area of its own.
+		assertEquals(Optional.empty(), colony.field());
+		assertEquals(Optional.empty(), colony.storage());
 		List<Integer> priorities = colony.projects().stream().map(Project::priority).toList();
 		for (int i = 1; i < priorities.size(); i++) {
 			assertTrue(priorities.get(i) < priorities.get(i - 1), "priorities not in the list's order: " + priorities);
@@ -88,16 +87,11 @@ class StarterProjectsTest {
 	}
 
 	@Test
-	void theStarterAreasDoNotOverlap() {
-		assertNoSharedColumns(found());
-	}
-
-	@Test
-	void theStarterAreasShareNoColumnsOnUnevenGround() {
+	void theMineshaftAndQuarryShareNoColumnsOnUnevenGround() {
 		// Ground steps a block up or down every few columns, so sites may lie above or below the core's level.
 		Function<BlockPos, BlockState> uneven = pos -> pos.getY() < CORE.getY() + Math.floorMod(pos.getX() / 3 + pos.getZ() / 4, 3) - 1
 			? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState();
-		Colony colony = found(uneven);
+		Colony colony = found();
 		colony.updateQuarry(true, uneven, pos -> true);
 		assertTrue(colony.quarry().isPresent(), "no quarry on uneven ground");
 		assertNoSharedColumns(colony);
@@ -164,27 +158,13 @@ class StarterProjectsTest {
 
 	private static void assertNoSharedColumns(Colony colony) {
 		List<BoundingBox> areas = new ArrayList<>();
-		areas.add(colony.field().orElseThrow().area());
 		areas.add(colony.mineshaft().orElseThrow().area());
-		areas.add(colony.storage().orElseThrow().area());
 		colony.quarry().ifPresent(quarry -> areas.add(quarry.area()));
-		colony.projects().stream().filter(project -> project.name().equals("house")).flatMap(project -> colony.plans(project).stream())
-			.forEach(plan -> areas.add(BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).orElseThrow()));
 		for (int i = 0; i < areas.size(); i++) {
 			for (int j = i + 1; j < areas.size(); j++) {
 				assertFalse(Sites.sharesColumns(areas.get(i), areas.get(j)), areas.get(i) + " shares columns with " + areas.get(j));
 			}
 		}
-	}
-
-	@Test
-	void theFarmBringsSoilToRock() {
-		Colony colony = found();
-		Project farm = colony.projects().stream().filter(project -> project.name().equals("farm")).findFirst().orElseThrow();
-		BlockPos center = colony.field().orElseThrow().center();
-
-		List<BuildPlan.Step> steps = colony.plans(farm).stream().flatMap(plan -> plan.steps().stream()).toList();
-		assertTrue(steps.contains(new BuildPlan.Step(center.offset(1, 0, 1), Blocks.DIRT.defaultBlockState())), "no dirt on the rock: " + steps);
 	}
 
 	@Test

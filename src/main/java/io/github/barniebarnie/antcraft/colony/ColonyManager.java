@@ -12,7 +12,6 @@ import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Farming;
-import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.LevelTreeView;
@@ -23,7 +22,6 @@ import io.github.barniebarnie.antcraft.work.OreVein;
 import io.github.barniebarnie.antcraft.work.PickaxeTier;
 import io.github.barniebarnie.antcraft.work.Replanting;
 import io.github.barniebarnie.antcraft.work.Storage;
-import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import io.github.barniebarnie.antcraft.work.TreeScanner;
 import java.util.ArrayList;
@@ -44,7 +42,6 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
@@ -67,10 +64,6 @@ public class ColonyManager extends SavedData {
 	private static final int SURVEY_INTERVAL = 100;
 	/** How far above and below the core crops are looked for. */
 	private static final int CROP_SCAN_HEIGHT = 4;
-	/** What a field yields: the colony lays one out only while it wants some of it. */
-	private static final Set<Item> FIELD_YIELDS = Set.of(Items.WHEAT, Items.WHEAT_SEEDS);
-	/** A core with this few free slots left gets a storage area levelled when there is no flat spot for one. */
-	private static final int NEARLY_FULL_FREE_SLOTS = 4;
 	/** Jobs whose bot has not reported for this long are freed for others. */
 	private static final long CLAIM_TIMEOUT = 600;
 
@@ -121,8 +114,7 @@ public class ColonyManager extends SavedData {
 	/** Starts the starter projects of {@code colony}, just founded (see {@link StarterProjects}). */
 	public void startProjects(ServerLevel level, Colony colony) {
 		LevelWorldView view = new LevelWorldView(level, new SimpleContainer(0), ItemStack.EMPTY, Set.of());
-		StarterProjects.start(colony, level::getBlockState, view, pos -> isWorkable(level, colony, pos), AntCraftConfig.mineshaftLevels(),
-			level.getServer().getStructureTemplateManager().get(StarterProjects.HOUSE).orElse(null));
+		StarterProjects.start(colony, view, AntCraftConfig.mineshaftLevels());
 	}
 
 	public void remove(BlockPos core) {
@@ -202,32 +194,22 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Posts a harvest job for each ripe crop in the territory. A colony with no crops lays out a field once it wants
-	 * what a field yields (see {@link #FIELD_YIELDS}), for stock targets or orders, and posts a plant job for each
-	 * open spot of its field.
+	 * Posts a harvest job for each ripe crop in the territory, and a plant job for each open spot of the colony's field:
+	 * the plots of the farms players placed, or the field an older colony laid out itself. A colony lays out no field of
+	 * its own; one that wants what a field yields with no field says it needs a farm (see {@link ColonyStatus}).
 	 */
 	private void surveyCrops(ServerLevel level, Colony colony) {
 		colony.board().removeOpenIf(job -> job.type() == JobType.HARVEST_CROP && !Farming.isRipe(level.getBlockState(job.target())));
 		BlockPos core = colony.core();
 		int r = colony.radius();
 		Territory territory = Territory.of(colony);
-		int crops = 0;
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -CROP_SCAN_HEIGHT, -r), core.offset(r, CROP_SCAN_HEIGHT, r))) {
 			if (!territory.contains(pos)) {
 				continue;
 			}
-			BlockState state = level.getBlockState(pos);
-			if (state.getBlock() instanceof CropBlock) {
-				crops++;
-			}
-			if (Farming.isRipe(state)) {
+			if (Farming.isRipe(level.getBlockState(pos))) {
 				colony.board().post(JobType.HARVEST_CROP, pos);
 			}
-		}
-		if (colony.field().isEmpty() && crops == 0 && FIELD_YIELDS.stream().anyMatch(Storage.wanted(level, colony))) {
-			colony.findSite("field", () -> Field.choose(core, r, colony.occupied(),
-				pos -> Territory.inBounds(colony.bounds(), pos) && Farming.isSoil(level.getBlockState(pos)), pos -> Farming.isOpen(level.getBlockState(pos))))
-				.ifPresent(colony::setField);
 		}
 		colony.field().ifPresent(field -> {
 			// Not while a plan, such as the farm's, still has to ready the spot.
@@ -371,37 +353,13 @@ public class ColonyManager extends SavedData {
 	}
 
 	/**
-	 * Picks the storage area once the core is nearly full, levelling one first when there is no flat spot, and orders
-	 * the chests it needs beyond the chests in {@code spare}; orders it no longer needs are withdrawn.
+	 * Orders the chests the colony's storage needs beyond the chests in {@code spare}; orders it no longer needs are
+	 * withdrawn. A colony picks no storage area of its own: with no warehouse placed (and no storage area from an older
+	 * version), a full core says so and suggests placing a warehouse (see {@link ColonyStatus.StorageState#NO_WAREHOUSE}).
 	 */
 	private void surveyStorage(ServerLevel level, Colony colony, Map<Item, Integer> spare) {
-		if (colony.storage().isPresent()) {
-			int chests = HaulerGoal.chestsToOrder(level, colony, Math.max(0, spare.getOrDefault(Items.CHEST, 0)));
-			colony.orderFor(Colony.OrderPurpose.STORAGE, chests > 0 ? Map.of(Items.CHEST, chests) : Map.of());
-			return;
-		}
-		Container core = Storage.containerAt(level, colony.core());
-		int free = 0;
-		for (int i = 0; core != null && i < core.getContainerSize(); i++) {
-			free += core.getItem(i).isEmpty() ? 1 : 0;
-		}
-		if (core == null || free > NEARLY_FULL_FREE_SLOTS) {
-			return;
-		}
-		colony.findSite("storage", () -> {
-			Optional<StorageArea> site = StorageArea.choose(colony.core(), colony.radius(), colony.occupied(),
-				pos -> Territory.inBounds(colony.bounds(), pos) && level.getBlockState(pos).isFaceSturdy(level, pos, Direction.UP),
-				pos -> level.getBlockState(pos).canBeReplaced() && level.getBlockState(pos).getFluidState().isEmpty());
-			if (site.isPresent()) {
-				colony.setStorage(site.get());
-			} else if (!colony.hasTerraform()) {
-				// No flat spot: the colony levels one, and picks it once it is flat.
-				StorageArea.levelling(colony.core(), colony.radius(), colony.occupied(), level::getBlockState, pos -> isWorkable(level, colony, pos))
-					.ifPresent(colony::addBuild);
-			}
-			// Nothing found unless a site or a spot to level is: while one is levelled, it is searched for every survey.
-			return colony.storage().isPresent() || colony.hasTerraform() ? Optional.of(true) : Optional.empty();
-		});
+		int chests = colony.storage().isEmpty() ? 0 : HaulerGoal.chestsToOrder(level, colony, Math.max(0, spare.getOrDefault(Items.CHEST, 0)));
+		colony.orderFor(Colony.OrderPurpose.STORAGE, chests > 0 ? Map.of(Items.CHEST, chests) : Map.of());
 	}
 
 	/** Whether bots can dig or fill the block at {@code pos} for a site the colony levels: no fluid, unbreakable block, container or colony block. */

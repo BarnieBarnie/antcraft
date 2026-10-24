@@ -1,8 +1,12 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import com.mojang.datafixers.util.Either;
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -25,6 +29,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -188,35 +194,42 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 60)
-	public void aColonyWithNoFlatSpotLevelsOneForItsStorage(GameTestHelper helper) {
-		// Bedrock walls keep every spot but the rows z=4..6 out; a bump and a hole spoil those.
+	/**
+	 * A warehouse placed on the rows z = 4..6, which a bump and a hole spoil: the colony levels the site, then builds
+	 * the warehouse, whose chests are then the colony storage. The colony levels no storage site of its own any more.
+	 */
+	@GameTest(maxTicks = 170)
+	public void aWarehousePlacedOnUnevenGroundIsLevelledThenBuilt(GameTestHelper helper) {
+		// Bedrock walls round the area; a stone platform one block up on the rows z = 4..6, for the levelling to fill from.
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				if (x == 0 || x == 7 || z == 0 || z == 7) {
 					for (int y = 0; y < 4; y++) {
 						helper.setBlock(x, y, z, Blocks.BEDROCK);
 					}
+				} else if (z >= 4 && z <= 6) {
+					helper.setBlock(x, 1, z, Blocks.STONE);
 				}
 			}
 		}
-		helper.setBlock(3, 1, 5, Blocks.DIRT);
-		helper.setBlock(4, 0, 5, Blocks.AIR);
+		helper.setBlock(3, 2, 5, Blocks.DIRT);
+		helper.setBlock(4, 1, 5, Blocks.AIR);
 		BlockPos corePos = new BlockPos(2, 1, 2);
 		Colony colony = colony(helper, corePos, 5);
 		Container core = core(helper, corePos);
-		// Chests to place and dirt to fill with; logs in every other slot, for storage.
-		core.setItem(0, new ItemStack(Items.CHEST, 2));
+		// Chests to place and dirt to fill with.
+		core.setItem(0, new ItemStack(Items.CHEST, 10));
 		core.setItem(1, new ItemStack(Items.DIRT, 4));
-		for (int i = 2; i < core.getContainerSize(); i++) {
-			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
-		}
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("warehouse"),
+			helper.absolutePos(new BlockPos(2, 2, 4)), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
 		member(helper, colony, 3, 3);
 		member(helper, colony, 4, 3);
+		GameTests.failOnGiveUp(helper, colony);
 
 		helper.succeedWhen(() -> {
-			helper.assertTrue(helper.getBlockState(new BlockPos(3, 1, 5)).isAir(), "bump not dug");
-			helper.assertTrue(helper.getBlockState(new BlockPos(4, 0, 5)).is(Blocks.DIRT), "hole not filled");
+			helper.assertFalse(helper.getBlockState(new BlockPos(3, 2, 5)).is(Blocks.DIRT), "bump not dug");
+			helper.assertTrue(helper.getBlockState(new BlockPos(4, 1, 5)).is(Blocks.DIRT), "hole not filled");
 			helper.assertTrue(colony.storage().isPresent(), "no storage area");
 			boolean chest = colony.storage().get().chestSpots().stream().anyMatch(spot -> Storage.containerAt(helper.getLevel(), spot) != null);
 			helper.assertTrue(chest, "no storage chest placed");
@@ -224,7 +237,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The farm a colony starts with (see {@link Field#plan}) on uneven ground: a bump in the crop layer is dug, and a
+	 * The farm plan of a field an older colony laid out itself (see {@link Field#plan}) on uneven ground: a bump in the crop layer is dug, and a
 	 * hole and rock in the soil layer get dirt, so the whole field is soil with room above it, but for the middle.
 	 */
 	@GameTest(maxTicks = 430)

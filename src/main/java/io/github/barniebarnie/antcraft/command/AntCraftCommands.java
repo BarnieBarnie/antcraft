@@ -225,9 +225,14 @@ public final class AntCraftCommands {
 		if (!low.isEmpty()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.low", String.join(", ", low)), false);
 		}
+		status.stock().stream().filter(ColonyStatus.Stock::needsFarm)
+			.forEach(stock -> source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.needs_farm", stock.name()), false));
 		for (ColonyStatus.Order order : status.orders()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.order_line",
 				order.count(), itemName(order.item()), names(order.toGather()), names(order.missing())), false);
+			if (order.needsFarm()) {
+				source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.needs_farm", itemName(order.item())), false);
+			}
 		}
 		if (!status.blocked().isEmpty()) {
 			String blocked = String.join(", ", status.blocked().stream().map(BlockPos::toShortString).toList());

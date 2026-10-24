@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.colony;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Storage;
@@ -62,7 +63,8 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 	/** Why the storage area cannot take what the core has no room for, if it cannot. */
 	public enum StorageState {
 		READY("commands.antcraft.colony.storage.ready"),
-		NO_SITE("commands.antcraft.colony.storage.no_site"),
+		/** No warehouse placed, nor a storage area from an older version: the player places a warehouse. */
+		NO_WAREHOUSE("commands.antcraft.colony.storage.no_warehouse"),
 		NO_CHEST("commands.antcraft.colony.storage.no_chest");
 
 		private final String key;
@@ -100,18 +102,31 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 	public record Bot(String name, Optional<JobType> job, boolean idle) {
 	}
 
-	/** A stock target with how many the colony has. */
-	public record Stock(String name, int have, int want) {
+	/** A stock target with how many the colony has, and whether meeting it needs a farm the colony does not have. */
+	public record Stock(String name, int have, int want, boolean needsFarm) {
+		public Stock(String name, int have, int want) {
+			this(name, have, want, false);
+		}
+
 		public boolean isShort() {
 			return this.have < this.want;
 		}
 
 		static final StreamCodec<ByteBuf, Stock> STREAM_CODEC = StreamCodec.composite(
-			ByteBufCodecs.STRING_UTF8, Stock::name, ByteBufCodecs.VAR_INT, Stock::have, ByteBufCodecs.VAR_INT, Stock::want, Stock::new);
+			ByteBufCodecs.STRING_UTF8, Stock::name, ByteBufCodecs.VAR_INT, Stock::have, ByteBufCodecs.VAR_INT, Stock::want, ByteBufCodecs.BOOL, Stock::needsFarm,
+			Stock::new);
 	}
 
-	/** An order, the parts of it the colony placed itself, and what is still to gather or missing to craft it. */
-	public record Order(Item item, int count, Map<Colony.OrderPurpose, Integer> forColony, Map<Item, Integer> toGather, Map<Item, Integer> missing) {
+	/**
+	 * An order, the parts of it the colony placed itself, what is still to gather or missing to craft it, and whether
+	 * it needs a farm the colony does not have.
+	 */
+	public record Order(Item item, int count, Map<Colony.OrderPurpose, Integer> forColony, Map<Item, Integer> toGather, Map<Item, Integer> missing,
+			boolean needsFarm) {
+		public Order(Item item, int count, Map<Colony.OrderPurpose, Integer> forColony, Map<Item, Integer> toGather, Map<Item, Integer> missing) {
+			this(item, count, forColony, toGather, missing, false);
+		}
+
 		/** How many of {@link #count} a player ordered. */
 		public int byPlayer() {
 			return Math.max(0, this.count - this.forColony.values().stream().mapToInt(Integer::intValue).sum());
@@ -120,7 +135,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		static final StreamCodec<RegistryFriendlyByteBuf, Order> STREAM_CODEC = StreamCodec.composite(
 			ITEM, Order::item, ByteBufCodecs.VAR_INT, Order::count,
 			ByteBufCodecs.map(n -> new EnumMap<>(Colony.OrderPurpose.class), enumCodec(Colony.OrderPurpose.values()), ByteBufCodecs.VAR_INT), Order::forColony,
-			ITEM_COUNTS, Order::toGather, ITEM_COUNTS, Order::missing, Order::new);
+			ITEM_COUNTS, Order::toGather, ITEM_COUNTS, Order::missing, ByteBufCodecs.BOOL, Order::needsFarm, Order::new);
 	}
 
 	/** A batch of a build plan with how many of its steps are left, and whether it waits on blocked steps, its own or those of a batch it needs. */
@@ -196,6 +211,11 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 	/** Where the jobs of {@code type} that bots gave up on are. */
 	public List<BlockPos> givenUp(JobType type) {
 		return this.givenUp.stream().filter(job -> job.type() == type).map(GivenUp::target).toList();
+	}
+
+	/** Whether {@code plan} gathers anything a field yields. */
+	private static boolean gathersFieldYields(TaskPlanner.Plan<Item> plan) {
+		return plan.toGather().keySet().stream().anyMatch(Field.YIELDS::contains);
 	}
 
 	/** How many of {@code steps} the world does not match yet. */
@@ -277,9 +297,19 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			}
 		}
 
+		// Gathering what a field yields takes a farm: the colony lays out no field of its own.
+		boolean noField = colony.field().isEmpty();
 		List<Stock> stocks = new ArrayList<>();
 		for (StockTarget target : colony.stockTargets()) {
-			stocks.add(new Stock(target.name(), StockPlanner.have(target.toPlannerTarget(), stock), target.count()));
+			int have = StockPlanner.have(target.toPlannerTarget(), stock);
+			boolean needsFarm = noField && have < target.count() && target.makeOptions().stream().findFirst()
+				.map(item -> {
+					// As for an order: what is held already counts in have.
+					Map<Item, Integer> available = new HashMap<>(stock);
+					available.remove(item);
+					return gathersFieldYields(TaskPlanner.plan(item, target.count() - have, available, book, gatherable));
+				}).orElse(false);
+			stocks.add(new Stock(target.name(), have, target.count(), needsFarm));
 		}
 		// Stable, so short items keep the order of their targets.
 		stocks.sort(Comparator.comparing(s -> !s.isShort()));
@@ -296,7 +326,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 					forColony.put(purpose, placed);
 				}
 			}
-			orders.add(new Order(item, count, forColony, plan.toGather(), plan.missing()));
+			orders.add(new Order(item, count, forColony, plan.toGather(), plan.missing(), noField && gathersFieldYields(plan)));
 		});
 
 		List<Build> builds = new ArrayList<>();
@@ -314,7 +344,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 				project.map(p -> colony.waitingFor(p.id())).orElse(Map.of())));
 		}
 
-		StorageState storage = colony.storage().isEmpty() ? StorageState.NO_SITE
+		StorageState storage = colony.storage().isEmpty() ? StorageState.NO_WAREHOUSE
 			: !chestWithRoom ? StorageState.NO_CHEST
 			: StorageState.READY;
 

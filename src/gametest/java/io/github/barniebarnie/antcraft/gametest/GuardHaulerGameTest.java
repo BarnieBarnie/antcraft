@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
@@ -15,6 +16,7 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -309,13 +311,8 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/**
-	 * A colony whose core is full and that has no storage area: it needs a site and a chest, and the
-	 * chest has no slot in the core to be crafted into. Inside the walls the only flat site
-	 * clear of the core is the rows z=4 and z=6.
-	 */
-	@GameTest(maxTicks = 230)
-	public void aFullCoreGetsAStorageChest(GameTestHelper helper) {
+	/** A core at x = 2, z = 2 full of planks and cobblestone, so a chest has no slot to be crafted into. */
+	private static Colony fullCoreColony(GameTestHelper helper) {
 		BlockPos corePos = new BlockPos(2, 1, 2);
 		helper.setBlock(corePos, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(corePos)).orElseThrow();
@@ -326,6 +323,43 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 		for (int i = 1; i < core.getContainerSize(); i++) {
 			core.setItem(i, new ItemStack(Items.COBBLESTONE, 64));
 		}
+		return colony;
+	}
+
+	/**
+	 * A colony whose core is full and that has no warehouse picks no storage area and levels no site for one: the
+	 * colony status says the core is full and to place a warehouse.
+	 */
+	@GameTest(maxTicks = 260)
+	public void aFullCoreWithNoWarehouseSaysSoAndStartsNoStorage(GameTestHelper helper) {
+		Colony colony = fullCoreColony(helper);
+		member(helper, colony);
+		member(helper, colony);
+
+		helper.onEachTick(() -> {
+			if (colony.storage().isPresent() || !colony.builds().isEmpty()) {
+				helper.fail("storage started: " + colony.storage() + ", builds " + colony.builds());
+			}
+		});
+		// Two surveys.
+		helper.runAfterDelay(220, () -> {
+			helper.assertValueEqual(ColonyStatus.of(helper.getLevel(), colony).room(), new ColonyStatus.Room(0, ColonyStatus.StorageState.NO_WAREHOUSE),
+				"room in the core");
+			helper.assertValueEqual(colony.orders(), Map.of(), "orders");
+			helper.succeed();
+		});
+	}
+
+	/**
+	 * An existing colony with a storage area the colony picked in an older version, at the rows z = 4 and z = 6, keeps
+	 * using it: its core is full, so the chest has no slot in the core to be crafted into, yet bots craft and place one
+	 * there and free the core.
+	 */
+	@GameTest(maxTicks = 80)
+	public void anExistingColonyKeepsUsingItsStorageArea(GameTestHelper helper) {
+		Colony colony = fullCoreColony(helper);
+		Container core = (Container) helper.getBlockEntity(new BlockPos(2, 1, 2), BlockEntity.class);
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
 		member(helper, colony);
 		member(helper, colony);
 
@@ -365,13 +399,14 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A colony whose core at {@link #FULL_CORE} is full of different items, a stack of each and none
 	 * above a stock target, so nothing in it is surplus; planks in the first slot to craft a chest from.
-	 * It has two bots, which craft the chest and store the surplus between jobs.
+	 * It has a storage area with no chest yet, and two bots, which craft the chest and store the surplus between jobs.
 	 */
 	private static Colony coreFullOfDifferentItems(GameTestHelper helper) {
 		helper.setBlock(FULL_CORE, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(FULL_CORE)).orElseThrow();
 		colony.setRadius(5);
 		colony.setStockTargets(List.of());
+		colony.setStorage(new StorageArea(helper.absolutePos(STORAGE)));
 		Container core = fullCore(helper);
 		core.setItem(0, new ItemStack(Items.OAK_PLANKS, 64));
 		List<ItemStack> others = distinctStacks(core.getContainerSize());
@@ -402,7 +437,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Storage takes what nothing needs, and the order is crafted. */
-	@GameTest(maxTicks = 230)
+	@GameTest(maxTicks = 80)
 	public void aCoreFullOfDifferentItemsMakesRoom(GameTestHelper helper) {
 		Colony colony = coreFullOfDifferentItems(helper);
 		colony.addOrder(Items.STICK, 4);
@@ -414,7 +449,7 @@ public class GuardHaulerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A depositor fills the slot the hauler freed before the chest is crafted; the hauler frees another. */
-	@GameTest(maxTicks = 230)
+	@GameTest(maxTicks = 80)
 	public void aFreedSlotThatIsRefilledIsFreedAgain(GameTestHelper helper) {
 		Colony colony = coreFullOfDifferentItems(helper);
 		ItemStack deposit = distinctStacks(fullCore(helper).getContainerSize() + 1).getLast();

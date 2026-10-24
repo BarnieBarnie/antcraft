@@ -7,9 +7,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -26,6 +29,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 public record Field(BoundingBox area, List<BlockPos> plots, Optional<BlockPos> water) {
 	/** Blocks from the middle to the edge: a 5x5 field, every block within reach of the water. */
 	public static final int RADIUS = 2;
+	/** What a field yields: a colony that wants some with no field needs a farm. */
+	public static final Set<Item> YIELDS = Set.of(Items.WHEAT, Items.WHEAT_SEEDS);
 
 	/** How many blocks above the soil {@link #plan} clears: the crop layer and the one above, room to walk and light. */
 	private static final int CLEAR_HEIGHT = 2;
