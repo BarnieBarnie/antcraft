@@ -33,6 +33,7 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -547,6 +548,68 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 			// Long enough for cobblestone to form again and the bot to leave it.
 			helper.assertTrue(helper.getTick() - metAt[0] >= 60, "not long since the target was met");
 			helper.assertTrue(helper.getLevel().getBlockState(mine).is(Blocks.COBBLESTONE), "the last cobblestone formed was mined");
+		});
+	}
+
+	/**
+	 * With a warehouse built and the core filled up with dirt once the bot takes the generator job, the bot mines the
+	 * cobblestone the stock target wants, stores it in the warehouse, as the core has no room, and completes the job
+	 * with its pack empty of cobblestone, rather than leaving the job holding it.
+	 */
+	@GameTest(maxTicks = 800)
+	public void theGeneratorMinerStoresItsCobblestoneInTheWarehouseWhenTheCoreIsFull(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 32));
+		core.setItem(1, new ItemStack(Items.WATER_BUCKET));
+		core.setItem(2, new ItemStack(Items.LAVA_BUCKET));
+		// The warehouse, 5 wide and 3 deep, beside the core and clear of the generator; built at once, as builders would.
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> warehouse = BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("warehouse"),
+			helper.absolutePos(new BlockPos(3, 1, 0)), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(warehouse.right().isPresent(), "not placed: " + warehouse.left());
+		for (int round = 0; round < 50 && !colony.builds().isEmpty(); round++) {
+			colony.postBuildJobs();
+			colony.builds().forEach(plan -> plan.steps().forEach(step -> helper.getLevel().setBlockAndUpdate(step.pos(), step.state())));
+			colony.board().jobs().stream().filter(job -> job.isOpen() && colony.build(job.id()).isPresent()).toList().forEach(job -> {
+				colony.finishBatch(job.id());
+				colony.board().complete(job.id());
+			});
+		}
+		List<BlockPos> chests = warehouse.right().orElseThrow().chests();
+		helper.assertTrue(!Storage.storageChests(helper.getLevel(), colony).isEmpty(), "no warehouse chests");
+		placeGenerator(helper, colony, Rotation.NONE, Mirror.LEFT_RIGHT);
+		AntBot bot = helper.getLevel().getEntitiesOfClass(AntBot.class, new AABB(helper.absolutePos(BlockPos.ZERO)).inflate(16)).stream()
+			.filter(member -> colony.members().contains(member.getUUID())).findFirst().orElseThrow();
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		int target = 3;
+		boolean[] wanted = {false};
+		boolean[] onJob = {false};
+		boolean[] done = {false};
+		helper.onEachTick(() -> {
+			if (!wanted[0] && generator(colony).finished()) {
+				colony.setStockTarget(StockTarget.of(Items.COBBLESTONE, target));
+				wanted[0] = true;
+			}
+			boolean claimed = colony.board().jobs().stream()
+				.anyMatch(job -> job.type() == JobType.MINE_GENERATOR && job.claimedBy().equals(Optional.of(bot.getUUID())));
+			if (claimed && !onJob[0]) {
+				for (int i = 0; i < core.getContainerSize(); i++) {
+					core.setItem(i, new ItemStack(Items.DIRT, 64));
+				}
+				onJob[0] = true;
+			}
+			if (!claimed && onJob[0] && !done[0]) {
+				helper.assertValueEqual(bot.getInventory().countItem(Items.COBBLESTONE), 0, "cobblestone the bot left the job with");
+				done[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(done[0], "the generator job is not done yet");
+			int stored = chests.stream().map(spot -> Storage.containerAt(helper.getLevel(), spot)).filter(Objects::nonNull)
+				.mapToInt(chest -> chest.countItem(Items.COBBLESTONE)).sum();
+			helper.assertValueEqual(stored, target, "cobblestone in the warehouse");
+			helper.assertTrue(colony.board().jobs().stream().noneMatch(job -> job.type() == JobType.MINE_GENERATOR), "generator job left up");
 		});
 	}
 

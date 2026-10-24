@@ -154,6 +154,16 @@ class GeneratorJobTest {
 	}
 
 	@Test
+	void theMiningSpotIsKeptOpenForPathsOnceTheGeneratorIsBuilt() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		BlockPos mine = placed.workSpots().getFirst();
+		finishAll(colony);
+		assertTrue(colony.keepOpen().test(mine), "a path could put scaffold in the empty mining spot");
+		assertTrue(!colony.keepOpen().test(placed.workSpots().get(1).above(3)), "kept open off the mining spot");
+	}
+
+	@Test
 	void theGeneratorJobTakesThePriorityOfWhatWaitsForCobblestone() {
 		Colony colony = colony();
 		place(colony, AT, Rotation.NONE);

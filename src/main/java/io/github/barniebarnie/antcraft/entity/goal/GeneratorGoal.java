@@ -24,10 +24,10 @@ import org.jspecify.annotations.Nullable;
  * Cobblestone generator work: the executor of {@link JobType#MINE_GENERATOR} jobs for {@link WorkerGoal}. The bot stands
  * on the generator's second work spot, in front of its mining block, and mines the cobblestone each time it forms there,
  * the drops going straight into its pack, until the colony holds what its stock targets and orders want of cobblestone,
- * counting what the bot carries; then it stores the cobblestone in the core and completes the job. A full pack it takes
- * to the core on the way. It breaks no other block of the generator and leaves its fluids alone: it only walks to the
- * spot, and paths leave the generator's blocks standing, as builders placed them. The pickaxe the job declares is
- * fetched by {@link WorkerGoal} (see its tool check).
+ * counting what the bot carries; then it stores the cobblestone in the core, or in a storage chest when the core is
+ * full, and completes the job. A full pack it stores on the way. It breaks no other block of the generator and leaves
+ * its fluids alone: it only walks to the spot, and paths leave the generator's blocks standing, as builders placed them,
+ * and keep its mining block open. The pickaxe the job declares is fetched by {@link WorkerGoal} (see its tool check).
  */
 public class GeneratorGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	private static final int MIN_FREE_SLOTS = 2;
@@ -159,28 +159,36 @@ public class GeneratorGoal extends ColonyWorkGoal implements WorkerGoal.Executor
 		}
 	}
 
-	/** Stores the cobblestone it carries in the core, then mines on, or completes the job once the colony has enough. */
+	/**
+	 * Stores the cobblestone it carries in the core, or in a storage chest when the core has no room for it, then mines
+	 * on, or completes the job once the colony has enough. With no room anywhere it leaves the job.
+	 */
 	private void deposit(ServerLevel level, Colony colony) {
+		ItemStack cobblestone = new ItemStack(Items.COBBLESTONE);
 		Container core = Storage.containerAt(level, colony.core());
-		if (core == null) {
+		BlockPos target = core != null && Storage.hasRoomFor(core, cobblestone) ? colony.core()
+			: Storage.chestFor(Storage.storageChests(level, colony), cobblestone);
+		Container container = target == null ? null : Storage.containerAt(level, target);
+		if (target == null || container == null) {
+			// Full core and storage: someone else's job to make room.
 			this.endJob(WorkerGoal.Outcome.RELEASE);
 			return;
 		}
-		if (!this.reach(colony.core())) {
+		if (!this.reach(target)) {
 			return;
 		}
 		for (int i = 0; i < this.bot.getInventory().getContainerSize(); i++) {
 			ItemStack stack = this.bot.getInventory().getItem(i);
 			if (stack.is(Items.COBBLESTONE)) {
-				ItemStack rest = HopperBlockEntity.addItem(null, core, stack.copy(), null);
+				ItemStack rest = HopperBlockEntity.addItem(null, container, stack.copy(), null);
 				this.bot.getInventory().setItem(i, rest);
 			}
 		}
 		this.bot.getInventory().setChanged();
-		core.setChanged();
+		container.setChanged();
 		if (this.bot.getInventory().countItem(Items.COBBLESTONE) > 0) {
-			// The core is full: someone else's job to make room.
-			this.endJob(WorkerGoal.Outcome.RELEASE);
+			// What did not fit goes to the next place with room.
+			this.resetMovement();
 		} else if (this.enough) {
 			this.endJob(WorkerGoal.Outcome.COMPLETE);
 		} else {

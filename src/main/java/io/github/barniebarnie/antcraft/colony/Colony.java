@@ -1398,7 +1398,7 @@ public class Colony {
 		return false;
 	}
 
-	/** Where paths must not place scaffold: the mineshaft's stairs, halls and branches, every build plan's step, which the plan wants as it says, and the ore veins posted. */
+	/** Where paths must not place scaffold: the mineshaft's stairs, halls and branches, every build plan's step, which the plan wants as it says, the ore veins posted and the generators' mining blocks. */
 	public Predicate<BlockPos> keepOpen() {
 		List<Set<BlockPos>> open = new ArrayList<>();
 		open.add(this.shaftOpen);
@@ -1416,6 +1416,8 @@ public class Colony {
 		Set<BlockPos> veins = new HashSet<>();
 		this.board.jobs().stream().filter(job -> job.type() == JobType.MINE_VEIN).forEach(job -> veins.addAll(job.area()));
 		open.add(veins);
+		// The generators' mining blocks, where cobblestone forms again once mined.
+		open.add(Set.copyOf(this.generatorMiningBlocks()));
 		BoundingBox bounds = this.bounds;
 		return pos -> Territory.inBounds(bounds, pos) && open.stream().anyMatch(set -> set.contains(pos));
 	}
