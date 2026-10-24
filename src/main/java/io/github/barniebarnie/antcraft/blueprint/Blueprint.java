@@ -47,6 +47,11 @@ public record Blueprint(Identifier structure, String name, Optional<Role> role, 
 		this(structure, name, role, chests, workSpots, 0);
 	}
 
+	/** This blueprint building {@code palette} of its structure instead. */
+	public Blueprint withPalette(int palette) {
+		return new Blueprint(this.structure, this.name, this.role, this.chests, this.workSpots, palette);
+	}
+
 	/** Reads a blueprint file; an error names what is wrong, such as a missing field or an unknown role. */
 	public static DataResult<Blueprint> parse(JsonElement json) {
 		return CODEC.parse(JsonOps.INSTANCE, json);

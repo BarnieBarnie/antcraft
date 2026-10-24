@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonObject;
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
@@ -299,6 +300,27 @@ class BlueprintPlacementTest {
 		assertFalse(colony.builds().stream().anyMatch(plan -> plan.kind() == BuildPlan.Kind.BUILD), "structure started: " + colony.builds());
 		assertEquals(List.of(), colony.blueprints());
 		assertTrue(colony.projects().stream().noneMatch(project -> project.id().equals(placed.project())), "project left: " + colony.projects());
+	}
+
+	@Test
+	void aPlacementDroppedForALevellingGivenUpInAnOldSaveIsReported() {
+		Colony colony = colony();
+		// A levelling of two batches, neither needing the other: the second is still to do once the first is given up.
+		BuildPlan levelling = new BuildPlan(List.of(Terraform.fill(AT.below()), Terraform.fill(AT.offset(1, -1, 0))),
+			List.of(new BuildPlan.Batch(0, 1, List.of(), false), new BuildPlan.Batch(1, 2, List.of(), false)), BuildPlan.Kind.TERRAFORM);
+		PlacedBlueprint placed = place(colony, AT, Optional.of(levelling));
+		UUID plan = colony.projects().stream().filter(project -> project.id().equals(placed.project())).findFirst().orElseThrow().plans().getFirst();
+		// A save from before #267: the levelling's first batch, whose job id is the plan's, given up with colony blocked clear, the placement kept.
+		JsonObject json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow().getAsJsonObject();
+		JsonObject batches = json.has("batches") ? json.getAsJsonObject("batches") : new JsonObject();
+		batches.addProperty(plan.toString(), "given_up");
+		json.add("batches", batches);
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(List.of(placed), loaded.blueprints());
+
+		finishAll(loaded);
+		assertEquals(List.of(), loaded.blueprints());
+		assertEquals(List.of(placed), loaded.droppedUnlevelled());
 	}
 
 	@Test

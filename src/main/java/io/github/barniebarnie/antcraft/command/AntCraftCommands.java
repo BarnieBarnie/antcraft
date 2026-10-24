@@ -33,6 +33,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandBuildContext;
@@ -75,7 +76,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
  * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation] [mirror] [palette]|cancel &lt;n&gt;
- * /antcraft colony build place &lt;blueprint&gt; &lt;at&gt; [rotation] [mirror]
+ * /antcraft colony build place &lt;blueprint&gt; &lt;at&gt; [rotation] [mirror] [palette]
  * /antcraft colony project list|cancel &lt;n&gt;|priority &lt;n&gt; &lt;priority&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
  * /antcraft colony trust|untrust &lt;player&gt;   (also the colony's owner, not only operators)
@@ -178,14 +179,19 @@ public final class AntCraftCommands {
 							.suggests((ctx, builder) -> SharedSuggestionProvider.suggestResource(Blueprints.ids(), builder))
 							.then(Commands.argument("at", BlockPosArgument.blockPos())
 								.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
-									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE, Mirror.NONE))
+									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE, Mirror.NONE, OptionalInt.empty()))
 								.then(Commands.argument("rotation", TemplateRotationArgument.templateRotation())
 									.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
-										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"), Mirror.NONE))
+										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"), Mirror.NONE,
+										OptionalInt.empty()))
 									.then(Commands.argument("mirror", TemplateMirrorArgument.templateMirror())
 										.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
 											BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
-											TemplateMirrorArgument.getMirror(ctx, "mirror"))))))))
+											TemplateMirrorArgument.getMirror(ctx, "mirror"), OptionalInt.empty()))
+										.then(Commands.argument("palette", IntegerArgumentType.integer(0))
+											.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
+												BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
+												TemplateMirrorArgument.getMirror(ctx, "mirror"), OptionalInt.of(IntegerArgumentType.getInteger(ctx, "palette"))))))))))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
@@ -257,6 +263,8 @@ public final class AntCraftCommands {
 		if (status.room().coreFull()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.core_full", Component.translatable(status.room().storage().key())), false);
 		}
+		// Placements an older save's given-up levelling dropped, named as colony blocked clear names them.
+		found.get().droppedUnlevelled().forEach(placed -> sendUnlevelled(source, placed));
 		return status.members();
 	}
 
@@ -511,9 +519,10 @@ public final class AntCraftCommands {
 
 	/**
 	 * Places a blueprint for the nearest colony to build, through {@link BlueprintPlacement#place} like the client's
-	 * request: refused with the reason unless the player running it may act on the colony and the site is free.
+	 * request: refused with the reason unless the player running it may act on the colony and the site is free. It builds
+	 * {@code palette}, if given, rather than the palette the blueprint file names.
 	 */
-	private static int placeBlueprint(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation, Mirror mirror) {
+	private static int placeBlueprint(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation, Mirror mirror, OptionalInt palette) {
 		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_PLACE)) {
 			return 0;
 		}
@@ -525,7 +534,7 @@ public final class AntCraftCommands {
 		ServerPlayer player = source.getPlayer();
 		// The console and command blocks run as operators.
 		boolean mayAct = player == null || ColonyActions.mayAct(colony, player);
-		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(source.getLevel(), colony, mayAct, id, at, rotation, mirror);
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(source.getLevel(), colony, mayAct, id, at, rotation, mirror, palette);
 		if (placed.left().isPresent()) {
 			source.sendFailure(placed.left().get().message());
 			return 0;
@@ -583,12 +592,15 @@ public final class AntCraftCommands {
 		}
 		Colony.Cleared cleared = colony.get().clearBlocked();
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.cleared", cleared.steps()), false);
-		for (PlacedBlueprint placed : cleared.unlevelled()) {
-			BlockPos at = placed.at();
-			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.unlevelled", placed.displayName(),
-				at.getX(), at.getY(), at.getZ()), false);
-		}
+		cleared.unlevelled().forEach(placed -> sendUnlevelled(source, placed));
 		return cleared.steps();
+	}
+
+	/** Says {@code placed} was dropped because its site could not be levelled. */
+	private static void sendUnlevelled(CommandSourceStack source, PlacedBlueprint placed) {
+		BlockPos at = placed.at();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.blocked.unlevelled", placed.displayName(),
+			at.getX(), at.getY(), at.getZ()), false);
 	}
 
 	private static int cancelBuild(CommandSourceStack source, int n) {

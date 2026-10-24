@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.work.Terraform;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
@@ -107,10 +108,16 @@ public final class BlueprintPlacement {
 	 */
 	public static Either<Refusal, PlacedBlueprint> place(ServerLevel level, Colony colony, boolean mayAct, Identifier id, BlockPos at,
 			Rotation rotation, Mirror mirror) {
+		return place(level, colony, mayAct, id, at, rotation, mirror, OptionalInt.empty());
+	}
+
+	/** {@link #place(ServerLevel, Colony, boolean, Identifier, BlockPos, Rotation, Mirror)} in {@code palette}, if given, rather than the blueprint's own. */
+	public static Either<Refusal, PlacedBlueprint> place(ServerLevel level, Colony colony, boolean mayAct, Identifier id, BlockPos at,
+			Rotation rotation, Mirror mirror, OptionalInt palette) {
 		if (!mayAct) {
 			return Either.left(Refusal.NOT_ALLOWED);
 		}
-		Optional<Blueprint> blueprint = Blueprints.get(id);
+		Optional<Blueprint> blueprint = Blueprints.get(id).map(print -> palette.isPresent() ? print.withPalette(palette.getAsInt()) : print);
 		Optional<StructureTemplate> template = blueprint.flatMap(print -> level.getServer().getStructureTemplateManager().get(print.structure()));
 		Either<Refusal, PlacedBlueprint> site = site(colony, id, blueprint, template.map(StructureTemplate::getSize), at, rotation, mirror);
 		if (site.left().isPresent()) {

@@ -77,7 +77,7 @@
 	"commands.antcraft.colony.build.place.unknown_blueprint": "No blueprint by that name",
 	"commands.antcraft.colony.build.place.no_structure": "That blueprint's structure is missing",
 	"commands.antcraft.colony.build.place.nothing_to_build": "That blueprint's structure holds nothing to build",
-	"commands.antcraft.colony.build.place.no_palette": "That blueprint names a palette its structure does not have",
+	"commands.antcraft.colony.build.place.no_palette": "The structure of that blueprint has no such palette",
 	"commands.antcraft.colony.build.place.outside": "That site leaves the colony's territory",
 	"commands.antcraft.colony.build.place.overlaps_core": "That site covers the colony core",
 	"commands.antcraft.colony.build.place.overlaps_mineshaft": "That site overlaps the mineshaft",

@@ -253,6 +253,31 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The test blueprint two_palettes (one block, cobblestone in palette 0 and oak planks in palette 1, its file names none)
+	 * placed with palette 1: the colony builds oak planks. A palette the structure lacks is refused.
+	 */
+	@GameTest(maxTicks = 40)
+	public void placeCommandBuildsTheChosenPalette(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		core.setItem(1, new ItemStack(Items.OAK_PLANKS, 1));
+
+		List<Component> lacking = command(helper, "antcraft colony build place antcraft-gametest:two_palettes " + coords(helper, 5, 1, 4) + " none none 2");
+		helper.assertTrue(says(lacking, "commands.antcraft.colony.build.place.no_palette"), "no no_palette refusal: " + lacking);
+		List<Component> placed = command(helper, "antcraft colony build place antcraft-gametest:two_palettes " + coords(helper, 5, 1, 4) + " none none 1");
+		helper.assertTrue(says(placed, "commands.antcraft.colony.build.placed"), "not placed: " + placed);
+		ColonyManager.get(helper.getLevel()).join(helper.spawn(ModEntities.ANT_BOT, 2, 1, 2), colony);
+		GameTests.failOnGiveUp(helper, colony);
+
+		helper.succeedWhen(() -> {
+			assertState(helper, 5, 1, 4, Blocks.OAK_PLANKS.defaultBlockState());
+			helper.assertTrue(colony.builds().isEmpty(), "builds left: " + colony.builds());
+		});
+	}
+
+	/**
 	 * The cobble_step blueprint placed on a stone floor one block thick with air under it: the site is flat, so the
 	 * colony builds the structure at once, without levelling. With a hole in the floor, only that hole is filled, not the
 	 * air below it.

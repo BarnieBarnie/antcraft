@@ -37,6 +37,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.StringRepresentable;
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
@@ -60,6 +61,8 @@ public class Colony {
 	public static final int DEFAULT_RADIUS = 32;
 	/** How many finished terraforms' ground the colony keeps at most (see {@link #keepGround}); the oldest is forgotten first. */
 	public static final int MAX_KEPT_GROUND = 32;
+	/** How many placements dropped for a site that could not be levelled {@link #droppedUnlevelled} keeps. */
+	public static final int MAX_DROPPED_UNLEVELLED = 8;
 	/** The name of the mineshaft's project. */
 	public static final String MINESHAFT = "mineshaft";
 	/** How often given-up trees and branches are put back up for one more try: a Minecraft day. */
@@ -269,6 +272,11 @@ public class Colony {
 	private final List<Project> projects = new ArrayList<>();
 	/** The blueprints players placed, built or still to build, in the order they were placed. */
 	private final List<PlacedBlueprint> blueprints = new ArrayList<>();
+	/**
+	 * The placed blueprints dropped when their levelling, given up before {@link #clearBlocked} dropped such placements
+	 * itself (saves from before #267), finished: at most {@link #MAX_DROPPED_UNLEVELLED}, newest last; not saved.
+	 */
+	private final List<PlacedBlueprint> droppedUnlevelled = new ArrayList<>();
 	/** The ground of finished terraforms, oldest first, which paths leave standing for good (see {@link #keepGround}). */
 	private final List<BoundingBox> keptGround = new ArrayList<>();
 	/** What each project still waits for, by project id, as {@link #planProjects} last found; not saved. */
@@ -590,6 +598,14 @@ public class Colony {
 		return List.copyOf(this.blueprints);
 	}
 
+	/**
+	 * The placed blueprints dropped since the server started because their site levelling had been given up in a save from
+	 * before {@link #clearBlocked} dropped them itself, oldest first; {@code colony info} names them.
+	 */
+	public List<PlacedBlueprint> droppedUnlevelled() {
+		return List.copyOf(this.droppedUnlevelled);
+	}
+
 	/** The built blueprints with role {@code role}, oldest first, such as the storage buildings whose chests the colony may use. */
 	public List<PlacedBlueprint> finishedBlueprints(Blueprint.Role role) {
 		return this.blueprints.stream().filter(placed -> placed.finished() && placed.role().equals(Optional.of(role))).toList();
@@ -751,6 +767,13 @@ public class Colony {
 			}
 			if (placed.waiting().isPresent() && !this.givenUpBatches(id, this.builds.get(id)).isEmpty()) {
 				// The levelling was given up: the structure does not start on an unlevelled site, and goes with the project.
+				// Since #267 clearBlocked drops such placements and names them; this backstop for older saves says so too.
+				AntCraft.LOGGER.warn("Colony at {} dropped {} at {}: its site could not be levelled", this.core.toShortString(),
+					placed.blueprint(), placed.at().toShortString());
+				this.droppedUnlevelled.add(placed);
+				if (this.droppedUnlevelled.size() > MAX_DROPPED_UNLEVELLED) {
+					this.droppedUnlevelled.removeFirst();
+				}
 				continue;
 			}
 			if (placed.waiting().isPresent()) {
