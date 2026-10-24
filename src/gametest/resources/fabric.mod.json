@@ -19,7 +19,8 @@
 			"io.github.barniebarnie.antcraft.gametest.BuilderGameTest",
 			"io.github.barniebarnie.antcraft.gametest.TerraformGameTest",
 			"io.github.barniebarnie.antcraft.gametest.SpiralMineshaftGameTest",
-			"io.github.barniebarnie.antcraft.gametest.UpkeepGameTest"
+			"io.github.barniebarnie.antcraft.gametest.UpkeepGameTest",
+			"io.github.barniebarnie.antcraft.gametest.BlueprintGameTest"
 		]
 	},
 	"mixins": [

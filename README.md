@@ -49,6 +49,28 @@ Bots use the best tool or weapon they carry, and tools wear out.
 
 **Builds.** A build is a list of blocks to clear or place, made with `/antcraft colony build copy`, loaded from a structure file with `/antcraft colony build load`, or by the colony itself for its mineshaft. Builders claim builds, fetch the blocks from the core, and the colony orders what is missing (including a pickaxe for digging, buckets and flint and steel). They place blocks the way a player would: water and lava are poured from buckets (filled at a source nearby when the core has none), waterlogged blocks are placed dry and then filled, doors, beds and tall plants go in whole from one item, and fire is lit with flint and steel. To reach high blocks they pillar up on scaffold blocks from the core, and take the scaffolding down again before they move on. Blocks a builder placed are protected: no other bot breaks them. Steps the colony cannot do, such as an unbreakable block in the way, a block out of reach, a block with no item (like a portal), fire with nothing to stay on, or a fluid with no bucket and no source nearby, are reported in `colony info` and the colony screen; the builders carry on with the rest, and `/antcraft colony blocked clear` gives up on those steps. When the colony finds no flat spot for its storage area, it levels the nearest one that takes the least work (a terraform, see below) and puts its storage there.
 
+**Blueprints.** The colony keeps a library of buildings it knows: blueprints, loaded with the server's data and again on `/reload`. The mod bundles `antcraft:starter_house` and `antcraft:cobble_step`, and a data pack can add more. A blueprint is a file `data/<namespace>/blueprint/<name>.json`, and its id is that of the file (`<namespace>:<name>`):
+
+```json
+{
+	"structure": "antcraft:farm_plot",
+	"name": "blueprint.antcraft.farm_plot",
+	"role": "farm",
+	"chests": [[0, 1, 0]],
+	"work_spots": [[1, 1, 2], [2, 1, 2]]
+}
+```
+
+| Field | Required | Meaning |
+|-------|----------|---------|
+| `structure` | yes | The `.nbt` structure template it builds, as `colony build load` takes it |
+| `name` | yes | Lang key of its display name |
+| `role` | no | What the colony uses it for: `storage`, `farm` or `generator`. None by default |
+| `chests` | no | Chest spots, `[x, y, z]` relative to the structure's origin (its corner at 0, 0, 0 in the structure file). None by default |
+| `work_spots` | no | Spots a bot stands on or works at, such as farm plots or a generator's mining block, relative like `chests`. None by default |
+
+Spots are mirrored and turned with the structure, so they stay on the same blocks however it is placed. A file with an unknown role, a missing field or a bad position is left out, with the reason in the server log.
+
 **Storage:** once the core is nearly full, the colony picks a flat spot near the core for its storage area: two rows of chests with an aisle between them. The core keeps a working stock (stock targets and what open orders need); bots move the rest to the storage chests between jobs, one category per chest (tools and armor, food, wood, stone and ores, everything else), and bring items back when the core runs short. When a category has no chest with room, the colony orders a chest and a bot places it. A nearly full core with nothing above its working stock keeps only what stock targets and orders need, so a core full of different items still has surplus to store. When the core is full and there is no chest to craft into it, a bot holds a stack of surplus so the chest has a slot, and another if something fills that slot first; `colony info` and the colony screen say when the core is full and why storage cannot take the overflow (no flat spot, or no chest yet). Several bots split the work and never make the same trip. While the colony has a storage area, haul jobs bring everything up from the landing chests; without one, only what the colony wants. Bots keep their tools, weapons and dirt for pillaring when they store what they carry.
 
 **Trees:** a bot on a tree job fells a natural tree (logs touching natural leaves, so your log houses are safe), takes down any scaffold blocks it placed to get up there, picks up the drops, replants a sapling, and brings the logs to the colony core. Before each tree it tops up to 16 scaffold blocks from the core, so it can pillar up to logs it cannot reach from the ground. It leaves the canopy to decay by itself (only breaking leaves in its way). When it has no sapling to replant it posts a replant job, which a bot takes once a sapling lies near the stump or the colony core holds one. A tree is replanted with a sapling of its own kind: a 2x2 tree, like dark oak, only once all four saplings of its kind are there, a 1x1 tree with any sapling if none of its own kind turned up within two minutes (`replantMatchWaitTicks`). A 2x2 site with a spot built over cannot grow its tree back, so it gets a 1x1 tree on one open spot instead. A tree with logs it cannot reach, even with scaffold, is tried again every 30 seconds, and given up after five tries; `colony info` and the colony screen list the trees given up on.

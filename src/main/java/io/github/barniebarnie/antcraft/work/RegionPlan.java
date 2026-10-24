@@ -96,6 +96,16 @@ public final class RegionPlan {
 			turn(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), mirror, rotation), at);
 	}
 
+	/**
+	 * Where {@link #load} puts the block at {@code pos} of a structure of {@code size}, relative to the structure's origin:
+	 * mirrored, turned and moved the same way, so a spot in a structure stays on the same block wherever it is built.
+	 */
+	public static BlockPos placed(BlockPos pos, Vec3i size, BlockPos at, Mirror mirror, Rotation rotation) {
+		BlockPos min = BlockPos.min(turn(BlockPos.ZERO, mirror, rotation),
+			turn(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), mirror, rotation));
+		return at.offset(turn(pos, mirror, rotation).subtract(min));
+	}
+
 	/** How many palettes {@code template} holds: 1 for a structure block's save. */
 	public static int paletteCount(StructureTemplate template) {
 		return template.palettes.size();

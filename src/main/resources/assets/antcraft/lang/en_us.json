@@ -54,6 +54,8 @@
 	"project.antcraft.mineshaft": "Mineshaft",
 	"project.antcraft.storage": "Storage",
 	"project.antcraft.house": "House",
+	"blueprint.antcraft.starter_house": "Starter House",
+	"blueprint.antcraft.cobble_step": "Cobblestone Step",
 	"project.antcraft.quarry": "Quarry",
 	"commands.antcraft.colony.project.empty": "The colony has no projects",
 	"commands.antcraft.colony.project.line": "%s. %s (priority %s): %s builds, %s steps left; waits for %s",

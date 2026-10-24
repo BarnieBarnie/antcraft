@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft;
 
+import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -28,6 +29,7 @@ public class AntCraft implements ModInitializer {
 		ModEntities.register();
 		ModItems.register();
 		AntCraftCommands.register();
+		Blueprints.register();
 		ColonyNetworking.register();
 		ServerTickEvents.END_LEVEL_TICK.register(level -> ColonyManager.get(level).tick(level));
 		LOGGER.info("AntCraft loaded");
