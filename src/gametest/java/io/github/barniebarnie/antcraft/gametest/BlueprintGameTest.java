@@ -16,6 +16,7 @@ import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
+import io.github.barniebarnie.antcraft.colony.SiteRules;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -48,6 +49,7 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.phys.Vec3;
 
 public class BlueprintGameTest implements CustomTestMethodInvoker {
@@ -243,6 +245,30 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 			ColonyNetworking.handle(helper.getLevel(), new ColonyNetworking.Requester(stranger, near, false, false, true), request);
 		helper.assertTrue(trusted.right().isPresent(), "a trusted player's placement refused: " + trusted.left());
 		helper.assertValueEqual(colony.blueprints().size(), 1, "placed blueprints");
+		helper.succeed();
+	}
+
+	/**
+	 * A client holding a Blueprint learns the placement rules of the nearest colony it may place for, to tint the ghost;
+	 * a player who may not act on the colony learns of none.
+	 */
+	@GameTest(maxTicks = 5)
+	public void theClientLearnsTheRulesOfTheColonyItMayPlaceFor(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setOwner(UUID.randomUUID());
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(helper.absolutePos(new BlockPos(5, 1, 5)), Blocks.STONE.defaultBlockState()))));
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		UUID stranger = UUID.randomUUID();
+
+		ColonyNetworking.SiteRulesReply refused = ColonyNetworking.siteRules(helper.getLevel(), new ColonyNetworking.Requester(stranger, near, false, false, true));
+		// Colonies of tests running alongside, with no owner, may be in range; this one is not offered.
+		helper.assertFalse(refused.rules().map(SiteRules::core).equals(Optional.of(colony.core())), "a stranger got the rules: " + refused.rules());
+
+		colony.trust(stranger);
+		ColonyNetworking.SiteRulesReply trusted = ColonyNetworking.siteRules(helper.getLevel(), new ColonyNetworking.Requester(stranger, near, false, false, true));
+		helper.assertValueEqual(trusted.rules(), Optional.of(SiteRules.of(colony)), "a trusted player's rules");
+		helper.assertValueEqual(trusted.rules().orElseThrow().check(new BoundingBox(helper.absolutePos(new BlockPos(5, 1, 5)))),
+			Optional.of(BlueprintPlacement.Refusal.OVERLAPS_BUILD), "a site over the build");
 		helper.succeed();
 	}
 

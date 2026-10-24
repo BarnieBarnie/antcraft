@@ -89,6 +89,8 @@
 	"commands.antcraft.colony.project.priority": "Project %s, %s, now has priority %s",
 	"key.category.antcraft.main": "AntCraft",
 	"key.antcraft.colony_status": "Colony status",
+	"key.antcraft.rotate_blueprint": "Turn blueprint",
+	"key.antcraft.mirror_blueprint": "Mirror blueprint",
 	"screen.antcraft.blueprint_picker": "Pick a blueprint",
 	"screen.antcraft.blueprint_picker.empty": "The server has sent no blueprints",
 	"screen.antcraft.blueprint_picker.chosen": "%s (chosen)",

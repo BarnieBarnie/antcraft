@@ -23,11 +23,15 @@ import net.minecraft.world.level.Level;
  * A Blueprint remembers one of the server's blueprints ({@link ModComponents#CHOSEN_BLUEPRINT}). Right-clicking the air
  * with it opens the picker on the client, which asks the server to set the chosen blueprint
  * ({@code ColonyNetworking.ChooseBlueprint}). Right-clicking a block with no blueprint chosen opens the picker too; with
- * one chosen it is left to {@link #place}.
+ * one chosen the client asks the server to place it where its ghost stands ({@link #place}).
  */
 public class BlueprintItem extends Item {
 	/** Opens the picker for the item in a hand; the client sets it, a dedicated server has none. */
 	private static Consumer<InteractionHand> picker = hand -> {
+	};
+
+	/** Asks the server to place the chosen blueprint for a right-click on a block; the client sets it, a dedicated server has none. */
+	private static Consumer<UseOnContext> placer = context -> {
 	};
 
 	public BlueprintItem(Properties properties) {
@@ -37,6 +41,11 @@ public class BlueprintItem extends Item {
 	/** Sets what opens the picker on the client. */
 	public static void setPicker(Consumer<InteractionHand> opener) {
 		picker = opener;
+	}
+
+	/** Sets what places the chosen blueprint on the client. */
+	public static void setPlacer(Consumer<UseOnContext> sender) {
+		placer = sender;
 	}
 
 	/** The blueprint {@code stack} is set to, if any. */
@@ -83,11 +92,15 @@ public class BlueprintItem extends Item {
 	}
 
 	/**
-	 * Right-click on a block with a blueprint chosen, the place to put it there for the colony to build. Until then it
-	 * passes, so the picker opens as for the air.
+	 * Right-click on a block with a blueprint chosen: the client asks the server to place it where its ghost stands, turned
+	 * and mirrored as shown ({@code ColonyNetworking.PlaceBlueprint}). The server checks the request and answers on the
+	 * action bar; nothing happens to the block here on either side.
 	 */
 	protected InteractionResult place(UseOnContext context) {
-		return InteractionResult.PASS;
+		if (context.getLevel().isClientSide()) {
+			placer.accept(context);
+		}
+		return InteractionResult.SUCCESS;
 	}
 
 	@Override

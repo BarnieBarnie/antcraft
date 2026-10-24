@@ -22,6 +22,12 @@
 			"io.github.barniebarnie.antcraft.client.AntCraftClient"
 		]
 	},
+	"mixins": [
+		{
+			"config": "antcraft.client.mixins.json",
+			"environment": "client"
+		}
+	],
 	"accessWidener": "antcraft.classtweaker",
 	"depends": {
 		"fabricloader": ">=0.19.5",

@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
+import io.github.barniebarnie.antcraft.colony.SiteRules;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
@@ -98,6 +99,29 @@ public final class ColonyNetworking {
 		}
 	}
 
+	/** Client holding a Blueprint asks for the placement rules of the nearest colony it may place for, to tint the ghost. */
+	public record SiteRulesRequest() implements CustomPacketPayload {
+		public static final Type<SiteRulesRequest> TYPE = new Type<>(AntCraft.id("site_rules_request"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, SiteRulesRequest> STREAM_CODEC = StreamCodec.unit(new SiteRulesRequest());
+
+		@Override
+		public Type<SiteRulesRequest> type() {
+			return TYPE;
+		}
+	}
+
+	/** The placement rules of the nearest colony the player may place for, or empty when there is none in range. */
+	public record SiteRulesReply(Optional<SiteRules> rules) implements CustomPacketPayload {
+		public static final Type<SiteRulesReply> TYPE = new Type<>(AntCraft.id("site_rules"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, SiteRulesReply> STREAM_CODEC =
+			ByteBufCodecs.optional(SiteRules.STREAM_CODEC).map(SiteRulesReply::new, SiteRulesReply::rules).cast();
+
+		@Override
+		public Type<SiteRulesReply> type() {
+			return TYPE;
+		}
+	}
+
 	/** The blueprints the server loaded, sent to each player on joining and after every data reload. */
 	public record BlueprintList(List<BlueprintSummary> blueprints) implements CustomPacketPayload {
 		public static final Type<BlueprintList> TYPE = new Type<>(AntCraft.id("blueprint_list"));
@@ -159,6 +183,8 @@ public final class ColonyNetworking {
 		PayloadTypeRegistry.serverboundPlay().register(EditRequest.TYPE, EditRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(PlaceBlueprint.TYPE, PlaceBlueprint.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(ChooseBlueprint.TYPE, ChooseBlueprint.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(SiteRulesRequest.TYPE, SiteRulesRequest.STREAM_CODEC);
+		PayloadTypeRegistry.clientboundPlay().register(SiteRulesReply.TYPE, SiteRulesReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BlueprintList.TYPE, BlueprintList.STREAM_CODEC);
 		// On joining and after every data reload, so the picker lists what the server has loaded now.
@@ -168,6 +194,8 @@ public final class ColonyNetworking {
 			}
 		});
 		ServerPlayNetworking.registerGlobalReceiver(ChooseBlueprint.TYPE, (request, context) -> handle(context.player(), request));
+		ServerPlayNetworking.registerGlobalReceiver(SiteRulesRequest.TYPE, (request, context) ->
+			context.responseSender().sendPacket(siteRules(context.player().level(), Requester.of(context.player()))));
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			context.responseSender().sendPacket(reply(player.level(), Requester.of(player)));
@@ -181,11 +209,14 @@ public final class ColonyNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(PlaceBlueprint.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
 			Requester requester = Requester.of(player);
-			player.sendSystemMessage(handle(player.level(), requester, request).map(
+			// On the action bar, where the player looks while placing.
+			player.sendOverlayMessage(handle(player.level(), requester, request).map(
 				refusal -> refusal.message().copy().withStyle(ChatFormatting.RED),
 				placed -> Component.translatable("commands.antcraft.colony.build.placed", placed.displayName(), placed.at().toShortString(),
 					ColonyManager.get(player.level()).byCore(request.core()).map(colony -> colony.builds().size()).orElse(0))));
 			context.responseSender().sendPacket(reply(player.level(), requester));
+			// The new build takes room, so the ghost turns red over it at once.
+			context.responseSender().sendPacket(siteRules(player.level(), requester));
 		});
 	}
 
@@ -234,6 +265,14 @@ public final class ColonyNetworking {
 		requester.claim(colony.get());
 		boolean mayAct = ColonyActions.mayEdit(ColonyActions.Edit.BUILD_PLACE, requester.botsAllowed()) && requester.mayAct(colony.get());
 		return BlueprintPlacement.place(level, colony.get(), mayAct, request.blueprint(), request.at(), request.rotation(), request.mirror());
+	}
+
+	/**
+	 * The placement rules for {@code requester}: those of the nearest colony in range they may act on, so may place
+	 * blueprints for ({@link ColonyActions#mayAct}), or none.
+	 */
+	public static SiteRulesReply siteRules(ServerLevel level, Requester requester) {
+		return new SiteRulesReply(ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE, requester::mayAct).map(SiteRules::of));
 	}
 
 	/**

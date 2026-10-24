@@ -83,19 +83,9 @@ public final class BlueprintPlacement {
 		Vec3i extent = size.get();
 		BoundingBox area = BoundingBox.fromCorners(RegionPlan.placed(BlockPos.ZERO, extent, at, mirror, rotation),
 			RegionPlan.placed(new BlockPos(extent.getX() - 1, extent.getY() - 1, extent.getZ() - 1), extent, at, mirror, rotation));
-		if (!Territory.of(colony).contains(new BlockPos(area.minX(), area.minY(), area.minZ()), new BlockPos(area.maxX(), area.maxY(), area.maxZ()))) {
-			return Either.left(Refusal.OUTSIDE);
-		}
-		BlockPos core = colony.core();
-		if (Sites.sharesColumns(area, new BoundingBox(core))) {
-			return Either.left(Refusal.OVERLAPS_CORE);
-		}
-		if (colony.mineshaft().filter(shaft -> Sites.sharesColumns(area, shaft.area())).isPresent()) {
-			return Either.left(Refusal.OVERLAPS_MINESHAFT);
-		}
-		if (colony.occupied().stream().anyMatch(other -> Sites.sharesColumns(area, other))
-				|| colony.placedBlocks().stream().anyMatch(pos -> Sites.sharesColumns(area, new BoundingBox(pos)))) {
-			return Either.left(Refusal.OVERLAPS_BUILD);
+		Optional<Refusal> refusal = SiteRules.of(colony).check(area);
+		if (refusal.isPresent()) {
+			return Either.left(refusal.get());
 		}
 		Blueprint print = blueprint.get();
 		return Either.right(new PlacedBlueprint(new UUID(0, 0), id, print.name(), at, rotation, mirror, area, print.role(),
