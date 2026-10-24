@@ -630,6 +630,58 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		succeedWhenItGeneratesCobblestone(helper, colony, generator, () -> helper.assertBlockNotPresent(Blocks.LAVA, pool));
 	}
 
+	/** The water of a built cobblestone generator is taken out: the builder pours it back from the water bucket in the core. */
+	@GameTest(maxTicks = 200)
+	public void aBuiltGeneratorsWaterIsPouredBackOnceGone(GameTestHelper helper) {
+		PlacedBlueprint generator = builtGenerator(helper, new ItemStack(Items.WATER_BUCKET));
+		BlockPos water = generator.water().getFirst();
+		helper.getLevel().setBlockAndUpdate(water, Blocks.AIR.defaultBlockState());
+		succeedWhenItsFluidsAreBack(helper, generator, () -> { });
+	}
+
+	/**
+	 * The lava of a built cobblestone generator is taken out. Walled in but for the mining block, it cannot be poured
+	 * back as it is: the builder scoops up the water with the empty bucket in the core, mines the mining block, pours the
+	 * water back and fills the bucket at a lava pool nearby for the lava, and cobblestone forms in the mining block again.
+	 */
+	@GameTest(maxTicks = 1400)
+	public void aBuiltGeneratorsLavaIsPouredBackOnceGoneWithLavaFetchedFromAPool(GameTestHelper helper) {
+		PlacedBlueprint generator = builtGenerator(helper, new ItemStack(Items.BUCKET));
+		BlockPos lava = generator.lava().getFirst();
+		helper.getLevel().setBlockAndUpdate(lava, Blocks.AIR.defaultBlockState());
+		// A lava source sunk into the floor, with stone under it, so it does not spread.
+		BlockPos pool = new BlockPos(6, 0, 1);
+		helper.setBlock(pool.below(), Blocks.STONE);
+		helper.setBlock(pool, Blocks.LAVA);
+		succeedWhenItsFluidsAreBack(helper, generator, () -> helper.assertBlockNotPresent(Blocks.LAVA, pool));
+	}
+
+	/** A cobblestone generator built at once (see {@link #placeGenerator}) for a colony whose core holds {@code item}. */
+	private static PlacedBlueprint builtGenerator(GameTestHelper helper, ItemStack item) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, item);
+		placeGenerator(helper, colony, Rotation.NONE, Mirror.NONE);
+		GameTests.buildNow(helper, colony);
+		PlacedBlueprint generator = generator(colony);
+		helper.assertValueEqual(generator.water().size(), 1, "generator water");
+		helper.assertValueEqual(generator.lava().size(), 1, "generator lava");
+		return generator;
+	}
+
+	/** Succeeds once the water and lava sources of {@code generator} are back, with cobblestone in its mining block, and {@code more} holds. */
+	private static void succeedWhenItsFluidsAreBack(GameTestHelper helper, PlacedBlueprint generator, Runnable more) {
+		helper.succeedWhen(() -> {
+			BlockState water = helper.getLevel().getBlockState(generator.water().getFirst());
+			BlockState lava = helper.getLevel().getBlockState(generator.lava().getFirst());
+			helper.assertTrue(water.is(Blocks.WATER) && water.getFluidState().isSource(), "no water poured back");
+			helper.assertTrue(lava.is(Blocks.LAVA) && lava.getFluidState().isSource(), "no lava poured back");
+			helper.assertTrue(helper.getLevel().getBlockState(generator.workSpots().getFirst()).is(Blocks.COBBLESTONE), "no cobblestone in the mining block");
+			more.run();
+		});
+	}
+
 	/**
 	 * A builder needs water for a step and has an empty bucket. The water of the built farm and the water and lava of the
 	 * built cobblestone generator are nearer than the pool in the corner, but it fills its bucket at the pool and leaves

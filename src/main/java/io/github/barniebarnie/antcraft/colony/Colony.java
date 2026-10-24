@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -303,6 +304,8 @@ public class Colony {
 	private final OreRevisit oreRevisit = new OreRevisit();
 	/** Game time of the last tree survey, or -1 if the colony has not surveyed yet. */
 	long lastSurvey = -1;
+	/** Whether {@link #lookUpFluids} ran since the colony was loaded. */
+	private boolean fluidsLookedUp;
 	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
 	private long lastGivenUpRecheck = -1;
 
@@ -573,9 +576,7 @@ public class Colony {
 	 */
 	public PlacedBlueprint placeBlueprint(PlacedBlueprint placed, Optional<BuildPlan> levelling, BuildPlan structure) {
 		Project project = this.addBuild(placed.blueprint().toString(), levelling.orElse(structure));
-		List<BlockPos> water = structure.steps().stream().filter(step -> step.state().is(Blocks.WATER) && step.state().getFluidState().isSource())
-			.map(BuildPlan.Step::pos).toList();
-		PlacedBlueprint added = placed.withWater(water).withProject(project.id(), levelling.map(plan -> structure));
+		PlacedBlueprint added = placed.withFluidsOf(structure).withProject(project.id(), levelling.map(plan -> structure));
 		this.blueprints.add(added);
 		return added;
 	}
@@ -620,6 +621,77 @@ public class Colony {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Fills in where each placed blueprint saved without them pours water and lava, from {@code structure}, the plan of
+	 * its structure, if the server has it: farms saved before they kept their water, and generators before they kept
+	 * their lava. Once per load; a blueprint with no fluids is looked up each load, which costs only the structure.
+	 */
+	public void lookUpFluids(Function<PlacedBlueprint, Optional<BuildPlan>> structure) {
+		if (this.fluidsLookedUp) {
+			return;
+		}
+		this.fluidsLookedUp = true;
+		this.blueprints.replaceAll(placed -> placed.lava().isEmpty()
+				&& (placed.water().isEmpty() || placed.role().equals(Optional.of(Blueprint.Role.GENERATOR)))
+			? structure.apply(placed).map(placed::withFluidsOf).orElse(placed) : placed);
+	}
+
+	/**
+	 * Adds a plan to pour back the water and lava of each built blueprint that {@code world} shows gone, such as a farm's
+	 * water or a generator's lava, unless a plan is at them already. {@code world} gives null where it cannot tell, such
+	 * as in unloaded chunks; such fluids are taken as still there. See {@link #fluidSteps} for the steps.
+	 */
+	public void restoreFluids(Function<BlockPos, @Nullable BlockState> world) {
+		Set<BlockPos> planned = this.builds.values().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos)
+			.collect(Collectors.toSet());
+		for (PlacedBlueprint placed : List.copyOf(this.blueprints)) {
+			List<BlockPos> spots = Stream.of(placed.water(), placed.lava(), placed.workSpots().stream().limit(1).toList()).flatMap(List::stream).toList();
+			if (!placed.finished() || spots.stream().anyMatch(planned::contains)) {
+				continue;
+			}
+			List<BuildPlan.Step> steps = fluidSteps(placed, world);
+			if (!steps.isEmpty()) {
+				this.addBuild(placed.blueprint().toString(), new BuildPlan(steps));
+				planned.addAll(spots);
+			}
+		}
+	}
+
+	/**
+	 * The steps that pour back what of the water and lava of {@code placed} is gone in {@code world}: water first, so
+	 * lava poured into a generator meets it. A generator's lava is walled in but for its mining block, so with that
+	 * block standing a builder could not pour it, as a player could not; the generator is opened in stages, a plan for
+	 * each: its water is scooped up first, so none flows beside the mining block, then once no fluid is left beside it
+	 * the mining block is mined, and then both are poured back.
+	 */
+	private static List<BuildPlan.Step> fluidSteps(PlacedBlueprint placed, Function<BlockPos, @Nullable BlockState> world) {
+		List<BlockPos> water = placed.water().stream().filter(pos -> isGone(world.apply(pos), Blocks.WATER)).toList();
+		List<BlockPos> lava = placed.lava().stream().filter(pos -> isGone(world.apply(pos), Blocks.LAVA)).toList();
+		if (!lava.isEmpty() && placed.role().equals(Optional.of(Blueprint.Role.GENERATOR)) && !placed.workSpots().isEmpty()) {
+			BlockPos mine = placed.workSpots().getFirst();
+			BlockState block = world.apply(mine);
+			if (block == null) {
+				return List.of();
+			}
+			if (!block.canBeReplaced()) {
+				List<BlockPos> standing = placed.water().stream().filter(pos -> !water.contains(pos)).toList();
+				if (!standing.isEmpty()) {
+					return standing.stream().map(BuildPlan.Step::clear).toList();
+				}
+				boolean wet = Stream.of(Direction.UP, Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST).map(mine::relative)
+					.map(world).anyMatch(state -> state == null || !state.getFluidState().isEmpty());
+				return wet ? List.of() : List.of(BuildPlan.Step.clear(mine));
+			}
+		}
+		return Stream.concat(water.stream().map(pos -> new BuildPlan.Step(pos, Blocks.WATER.defaultBlockState())),
+			lava.stream().map(pos -> new BuildPlan.Step(pos, Blocks.LAVA.defaultBlockState()))).toList();
+	}
+
+	/** Whether {@code state}, if known, is not a source of {@code fluid}. */
+	private static boolean isGone(@Nullable BlockState state, Block fluid) {
+		return state != null && !(state.is(fluid) && state.getFluidState().isSource());
 	}
 
 	/**

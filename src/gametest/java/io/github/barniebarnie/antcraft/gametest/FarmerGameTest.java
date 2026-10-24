@@ -988,4 +988,33 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockNotPresent(Blocks.WATER, source);
 		});
 	}
+
+	/**
+	 * A built farm is tilled and planted on every plot, with no crop ripe, when its water is taken out: it is poured back
+	 * from the water bucket in the core without waiting for a harvest.
+	 */
+	@GameTest(maxTicks = 100)
+	public void aFullyPlantedFarmsWaterIsPouredBackWithoutWaitingForAHarvest(GameTestHelper helper) {
+		raisedGround(helper);
+		Colony colony = colony(helper);
+		Container core = core(helper);
+		core.setItem(0, new ItemStack(Items.WATER_BUCKET));
+		PlacedBlueprint farm = builtFarm(helper, colony, new BlockPos(3, 2, 3));
+		for (BlockPos plot : farm.workSpots()) {
+			helper.getLevel().setBlockAndUpdate(plot, Blocks.FARMLAND.defaultBlockState());
+			helper.getLevel().setBlockAndUpdate(plot.above(), Blocks.WHEAT.defaultBlockState());
+		}
+		BlockPos water = farm.water().getFirst();
+		helper.getLevel().setBlockAndUpdate(water, Blocks.AIR.defaultBlockState());
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 2, 5);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		GameTests.failOnGiveUp(helper, colony);
+		failIfAPlotBreaks(helper, farm);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getBlockState(water).is(Blocks.WATER), "no water poured back in the farm");
+			helper.assertTrue(farm.workSpots().stream().allMatch(plot -> helper.getLevel().getBlockState(plot.above()).is(Blocks.WHEAT)),
+				"a crop was harvested or trampled");
+		});
+	}
 }

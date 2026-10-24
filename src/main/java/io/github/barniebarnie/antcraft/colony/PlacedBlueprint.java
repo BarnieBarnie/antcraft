@@ -11,6 +11,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -28,12 +30,13 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * @param role what the colony uses it for, if anything
  * @param chests where its chests stand, turned with the structure
  * @param workSpots its work spots, turned with the structure
- * @param water where the structure pours water sources, such as a farm's, which the farmer pours back once gone
+ * @param water where the structure pours water sources, such as a farm's or a generator's, which builders pour back once gone
+ * @param lava where the structure pours lava sources, such as a generator's, which builders pour back once gone
  * @param waiting the structure's plan while the colony levels the site first; it is added to the project once the levelling is done
  * @param finished whether the structure is built
  */
 public record PlacedBlueprint(UUID project, Identifier blueprint, String name, BlockPos at, Rotation rotation, Mirror mirror, BoundingBox area,
-		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, Optional<BuildPlan> waiting, boolean finished) {
+		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, List<BlockPos> lava, Optional<BuildPlan> waiting, boolean finished) {
 	public static final Codec<PlacedBlueprint> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.STRING_CODEC.fieldOf("project").forGetter(PlacedBlueprint::project),
 		Identifier.CODEC.fieldOf("blueprint").forGetter(PlacedBlueprint::blueprint),
@@ -46,6 +49,7 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 		BlockPos.CODEC.listOf().optionalFieldOf("chests", List.of()).forGetter(PlacedBlueprint::chests),
 		BlockPos.CODEC.listOf().optionalFieldOf("work_spots", List.of()).forGetter(PlacedBlueprint::workSpots),
 		BlockPos.CODEC.listOf().optionalFieldOf("water", List.of()).forGetter(PlacedBlueprint::water),
+		BlockPos.CODEC.listOf().optionalFieldOf("lava", List.of()).forGetter(PlacedBlueprint::lava),
 		BuildPlan.CODEC.optionalFieldOf("waiting").forGetter(PlacedBlueprint::waiting),
 		Codec.BOOL.optionalFieldOf("finished", false).forGetter(PlacedBlueprint::finished)
 	).apply(i, PlacedBlueprint::new));
@@ -54,6 +58,7 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 		chests = List.copyOf(chests);
 		workSpots = List.copyOf(workSpots);
 		water = List.copyOf(water);
+		lava = List.copyOf(lava);
 	}
 
 	/** The blueprint's name, translated. */
@@ -63,17 +68,27 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 
 	PlacedBlueprint withProject(UUID project, Optional<BuildPlan> waiting) {
 		return new PlacedBlueprint(project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, waiting, this.finished);
+			this.workSpots, this.water, this.lava, waiting, this.finished);
 	}
 
-	/** This with {@code water} where its structure pours water. */
-	PlacedBlueprint withWater(List<BlockPos> water) {
+	/** This with {@code water} and {@code lava} where its structure pours those sources. */
+	PlacedBlueprint withFluids(List<BlockPos> water, List<BlockPos> lava) {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, water, this.waiting, this.finished);
+			this.workSpots, water, lava, this.waiting, this.finished);
+	}
+
+	/** This with where {@code structure}, its structure's plan, pours water and lava sources. */
+	PlacedBlueprint withFluidsOf(BuildPlan structure) {
+		return this.withFluids(sources(structure, Blocks.WATER), sources(structure, Blocks.LAVA));
+	}
+
+	private static List<BlockPos> sources(BuildPlan structure, Block fluid) {
+		return structure.steps().stream().filter(step -> step.state().is(fluid) && step.state().getFluidState().isSource())
+			.map(BuildPlan.Step::pos).toList();
 	}
 
 	PlacedBlueprint built() {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, this.water, Optional.empty(), true);
+			this.workSpots, this.water, this.lava, Optional.empty(), true);
 	}
 }

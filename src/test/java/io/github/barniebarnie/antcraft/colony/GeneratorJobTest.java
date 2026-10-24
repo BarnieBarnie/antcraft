@@ -3,8 +3,11 @@ package io.github.barniebarnie.antcraft.colony;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.io.IOException;
@@ -15,12 +18,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
@@ -172,5 +179,102 @@ class GeneratorJobTest {
 		colony.addOrder(Items.COBBLESTONE, 16);
 		colony.prioritizeGatherJobs(Map.of(), item -> List.of(), item -> true);
 		assertEquals(Colony.ORDER_PRIORITY, generatorJobs(colony).getFirst().priority());
+	}
+
+	private static BuildPlan plan(BlockPos at, Rotation rotation) {
+		return RegionPlan.load(structure, at, Mirror.NONE, rotation, 0).orElseThrow();
+	}
+
+	private static List<BlockPos> built(BlockPos at, Rotation rotation, Block fluid) {
+		return plan(at, rotation).steps().stream().filter(step -> step.state().is(fluid) && step.state().getFluidState().isSource())
+			.map(BuildPlan.Step::pos).toList();
+	}
+
+	@Test
+	void aPlacedGeneratorKeepsWhereItsWaterAndLavaGo() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.CLOCKWISE_90);
+		assertEquals(built(AT, Rotation.CLOCKWISE_90, Blocks.WATER), placed.water());
+		assertEquals(built(AT, Rotation.CLOCKWISE_90, Blocks.LAVA), placed.lava());
+		assertEquals(1, placed.lava().size(), "one lava source");
+	}
+
+	@Test
+	void aGeneratorSavedWithoutItsFluidsGetsThemFromItsStructureOnLoad() {
+		Colony colony = colony();
+		place(colony, AT, Rotation.CLOCKWISE_180);
+		finishAll(colony);
+		JsonElement saved = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
+		saved.getAsJsonObject().getAsJsonArray("blueprints").forEach(placed -> {
+			placed.getAsJsonObject().remove("water");
+			placed.getAsJsonObject().remove("lava");
+		});
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, saved).getOrThrow();
+		loaded.lookUpFluids(placed -> Optional.of(plan(placed.at(), placed.rotation())));
+		PlacedBlueprint generator = loaded.blueprints().getFirst();
+		assertEquals(built(AT, Rotation.CLOCKWISE_180, Blocks.WATER), generator.water());
+		assertEquals(built(AT, Rotation.CLOCKWISE_180, Blocks.LAVA), generator.lava());
+	}
+
+	@Test
+	void aBuiltGeneratorsWaterThatIsGoneIsPouredBackOnce() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.NONE);
+		BlockPos water = placed.water().getFirst();
+		BlockPos lava = placed.lava().getFirst();
+		colony.restoreFluids(pos -> Blocks.AIR.defaultBlockState());
+		assertEquals(1, colony.builds().size(), "only the structure while the generator is being built");
+		finishAll(colony);
+
+		colony.restoreFluids(world(Map.of(water, Blocks.WATER.defaultBlockState(), lava, Blocks.LAVA.defaultBlockState())));
+		assertEquals(List.of(), colony.builds(), "both stand");
+
+		Function<BlockPos, BlockState> gone = world(Map.of(water, Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 2),
+			lava, Blocks.LAVA.defaultBlockState()));
+		colony.restoreFluids(gone);
+		colony.restoreFluids(gone);
+		assertEquals(1, colony.builds().size(), "one plan: " + colony.builds());
+		assertEquals(List.of(new BuildPlan.Step(water, Blocks.WATER.defaultBlockState())), colony.builds().getFirst().steps());
+	}
+
+	/**
+	 * A generator's lava is walled in but for the mining block: its water is scooped up, then the mining block mined once
+	 * nothing flows beside it, then both are poured back, water first.
+	 */
+	@Test
+	void aBuiltGeneratorsLavaThatIsGoneIsPouredBackThroughItsMiningBlock() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Rotation.CLOCKWISE_90);
+		finishAll(colony);
+		BlockPos water = placed.water().getFirst();
+		BlockPos lava = placed.lava().getFirst();
+		BlockPos mine = placed.workSpots().getFirst();
+		BlockPos channel = mine.offset(mine.subtract(lava));
+		BlockState flowing = Blocks.WATER.defaultBlockState().setValue(LiquidBlock.LEVEL, 1);
+
+		assertEquals(List.of(BuildPlan.Step.clear(water)),
+			restored(colony, Map.of(water, Blocks.WATER.defaultBlockState(), channel, flowing, mine, Blocks.COBBLESTONE.defaultBlockState())),
+			"the water scooped up first");
+		assertEquals(List.of(), restored(colony, Map.of(channel, flowing, mine, Blocks.COBBLESTONE.defaultBlockState())),
+			"mined while water flows beside it");
+		assertEquals(List.of(BuildPlan.Step.clear(mine)), restored(colony, Map.of(mine, Blocks.COBBLESTONE.defaultBlockState())),
+			"the mining block mined once dry");
+		assertEquals(List.of(new BuildPlan.Step(water, Blocks.WATER.defaultBlockState()), new BuildPlan.Step(lava, Blocks.LAVA.defaultBlockState())),
+			restored(colony, Map.of()), "both poured back, water first");
+		assertEquals(List.of(new BuildPlan.Step(lava, Blocks.LAVA.defaultBlockState())),
+			restored(colony, Map.of(water, Blocks.WATER.defaultBlockState(), channel, flowing)), "lava poured through the mined block");
+	}
+
+	/** The world of {@code blocks}, air elsewhere. */
+	private static Function<BlockPos, BlockState> world(Map<BlockPos, BlockState> blocks) {
+		return pos -> blocks.getOrDefault(pos, Blocks.AIR.defaultBlockState());
+	}
+
+	/** The steps of the plan {@link Colony#restoreFluids} adds for {@code blocks}, which is then finished again. */
+	private static List<BuildPlan.Step> restored(Colony colony, Map<BlockPos, BlockState> blocks) {
+		colony.restoreFluids(world(blocks));
+		List<BuildPlan.Step> steps = colony.builds().stream().flatMap(plan -> plan.steps().stream()).toList();
+		finishAll(colony);
+		return steps;
 	}
 }

@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
 import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
@@ -458,6 +459,12 @@ public class ColonyManager extends SavedData {
 		}
 	}
 
+	/** The plan of the structure of {@code placed}, if the server has its blueprint and structure. */
+	private static Optional<BuildPlan> structure(ServerLevel level, PlacedBlueprint placed) {
+		return Blueprints.get(placed.blueprint()).flatMap(print -> level.getServer().getStructureTemplateManager().get(print.structure())
+			.flatMap(template -> BlueprintPlacement.structure(template, print, placed.at(), placed.rotation(), placed.mirror()).right()));
+	}
+
 	public void tick(ServerLevel level) {
 		long now = level.getGameTime();
 		for (Colony colony : this.colonies.values()) {
@@ -472,6 +479,9 @@ public class ColonyManager extends SavedData {
 			colony.recheckBlocked(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null, BuilderGoal.workable(level, colony));
 			// A block of a finished batch broken since, such as a torch off the mineshaft stairs, is built again.
 			colony.recheckDone(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
+			// A built farm's water or generator's water and lava gone since is poured back.
+			colony.lookUpFluids(placed -> structure(level, placed));
+			colony.restoreFluids(pos -> level.isLoaded(pos) ? level.getBlockState(pos) : null);
 			LevelTreeView trees = new LevelTreeView(level);
 			// A log job goes once its log does; a tree job stays to pick up the drops and replant the tree.
 			colony.board().removeOpenIf(job -> job.type() == JobType.CHOP_LOG && job.blocks().stream().noneMatch(trees::isLog));

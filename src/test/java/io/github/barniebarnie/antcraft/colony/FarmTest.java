@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
@@ -186,6 +187,38 @@ class FarmTest {
 		assertEquals(expected, colony.fieldWater());
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
 		assertEquals(expected, loaded.fieldWater(), "once loaded");
+	}
+
+	@Test
+	void aFarmSavedWithoutWaterGetsItsWaterSpotsFromItsStructureOnLoad() {
+		Colony colony = colony();
+		place(colony, AT, Mirror.FRONT_BACK, Rotation.CLOCKWISE_90);
+		finishAll(colony);
+		JsonElement saved = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow();
+		// As saved before placed blueprints kept their water.
+		saved.getAsJsonObject().getAsJsonArray("blueprints").forEach(placed -> placed.getAsJsonObject().remove("water"));
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, saved).getOrThrow();
+		assertEquals(List.of(), loaded.fieldWater(), "the old save has water");
+
+		loaded.lookUpFluids(placed -> Optional.of(plan(placed.at(), placed.mirror(), placed.rotation())));
+		List<BlockPos> water = built(AT, Mirror.FRONT_BACK, Rotation.CLOCKWISE_90, Blocks.WATER);
+		assertEquals(water, loaded.fieldWater());
+		assertTrue(loaded.isProtected(pos -> Blocks.AIR.defaultBlockState(), water.getFirst()), "water gone");
+	}
+
+	@Test
+	void aBuiltFarmsWaterThatIsGoneGetsAPlanToPourItBackOnce() {
+		Colony colony = colony();
+		place(colony, AT, Mirror.NONE, Rotation.NONE);
+		finishAll(colony);
+		BlockPos water = built(AT, Mirror.NONE, Rotation.NONE, Blocks.WATER).getFirst();
+		colony.restoreFluids(pos -> pos.equals(water) ? Blocks.WATER.defaultBlockState() : Blocks.DIRT.defaultBlockState());
+		assertEquals(List.of(), colony.builds(), "the water stands");
+
+		colony.restoreFluids(pos -> pos.equals(water) ? Blocks.AIR.defaultBlockState() : Blocks.DIRT.defaultBlockState());
+		colony.restoreFluids(pos -> pos.equals(water) ? Blocks.AIR.defaultBlockState() : Blocks.DIRT.defaultBlockState());
+		assertEquals(1, colony.builds().size(), "one plan: " + colony.builds());
+		assertEquals(List.of(new BuildPlan.Step(water, Blocks.WATER.defaultBlockState())), colony.builds().getFirst().steps());
 	}
 
 	private static PlacedBlueprint placed(Colony colony) {
