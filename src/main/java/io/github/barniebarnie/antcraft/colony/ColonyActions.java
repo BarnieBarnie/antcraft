@@ -45,6 +45,8 @@ public final class ColonyActions {
 		MINESHAFT,
 		/** Add a build copied from a region ({@code colony build copy}). */
 		BUILD_COPY,
+		/** Place a blueprint for the colony to build ({@code colony build place}, or the client's request; see {@link BlueprintPlacement}). */
+		BUILD_PLACE,
 		/** Drop a build ({@code colony build cancel}). */
 		BUILD_CANCEL,
 		/** Add a terraform plan ({@code colony terraform}). */
@@ -62,7 +64,7 @@ public final class ColonyActions {
 		 */
 		boolean commandsBots() {
 			return switch (this) {
-				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS, MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL,
+				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS, MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL,
 					PROJECT_PRIORITY -> false;
 			};
 		}
@@ -71,7 +73,7 @@ public final class ColonyActions {
 		public boolean fromScreen() {
 			return switch (this) {
 				case ORDER, CANCEL, SET_STOCK, REMOVE_STOCK, RADIUS -> true;
-				case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
+				case MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
 			};
 		}
 	}
@@ -167,7 +169,7 @@ public final class ColonyActions {
 				colony.setRadius(count);
 				yield true;
 			}
-			case MINESHAFT, BUILD_COPY, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
+			case MINESHAFT, BUILD_COPY, BUILD_PLACE, BUILD_CANCEL, TERRAFORM, CLEAR_BLOCKED, PROJECT_CANCEL, PROJECT_PRIORITY -> false;
 		};
 	}
 

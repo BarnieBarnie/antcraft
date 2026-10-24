@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.colony.Project;
@@ -43,6 +44,7 @@ class LangKeysTest {
 		FAMILIES = Map.of(
 			JobType.KEY_PREFIX, Stream.of(JobType.values()).map(JobType::getSerializedName).toList(),
 			Project.KEY_PREFIX, Project.STARTER,
+			BlueprintPlacement.Refusal.KEY_PREFIX, Stream.of(BlueprintPlacement.Refusal.values()).map(BlueprintPlacement.Refusal::id).toList(),
 			"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
 	}
 

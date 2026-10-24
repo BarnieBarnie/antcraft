@@ -7,11 +7,14 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
 import com.mojang.datafixers.util.Either;
+import io.github.barniebarnie.antcraft.blueprint.Blueprints;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
 import io.github.barniebarnie.antcraft.colony.JobType;
+import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.colony.Project;
 import io.github.barniebarnie.antcraft.colony.StockPlanner;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
@@ -52,6 +55,7 @@ import net.minecraft.network.chat.ComponentUtils;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
@@ -70,6 +74,7 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
  * /antcraft colony build list|copy &lt;from&gt; &lt;to&gt; &lt;at&gt;|load &lt;structure&gt; &lt;at&gt; [rotation] [mirror] [palette]|cancel &lt;n&gt;
+ * /antcraft colony build place &lt;blueprint&gt; &lt;at&gt; [rotation] [mirror]
  * /antcraft colony project list|cancel &lt;n&gt;|priority &lt;n&gt; &lt;priority&gt;
  * /antcraft colony terraform &lt;from&gt; &lt;to&gt; &lt;y&gt;
  * /antcraft colony trust|untrust &lt;player&gt;
@@ -159,6 +164,19 @@ public final class AntCraftCommands {
 											.executes(ctx -> loadBuild(ctx.getSource(), IdentifierArgument.getId(ctx, "structure"),
 												BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
 												TemplateMirrorArgument.getMirror(ctx, "mirror"), IntegerArgumentType.getInteger(ctx, "palette")))))))))
+					.then(Commands.literal("place")
+						.then(Commands.argument("blueprint", IdentifierArgument.id())
+							.suggests((ctx, builder) -> SharedSuggestionProvider.suggestResource(Blueprints.ids(), builder))
+							.then(Commands.argument("at", BlockPosArgument.blockPos())
+								.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
+									BlockPosArgument.getBlockPos(ctx, "at"), Rotation.NONE, Mirror.NONE))
+								.then(Commands.argument("rotation", TemplateRotationArgument.templateRotation())
+									.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
+										BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"), Mirror.NONE))
+									.then(Commands.argument("mirror", TemplateMirrorArgument.templateMirror())
+										.executes(ctx -> placeBlueprint(ctx.getSource(), IdentifierArgument.getId(ctx, "blueprint"),
+											BlockPosArgument.getBlockPos(ctx, "at"), TemplateRotationArgument.getRotation(ctx, "rotation"),
+											TemplateMirrorArgument.getMirror(ctx, "mirror"))))))))
 					.then(Commands.literal("cancel")
 						.then(Commands.argument("n", IntegerArgumentType.integer(1))
 							.executes(ctx -> cancelBuild(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "n"))))))
@@ -386,9 +404,16 @@ public final class AntCraftCommands {
 		for (int i = 0; i < builds.size(); i++) {
 			BuildPlan plan = builds.get(i);
 			long left = plan.steps().stream().filter(step -> !step.isDone(source.getLevel().getBlockState(step.pos()))).count();
+			int n = i + 1;
+			Optional<PlacedBlueprint> placed = colony.blueprintOf(plan);
+			if (placed.isPresent()) {
+				String key = plan.kind() == BuildPlan.Kind.TERRAFORM ? "commands.antcraft.colony.build.line_blueprint_terraform"
+					: "commands.antcraft.colony.build.line_blueprint";
+				source.sendSuccess(() -> Component.translatable(key, n, placed.get().displayName(), plan.target().toShortString(), left, plan.steps().size()), false);
+				continue;
+			}
 			String key = isMineshaft(colony, plan) ? "commands.antcraft.colony.build.line_mineshaft"
 				: plan.kind() == BuildPlan.Kind.TERRAFORM ? "commands.antcraft.colony.build.line_terraform" : "commands.antcraft.colony.build.line";
-			int n = i + 1;
 			source.sendSuccess(() -> Component.translatable(key, n, plan.target().toShortString(), left, plan.steps().size()), false);
 		}
 		return builds.size();
@@ -454,6 +479,33 @@ public final class AntCraftCommands {
 		}
 		colony.get().addBuild(id.toString(), plan.get());
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.loaded", id.toString(), at.toShortString(), colony.get().builds().size()), false);
+		return 1;
+	}
+
+	/**
+	 * Places a blueprint for the nearest colony to build, through {@link BlueprintPlacement#place} like the client's
+	 * request: refused with the reason unless the player running it may act on the colony and the site is free.
+	 */
+	private static int placeBlueprint(CommandSourceStack source, Identifier id, BlockPos at, Rotation rotation, Mirror mirror) {
+		if (!checkMayEdit(source, ColonyActions.Edit.BUILD_PLACE)) {
+			return 0;
+		}
+		Optional<Colony> found = nearestColony(source);
+		if (found.isEmpty()) {
+			return 0;
+		}
+		Colony colony = found.get();
+		ServerPlayer player = source.getPlayer();
+		// The console and command blocks run as operators.
+		boolean mayAct = player == null || ColonyActions.mayAct(colony, player);
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(source.getLevel(), colony, mayAct, id, at, rotation, mirror);
+		if (placed.left().isPresent()) {
+			source.sendFailure(placed.left().get().message());
+			return 0;
+		}
+		PlacedBlueprint build = placed.right().orElseThrow();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.build.placed", build.displayName(), at.toShortString(),
+			colony.builds().size()), false);
 		return 1;
 	}
 
@@ -547,7 +599,7 @@ public final class AntCraftCommands {
 			List<BuildPlan> plans = colony.plans(project);
 			long left = plans.stream().flatMap(plan -> plan.steps().stream()).filter(step -> !step.isDone(source.getLevel().getBlockState(step.pos()))).count();
 			int n = i + 1;
-			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.line", n, project.displayName(), project.priority(),
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.project.line", n, colony.displayName(project), project.priority(),
 				plans.size(), left, names(colony.waitingFor(project.id()))), false);
 		}
 		return projects.size();

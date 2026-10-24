@@ -5,6 +5,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
 
@@ -51,6 +52,11 @@ public record Project(UUID id, String name, int priority, List<UUID> plans, List
 
 	Project withPriority(int priority) {
 		return new Project(this.id, this.name, priority, this.plans, this.stock, this.starter);
+	}
+
+	Project with(UUID plan) {
+		return new Project(this.id, this.name, this.priority, Stream.concat(this.plans.stream(), Stream.of(plan)).toList(),
+			this.stock, this.starter);
 	}
 
 	Project without(UUID plan) {

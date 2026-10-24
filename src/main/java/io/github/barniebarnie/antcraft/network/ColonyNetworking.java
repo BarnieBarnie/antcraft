@@ -1,23 +1,31 @@
 package io.github.barniebarnie.antcraft.network;
 
 import io.github.barniebarnie.antcraft.AntCraft;
+import com.mojang.datafixers.util.Either;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.ColonyStatus;
+import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import java.util.Optional;
 import java.util.UUID;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 
 /**
  * Payloads between the colony status screen and the server. Each payload is a record here,
@@ -67,6 +75,23 @@ public final class ColonyNetworking {
 		}
 	}
 
+	/** Client asks to place blueprint {@code blueprint} for the colony with its core at {@code core}; see {@link BlueprintPlacement#place}. */
+	public record PlaceBlueprint(BlockPos core, Identifier blueprint, BlockPos at, Rotation rotation, Mirror mirror) implements CustomPacketPayload {
+		public static final Type<PlaceBlueprint> TYPE = new Type<>(AntCraft.id("place_blueprint"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, PlaceBlueprint> STREAM_CODEC = StreamCodec.composite(
+			BlockPos.STREAM_CODEC, PlaceBlueprint::core,
+			Identifier.STREAM_CODEC, PlaceBlueprint::blueprint,
+			BlockPos.STREAM_CODEC, PlaceBlueprint::at,
+			ByteBufCodecs.idMapper(i -> Rotation.values()[i], Rotation::ordinal), PlaceBlueprint::rotation,
+			ByteBufCodecs.idMapper(i -> Mirror.values()[i], Mirror::ordinal), PlaceBlueprint::mirror,
+			PlaceBlueprint::new);
+
+		@Override
+		public Type<PlaceBlueprint> type() {
+			return TYPE;
+		}
+	}
+
 	/**
 	 * Who sent a request and what they may do: the player and their position, whether they are an operator, whether only
 	 * operators may act on colonies, and whether bots are allowed on the server. Built once per received payload.
@@ -91,6 +116,7 @@ public final class ColonyNetworking {
 	public static void register() {
 		PayloadTypeRegistry.serverboundPlay().register(StatusRequest.TYPE, StatusRequest.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(EditRequest.TYPE, EditRequest.STREAM_CODEC);
+		PayloadTypeRegistry.serverboundPlay().register(PlaceBlueprint.TYPE, PlaceBlueprint.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(StatusReply.TYPE, StatusReply.STREAM_CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
 			ServerPlayer player = context.player();
@@ -100,6 +126,15 @@ public final class ColonyNetworking {
 			ServerPlayer player = context.player();
 			Requester requester = Requester.of(player);
 			handle(player.level(), requester, request);
+			context.responseSender().sendPacket(reply(player.level(), requester));
+		});
+		ServerPlayNetworking.registerGlobalReceiver(PlaceBlueprint.TYPE, (request, context) -> {
+			ServerPlayer player = context.player();
+			Requester requester = Requester.of(player);
+			player.sendSystemMessage(handle(player.level(), requester, request).map(
+				refusal -> refusal.message().copy().withStyle(ChatFormatting.RED),
+				placed -> Component.translatable("commands.antcraft.colony.build.placed", placed.displayName(), placed.at().toShortString(),
+					ColonyManager.get(player.level()).byCore(request.core()).map(colony -> colony.builds().size()).orElse(0))));
 			context.responseSender().sendPacket(reply(player.level(), requester));
 		});
 	}
@@ -124,6 +159,21 @@ public final class ColonyNetworking {
 		return colony(level, requester, request.core())
 			.map(colony -> ColonyActions.edit(colony, request.kind(), request.target(), request.count()))
 			.orElse(false);
+	}
+
+	/**
+	 * Places a blueprint for {@code requester}, the same way {@code /antcraft colony build place} does
+	 * ({@link BlueprintPlacement#place}): refused with the reason unless there is a colony at the request's core, the
+	 * requester may act on it, and the site is free. A colony with no owner yet becomes the requester's if they may act on it.
+	 */
+	public static Either<BlueprintPlacement.Refusal, PlacedBlueprint> handle(ServerLevel level, Requester requester, PlaceBlueprint request) {
+		Optional<Colony> colony = ColonyManager.get(level).byCore(request.core());
+		if (colony.isEmpty()) {
+			return Either.left(BlueprintPlacement.Refusal.NO_COLONY);
+		}
+		requester.claim(colony.get());
+		boolean mayAct = ColonyActions.mayEdit(ColonyActions.Edit.BUILD_PLACE, requester.botsAllowed()) && requester.mayAct(colony.get());
+		return BlueprintPlacement.place(level, colony.get(), mayAct, request.blueprint(), request.at(), request.rotation(), request.mirror());
 	}
 
 	/**

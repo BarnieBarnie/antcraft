@@ -33,8 +33,10 @@ import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.StringRepresentable;
+import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
@@ -199,12 +201,20 @@ public class Colony {
 		).apply(i, Access::new));
 	}
 
+	/** The blueprints players placed for the colony to build, and those it built (see {@link PlacedBlueprint}). */
+	private record Placements(List<PlacedBlueprint> blueprints) {
+		static final MapCodec<Placements> CODEC = RecordCodecBuilder.mapCodec(i -> i.group(
+			PlacedBlueprint.CODEC.listOf().optionalFieldOf("blueprints", List.of()).forGetter(Placements::blueprints)
+		).apply(i, Placements::new));
+	}
+
 	public static final Codec<Colony> CODEC = RecordCodecBuilder.create(i -> i.group(
 		Basics.CODEC.forGetter(c -> new Basics(c.id, c.core, List.copyOf(c.members), c.board, c.radius)),
 		Wants.CODEC.forGetter(c -> new Wants(c.orders, c.stock, Map.of(), c.systemOrders)),
 		Works.CODEC.forGetter(c -> new Works(c.mineshaft, c.builds, c.placed(), c.blockedSteps, c.batchStates, c.field, c.storage, List.copyOf(c.projects),
 			List.copyOf(c.keptGround), c.quarry, List.copyOf(c.veinCells))),
-		Access.CODEC.forGetter(c -> new Access(c.owner, List.copyOf(c.trusted)))
+		Access.CODEC.forGetter(c -> new Access(c.owner, List.copyOf(c.trusted))),
+		Placements.CODEC.forGetter(c -> new Placements(List.copyOf(c.blueprints)))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -228,6 +238,8 @@ public class Colony {
 	private final List<StockTarget> stock;
 	/** The projects the colony works on, in the order they were added; see {@link #projects}. */
 	private final List<Project> projects = new ArrayList<>();
+	/** The blueprints players placed, built or still to build, in the order they were placed. */
+	private final List<PlacedBlueprint> blueprints = new ArrayList<>();
 	/** The ground of finished terraforms, oldest first, which paths leave standing for good (see {@link #keepGround}). */
 	private final List<BoundingBox> keptGround = new ArrayList<>();
 	/** What each project still waits for, by project id, as {@link #planProjects} last found; not saved. */
@@ -269,7 +281,7 @@ public class Colony {
 	/** Game time of the last recheck of given-up jobs, or -1 before the first; not saved, so a reload only delays it. */
 	private long lastGivenUpRecheck = -1;
 
-	private Colony(Basics basics, Wants wants, Works works, Access access) {
+	private Colony(Basics basics, Wants wants, Works works, Access access, Placements placements) {
 		this(basics.id(), basics.core(), basics.members(), basics.board(), basics.radius(), wants.orders(), works.mineshaft(), wants.stock(),
 			works.builds(), works.placed(), works.field(), works.storage(), wants.buildOrders(), works.blockedSteps(), wants.systemOrders(),
 			works.batchStates(), works.projects());
@@ -279,6 +291,8 @@ public class Colony {
 		this.owner = access.owner();
 		this.trusted.addAll(access.trusted());
 		access.owner().ifPresent(this.trusted::remove);
+		// A placement still being built whose project is gone was cancelled.
+		placements.blueprints().stream().filter(placed -> placed.finished() || this.hasProject(placed.project())).forEach(this.blueprints::add);
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,
@@ -519,7 +533,78 @@ public class Colony {
 		this.storage.ifPresent(storage -> areas.add(storage.area()));
 		this.quarry.ifPresent(quarry -> areas.add(quarry.area()));
 		this.builds.values().forEach(plan -> BoundingBox.encapsulatingPositions(plan.steps().stream().map(BuildPlan.Step::pos).toList()).ifPresent(areas::add));
+		this.blueprints.forEach(placed -> areas.add(placed.area()));
 		return areas;
+	}
+
+	/** Where blocks build plans placed are, which bots leave standing while they are there (see {@link #isProtected}). */
+	public Set<BlockPos> placedBlocks() {
+		return Set.copyOf(this.protectedBlocks.keySet());
+	}
+
+	/**
+	 * Adds the blueprint {@code placed} (see {@link BlueprintPlacement}) as a project named after it: the {@code levelling}
+	 * of its site first, if any, and once that is done the {@code structure}. Returns it with its project.
+	 */
+	public PlacedBlueprint placeBlueprint(PlacedBlueprint placed, Optional<BuildPlan> levelling, BuildPlan structure) {
+		Project project = this.addBuild(placed.blueprint().toString(), levelling.orElse(structure));
+		PlacedBlueprint added = placed.withProject(project.id(), levelling.map(plan -> structure));
+		this.blueprints.add(added);
+		return added;
+	}
+
+	/** The blueprints players placed, in the order they were placed: those being built and those built. */
+	public List<PlacedBlueprint> blueprints() {
+		return List.copyOf(this.blueprints);
+	}
+
+	/** The built blueprints with role {@code role}, oldest first, such as the storage buildings whose chests the colony may use. */
+	public List<PlacedBlueprint> finishedBlueprints(Blueprint.Role role) {
+		return this.blueprints.stream().filter(placed -> placed.finished() && placed.role().equals(Optional.of(role))).toList();
+	}
+
+	/** The placed blueprint {@code plan} builds or levels the site of, if any. */
+	public Optional<PlacedBlueprint> blueprintOf(BuildPlan plan) {
+		Optional<UUID> id = this.builds.entrySet().stream().filter(e -> e.getValue().equals(plan)).map(Map.Entry::getKey).findFirst();
+		return id.flatMap(planId -> this.projects.stream().filter(project -> project.plans().contains(planId)).findFirst())
+			.flatMap(project -> this.blueprintOf(project.id()));
+	}
+
+	private Optional<PlacedBlueprint> blueprintOf(UUID project) {
+		return this.blueprints.stream().filter(placed -> !placed.finished() && placed.project().equals(project)).findFirst();
+	}
+
+	/** The name to show for {@code project}: a placed blueprint's translated name, else {@link Project#displayName}. */
+	public Component displayName(Project project) {
+		return this.blueprintOf(project.id()).map(PlacedBlueprint::displayName).orElseGet(project::displayName);
+	}
+
+	private boolean hasProject(UUID id) {
+		return this.projects.stream().anyMatch(project -> project.id().equals(id));
+	}
+
+	/**
+	 * Before the finished plan with id {@code id} is dropped: a placed blueprint's levelling hands over to its structure,
+	 * added to the same project, and its structure marks it built.
+	 */
+	private void finishBlueprintPlan(UUID id) {
+		for (int i = 0; i < this.blueprints.size(); i++) {
+			PlacedBlueprint placed = this.blueprints.get(i);
+			Optional<Project> project = this.projects.stream().filter(p -> p.id().equals(placed.project()) && p.plans().contains(id)).findFirst();
+			if (placed.finished() || project.isEmpty()) {
+				continue;
+			}
+			if (placed.waiting().isPresent()) {
+				UUID structure = UUID.randomUUID();
+				this.builds.put(structure, withoutOverlaps(placed.waiting().get()));
+				this.projects.replaceAll(p -> p.id().equals(placed.project()) ? p.with(structure) : p);
+				this.blueprints.set(i, placed.withProject(placed.project(), Optional.empty()));
+				this.indexBatches();
+				this.settleEmpty(structure);
+			} else if (project.get().plans().equals(List.of(id))) {
+				this.blueprints.set(i, placed.built());
+			}
+		}
 	}
 
 	public Project addBuild(String name, BuildPlan plan) {
@@ -836,6 +921,7 @@ public class Colony {
 
 	/** Drops the finished plan with id {@code id}, keeping its ground, if any, for good (see {@link #keepGround}). */
 	private void finishPlan(UUID id) {
+		this.finishBlueprintPlan(id);
 		this.builds.get(id).ground().ifPresent(ground -> {
 			this.keptGround.removeIf(kept -> ground.isInside(kept.minX(), kept.minY(), kept.minZ())
 				&& ground.isInside(kept.maxX(), kept.maxY(), kept.maxZ()));
@@ -865,6 +951,8 @@ public class Colony {
 		this.batchStates.keySet().removeAll(jobs);
 		this.blockedSteps.removeIf(blocked -> jobs.contains(blocked.plan()));
 		this.board.removeOpenIf(job -> isBuildJob(job) && jobs.contains(job.id()));
+		// A placed blueprint cancelled before it was built is forgotten.
+		this.blueprints.removeIf(placed -> !placed.finished() && !this.hasProject(placed.project()));
 		this.lastSurvey = -1;
 	}
 

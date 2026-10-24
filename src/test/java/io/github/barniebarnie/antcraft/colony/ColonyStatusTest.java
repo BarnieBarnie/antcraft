@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import io.netty.buffer.Unpooled;
@@ -14,6 +15,10 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.network.chat.Component;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -193,6 +198,19 @@ class ColonyStatusTest {
 		assertEquals(Component.literal("hut"), build.project());
 		assertEquals(2, build.priority());
 		assertEquals(Map.of(Items.OAK_PLANKS, 1), build.waitsFor());
+	}
+
+	@Test
+	void showsAPlacedBlueprintsBuildUnderTheBlueprintsName() {
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20, Map.of(), Optional.empty(), List.of(),
+			Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		Blueprint blueprint = new Blueprint(Identifier.fromNamespaceAndPath("antcraft", "hut"), "blueprint.antcraft.hut", Optional.empty(), List.of(), List.of());
+		PlacedBlueprint site = BlueprintPlacement.site(colony, Identifier.fromNamespaceAndPath("antcraft", "hut"), Optional.of(blueprint),
+			Optional.of(new Vec3i(1, 1, 1)), new BlockPos(10, 64, 10), Rotation.NONE, Mirror.NONE).right().orElseThrow();
+		colony.placeBlueprint(site, Optional.empty(), new BuildPlan(List.of(new BuildPlan.Step(new BlockPos(10, 64, 10), Blocks.OAK_PLANKS.defaultBlockState()))));
+
+		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), item -> List.of(), item -> false, pos -> Blocks.AIR.defaultBlockState(), 1, false);
+		assertEquals(Component.translatable("blueprint.antcraft.hut"), status.builds().getFirst().project());
 	}
 
 	/** Given-up jobs are listed, not counted as open work. */

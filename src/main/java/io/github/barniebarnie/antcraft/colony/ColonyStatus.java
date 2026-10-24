@@ -310,7 +310,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 			boolean mineshaft = colony.mineshaft().map(shaft -> shaft.plan().equals(plan)).orElse(false);
 			Optional<Project> project = colony.projects().stream().filter(p -> colony.plans(p).contains(plan)).findFirst();
 			builds.add(new Build(plan.target(), left(plan.steps(), world), plan.steps().size(), mineshaft, plan.kind() == BuildPlan.Kind.TERRAFORM,
-				batches, project.map(Project::displayName).orElse(Component.empty()), project.map(Project::priority).orElse(0),
+				batches, project.map(colony::displayName).orElse(Component.empty()), project.map(Project::priority).orElse(0),
 				project.map(p -> colony.waitingFor(p.id())).orElse(Map.of())));
 		}
 
