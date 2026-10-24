@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -145,6 +146,9 @@ class BuildPlanTest {
 		assertFalse(batch.waitsForWalls(at(world), pour), "walls stand");
 		// A batch without fluids carries no walls of others.
 		assertEquals(List.of(), plan.batch(cell == 0 ? 1 : 0).walls());
+		// The walls are part of a plan's equality: a batch that waits for them is not the plan of its bare steps.
+		assertNotEquals(new BuildPlan(batch.steps(), List.of(), batch.kind(), batch.ground()), batch);
+		assertEquals(plan.batch(cell), batch);
 	}
 
 	@Test

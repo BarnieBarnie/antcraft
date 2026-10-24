@@ -333,6 +333,10 @@ public class Colony {
 		access.owner().ifPresent(this.trusted::remove);
 		// A placement still being built whose project is gone was cancelled.
 		placements.blueprints().stream().filter(placed -> placed.finished() || this.hasProject(placed.project())).forEach(this.blueprints::add);
+		// A plan an old save left with nothing to do but never finished, such as a levelling whose batches not given up
+		// were all done or needed the given-up one, would wait for ever: finish it now, so finishBlueprintPlan reports its placement.
+		this.builds.entrySet().stream().filter(e -> this.isFinished(e.getKey(), e.getValue())).map(Map.Entry::getKey).toList()
+			.forEach(this::finishPlan);
 	}
 
 	Colony(UUID id, BlockPos core, List<UUID> members, JobBoard board, int radius, Map<Item, Integer> orders, Optional<Mineshaft> mineshaft,

@@ -75,7 +75,8 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * A terraform's {@code ground} is the ground it levels, up to the height, which paths leave standing
  * while the plan has work left, as no step of the plan would fill a hole in ground already right.
  * A batch taken as a plan of its own (see {@link #batch}) carries as {@code walls} the blocks of the other batches beside and
- * under its fluids, which are not saved: a whole plan has none.
+ * under its fluids, which are not saved: a whole plan has none. The walls count in {@code equals}, on purpose: such a batch
+ * waits for them, so it is not the same plan as one of its bare steps. The colony keeps and compares only whole plans.
  */
 public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Optional<BoundingBox> ground, List<Step> walls) {
 	/** Saves from before batches hold only the steps, as one batch. */

@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -105,8 +106,12 @@ public final class ColonyNetworking {
 		}
 	}
 
-	/** Client asks to place blueprint {@code blueprint} for the colony with its core at {@code core}; see {@link BlueprintPlacement#place}. */
-	public record PlaceBlueprint(BlockPos core, Identifier blueprint, BlockPos at, Rotation rotation, Mirror mirror) implements CustomPacketPayload {
+	/**
+	 * Client asks to place blueprint {@code blueprint} for the colony with its core at {@code core}, in {@code palette} of its
+	 * structure if given, else the one the blueprint names; see {@link BlueprintPlacement#place}.
+	 */
+	public record PlaceBlueprint(BlockPos core, Identifier blueprint, BlockPos at, Rotation rotation, Mirror mirror, OptionalInt palette)
+			implements CustomPacketPayload {
 		public static final Type<PlaceBlueprint> TYPE = new Type<>(AntCraft.id("place_blueprint"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, PlaceBlueprint> STREAM_CODEC = StreamCodec.composite(
 			BlockPos.STREAM_CODEC, PlaceBlueprint::core,
@@ -114,7 +119,15 @@ public final class ColonyNetworking {
 			BlockPos.STREAM_CODEC, PlaceBlueprint::at,
 			ByteBufCodecs.idMapper(i -> Rotation.values()[i], Rotation::ordinal), PlaceBlueprint::rotation,
 			ByteBufCodecs.idMapper(i -> Mirror.values()[i], Mirror::ordinal), PlaceBlueprint::mirror,
+			ByteBufCodecs.optional(ByteBufCodecs.VAR_INT).map(
+				palette -> palette.map(OptionalInt::of).orElseGet(OptionalInt::empty),
+				palette -> palette.isPresent() ? Optional.of(palette.getAsInt()) : Optional.empty()), PlaceBlueprint::palette,
 			PlaceBlueprint::new);
+
+		/** A request in the palette the blueprint names. */
+		public PlaceBlueprint(BlockPos core, Identifier blueprint, BlockPos at, Rotation rotation, Mirror mirror) {
+			this(core, blueprint, at, rotation, mirror, OptionalInt.empty());
+		}
 
 		@Override
 		public Type<PlaceBlueprint> type() {
@@ -435,7 +448,8 @@ public final class ColonyNetworking {
 		}
 		requester.claim(colony.get());
 		boolean mayAct = ColonyActions.mayEdit(ColonyActions.Edit.BUILD_PLACE, requester.botsAllowed()) && requester.mayAct(colony.get());
-		return BlueprintPlacement.place(level, colony.get(), mayAct, request.blueprint(), request.at(), request.rotation(), request.mirror());
+		return BlueprintPlacement.place(level, colony.get(), mayAct, request.blueprint(), request.at(), request.rotation(), request.mirror(),
+			request.palette());
 	}
 
 	/**

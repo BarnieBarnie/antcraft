@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Terraform;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -321,6 +322,38 @@ class BlueprintPlacementTest {
 		finishAll(loaded);
 		assertEquals(List.of(), loaded.blueprints());
 		assertEquals(List.of(placed), loaded.droppedUnlevelled());
+	}
+
+	@Test
+	void aPlacementStuckInAnOldSaveIsDroppedAndReportedOnLoad() {
+		// Every batch left needs the given-up one: no batch is ever finished, so the backstop in finishBatch never fires.
+		BuildPlan needing = new BuildPlan(List.of(Terraform.fill(AT.below()), Terraform.fill(AT.offset(1, -1, 0))),
+			List.of(new BuildPlan.Batch(0, 1, List.of(), false), new BuildPlan.Batch(1, 2, List.of(0), false)), BuildPlan.Kind.TERRAFORM);
+		assertStuckPlacementDroppedOnLoad(needing, false);
+		// Every batch not given up already done.
+		BuildPlan apart = new BuildPlan(List.of(Terraform.fill(AT.below()), Terraform.fill(AT.offset(1, -1, 0))),
+			List.of(new BuildPlan.Batch(0, 1, List.of(), false), new BuildPlan.Batch(1, 2, List.of(), false)), BuildPlan.Kind.TERRAFORM);
+		assertStuckPlacementDroppedOnLoad(apart, true);
+	}
+
+	/** Saves a colony with {@code levelling}'s first batch given up as before #267, the second done if {@code secondDone}, and loads it. */
+	private static void assertStuckPlacementDroppedOnLoad(BuildPlan levelling, boolean secondDone) {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Optional.of(levelling));
+		UUID plan = colony.projects().stream().filter(project -> project.id().equals(placed.project())).findFirst().orElseThrow().plans().getFirst();
+		JsonObject json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow().getAsJsonObject();
+		JsonObject batches = json.has("batches") ? json.getAsJsonObject("batches") : new JsonObject();
+		batches.addProperty(plan.toString(), "given_up");
+		if (secondDone) {
+			batches.addProperty(UUID.nameUUIDFromBytes((plan + "/1").getBytes(StandardCharsets.UTF_8)).toString(), "done");
+		}
+		json.add("batches", batches);
+
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(List.of(), loaded.blueprints());
+		assertEquals(List.of(placed), loaded.droppedUnlevelled());
+		assertTrue(loaded.projects().stream().noneMatch(project -> project.id().equals(placed.project())), "project left: " + loaded.projects());
+		assertEquals(List.of(), loaded.builds());
 	}
 
 	@Test

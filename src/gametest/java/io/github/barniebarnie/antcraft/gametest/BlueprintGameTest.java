@@ -35,6 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.stream.Stream;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -275,6 +276,28 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 			assertState(helper, 5, 1, 4, Blocks.OAK_PLANKS.defaultBlockState());
 			helper.assertTrue(colony.builds().isEmpty(), "builds left: " + colony.builds());
 		});
+	}
+
+	/** The client's placement request with a palette builds that palette, as the command does; one the structure lacks is refused. */
+	@GameTest(maxTicks = 5)
+	public void placeRequestBuildsTheChosenPalette(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos near = helper.absolutePos(new BlockPos(4, 1, 4));
+		ColonyNetworking.Requester requester = new ColonyNetworking.Requester(UUID.randomUUID(), near, false, false, true);
+		BlockPos at = helper.absolutePos(new BlockPos(5, 1, 4));
+		Identifier twoPalettes = Identifier.parse("antcraft-gametest:two_palettes");
+
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> lacking = ColonyNetworking.handle(helper.getLevel(), requester,
+			new ColonyNetworking.PlaceBlueprint(colony.core(), twoPalettes, at, Rotation.NONE, Mirror.NONE, OptionalInt.of(2)));
+		helper.assertValueEqual(lacking.left(), Optional.of(BlueprintPlacement.Refusal.NO_PALETTE), "palette 2");
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = ColonyNetworking.handle(helper.getLevel(), requester,
+			new ColonyNetworking.PlaceBlueprint(colony.core(), twoPalettes, at, Rotation.NONE, Mirror.NONE, OptionalInt.of(1)));
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		// The structure, waiting for the levelling or building now.
+		List<BuildPlan> plans = Stream.concat(colony.builds().stream(), placed.right().orElseThrow().waiting().stream()).toList();
+		helper.assertValueEqual(plans.stream().flatMap(plan -> plan.steps().stream()).filter(step -> step.pos().equals(at))
+			.map(BuildPlan.Step::state).toList(), List.of(Blocks.OAK_PLANKS.defaultBlockState()), "steps at the site");
+		helper.succeed();
 	}
 
 	/**
