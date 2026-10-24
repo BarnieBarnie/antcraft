@@ -3,7 +3,7 @@
 	"category": "misc",
 	"key": {
 		"I": "minecraft:iron_ingot",
-		"R": "minecraft:redstone",
+		"R": "minecraft:copper_block",
 		"C": "minecraft:chest"
 	},
 	"pattern": [

@@ -4,7 +4,7 @@
 	"key": {
 		"P": "minecraft:carved_pumpkin",
 		"I": "minecraft:iron_ingot",
-		"R": "minecraft:redstone_block"
+		"R": "minecraft:copper_block"
 	},
 	"pattern": [
 		" P ",

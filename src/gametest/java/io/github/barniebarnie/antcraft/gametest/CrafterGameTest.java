@@ -134,7 +134,7 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		store(helper,
 			new ItemStack(Items.CARVED_PUMPKIN),
 			new ItemStack(Items.IRON_INGOT, 3),
-			new ItemStack(Items.REDSTONE, 9));
+			new ItemStack(Items.COPPER_INGOT, 9));
 		colony.addOrder(ModItems.BOT_CORE, 1);
 		crafter(helper, colony);
 

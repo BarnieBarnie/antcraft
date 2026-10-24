@@ -19,14 +19,14 @@ AntCraft runs entirely on the server side, so it cannot be used as a cheat clien
 ```
  . P .      P = carved pumpkin
  I R I      I = iron ingot
- . I .      R = block of redstone
+ . I .      R = block of copper
 ```
 
 Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory, which they drop when they die. They fight hostile mobs (except creepers, for now).
 
 Bots find their own way: they walk, jump, swim, drop up to 3 blocks, dig through blocks in the way, and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, blocks next to lava or water, or blocks a colony builder placed.
 
-**Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, redstone on the sides) and place it. Bots activated within 32 blocks join the colony and use the core, which holds 54 stacks, as their home. The colony surveys its area every 5 seconds and posts jobs for the work it wants done, such as a tree to fell while it is short of logs; each bot claims a different job, so they never get in each other's way. If a bot dies or goes missing, its job is freed for the others. Breaking the core dissolves the colony and drops its contents.
+**Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, blocks of copper on the sides) and place it. Bots activated within 32 blocks join the colony and use the core, which holds 54 stacks, as their home. The colony surveys its area every 5 seconds and posts jobs for the work it wants done, such as a tree to fell while it is short of logs; each bot claims a different job, so they never get in each other's way. If a bot dies or goes missing, its job is freed for the others. Breaking the core dissolves the colony and drops its contents.
 
 **Stock.** A colony keeps a base stock in its core, so crafters have work and the colony grows on its own. A new colony keeps 2 pickaxes, 1 axe, shovel and hoe, 2 swords (any material; stone when there is cobblestone, else wood), 32 logs, 32 planks, 16 sticks, 64 cobblestone, 32 scaffold blocks, 16 food (bread), 32 torches and one piece of each armor slot. Every survey, the colony orders what is short and can be crafted from what is in the core right now; gathered items such as logs and cobblestone come from tree and mine jobs. Armor needs ingots, so it waits until the colony can smelt. Change the list with `/antcraft colony stock`.
 
