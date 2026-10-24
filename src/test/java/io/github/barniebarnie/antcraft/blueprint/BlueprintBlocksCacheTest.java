@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Predicate;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -64,5 +65,50 @@ class BlueprintBlocksCacheTest {
 		List<Identifier> asked = new ArrayList<>();
 		assertEquals(Optional.empty(), cache.get(STEP, asked::add));
 		assertEquals(List.of(STEP), asked);
+	}
+
+	/** A request the client could not send, say to a server without the payload, is asked again the next time the blocks are wanted. */
+	@Test
+	void aRequestThatCouldNotBeSentIsAskedAgain() {
+		BlueprintBlocksCache cache = new BlueprintBlocksCache();
+		List<Identifier> asked = new ArrayList<>();
+		boolean[] sent = {false};
+		Predicate<Identifier> ask = id -> {
+			asked.add(id);
+			return sent[0];
+		};
+		cache.get(STEP, ask);
+		cache.get(STEP, ask);
+		assertEquals(List.of(STEP, STEP), asked);
+		sent[0] = true;
+		cache.get(STEP, ask);
+		cache.get(STEP, ask);
+		assertEquals(List.of(STEP, STEP, STEP), asked, "asked again once sent");
+		cache.receive(blocks(STEP));
+		assertEquals(Optional.of(blocks(STEP)), cache.get(STEP, ask));
+	}
+
+	/** The parts of a reply come together in any order; parts from before a clear, or that do not belong together, are dropped. */
+	@Test
+	void partsArePutTogetherOnceAllArrived() {
+		BlueprintBlocks whole = new BlueprintBlocks(STEP, new Vec3i(2, 1, 1), List.of(
+			new BlueprintSummary.Block(BlockPos.ZERO, Blocks.STONE.defaultBlockState()),
+			new BlueprintSummary.Block(new BlockPos(1, 0, 0), Blocks.DIRT.defaultBlockState())));
+		BlueprintBlocks first = new BlueprintBlocks(STEP, whole.size(), whole.blocks().subList(0, 1));
+		BlueprintBlocks second = new BlueprintBlocks(STEP, whole.size(), whole.blocks().subList(1, 2));
+		BlueprintBlocksCache cache = new BlueprintBlocksCache();
+		List<Identifier> asked = new ArrayList<>();
+		cache.get(STEP, asked::add);
+		cache.receive(second, 1, 2);
+		cache.clear();
+		cache.get(STEP, asked::add);
+		cache.receive(first, 0, 2);
+		assertEquals(Optional.empty(), cache.get(STEP, asked::add), "a part from before the clear was kept");
+		cache.receive(second, 5, 2);
+		cache.receive(second, 1, 1 << 20);
+		assertEquals(Optional.empty(), cache.get(STEP, asked::add), "a part out of range was kept");
+		cache.receive(second, 1, 2);
+		assertEquals(Optional.of(whole), cache.get(STEP, asked::add));
+		assertEquals(List.of(STEP, STEP), asked);
 	}
 }

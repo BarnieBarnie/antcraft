@@ -107,13 +107,13 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 5)
 	public void aClientAskingForABlueprintsBlocksGetsThem(GameTestHelper helper) {
 		MinecraftServer server = helper.getLevel().getServer();
-		BlueprintBlocks step = ColonyNetworking.blocks(server, new ColonyNetworking.BlueprintBlocksRequest(COBBLE_STEP)).blocks();
+		BlueprintBlocks step = ColonyNetworking.blocks(server, new ColonyNetworking.BlueprintBlocksRequest(COBBLE_STEP)).getFirst().blocks();
 		helper.assertValueEqual(step.id(), COBBLE_STEP, "id of the reply");
 		helper.assertValueEqual(step.size(), new Vec3i(2, 2, 1), "size of the cobble step");
 		helper.assertValueEqual(step.blocks().stream().filter(block -> block.state().is(Blocks.OAK_STAIRS)).map(BlueprintSummary.Block::pos).toList(),
 			List.of(new BlockPos(0, 1, 0)), "stairs of the cobble step");
 		helper.assertValueEqual(step.blocks().size(), 3, "blocks of the cobble step");
-		BlueprintBlocks castle = ColonyNetworking.blocks(server, new ColonyNetworking.BlueprintBlocksRequest(AntCraft.id("castle"))).blocks();
+		BlueprintBlocks castle = ColonyNetworking.blocks(server, new ColonyNetworking.BlueprintBlocksRequest(AntCraft.id("castle"))).getFirst().blocks();
 		helper.assertValueEqual(castle, new BlueprintBlocks(AntCraft.id("castle"), Vec3i.ZERO, List.of()), "blocks of an unknown blueprint");
 		helper.succeed();
 	}

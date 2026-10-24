@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import java.util.Comparator;
@@ -24,18 +25,20 @@ import net.minecraft.world.phys.Vec3;
  * @param core the core of the colony building it
  * @param project the colony project that builds it, which cancelling drops
  * @param name the lang key of the blueprint's name
- * @param blocks the blocks not placed yet, where they go
+ * @param blocks the blocks not placed yet, where they go, in layer order; sent in the compact encoding of
+ *     {@link BlueprintBlocks#PLACED_STREAM_CODEC}
  */
 public record BuildGhost(BlockPos core, UUID project, String name, List<BlueprintSummary.Block> blocks) {
 	public static final StreamCodec<RegistryFriendlyByteBuf, BuildGhost> STREAM_CODEC = StreamCodec.composite(
 		BlockPos.STREAM_CODEC, BuildGhost::core,
 		UUIDUtil.STREAM_CODEC, BuildGhost::project,
 		ByteBufCodecs.stringUtf8(256), BuildGhost::name,
-		BlueprintSummary.Block.STREAM_CODEC.apply(ByteBufCodecs.list()), BuildGhost::blocks,
+		BlueprintBlocks.PLACED_STREAM_CODEC, BuildGhost::blocks,
 		BuildGhost::new);
 
+	/** Keeps the blocks in {@link BlueprintBlocks#LAYER_ORDER}, the order they arrive in from the server. */
 	public BuildGhost {
-		blocks = List.copyOf(blocks);
+		blocks = blocks.stream().sorted(BlueprintBlocks.LAYER_ORDER).toList();
 	}
 
 	/**

@@ -29,12 +29,19 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  */
 public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.Block> blocks) {
 	/**
-	 * The most bytes the blocks may take in a reply, well under the game's limit for a payload to a client (see
-	 * {@link io.github.barniebarnie.antcraft.network.ColonyNetworking#PAYLOAD_LIMIT}); see {@link #sendable()}.
+	 * The most bytes the blocks may take in one part of a reply, well under the game's limit for a payload to a client (see
+	 * {@link io.github.barniebarnie.antcraft.network.ColonyNetworking#PAYLOAD_LIMIT}); see {@link #parts()}.
 	 */
 	public static final int MAX_BLOCK_BYTES = 900_000;
 
-	private static final Comparator<BlueprintSummary.Block> LAYER_ORDER = Comparator.<BlueprintSummary.Block>comparingInt(block -> block.pos().getY())
+	/**
+	 * The most parts a reply is split into, so a client is never sent more than about 58 MB of blocks for one preview;
+	 * see {@link #parts()}.
+	 */
+	public static final int MAX_PARTS = 64;
+
+	/** Blocks in layer order: by y, then z, then x. */
+	public static final Comparator<BlueprintSummary.Block> LAYER_ORDER = Comparator.<BlueprintSummary.Block>comparingInt(block -> block.pos().getY())
 		.thenComparingInt(block -> block.pos().getZ())
 		.thenComparingInt(block -> block.pos().getX());
 
@@ -46,27 +53,35 @@ public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.B
 		(buf, blocks) -> {
 			Identifier.STREAM_CODEC.encode(buf, blocks.id());
 			Vec3i.STREAM_CODEC.encode(buf, blocks.size());
-			buf.writeVarInt(blocks.blocks().size());
-			long last = -1;
-			for (BlueprintSummary.Block block : blocks.blocks()) {
-				long cell = blocks.cell(block.pos());
-				buf.writeVarLong(cell - last);
-				buf.writeVarInt(Block.BLOCK_STATE_REGISTRY.getId(block.state()));
-				last = cell;
-			}
+			writeCells(buf, blocks.size(), blocks.blocks());
 		},
 		buf -> {
 			Identifier id = Identifier.STREAM_CODEC.decode(buf);
 			Vec3i size = Vec3i.STREAM_CODEC.decode(buf);
-			int count = buf.readVarInt();
-			List<BlueprintSummary.Block> blocks = new ArrayList<>(Math.min(count, 1 << 16));
-			long cell = -1;
-			for (int i = 0; i < count; i++) {
-				cell += buf.readVarLong();
-				BlockState state = Block.BLOCK_STATE_REGISTRY.byIdOrThrow(buf.readVarInt());
-				blocks.add(new BlueprintSummary.Block(pos(size, cell), state));
-			}
-			return new BlueprintBlocks(id, size, blocks);
+			return new BlueprintBlocks(id, size, readCells(buf, BlockPos.ZERO, size));
+		});
+
+	/**
+	 * Blocks anywhere in the world, such as those left of a placed build, as {@link #STREAM_CODEC} sends a structure's:
+	 * the corner and size of the box around them, then each block's cell in that box and its state. Decoded in
+	 * {@link #LAYER_ORDER}, so a list in another order comes back sorted.
+	 */
+	public static final StreamCodec<RegistryFriendlyByteBuf, List<BlueprintSummary.Block>> PLACED_STREAM_CODEC = StreamCodec.of(
+		(buf, blocks) -> {
+			BlockPos min = blocks.stream().map(BlueprintSummary.Block::pos).reduce(BlockPos::min).orElse(BlockPos.ZERO);
+			BlockPos max = blocks.stream().map(BlueprintSummary.Block::pos).reduce(BlockPos::max).orElse(min.offset(-1, -1, -1));
+			Vec3i size = max.subtract(min).offset(1, 1, 1);
+			BlockPos.STREAM_CODEC.encode(buf, min);
+			Vec3i.STREAM_CODEC.encode(buf, size);
+			writeCells(buf, size, blocks.stream()
+				.map(block -> new BlueprintSummary.Block(block.pos().subtract(min), block.state()))
+				.sorted(LAYER_ORDER)
+				.toList());
+		},
+		buf -> {
+			BlockPos min = BlockPos.STREAM_CODEC.decode(buf);
+			Vec3i size = Vec3i.STREAM_CODEC.decode(buf);
+			return readCells(buf, min, size);
 		});
 
 	public BlueprintBlocks {
@@ -89,22 +104,76 @@ public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.B
 	}
 
 	/**
-	 * These blocks, or none but the size if they would take more than {@link #MAX_BLOCK_BYTES} in a reply, so a client is
-	 * never sent more than it takes. Without blocks the preview draws nothing, but the client still knows where the
-	 * structure would stand and whether the site is free.
+	 * These blocks split into parts of at most {@link #MAX_BLOCK_BYTES} each, to send one per payload; see
+	 * {@link #parts(int, int)}.
 	 */
-	public BlueprintBlocks sendable() {
+	public List<BlueprintBlocks> parts() {
+		return this.parts(MAX_BLOCK_BYTES, MAX_PARTS);
+	}
+
+	/**
+	 * These blocks split into parts, in layer order, whose blocks take at most {@code maxBytes} each in a reply, and which
+	 * {@link #join} puts back together; always one part, these blocks, when they fit in one. If they would take more
+	 * than {@code maxParts} parts, a single part with none but the size: the preview then draws nothing, but the client
+	 * still knows where the structure would stand and whether the site is free.
+	 */
+	public List<BlueprintBlocks> parts(int maxBytes, int maxParts) {
+		List<BlueprintBlocks> parts = new ArrayList<>();
+		List<BlueprintSummary.Block> part = new ArrayList<>();
 		long bytes = 0;
 		long last = -1;
 		for (BlueprintSummary.Block block : this.blocks) {
 			long cell = this.cell(block.pos());
-			bytes += VarLong.getByteSize(cell - last) + VarInt.getByteSize(Block.BLOCK_STATE_REGISTRY.getId(block.state()));
-			last = cell;
-			if (bytes > MAX_BLOCK_BYTES) {
-				return new BlueprintBlocks(this.id, this.size, List.of());
+			int blockBytes = VarLong.getByteSize(cell - last) + VarInt.getByteSize(Block.BLOCK_STATE_REGISTRY.getId(block.state()));
+			if (!part.isEmpty() && bytes + blockBytes > maxBytes) {
+				parts.add(new BlueprintBlocks(this.id, this.size, part));
+				if (parts.size() >= maxParts) {
+					return List.of(new BlueprintBlocks(this.id, this.size, List.of()));
+				}
+				part = new ArrayList<>();
+				// The first block of a part counts from the start of the box again.
+				blockBytes = VarLong.getByteSize(cell + 1) + VarInt.getByteSize(Block.BLOCK_STATE_REGISTRY.getId(block.state()));
+				bytes = 0;
 			}
+			part.add(block);
+			bytes += blockBytes;
+			last = cell;
 		}
-		return this;
+		if (parts.isEmpty()) {
+			return List.of(this);
+		}
+		parts.add(new BlueprintBlocks(this.id, this.size, part));
+		return List.copyOf(parts);
+	}
+
+	/** The blueprint whose blocks {@code parts} are, the id and size those of the first part; see {@link #parts}. */
+	public static BlueprintBlocks join(List<BlueprintBlocks> parts) {
+		BlueprintBlocks first = parts.getFirst();
+		return new BlueprintBlocks(first.id(), first.size(), parts.stream().flatMap(part -> part.blocks().stream()).toList());
+	}
+
+	private static void writeCells(RegistryFriendlyByteBuf buf, Vec3i size, List<BlueprintSummary.Block> blocks) {
+		buf.writeVarInt(blocks.size());
+		long last = -1;
+		for (BlueprintSummary.Block block : blocks) {
+			long cell = cell(size, block.pos());
+			buf.writeVarLong(cell - last);
+			buf.writeVarInt(Block.BLOCK_STATE_REGISTRY.getId(block.state()));
+			last = cell;
+		}
+	}
+
+	/** Blocks written by {@link #writeCells}, in a box of {@code size} with its corner at {@code min}. */
+	private static List<BlueprintSummary.Block> readCells(RegistryFriendlyByteBuf buf, BlockPos min, Vec3i size) {
+		int count = buf.readVarInt();
+		List<BlueprintSummary.Block> blocks = new ArrayList<>(Math.min(count, 1 << 16));
+		long cell = -1;
+		for (int i = 0; i < count; i++) {
+			cell += buf.readVarLong();
+			BlockState state = Block.BLOCK_STATE_REGISTRY.byIdOrThrow(buf.readVarInt());
+			blocks.add(new BlueprintSummary.Block(min.offset(pos(size, cell)), state));
+		}
+		return blocks;
 	}
 
 	private static boolean inside(Vec3i size, BlockPos pos) {
@@ -113,7 +182,11 @@ public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.B
 
 	/** The number of {@code pos}'s cell, counting the cells of the size's box in layer order. */
 	private long cell(BlockPos pos) {
-		return ((long) pos.getY() * this.size.getZ() + pos.getZ()) * this.size.getX() + pos.getX();
+		return cell(this.size, pos);
+	}
+
+	private static long cell(Vec3i size, BlockPos pos) {
+		return ((long) pos.getY() * size.getZ() + pos.getZ()) * size.getX() + pos.getX();
 	}
 
 	private static BlockPos pos(Vec3i size, long cell) {

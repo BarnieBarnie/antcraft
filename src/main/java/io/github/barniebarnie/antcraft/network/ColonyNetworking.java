@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
@@ -191,11 +192,24 @@ public final class ColonyNetworking {
 		}
 	}
 
-	/** The blocks of the blueprint a client asked for; none, with a zero size, for one the server does not have. */
-	public record BlueprintBlocksReply(BlueprintBlocks blocks) implements CustomPacketPayload {
+	/**
+	 * Part {@code part} of the {@code parts} the blocks of the blueprint a client asked for come in
+	 * ({@link BlueprintBlocks#parts()}): all of them in one for most structures, which the client puts back together; none,
+	 * with a zero size, for one the server does not have.
+	 */
+	public record BlueprintBlocksReply(BlueprintBlocks blocks, int part, int parts) implements CustomPacketPayload {
 		public static final Type<BlueprintBlocksReply> TYPE = new Type<>(AntCraft.id("blueprint_blocks"));
-		public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintBlocksReply> STREAM_CODEC =
-			BlueprintBlocks.STREAM_CODEC.map(BlueprintBlocksReply::new, BlueprintBlocksReply::blocks);
+		public static final StreamCodec<RegistryFriendlyByteBuf, BlueprintBlocksReply> STREAM_CODEC = StreamCodec.composite(
+			BlueprintBlocks.STREAM_CODEC, BlueprintBlocksReply::blocks,
+			ByteBufCodecs.VAR_INT, BlueprintBlocksReply::part,
+			ByteBufCodecs.VAR_INT, BlueprintBlocksReply::parts,
+			BlueprintBlocksReply::new);
+
+		/** The replies that send {@code blocks}, one per part. */
+		public static List<BlueprintBlocksReply> of(BlueprintBlocks blocks) {
+			List<BlueprintBlocks> parts = blocks.parts();
+			return IntStream.range(0, parts.size()).mapToObj(i -> new BlueprintBlocksReply(parts.get(i), i, parts.size())).toList();
+		}
 
 		@Override
 		public Type<BlueprintBlocksReply> type() {
@@ -294,7 +308,7 @@ public final class ColonyNetworking {
 		});
 		ServerPlayNetworking.registerGlobalReceiver(ChooseBlueprint.TYPE, (request, context) -> handle(context.player(), request));
 		ServerPlayNetworking.registerGlobalReceiver(BlueprintBlocksRequest.TYPE, (request, context) ->
-			context.responseSender().sendPacket(blocks(context.player().level().getServer(), request)));
+			blocks(context.player().level().getServer(), request).forEach(reply -> context.responseSender().sendPacket(reply)));
 		ServerPlayNetworking.registerGlobalReceiver(SiteRulesRequest.TYPE, (request, context) ->
 			context.responseSender().sendPacket(siteRules(context.player().level(), Requester.of(context.player()))));
 		ServerPlayNetworking.registerGlobalReceiver(StatusRequest.TYPE, (request, context) -> {
@@ -338,14 +352,13 @@ public final class ColonyNetworking {
 	}
 
 	/**
-	 * The reply to a request for a blueprint's blocks: those of its structure as {@code server} has it now, none for a
-	 * blueprint or structure it does not have, and none but the size for one too large to send
-	 * ({@link BlueprintBlocks#sendable()}). Any player may ask, as any player gets the list.
+	 * The replies to a request for a blueprint's blocks: those of its structure as {@code server} has it now, in as many
+	 * parts as they take ({@link BlueprintBlocksReply#of}); none for a blueprint or structure it does not have, and none but
+	 * the size for one too large to send even in parts. Any player may ask, as any player gets the list.
 	 */
-	public static BlueprintBlocksReply blocks(MinecraftServer server, BlueprintBlocksRequest request) {
-		return new BlueprintBlocksReply(Blueprints.get(request.blueprint())
-			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), server.getStructureTemplateManager().get(blueprint.structure()), blueprint.palette())
-				.sendable())
+	public static List<BlueprintBlocksReply> blocks(MinecraftServer server, BlueprintBlocksRequest request) {
+		return BlueprintBlocksReply.of(Blueprints.get(request.blueprint())
+			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), server.getStructureTemplateManager().get(blueprint.structure()), blueprint.palette()))
 			.orElse(new BlueprintBlocks(request.blueprint(), Vec3i.ZERO, List.of())));
 	}
 

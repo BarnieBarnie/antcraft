@@ -10,7 +10,9 @@ import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import io.netty.buffer.Unpooled;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,6 +22,7 @@ import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.Vec3i;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
@@ -122,6 +125,33 @@ class BuildGhostTest {
 		ColonyNetworking.BuildGhosts.STREAM_CODEC.encode(buf, payload);
 		assertEquals(payload, ColonyNetworking.BuildGhosts.STREAM_CODEC.decode(buf));
 		assertEquals(0, buf.readableBytes());
+	}
+
+	/**
+	 * The blocks left of a large build, in many states, go in the compact encoding of blueprint blocks: well under the
+	 * payload limit, where a full position and state per block would not fit.
+	 */
+	@Test
+	void theGhostPayloadOfALargeBuildStaysUnderTheLimit() {
+		List<BlockState> states = BuiltInRegistries.BLOCK.stream().filter(block -> !block.defaultBlockState().isAir())
+			.flatMap(block -> block.getStateDefinition().getPossibleStates().stream()).limit(20000).toList();
+		List<BlueprintSummary.Block> blocks = new ArrayList<>();
+		for (int x = 47; x >= 0; x--) {
+			for (int y = 0; y < 48; y++) {
+				for (int z = 0; z < 48; z++) {
+					blocks.add(new BlueprintSummary.Block(new BlockPos(-30_000 + x, -60 + y, 1_000_000 + z), states.get(blocks.size() % states.size())));
+				}
+			}
+		}
+		ColonyNetworking.BuildGhosts payload = new ColonyNetworking.BuildGhosts(List.of(
+			new BuildGhost(new BlockPos(1, 2, 3), UUID.randomUUID(), "blueprint.antcraft.castle", blocks)));
+		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+		ColonyNetworking.BuildGhosts.STREAM_CODEC.encode(buf, payload);
+		assertTrue(buf.readableBytes() < ColonyNetworking.PAYLOAD_LIMIT / 2, buf.readableBytes() + " bytes");
+		ColonyNetworking.BuildGhosts decoded = ColonyNetworking.BuildGhosts.STREAM_CODEC.decode(buf);
+		assertEquals(0, buf.readableBytes());
+		assertEquals(payload, decoded);
+		assertEquals(new HashSet<>(blocks), new HashSet<>(decoded.builds().getFirst().blocks()));
 	}
 
 	@Test

@@ -29,13 +29,16 @@ public final class ClientBlueprints {
 
 	/**
 	 * The size and blocks of blueprint {@code id}, if the server sent them; the first time they are wanted, asks the server
-	 * for them, so the preview shows once the reply arrives.
+	 * for them, so the preview shows once the reply arrives. If the request cannot be sent, it is tried again the next
+	 * time they are wanted.
 	 */
 	public static Optional<BlueprintBlocks> blocks(Identifier id) {
 		return BLOCKS.get(id, ask -> {
-			if (ClientPlayNetworking.canSend(ColonyNetworking.BlueprintBlocksRequest.TYPE)) {
-				ClientPlayNetworking.send(new ColonyNetworking.BlueprintBlocksRequest(ask));
+			if (!ClientPlayNetworking.canSend(ColonyNetworking.BlueprintBlocksRequest.TYPE)) {
+				return false;
 			}
+			ClientPlayNetworking.send(new ColonyNetworking.BlueprintBlocksRequest(ask));
+			return true;
 		});
 	}
 
@@ -44,7 +47,7 @@ public final class ClientBlueprints {
 		BLOCKS.clear();
 	}
 
-	static void receive(BlueprintBlocks blocks) {
-		BLOCKS.receive(blocks);
+	static void receive(ColonyNetworking.BlueprintBlocksReply reply) {
+		BLOCKS.receive(reply.blocks(), reply.part(), reply.parts());
 	}
 }

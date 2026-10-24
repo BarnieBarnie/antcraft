@@ -141,19 +141,45 @@ class BlueprintSummaryTest {
 	@Test
 	void theBlocksOfTheLargestStructureFitInOnePayload() {
 		BlueprintBlocks big = cube(48, 20000);
+		List<ColonyNetworking.BlueprintBlocksReply> replies = ColonyNetworking.BlueprintBlocksReply.of(big);
+		assertEquals(List.of(new ColonyNetworking.BlueprintBlocksReply(big, 0, 1)), replies);
 		RegistryFriendlyByteBuf buf = buffer();
-		ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, new ColonyNetworking.BlueprintBlocksReply(big));
+		ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, replies.getFirst());
 		assertTrue(buf.readableBytes() < ColonyNetworking.PAYLOAD_LIMIT / 2, buf.readableBytes() + " bytes");
 		assertEquals(big, ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf).blocks());
 	}
 
-	/** Blocks too many for one payload are not sent; the size still is, so the client can still tell whether the site is free. */
+	/** Blocks too many for one payload are sent in parts, each well under the limit, which the client puts back together. */
 	@Test
-	void blocksTooManyForAPayloadAreLeftOut() {
-		BlueprintBlocks huge = cube(80, 10);
-		assertEquals(new BlueprintBlocks(id("big"), new Vec3i(80, 80, 80), List.of()), huge.sendable());
-		BlueprintBlocks big = cube(48, 10);
-		assertEquals(big, big.sendable());
+	void blocksTooManyForAPayloadAreSentInPartsAndPutBackTogether() {
+		BlueprintBlocks huge = cube(80, 20000);
+		List<ColonyNetworking.BlueprintBlocksReply> replies = ColonyNetworking.BlueprintBlocksReply.of(huge);
+		assertTrue(replies.size() > 1, replies.size() + " parts");
+		BlueprintBlocksCache cache = new BlueprintBlocksCache();
+		assertEquals(Optional.empty(), cache.get(huge.id(), id -> true));
+		for (ColonyNetworking.BlueprintBlocksReply reply : replies.reversed()) {
+			assertEquals(Optional.empty(), cache.get(huge.id(), id -> true), "whole before every part arrived");
+			RegistryFriendlyByteBuf buf = buffer();
+			ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, reply);
+			assertTrue(buf.readableBytes() < ColonyNetworking.PAYLOAD_LIMIT, buf.readableBytes() + " bytes");
+			ColonyNetworking.BlueprintBlocksReply decoded = ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf);
+			assertEquals(reply, decoded);
+			cache.receive(decoded.blocks(), decoded.part(), decoded.parts());
+		}
+		assertEquals(Optional.of(huge), cache.get(huge.id(), id -> true));
+	}
+
+	/** Blocks that fit go in one part; those that would take more parts than a client is sent are left out, but for the size. */
+	@Test
+	void blocksTooManyEvenInPartsAreLeftOut() {
+		BlueprintBlocks big = cube(16, 10);
+		assertEquals(List.of(big), big.parts());
+		List<BlueprintBlocks> parts = big.parts(1000, 64);
+		assertTrue(parts.size() > 4, parts.size() + " parts");
+		assertEquals(big, BlueprintBlocks.join(parts));
+		assertEquals(List.of(new BlueprintBlocks(id("big"), new Vec3i(16, 16, 16), List.of())), big.parts(1000, 4));
+		BlueprintBlocks none = new BlueprintBlocks(id("lost"), Vec3i.ZERO, List.of());
+		assertEquals(List.of(none), none.parts());
 	}
 
 	@Test
@@ -217,7 +243,7 @@ class BlueprintSummaryTest {
 		ColonyNetworking.BlueprintBlocksRequest.STREAM_CODEC.encode(buf, request);
 		assertEquals(request, ColonyNetworking.BlueprintBlocksRequest.STREAM_CODEC.decode(buf));
 		for (BlueprintBlocks blocks : List.of(bundledBlocks("starter_house"), bundledBlocks("cobble_step"), new BlueprintBlocks(id("lost"), Vec3i.ZERO, List.of()))) {
-			ColonyNetworking.BlueprintBlocksReply reply = new ColonyNetworking.BlueprintBlocksReply(blocks);
+			ColonyNetworking.BlueprintBlocksReply reply = new ColonyNetworking.BlueprintBlocksReply(blocks, 0, 1);
 			ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, reply);
 			assertEquals(reply, ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf));
 			assertEquals(0, buf.readableBytes());

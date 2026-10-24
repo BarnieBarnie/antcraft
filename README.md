@@ -89,7 +89,7 @@ The bundled **cobblestone generator** (`antcraft:cobble_generator`, role `genera
 
 **The Blueprint item** (shapeless: paper and a copper ingot) picks blueprints in game instead of by id. Right-click the air with it to open the picker, which lists every blueprint the server has (sent to each client on joining and after `/reload`) with its size, role and the materials it needs; choosing one sets the item to it, and its tooltip names the chosen blueprint. Right-clicking a block with no blueprint chosen opens the picker too.
 
-With a blueprint chosen, holding the item shows a see-through ghost of the structure centred on the block you look at, standing against the face you look at. The list holds no blocks, so it stays small for data packs with many or large structures; the client asks the server for the blocks of the chosen blueprint the first time it shows its ghost, and keeps them until the next `/reload`. The controls, rebindable under AntCraft in the controls menu:
+With a blueprint chosen, holding the item shows a see-through ghost of the structure centred on the block you look at, standing against the face you look at. The list holds no blocks, so it stays small for data packs with many or large structures; the client asks the server for the blocks of the chosen blueprint the first time it shows its ghost, and keeps them until the next `/reload`. A structure too large for one network payload comes in several, which the client puts back together (up to 64 payloads; a larger one shows no ghost), and a request the client could not send is sent again while the ghost is shown. The controls, rebindable under AntCraft in the controls menu:
 
 | Control | Does |
 |---|---|
