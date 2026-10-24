@@ -307,6 +307,27 @@ class ColonyTest {
 	}
 
 	@Test
+	void aBlockOfAnotherBatchIsHeldUpOnlyWhileItsBatchWaitsOnABlockedOne() {
+		Colony colony = colony();
+		BuildPlan plan = fourBatches();
+		colony.addBuild(plan);
+		colony.postBuildJobs();
+		UUID last = batchJob(colony, plan, 3).id();
+		// Batch 2 is merely not done yet: a fluid of batch 3 waits for its blocks.
+		assertFalse(colony.isHeldUp(last, new BlockPos(3, 64, 1)), "not done yet, but held up");
+
+		Job first = batchJob(colony, plan, 0);
+		colony.board().complete(first.id());
+		colony.reportBlocked(first.id(), List.of(new BlockPos(1, 64, 1)));
+		// Batch 2 needs batch 1, which needs the blocked batch 0; batch 3 needs none of them.
+		assertTrue(colony.isHeldUp(last, new BlockPos(3, 64, 1)), "needs a blocked batch through another");
+		assertTrue(colony.isHeldUp(last, new BlockPos(1, 64, 1)), "blocked itself");
+		assertFalse(colony.isHeldUp(last, new BlockPos(4, 64, 1)), "its own batch");
+		assertFalse(colony.isHeldUp(last, new BlockPos(9, 64, 9)), "in no batch");
+		assertFalse(colony.isHeldUp(UUID.randomUUID(), new BlockPos(3, 64, 1)), "no such job");
+	}
+
+	@Test
 	void aBlockedBatchHoldsUpOnlyTheBatchesThatNeedIt() {
 		Colony colony = colony();
 		BuildPlan plan = fourBatches();

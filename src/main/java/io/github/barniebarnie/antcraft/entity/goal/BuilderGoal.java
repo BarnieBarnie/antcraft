@@ -249,7 +249,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Container core = Storage.containerAt(level, colony.core());
 		// A plan left only with steps it cannot clear is taken too, to be finished and reported.
 		return colony.build(job.id()).filter(plan -> this.nextStep(level, colony, core, plan, isDig(job)).isPresent()
-			|| !this.isWaiting(level, colony, core, plan, isDig(job))).isPresent();
+			|| !this.isWaiting(level, colony, core, job.id(), plan, isDig(job))).isPresent();
 	}
 
 	@Override
@@ -1045,9 +1045,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/**
 	 * Whether {@code plan} waits for materials, for a fluid to settle or, for a {@code dig} job, for
 	 * a tree in it to be felled, rather than being left only with steps it cannot do. A fluid waits
-	 * for an empty bucket only while there is a source to fill it at, and for a wall of another batch while it is not blocked.
+	 * for an empty bucket only while there is a source to fill it at, and for a wall of another batch while that batch is not held up by a blocked one.
 	 */
-	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, BuildPlan plan, boolean dig) {
+	private boolean isWaiting(ServerLevel level, Colony colony, @Nullable Container core, UUID job, BuildPlan plan, boolean dig) {
 		return plan.nextStep(level::getBlockState, step -> {
 			BlockState current = level.getBlockState(step.pos());
 			if (dig && Digging.isForTreeJob(level, colony, step.pos())) {
@@ -1064,19 +1064,19 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			if (!isPossible(level, step)) {
 				return false;
 			}
-			return plan.waitsForWalls(level::getBlockState, step) ? waitsForOtherBatches(level, colony, plan, step)
+			return plan.waitsForWalls(level::getBlockState, step) ? waitsForOtherBatches(level, colony, job, plan, step)
 				: !isPoured(item) || this.source(level, colony, item) != null;
 		}).isPresent();
 	}
 
 	/**
-	 * Whether the fluid of {@code step} waits for a wall of another batch of its plan (see {@link BuildPlan#walls}) that is
-	 * not reported blocked: that batch's builder places it in time. One reported blocked leaves the fluid to be reported too.
+	 * Whether the fluid of {@code step}, in the batch of build job {@code job}, waits for a wall of another batch of its plan
+	 * (see {@link BuildPlan#walls}) that is not held up (see {@link Colony#isHeldUp}): that batch's builder places it in time.
+	 * One reported blocked, or in a batch that needs a blocked one and so never runs, leaves the fluid to be reported too.
 	 */
-	private static boolean waitsForOtherBatches(ServerLevel level, Colony colony, BuildPlan plan, BuildPlan.Step step) {
-		List<BlockPos> blocked = colony.blockedSteps();
+	private static boolean waitsForOtherBatches(ServerLevel level, Colony colony, UUID job, BuildPlan plan, BuildPlan.Step step) {
 		return plan.missingWalls(level::getBlockState, step).stream()
-			.anyMatch(wall -> plan.walls().contains(wall) && !blocked.contains(wall.pos()));
+			.anyMatch(wall -> plan.walls().contains(wall) && !colony.isHeldUp(job, wall.pos()));
 	}
 
 	/** Whether a block of {@code plan} is still to clear once a fluid there settles, so the plan is not worked through yet. */
@@ -1139,7 +1139,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * while it waits for nothing but materials may the batches that need this one start meanwhile.
 	 */
 	private void putAside(ServerLevel level, Colony colony, @Nullable Container core, Job job, Optional<BuildPlan> plan, boolean dig) {
-		if (plan.isPresent() && this.isWaiting(level, colony, core, plan.get(), dig)) {
+		if (plan.isPresent() && this.isWaiting(level, colony, core, job.id(), plan.get(), dig)) {
 			Colony.Wait reason = this.settles(level, core, plan.get()) ? Colony.Wait.FLUID
 				: dig && Digging.waitsForTrees(level, colony, plan.get()) ? Colony.Wait.TREES : Colony.Wait.ITEMS;
 			colony.batchWaiting(job.id(), reason);

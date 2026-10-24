@@ -499,6 +499,21 @@ public class Colony {
 			.map(e -> this.blockedBatches(e.getKey(), e.getValue())).orElse(Set.of());
 	}
 
+	/**
+	 * Whether a block at {@code pos} that another batch of build job {@code job}'s plan places is in a
+	 * {@linkplain #blockedBatches blocked batch}, so it is not placed until the player frees that batch: a fluid of the job's
+	 * batch that waits for it (see {@link BuildPlan#walls}) would wait for ever, and is reported instead.
+	 */
+	public boolean isHeldUp(UUID job, BlockPos pos) {
+		BatchRef ref = this.batchJobs.get(job);
+		BuildPlan plan = ref == null ? null : this.builds.get(ref.plan());
+		if (plan == null) {
+			return false;
+		}
+		Set<Integer> blocked = this.blockedBatches(ref.plan(), plan);
+		return blocked.stream().anyMatch(i -> i != ref.index() && plan.batch(i).steps().stream().anyMatch(step -> step.pos().equals(pos)));
+	}
+
 	/** A batch of a plan, by the plan's id and the batch's index. */
 	private record BatchRef(UUID plan, int index) {
 	}

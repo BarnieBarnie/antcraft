@@ -1626,6 +1626,33 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Water whose wall is in a batch that needs a blocked batch, which never runs, is reported too, rather than waiting for
+	 * it for ever (see #288). Batch 0 places cobblestone where bedrock stands, batch 1 pours the water, walled in by stone on
+	 * three sides, and batch 2, which needs batch 0, places its east wall.
+	 */
+	@GameTest(maxTicks = 40)
+	public void reportsAFluidWhoseWallsBatchNeedsABlockedBatch(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE, 2));
+		for (BlockPos pos : List.of(new BlockPos(2, 1, 6), new BlockPos(3, 1, 5), new BlockPos(3, 1, 7))) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(6, 1, 2, Blocks.BEDROCK);
+		BuildPlan.Step blocked = step(helper, 6, 1, 2, COBBLE);
+		BuildPlan.Step water = step(helper, 3, 1, 6, Blocks.WATER.defaultBlockState());
+		BuildPlan.Step wall = step(helper, 4, 1, 6, COBBLE);
+		colony.addBuild(new BuildPlan(List.of(blocked, water, wall), List.of(new BuildPlan.Batch(0, 1, List.of()),
+			new BuildPlan.Batch(1, 2, List.of()), new BuildPlan.Batch(2, 3, List.of(0))), BuildPlan.Kind.BUILD, Optional.empty()));
+		member(helper, colony, 2, 3);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.blockedSteps().containsAll(List.of(blocked.pos(), water.pos())), "not both reported: " + colony.blockedSteps());
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(3, 1, 6));
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 6));
+		});
+	}
+
 	/** A fluid source at (4, 1, 4), walled in by stone so it does not spread. */
 	private static BuildPlan pool(GameTestHelper helper, BlockState fluid) {
 		for (Direction side : Direction.Plane.HORIZONTAL) {
