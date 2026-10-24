@@ -9,7 +9,6 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Farming;
-import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
 import java.util.ArrayList;
@@ -309,15 +308,16 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	}
 
 	/**
-	 * Waters the middle of the colony field with a bucket: it pours a water bucket, fills an empty
+	 * Waters the colony field with a bucket where its water is gone (see {@link Colony#fieldWater}), such as the middle of
+	 * the field the colony laid out or a built farm's water: it pours a water bucket, fills an empty
 	 * one at the nearest water in the territory, or fetches one from the core or a storage chest. Without any bucket in
 	 * the colony it orders one. Returns true while busy, so the caller skips its own work this tick.
 	 * ponytail: the field is planted while the water waits; farmland under a crop stays tilled when
 	 * dry, the crops just grow slower until the water comes.
 	 */
 	private boolean waterField(ServerLevel level, Colony colony) {
-		BlockPos center = colony.field().flatMap(Field::water).orElse(null);
-		if (center == null || level.getBlockState(center).is(Blocks.WATER)) {
+		BlockPos center = colony.fieldWater().stream().filter(pos -> !level.getBlockState(pos).is(Blocks.WATER)).findFirst().orElse(null);
+		if (center == null) {
 			return false;
 		}
 		SimpleContainer inventory = this.bot.getInventory();

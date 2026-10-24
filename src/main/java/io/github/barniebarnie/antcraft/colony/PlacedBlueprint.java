@@ -28,11 +28,12 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
  * @param role what the colony uses it for, if anything
  * @param chests where its chests stand, turned with the structure
  * @param workSpots its work spots, turned with the structure
+ * @param water where the structure pours water sources, such as a farm's, which the farmer pours back once gone
  * @param waiting the structure's plan while the colony levels the site first; it is added to the project once the levelling is done
  * @param finished whether the structure is built
  */
 public record PlacedBlueprint(UUID project, Identifier blueprint, String name, BlockPos at, Rotation rotation, Mirror mirror, BoundingBox area,
-		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, Optional<BuildPlan> waiting, boolean finished) {
+		Optional<Blueprint.Role> role, List<BlockPos> chests, List<BlockPos> workSpots, List<BlockPos> water, Optional<BuildPlan> waiting, boolean finished) {
 	public static final Codec<PlacedBlueprint> CODEC = RecordCodecBuilder.create(i -> i.group(
 		UUIDUtil.STRING_CODEC.fieldOf("project").forGetter(PlacedBlueprint::project),
 		Identifier.CODEC.fieldOf("blueprint").forGetter(PlacedBlueprint::blueprint),
@@ -44,6 +45,7 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 		Blueprint.Role.CODEC.optionalFieldOf("role").forGetter(PlacedBlueprint::role),
 		BlockPos.CODEC.listOf().optionalFieldOf("chests", List.of()).forGetter(PlacedBlueprint::chests),
 		BlockPos.CODEC.listOf().optionalFieldOf("work_spots", List.of()).forGetter(PlacedBlueprint::workSpots),
+		BlockPos.CODEC.listOf().optionalFieldOf("water", List.of()).forGetter(PlacedBlueprint::water),
 		BuildPlan.CODEC.optionalFieldOf("waiting").forGetter(PlacedBlueprint::waiting),
 		Codec.BOOL.optionalFieldOf("finished", false).forGetter(PlacedBlueprint::finished)
 	).apply(i, PlacedBlueprint::new));
@@ -51,6 +53,7 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 	public PlacedBlueprint {
 		chests = List.copyOf(chests);
 		workSpots = List.copyOf(workSpots);
+		water = List.copyOf(water);
 	}
 
 	/** The blueprint's name, translated. */
@@ -60,11 +63,17 @@ public record PlacedBlueprint(UUID project, Identifier blueprint, String name, B
 
 	PlacedBlueprint withProject(UUID project, Optional<BuildPlan> waiting) {
 		return new PlacedBlueprint(project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, waiting, this.finished);
+			this.workSpots, this.water, waiting, this.finished);
+	}
+
+	/** This with {@code water} where its structure pours water. */
+	PlacedBlueprint withWater(List<BlockPos> water) {
+		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
+			this.workSpots, water, this.waiting, this.finished);
 	}
 
 	PlacedBlueprint built() {
 		return new PlacedBlueprint(this.project, this.blueprint, this.name, this.at, this.rotation, this.mirror, this.area, this.role, this.chests,
-			this.workSpots, Optional.empty(), true);
+			this.workSpots, this.water, Optional.empty(), true);
 	}
 }

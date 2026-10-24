@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.Sites;
 import io.github.barniebarnie.antcraft.work.Terraform;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -89,7 +90,7 @@ public final class BlueprintPlacement {
 		}
 		Blueprint print = blueprint.get();
 		return Either.right(new PlacedBlueprint(new UUID(0, 0), id, print.name(), at, rotation, mirror, area, print.role(),
-			print.chestsAt(extent, at, mirror, rotation), print.workSpotsAt(extent, at, mirror, rotation), Optional.empty(), false));
+			print.chestsAt(extent, at, mirror, rotation), print.workSpotsAt(extent, at, mirror, rotation), List.of(), Optional.empty(), false));
 	}
 
 	/**

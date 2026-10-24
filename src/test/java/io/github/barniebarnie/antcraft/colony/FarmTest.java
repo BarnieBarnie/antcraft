@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
@@ -144,5 +145,50 @@ class FarmTest {
 		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
 		assertEquals(colony.field(), loaded.field());
 		assertTrue(loaded.field().isPresent());
+	}
+
+	@Test
+	void aBuiltFarmKeepsItsPlotsTilledOrNotAndItsWaterEvenWhenGone() {
+		Colony colony = colony();
+		place(colony, AT, Mirror.NONE, Rotation.CLOCKWISE_90);
+		List<BlockPos> water = built(AT, Mirror.NONE, Rotation.CLOCKWISE_90, Blocks.WATER);
+		BlockPos plot = blueprint.workSpotsAt(structure.getSize(), AT, Mirror.NONE, Rotation.CLOCKWISE_90).getFirst();
+		assertFalse(colony.isProtected(pos -> Blocks.FARMLAND.defaultBlockState(), plot), "protected while the farm is being built");
+
+		finishAll(colony);
+		for (BlockPos spot : blueprint.workSpotsAt(structure.getSize(), AT, Mirror.NONE, Rotation.CLOCKWISE_90)) {
+			// Tilled, the dirt a builder placed is farmland: a path must not break it all the same.
+			assertTrue(colony.isProtected(pos -> Blocks.FARMLAND.defaultBlockState(), spot), "tilled plot " + spot);
+			assertTrue(colony.isProtected(pos -> Blocks.DIRT.defaultBlockState(), spot), "plot " + spot);
+		}
+		for (BlockPos pos : water) {
+			// Bots fill no bucket there, and once it is gone the farmer pours it back.
+			assertTrue(colony.isProtected(p -> Blocks.WATER.defaultBlockState(), pos), "water " + pos);
+			assertTrue(colony.isProtected(p -> Blocks.AIR.defaultBlockState(), pos), "water gone " + pos);
+		}
+		BlockPos beside = new BlockPos(placed(colony).area().maxX() + 1, AT.getY(), AT.getZ());
+		assertFalse(colony.isProtected(pos -> Blocks.DIRT.defaultBlockState(), beside), "beside the farm");
+	}
+
+	@Test
+	void theFieldWaterIsTheWaterOfEveryBuiltFarmOldestFirstElseTheLaidOutFieldsMiddle() {
+		Colony colony = colony();
+		Field laidOut = new Field(new BlockPos(-8, 63, -8));
+		colony.setField(laidOut);
+		place(colony, AT, Mirror.NONE, Rotation.NONE);
+		BlockPos second = AT.offset(0, 0, -8);
+		place(colony, second, Mirror.FRONT_BACK, Rotation.CLOCKWISE_90);
+		assertEquals(List.of(laidOut.center()), colony.fieldWater(), "while the farms are being built");
+
+		finishAll(colony);
+		List<BlockPos> expected = new ArrayList<>(built(AT, Mirror.NONE, Rotation.NONE, Blocks.WATER));
+		expected.addAll(built(second, Mirror.FRONT_BACK, Rotation.CLOCKWISE_90, Blocks.WATER));
+		assertEquals(expected, colony.fieldWater());
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow()).getOrThrow();
+		assertEquals(expected, loaded.fieldWater(), "once loaded");
+	}
+
+	private static PlacedBlueprint placed(Colony colony) {
+		return colony.blueprints().getFirst();
 	}
 }

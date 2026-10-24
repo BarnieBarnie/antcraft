@@ -548,7 +548,9 @@ public class Colony {
 	 */
 	public PlacedBlueprint placeBlueprint(PlacedBlueprint placed, Optional<BuildPlan> levelling, BuildPlan structure) {
 		Project project = this.addBuild(placed.blueprint().toString(), levelling.orElse(structure));
-		PlacedBlueprint added = placed.withProject(project.id(), levelling.map(plan -> structure));
+		List<BlockPos> water = structure.steps().stream().filter(step -> step.state().is(Blocks.WATER) && step.state().getFluidState().isSource())
+			.map(BuildPlan.Step::pos).toList();
+		PlacedBlueprint added = placed.withWater(water).withProject(project.id(), levelling.map(plan -> structure));
 		this.blueprints.add(added);
 		return added;
 	}
@@ -574,6 +576,21 @@ public class Colony {
 		for (PlacedBlueprint placed : this.blueprints) {
 			if (placed.finished() && placed.role().equals(Optional.of(Blueprint.Role.GENERATOR)) && placed.workSpots().size() >= 2
 					&& placed.workSpots().getFirst().equals(pos)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether {@code pos} is a plot or the water of a built farm, which stay protected tilled, broken or gone: tilling
+	 * turns the dirt a builder placed into farmland, and the farmer pours the water back. A loop, as paths ask this of
+	 * every block.
+	 */
+	private boolean isFarmBlock(BlockPos pos) {
+		for (PlacedBlueprint placed : this.blueprints) {
+			if (placed.finished() && placed.role().equals(Optional.of(Blueprint.Role.FARM)) && placed.area().isInside(pos)
+					&& (placed.workSpots().contains(pos) || placed.water().contains(pos))) {
 				return true;
 			}
 		}
@@ -1281,8 +1298,8 @@ public class Colony {
 		if (!Territory.inBounds(this.bounds, pos)) {
 			return false;
 		}
-		// A generator's mining block too, mined or formed again, which only its generator job breaks.
-		if (this.shaftBlocks.contains(pos) || this.isGeneratorMiningBlock(pos)) {
+		// A generator's mining block too, mined or formed again, which only its generator job breaks, and a built farm's plots and water.
+		if (this.shaftBlocks.contains(pos) || this.isGeneratorMiningBlock(pos) || this.isFarmBlock(pos)) {
 			return true;
 		}
 		if (!this.protectedBlocks.containsKey(pos)) {
@@ -1401,6 +1418,18 @@ public class Colony {
 		}
 		List<BlockPos> plots = farms.stream().flatMap(placed -> placed.workSpots().stream()).toList();
 		return BoundingBox.encapsulatingBoxes(farms.stream().map(PlacedBlueprint::area).toList()).map(area -> Field.of(area, plots));
+	}
+
+	/**
+	 * Where the farmer keeps water for the field: the water of every built farm, oldest first, which it pours back once
+	 * gone; with none built, the middle of the field the colony laid out itself, if it has one.
+	 */
+	public List<BlockPos> fieldWater() {
+		List<PlacedBlueprint> farms = this.finishedBlueprints(Blueprint.Role.FARM);
+		if (farms.isEmpty()) {
+			return this.field.flatMap(Field::water).stream().toList();
+		}
+		return farms.stream().flatMap(placed -> placed.water().stream()).toList();
 	}
 
 	public void setField(Field field) {

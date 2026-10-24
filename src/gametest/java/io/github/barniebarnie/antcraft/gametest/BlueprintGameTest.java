@@ -514,4 +514,62 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(pool, Blocks.LAVA);
 		succeedWhenItGeneratesCobblestone(helper, colony, generator, () -> helper.assertBlockNotPresent(Blocks.LAVA, pool));
 	}
+
+	/**
+	 * A builder needs water for a step and has an empty bucket. The water of the built farm and the water and lava of the
+	 * built cobblestone generator are nearer than the pool in the corner, but it fills its bucket at the pool and leaves
+	 * the buildings' fluids alone.
+	 */
+	@GameTest(maxTicks = 200)
+	public void aBuilderFillsItsBucketAwayFromTheFluidsOfBuiltBuildings(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		for (int x = 0; x <= 7; x++) {
+			for (int z = 0; z <= 7; z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+			}
+		}
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.BUCKET));
+		// The generator fills x = 5..7, z = 0..5 and the farm x = 0..4, z = 3..7.
+		for (Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed : List.of(
+				BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("cobble_generator"), helper.absolutePos(new BlockPos(5, 1, 0)),
+					Rotation.CLOCKWISE_90, Mirror.NONE),
+				BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("farm"), helper.absolutePos(new BlockPos(0, 1, 3)),
+					Rotation.NONE, Mirror.NONE))) {
+			helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		}
+		GameTests.buildNow(helper, colony);
+		List<BlockPos> fluids = new ArrayList<>();
+		for (PlacedBlueprint placed : colony.blueprints()) {
+			BlockPos.betweenClosedStream(placed.area()).filter(pos -> helper.getLevel().getBlockState(pos).getFluidState().isSource())
+				.map(BlockPos::immutable).forEach(fluids::add);
+		}
+		helper.assertValueEqual(fluids.size(), 3, "fluid sources of the farm and generator");
+		// The pool, sunk into the floor with stone under it, so it does not spread.
+		BlockPos pool = new BlockPos(7, 0, 7);
+		helper.setBlock(pool.below(), Blocks.STONE);
+		helper.setBlock(pool, Blocks.WATER);
+		// The step pours water into a pit in the floor.
+		BlockPos pit = new BlockPos(3, 0, 1);
+		helper.setBlock(pit.below(), Blocks.STONE);
+		helper.setBlock(pit, Blocks.AIR);
+		colony.addBuild(new BuildPlan(List.of(new BuildPlan.Step(helper.absolutePos(pit), Blocks.WATER.defaultBlockState()))));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		GameTests.failOnGiveUp(helper, colony);
+		helper.onEachTick(() -> {
+			for (BlockPos pos : fluids) {
+				if (!helper.getLevel().getBlockState(pos).getFluidState().isSource()) {
+					helper.fail("took the fluid at " + TestPositions.relative(helper, pos).toShortString());
+				}
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.WATER, pit);
+			helper.assertBlockNotPresent(Blocks.WATER, pool);
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+		});
+	}
 }

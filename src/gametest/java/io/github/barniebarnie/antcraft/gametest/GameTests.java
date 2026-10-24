@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
@@ -144,5 +145,29 @@ public final class GameTests {
 			stacks.filter(stack -> OUTSIDE.equals(stack.get(DataComponents.CUSTOM_NAME))).findFirst()
 				.ifPresent(stack -> helper.fail("picked up the " + stack.getItem() + " outside the test area"));
 		});
+	}
+
+	/**
+	 * Stands every build plan of {@code colony}, such as its placed blueprints with their levelling, in the world at once,
+	 * protecting every block placed, as builders would, and finishes them: for tests about a built building, without
+	 * waiting for bots to build it.
+	 */
+	public static void buildNow(GameTestHelper helper, Colony colony) {
+		for (int round = 0; round < 10 && !colony.builds().isEmpty(); round++) {
+			for (BuildPlan plan : colony.builds()) {
+				for (BuildPlan.Step step : plan.steps()) {
+					helper.getLevel().setBlockAndUpdate(step.pos(), step.state());
+					if (!step.state().isAir()) {
+						colony.protect(step.pos(), step.state().getBlock());
+					}
+				}
+			}
+			colony.postBuildJobs();
+			colony.board().jobs().stream().filter(job -> job.isOpen() && colony.build(job.id()).isPresent()).toList().forEach(job -> {
+				colony.finishBatch(job.id());
+				colony.board().complete(job.id());
+			});
+		}
+		helper.assertTrue(colony.blueprints().stream().allMatch(placed -> placed.finished()), "blueprints not built: " + colony.blueprints());
 	}
 }

@@ -894,4 +894,98 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			}
 		});
 	}
+
+	/** Stone ground one block up, level with the top of the core, so a farm stands on flat ground and needs no levelling. */
+	private static void raisedGround(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 1, z, Blocks.STONE);
+			}
+		}
+	}
+
+	/** Places the farm with its lowest corner at {@code at} and has it stand built at once (see {@link GameTests#buildNow}). */
+	private static PlacedBlueprint builtFarm(GameTestHelper helper, Colony colony, BlockPos at) {
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("farm"),
+			helper.absolutePos(at), Rotation.NONE, Mirror.NONE);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		GameTests.buildNow(helper, colony);
+		return colony.blueprints().getFirst();
+	}
+
+	/** Fails the test once a plot of {@code farm} is neither dirt nor farmland. */
+	private static void failIfAPlotBreaks(GameTestHelper helper, PlacedBlueprint farm) {
+		helper.onEachTick(() -> {
+			for (BlockPos plot : farm.workSpots()) {
+				BlockState soil = helper.getLevel().getBlockState(plot);
+				if (!soil.is(Blocks.FARMLAND) && !soil.is(Blocks.DIRT)) {
+					helper.fail("plot " + TestPositions.relative(helper, plot).toShortString() + " broken: " + soil);
+				}
+			}
+		});
+	}
+
+	/**
+	 * A built farm, tilled and planted, lies across the only way to ripe wheat, with bedrock beside it and a bedrock ceiling
+	 * over its crops too low to walk on them: the way through is under the ceiling, through the plots. The bot leaves the
+	 * plots standing, though tilling made the dirt the builders placed farmland, and the wheat is out of its reach.
+	 */
+	@GameTest(maxTicks = 120)
+	public void aPathPastABuiltFarmBreaksNoneOfItsTilledPlots(GameTestHelper helper) {
+		raisedGround(helper);
+		Colony colony = colony(helper);
+		PlacedBlueprint farm = builtFarm(helper, colony, new BlockPos(1, 2, 2));
+		for (BlockPos plot : farm.workSpots()) {
+			helper.getLevel().setBlockAndUpdate(plot, Blocks.FARMLAND.defaultBlockState());
+			helper.getLevel().setBlockAndUpdate(plot.above(), Blocks.WHEAT.defaultBlockState());
+			helper.getLevel().setBlockAndUpdate(plot.above(2), Blocks.BEDROCK.defaultBlockState());
+		}
+		// The farm fills x = 1..5, z = 2..6: walls across the rows north and south of it.
+		for (int y = 2; y <= 4; y++) {
+			for (int z : new int[] {0, 1, 7}) {
+				helper.setBlock(3, y, z, Blocks.BEDROCK);
+			}
+		}
+		BlockPos crop = new BlockPos(7, 2, 4);
+		helper.setBlock(crop.below(), Blocks.FARMLAND);
+		helper.setBlock(crop, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 2, 4);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		failIfAPlotBreaks(helper, farm);
+
+		helper.runAfterDelay(100, () -> {
+			helper.assertTrue(Farming.isRipe(helper.getBlockState(crop)), "harvested the wheat past the farm");
+			helper.succeed();
+		});
+	}
+
+	/**
+	 * A built farm's water is gone: the farmer fills a bucket at a source away from the farm and pours it back, and
+	 * plants the farm.
+	 */
+	@GameTest(maxTicks = 60)
+	public void aBuiltFarmsWaterIsPouredBackOnceGone(GameTestHelper helper) {
+		raisedGround(helper);
+		// Sunk into the ground, so it does not spread.
+		BlockPos source = new BlockPos(0, 1, 7);
+		helper.setBlock(source, Blocks.WATER);
+		Colony colony = colony(helper);
+		Container core = core(helper);
+		core.setItem(0, new ItemStack(Items.BUCKET));
+		core.setItem(1, new ItemStack(Items.WOODEN_HOE));
+		core.setItem(2, new ItemStack(Items.WHEAT_SEEDS, 32));
+		PlacedBlueprint farm = builtFarm(helper, colony, new BlockPos(3, 2, 3));
+		helper.assertValueEqual(farm.water().size(), 1, "farm water");
+		BlockPos water = farm.water().getFirst();
+		helper.getLevel().setBlockAndUpdate(water, Blocks.AIR.defaultBlockState());
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 2, 5);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		GameTests.failOnGiveUp(helper, colony);
+		failIfAPlotBreaks(helper, farm);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getLevel().getBlockState(water).is(Blocks.WATER), "no water poured back in the farm");
+			helper.assertBlockNotPresent(Blocks.WATER, source);
+		});
+	}
 }
