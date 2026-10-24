@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -93,5 +95,22 @@ class StorageAreaTest {
 		BuildPlan plan = StorageArea.levelling(CORE, 32, List.of(TAKEN), bumpy(), pos -> true).orElseThrow();
 
 		assertTrue(plan.steps().stream().allMatch(step -> !TAKEN.isInside(step.pos().atY(0))), plan.steps().toString());
+	}
+
+	@Test
+	void aSavedOldStorageAreaStillLoads() {
+		// Saves from before warehouses hold only the lowest corner of the fixed layout.
+		StorageArea loaded = StorageArea.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString("[3, 64, -2]")).getOrThrow();
+		assertEquals(new StorageArea(new BlockPos(3, 64, -2)), loaded);
+		assertEquals(new BlockPos(3, 64, -2), loaded.chestSpots().getFirst());
+		assertEquals(new BoundingBox(3, 64, -2, 7, 65, 0), loaded.area());
+	}
+
+	@Test
+	void aStorageAreaOfChestSpotsIsSavedAndLoaded() {
+		StorageArea area = StorageArea.of(new BoundingBox(0, 64, 0, 3, 65, 2), List.of(new BlockPos(3, 64, 2), new BlockPos(0, 64, 0)));
+		StorageArea loaded = StorageArea.CODEC.parse(JsonOps.INSTANCE, StorageArea.CODEC.encodeStart(JsonOps.INSTANCE, area).getOrThrow()).getOrThrow();
+		assertEquals(area, loaded);
+		assertEquals(List.of(new BlockPos(3, 64, 2), new BlockPos(0, 64, 0)), loaded.chestSpots());
 	}
 }

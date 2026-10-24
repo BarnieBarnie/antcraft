@@ -197,7 +197,7 @@ class BlueprintTest {
 				files.add(file.getFileName().toString());
 			}
 		}
-		assertTrue(files.containsAll(List.of("starter_house.json", "cobble_step.json")), files.toString());
+		assertTrue(files.containsAll(List.of("starter_house.json", "cobble_step.json", "warehouse.json")), files.toString());
 	}
 
 	@Test

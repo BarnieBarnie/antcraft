@@ -111,7 +111,7 @@ class BlueprintSummaryTest {
 		try (Stream<Path> files = Files.list(BLUEPRINTS)) {
 			names = files.map(file -> file.getFileName().toString().replace(".json", "")).sorted().toList();
 		}
-		assertEquals(List.of("cobble_step", "starter_house"), names);
+		assertEquals(List.of("cobble_step", "starter_house", "warehouse"), names);
 		for (String name : names) {
 			BlueprintSummary summary = bundled(name);
 			assertTrue(summary.size().getX() > 0 && summary.size().getY() > 0 && summary.size().getZ() > 0, name + " " + summary.size());

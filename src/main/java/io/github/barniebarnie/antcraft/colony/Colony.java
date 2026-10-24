@@ -1359,9 +1359,17 @@ public class Colony {
 		this.board.removeOpenIf(job -> job.type() == JobType.PLANT_CROP);
 	}
 
-	/** Where haulers keep the colony's storage chests, once the colony has picked a spot. */
+	/**
+	 * Where haulers keep the colony's storage chests: the chests of every built warehouse (a placed blueprint with role
+	 * {@link Blueprint.Role#STORAGE}), oldest first; with none built, the area the colony picked itself, once it has.
+	 */
 	public Optional<StorageArea> storage() {
-		return this.storage;
+		List<PlacedBlueprint> warehouses = this.finishedBlueprints(Blueprint.Role.STORAGE);
+		if (warehouses.isEmpty()) {
+			return this.storage;
+		}
+		List<BlockPos> chests = warehouses.stream().flatMap(placed -> placed.chests().stream()).toList();
+		return BoundingBox.encapsulatingBoxes(warehouses.stream().map(PlacedBlueprint::area).toList()).map(area -> StorageArea.of(area, chests));
 	}
 
 	public void setStorage(StorageArea storage) {

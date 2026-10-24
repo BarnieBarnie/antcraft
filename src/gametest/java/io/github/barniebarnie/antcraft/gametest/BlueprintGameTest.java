@@ -21,6 +21,7 @@ import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,7 +63,7 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 	/** The server's data load fills the blueprint library with the bundled blueprints, each pointing at a structure the server has. */
 	@GameTest(maxTicks = 5)
 	public void theServerListsTheBundledBlueprints(GameTestHelper helper) {
-		for (String name : List.of("starter_house", "cobble_step")) {
+		for (String name : List.of("starter_house", "cobble_step", "warehouse")) {
 			Identifier id = AntCraft.id(name);
 			Optional<Blueprint> blueprint = Blueprints.get(id);
 			helper.assertTrue(blueprint.isPresent(), "no blueprint " + id + " in " + Blueprints.ids());
@@ -243,5 +244,46 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(trusted.right().isPresent(), "a trusted player's placement refused: " + trusted.left());
 		helper.assertValueEqual(colony.blueprints().size(), 1, "placed blueprints");
 		helper.succeed();
+	}
+
+	/**
+	 * A warehouse placed for the colony, turned a quarter: the bot builds its chests from the core, and once it stands
+	 * the colony stores there, so the bot moves the logs the core does not need into its chests.
+	 */
+	@GameTest(maxTicks = 480)
+	public void aPlacedWarehouseIsBuiltAndBotsStoreSurplusInIt(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.CHEST, 10));
+		for (int i = 1; i <= 4; i++) {
+			core.setItem(i, new ItemStack(Items.OAK_LOG, 64));
+		}
+		// A stone platform, so the site needs no levelling: turned a quarter, the warehouse is 3 wide and 5 deep.
+		for (int x = 3; x <= 5; x++) {
+			for (int z = 2; z <= 6; z++) {
+				helper.setBlock(x, 1, z, Blocks.STONE);
+			}
+		}
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("warehouse"),
+			helper.absolutePos(new BlockPos(3, 2, 2)), Rotation.CLOCKWISE_90, Mirror.NONE);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		List<BlockPos> chests = placed.right().orElseThrow().chests();
+		helper.assertValueEqual(chests.size(), 10, "chest spots");
+		ColonyManager.get(helper.getLevel()).join(helper.spawn(ModEntities.ANT_BOT, 6, 1, 6), colony);
+		GameTests.failOnGiveUp(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(colony.blueprints().stream().map(PlacedBlueprint::finished).toList(), List.of(true), "placed blueprints finished");
+			int stored = 0;
+			for (BlockPos spot : chests) {
+				Container chest = Storage.containerAt(helper.getLevel(), spot);
+				helper.assertTrue(chest != null, "no chest at " + spot);
+				stored += chest.countItem(Items.OAK_LOG);
+			}
+			// Without stock targets, the core keeps one stack.
+			helper.assertValueEqual(core.countItem(Items.OAK_LOG), 64, "logs in the core");
+			helper.assertValueEqual(stored, 3 * 64, "logs in the warehouse");
+		});
 	}
 }
