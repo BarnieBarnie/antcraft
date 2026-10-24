@@ -11,7 +11,9 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.ToolKind;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
@@ -298,16 +300,21 @@ public abstract class ColonyWorkGoal {
 
 	/** The block in the colony territory nearest {@code from} that is {@code wanted}, or null. */
 	protected static @Nullable BlockPos nearest(ServerLevel level, Colony colony, BlockPos from, Predicate<BlockPos> wanted) {
+		return all(level, colony, wanted).stream().min(Comparator.comparingDouble(pos -> pos.distSqr(from))).orElse(null);
+	}
+
+	/** Every block in the colony territory, as far above and below the core as {@link #nearest} looks, that is {@code wanted}. */
+	protected static List<BlockPos> all(ServerLevel level, Colony colony, Predicate<BlockPos> wanted) {
 		BlockPos core = colony.core();
 		int r = colony.radius();
 		Territory territory = Territory.of(colony);
-		BlockPos nearest = null;
+		List<BlockPos> found = new ArrayList<>();
 		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-r, -SCAN_HEIGHT, -r), core.offset(r, SCAN_HEIGHT, r))) {
-			if (territory.contains(pos) && wanted.test(pos) && (nearest == null || pos.distSqr(from) < nearest.distSqr(from))) {
-				nearest = pos.immutable();
+			if (territory.contains(pos) && wanted.test(pos)) {
+				found.add(pos.immutable());
 			}
 		}
-		return nearest;
+		return found;
 	}
 
 	protected static int findSlot(Container container, Predicate<ItemStack> filter) {

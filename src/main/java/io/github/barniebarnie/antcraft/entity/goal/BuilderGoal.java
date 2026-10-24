@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.FireSpread;
+import io.github.barniebarnie.antcraft.work.LavaSources;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import io.github.barniebarnie.antcraft.work.ToolKind;
@@ -67,7 +68,8 @@ import org.jspecify.annotations.Nullable;
  * way it scoops up with a bucket or fills with a cheap block from the core, and fluid beside a block
  * it digs that the plan does not clear it walls off with such a block; those it cannot clear are
  * reported as blocked. It pours water and lava from a bucket, as a player would, filling an
- * empty one at a source in the territory when the core has no full one; a waterlogged block it
+ * empty one at a source in the territory when the core has no full one, lava also beside the mine and only from a
+ * spot safe from it (see {@link LavaSources}); between jobs it fills one the same way for an order and stores it. A waterlogged block it
  * places dry and fills from a water bucket the same way, and one standing waterlogged where the plan
  * wants it dry it empties with an empty bucket. A door, bed or tall plant it places whole
  * from one item, clearing the spot for its other half first; one whose other half would go into
@@ -115,6 +117,10 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** Sources it found no spot to see from, skipped until no other source is left. */
 	private final Set<BlockPos> hiddenSources = new HashSet<>();
 	private long nextSourceScan;
+	/** Where a bot fills a bucket with lava from: a spot that is safe from it (see {@link LavaSources#isSafeSpot}); one for good, as goals compare by value. */
+	private final Predicate<BlockPos> safeFromLava = feet -> LavaSources.isSafeSpot(pos -> this.bot.level().getBlockState(pos), feet);
+	/** The full bucket filled for an order between jobs, on its way to the core; null if none. */
+	private @Nullable Item gathered;
 	private final ScaffoldCleanup scaffoldCleanup;
 	/** Taking its scaffolding down, before putting a plan aside or once it has no job. */
 	private boolean cleaning;
@@ -183,7 +189,55 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			this.startCleanup();
 			return true;
 		}
-		return false;
+		return this.gather(level, colony);
+	}
+
+	@Override
+	protected boolean carriesLoad() {
+		return this.gathered != null;
+	}
+
+	/**
+	 * Fills an empty bucket for an order of a full one, such as a lava bucket, which cannot be crafted, at the nearest source
+	 * it can fill one at, and takes it to the core. Only while the colony and its bots hold fewer of them than are ordered,
+	 * and an empty bucket, carried or in the core. Returns false when there is none of it to do, such as with no source in
+	 * reach, so the bot stays where it is.
+	 */
+	private boolean gather(ServerLevel level, Colony colony) {
+		Container core = Storage.containerAt(level, colony.core());
+		if (this.gathered != null && this.bot.getInventory().countItem(this.gathered) == 0) {
+			this.gathered = null;
+		}
+		if (core == null) {
+			return false;
+		}
+		if (this.gathered != null) {
+			if (this.reach(colony.core())) {
+				Item item = this.gathered;
+				colony.fulfil(item, Storage.moveItems(this.bot.getInventory(), core, stack -> stack.is(item), 1));
+				this.gathered = null;
+				this.resetMovement();
+			}
+			return true;
+		}
+		Map<Item, Integer> held = Storage.held(level, colony);
+		Optional<Item> wanted = colony.orders().entrySet().stream()
+			.filter(order -> isPoured(order.getKey()) && held.getOrDefault(order.getKey(), 0) < order.getValue())
+			.map(Map.Entry::getKey)
+			.filter(item -> this.source(level, colony, item) != null)
+			.findFirst();
+		if (wanted.isEmpty()) {
+			return false;
+		}
+		int empty = findSlot(this.bot.getInventory(), BuilderGoal::isBucket);
+		if (empty >= 0) {
+			this.gathered = this.fillAt(level, colony, wanted.get(), empty) ? wanted.get() : null;
+		} else if (findSlot(core, BuilderGoal::isBucket) < 0) {
+			return false;
+		} else if (this.reach(colony.core())) {
+			Storage.moveItems(core, this.bot.getInventory(), BuilderGoal::isBucket, 1);
+		}
+		return true;
 	}
 
 	/** Whether this bot has something to do in the job's batch, or can finish it or report it blocked. */
@@ -628,14 +682,47 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		} else if (source == null) {
 			this.cooldown = IDLE_TICKS;
 		} else {
-			PathFollower.Status status = this.approach(this.inSight(source), source);
-			if (status == PathFollower.Status.FAILED) {
-				this.hiddenSources.add(source);
-				this.sources.remove(bucket);
-			} else if (status == PathFollower.Status.ARRIVED) {
-				this.scoop(level, source, empty);
-				this.sources.remove(bucket);
-			}
+			this.fillAt(level, colony, bucket, empty);
+		}
+	}
+
+	/**
+	 * Goes to the nearest source to fill the empty bucket in {@code slot} into {@code bucket} at, and fills it once there:
+	 * within reach and in sight of it, and for lava at a spot safe from it (see {@link LavaSources}). Returns true once filled.
+	 */
+	private boolean fillAt(ServerLevel level, Colony colony, Item bucket, int slot) {
+		BlockPos source = this.source(level, colony, bucket);
+		if (source == null) {
+			this.cooldown = IDLE_TICKS;
+			return false;
+		}
+		Goal goal = bucket == Items.LAVA_BUCKET ? new SafeSpot(this.inSight(source), this.safeFromLava) : this.inSight(source);
+		PathFollower.Status status = this.approach(goal, source);
+		if (status == PathFollower.Status.FAILED) {
+			this.hiddenSources.add(source);
+			this.sources.remove(bucket);
+		} else if (status == PathFollower.Status.ARRIVED) {
+			this.sources.remove(bucket);
+			return !this.scoop(level, source, slot).isEmpty();
+		}
+		return false;
+	}
+
+	/** {@code goal}, reached only where {@code safe} says the bot stands safe. */
+	private record SafeSpot(Goal goal, Predicate<BlockPos> safe) implements Goal {
+		@Override
+		public boolean isReached(BlockPos feet) {
+			return this.goal.isReached(feet) && this.safe.test(feet);
+		}
+
+		@Override
+		public boolean isReached(BlockPos feet, Predicate<BlockPos> broken) {
+			return this.goal.isReached(feet, broken) && this.safe.test(feet);
+		}
+
+		@Override
+		public double heuristic(BlockPos feet) {
+			return this.goal.heuristic(feet);
 		}
 	}
 
@@ -658,10 +745,24 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	/** The fluid source in the territory nearest {@code from} that fills an empty bucket into {@code bucket}; never one a plan places, so a builder does not undo its own work, nor one in {@code skip}. */
 	private static @Nullable BlockPos source(ServerLevel level, Colony colony, BlockPos from, Item bucket, Set<BlockPos> skip) {
 		Set<BlockPos> planned = planned(colony);
-		return nearest(level, colony, from, pos -> {
+		Predicate<BlockPos> fills = pos -> {
 			FluidState fluid = level.getFluidState(pos);
 			return fluid.isSource() && fluid.getType().getBucket() == bucket && level.getBlockState(pos).getBlock() instanceof LiquidBlock && !planned.contains(pos) && !skip.contains(pos);
-		});
+		};
+		if (bucket != Items.LAVA_BUCKET) {
+			return nearest(level, colony, from, fills);
+		}
+		// Lava also in the mine, beside the cells dug out, and only where a bot can fill a bucket safe from it.
+		Set<BlockPos> found = new HashSet<>(all(level, colony, fills));
+		for (BlockPos cell : colony.mineCells()) {
+			for (Direction side : Direction.values()) {
+				BlockPos pos = cell.relative(side);
+				if (fills.test(pos)) {
+					found.add(pos);
+				}
+			}
+		}
+		return LavaSources.choose(level::getBlockState, from, found, REACH).map(LavaSources.Fill::source).orElse(null);
 	}
 
 	/** Whether {@code item} is a full bucket, poured as a fluid source or into a waterlogged block. */

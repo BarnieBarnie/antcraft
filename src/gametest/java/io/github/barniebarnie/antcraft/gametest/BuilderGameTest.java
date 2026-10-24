@@ -1693,6 +1693,66 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A lava source sunk into the floor at (6, 0, 6), with stone under it, so it does not spread. */
+	private static BlockPos lavaPool(GameTestHelper helper) {
+		BlockPos pool = new BlockPos(6, 0, 6);
+		helper.setBlock(pool.below(), Blocks.STONE);
+		helper.setBlock(pool, Blocks.LAVA);
+		return pool;
+	}
+
+	/** Fails the test once {@code bot} burns, stands in lava or takes damage, as a bot filling a bucket at lava never should. */
+	private static void failIfBurnt(GameTestHelper helper, AntBot bot) {
+		helper.onEachTick(() -> {
+			helper.assertFalse(bot.isInLava() || bot.isOnFire(), "bot in lava or on fire at " + bot.blockPosition().toShortString());
+			helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "bot hurt: " + bot.getHealth());
+		});
+	}
+
+	@GameTest(maxTicks = 50)
+	public void fillsABucketAtALavaPoolForAnOrderAndStoresItInTheCore(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		BlockPos pool = lavaPool(helper);
+		core(helper).setItem(0, new ItemStack(Items.BUCKET));
+		colony.addOrder(Items.LAVA_BUCKET, 1);
+		AntBot bot = member(helper, colony, 1, 4);
+
+		failIfBurnt(helper, bot);
+		GameTests.failIfIdle(helper, bot, 40, () -> core(helper).countItem(Items.LAVA_BUCKET) == 0);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.LAVA_BUCKET) == 1, "no lava bucket in the core");
+			helper.assertBlockNotPresent(Blocks.LAVA, pool);
+			helper.assertFalse(colony.orders().containsKey(Items.LAVA_BUCKET), "order still open: " + colony.orders());
+		});
+	}
+
+	@GameTest(maxTicks = 70)
+	public void reportsALavaStepWithNoLavaInRangeAndStaysHome(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.BUCKET));
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(new BlockPos(4, 1, 4).relative(side), Blocks.STONE);
+		}
+		colony.addBuild(new BuildPlan(List.of(step(helper, 4, 1, 4, Blocks.LAVA.defaultBlockState()))));
+		AntBot bot = member(helper, colony, 1, 4);
+		BlockPos home = bot.blockPosition();
+
+		helper.onEachTick(() -> helper.assertTrue(bot.blockPosition().closerThan(home, 3), "wandered off to " + relative(helper, bot.blockPosition())));
+		// Reported, and it stays so for a while: the bot does not go looking for lava meanwhile.
+		long[] reported = {-1};
+		helper.onEachTick(() -> {
+			if (reported[0] < 0 && !colony.blockedSteps().isEmpty()) {
+				reported[0] = helper.getTick();
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.blockedSteps().equals(List.of(helper.absolutePos(new BlockPos(4, 1, 4)))), "step not reported: " + colony.blockedSteps());
+			helper.assertTrue(reported[0] >= 0 && helper.getTick() - reported[0] >= 20, "not reported long enough");
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+			helper.assertTrue(core(helper).countItem(Items.BUCKET) + bot.getInventory().countItem(Items.BUCKET) == 1, "bucket lost");
+		});
+	}
+
 	/** The nearest source is walled in with stone, top included, within reach of the builder: like a player, it fills its bucket at the open one instead. */
 	@GameTest(maxTicks = 70)
 	public void doesNotScoopAWaterSourceBehindAWall(GameTestHelper helper) {
