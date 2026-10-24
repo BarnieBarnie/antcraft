@@ -520,6 +520,21 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		return this.steps.getFirst().pos();
 	}
 
+	/**
+	 * Whether {@code step} pours a fluid while a block this plan places beside or under it is not in {@code world} yet:
+	 * poured first, it would flow out where a wall is still missing, as lava flows out of a cobblestone generator, so it
+	 * waits. A block placed over it, or a waterlogged block (placed dry, then filled), does not wait.
+	 */
+	public boolean waitsForWalls(Function<BlockPos, BlockState> world, Step step) {
+		if (step.isClear() || !(step.state().getBlock() instanceof LiquidBlock)) {
+			return false;
+		}
+		Set<BlockPos> around = Stream.concat(Direction.Plane.HORIZONTAL.stream().map(step.pos()::relative), Stream.of(step.pos().below()))
+			.collect(Collectors.toSet());
+		return this.steps.stream().anyMatch(wall -> around.contains(wall.pos()) && !wall.isClear()
+			&& !(wall.state().getBlock() instanceof LiquidBlock) && !wall.isPlaced(world.apply(wall.pos())));
+	}
+
 	/** The first step the world does not match yet. */
 	public Optional<Step> nextStep(Function<BlockPos, BlockState> world) {
 		return this.nextStep(world, step -> true);

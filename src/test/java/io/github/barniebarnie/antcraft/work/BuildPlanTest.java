@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +71,38 @@ class BuildPlanTest {
 		Bootstrap.bootStrap();
 		// The vanilla tags, such as which blocks are dug with a pickaxe.
 		VanillaData.recipeBook();
+	}
+
+	/**
+	 * A fluid is poured only once the blocks the plan puts beside and under it stand, or it would flow out where a wall is
+	 * still missing, such as the lava of a cobblestone generator before the block it is to flow into.
+	 */
+	@Test
+	void aFluidWaitsForThePlansBlocksBesideAndUnderIt() {
+		BlockPos lava = new BlockPos(5, 1, 5);
+		BlockState stone = Blocks.COBBLESTONE.defaultBlockState();
+		BuildPlan.Step pour = new BuildPlan.Step(lava, Blocks.LAVA.defaultBlockState());
+		List<BlockPos> walls = List.of(lava.west(), lava.east(), lava.south(), lava.below());
+		List<BuildPlan.Step> steps = new ArrayList<>(walls.stream().map(pos -> new BuildPlan.Step(pos, stone)).toList());
+		// Neither a block over it, a block further off nor a block cleared beside it holds it back.
+		steps.add(new BuildPlan.Step(lava.above(), stone));
+		steps.add(new BuildPlan.Step(lava.east(2), stone));
+		steps.add(BuildPlan.Step.clear(lava.north()));
+		steps.add(pour);
+		BuildPlan plan = new BuildPlan(steps);
+
+		assertTrue(plan.waitsForWalls(at(world()), pour), "poured with no walls");
+		Map<BlockPos, BlockState> world = world();
+		walls.subList(0, 3).forEach(pos -> world.put(pos, stone));
+		assertTrue(plan.waitsForWalls(at(world), pour), "poured with no floor");
+		world.put(lava.below(), stone);
+		world.put(lava.north(), stone);
+		assertFalse(plan.waitsForWalls(at(world), pour), "walls stand");
+		BuildPlan.Step wall = new BuildPlan.Step(lava.west(), stone);
+		assertFalse(plan.waitsForWalls(at(world()), wall), "a block waits");
+		// A waterlogged block is placed dry, then filled: it does not wait either.
+		BuildPlan.Step wet = new BuildPlan.Step(lava, stairs(Direction.EAST).setValue(BlockStateProperties.WATERLOGGED, true));
+		assertFalse(new BuildPlan(List.of(wet, new BuildPlan.Step(lava.west(), stone))).waitsForWalls(at(world()), wet), "a waterlogged block waits");
 	}
 
 	@Test

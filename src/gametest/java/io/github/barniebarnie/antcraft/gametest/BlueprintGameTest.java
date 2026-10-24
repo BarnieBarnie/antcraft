@@ -17,11 +17,13 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.colony.SiteRules;
+import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -35,6 +37,7 @@ import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.Vec3i;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -65,7 +68,7 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 	/** The server's data load fills the blueprint library with the bundled blueprints, each pointing at a structure the server has. */
 	@GameTest(maxTicks = 5)
 	public void theServerListsTheBundledBlueprints(GameTestHelper helper) {
-		for (String name : List.of("starter_house", "cobble_step", "warehouse", "farm")) {
+		for (String name : List.of("starter_house", "cobble_step", "warehouse", "farm", "cobble_generator")) {
 			Identifier id = AntCraft.id(name);
 			Optional<Blueprint> blueprint = Blueprints.get(id);
 			helper.assertTrue(blueprint.isPresent(), "no blueprint " + id + " in " + Blueprints.ids());
@@ -311,5 +314,102 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(core.countItem(Items.OAK_LOG), 64, "logs in the core");
 			helper.assertValueEqual(stored, 3 * 64, "logs in the warehouse");
 		});
+	}
+
+	/** Where the generator tests place the cobblestone generator: its lowest corner, on the floor, leaving room for it turned either way. */
+	private static final BlockPos GENERATOR = new BlockPos(1, 1, 4);
+
+	/**
+	 * Places the cobblestone generator, mirrored then turned, on a stone floor laid over the test area, has a bot join the
+	 * colony, and fails the test once lava or water leaks out of it, obsidian or stone forms in it, or the bot is hurt.
+	 * Returns the placed generator.
+	 */
+	private static PlacedBlueprint placeGenerator(GameTestHelper helper, Colony colony, Rotation rotation, Mirror mirror) {
+		// A stone floor, so the site needs no levelling and the bot walks one step below its floor, as on level ground.
+		for (int x = 0; x <= 7; x++) {
+			for (int z = 0; z <= 7; z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+			}
+		}
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true,
+			AntCraft.id("cobble_generator"), helper.absolutePos(GENERATOR), rotation, mirror);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		PlacedBlueprint generator = placed.right().orElseThrow();
+		helper.assertValueEqual(generator.role(), Optional.of(Blueprint.Role.GENERATOR), "role");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		GameTests.failOnGiveUp(helper, colony);
+		Vec3i size = helper.getLevel().getServer().getStructureTemplateManager().get(AntCraft.id("cobble_generator")).orElseThrow().getSize();
+		BlockPos lava = RegionPlan.placed(new BlockPos(4, 1, 1), size, helper.absolutePos(GENERATOR), mirror, rotation);
+		helper.onEachTick(() -> {
+			helper.assertFalse(bot.isInLava() || bot.isOnFire() || bot.getHealth() < bot.getMaxHealth(), "bot hurt at " + bot.blockPosition().toShortString());
+			for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(0, 1, 3)), helper.absolutePos(new BlockPos(7, 4, 7)))) {
+				BlockState state = helper.getLevel().getBlockState(pos);
+				if (state.is(Blocks.OBSIDIAN) || state.is(Blocks.STONE) || state.is(Blocks.LAVA) && !pos.equals(lava)) {
+					helper.fail(state + " at " + TestPositions.relative(helper, pos).toShortString());
+				}
+				if (state.is(Blocks.WATER) && !generator.area().isInside(pos)) {
+					helper.fail("water leaked to " + TestPositions.relative(helper, pos).toShortString());
+				}
+			}
+		});
+		return generator;
+	}
+
+	/**
+	 * Once the generator stands, its mining block holds cobblestone; mined, cobblestone forms there again. Succeeds once
+	 * it has formed twice.
+	 */
+	private static void succeedWhenItGeneratesCobblestone(GameTestHelper helper, Colony colony, PlacedBlueprint generator, Runnable more) {
+		BlockPos mine = generator.workSpots().get(0);
+		boolean[] mined = {false};
+		helper.onEachTick(() -> {
+			if (!mined[0] && generator(colony).finished() && helper.getLevel().getBlockState(mine).is(Blocks.COBBLESTONE)) {
+				helper.getLevel().destroyBlock(mine, false);
+				mined[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(mined[0], "no cobblestone formed in the finished generator yet");
+			helper.assertTrue(helper.getLevel().getBlockState(mine).is(Blocks.COBBLESTONE), "no cobblestone formed again once mined");
+			more.run();
+		});
+	}
+
+	private static PlacedBlueprint generator(Colony colony) {
+		return colony.blueprints().stream().filter(placed -> placed.blueprint().equals(AntCraft.id("cobble_generator"))).findFirst().orElseThrow();
+	}
+
+	/**
+	 * Builders build the cobblestone generator from the core, pouring its water and lava from buckets, and it makes
+	 * cobblestone. Turned half round, its lava comes before its water and walls in the build order.
+	 */
+	@GameTest(maxTicks = 420)
+	public void aBuiltCobblestoneGeneratorFormsCobblestoneAtItsMiningBlock(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		core.setItem(1, new ItemStack(Items.WATER_BUCKET));
+		core.setItem(2, new ItemStack(Items.LAVA_BUCKET));
+		PlacedBlueprint generator = placeGenerator(helper, colony, Rotation.CLOCKWISE_180, Mirror.NONE);
+		succeedWhenItGeneratesCobblestone(helper, colony, generator, () -> { });
+	}
+
+	/** Without lava in the core, the builder fills the empty bucket at a lava pool nearby, and the generator is built all the same. */
+	@GameTest(maxTicks = 600)
+	public void aCobblestoneGeneratorIsBuiltWithLavaFetchedFromAPool(GameTestHelper helper) {
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		Colony colony = colony(helper);
+		Container core = (Container) helper.getBlockEntity(CORE, BlockEntity.class);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 64));
+		core.setItem(1, new ItemStack(Items.WATER_BUCKET));
+		core.setItem(2, new ItemStack(Items.BUCKET));
+		PlacedBlueprint generator = placeGenerator(helper, colony, Rotation.NONE, Mirror.NONE);
+		// A lava source sunk into the floor, with stone under it, so it does not spread.
+		BlockPos pool = new BlockPos(6, 0, 1);
+		helper.setBlock(pool.below(), Blocks.STONE);
+		helper.setBlock(pool, Blocks.LAVA);
+		succeedWhenItGeneratesCobblestone(helper, colony, generator, () -> helper.assertBlockNotPresent(Blocks.LAVA, pool));
 	}
 }

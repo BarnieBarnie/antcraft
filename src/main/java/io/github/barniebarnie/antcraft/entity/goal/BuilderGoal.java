@@ -600,7 +600,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 					|| !walls.isEmpty() && !isUnbreakable(level, step.pos()) && this.fillers(core, walls.size()).isPresent();
 			}
 			Item item = step.item(current);
-			if (!isPossible(level, step)) {
+			if (!isPossible(level, step) || plan.waitsForWalls(level::getBlockState, step)) {
 				return false;
 			}
 			return this.has(core, stack -> stack.is(item))
