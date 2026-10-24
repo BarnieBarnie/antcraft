@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -169,6 +170,32 @@ class BuildPlanTest {
 		assertEquals(Map.of(Items.COBBLESTONE_STAIRS, 2), BuildPlan.shortfall(Map.of(Items.COBBLESTONE_STAIRS, 2), Map.of(), Map.of(), Map.of(), Map.of(Items.STONE_BRICK_STAIRS, 2)),
 			"cobblestone stairs placed as such take no other");
 		assertEquals(Optional.empty(), plan.needs(air).item(), "a job of stone stairs declares no one kind to fetch");
+	}
+
+	@Test
+	void woodenTrapdoorStepsTakeWhicheverWoodenTrapdoorTheColonyHasAndOrderOneItCanMake() {
+		BuildPlan plan = new BuildPlan(List.of(BuildPlan.Step.woodenTrapdoor(A, Blocks.OAK_TRAPDOOR.defaultBlockState()),
+			new BuildPlan.Step(B, Blocks.COBBLESTONE_STAIRS.defaultBlockState())));
+		Function<BlockPos, BlockState> air = pos -> Blocks.AIR.defaultBlockState();
+		Map<Item, Integer> materials = plan.materials(air);
+		Map<Item, Integer> hatches = plan.standInMaterials(air);
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), hatches);
+		assertEquals(Map.of(Items.COBBLESTONE_STAIRS, 1), BuildPlan.shortfall(materials, Map.of(), Map.of(), hatches, Map.of(Items.BIRCH_TRAPDOOR, 1)),
+			"a birch trapdoor stands in for the oak one");
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1, Items.COBBLESTONE_STAIRS, 1),
+			BuildPlan.shortfall(materials, Map.of(), Map.of(), hatches, Map.of(Items.IRON_TRAPDOOR, 1, Items.STONE_BRICK_STAIRS, 1)),
+			"an iron trapdoor or stairs do not, nor does a stair step placed as such take other stairs");
+		// What no trapdoor the colony has covers is ordered as one it can make, the step's own if it can.
+		Predicate<Item> spruce = Items.SPRUCE_TRAPDOOR::equals;
+		assertEquals(Map.of(Items.SPRUCE_TRAPDOOR, 1, Items.COBBLESTONE_STAIRS, 1),
+			BuildPlan.shortfall(materials, Map.of(), Map.of(), hatches, Map.of(), new HashMap<>(), spruce));
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1, Items.COBBLESTONE_STAIRS, 1),
+			BuildPlan.shortfall(materials, Map.of(), Map.of(), hatches, Map.of(), new HashMap<>(), spruce.or(Items.OAK_TRAPDOOR::equals)));
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1, Items.COBBLESTONE_STAIRS, 1),
+			BuildPlan.shortfall(materials, Map.of(), Map.of(), hatches, Map.of(), new HashMap<>(), item -> false), "the step's own when it can make none");
+		// A trapdoor placed as such, not as a hatch, is ordered as such.
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), BuildPlan.shortfall(Map.of(Items.OAK_TRAPDOOR, 1), Map.of(), Map.of(), Map.of(), Map.of(), new HashMap<>(), spruce));
+		assertEquals(Optional.empty(), new BuildPlan(List.of(plan.steps().getFirst())).needs(air).item(), "a hatch job declares no one kind to fetch");
 	}
 
 	@Test

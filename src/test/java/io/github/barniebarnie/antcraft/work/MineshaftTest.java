@@ -786,6 +786,20 @@ class MineshaftTest {
 	}
 
 	@Test
+	void theLadderShaftHatchTakesAnyWoodenTrapdoorTheSameWayRound() {
+		BuildPlan.Step hatch = steps(LADDER).get(new BlockPos(0, 9, 0));
+		BlockState spruce = Blocks.SPRUCE_TRAPDOOR.withPropertiesOf(hatch.state());
+		assertTrue(hatch.isDone(spruce), "a spruce trapdoor is no hatch");
+		assertTrue(hatch.isDone(Blocks.CRIMSON_TRAPDOOR.withPropertiesOf(hatch.state())), "a crimson trapdoor is no hatch");
+		assertFalse(hatch.isDone(spruce.setValue(TrapDoorBlock.HALF, Half.BOTTOM)), "a trapdoor the wrong way round is a hatch");
+		assertFalse(hatch.isDone(Blocks.IRON_TRAPDOOR.withPropertiesOf(hatch.state())), "an iron trapdoor, which no bot opens, is a hatch");
+		// Saved and loaded with the step.
+		BuildPlan plan = new BuildPlan(List.of(hatch));
+		var json = BuildPlan.CODEC.encodeStart(JsonOps.INSTANCE, plan).getOrThrow();
+		assertEquals(plan, BuildPlan.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+	}
+
+	@Test
 	void eachLadderShaftLevelHasALandingChamberWithAChestAndATorchAndTheHallLeavesFromIt() {
 		Map<BlockPos, BuildPlan.Step> steps = steps(LADDER);
 		// The landings take turns either side of the column, so one level's chamber is never right under another's.

@@ -516,13 +516,14 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * with a fill block such as cobblestone or sand that the bot or the core has, when neither has
 	 * the step's own block. Sand and gravel only where the step may fall and rests on the block
 	 * below (see {@link BuildPlan.Step#fillBlocks}), so a mineshaft's wall never drops into the shaft.
-	 * Likewise a step any stone stairs will do takes whichever of {@link BuildPlan#STONE_STAIRS} there is.
+	 * Likewise a step any of a kind will do, such as any stone stairs or any wooden trapdoor, takes whichever of
+	 * its {@link BuildPlan.Step#standIns} there is.
 	 */
 	private BuildPlan.Step withFiller(ServerLevel level, @Nullable Container core, BuildPlan.Step step) {
-		if (!step.anySolid() && !step.anyStoneStairs() || this.has(core, stack -> stack.is(step.item()))) {
+		if (!step.anySolid() && step.standIns().isEmpty() || this.has(core, stack -> stack.is(step.item()))) {
 			return step;
 		}
-		Set<Item> fillers = step.anyStoneStairs() ? BuildPlan.STONE_STAIRS : step.fillBlocks(level.getBlockState(step.pos().below()));
+		Set<Item> fillers = !step.standIns().isEmpty() ? step.standIns() : step.fillBlocks(level.getBlockState(step.pos().below()));
 		Predicate<ItemStack> usable = stack -> fillers.contains(stack.getItem());
 		SimpleContainer inventory = this.bot.getInventory();
 		int slot = findSlot(inventory, usable);
@@ -530,9 +531,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (filler == null && core != null && (slot = findSlot(core, usable)) >= 0) {
 			filler = core.getItem(slot).getItem();
 		}
-		// Stairs keep the way they face.
-		return filler == null ? step
-			: new BuildPlan.Step(step.pos(), Block.byItem(filler).withPropertiesOf(step.state()), step.anySolid(), step.mayFall(), step.anyStoneStairs());
+		// Stairs and trapdoors keep the way they face.
+		return filler == null ? step : new BuildPlan.Step(step.pos(), Block.byItem(filler).withPropertiesOf(step.state()), step.anySolid(), step.mayFall(),
+			step.anyStoneStairs(), step.anyWoodenTrapdoor());
 	}
 
 	/** Every position a plan of the colony puts a block or clears, where scaffold must never go. */
@@ -1232,6 +1233,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		if (stairs > 0) {
 			fills.addAll(BuildPlan.STONE_STAIRS);
 		}
+		// And a hatch any wooden trapdoor will do, so the bot keeps the one it takes.
+		plan.steps().stream().filter(step -> step.anyWoodenTrapdoor() && !step.isDone(level.getBlockState(step.pos())))
+			.findAny().ifPresent(step -> fills.addAll(step.standIns()));
 		int count = BuildPlan.STONE_STAIRS.contains(item) && stairs > 0 ? Math.max(stairs, needed.getOrDefault(item, 1))
 			: fills.contains(item) ? Math.max(fillers, needed.getOrDefault(item, 1)) : needed.getOrDefault(item, 1);
 		if (core == null) {

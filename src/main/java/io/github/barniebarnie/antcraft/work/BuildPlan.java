@@ -4,10 +4,12 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -328,20 +330,26 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 * what is below (see {@link #fillBlocks}); without, the block must hold on its own, such as a
 	 * mineshaft's ceiling, or a wall the shaft is later dug out beside and below. With
 	 * {@code anyStoneStairs}, any of the {@link #STONE_STAIRS} the same way round will do, such as
-	 * for a mineshaft's steps.
+	 * for a mineshaft's steps, and with {@code anyWoodenTrapdoor} any of the {@link #WOODEN_TRAPDOORS},
+	 * such as for a ladder shaft's hatch.
 	 */
-	public record Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall, boolean anyStoneStairs) {
+	public record Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall, boolean anyStoneStairs, boolean anyWoodenTrapdoor) {
 		/** Saves from before {@code may_fall} take only fillers that hold, which is safe for any step. */
 		public static final Codec<Step> CODEC = RecordCodecBuilder.create(i -> i.group(
 			BlockPos.CODEC.fieldOf("pos").forGetter(Step::pos),
 			BlockState.CODEC.optionalFieldOf("state", Blocks.AIR.defaultBlockState()).forGetter(Step::state),
 			Codec.BOOL.optionalFieldOf("any_solid", false).forGetter(Step::anySolid),
 			Codec.BOOL.optionalFieldOf("may_fall", false).forGetter(Step::mayFall),
-			Codec.BOOL.optionalFieldOf("any_stone_stairs", false).forGetter(Step::anyStoneStairs)
+			Codec.BOOL.optionalFieldOf("any_stone_stairs", false).forGetter(Step::anyStoneStairs),
+			Codec.BOOL.optionalFieldOf("any_wooden_trapdoor", false).forGetter(Step::anyWoodenTrapdoor)
 		).apply(i, Step::new));
 
 		public Step {
 			pos = pos.immutable();
+		}
+
+		public Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall, boolean anyStoneStairs) {
+			this(pos, state, anySolid, mayFall, anyStoneStairs, false);
 		}
 
 		public Step(BlockPos pos, BlockState state, boolean anySolid, boolean mayFall) {
@@ -368,6 +376,16 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		/** Places the stair {@code state}, or any other of the {@link #STONE_STAIRS} the same way round. */
 		public static Step stoneStairs(BlockPos pos, BlockState state) {
 			return new Step(pos, state, false, false, true);
+		}
+
+		/** Places the trapdoor {@code state}, or any other of the {@link #WOODEN_TRAPDOORS} the same way round. */
+		public static Step woodenTrapdoor(BlockPos pos, BlockState state) {
+			return new Step(pos, state, false, false, false, true);
+		}
+
+		/** The items any of which will do for this step, placed the same way round: none but its own block unless it takes any of a kind. */
+		public Set<Item> standIns() {
+			return this.anyStoneStairs ? STONE_STAIRS : this.anyWoodenTrapdoor ? WOODEN_TRAPDOORS : Set.of();
 		}
 
 		public static Step clear(BlockPos pos) {
@@ -433,7 +451,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			if (this.anySolid) {
 				return world.isFaceSturdy(EmptyBlockGetter.INSTANCE, BlockPos.ZERO, Direction.UP);
 			}
-			return this.isClear() ? world.isAir() : matches(this.dry(), world, this.anyStoneStairs);
+			return this.isClear() ? world.isAir() : matches(this.dry(), world, this.standIns());
 		}
 
 		/**
@@ -462,8 +480,8 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			return this.isPlaced(world) && (this.anySolid || this.isWaterlogged() == isWaterlogged(world));
 		}
 
-		private static boolean matches(BlockState wanted, BlockState world, boolean anyStoneStairs) {
-			if (!world.is(wanted.getBlock()) && !(anyStoneStairs && STONE_STAIRS.contains(world.getBlock().asItem()))) {
+		private static boolean matches(BlockState wanted, BlockState world, Set<Item> standIns) {
+			if (!world.is(wanted.getBlock()) && !standIns.contains(world.getBlock().asItem())) {
 				return false;
 			}
 			for (Property<?> property : wanted.getProperties()) {
@@ -627,9 +645,41 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		Items.BLACKSTONE_STAIRS, Items.POLISHED_BLACKSTONE_STAIRS, Items.POLISHED_BLACKSTONE_BRICK_STAIRS,
 		Items.TUFF_STAIRS, Items.POLISHED_TUFF_STAIRS, Items.TUFF_BRICK_STAIRS);
 
+	/**
+	 * The trapdoors a step of {@link Step#anyWoodenTrapdoor} takes: those of {@code #minecraft:wooden_trapdoors}, which
+	 * bots open by hand. Its own block, the oak trapdoor, first, then the order the colony makes one in when it cannot
+	 * make that (see {@link #toMake}).
+	 */
+	// ponytail: a fixed list rather than the tag, so unit tests see it; a game test checks it matches the tag.
+	public static final Set<Item> WOODEN_TRAPDOORS = Collections.unmodifiableSet(new LinkedHashSet<>(List.of(Items.OAK_TRAPDOOR,
+		Items.SPRUCE_TRAPDOOR, Items.BIRCH_TRAPDOOR, Items.JUNGLE_TRAPDOOR, Items.ACACIA_TRAPDOOR, Items.DARK_OAK_TRAPDOOR,
+		Items.MANGROVE_TRAPDOOR, Items.CHERRY_TRAPDOOR, Items.PALE_OAK_TRAPDOOR, Items.POPLAR_TRAPDOOR, Items.BAMBOO_TRAPDOOR, Items.CRIMSON_TRAPDOOR,
+		Items.WARPED_TRAPDOOR)));
+
+	/** The kinds of item that stand in for each other in a step that takes any of a kind (see {@link Step#standIns}). */
+	private static final List<Set<Item>> STAND_IN_KINDS = List.of(STONE_STAIRS, WOODEN_TRAPDOORS);
+
 	/** The part of {@link #materials(Function)} for steps of {@link Step#anyStoneStairs}, which other stone stairs can stand in for. */
 	public Map<Item, Integer> stoneStairMaterials(Function<BlockPos, BlockState> world) {
 		return this.materialsOf(world, Step::anyStoneStairs);
+	}
+
+	/** The part of {@link #materials(Function)} for steps that take any of a kind, such as any stone stairs (see {@link Step#standIns}). */
+	public Map<Item, Integer> standInMaterials(Function<BlockPos, BlockState> world) {
+		return this.materialsOf(world, step -> !step.standIns().isEmpty());
+	}
+
+	/**
+	 * What to order for {@code item} placed by a step that takes any of a kind, when the colony has none of that kind to
+	 * spare: for a wooden trapdoor, the item if the colony can make it ({@code makeable}), else the first of the
+	 * {@link #WOODEN_TRAPDOORS} it can make, else the item. Stone stairs are ordered as such, as cobblestone stairs are
+	 * what a bot crafts where they go.
+	 */
+	public static Item toMake(Item item, Predicate<Item> makeable) {
+		if (!WOODEN_TRAPDOORS.contains(item) || makeable.test(item)) {
+			return item;
+		}
+		return WOODEN_TRAPDOORS.stream().filter(makeable).findFirst().orElse(item);
 	}
 
 	private Map<Item, Integer> materialsOf(Function<BlockPos, BlockState> world, Predicate<Step> which) {
@@ -667,8 +717,8 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	}
 
 	/**
-	 * {@link #shortfall(Map, Map, Map, Map)}, where the {@code stairs} of steps any stone stairs will do
-	 * (see {@link #stoneStairMaterials}) take the {@link #STONE_STAIRS} the colony has to spare.
+	 * {@link #shortfall(Map, Map, Map, Map)}, where the {@code stairs} of steps that take any of a kind (see
+	 * {@link #standInMaterials}), such as any stone stairs, take those of that kind the colony has to spare.
 	 */
 	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
 			Map<Item, Integer> stairs, Map<Item, Integer> has) {
@@ -681,6 +731,15 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 */
 	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
 			Map<Item, Integer> stairs, Map<Item, Integer> has, Map<Item, Integer> used) {
+		return shortfall(materials, holding, resting, stairs, has, used, item -> false);
+	}
+
+	/**
+	 * {@link #shortfall(Map, Map, Map, Map, Map, Map)}, where what the spare items of their kind leave the {@code stairs}
+	 * short of is ordered as the item {@link #toMake} picks with what is {@code makeable}.
+	 */
+	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
+			Map<Item, Integer> stairs, Map<Item, Integer> has, Map<Item, Integer> used, Predicate<Item> makeable) {
 		Map<Item, Integer> needed = new LinkedHashMap<>();
 		materials.forEach((item, count) -> {
 			if (count > has.getOrDefault(item, 0)) {
@@ -693,7 +752,19 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		cover(needed, new LinkedHashMap<>(holding), spareHolding, used);
 		cover(needed, rest, spareFalling, used);
 		cover(needed, rest, spareHolding, used);
-		cover(needed, new LinkedHashMap<>(stairs), spare(STONE_STAIRS::contains, materials, has), used);
+		for (Set<Item> kind : STAND_IN_KINDS) {
+			Map<Item, Integer> fills = new LinkedHashMap<>(stairs);
+			fills.keySet().retainAll(kind);
+			cover(needed, fills, spare(kind::contains, materials, has), used);
+			fills.forEach((item, left) -> {
+				Item made = toMake(item, makeable);
+				int moved = Math.min(left, needed.getOrDefault(item, 0));
+				if (made != item && moved > 0) {
+					needed.merge(item, -moved, Integer::sum);
+					needed.merge(made, moved, Integer::sum);
+				}
+			});
+		}
 		needed.values().removeIf(count -> count <= 0);
 		return needed;
 	}
@@ -767,7 +838,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 
 	/** Whether a step left with {@code world} as it is can be done without one particular item: see {@link Needs}. */
 	private static boolean takesAnyItem(Step step, BlockState current, Item item) {
-		return step.anySolid() || step.anyStoneStairs() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem;
+		return step.anySolid() || !step.standIns().isEmpty() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem;
 	}
 
 	/**

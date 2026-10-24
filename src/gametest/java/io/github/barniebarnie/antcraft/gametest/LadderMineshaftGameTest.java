@@ -19,8 +19,11 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -120,6 +123,41 @@ public class LadderMineshaftGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			assertDug(helper, shaft);
+			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
+		});
+	}
+
+	/**
+	 * As above, but the core holds spruce planks and no trapdoor: the colony, which has no oak, makes the hatch a spruce
+	 * trapdoor, and never orders an oak one.
+	 */
+	@GameTest(maxTicks = 360)
+	public void aColonyWithOnlySprucePlanksPutsASpruceTrapdoorHatchOnItsShaft(GameTestHelper helper) {
+		// Any of the tag will do, and the list the plan takes them from is the tag.
+		Set<Item> tag = new HashSet<>();
+		BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.WOODEN_TRAPDOORS).forEach(holder -> tag.add(holder.value()));
+		helper.assertTrue(tag.equals(BuildPlan.WOODEN_TRAPDOORS), "the wooden trapdoors are not the tag's: " + tag);
+		stone(helper, 4);
+		Colony colony = colony(helper, CORE);
+		core(helper, CORE).setItem(0, new ItemStack(Items.LADDER, 16));
+		core(helper, CORE).setItem(1, new ItemStack(Items.SPRUCE_PLANKS, 6));
+		core(helper, CORE).setItem(2, new ItemStack(Items.TORCH, 4));
+		core(helper, CORE).setItem(3, new ItemStack(Items.CHEST, 1));
+		Mineshaft shaft = shaft(helper, new BlockPos(3, 5, 3), 3);
+		colony.setMineshaft(shaft);
+		for (BlockPos at : List.of(new BlockPos(7, 5, 0), new BlockPos(7, 5, 7))) {
+			member(helper, colony, at).getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		}
+		helper.onEachTick(() -> {
+			if (colony.orders().containsKey(Items.OAK_TRAPDOOR)) {
+				helper.fail("ordered an oak trapdoor: " + colony.orders());
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			assertDug(helper, shaft);
+			BlockState hatch = helper.getLevel().getBlockState(shaft.stairs().getFirst());
+			helper.assertTrue(hatch.is(Blocks.SPRUCE_TRAPDOOR), "the hatch is " + hatch);
 			helper.assertTrue(colony.builds().isEmpty(), "shaft not finished");
 		});
 	}

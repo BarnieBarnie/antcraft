@@ -547,8 +547,9 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			for (; y >= level; y--) {
 				this.place(steps, this.top.atY(y), ladder, open);
 				if (y == this.hatch().getY() - 1) {
-					this.place(steps, this.hatch(), Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, LADDER_FACING)
-						.setValue(TrapDoorBlock.HALF, Half.TOP), open);
+					// Any wooden trapdoor will do, so a colony with no oak makes it of a wood it has.
+					this.place(steps, BuildPlan.Step.woodenTrapdoor(this.hatch(), Blocks.OAK_TRAPDOOR.defaultBlockState()
+						.setValue(TrapDoorBlock.FACING, LADDER_FACING).setValue(TrapDoorBlock.HALF, Half.TOP)), open);
 				}
 			}
 			BlockPos landing = this.landing(level);

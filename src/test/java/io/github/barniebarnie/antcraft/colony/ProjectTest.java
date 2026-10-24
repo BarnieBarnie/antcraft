@@ -383,6 +383,25 @@ class ProjectTest {
 		assertTrue(crafts.stream().anyMatch(job -> job.target().equals(colony.core())), "no craft at the core: " + crafts);
 	}
 
+	/** What a new ladder shaft orders for its hatch with the colony holding {@code has}: the wooden trapdoors ordered. */
+	private static Map<Item, Integer> hatchOrders(Map<Item, Integer> has) {
+		Colony colony = colony();
+		colony.setMineshaft(new Mineshaft(new BlockPos(2, 64, 2), List.of(60), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1));
+		colony.postBuildJobs();
+		colony.planProjects(STONE, step -> true, has, tool -> true, item -> ToolUpgrade.makeableNow(item, has, book, gatherable));
+		return colony.orders().entrySet().stream().filter(order -> BuildPlan.WOODEN_TRAPDOORS.contains(order.getKey()))
+			.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+	}
+
+	@Test
+	void aLadderShaftOrdersAHatchOfAWoodTheColonyCanMakeOneOf() {
+		assertEquals(Map.of(Items.SPRUCE_TRAPDOOR, 1), hatchOrders(Map.of(Items.SPRUCE_PLANKS, 6)));
+		assertEquals(Map.of(Items.SPRUCE_TRAPDOOR, 1), hatchOrders(Map.of(Items.SPRUCE_LOG, 2)));
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), hatchOrders(Map.of(Items.SPRUCE_PLANKS, 6, Items.OAK_PLANKS, 6)), "oak while it can make one");
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), hatchOrders(Map.of()), "oak, its logs to gather, while it can make none");
+		assertEquals(Map.of(), hatchOrders(Map.of(Items.BIRCH_TRAPDOOR, 1)), "the birch trapdoor it has does");
+	}
+
 	@Test
 	void stoneStairsTheColonyHasLeaveNothingToCraftOnTheSpot() {
 		Colony colony = colony();

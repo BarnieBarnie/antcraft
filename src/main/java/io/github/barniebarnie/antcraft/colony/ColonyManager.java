@@ -389,7 +389,8 @@ public class ColonyManager extends SavedData {
 		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for. A pickaxe
 		// is ordered until one is made, not just while none is coming, or the order would withdraw itself.
 		Map<Item, Integer> materials = colony.planProjects(level::getBlockState, step -> BuilderGoal.isPossible(level, step), have,
-			tool -> kind.rank(pickaxe) >= kind.rank(tool));
+			tool -> kind.rank(pickaxe) >= kind.rank(tool),
+			item -> ToolUpgrade.makeableNow(item, have, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
 		colony.postStairCrafts(level::getBlockState, have, craftsStairsOnTheSpot(level, colony));
 		// What builders will place is not there for anything else.
 		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));

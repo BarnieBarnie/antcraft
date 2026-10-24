@@ -766,6 +766,15 @@ public class Colony {
 	 */
 	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
 			Predicate<Item> hasTool) {
+		return this.planProjects(world, possible, has, hasTool, item -> false);
+	}
+
+	/**
+	 * {@link #planProjects(Function, Predicate, Map, Predicate)}, where a step any wooden trapdoor will do, such as a ladder
+	 * shaft's hatch, that the colony has none for orders one it can make, a {@code makeable} one (see {@link BuildPlan#toMake}).
+	 */
+	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
+			Predicate<Item> hasTool, Predicate<Item> makeable) {
 		this.waiting.clear();
 		Map<Item, Integer> left = new HashMap<>(has);
 		Map<Item, Integer> placed = new HashMap<>();
@@ -780,9 +789,10 @@ public class Colony {
 			Map<Item, Integer> holding = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, false)).toList());
 			Map<Item, Integer> resting = StockPlanner.total(plans.stream().map(plan -> plan.fillMaterials(world, true)).toList());
 			// A mineshaft's steps take whichever stone stairs the colony has; only what those lack is ordered, as cobblestone stairs.
-			Map<Item, Integer> stairs = StockPlanner.total(plans.stream().map(plan -> plan.stoneStairMaterials(world)).toList());
+			// Likewise a ladder shaft's hatch takes whichever wooden trapdoor it has, else one of a wood it can make one of.
+			Map<Item, Integer> stairs = StockPlanner.total(plans.stream().map(plan -> plan.standInMaterials(world)).toList());
 			Map<Item, Integer> spares = new HashMap<>();
-			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, stairs, left, spares));
+			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, stairs, left, spares, makeable));
 			// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
 			if (needed.keySet().removeIf(Colony::isFullBucket) && left.getOrDefault(Items.BUCKET, 0) <= 0) {
 				needed.put(Items.BUCKET, 1);
