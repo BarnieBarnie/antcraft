@@ -284,6 +284,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			return false;
 		}
 		this.bot.setWorking(this.job != null);
+		this.lookForLava(level, colony.get());
 		if (this.cooldown > 0) {
 			this.cooldown--;
 			return true;

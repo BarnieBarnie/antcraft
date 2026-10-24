@@ -21,6 +21,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
@@ -30,6 +31,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.BucketPickup;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -46,6 +48,8 @@ public abstract class ColonyWorkGoal {
 	protected static final int UPGRADE_CHECK_TICKS = 100;
 	/** How far above and below the core {@link #nearest} looks. */
 	private static final int SCAN_HEIGHT = 4;
+	/** How far around it a bot in the mine looks for lava to remember (see {@link #lookForLava}). */
+	private static final int LAVA_SIGHT = 8;
 	/** How long a busy bot in the spot of a block steps aside for, enough to walk a block and the block to go in. */
 	private static final int STEP_ASIDE_TICKS = 20;
 
@@ -61,12 +65,36 @@ public abstract class ColonyWorkGoal {
 	/** Where the bot fetches {@link #upgrade} from: the core or a mineshaft landing chest. */
 	private BlockPos upgradeFrom = BlockPos.ZERO;
 	private long nextUpgradeCheck;
+	/** Where it last looked for lava from (see {@link #lookForLava}). */
+	private @Nullable BlockPos lookedForLava;
 
 	protected ColonyWorkGoal(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
 		this.breaker = new BlockBreaker(bot);
 		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
+	}
+
+	/**
+	 * Each time the bot steps onto another cell of the mine, such as in a hall or a branch it digs, remembers the lava
+	 * sources it sees from there within {@link #LAVA_SIGHT} blocks (see {@link Colony#sawLava}), so builders find them to
+	 * fill buckets at.
+	 */
+	protected void lookForLava(ServerLevel level, Colony colony) {
+		BlockPos feet = this.bot.blockPosition();
+		if (feet.equals(this.lookedForLava)) {
+			return;
+		}
+		this.lookedForLava = feet;
+		if (!colony.mineCells().contains(feet)) {
+			return;
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-LAVA_SIGHT, -LAVA_SIGHT, -LAVA_SIGHT), feet.offset(LAVA_SIGHT, LAVA_SIGHT, LAVA_SIGHT))) {
+			FluidState fluid = level.getFluidState(pos);
+			if (fluid.isSource() && fluid.is(FluidTags.LAVA) && !colony.seenLava().contains(pos) && LineOfSight.sees(level, feet, pos, p -> false)) {
+				colony.sawLava(pos);
+			}
+		}
 	}
 
 	/**

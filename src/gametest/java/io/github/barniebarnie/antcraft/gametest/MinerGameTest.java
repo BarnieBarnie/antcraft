@@ -365,6 +365,60 @@ public class MinerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * In a 16x16 area: stone up to y=4 and an old staircase shaft from (12, 5, 3) down to a landing at y=1, whose 9-long
+	 * hall west along z=3 the builder digs, as the shaft's plan does. A branch, not yet dug, leaves it south at x=9;
+	 * its cell and a small cave past it are open, with a lava source sunk in the cave's floor at (9, 0, 6): more than
+	 * the scan height below the core and beside no cell of the mine, so only a bot that saw it knows it is there. The
+	 * builder walks past the branch to dig the far end of the hall, sees the lava down it, and a lava order is filled there.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1600)
+	public void lavaABuilderSawWhileDiggingAHallIsUsedForALavaOrder(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 4, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(9, 1, 4, 9, 2, 6)) {
+			helper.setBlock(pos, Blocks.AIR);
+		}
+		BlockPos pool = new BlockPos(9, 0, 6);
+		helper.setBlock(pool.below(), Blocks.STONE);
+		helper.setBlock(pool, Blocks.LAVA);
+		BlockPos corePos = new BlockPos(12, 5, 8);
+		Colony colony = colony(helper, corePos);
+		GameTests.failOnGiveUp(helper, colony);
+		core(helper, corePos).setItem(0, new ItemStack(Items.TORCH, 8));
+		core(helper, corePos).setItem(1, new ItemStack(Items.CHEST));
+		int y = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
+		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(12, 5, 3)), List.of(y), 3, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1,
+			Mineshaft.Layout.STAIRCASE);
+		helper.assertTrue(shaft.hall(y).getLast().equals(helper.absolutePos(new BlockPos(3, 1, 3))), "the hall does not end at x=3");
+		helper.assertTrue(shaft.branches(y).stream().anyMatch(branch -> branch.start().equals(helper.absolutePos(new BlockPos(9, 1, 4)))),
+			"no branch south at x=9");
+		colony.setMineshaft(shaft);
+		helper.assertFalse(Direction.stream().map(side -> helper.absolutePos(pool).relative(side)).anyMatch(colony.mineCells()::contains),
+			"the lava is beside the mine");
+		AntBot builder = member(helper, colony, 14, 5, 12);
+		builder.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+
+		// Once the builder has seen the lava, the colony wants a bucket of it.
+		boolean[] ordered = {false};
+		helper.onEachTick(() -> {
+			if (!ordered[0] && colony.seenLava().contains(helper.absolutePos(pool))) {
+				ordered[0] = true;
+				core(helper, corePos).setItem(2, new ItemStack(Items.BUCKET));
+				colony.addOrder(Items.LAVA_BUCKET, 1);
+			}
+			if (!ordered[0] && colony.builds().isEmpty()) {
+				helper.fail("the shaft is dug and the lava was not seen");
+			}
+			helper.assertFalse(builder.isInLava() || builder.isOnFire(), "builder in lava or on fire at " + relative(helper, builder.blockPosition()).toShortString());
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper, corePos).countItem(Items.LAVA_BUCKET) == 1, "no lava bucket in the core");
+			helper.assertBlockNotPresent(Blocks.LAVA, pool);
+		});
+	}
+
+	/**
 	 * Stone up to y=4 and a ladder shaft from (1, 5, 1) down to a landing at y=1, whose hall the miner digs east along
 	 * z=1. The miner starts on the ground right above the end of the hall: it climbs down the ladder rather than dig its
 	 * own way down, so it breaks no block that is not a cell of the mine.

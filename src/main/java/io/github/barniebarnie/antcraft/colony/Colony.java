@@ -63,6 +63,8 @@ public class Colony {
 	public static final int MAX_KEPT_GROUND = 32;
 	/** How many placements dropped for a site that could not be levelled {@link #droppedUnlevelled} keeps. */
 	public static final int MAX_DROPPED_UNLEVELLED = 8;
+	/** How many lava sources bots saw the colony remembers at most (see {@link #sawLava}); the one seen longest ago is forgotten first. */
+	public static final int MAX_SEEN_LAVA = 64;
 	/** The name of the mineshaft's project. */
 	public static final String MINESHAFT = "mineshaft";
 	/** How often given-up trees and branches are put back up for one more try: a Minecraft day. */
@@ -265,8 +267,8 @@ public class Colony {
 	private Set<BlockPos> shaftOpen;
 	/** The holes miners dug out ore veins through, off the mine's branches (see {@link #mineCells}). */
 	private final Set<BlockPos> veinCells = new HashSet<>();
-	/** Lava sources bots saw, such as from the mine's halls and branches, where builders fill buckets (see {@link #sawLava}). */
-	private final Set<BlockPos> seenLava = new LinkedHashSet<>();
+	/** Lava sources bots saw, such as from the mine's halls and branches, where builders fill buckets, oldest first (see {@link #sawLava}). */
+	private final LinkedHashSet<BlockPos> seenLava = new LinkedHashSet<>();
 	private final List<StockTarget> stock;
 	/** The projects the colony works on, in the order they were added; see {@link #projects}. */
 	private final List<Project> projects = new ArrayList<>();
@@ -327,7 +329,7 @@ public class Colony {
 		this.keptGround.addAll(works.keptGround());
 		this.quarry = works.quarry();
 		this.veinCells.addAll(works.veinCells());
-		this.seenLava.addAll(works.seenLava());
+		works.seenLava().forEach(this::sawLava);
 		this.owner = access.owner();
 		this.trusted.addAll(access.trusted());
 		access.owner().ifPresent(this.trusted::remove);
@@ -1624,9 +1626,18 @@ public class Colony {
 		return Sets.union(this.shaftOpen, this.veinCells);
 	}
 
-	/** Remembers a lava source a bot saw, so lava fetching finds it, also where it does not look itself, such as off the mine's halls. */
+	/**
+	 * Remembers a lava source a bot saw, so lava fetching finds it, also where it does not look itself, such as off the
+	 * mine's halls. At most {@link #MAX_SEEN_LAVA} are remembered: past that the one seen longest ago is forgotten.
+	 */
 	public void sawLava(BlockPos pos) {
-		this.seenLava.add(pos.immutable());
+		BlockPos seen = pos.immutable();
+		// Seen again, it is the newest.
+		this.seenLava.remove(seen);
+		this.seenLava.add(seen);
+		while (this.seenLava.size() > MAX_SEEN_LAVA) {
+			this.seenLava.removeFirst();
+		}
 	}
 
 	/** Forgets a lava source a bot saw, once it is gone. */

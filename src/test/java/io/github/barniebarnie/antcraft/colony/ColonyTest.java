@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
@@ -464,6 +466,34 @@ class ColonyTest {
 		assertEquals(Set.of(lava, PLACED), loaded.seenLava());
 		loaded.forgetLava(PLACED);
 		assertEquals(Set.of(lava), loaded.seenLava());
+	}
+
+	/** The lava sources remembered stay under a cap, the ones seen longest ago forgotten first, also in a save that holds more. */
+	@Test
+	void theLavaRememberedStaysUnderItsCap() {
+		Colony colony = colony();
+		List<BlockPos> seen = new ArrayList<>();
+		for (int i = 0; i < Colony.MAX_SEEN_LAVA + 10; i++) {
+			BlockPos pos = new BlockPos(i, -20, 3);
+			seen.add(pos);
+			colony.sawLava(pos);
+		}
+		assertEquals(Colony.MAX_SEEN_LAVA, colony.seenLava().size());
+		assertEquals(Set.copyOf(seen.subList(10, seen.size())), colony.seenLava());
+		// Seen again, a source is the newest: the oldest other one goes first.
+		colony.sawLava(seen.get(10));
+		colony.sawLava(new BlockPos(0, -30, 0));
+		assertTrue(colony.seenLava().contains(seen.get(10)), "forgot the source seen again");
+		assertFalse(colony.seenLava().contains(seen.get(11)), "kept the oldest source");
+		JsonObject json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow().getAsJsonObject();
+		JsonArray more = new JsonArray();
+		for (int i = 0; i < Colony.MAX_SEEN_LAVA * 2; i++) {
+			more.add(BlockPos.CODEC.encodeStart(JsonOps.INSTANCE, new BlockPos(i, -40, 0)).getOrThrow());
+		}
+		json.add("seen_lava", more);
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(Colony.MAX_SEEN_LAVA, loaded.seenLava().size());
+		assertTrue(loaded.seenLava().contains(new BlockPos(Colony.MAX_SEEN_LAVA * 2 - 1, -40, 0)), "forgot the newest source of the save");
 	}
 
 	@Test
