@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
@@ -46,45 +45,6 @@ public final class Sites {
 	public static Optional<BoundingBox> box(BlockPos core, int reach, List<BoundingBox> avoid, Vec3i size, Predicate<BlockPos> fits) {
 		return nearest(core, reach, avoid, pos -> BoundingBox.fromCorners(pos, pos.offset(size).offset(-1, -1, -1)), box -> box,
 			box -> BlockPos.betweenClosedStream(box).allMatch(fits));
-	}
-
-	/** How wide each ring of columns {@link #cheapest} searches is: a site in a farther ring is taken only if a nearer ring has none. */
-	private static final int RING = 8;
-
-	/**
-	 * The site at the core's level, among the columns within {@code reach} of it, clear of the core
-	 * and the {@code avoid} areas, with the lowest {@code cost} in the nearest ring of {@link #RING}
-	 * blocks that has one, the nearest of those first. Empty costs, such as for a site that cannot be
-	 * made to fit, are left out. Rings keep the search near the core, and its cost low, until the
-	 * ground there is taken.
-	 */
-	static <T> Optional<T> cheapest(BlockPos core, int reach, List<BoundingBox> avoid, Function<BlockPos, T> at,
-			Function<T, BoundingBox> area, Function<T, OptionalInt> cost) {
-		List<BlockPos> columns = columns(core, reach);
-		columns.sort(Comparator.comparingInt(pos -> ring(core, pos)));
-		T best = null;
-		int bestCost = Integer.MAX_VALUE;
-		int bestRing = Integer.MAX_VALUE;
-		for (BlockPos column : columns) {
-			if (ring(core, column) > bestRing) {
-				break;
-			}
-			T site = at.apply(column);
-			if (isClear(core, avoid, area.apply(site))) {
-				OptionalInt c = cost.apply(site);
-				if (c.isPresent() && c.getAsInt() < bestCost) {
-					best = site;
-					bestCost = c.getAsInt();
-					bestRing = ring(core, column);
-				}
-			}
-		}
-		return Optional.ofNullable(best);
-	}
-
-	/** Which ring of {@link #RING} blocks around the core {@code column} lies in: 0 up to {@code RING} blocks out, 1 up to twice that, and so on. */
-	private static int ring(BlockPos core, BlockPos column) {
-		return Math.max(0, Math.max(Math.abs(column.getX() - core.getX()), Math.abs(column.getZ() - core.getZ())) - 1) / RING;
 	}
 
 	/** The columns within {@code reach} of the core, nearest first. */

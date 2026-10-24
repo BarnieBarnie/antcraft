@@ -11,13 +11,17 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Farming;
 import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.Terraform;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -33,6 +37,7 @@ import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /** Colonies levelling an area: miners dig what is above the height, builders fill the holes up to it. */
 public class TerraformGameTest implements CustomTestMethodInvoker {
@@ -237,7 +242,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The farm plan of a field an older colony laid out itself (see {@link Field#plan}) on uneven ground: a bump in the crop layer is dug, and a
+	 * The farm plan of a field an older colony laid out itself (see {@link #fieldPlan}) on uneven ground: a bump in the crop layer is dug, and a
 	 * hole and rock in the soil layer get dirt, so the whole field is soil with room above it, but for the middle.
 	 */
 	@GameTest(maxTicks = 430)
@@ -252,7 +257,7 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 		core(helper, CORE).setItem(0, new ItemStack(Items.DIRT, 4));
 		Field field = new Field(helper.absolutePos(new BlockPos(4, 1, 4)));
 		colony.setField(field);
-		colony.addBuild("farm", field.plan(helper.getLevel()::getBlockState).orElseThrow());
+		colony.addBuild("farm", fieldPlan(field, helper.getLevel()::getBlockState));
 		member(helper, colony, 1, 3);
 		member(helper, colony, 1, 5);
 
@@ -265,6 +270,38 @@ public class TerraformGameTest implements CustomTestMethodInvoker {
 			}
 			helper.assertTrue(colony.builds().isEmpty(), "farm still listed");
 		});
+	}
+
+	/**
+	 * The plan an older colony made to ready its square field for planting: the two layers above the soil cleared (top
+	 * first), and dirt where the soil cannot be tilled, such as rock, in cells (see {@link BuildPlan#inCells}). The middle
+	 * is left for the water. Colonies no longer lay out fields, but a saved farm plan of one is still built.
+	 */
+	private static BuildPlan fieldPlan(Field field, Function<BlockPos, BlockState> world) {
+		BlockPos center = field.center();
+		List<BuildPlan.Step> clear = new ArrayList<>();
+		List<BuildPlan.Step> soil = new ArrayList<>();
+		for (BlockPos pos : BlockPos.betweenClosed(center.offset(-Field.RADIUS, 0, -Field.RADIUS), center.offset(Field.RADIUS, 0, Field.RADIUS))) {
+			for (int up = 2; up >= 1; up--) {
+				if (!Farming.isOpen(world.apply(pos.above(up)))) {
+					clear.add(BuildPlan.Step.clear(pos.above(up)));
+				}
+			}
+			if (!pos.equals(center) && !Farming.isSoil(world.apply(pos))) {
+				soil.add(new BuildPlan.Step(pos, Blocks.DIRT.defaultBlockState()));
+			}
+		}
+		List<BuildPlan.Step> steps = new ArrayList<>(clear);
+		steps.addAll(soil);
+		List<BuildPlan.Batch> batches = new ArrayList<>();
+		if (!clear.isEmpty()) {
+			batches.add(new BuildPlan.Batch(0, clear.size(), List.of(), true));
+		}
+		if (!soil.isEmpty()) {
+			batches.add(new BuildPlan.Batch(clear.size(), steps.size(), batches.isEmpty() ? List.of() : List.of(0)));
+		}
+		return new BuildPlan(steps, batches, BuildPlan.Kind.TERRAFORM, Optional.of(new BoundingBox(center.getX() - Field.RADIUS, center.getY(),
+			center.getZ() - Field.RADIUS, center.getX() + Field.RADIUS, center.getY(), center.getZ() + Field.RADIUS))).inCells();
 	}
 
 	/** Any bot can clear water, but only with a bucket or a filler block, and the colony has neither. */
