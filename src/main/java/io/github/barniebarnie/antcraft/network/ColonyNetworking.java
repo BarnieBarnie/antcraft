@@ -16,6 +16,7 @@ import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -153,8 +154,52 @@ public final class ColonyNetworking {
 		public static final StreamCodec<RegistryFriendlyByteBuf, BuildGhosts> STREAM_CODEC =
 			BuildGhost.STREAM_CODEC.apply(ByteBufCodecs.list()).map(BuildGhosts::new, BuildGhosts::builds);
 
+		/**
+		 * The most bytes a ghost may take besides its blocks: its core, project, name (at most 256 characters), box and
+		 * block count.
+		 */
+		static final int GHOST_OVERHEAD = 1024;
+
+		/** The most ghosts sent, so their overhead leaves room for blocks. */
+		static final int MAX_GHOSTS = BlueprintBlocks.MAX_BLOCK_BYTES / (4 * GHOST_OVERHEAD);
+
 		public BuildGhosts {
 			builds = List.copyOf(builds);
+		}
+
+		/**
+		 * {@code builds} capped to fit one payload: their blocks take at most {@link BlueprintBlocks#MAX_BLOCK_BYTES} in
+		 * all, shared out evenly, smallest ghost first, so a small ghost stays whole beside a huge one. A capped ghost keeps
+		 * its lowest layers, those built next, and shows more as they are built; one left without blocks, and those past
+		 * {@link #MAX_GHOSTS}, are not sent.
+		 */
+		public static BuildGhosts capped(List<BuildGhost> builds) {
+			List<BuildGhost> ghosts = builds.subList(0, Math.min(builds.size(), MAX_GHOSTS));
+			List<long[]> bytes = ghosts.stream().map(ghost -> BlueprintBlocks.placedBytes(ghost.blocks())).toList();
+			int[] keep = new int[ghosts.size()];
+			long left = BlueprintBlocks.MAX_BLOCK_BYTES - (long) GHOST_OVERHEAD * ghosts.size();
+			List<Integer> smallestFirst = IntStream.range(0, ghosts.size()).boxed()
+				.sorted(Comparator.comparingLong(i -> total(bytes.get(i))))
+				.toList();
+			for (int k = 0; k < smallestFirst.size(); k++) {
+				int i = smallestFirst.get(k);
+				long share = left / (smallestFirst.size() - k);
+				long[] cumulative = bytes.get(i);
+				int count = 0;
+				while (count < cumulative.length && cumulative[count] <= share) {
+					count++;
+				}
+				keep[i] = count;
+				left -= count == 0 ? 0 : cumulative[count - 1];
+			}
+			return new BuildGhosts(IntStream.range(0, ghosts.size())
+				.filter(i -> keep[i] > 0)
+				.mapToObj(i -> ghosts.get(i).first(keep[i]))
+				.toList());
+		}
+
+		private static long total(long[] cumulative) {
+			return cumulative.length == 0 ? 0 : cumulative[cumulative.length - 1];
 		}
 
 		@Override
@@ -413,7 +458,7 @@ public final class ColonyNetworking {
 	 * they may act on ({@link ColonyActions#mayAct}, as for {@link #siteRules}), or none.
 	 */
 	public static BuildGhosts ghosts(ServerLevel level, Requester requester) {
-		return new BuildGhosts(ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE, requester::mayAct)
+		return BuildGhosts.capped(ColonyManager.get(level).nearest(requester.from(), AntCraftCommands.COLONY_RANGE, requester::mayAct)
 			.map(colony -> BuildGhost.of(colony, level::getBlockState))
 			.orElse(List.of()));
 	}

@@ -154,6 +154,46 @@ class BuildGhostTest {
 		assertEquals(new HashSet<>(blocks), new HashSet<>(decoded.builds().getFirst().blocks()));
 	}
 
+	/**
+	 * The ghosts of a build too large for one payload are capped: each keeps its lowest layers, those built next, and a
+	 * small ghost beside it is kept whole, so the payload stays under the limit.
+	 */
+	@Test
+	void theGhostsOfAVeryLargeBuildAreCappedUnderTheLimit() {
+		List<BlockState> states = BuiltInRegistries.BLOCK.stream().filter(block -> !block.defaultBlockState().isAir())
+			.flatMap(block -> block.getStateDefinition().getPossibleStates().stream()).limit(20000).toList();
+		List<BlueprintSummary.Block> blocks = new ArrayList<>();
+		for (int y = 0; y < 60; y++) {
+			for (int z = 0; z < 100; z++) {
+				for (int x = 0; x < 100; x++) {
+					blocks.add(new BlueprintSummary.Block(new BlockPos(x, -60 + y, z), states.get((int) ((blocks.size() * 7919L) % states.size()))));
+				}
+			}
+		}
+		BuildGhost big = new BuildGhost(new BlockPos(1, 2, 3), UUID.randomUUID(), "blueprint.antcraft.castle", blocks);
+		BuildGhost small = new BuildGhost(new BlockPos(1, 2, 3), UUID.randomUUID(), "blueprint.antcraft.hut",
+			List.of(new BlueprintSummary.Block(AT, STONE), new BlueprintSummary.Block(AT.above(), PLANKS)));
+		RegistryFriendlyByteBuf whole = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+		ColonyNetworking.BuildGhosts.STREAM_CODEC.encode(whole, new ColonyNetworking.BuildGhosts(List.of(big, small)));
+		assertTrue(whole.readableBytes() > ColonyNetworking.PAYLOAD_LIMIT, "the build fits uncapped: " + whole.readableBytes() + " bytes");
+
+		ColonyNetworking.BuildGhosts payload = ColonyNetworking.BuildGhosts.capped(List.of(big, small));
+		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
+		ColonyNetworking.BuildGhosts.STREAM_CODEC.encode(buf, payload);
+		assertTrue(buf.readableBytes() < ColonyNetworking.PAYLOAD_LIMIT, buf.readableBytes() + " bytes");
+		assertEquals(payload, ColonyNetworking.BuildGhosts.STREAM_CODEC.decode(buf));
+
+		assertEquals(List.of(big.project(), small.project()), payload.builds().stream().map(BuildGhost::project).toList());
+		List<BlueprintSummary.Block> kept = payload.builds().getFirst().blocks();
+		assertTrue(kept.size() > blocks.size() / 4, "kept only " + kept.size());
+		assertTrue(kept.size() < blocks.size());
+		assertEquals(big.blocks().subList(0, kept.size()), kept, "the lowest layers are kept");
+		assertEquals(small, payload.builds().get(1));
+
+		// Ghosts that fit are sent as they are.
+		assertEquals(new ColonyNetworking.BuildGhosts(List.of(small)), ColonyNetworking.BuildGhosts.capped(List.of(small)));
+	}
+
 	@Test
 	void theCancelRequestRoundTrips() {
 		ColonyNetworking.CancelBuild request = new ColonyNetworking.CancelBuild(new BlockPos(1, 2, 3), UUID.randomUUID());

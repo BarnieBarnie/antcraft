@@ -30,7 +30,8 @@ public final class ClientBlueprints {
 	/**
 	 * The size and blocks of blueprint {@code id}, if the server sent them; the first time they are wanted, asks the server
 	 * for them, so the preview shows once the reply arrives. If the request cannot be sent, it is tried again the next
-	 * time they are wanted.
+	 * time they are wanted, at most once a second, and if no reply came it is sent again after a while (see
+	 * {@link BlueprintBlocksCache}).
 	 */
 	public static Optional<BlueprintBlocks> blocks(Identifier id) {
 		return BLOCKS.get(id, ask -> {

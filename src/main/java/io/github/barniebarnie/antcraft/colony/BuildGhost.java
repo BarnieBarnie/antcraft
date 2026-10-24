@@ -72,6 +72,11 @@ public record BuildGhost(BlockPos core, UUID project, String name, List<Blueprin
 			.toList();
 	}
 
+	/** This ghost with only its first {@code count} blocks, the lowest layers, those built next. */
+	public BuildGhost first(int count) {
+		return count >= this.blocks.size() ? this : new BuildGhost(this.core, this.project, this.name, this.blocks.subList(0, count));
+	}
+
 	/** The ghost whose block the ray from {@code from} to {@code to} passes through first, if any. */
 	public static Optional<BuildGhost> lookedAt(List<BuildGhost> ghosts, Vec3 from, Vec3 to) {
 		record Hit(BuildGhost ghost, double distance) {

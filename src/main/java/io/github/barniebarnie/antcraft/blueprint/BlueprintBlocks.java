@@ -146,6 +146,31 @@ public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.B
 		return List.copyOf(parts);
 	}
 
+	/**
+	 * How many bytes the first blocks of {@code blocks}, which are in {@link #LAYER_ORDER}, take in
+	 * {@link #PLACED_STREAM_CODEC}, not counting the box and count before them: element {@code i} for the first
+	 * {@code i + 1}. Any first blocks take no more than that sent alone, as their box is no larger.
+	 */
+	public static long[] placedBytes(List<BlueprintSummary.Block> blocks) {
+		long[] bytes = new long[blocks.size()];
+		if (blocks.isEmpty()) {
+			return bytes;
+		}
+		BlockPos min = blocks.stream().map(BlueprintSummary.Block::pos).reduce(BlockPos::min).orElseThrow();
+		BlockPos max = blocks.stream().map(BlueprintSummary.Block::pos).reduce(BlockPos::max).orElseThrow();
+		Vec3i size = max.subtract(min).offset(1, 1, 1);
+		long total = 0;
+		long last = -1;
+		for (int i = 0; i < blocks.size(); i++) {
+			BlueprintSummary.Block block = blocks.get(i);
+			long cell = cell(size, block.pos().subtract(min));
+			total += VarLong.getByteSize(cell - last) + VarInt.getByteSize(Block.BLOCK_STATE_REGISTRY.getId(block.state()));
+			bytes[i] = total;
+			last = cell;
+		}
+		return bytes;
+	}
+
 	/** The blueprint whose blocks {@code parts} are, the id and size those of the first part; see {@link #parts}. */
 	public static BlueprintBlocks join(List<BlueprintBlocks> parts) {
 		BlueprintBlocks first = parts.getFirst();
