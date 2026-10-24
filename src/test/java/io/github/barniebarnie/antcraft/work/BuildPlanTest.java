@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.mojang.serialization.JsonOps;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -770,5 +771,25 @@ class BuildPlanTest {
 		assertEquals(Map.of(Items.LADDER, 3, Items.TORCH, 1), BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(Items.TORCH, 1), core, 2),
 			"room for the ladders and one more kind");
 		assertEquals(Map.of(Items.LADDER, 3), BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 0), "the item asked for, room or not");
+	}
+
+	/** A step any of a kind will do, whose own item the core lacks, takes a stand-in from the core on the same trip. */
+	@Test
+	void theFetchListTakesAStandInTheCoreHasForAStepWhoseOwnItemItLacks() {
+		Map<Item, Integer> needed = new LinkedHashMap<>();
+		needed.put(Items.LADDER, 3);
+		needed.put(Items.OAK_TRAPDOOR, 1);
+		needed.put(Items.COBBLESTONE, 2);
+		Map<Item, Set<Item>> standIns = Map.of(Items.OAK_TRAPDOOR, BuildPlan.WOODEN_TRAPDOORS, Items.COBBLESTONE, BuildPlan.HOLDING_FILL_BLOCKS);
+		Map<Item, Integer> core = Map.of(Items.LADDER, 10, Items.SPRUCE_TRAPDOOR, 2, Items.DIRT, 5, Items.COBBLESTONE, 1);
+
+		assertEquals(Map.of(Items.LADDER, 3, Items.SPRUCE_TRAPDOOR, 1, Items.COBBLESTONE, 1, Items.DIRT, 1),
+			BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 10, standIns));
+		assertEquals(Map.of(Items.LADDER, 3, Items.COBBLESTONE, 1, Items.DIRT, 1),
+			BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(Items.BIRCH_TRAPDOOR, 1), core, 10, standIns), "a stand-in carried does");
+		Map<Item, Integer> both = new LinkedHashMap<>(needed);
+		both.put(Items.SPRUCE_TRAPDOOR, 2);
+		assertEquals(Map.of(Items.LADDER, 3, Items.SPRUCE_TRAPDOOR, 2, Items.COBBLESTONE, 1, Items.DIRT, 1),
+			BuildPlan.fetchList(Items.LADDER, 3, both, Map.of(), core, 10, standIns), "not a stand-in the plan places as such");
 	}
 }

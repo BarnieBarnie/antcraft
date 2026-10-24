@@ -385,10 +385,16 @@ class ProjectTest {
 
 	/** What a new ladder shaft orders for its hatch with the colony holding {@code has}: the wooden trapdoors ordered. */
 	private static Map<Item, Integer> hatchOrders(Map<Item, Integer> has) {
+		return hatchOrders(has, Map.of());
+	}
+
+	/** {@link #hatchOrders(Map)} with the logs of the trees that grow nearby, {@code nearby}. */
+	private static Map<Item, Integer> hatchOrders(Map<Item, Integer> has, Map<Item, Integer> nearby) {
 		Colony colony = colony();
 		colony.setMineshaft(new Mineshaft(new BlockPos(2, 64, 2), List.of(60), 1, 1, Mineshaft.DEFAULT_TORCH_SPACING, 1));
 		colony.postBuildJobs();
-		colony.planProjects(STONE, step -> true, has, tool -> true, item -> ToolUpgrade.makeableNow(item, has, book, gatherable));
+		colony.planProjects(STONE, step -> true, has, tool -> true, item -> ToolUpgrade.makeableNow(item, has, book, gatherable),
+			item -> ToolUpgrade.makeableNow(item, nearby, book, gatherable));
 		return colony.orders().entrySet().stream().filter(order -> BuildPlan.WOODEN_TRAPDOORS.contains(order.getKey()))
 			.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 	}
@@ -400,6 +406,14 @@ class ProjectTest {
 		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), hatchOrders(Map.of(Items.SPRUCE_PLANKS, 6, Items.OAK_PLANKS, 6)), "oak while it can make one");
 		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), hatchOrders(Map.of()), "oak, its logs to gather, while it can make none");
 		assertEquals(Map.of(), hatchOrders(Map.of(Items.BIRCH_TRAPDOOR, 1)), "the birch trapdoor it has does");
+	}
+
+	@Test
+	void aColonyWithNoWoodOrdersAHatchOfAWoodThatGrowsNearby() {
+		Map<Item, Integer> spruce = Map.of(Items.SPRUCE_LOG, 64);
+		assertEquals(Map.of(Items.SPRUCE_TRAPDOOR, 1), hatchOrders(Map.of(), spruce), "only spruce grows nearby");
+		assertEquals(Map.of(Items.OAK_TRAPDOOR, 1), hatchOrders(Map.of(), Map.of(Items.SPRUCE_LOG, 64, Items.OAK_LOG, 64)), "oak while oak grows too");
+		assertEquals(Map.of(Items.BIRCH_TRAPDOOR, 1), hatchOrders(Map.of(Items.BIRCH_PLANKS, 6), spruce), "what it can make now first");
 	}
 
 	@Test

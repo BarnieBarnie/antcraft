@@ -717,10 +717,20 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 * what a bot crafts where they go.
 	 */
 	public static Item toMake(Item item, Predicate<Item> makeable) {
+		return toMake(item, makeable, other -> false);
+	}
+
+	/**
+	 * {@link #toMake(Item, Predicate)}, where a wooden trapdoor the colony can make none of is one it can make from the
+	 * trees that grow nearby ({@code grows}): the item if it can, else the first of the {@link #WOODEN_TRAPDOORS} it can,
+	 * so gatherers fetch logs that are there to fetch.
+	 */
+	public static Item toMake(Item item, Predicate<Item> makeable, Predicate<Item> grows) {
 		if (!WOODEN_TRAPDOORS.contains(item) || makeable.test(item)) {
 			return item;
 		}
-		return WOODEN_TRAPDOORS.stream().filter(makeable).findFirst().orElse(item);
+		return WOODEN_TRAPDOORS.stream().filter(makeable).findFirst()
+			.or(() -> grows.test(item) ? Optional.of(item) : WOODEN_TRAPDOORS.stream().filter(grows).findFirst()).orElse(item);
 	}
 
 	private Map<Item, Integer> materialsOf(Function<BlockPos, BlockState> world, Predicate<Step> which) {
@@ -781,6 +791,15 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 */
 	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
 			Map<Item, Integer> stairs, Map<Item, Integer> has, Map<Item, Integer> used, Predicate<Item> makeable) {
+		return shortfall(materials, holding, resting, stairs, has, used, makeable, item -> false);
+	}
+
+	/**
+	 * {@link #shortfall(Map, Map, Map, Map, Map, Map, Predicate)}, where {@link #toMake} falls back on what the colony can
+	 * make from the trees that grow nearby ({@code grows}).
+	 */
+	public static Map<Item, Integer> shortfall(Map<Item, Integer> materials, Map<Item, Integer> holding, Map<Item, Integer> resting,
+			Map<Item, Integer> stairs, Map<Item, Integer> has, Map<Item, Integer> used, Predicate<Item> makeable, Predicate<Item> grows) {
 		Map<Item, Integer> needed = new LinkedHashMap<>();
 		materials.forEach((item, count) -> {
 			if (count > has.getOrDefault(item, 0)) {
@@ -798,7 +817,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			fills.keySet().retainAll(kind);
 			cover(needed, fills, spare(kind::contains, materials, has), used);
 			fills.forEach((item, left) -> {
-				Item made = toMake(item, makeable);
+				Item made = toMake(item, makeable, grows);
 				int moved = Math.min(left, needed.getOrDefault(item, 0));
 				if (made != item && moved > 0) {
 					needed.merge(item, -moved, Integer::sum);
@@ -944,17 +963,68 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 */
 	public static Map<Item, Integer> fetchList(Item first, int count, Map<Item, Integer> needed, Map<Item, Integer> carried,
 			Map<Item, Integer> inCore, int room) {
+		return fetchList(first, count, needed, carried, inCore, room, Map.of());
+	}
+
+	/**
+	 * {@link #fetchList(Item, int, Map, Map, Map, int)}, where what the core lacks of an item that others stand in for
+	 * ({@code standIns}), such as any wooden trapdoor or a fill block, is made up with those, carried or in the core, that
+	 * the batch does not place as such, so the step needs no trip of its own.
+	 */
+	public static Map<Item, Integer> fetchList(Item first, int count, Map<Item, Integer> needed, Map<Item, Integer> carried,
+			Map<Item, Integer> inCore, int room, Map<Item, Set<Item>> standIns) {
 		Map<Item, Integer> list = new LinkedHashMap<>();
 		list.put(first, count);
 		int slots = slots(first, count);
+		Map<Item, Integer> lacking = new LinkedHashMap<>();
 		for (Map.Entry<Item, Integer> entry : needed.entrySet()) {
 			Item item = entry.getKey();
-			int take = Math.min(entry.getValue() - carried.getOrDefault(item, 0), inCore.getOrDefault(item, 0));
-			if (item == first || take <= 0 || slots + slots(item, take) > room) {
+			int want = entry.getValue() - carried.getOrDefault(item, 0);
+			int take = Math.max(0, Math.min(want, inCore.getOrDefault(item, 0)));
+			if (item == first) {
+				continue;
+			}
+			if (want > take) {
+				lacking.put(item, want - take);
+			}
+			if (take <= 0 || slots + slots(item, take) > room) {
 				continue;
 			}
 			list.put(item, take);
 			slots += slots(item, take);
+		}
+		// What the batch places as such, or the bot came for, is not there to stand in for anything else.
+		Map<Item, Integer> spareCarried = new HashMap<>();
+		carried.forEach((item, held) -> spareCarried.put(item, held - needed.getOrDefault(item, 0)));
+		// What the bot came for beyond the steps of its own, such as fill blocks, is already on its way.
+		spareCarried.put(first, carried.getOrDefault(first, 0) + count - needed.getOrDefault(first, 0));
+		Map<Item, Integer> spareInCore = new HashMap<>();
+		inCore.forEach((item, held) -> spareInCore.put(item,
+			held - (item == first ? count : Math.max(0, needed.getOrDefault(item, 0) - carried.getOrDefault(item, 0)))));
+		for (Map.Entry<Item, Integer> entry : lacking.entrySet()) {
+			int left = entry.getValue();
+			Set<Item> kind = standIns.getOrDefault(entry.getKey(), Set.of());
+			// Those the bot has on it first, then those in the core.
+			for (Item standIn : kind) {
+				int held = standIn == entry.getKey() ? 0 : Math.max(0, Math.min(left, spareCarried.getOrDefault(standIn, 0)));
+				spareCarried.merge(standIn, -held, Integer::sum);
+				left -= held;
+			}
+			for (Item standIn : kind) {
+				if (standIn == entry.getKey() || left <= 0) {
+					continue;
+				}
+				int take = Math.min(left, spareInCore.getOrDefault(standIn, 0));
+				int listed = list.getOrDefault(standIn, 0);
+				int more = take <= 0 ? 0 : slots(standIn, listed + take) - slots(standIn, listed);
+				if (take <= 0 || slots + more > room) {
+					continue;
+				}
+				list.put(standIn, listed + take);
+				spareInCore.merge(standIn, -take, Integer::sum);
+				slots += more;
+				left -= take;
+			}
 		}
 		return list;
 	}

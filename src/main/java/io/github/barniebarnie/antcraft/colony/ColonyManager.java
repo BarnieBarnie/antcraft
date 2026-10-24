@@ -377,7 +377,7 @@ public class ColonyManager extends SavedData {
 	 * and orders what the plans still have to place beyond what the colony holds, its bots' inventories included.
 	 * Orders plans no longer need are withdrawn.
 	 */
-	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have) {
+	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have, List<TreeScanner.Tree> trees) {
 		colony.postBuildJobs();
 		Item pickaxe = bestPickaxe(level, colony, have);
 		// A pickaxe on order that the colony holds the materials for counts too, so no bot digs the batch by hand
@@ -388,10 +388,13 @@ public class ColonyManager extends SavedData {
 		Item coming = Stream.concat(Stream.ofNullable(pickaxe), made).max(Comparator.comparingInt(kind::rank)).orElse(null);
 		colony.declareBuildNeeds(level::getBlockState, step -> BuilderGoal.isPossible(level, step), tool -> kind.rank(coming) >= kind.rank(tool));
 		// Steps a builder cannot do, such as fire that would go out, are reported blocked rather than ordered for. A pickaxe
-		// is ordered until one is made, not just while none is coming, or the order would withdraw itself.
+		// is ordered until one is made, not just while none is coming, or the order would withdraw itself. A hatch the colony
+		// has no wood for is of a wood that grows nearby.
+		Map<Item, Integer> wood = nearbyWood(level, trees);
 		Map<Item, Integer> materials = colony.planProjects(level::getBlockState, step -> BuilderGoal.isPossible(level, step), have,
 			tool -> kind.rank(pickaxe) >= kind.rank(tool),
-			item -> ToolUpgrade.makeableNow(item, have, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
+			item -> ToolUpgrade.makeableNow(item, have, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable),
+			item -> ToolUpgrade.makeableNow(item, wood, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
 		colony.postStairCrafts(level::getBlockState, have, craftsStairsOnTheSpot(level, colony));
 		// What builders will place is not there for anything else.
 		materials.forEach((item, count) -> have.computeIfPresent(item, (key, held) -> held - count));
@@ -443,10 +446,7 @@ public class ColonyManager extends SavedData {
 	 * Posts jobs for the trees in a build's way, so miners leave their logs to lumberjacks, and for the trees
 	 * nearest the core while the colony is short of logs; orders include what builds need.
 	 */
-	private void surveyTrees(ServerLevel level, Colony colony, LevelTreeView trees) {
-		Territory territory = Territory.of(colony);
-		List<TreeScanner.Tree> all = TreeScanner.findAll(trees, colony.core(), colony.radius()).stream()
-			.filter(tree -> territory.contains(tree.base())).toList();
+	private void surveyTrees(ServerLevel level, Colony colony, List<TreeScanner.Tree> all) {
 		Set<BlockPos> building = colony.builds().stream().flatMap(plan -> plan.steps().stream()).map(BuildPlan.Step::pos).collect(Collectors.toSet());
 		Function<TreeScanner.Tree, Optional<Item>> sapling = tree -> Replanting.saplingFor(level.getBlockState(tree.logs().getFirst()).getBlock());
 		all.stream().filter(tree -> tree.logs().stream().anyMatch(building::contains))
@@ -463,6 +463,19 @@ public class ColonyManager extends SavedData {
 	private static Optional<BuildPlan> structure(ServerLevel level, PlacedBlueprint placed) {
 		return Blueprints.get(placed.blueprint()).flatMap(print -> level.getServer().getStructureTemplateManager().get(print.structure())
 			.flatMap(template -> BlueprintPlacement.structure(template, print, placed.at(), placed.rotation(), placed.mirror()).right()));
+	}
+
+	/** The trees in the colony's territory. */
+	private static List<TreeScanner.Tree> trees(Colony colony, LevelTreeView trees) {
+		Territory territory = Territory.of(colony);
+		return TreeScanner.findAll(trees, colony.core(), colony.radius()).stream().filter(tree -> territory.contains(tree.base())).toList();
+	}
+
+	/** A stack of logs of each kind of {@code trees}, to see what the colony can make from wood that grows nearby. */
+	private static Map<Item, Integer> nearbyWood(ServerLevel level, List<TreeScanner.Tree> trees) {
+		Map<Item, Integer> logs = new HashMap<>();
+		trees.forEach(tree -> logs.put(level.getBlockState(tree.logs().getFirst()).getBlock().asItem(), 64));
+		return logs;
 	}
 
 	public void tick(ServerLevel level) {
@@ -492,7 +505,8 @@ public class ColonyManager extends SavedData {
 			Map<Item, Integer> held = Storage.held(level, colony);
 			Map<Item, Integer> have = new HashMap<>(held);
 			// Builds first, so the mine sees the build jobs open now (see surveyMine).
-			this.surveyBuilds(level, colony, have);
+			List<TreeScanner.Tree> nearby = trees(colony, trees);
+			this.surveyBuilds(level, colony, have, nearby);
 			this.surveyMine(level, colony, held);
 			// After the mine, so the shaft is picked first and its branch jobs close the quarry.
 			boolean shortOfCobblestone = Storage.wanted(level, colony).test(Items.COBBLESTONE);
@@ -501,7 +515,7 @@ public class ColonyManager extends SavedData {
 			this.surveyStorage(level, colony, have);
 			this.surveyStock(level, colony);
 			this.surveyCoreJobs(level, colony);
-			this.surveyTrees(level, colony, trees);
+			this.surveyTrees(level, colony, nearby);
 			colony.prioritizeGatherJobs(Storage.held(level, colony), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable);
 		}
 	}

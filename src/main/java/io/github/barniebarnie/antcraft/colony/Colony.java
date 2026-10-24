@@ -851,6 +851,15 @@ public class Colony {
 	 */
 	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
 			Predicate<Item> hasTool, Predicate<Item> makeable) {
+		return this.planProjects(world, possible, has, hasTool, makeable, item -> false);
+	}
+
+	/**
+	 * {@link #planProjects(Function, Predicate, Map, Predicate, Predicate)}, where such a step the colony can make no wooden
+	 * trapdoor for orders one it can make from the trees that grow nearby ({@code grows}), so gatherers fetch logs that are there.
+	 */
+	public Map<Item, Integer> planProjects(Function<BlockPos, BlockState> world, Predicate<BuildPlan.Step> possible, Map<Item, Integer> has,
+			Predicate<Item> hasTool, Predicate<Item> makeable, Predicate<Item> grows) {
 		this.waiting.clear();
 		Map<Item, Integer> left = new HashMap<>(has);
 		Map<Item, Integer> placed = new HashMap<>();
@@ -868,7 +877,7 @@ public class Colony {
 			// Likewise a ladder shaft's hatch takes whichever wooden trapdoor it has, else one of a wood it can make one of.
 			Map<Item, Integer> stairs = StockPlanner.total(plans.stream().map(plan -> plan.standInMaterials(world)).toList());
 			Map<Item, Integer> spares = new HashMap<>();
-			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, stairs, left, spares, makeable));
+			Map<Item, Integer> needed = new LinkedHashMap<>(BuildPlan.shortfall(materials, holding, resting, stairs, left, spares, makeable, grows));
 			// A full bucket cannot be made, only filled at a source, so builders get an empty one to fill.
 			if (needed.keySet().removeIf(Colony::isFullBucket) && left.getOrDefault(Items.BUCKET, 0) <= 0) {
 				needed.put(Items.BUCKET, 1);

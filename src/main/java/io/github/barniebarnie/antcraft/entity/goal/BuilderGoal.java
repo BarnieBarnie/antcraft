@@ -1266,7 +1266,9 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			Storage.moveItems(inventory, core, stack -> spare.test(stack) && !(pillaring && stack.is(SCAFFOLD)));
 			// The rest of what the batch needs comes along on the same trip, such as the torches and the chest of a shaft
 			// level fetched with its ladders, leaving room for what it digs.
-			BuildPlan.fetchList(item, count, needed, Storage.stock(inventory), Storage.stock(core), freeSlots(inventory) - FETCH_FREE_SLOTS)
+			// What the core lacks of a step's own item, such as an oak trapdoor or cobblestone fill, comes as a stand-in it has.
+			BuildPlan.fetchList(item, count, needed, Storage.stock(inventory), Storage.stock(core), freeSlots(inventory) - FETCH_FREE_SLOTS,
+					standIns(level, plan))
 				.forEach((kind, taken) -> Storage.moveItems(core, inventory, stack -> stack.is(kind), taken));
 			if (pillaring) {
 				int stock = SCAFFOLD_STOCK + needed.entrySet().stream()
@@ -1279,6 +1281,23 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				}
 			}
 		}
+	}
+
+	/**
+	 * What may stand in for the own item of each step of {@code plan} still open (see {@link #withFiller}): its
+	 * {@link BuildPlan.Step#standIns}, or for a step any solid block will do its {@link BuildPlan.Step#fillBlocks}, only
+	 * those that hold where any step of that item needs them to.
+	 */
+	private static Map<Item, Set<Item>> standIns(ServerLevel level, BuildPlan plan) {
+		Map<Item, Set<Item>> standIns = new HashMap<>();
+		for (BuildPlan.Step step : plan.steps()) {
+			if (step.isDone(level.getBlockState(step.pos())) || !step.anySolid() && step.standIns().isEmpty()) {
+				continue;
+			}
+			Set<Item> kind = !step.standIns().isEmpty() ? step.standIns() : step.fillBlocks(level.getBlockState(step.pos().below()));
+			standIns.merge(step.item(), kind, (one, other) -> one.size() <= other.size() ? one : other);
+		}
+		return standIns;
 	}
 
 	/** Whether {@code plan} still has a step too high to reach from where the bot stands, which it pillars up to (see {@link #restockScaffold}). */
