@@ -14,9 +14,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.util.ARGB;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.material.Fluids;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -124,6 +127,57 @@ class GhostLayoutTest {
 		// Water does not hide the faces of a solid block, and the stone has no fluid.
 		assertEquals(Set.of(), pieces.get(3).hidden());
 		assertEquals(Optional.empty(), pieces.get(3).fluid());
+	}
+
+	@Test
+	void theSurfaceSlopesTowardsLowerWaterLikeTheGameDrawsIt() {
+		BlockState source = Blocks.WATER.defaultBlockState();
+		BlockState flowing = source.setValue(LiquidBlock.LEVEL, 4);
+		List<GhostLayout.Piece> pieces = GhostLayout.pieces(List.of(block(AT, source), block(AT.east(), flowing)));
+		GhostLayout.Fluid high = pieces.get(0).fluid().orElseThrow();
+		GhostLayout.Fluid low = pieces.get(1).fluid().orElseThrow();
+		float own = Fluids.WATER.defaultFluidState().getOwnHeight();
+		float flowingOwn = flowing.getFluidState().getOwnHeight();
+		// Corners away from the lower water stay at the source's height; nothing outside the ghost pulls them down.
+		assertEquals(own, high.corners().northWest(), 1.0E-6F);
+		assertEquals(own, high.corners().southWest(), 1.0E-6F);
+		// The game weighs a near-full height ten times: (10 * own + flowing) / 11 at the shared edge.
+		float shared = (own * 10.0F + flowingOwn) / 11.0F;
+		assertEquals(shared, high.corners().northEast(), 1.0E-6F);
+		assertEquals(shared, high.corners().southEast(), 1.0E-6F);
+		// The two surfaces meet at the shared edge, with no step between them.
+		assertEquals(high.corners().northEast(), low.corners().northWest());
+		assertEquals(high.corners().southEast(), low.corners().southWest());
+		assertEquals(flowingOwn, low.corners().northEast(), 1.0E-6F);
+		assertTrue(low.corners().northEast() < low.corners().northWest());
+	}
+
+	@Test
+	void waterUnderMoreWaterIsFullToEveryCorner() {
+		BlockState water = Blocks.WATER.defaultBlockState();
+		List<GhostLayout.Piece> pieces = GhostLayout.pieces(List.of(block(AT, water), block(AT.above(), water),
+			block(AT.east(), water.setValue(LiquidBlock.LEVEL, 4))));
+		assertEquals(new GhostLayout.Corners(1.0F, 1.0F, 1.0F, 1.0F), pieces.get(0).fluid().orElseThrow().corners());
+		// Water with nothing of the ghost around it keeps a flat surface at its own height.
+		GhostLayout.Corners top = pieces.get(1).fluid().orElseThrow().corners();
+		float own = Fluids.WATER.defaultFluidState().getOwnHeight();
+		for (float corner : new float[] {top.northWest(), top.northEast(), top.southEast(), top.southWest()}) {
+			assertEquals(own, corner, 1.0E-6F);
+		}
+	}
+
+	@Test
+	void theBiomesOfAChunkColourTheGhostsNearIt() {
+		BoundingBox area = new BoundingBox(18, 60, 18, 20, 70, 20);
+		assertTrue(GhostLayout.biomesReach(new ChunkPos(1, 1), area), "the chunk it stands in");
+		// Biome colours blend over a few blocks, so the chunks next to it count too.
+		assertTrue(GhostLayout.biomesReach(new ChunkPos(0, 1), area), "the chunk west, 3 blocks away");
+		assertTrue(GhostLayout.biomesReach(new ChunkPos(0, 0), area), "the chunk north-west");
+		assertFalse(GhostLayout.biomesReach(new ChunkPos(2, 1), area), "the chunk east, 12 blocks away");
+		assertFalse(GhostLayout.biomesReach(new ChunkPos(1, 3), area), "a chunk further south");
+		assertEquals(Optional.of(new BoundingBox(8, 64, 8, 9, 65, 8)),
+			GhostLayout.area(GhostLayout.pieces(List.of(block(AT, Blocks.STONE.defaultBlockState()), block(AT.east().above(), Blocks.STONE.defaultBlockState())))));
+		assertEquals(Optional.empty(), GhostLayout.area(List.of()));
 	}
 
 	@Test

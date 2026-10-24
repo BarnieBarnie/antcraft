@@ -48,6 +48,18 @@ class GhostCacheTest {
 	}
 
 	@Test
+	void aValueForgottenAfterAChangeIsWorkedOutAgainForTheSameKey() {
+		get("a");
+		get("b");
+		// Something the values were worked out from changed, such as the biomes near a ghost: only the values it touches go.
+		this.cache.forgetIf((key, value) -> value.equals("A"));
+		assertEquals(1, this.cache.size());
+		get("a");
+		get("b");
+		assertEquals(List.of("a", "b", "a"), this.computed);
+	}
+
+	@Test
 	void aKeyNotUsedInAFrameIsForgotten() {
 		get("a");
 		get("b");

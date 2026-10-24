@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.client;
 
 import io.github.barniebarnie.antcraft.blueprint.BlueprintGhost;
 import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
+import io.github.barniebarnie.antcraft.blueprint.PreviewRefusal;
 import io.github.barniebarnie.antcraft.client.render.GhostRenderer;
 import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.SiteRules;
@@ -37,6 +38,7 @@ public final class BlueprintPreview {
 	private static Mirror mirror = Mirror.NONE;
 	private static volatile Optional<SiteRules> rules = Optional.empty();
 	private static int ticks;
+	private static final PreviewRefusal REFUSAL = new PreviewRefusal();
 
 	private BlueprintPreview() {
 	}
@@ -110,16 +112,20 @@ public final class BlueprintPreview {
 		rules = Optional.empty();
 		rotation = Rotation.NONE;
 		mirror = Mirror.NONE;
+		REFUSAL.reset();
 	}
 
-	/** Draws the ghost at the block the player looks at; called where the client collects what to draw for the frame. */
+	/**
+	 * Draws the ghost at the block the player looks at, red if it would be refused, which is worked out only when the
+	 * placement or the rules change ({@link PreviewRefusal}); called where the client collects what to draw for the frame.
+	 */
 	static void draw(Minecraft client, LevelRenderContext context) {
 		HitResult hit = client.hitResult;
 		if (client.player == null || !(hit instanceof BlockHitResult block) || hit.getType() != HitResult.Type.BLOCK) {
 			return;
 		}
 		held(client.player).flatMap(chosen -> ghost(chosen, block.getBlockPos(), block.getDirection())).ifPresent(ghost ->
-			GhostRenderer.submit(context, ghost, ghost::blocks, ghost.refusal(rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
+			GhostRenderer.submit(context, ghost, ghost::blocks, REFUSAL.get(ghost, rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
 	}
 
 	/**

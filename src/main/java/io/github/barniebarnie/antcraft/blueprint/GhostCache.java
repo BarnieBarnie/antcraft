@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.blueprint;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 /**
@@ -44,6 +45,14 @@ public final class GhostCache<K, V> {
 	public void endFrame() {
 		this.entries.removeIf(entry -> !entry.used);
 		this.entries.forEach(entry -> entry.used = false);
+	}
+
+	/**
+	 * Forgets each value {@code which} holds for, so it is worked out again the next time it is asked for: for a change
+	 * the keys do not show, such as the biomes of a chunk near a ghost loading after its colours were worked out.
+	 */
+	public void forgetIf(BiPredicate<? super K, ? super V> which) {
+		this.entries.removeIf(entry -> which.test(entry.key, entry.value));
 	}
 
 	/** How many values are kept. */

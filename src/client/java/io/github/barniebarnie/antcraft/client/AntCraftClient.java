@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -46,6 +47,8 @@ public class AntCraftClient implements ClientModInitializer {
 			BlueprintPreview.draw(Minecraft.getInstance(), context);
 			GhostRenderer.endFrame();
 		});
+		// Ghost colours worked out before a chunk's biomes arrived are worked out again with them.
+		ClientChunkEvents.CHUNK_LOAD.register((level, chunk) -> GhostRenderer.chunkLoaded(level, chunk.getPos()));
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BuildGhosts.TYPE, (ghosts, context) -> PlacedGhosts.set(ghosts.builds()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PlacedGhosts.reset());
 		BlueprintItem.setGhostClicker(PlacedGhosts::click);
