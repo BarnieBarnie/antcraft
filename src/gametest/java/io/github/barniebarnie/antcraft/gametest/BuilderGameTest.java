@@ -1520,6 +1520,51 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A water step whose wall cannot be placed, as bedrock stands where it goes, with a water bucket in the core and a
+	 * source to fill one at: the water waits for its wall (see {@link BuildPlan#waitsForWalls}), so both are reported
+	 * blocked and stay so across the colony's rechecks, rather than the water waiting silently for ever. Once the player
+	 * gives them up the plan is finished, with no water poured.
+	 */
+	@GameTest(maxTicks = 300)
+	public void reportsAFluidWhoseWallIsBlockedAndGivesItUpWithIt(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE));
+		BlockPos pool = new BlockPos(6, 1, 1);
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(pool.relative(side), Blocks.STONE);
+		}
+		helper.setBlock(pool, Blocks.WATER);
+		helper.setBlock(5, 1, 4, Blocks.BEDROCK);
+		BuildPlan.Step wall = step(helper, 5, 1, 4, COBBLE);
+		BuildPlan.Step water = step(helper, 4, 1, 4, Blocks.WATER.defaultBlockState());
+		colony.addBuild(new BuildPlan(List.of(wall, water)));
+		member(helper, colony, 2, 4);
+
+		long[] reported = {-1};
+		boolean[] cleared = {false};
+		helper.onEachTick(() -> {
+			boolean both = colony.blockedSteps().equals(List.of(wall.pos(), water.pos()));
+			if (reported[0] < 0 && both) {
+				reported[0] = helper.getTick();
+			} else if (reported[0] >= 0 && !cleared[0] && !both) {
+				helper.fail("no longer reported: " + colony.blockedSteps());
+			}
+			// Held past two rechecks of the blocked steps, a survey apart.
+			if (reported[0] >= 0 && !cleared[0] && helper.getTick() - reported[0] >= 220) {
+				command(helper, PermissionSet.ALL_PERMISSIONS, "antcraft colony blocked clear");
+				cleared[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(cleared[0], "not reported long enough: " + colony.blockedSteps());
+			helper.assertTrue(colony.blockedSteps().isEmpty(), "still reported blocked: " + colony.blockedSteps());
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished");
+			helper.assertBlockPresent(Blocks.AIR, new BlockPos(4, 1, 4));
+		});
+	}
+
 	/** A fluid source at (4, 1, 4), walled in by stone so it does not spread. */
 	private static BuildPlan pool(GameTestHelper helper, BlockState fluid) {
 		for (Direction side : Direction.Plane.HORIZONTAL) {

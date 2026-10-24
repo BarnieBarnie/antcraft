@@ -961,7 +961,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * Whether a bot could do a step now, with the buckets and filler blocks the colony holds, its bots'
 	 * included: such as once a blocking block is gone, or once there is a full bucket in the core or a
 	 * source to fill one at for a fluid, or a filler block for each fluid to wall off as a block beside it is dug. Never for a
-	 * block a player cannot place, so that step stays reported.
+	 * block a player cannot place, so that step stays reported, nor for a fluid waiting for a wall of its batch still to place.
 	 */
 	public static BiPredicate<BuildPlan, BuildPlan.Step> workable(ServerLevel level, Colony colony) {
 		Container core = Storage.containerAt(level, colony.core());
@@ -973,7 +973,7 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 		Map<Item, Boolean> canPour = new HashMap<>();
 		return (plan, step) -> {
 			Item item = step.item(level.getBlockState(step.pos()));
-			return isPossible(level, step) && !leavesAlone(level, plan, step)
+			return isPossible(level, step) && !leavesAlone(level, plan, step) && !plan.waitsForWalls(level::getBlockState, step)
 				&& (clearing(level, step, hasBucket, hasFiller) != BuildPlan.Clearing.BLOCKED || isWallable(level, step, fillers))
 				&& (!isPoured(item) || canPour.computeIfAbsent(item,
 					bucket -> core != null && core.countItem(bucket) > 0 || source(level, colony, colony.core(), bucket, Set.of()) != null));
@@ -1042,9 +1042,11 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 				return false;
 			}
 			Item item = step.item(current);
+			// A fluid waiting for its walls waits only as long as they do, which they tell for themselves.
 			return step.needsClearing(current)
 				? this.clearing(level, core, step) == BuildPlan.Clearing.SETTLE
-				: isPossible(level, step) && (!isPoured(item) || this.source(level, colony, item) != null);
+				: isPossible(level, step) && !plan.waitsForWalls(level::getBlockState, step)
+					&& (!isPoured(item) || this.source(level, colony, item) != null);
 		}).isPresent();
 	}
 
