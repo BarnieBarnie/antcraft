@@ -1,7 +1,11 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import com.mojang.datafixers.util.Either;
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.colony.PlacedBlueprint;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -11,7 +15,9 @@ import io.github.barniebarnie.antcraft.work.Field;
 import io.github.barniebarnie.antcraft.colony.StockTarget;
 import io.github.barniebarnie.antcraft.work.StorageArea;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -26,6 +32,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.DoublePlantBlock;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
@@ -787,6 +795,59 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(field.toPlant(crop -> planted(helper, crop)).isEmpty(), "unplanted: " + field.toPlant(crop -> planted(helper, crop)));
 			helper.assertTrue(helper.getLevel().getBlockState(field.center()).is(Blocks.WATER), "no water in the middle");
 			helper.assertBlockNotPresent(Blocks.WATER, source);
+		});
+	}
+
+	/** How many crops of the placed farm the test ripens. */
+	private static final int RIPENED = 4;
+
+	/**
+	 * A crop farm placed for the colony, turned a quarter and mirrored: the bot builds it from the core's dirt and water
+	 * bucket, then tills and plants each of its plots. The test ripens the first {@link #RIPENED} crops once planted; the
+	 * bot harvests that wheat and replants.
+	 */
+	@GameTest(maxTicks = 1400)
+	public void aPlacedFarmIsBuiltThenPlantedAndHarvested(GameTestHelper helper) {
+		// Stone ground one block up, level with the top of the core, so the farm is built on flat ground and needs no levelling.
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 1, z, Blocks.STONE);
+			}
+		}
+		Colony colony = colony(helper);
+		Container core = core(helper);
+		core.setItem(0, new ItemStack(Items.DIRT, 24));
+		core.setItem(1, new ItemStack(Items.WATER_BUCKET));
+		core.setItem(2, new ItemStack(Items.WOODEN_HOE));
+		core.setItem(3, new ItemStack(Items.WHEAT_SEEDS, 32));
+		Either<BlueprintPlacement.Refusal, PlacedBlueprint> placed = BlueprintPlacement.place(helper.getLevel(), colony, true, AntCraft.id("farm"),
+			helper.absolutePos(new BlockPos(3, 2, 3)), Rotation.CLOCKWISE_90, Mirror.LEFT_RIGHT);
+		helper.assertTrue(placed.right().isPresent(), "not placed: " + placed.left());
+		List<BlockPos> plots = placed.right().orElseThrow().workSpots();
+		helper.assertValueEqual(plots.size(), 24, "plots");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 2, 5);
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		GameTests.failOnGiveUp(helper, colony);
+		Set<BlockPos> planted = new HashSet<>();
+		helper.onEachTick(() -> {
+			for (BlockPos plot : plots) {
+				BlockState crop = helper.getLevel().getBlockState(plot.above());
+				if (crop.is(Blocks.WHEAT) && planted.add(plot) && planted.size() <= RIPENED) {
+					helper.getLevel().setBlockAndUpdate(plot.above(), crop.setValue(CropBlock.AGE, 7));
+				}
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(colony.blueprints().stream().map(PlacedBlueprint::finished).toList(), List.of(true), "farm built");
+			helper.assertTrue(helper.getBlockState(new BlockPos(5, 2, 5)).is(Blocks.WATER), "no water in the middle of the farm");
+			helper.assertValueEqual(planted.size(), plots.size(), "plots planted");
+			// The bot brings its wheat to the core once it has no more ripe crops near, so some may still be on it.
+			helper.assertValueEqual(core.countItem(Items.WHEAT) + bot.getInventory().countItem(Items.WHEAT), RIPENED, "wheat harvested");
+			for (BlockPos plot : plots) {
+				helper.assertTrue(planted(helper, plot.above()), "not replanted: " + TestPositions.relative(helper, plot).toShortString()
+					+ " holds " + helper.getLevel().getBlockState(plot));
+			}
 		});
 	}
 }

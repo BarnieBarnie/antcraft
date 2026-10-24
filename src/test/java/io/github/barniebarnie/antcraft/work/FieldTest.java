@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.gson.JsonParser;
+import com.mojang.serialization.JsonOps;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -177,5 +179,34 @@ class FieldTest {
 
 		assertFalse(overlaps(field, new BoundingBox(-10, -64, -10, 10, 64, 10)), "field at " + field.center());
 		assertTrue(Math.abs(field.center().getX()) + Field.RADIUS <= 32 && Math.abs(field.center().getZ()) + Field.RADIUS <= 32);
+	}
+
+	@Test
+	void aSavedOldFieldStillLoads() {
+		// Saves from before farm blueprints hold only the middle of the fixed 5x5 field.
+		Field loaded = Field.CODEC.parse(JsonOps.INSTANCE, JsonParser.parseString("[4, 63, -7]")).getOrThrow();
+		assertEquals(new Field(new BlockPos(4, 63, -7)), loaded);
+		assertEquals(new BoundingBox(2, 63, -9, 6, 65, -5), loaded.area());
+		assertEquals(Optional.of(new BlockPos(4, 63, -7)), loaded.water());
+		assertEquals(24, loaded.plots().size());
+		assertFalse(loaded.plots().contains(new BlockPos(4, 63, -7)), "the water is a plot");
+		// And it is still saved the old way, so older versions read it.
+		assertEquals(JsonParser.parseString("[4, 63, -7]"), Field.CODEC.encodeStart(JsonOps.INSTANCE, loaded).getOrThrow());
+	}
+
+	@Test
+	void aFieldOfPlotsIsSavedAndLoaded() {
+		Field field = Field.of(new BoundingBox(0, 64, 0, 2, 65, 1), List.of(new BlockPos(2, 64, 1), new BlockPos(0, 64, 0)));
+		Field loaded = Field.CODEC.parse(JsonOps.INSTANCE, Field.CODEC.encodeStart(JsonOps.INSTANCE, field).getOrThrow()).getOrThrow();
+		assertEquals(field, loaded);
+		assertEquals(List.of(new BlockPos(2, 64, 1), new BlockPos(0, 64, 0)), loaded.plots());
+		assertEquals(Optional.empty(), loaded.water());
+	}
+
+	@Test
+	void aFieldOfPlotsPlantsAboveEachPlotWithoutACrop() {
+		Field field = Field.of(new BoundingBox(0, 64, 0, 2, 65, 1), List.of(new BlockPos(2, 64, 1), new BlockPos(0, 64, 0)));
+		assertEquals(List.of(new BlockPos(2, 65, 1), new BlockPos(0, 65, 0)), field.toPlant(pos -> false));
+		assertEquals(List.of(new BlockPos(0, 65, 0)), field.toPlant(new BlockPos(2, 65, 1)::equals));
 	}
 }

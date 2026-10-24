@@ -1349,9 +1349,17 @@ public class Colony {
 		return this.addBuild(MINESHAFT, shaft.plan(), true);
 	}
 
-	/** The crop field the colony started itself, if it needed one. */
+	/**
+	 * Where farmers plant: the plots of every built farm (a placed blueprint with role {@link Blueprint.Role#FARM}),
+	 * oldest first; with none built, the field the colony laid out itself, if it needed one.
+	 */
 	public Optional<Field> field() {
-		return this.field;
+		List<PlacedBlueprint> farms = this.finishedBlueprints(Blueprint.Role.FARM);
+		if (farms.isEmpty()) {
+			return this.field;
+		}
+		List<BlockPos> plots = farms.stream().flatMap(placed -> placed.workSpots().stream()).toList();
+		return BoundingBox.encapsulatingBoxes(farms.stream().map(PlacedBlueprint::area).toList()).map(area -> Field.of(area, plots));
 	}
 
 	public void setField(Field field) {

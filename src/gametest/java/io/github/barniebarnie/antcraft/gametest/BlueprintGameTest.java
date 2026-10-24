@@ -63,7 +63,7 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 	/** The server's data load fills the blueprint library with the bundled blueprints, each pointing at a structure the server has. */
 	@GameTest(maxTicks = 5)
 	public void theServerListsTheBundledBlueprints(GameTestHelper helper) {
-		for (String name : List.of("starter_house", "cobble_step", "warehouse")) {
+		for (String name : List.of("starter_house", "cobble_step", "warehouse", "farm")) {
 			Identifier id = AntCraft.id(name);
 			Optional<Blueprint> blueprint = Blueprints.get(id);
 			helper.assertTrue(blueprint.isPresent(), "no blueprint " + id + " in " + Blueprints.ids());

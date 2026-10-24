@@ -316,7 +316,7 @@ public class FarmerGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 	 * dry, the crops just grow slower until the water comes.
 	 */
 	private boolean waterField(ServerLevel level, Colony colony) {
-		BlockPos center = colony.field().map(Field::center).orElse(null);
+		BlockPos center = colony.field().flatMap(Field::water).orElse(null);
 		if (center == null || level.getBlockState(center).is(Blocks.WATER)) {
 			return false;
 		}
