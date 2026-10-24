@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.Holder;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.tags.TagKey;
@@ -79,7 +80,14 @@ public record StockTarget(Either<TagKey<Item>, Item> match, int count, List<Item
 		return match.map(tag -> "#" + tag.location(), item -> BuiltInRegistries.ITEM.getKey(item).toString());
 	}
 
+	/**
+	 * The target as {@link StockPlanner} plans it. When none of the make options can be made now, it also orders
+	 * any other food it matches, such as baked potatoes for a food target that makes bread. Other items it matches
+	 * are not ordered, so a pickaxe target that lists no golden pickaxe never spends gold on one.
+	 */
 	public StockPlanner.Target<Item> toPlannerTarget() {
-		return new StockPlanner.Target<>(this::matches, this.makeOptions(), this.count);
+		List<Item> make = this.makeOptions();
+		List<Item> otherFood = this.options().stream().filter(item -> !make.contains(item) && item.components().has(DataComponents.FOOD)).toList();
+		return new StockPlanner.Target<>(this::matches, make, this.count, otherFood);
 	}
 }

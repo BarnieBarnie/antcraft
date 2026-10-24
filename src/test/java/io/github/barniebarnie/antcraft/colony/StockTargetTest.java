@@ -175,4 +175,37 @@ class StockTargetTest {
 		assertTrue(defaultOrders(ItemTags.HEAD_ARMOR, Map.of()).isEmpty());
 		assertEquals(Map.of(Items.IRON_HELMET, 1), defaultOrders(ItemTags.HEAD_ARMOR, Map.of(Items.RAW_IRON, 5, Items.COAL, 1)));
 	}
+
+	/** What {@code target} orders with {@code stock} in the core, planned against the game's recipes. */
+	private static Map<Item, Integer> ordersWithGameRecipes(StockTarget target, Map<Item, Integer> stock) {
+		VanillaData.bindTags();
+		return StockPlanner.ordersToAdd(List.of(target.toPlannerTarget()), stock, Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
+	}
+
+	private static StockTarget defaultTarget(TagKey<Item> tag) {
+		return DefaultStock.TARGETS.stream().filter(t -> t.match().left().equals(Optional.of(tag))).findFirst().orElseThrow();
+	}
+
+	@Test
+	void aColonyShortOfFoodWithPotatoesAndFuelOrdersBakedPotatoes() {
+		assertEquals(Map.of(Items.BAKED_POTATO, 4), ordersWithGameRecipes(defaultTarget(DefaultStock.COLONY_FOOD), Map.of(Items.POTATO, 4, Items.COAL, 1)));
+		// Bread first, when there is wheat for it.
+		assertEquals(Map.of(Items.BREAD, 1),
+			ordersWithGameRecipes(defaultTarget(DefaultStock.COLONY_FOOD), Map.of(Items.WHEAT, 3, Items.POTATO, 4, Items.COAL, 1)));
+	}
+
+	@Test
+	void aFoodTargetAlsoOrdersOtherFoodItsTagMatches() {
+		// Like an older colony's food target, which lists only bread: cooked salmon also meets this one.
+		// Raw fish counts toward this target too, so it wants 4 to be 2 short with 2 raw fish in stock.
+		StockTarget fish = StockTarget.of(ItemTags.FISHES, 4, Items.COOKED_COD);
+		assertEquals(Map.of(Items.COOKED_SALMON, 2), ordersWithGameRecipes(fish, Map.of(Items.SALMON, 2, Items.COAL, 1)));
+		assertEquals(Map.of(Items.COOKED_COD, 2), ordersWithGameRecipes(fish, Map.of(Items.COD, 2, Items.COAL, 1)));
+	}
+
+	@Test
+	void aToolTargetOrdersOnlyWhatItLists() {
+		// Gold also makes a pickaxe, but the target does not list one: gold is not spent on it.
+		assertTrue(ordersWithGameRecipes(defaultTarget(ItemTags.PICKAXES), Map.of(Items.GOLD_INGOT, 3, Items.STICK, 2)).isEmpty());
+	}
 }

@@ -38,7 +38,7 @@ public final class DefaultStock {
 		StockTarget.of(PathFollower.SCAFFOLD_BLOCKS, 32),
 		// Lumberjacks only pillar with these; the cobblestone above would otherwise meet the scaffold target alone.
 		StockTarget.of(PathFollower.FAST_SCAFFOLD_BLOCKS, 16),
-		StockTarget.of(COLONY_FOOD, 16, Items.BREAD),
+		StockTarget.of(COLONY_FOOD, 16, Items.BREAD, Items.BAKED_POTATO),
 		// Builders and miners light the mineshaft with these.
 		StockTarget.of(Items.TORCH, 32),
 		// Armor needs ingots, so these wait until the colony can smelt.

@@ -208,6 +208,22 @@ public class CrafterGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A colony with no farm meets its food target with baked potatoes, though the target, like an older colony's, lists only bread. */
+	@GameTest(maxTicks = 840)
+	public void bakesPotatoesForTheFoodTargetWithoutAFarm(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		colony.setStockTargets(List.of(StockTarget.of(DefaultStock.COLONY_FOOD, 2, Items.BREAD)));
+		helper.setBlock(CORE.east(), Blocks.FURNACE);
+		store(helper, new ItemStack(Items.POTATO, 2), new ItemStack(Items.COAL, 1));
+		crafter(helper, colony);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core(helper).countItem(Items.BAKED_POTATO) == 2, "core has " + core(helper).countItem(Items.BAKED_POTATO) + " baked potatoes");
+			helper.assertTrue(core(helper).countItem(Items.POTATO) == 0, "potatoes left in core: " + core(helper).countItem(Items.POTATO));
+			helper.assertTrue(!colony.orders().containsKey(Items.BAKED_POTATO), "order not cleared: " + colony.orders());
+		});
+	}
+
 	@GameTest(maxTicks = 860)
 	public void placesAStoredFurnaceToSmelt(GameTestHelper helper) {
 		Colony colony = colony(helper);

@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,8 +15,25 @@ public final class StockPlanner {
 	/**
 	 * @param matches which items count toward the target
 	 * @param make what to order when short, in order of preference
+	 * @param alternatives what else to order when none of {@code make} can be made now, in order of preference,
+	 *     such as baked potatoes for a food target that makes bread
 	 */
-	public record Target<I>(Predicate<I> matches, List<I> make, int count) {
+	public record Target<I>(Predicate<I> matches, List<I> make, int count, List<I> alternatives) {
+		public Target {
+			make = List.copyOf(make);
+			alternatives = List.copyOf(alternatives);
+		}
+
+		public Target(Predicate<I> matches, List<I> make, int count) {
+			this(matches, make, count, List.of());
+		}
+
+		/** Everything that may be ordered for this target: {@code make}, then the alternatives. */
+		public List<I> orderOptions() {
+			List<I> options = new ArrayList<>(this.make);
+			this.alternatives.stream().filter(option -> !options.contains(option)).forEach(options::add);
+			return options;
+		}
 	}
 
 	private StockPlanner() {
@@ -51,7 +69,7 @@ public final class StockPlanner {
 		Map<I, Integer> toAdd = new LinkedHashMap<>();
 		for (Target<I> target : targets) {
 			int shortfall = target.count() - have(target, stock) - have(target, orders) - have(target, toAdd);
-			for (I option : target.make()) {
+			for (I option : target.orderOptions()) {
 				if (shortfall <= 0) {
 					break;
 				}
