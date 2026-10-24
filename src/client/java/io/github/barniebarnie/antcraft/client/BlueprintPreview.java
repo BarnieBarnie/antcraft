@@ -119,7 +119,7 @@ public final class BlueprintPreview {
 			return;
 		}
 		held(client.player).flatMap(chosen -> ghost(chosen, block.getBlockPos(), block.getDirection())).ifPresent(ghost ->
-			GhostRenderer.submit(context, ghost.blocks(), ghost.refusal(rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
+			GhostRenderer.submit(context, ghost, ghost::blocks, ghost.refusal(rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
 	}
 
 	/**

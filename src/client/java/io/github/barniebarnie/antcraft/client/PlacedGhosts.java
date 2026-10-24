@@ -49,7 +49,7 @@ public final class PlacedGhosts {
 		}
 		Optional<UUID> armed = CONFIRM.armed(client.level.getGameTime());
 		for (BuildGhost ghost : ghosts) {
-			GhostRenderer.submit(context, ghost.blocks(), armed.equals(Optional.of(ghost.project())) ? GhostRenderer.REFUSED : GhostRenderer.PLANNED);
+			GhostRenderer.submit(context, ghost, ghost::blocks, armed.equals(Optional.of(ghost.project())) ? GhostRenderer.REFUSED : GhostRenderer.PLANNED);
 		}
 	}
 

@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.client.render.AntBotRenderer;
+import io.github.barniebarnie.antcraft.client.render.GhostRenderer;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -43,6 +44,7 @@ public class AntCraftClient implements ClientModInitializer {
 		LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
 			PlacedGhosts.draw(Minecraft.getInstance(), context);
 			BlueprintPreview.draw(Minecraft.getInstance(), context);
+			GhostRenderer.endFrame();
 		});
 		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BuildGhosts.TYPE, (ghosts, context) -> PlacedGhosts.set(ghosts.builds()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PlacedGhosts.reset());
