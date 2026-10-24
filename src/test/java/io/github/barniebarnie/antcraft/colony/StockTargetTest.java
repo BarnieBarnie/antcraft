@@ -197,7 +197,7 @@ class StockTargetTest {
 	@Test
 	void aFoodTargetAlsoOrdersOtherFoodItsTagMatches() {
 		// Like an older colony's food target, which lists only bread: cooked salmon also meets this one.
-		// Raw fish counts toward this target too, so it wants 4 to be 2 short with 2 raw fish in stock.
+		// Raw fish the colony can cook does not count toward it.
 		StockTarget fish = StockTarget.of(ItemTags.FISHES, 4, Items.COOKED_COD);
 		assertEquals(Map.of(Items.COOKED_SALMON, 2), ordersWithGameRecipes(fish, Map.of(Items.SALMON, 2, Items.COAL, 1)));
 		assertEquals(Map.of(Items.COOKED_COD, 2), ordersWithGameRecipes(fish, Map.of(Items.COD, 2, Items.COAL, 1)));
@@ -207,5 +207,27 @@ class StockTargetTest {
 	void aToolTargetOrdersOnlyWhatItLists() {
 		// Gold also makes a pickaxe, but the target does not list one: gold is not spent on it.
 		assertTrue(ordersWithGameRecipes(defaultTarget(ItemTags.PICKAXES), Map.of(Items.GOLD_INGOT, 3, Items.STICK, 2)).isEmpty());
+	}
+
+	@Test
+	void rawMeatTheColonyCanCookDoesNotMeetAFoodTarget() {
+		StockTarget meat = StockTarget.of(ItemTags.MEAT, 4, Items.COOKED_BEEF);
+		VanillaData.bindTags();
+		StockPlanner.Target<Item> planned = meat.toPlannerTarget();
+		Map<Item, Integer> withFuel = Map.of(Items.BEEF, 4, Items.COAL, 1);
+		assertEquals(0, StockPlanner.have(planned, withFuel, VanillaData.recipeBook(), VanillaData.gatherable()));
+		assertEquals(Map.of(Items.COOKED_BEEF, 4), ordersWithGameRecipes(meat, withFuel));
+		// Without fuel it cannot be cooked: raw meat is better than none.
+		assertEquals(4, StockPlanner.have(planned, Map.of(Items.BEEF, 4), VanillaData.recipeBook(), VanillaData.gatherable()));
+		assertTrue(ordersWithGameRecipes(meat, Map.of(Items.BEEF, 4)).isEmpty());
+	}
+
+	@Test
+	void ofTwoFoodsItCanMakeNowTheColonyOrdersTheBetterOne() {
+		// Cooked salmon fills more and saturates more than cooked cod; the fishes tag lists cod first.
+		Map<Item, Integer> stock = Map.of(Items.COD, 2, Items.SALMON, 2, Items.COAL, 1);
+		assertEquals(Map.of(Items.COOKED_SALMON, 2), ordersWithGameRecipes(StockTarget.of(ItemTags.FISHES, 4), stock));
+		// Also when the foods are alternatives to a make list it cannot make.
+		assertEquals(Map.of(Items.COOKED_SALMON, 2), ordersWithGameRecipes(StockTarget.of(ItemTags.FISHES, 4, Items.TROPICAL_FISH), stock));
 	}
 }

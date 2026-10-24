@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
@@ -27,6 +28,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -171,6 +173,22 @@ class ColonyStatusTest {
 		assertTrue(needsFarm(StockTarget.of(Items.BREAD, 16)));
 		// The mod's tags are not bound in unit tests, so bread is all this target can be met with.
 		assertTrue(needsFarm(StockTarget.of(DefaultStock.COLONY_FOOD, 16, Items.BREAD)));
+	}
+
+	@Test
+	void needsFarmAndOrderingAgreeOnWhatATargetCanBeMetWith() {
+		VanillaData.bindTags();
+		// Say oak planks took wheat, and birch planks birch logs. A planks target listing only oak planks never orders
+		// birch planks, so only a farm meets it, though the tag holds birch planks too.
+		TaskPlanner.RecipeBook<Item> book = item -> item == Items.OAK_PLANKS ? List.of(new TaskPlanner.Recipe<>(Items.OAK_PLANKS, 4, Map.of(Set.of(Items.WHEAT), 1)))
+			: item == Items.BIRCH_PLANKS ? List.of(new TaskPlanner.Recipe<>(Items.BIRCH_PLANKS, 4, Map.of(Set.of(Items.BIRCH_LOG), 1))) : List.of();
+		Predicate<Item> gatherable = item -> item == Items.WHEAT || item == Items.BIRCH_LOG;
+		StockTarget planks = StockTarget.of(ItemTags.PLANKS, 4, Items.OAK_PLANKS);
+		assertTrue(StockPlanner.ordersToAdd(List.of(planks.toPlannerTarget()), Map.of(Items.BIRCH_LOG, 1), Map.of(), book, gatherable).isEmpty());
+		Colony colony = new Colony(UUID.randomUUID(), new BlockPos(0, 64, 0), List.of(), new JobBoard(), 20,
+			Map.of(), Optional.empty(), List.of(planks), Map.of(), List.of(), Optional.empty(), Optional.empty(), Map.of(), List.of(), Map.of());
+		ColonyStatus status = ColonyStatus.of(colony, Map.of(), Map.of(), book, gatherable, pos -> Blocks.AIR.defaultBlockState(), 1, false);
+		assertTrue(status.stock().getFirst().needsFarm(), "does not need a farm: " + status.stock());
 	}
 
 	@Test

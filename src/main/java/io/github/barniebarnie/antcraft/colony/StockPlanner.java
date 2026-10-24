@@ -58,17 +58,46 @@ public final class StockPlanner {
 	}
 
 	/**
+	 * As {@link #have(Target, Map)}, but what the colony can cook into another of the target's {@linkplain Target#orderOptions
+	 * order options} now does not count: raw beef in the core does not meet a food target while it can become cooked beef,
+	 * or the colony would never cook it. Without fuel it counts, as it is all there is.
+	 */
+	public static <I> int have(Target<I> target, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+		int have = 0;
+		for (Map.Entry<I, Integer> entry : stock.entrySet()) {
+			if (target.matches().test(entry.getKey()) && !cookableNow(target, entry.getKey(), stock, book, gatherable)) {
+				have += entry.getValue();
+			}
+		}
+		return have;
+	}
+
+	/** Whether {@code item} smelts into another of the target's order options, and stock allows that now. */
+	private static <I> boolean cookableNow(Target<I> target, I item, Map<I, Integer> stock, TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
+		for (I option : target.orderOptions()) {
+			if (!option.equals(item) && target.matches().test(option)
+					&& book.recipesFor(option).stream().anyMatch(recipe -> recipe.smelting() && recipe.ingredients().keySet().stream().anyMatch(set -> set.contains(item)))
+					&& makeableNow(option, 1, stock, book, gatherable) > 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
 	 * The orders to add so the targets are met. Pending orders count as already on their way.
 	 * Only what the crafter can make from stock right now is ordered, as many as the stock
 	 * allows; later surveys top up as more materials come in. An order that had to wait for
 	 * gathering would block its target, for example birch planks while only oak grows nearby.
+	 * Raw food the colony can cook into one of a target's options does not count toward it (see
+	 * {@link #have(Target, Map, TaskPlanner.RecipeBook, Predicate)}).
 	 * Gatherable targets get no order: they are collected, not crafted.
 	 */
 	public static <I> Map<I, Integer> ordersToAdd(List<Target<I>> targets, Map<I, Integer> stock, Map<I, Integer> orders,
 			TaskPlanner.RecipeBook<I> book, Predicate<I> gatherable) {
 		Map<I, Integer> toAdd = new LinkedHashMap<>();
 		for (Target<I> target : targets) {
-			int shortfall = target.count() - have(target, stock) - have(target, orders) - have(target, toAdd);
+			int shortfall = target.count() - have(target, stock, book, gatherable) - have(target, orders) - have(target, toAdd);
 			for (I option : target.orderOptions()) {
 				if (shortfall <= 0) {
 					break;

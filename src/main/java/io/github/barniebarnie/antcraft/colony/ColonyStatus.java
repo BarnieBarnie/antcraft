@@ -236,14 +236,14 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 	}
 
 	/**
-	 * Whether only a farm lets the colony get {@code count} more of what {@code target} wants: a plan for one of its
-	 * {@linkplain StockTarget#options options} gathers what a field yields, and no other option can be had without it.
+	 * Whether only a farm lets the colony get {@code count} more of what {@code target} wants: a plan for one of the
+	 * {@linkplain StockPlanner.Target#orderOptions options it orders} gathers what a field yields, and no other option can be had without it.
 	 * An option the colony can neither craft nor gather, such as cooked beef, is no way to meet it.
 	 */
 	private static boolean onlyAFarmMeets(StockTarget target, int count, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book,
 			Predicate<Item> gatherable) {
 		boolean farm = false;
-		for (Item item : target.options()) {
+		for (Item item : target.toPlannerTarget().orderOptions()) {
 			// As for an order: what is held already counts in have.
 			Map<Item, Integer> available = new HashMap<>(stock);
 			available.remove(item);
@@ -340,7 +340,7 @@ public record ColonyStatus(BlockPos core, int members, Map<UUID, Bot> bots, int 
 		boolean noField = colony.field().isEmpty();
 		List<Stock> stocks = new ArrayList<>();
 		for (StockTarget target : colony.stockTargets()) {
-			int have = StockPlanner.have(target.toPlannerTarget(), stock);
+			int have = StockPlanner.have(target.toPlannerTarget(), stock, book, gatherable);
 			boolean needsFarm = noField && have < target.count() && onlyAFarmMeets(target, target.count() - have, stock, book, gatherable);
 			stocks.add(new Stock(target.name(), have, target.count(), needsFarm));
 		}

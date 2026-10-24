@@ -23,6 +23,8 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.GameRecipeBook;
+import io.github.barniebarnie.antcraft.work.Gatherables;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import io.github.barniebarnie.antcraft.work.Terraform;
@@ -326,8 +328,9 @@ public final class AntCraftCommands {
 		if (colony.stockTargets().isEmpty()) {
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.empty"), false);
 		}
+		GameRecipeBook book = GameRecipeBook.of(source.getServer());
 		for (StockTarget target : colony.stockTargets()) {
-			int have = StockPlanner.have(target.toPlannerTarget(), stock);
+			int have = StockPlanner.have(target.toPlannerTarget(), stock, book, Gatherables::isGatherable);
 			source.sendSuccess(() -> Component.translatable("commands.antcraft.colony.stock.line", target.name(), have, target.count()), false);
 		}
 		return colony.stockTargets().size();
