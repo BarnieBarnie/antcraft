@@ -20,7 +20,10 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -106,6 +109,18 @@ class ProjectTest {
 		colony.planProjects(WORLD, step -> true, Map.of(Items.OAK_PLANKS, 1), tool -> true);
 		assertEquals(Map.of(), colony.waitingFor(project.id()));
 		assertEquals(Map.of(), colony.orders());
+	}
+
+	@Test
+	void aStockTargetWhoseTagMatchesNothingOrdersNothingAndTheRestOfItsProjectStillOrders() {
+		Colony colony = colony();
+		TagKey<Item> nothing = TagKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath("antcraft", "matches_nothing"));
+		colony.addProject("odd", List.of(StockTarget.of(nothing, 2), StockTarget.of(Items.OAK_PLANKS, 3)));
+
+		colony.planProjects(WORLD, step -> true, Map.of(), tool -> false);
+
+		// Nothing to make for the empty tag: it is skipped, not a crash, and the planks are still ordered.
+		assertEquals(Map.of(Items.OAK_PLANKS, 3), colony.orders());
 	}
 
 	@Test

@@ -962,7 +962,8 @@ public class Colony {
 			for (StockTarget target : project.stock()) {
 				StockPlanner.Target<Item> planned = target.toPlannerTarget();
 				int have = StockPlanner.have(planned, left);
-				if (have < target.count()) {
+				// A tag that matches nothing, or is not bound, has nothing to make: it orders nothing.
+				if (have < target.count() && !planned.make().isEmpty()) {
 					needed.merge(planned.make().getLast(), target.count() - have, Math::max);
 				}
 				// What counts toward it is not there for the projects below.
