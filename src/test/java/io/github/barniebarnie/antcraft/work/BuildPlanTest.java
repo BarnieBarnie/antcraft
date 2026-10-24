@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -13,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.SequencedSet;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -815,5 +817,23 @@ class BuildPlanTest {
 			BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 10, Map.of(Items.STONE, BuildPlan.FILL_BLOCKS)));
 		assertEquals(Map.of(Items.LADDER, 3, Items.DIRT, 1),
 			BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 10, Map.of(Items.STONE, BuildPlan.HOLDING_FILL_BLOCKS)), "where it must hold");
+	}
+
+	/**
+	 * Which stone stairs stand in for a step of any stone stairs is the same every run: the stairs are taken in a fixed
+	 * order, the step's own cobblestone stairs first, then stone, stone brick and the rest.
+	 */
+	@Test
+	void theStoneStairsStandInFetchedIsTheSameEveryRun() {
+		assertInstanceOf(SequencedSet.class, BuildPlan.STONE_STAIRS, "an order to take them in");
+		List<Item> order = List.copyOf(BuildPlan.STONE_STAIRS);
+		assertEquals(List.of(Items.COBBLESTONE_STAIRS, Items.STONE_STAIRS, Items.STONE_BRICK_STAIRS), order.subList(0, 3));
+		Map<Item, Integer> needed = new LinkedHashMap<>();
+		needed.put(Items.LADDER, 3);
+		needed.put(Items.COBBLESTONE_STAIRS, 1);
+		Map<Item, Integer> core = new HashMap<>(Map.of(Items.LADDER, 10));
+		order.subList(1, order.size()).forEach(item -> core.put(item, 1));
+		assertEquals(Map.of(Items.LADDER, 3, Items.STONE_STAIRS, 1), BuildPlan.fetchList(Items.LADDER, 3, needed, Map.of(), core, 10,
+			Map.of(Items.COBBLESTONE_STAIRS, BuildPlan.STONE_STAIRS)), "the first the core has after the step's own");
 	}
 }

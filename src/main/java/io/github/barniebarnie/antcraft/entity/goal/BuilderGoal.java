@@ -252,6 +252,28 @@ public class BuilderGoal extends ColonyWorkGoal implements WorkerGoal.Executor {
 			|| !this.isWaiting(level, colony, core, job.id(), plan, isDig(job))).isPresent();
 	}
 
+	/**
+	 * Sets aside, as waiting for items (see {@link Colony#batchWaiting}), each open build batch of {@code colony} that no bot
+	 * claims and whose fluid waits for a wall another batch places, with nothing to clear: no bot takes such a batch while
+	 * nothing in it can be done (see {@link #isReady}), so none would put it aside, and a wall batch that needs it would never
+	 * start (see #307).
+	 */
+	public static void setAsideFluidsWaitingForOtherBatches(ServerLevel level, Colony colony) {
+		List<UUID> waiting = colony.board().jobs().stream()
+			.filter(job -> job.type() == JobType.BUILD && job.isOpen() && job.claimedBy().isEmpty())
+			.filter(job -> colony.build(job.id()).filter(plan -> waitsForAnotherBatch(level, colony, job.id(), plan)).isPresent())
+			.map(Job::id).toList();
+		waiting.forEach(job -> colony.batchWaiting(job, Colony.Wait.ITEMS));
+	}
+
+	/** Whether a fluid still to pour in {@code plan}, the batch of build job {@code job}, waits for a wall another batch places, with nothing in it to clear. */
+	private static boolean waitsForAnotherBatch(ServerLevel level, Colony colony, UUID job, BuildPlan plan) {
+		List<BuildPlan.Step> left = plan.steps().stream().filter(step -> !step.isDone(level.getBlockState(step.pos()))).toList();
+		return left.stream().noneMatch(step -> step.needsClearing(level.getBlockState(step.pos())))
+			&& left.stream().anyMatch(step -> plan.waitsForWalls(level::getBlockState, step) && isPossible(level, step)
+				&& waitsForOtherBatches(level, colony, job, plan, step));
+	}
+
 	@Override
 	public boolean begin(ServerLevel level, Job job) {
 		Optional<Colony> colony = this.colonyOf(level);

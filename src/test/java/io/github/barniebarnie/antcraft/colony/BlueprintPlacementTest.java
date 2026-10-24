@@ -336,6 +336,29 @@ class BlueprintPlacementTest {
 		assertStuckPlacementDroppedOnLoad(apart, true);
 	}
 
+	/**
+	 * The load sweep finishes any plan with nothing left to do, not only a levelling (see #307): a structure whose every batch a
+	 * save marks done is finished as its last batch would have finished it, so its placement counts as built, not waiting
+	 * for ever with no job posted.
+	 */
+	@Test
+	void aStructureEveryBatchOfWhichASaveMarksDoneIsBuiltOnLoad() {
+		Colony colony = colony();
+		PlacedBlueprint placed = place(colony, AT, Optional.empty());
+		UUID plan = colony.projects().stream().filter(project -> project.id().equals(placed.project())).findFirst().orElseThrow().plans().getFirst();
+		JsonObject json = Colony.CODEC.encodeStart(JsonOps.INSTANCE, colony).getOrThrow().getAsJsonObject();
+		JsonObject batches = json.has("batches") ? json.getAsJsonObject("batches") : new JsonObject();
+		batches.addProperty(plan.toString(), "done");
+		json.add("batches", batches);
+
+		Colony loaded = Colony.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow();
+		assertEquals(List.of(), loaded.builds());
+		assertEquals(List.of(placed.built()), loaded.blueprints());
+		assertEquals(List.of(), loaded.droppedUnlevelled());
+		loaded.postBuildJobs();
+		assertEquals(List.of(), loaded.board().jobs(), "a job posted for a plan with nothing to do");
+	}
+
 	/** Saves a colony with {@code levelling}'s first batch given up as before #267, the second done if {@code secondDone}, and loads it. */
 	private static void assertStuckPlacementDroppedOnLoad(BuildPlan levelling, boolean secondDone) {
 		Colony colony = colony();

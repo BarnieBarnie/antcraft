@@ -1654,6 +1654,41 @@ public class BuilderGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Water whose wall is in a batch that needs the water's own batch is no deadlock (see #307): the water's batch, waiting
+	 * for the wall with nothing else to do, so no bot takes it, is set aside as waiting for items by the colony's survey, so
+	 * the wall's batch starts, and the water is poured once the wall stands. Batch 0 pours the water, walled in by stone on
+	 * three sides, and batch 1, which needs batch 0, places its east wall.
+	 */
+	@GameTest(maxTicks = 60)
+	public void aFluidsWallInABatchThatNeedsTheFluidsBatchIsPlaced(GameTestHelper helper) {
+		Colony colony = colony(helper);
+		core(helper).setItem(0, new ItemStack(Items.WATER_BUCKET));
+		core(helper).setItem(1, new ItemStack(Items.COBBLESTONE));
+		for (BlockPos pos : List.of(new BlockPos(2, 1, 6), new BlockPos(3, 1, 5), new BlockPos(3, 1, 7))) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		BuildPlan.Step water = step(helper, 3, 1, 6, Blocks.WATER.defaultBlockState());
+		BuildPlan.Step wall = step(helper, 4, 1, 6, COBBLE);
+		colony.addBuild(new BuildPlan(List.of(water, wall), List.of(new BuildPlan.Batch(0, 1, List.of()),
+			new BuildPlan.Batch(1, 2, List.of(0))), BuildPlan.Kind.BUILD, Optional.empty()));
+		AntBot bot = member(helper, colony, 2, 3);
+		GameTests.failOnGiveUp(helper, colony);
+		GameTests.failIfIdle(helper, bot, 60, () -> !colony.builds().isEmpty());
+		helper.onEachTick(() -> {
+			for (BlockPos pos : BlockPos.betweenClosed(helper.absolutePos(new BlockPos(0, 1, 0)), helper.absolutePos(new BlockPos(7, 2, 7)))) {
+				if (helper.getLevel().getFluidState(pos).is(Fluids.FLOWING_WATER)) {
+					helper.fail("water leaked to " + TestPositions.relative(helper, pos).toShortString());
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(colony.builds().isEmpty(), "plan not finished; blocked: " + colony.blockedSteps());
+			helper.assertBlockPresent(Blocks.WATER, new BlockPos(3, 1, 6));
+			assertState(helper, 4, 1, 6, COBBLE);
+		});
+	}
+
 	/** A fluid source at (4, 1, 4), walled in by stone so it does not spread. */
 	private static BuildPlan pool(GameTestHelper helper, BlockState fluid) {
 		for (Direction side : Direction.Plane.HORIZONTAL) {

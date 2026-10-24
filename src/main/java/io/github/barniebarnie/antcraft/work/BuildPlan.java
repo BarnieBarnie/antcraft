@@ -684,15 +684,16 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 
 	/**
 	 * The stairs a step of {@link Step#anyStoneStairs} takes: stone ones, never wooden, which burn.
-	 * Its own block, cobblestone stairs, is what the colony makes when it holds none of these.
+	 * Its own block, cobblestone stairs, is what the colony makes when it holds none of these. In the order a stand-in is
+	 * taken (see {@link #fetchList}), so it is the same every run: cobblestone stairs first.
 	 */
 	// ponytail: a fixed list rather than a tag, so unit tests see it; make it a tag if other mods' stairs should count.
-	public static final Set<Item> STONE_STAIRS = Set.of(Items.COBBLESTONE_STAIRS, Items.STONE_STAIRS, Items.STONE_BRICK_STAIRS,
+	public static final Set<Item> STONE_STAIRS = Collections.unmodifiableSequencedSet(new LinkedHashSet<>(List.of(Items.COBBLESTONE_STAIRS, Items.STONE_STAIRS, Items.STONE_BRICK_STAIRS,
 		Items.MOSSY_COBBLESTONE_STAIRS, Items.MOSSY_STONE_BRICK_STAIRS, Items.COBBLED_DEEPSLATE_STAIRS, Items.POLISHED_DEEPSLATE_STAIRS,
 		Items.DEEPSLATE_BRICK_STAIRS, Items.DEEPSLATE_TILE_STAIRS, Items.ANDESITE_STAIRS, Items.POLISHED_ANDESITE_STAIRS,
 		Items.DIORITE_STAIRS, Items.POLISHED_DIORITE_STAIRS, Items.GRANITE_STAIRS, Items.POLISHED_GRANITE_STAIRS,
 		Items.BLACKSTONE_STAIRS, Items.POLISHED_BLACKSTONE_STAIRS, Items.POLISHED_BLACKSTONE_BRICK_STAIRS,
-		Items.TUFF_STAIRS, Items.POLISHED_TUFF_STAIRS, Items.TUFF_BRICK_STAIRS);
+		Items.TUFF_STAIRS, Items.POLISHED_TUFF_STAIRS, Items.TUFF_BRICK_STAIRS)));
 
 	/**
 	 * The trapdoors a step of {@link Step#anyWoodenTrapdoor} takes: those of {@code #minecraft:wooden_trapdoors}, which

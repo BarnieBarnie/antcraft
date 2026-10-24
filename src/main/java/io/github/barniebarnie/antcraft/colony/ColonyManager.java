@@ -385,6 +385,7 @@ public class ColonyManager extends SavedData {
 	 */
 	private void surveyBuilds(ServerLevel level, Colony colony, Map<Item, Integer> have, List<TreeScanner.Tree> trees) {
 		colony.postBuildJobs();
+		BuilderGoal.setAsideFluidsWaitingForOtherBatches(level, colony);
 		Item pickaxe = bestPickaxe(level, colony, have);
 		// A pickaxe on order that the colony holds the materials for counts too, so no bot digs the batch by hand
 		// while one is being made; a colony that has to gather them first digs by hand meanwhile.
