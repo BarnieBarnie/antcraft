@@ -49,11 +49,14 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(1, 1, 1, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow();
 		colony.setStockTargets(List.of());
-		for (int x = 8; x <= 9; x++) {
+		for (int x = 8; x <= 10; x++) {
 			helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, 4)), Blocks.STONE.defaultBlockState());
+			for (int y = 1; y <= 3; y++) {
+				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, y, 4)), Blocks.AIR.defaultBlockState());
+			}
 		}
 		helper.spawnItem(Items.COBBLESTONE, new BlockPos(6, 1, 4));
-		GameTests.spawnOutside(helper, Items.COBBLESTONE, new BlockPos(9, 1, 4));
+		GameTests.spawnOutside(helper, Items.COBBLESTONE, new BlockPos(10, 1, 4));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		Container core = (Container) helper.getBlockEntity(new BlockPos(1, 1, 1), BlockEntity.class);

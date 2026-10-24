@@ -356,7 +356,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		BlockPos site = helper.absolutePos(new BlockPos(6, 1, 5));
 		colony.board().post(JobType.REPLANT, site, List.of(site), Optional.of(Items.OAK_SAPLING), helper.getLevel().getGameTime());
 		// A floor just outside the test area, with room to walk to it whatever the terrain there.
-		for (int x = 8; x <= 9; x++) {
+		for (int x = 8; x <= 10; x++) {
 			for (int z = 4; z <= 5; z++) {
 				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
 				for (int y = 1; y <= 3; y++) {
@@ -364,8 +364,8 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
-		GameTests.spawnOutside(helper, Items.OAK_SAPLING, new BlockPos(9, 1, 4));
-		GameTests.spawnOutside(helper, Items.OAK_LOG, new BlockPos(9, 1, 5));
+		GameTests.spawnOutside(helper, Items.OAK_SAPLING, new BlockPos(10, 1, 4));
+		GameTests.spawnOutside(helper, Items.OAK_LOG, new BlockPos(10, 1, 5));
 		GameTests.failIfTakenFromOutside(helper, lumberjack(helper, 2, 4), home(helper));
 
 		helper.succeedWhen(() -> {
@@ -384,7 +384,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		Colony colony = colonyAtHome(helper);
 		bareTree(helper, 6, 5);
 		// A floor just outside the test area, with room to walk to it whatever the terrain there.
-		for (int x = 8; x <= 9; x++) {
+		for (int x = 8; x <= 10; x++) {
 			for (int z = 4; z <= 6; z++) {
 				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
 				for (int y = 1; y <= 3; y++) {
@@ -397,7 +397,7 @@ public class LumberjackGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			if (inside[0] == null && countBlocks(helper, BlockTags.LOGS) == 0) {
 				inside[0] = helper.spawnItem(Items.OAK_LOG, new BlockPos(4, 1, 7));
-				GameTests.spawnOutside(helper, Items.OAK_LOG, new BlockPos(9, 1, 5));
+				GameTests.spawnOutside(helper, Items.OAK_LOG, new BlockPos(10, 1, 5));
 			}
 		});
 

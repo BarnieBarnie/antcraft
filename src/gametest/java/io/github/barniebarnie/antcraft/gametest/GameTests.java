@@ -110,6 +110,8 @@ public final class GameTests {
 		});
 	}
 
+	/** How far sideways a mob picks up items beyond its own box ({@code Mob.ITEM_PICKUP_REACH}). */
+	private static final double PICKUP_REACH = 1;
 	/** The name {@link #spawnOutside} marks its items with. */
 	private static final Component OUTSIDE = Component.literal("outside the test area");
 
@@ -117,9 +119,18 @@ public final class GameTests {
 	 * Spawns {@code item} at {@code pos}, just outside the test area, marked so the test can tell it from items of its
 	 * own. Just outside one test area is inside or beside the next, whose bots may take it, so tests check with
 	 * {@link #failIfTakenFromOutside} that their own bot did not, rather than that the item still lies there.
+	 * <p>
+	 * Fails the test if the item lies within the game's own pickup reach of a bot standing in the area (the area grown
+	 * by {@link #PICKUP_REACH} sideways): a bot fetching an item at the edge would then sweep it up by chance, and the
+	 * test fail without the bot going for it. {@link GameTestHelper#spawnItem(Item, BlockPos)} puts the item on the
+	 * corner of {@code pos}, so on the east side x=9 is too near and x=10 the nearest that is safe.
 	 */
 	public static void spawnOutside(GameTestHelper helper, Item item, BlockPos pos) {
 		ItemEntity entity = helper.spawnItem(item, pos);
+		if (entity.getBoundingBox().intersects(helper.getBounds().inflate(PICKUP_REACH, 0, PICKUP_REACH))) {
+			entity.discard();
+			helper.fail("item outside the test area at " + pos.toShortString() + " lies within pickup reach of a bot in it");
+		}
 		ItemStack stack = entity.getItem().copy();
 		stack.set(DataComponents.CUSTOM_NAME, OUTSIDE);
 		entity.setItem(stack);

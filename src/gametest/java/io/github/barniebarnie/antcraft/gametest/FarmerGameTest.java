@@ -27,6 +27,7 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.sheep.Sheep;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -423,7 +424,7 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 		core(helper).setItem(0, new ItemStack(Items.SHEARS));
 		Sheep sheep = sheep(helper);
 		// A floor just outside the test area, with room to walk to it whatever the terrain there.
-		for (int x = 8; x <= 9; x++) {
+		for (int x = 8; x <= 10; x++) {
 			for (int z = 4; z <= 6; z++) {
 				helper.getLevel().setBlockAndUpdate(helper.absolutePos(new BlockPos(x, 0, z)), Blocks.STONE.defaultBlockState());
 				for (int y = 1; y <= 3; y++) {
@@ -432,16 +433,18 @@ public class FarmerGameTest implements CustomTestMethodInvoker {
 			}
 		}
 		GameTests.failIfTakenFromOutside(helper, farmer(helper, colony), core(helper));
-		boolean[] spawned = {false};
+		ItemEntity[] edge = {null};
 		helper.onEachTick(() -> {
-			if (!spawned[0] && sheep.isSheared()) {
-				GameTests.spawnOutside(helper, Items.WOOL.white(), new BlockPos(9, 1, 5));
-				spawned[0] = true;
+			if (edge[0] == null && sheep.isSheared()) {
+				// Wool at the very edge of the area every run, so the farmer always fetches one as close to the outside wool as it can lie.
+				edge[0] = helper.spawnItem(Items.WOOL.white(), new BlockPos(7, 1, 5));
+				GameTests.spawnOutside(helper, Items.WOOL.white(), new BlockPos(10, 1, 5));
 			}
 		});
 
 		helper.succeedWhen(() -> {
-			helper.assertTrue(spawned[0], "sheep not sheared");
+			helper.assertTrue(edge[0] != null, "sheep not sheared");
+			helper.assertTrue(!edge[0].isAlive(), "wool at the edge of the test area not picked up");
 			// Stored once it is done picking up the fleece.
 			helper.assertTrue(wool(core(helper)) > 0, "no wool in the core");
 		});
