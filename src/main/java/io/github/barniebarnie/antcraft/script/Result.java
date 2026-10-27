@@ -25,6 +25,10 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 	public static final String BLOCKED = "blocked";
 	public static final String PROTECTED = "protected";
 	public static final String TARGET_GONE = "target_gone";
+	public static final String NO_RECIPE = "no_recipe";
+	public static final String MISSING_INGREDIENTS = "missing_ingredients";
+	public static final String NO_TABLE = "no_table";
+	public static final String NO_FURNACE = "no_furnace";
 
 	public static Result fail(String reason) {
 		return new Result(false, reason, PyNone.NONE);

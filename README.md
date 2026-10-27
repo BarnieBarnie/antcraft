@@ -167,7 +167,7 @@ The mod is turning from goal-driven colonies into **scripted bots**: the mod giv
 |-----------|------|
 | 1 | Language core: tokenizer, parser, compiler and a pausable VM with the builtins (done) |
 | 2 | Scripts in the game: script folders, `script list`/`reload`, `bot run`/`stop`/`status`/`log`, the instruction budget, output and logging, `say`, `wait`, `pos`, `home`/`set_home`, `goto` with chunk loading, and `idle.py` (done) |
-| 3 | Core actions and senses: `mine`, `place`, `pick_up`, `craft`, `smelt`, `find_nearest`, `scan`, containers, `memory`; a tree punched into a wooden pickaxe by a script |
+| 3 | Core actions and senses: `mine`, `place`, `pick_up`, `craft`, `smelt`, `find_nearest`, `scan`, containers, `memory`; a tree punched into a wooden pickaxe by a script (done) |
 | 4 | The goal-driven colony removed; its engine parts kept behind the actions |
 | 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home |
 | 6 | Mining library: the mineshaft, dug and laddered, every time |

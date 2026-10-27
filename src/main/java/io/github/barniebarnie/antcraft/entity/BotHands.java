@@ -9,11 +9,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.CompoundContainer;
+import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.InventoryCarrier;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
@@ -65,6 +68,67 @@ public final class BotHands {
 			}
 		}
 		return count;
+	}
+
+	/**
+	 * What the bot carries as one container: its inventory, then its hand as the last slot. Taking from it takes the
+	 * inventory's items first; adding to it fills the hand only when the inventory has no room.
+	 */
+	public static Container carried(AntBot bot) {
+		return new CompoundContainer(bot.getInventory(), new Hand(bot));
+	}
+
+	/** The bot's main hand as a container of one slot. */
+	private record Hand(AntBot bot) implements Container {
+		@Override
+		public int getContainerSize() {
+			return 1;
+		}
+
+		@Override
+		public boolean isEmpty() {
+			return this.bot.getMainHandItem().isEmpty();
+		}
+
+		@Override
+		public ItemStack getItem(int slot) {
+			return this.bot.getMainHandItem();
+		}
+
+		@Override
+		public ItemStack removeItem(int slot, int count) {
+			ItemStack taken = this.bot.getMainHandItem().split(count);
+			if (this.bot.getMainHandItem().isEmpty()) {
+				this.setItem(slot, ItemStack.EMPTY);
+			}
+			return taken;
+		}
+
+		@Override
+		public ItemStack removeItemNoUpdate(int slot) {
+			ItemStack held = this.bot.getMainHandItem();
+			this.setItem(slot, ItemStack.EMPTY);
+			return held;
+		}
+
+		@Override
+		public void setItem(int slot, ItemStack stack) {
+			this.bot.setItemSlot(EquipmentSlot.MAINHAND, stack);
+		}
+
+		@Override
+		public void setChanged() {
+		}
+
+		@Override
+		public boolean stillValid(Player player) {
+			return true;
+		}
+
+		@Override
+		public void clearContent() {
+			this.setItem(0, ItemStack.EMPTY);
+		}
 	}
 
 	/** Puts a stack {@code item} matches in the bot's hand, the held item going to its slot; false if it carries none. */

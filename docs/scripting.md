@@ -151,16 +151,16 @@ Details: `inventory()` lists the held stack first, then the inventory; `count` a
 | `equip(item)` | hold an item (at once) |
 | `use(pos, item=None)` | walk into reach and use the held item, or first hold `item`, on a block as a player's right click does (bucket, hoe, bone meal, flint and steel; with an empty hand, the block itself, such as a lever) |
 | `attack(entity)` | fight until the target is dead, gone, or the bot must flee |
-| `put(container, item, n=None)` | put items into a container (all matching when `n` is `None`) |
-| `take(container, item, n=None)` | take items out |
-| `craft(item, n=1, table=None)` | craft by one recipe from carried items; 3x3 recipes need a crafting table at `table` or within reach |
-| `smelt(item, n=1, furnace=None, fuel=None)` | load a furnace, wait, take the output |
+| `put(container, item, n=None)` | walk into reach and put up to `n` items into a chest, barrel, furnace or other container (all matching when `n` is `None`); `value` is how many |
+| `take(container, item, n=None)` | walk into reach and take up to `n` items out (all matching when `n` is `None`); `value` is how many |
+| `craft(item, n=1, table=None)` | craft by one recipe from carried items until at least `n` items are made; `value` is how many it made. 2x2 recipes are crafted anywhere; 3x3 recipes need a crafting table at `table` (walked to) or within reach |
+| `smelt(item, n=1, furnace=None, fuel=None)` | load up to `n` of the carried input `item` into the furnace at `furnace` (walked to) or one within reach, burn `fuel` (default: the best fuel carried, coal, then charcoal, then logs), wait by it until done and take the output; `value` is how many items it took out |
 | `drop(item, n=None)` | toss up to `n` items (all matching when `n` is `None`), the held ones first; `value` is how many. The bot does not pick up again by itself what it dropped, though `pick_up` takes it |
 | `wait(ticks)` | do nothing |
 | `say(text)` | show text above the bot and in its owner's chat |
 | `stop()` | end the script |
 
-The block actions (`mine`, `place`, `use`) walk, like `goto`, to where the bot sees the block within 4 blocks of its eyes, then work on it. Which reasons each can return:
+The block actions (`mine`, `place`, `use`, `put`, `take`, and `craft` and `smelt` at a station given by position) walk, like `goto`, to where the bot sees the block within 4 blocks of its eyes, then work on it. Which reasons each can return:
 
 | Action | Reasons |
 |---|---|
@@ -169,8 +169,14 @@ The block actions (`mine`, `place`, `use`) walk, like `goto`, to where the bot s
 | `use` | `no_item`, `protected`, `blocked` (the use did nothing, such as a hoe on stone), `out_of_reach`, `not_loaded`, `timeout` |
 | `pick_up` | `target_gone` (no such item around, or it went before the bot took one), `no_space`, `out_of_reach` (some could not be walked to), `not_loaded`, `timeout` |
 | `equip`, `drop` | `no_item` |
+| `put` | `no_item` (it carries none), `target_gone` (no container there), `no_space` (the container filled up; `value` is how many went in), `protected`, `out_of_reach`, `not_loaded`, `timeout` |
+| `take` | `no_item` (the container holds none), `target_gone`, `no_space` (the bot's inventory and hand filled up), `protected`, `out_of_reach`, `not_loaded`, `timeout` |
+| `craft` | `no_recipe` (no crafting recipe makes `item`), `missing_ingredients` (the bot does not carry what a recipe needs, or ran out before `n` were made; `value` is how many it made), `no_table` (a 3x3 recipe and no crafting table at `table` or within reach), `no_space` (what it made does not fit), and at a `table` `protected`, `out_of_reach`, `not_loaded`, `timeout` |
+| `smelt` | `no_recipe` (a furnace does not smelt `item`), `missing_ingredients` (none of `item` carried, or no fuel to burn when the fire goes out), `no_furnace` (no furnace at `furnace` or within reach), `blocked` (the furnace holds another input or output), `no_space` (the output does not fit and stays in the furnace), `timeout` (the furnace made nothing for 1200 ticks), `protected`, `out_of_reach`, `not_loaded` |
 
-`protected` means the block may not be changed: outside the world's build height or border, under the server's spawn protection, and for `mine` a block that cannot be broken, such as bedrock. Placing and using go through the game's own code with a stand-in player at the bot, so blocks and items behave as for a player: a bucket fills, a hoe wears down.
+`protected` means the block may not be changed: outside the world's build height or border, under the server's spawn protection, and for `mine` a block that cannot be broken, such as bedrock. `craft` and `smelt` use carried items, the held stack included. `smelt` puts in one fuel item at a time, when the fire goes out, so it burns no more than it needs; when it gives up it takes back what is left of the input. `put`, `take` and `craft` act in the tick the bot is in reach; `smelt` waits by the furnace, about 10 seconds an item.
+
+Placing and using go through the game's own code with a stand-in player at the bot, so blocks and items behave as for a player: a bucket fills, a hoe wears down.
 
 Later milestones add `build(blueprint, at, turn=0)` (the existing build-plan code as one action) and `till`, `plant` and `harvest` helpers.
 
@@ -260,9 +266,9 @@ while count("#minecraft:logs") < 3:
     if not log or not mine(log):
         break
 pick_up("#minecraft:logs")
-craft("oak_planks", 3)
-craft("stick", 1)
-table_spot = pos().north()
+craft("oak_planks", 9)
+craft("stick", 2)
+table_spot = pos().north(2)
 craft("crafting_table") and place(table_spot, "crafting_table")
 r = craft("wooden_pickaxe", table=table_spot)
 say("pickaxe!" if r else f"no pickaxe: {r.reason}")

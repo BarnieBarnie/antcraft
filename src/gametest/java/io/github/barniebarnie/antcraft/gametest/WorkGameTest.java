@@ -44,7 +44,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The position {@code (x, y, z)} of the test area as a script tuple. */
-	private static String at(GameTestHelper helper, int x, int y, int z) {
+	static String at(GameTestHelper helper, int x, int y, int z) {
 		BlockPos pos = helper.absolutePos(new BlockPos(x, y, z));
 		return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
 	}
@@ -55,7 +55,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		return "(" + pos.getX() + ", " + (helper.getLevel().getMaxY() + 10) + ", " + pos.getZ() + ")";
 	}
 
-	private static List<String> printed(AntBot bot) {
+	static List<String> printed(AntBot bot) {
 		return BotScripts.log(bot, Output.Level.PRINT);
 	}
 
@@ -63,7 +63,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 * Runs {@code source} on {@code bot} and succeeds once it finished having printed exactly {@code expected} and
 	 * {@code world} holds; fails at once when the script fails or finishes having printed something else.
 	 */
-	private static void expect(GameTestHelper helper, AntBot bot, String source, List<String> expected, Runnable world) {
+	static void expect(GameTestHelper helper, AntBot bot, String source, List<String> expected, Runnable world) {
 		ScriptRun run = BotScripts.run(bot, source);
 		helper.onEachTick(() -> {
 			if (run.state() == ScriptRun.State.FAILED) {
@@ -80,13 +80,13 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	private static void expect(GameTestHelper helper, AntBot bot, String source, List<String> expected) {
+	static void expect(GameTestHelper helper, AntBot bot, String source, List<String> expected) {
 		expect(helper, bot, source, expected, () -> {
 		});
 	}
 
 	/** Fills every slot of the bot's inventory with something that stacks no further. */
-	private static void fillInventory(AntBot bot) {
+	static void fillInventory(AntBot bot) {
 		for (int i = 0; i < INVENTORY_SLOTS; i++) {
 			bot.getInventory().addItem(new ItemStack(Items.ENDER_PEARL, 16));
 		}

@@ -83,7 +83,7 @@ public final class WorkApi {
 		});
 	}
 
-	private static AntBot bot(ScriptRun run, NativeCall call) {
+	static AntBot bot(ScriptRun run, NativeCall call) {
 		AntBot bot = run.host().bot();
 		if (bot == null || !(bot.level() instanceof ServerLevel)) {
 			throw new ScriptError(call.name() + "() needs a bot in a world");
