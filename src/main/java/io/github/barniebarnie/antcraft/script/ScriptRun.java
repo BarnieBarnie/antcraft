@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.script;
 
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
@@ -45,6 +46,11 @@ public final class ScriptRun {
 		default @Nullable AntBot bot() {
 			return null;
 		}
+
+		/** The bot's body, for the actions that move it ({@link MoveApi}). */
+		default MoveApi.Body body() {
+			throw new UnsupportedOperationException("this bot cannot move");
+		}
 	}
 
 	/** Something a script waits on that takes ticks, such as {@code wait(ticks)}. */
@@ -57,6 +63,10 @@ public final class ScriptRun {
 
 		/** What the action is doing, for {@code /antcraft bot status}. */
 		String describe();
+
+		/** Ends the action early, because the script was stopped; it lets go of what it holds, such as the bot's path. */
+		default void cancel() {
+		}
 	}
 
 	public enum State {
@@ -68,6 +78,8 @@ public final class ScriptRun {
 	}
 
 	private final String name;
+	/** The script's file, which errors name. */
+	private final String file;
 	private final List<String> args;
 	private final Host host;
 	private final BotLog log;
@@ -83,6 +95,7 @@ public final class ScriptRun {
 	/** A run whose global {@code memory} is {@code memory}, the bot's, which outlives the run ({@link Memory}). */
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log, PyDict memory) {
 		this.name = name;
+		this.file = code.file();
 		this.args = List.copyOf(args);
 		this.host = host;
 		this.log = log;
@@ -122,15 +135,29 @@ public final class ScriptRun {
 			return;
 		}
 		reflexes();
-		if (action != null) {
-			if (!action.tick()) {
-				return;
+		Vm.Status status;
+		try {
+			if (action != null) {
+				if (!action.tick()) {
+					return;
+				}
+				Object result = action.result();
+				if (result instanceof Result r && !r.ok()) {
+					write(Level.DEBUG, action.describe() + " -> " + r.reason());
+				}
+				action = null;
+				vm.resume(result);
 			}
-			Object result = action.result();
+			status = vm.run(budget);
+		} catch (RuntimeException e) {
+			// A bug in a native or an action, not in the script: stop the script rather than the bot's tick.
+			AntCraft.LOGGER.warn("Script {} failed with an internal error at {}:{}", name, file, vm.line(), e);
 			action = null;
-			vm.resume(result);
+			state = State.FAILED;
+			write(Level.ERROR, file + ":" + vm.line() + ": internal error: " + e);
+			return;
 		}
-		switch (vm.run(budget)) {
+		switch (status) {
 			case FINISHED -> state = State.FINISHED;
 			case FAILED -> {
 				state = State.FAILED;
@@ -168,6 +195,9 @@ public final class ScriptRun {
 	public void stop() {
 		if (state == State.RUNNING) {
 			state = State.STOPPED;
+			if (action != null) {
+				action.cancel();
+			}
 			action = null;
 		}
 	}

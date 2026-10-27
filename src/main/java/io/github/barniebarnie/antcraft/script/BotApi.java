@@ -18,6 +18,7 @@ public final class BotApi {
 	public static void register(Natives natives, ScriptRun run) {
 		Pos.register(natives);
 		SenseApi.register(natives, run);
+		MoveApi.register(natives, run);
 		natives.register("pos", call -> {
 			Args.bind("pos", call, 0);
 			return run.host().pos();
@@ -32,7 +33,7 @@ public final class BotApi {
 			if (!(ticks instanceof Long n)) {
 				throw new ScriptError("wait() takes a number of ticks (int), not '" + Values.typeName(ticks) + "'");
 			}
-			return n <= 0 ? PyNone.NONE : run.start(new Wait(n), call);
+			return n <= 0 ? Result.OK : run.start(new Wait(n), call);
 		});
 		natives.register("stop", call -> {
 			Args.bind("stop", call, 0);
@@ -57,7 +58,7 @@ public final class BotApi {
 
 		@Override
 		public Object result() {
-			return PyNone.NONE;
+			return Result.OK;
 		}
 
 		@Override

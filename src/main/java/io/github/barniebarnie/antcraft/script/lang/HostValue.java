@@ -10,6 +10,11 @@ public interface HostValue {
 	/** The type name scripts see, in error messages and for method lookup. */
 	String typeName();
 
+	/** Whether the value counts as true in a test, such as {@code if}; true unless the type says otherwise. */
+	default boolean truthy() {
+		return true;
+	}
+
 	/** The data attribute {@code name}, or null when it has none. */
 	default Object attribute(String name) {
 		return null;

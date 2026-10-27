@@ -56,6 +56,7 @@ public final class Values {
 			case PyDict d -> d.size() != 0;
 			case PyRange r -> r.length() != 0;
 			case PyDictView v -> v.dict().size() != 0;
+			case HostValue h -> h.truthy();
 			default -> true;
 		};
 	}

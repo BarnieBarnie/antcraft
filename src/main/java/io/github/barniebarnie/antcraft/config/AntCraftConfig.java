@@ -42,10 +42,17 @@ public final class AntCraftConfig {
 	 * {@code replantMatchWaitTicks} is how long a felled 1x1 tree waits for a sapling of its own kind before any sapling will do.
 	 * {@code scriptInstructionsPerTick} is how many instructions each bot's script may run a tick, at most
 	 * {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}. {@code scriptChatLevel} is the lowest log level of a script's output that goes to
-	 * its bot's owner's chat ({@code print} always does).
+	 * its bot's owner's chat ({@code print} always does). {@code botsLoadChunks} is whether bots running a script keep their
+	 * chunk loaded and {@code goto} loads the chunks on its way.
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
-		int replantMatchWaitTicks, int scriptInstructionsPerTick, Output.Level scriptChatLevel) {
+		int replantMatchWaitTicks, int scriptInstructionsPerTick, Output.Level scriptChatLevel, boolean botsLoadChunks) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
+			int replantMatchWaitTicks, int scriptInstructionsPerTick, Output.Level scriptChatLevel) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, mineshaftLevels, colonyActionsRequireOp, replantMatchWaitTicks, scriptInstructionsPerTick,
+				scriptChatLevel, true);
+		}
+
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
 			this(enableOnDedicatedServer, maxBotsPerLevel, DEFAULT_MINESHAFT_LEVELS, false, DEFAULT_REPLANT_MATCH_WAIT_TICKS);
 		}
@@ -82,6 +89,7 @@ public final class AntCraftConfig {
 		props.setProperty("replantMatchWaitTicks", Integer.toString(values.replantMatchWaitTicks()));
 		props.setProperty("scriptInstructionsPerTick", Integer.toString(values.scriptInstructionsPerTick()));
 		props.setProperty("scriptChatLevel", values.scriptChatLevel().name().toLowerCase(Locale.ROOT));
+		props.setProperty("botsLoadChunks", Boolean.toString(values.botsLoadChunks()));
 		try (Writer writer = Files.newBufferedWriter(path)) {
 			props.store(writer, fileComment());
 		} catch (IOException e) {
@@ -96,7 +104,8 @@ public final class AntCraftConfig {
 			+ ") is per bot, and every bot may use its whole budget every tick:\n"
 			+ "30 bots at " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK + " are 600000 instructions a tick on the server thread, which can lag the game.\n"
 			+ "Raise it only for scripts that think a lot between actions, and measure with /antcraft profile.\n"
-			+ "scriptChatLevel (debug, info, warn or error) is the lowest level of script output shown in the bot owner's chat; print always shows.";
+			+ "scriptChatLevel (debug, info, warn or error) is the lowest level of script output shown in the bot owner's chat; print always shows.\n"
+			+ "botsLoadChunks: bots running a script keep their chunk loaded, and goto loads (and generates) the chunks on its way.";
 	}
 
 	public static Values parse(Properties props) {
@@ -129,7 +138,9 @@ public final class AntCraftConfig {
 			scriptInstructions = MAX_SCRIPT_INSTRUCTIONS_PER_TICK;
 		}
 		Output.Level chatLevel = chatLevel(props.getProperty("scriptChatLevel", "error").trim(), warn);
-		return new Values(enableOnDedicatedServer, maxBots, levels, colonyActionsRequireOp, replantMatchWaitTicks, scriptInstructions, chatLevel);
+		boolean botsLoadChunks = Boolean.parseBoolean(props.getProperty("botsLoadChunks", "true").trim());
+		return new Values(enableOnDedicatedServer, maxBots, levels, colonyActionsRequireOp, replantMatchWaitTicks, scriptInstructions, chatLevel,
+			botsLoadChunks);
 	}
 
 	/** A log level below print by name, in any case; {@code error}, with a warning, for anything else. */
@@ -178,6 +189,10 @@ public final class AntCraftConfig {
 
 	public static Output.Level scriptChatLevel() {
 		return values.scriptChatLevel();
+	}
+
+	public static boolean botsLoadChunks() {
+		return values.botsLoadChunks();
 	}
 
 	public static int maxBotsPerLevel() {

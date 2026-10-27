@@ -3,6 +3,8 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.lang.Compiler;
+import io.github.barniebarnie.antcraft.script.lang.Parser;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,6 +59,11 @@ public final class ServerScripts {
 				AntCraft.LOGGER.warn("Cannot create the script folder {}", folder, e);
 			}
 		}
+		try {
+			DefaultScripts.install(configFolder(), DefaultScripts.bundled());
+		} catch (IOException e) {
+			AntCraft.LOGGER.warn("Cannot copy the default scripts into {}", configFolder(), e);
+		}
 		library = ScriptLibrary.load(folders);
 		library.errors().forEach(script -> AntCraft.LOGGER.warn("Script {}: {}", script.name(), script.error()));
 		int restarted = 0;
@@ -68,6 +75,23 @@ public final class ServerScripts {
 			}
 		}
 		return new Reload(library, restarted);
+	}
+
+	/**
+	 * The script a bot runs when it has nothing else to do ({@link DefaultScripts#IDLE}): the library's, or the mod's own
+	 * when the library has none that compiles.
+	 */
+	public static Optional<ScriptLibrary.Script> idle() {
+		Optional<ScriptLibrary.Script> script = library.get(DefaultScripts.IDLE).filter(found -> found.code() != null);
+		return script.isPresent() ? script : Optional.of(BUNDLED_IDLE);
+	}
+
+	private static final ScriptLibrary.Script BUNDLED_IDLE = bundledIdle();
+
+	private static ScriptLibrary.Script bundledIdle() {
+		String file = DefaultScripts.IDLE + ".py";
+		String source = DefaultScripts.bundled().get(file);
+		return new ScriptLibrary.Script(DefaultScripts.IDLE, Path.of(file), source, Compiler.compile(Parser.parse(file, source)), null);
 	}
 
 	private static boolean restart(AntBot bot) {

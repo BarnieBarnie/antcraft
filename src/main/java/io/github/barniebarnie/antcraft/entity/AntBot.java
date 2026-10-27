@@ -18,6 +18,9 @@ import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotLog;
 import io.github.barniebarnie.antcraft.script.Memory;
+import io.github.barniebarnie.antcraft.script.DefaultScripts;
+import io.github.barniebarnie.antcraft.script.MoveApi;
+import io.github.barniebarnie.antcraft.script.ServerScripts;
 import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptLibrary;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
@@ -102,6 +105,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** The scripts' {@code memory}: outlives each script run, and is saved. */
 	private PyDict memory = Memory.create();
 	private final BotLog log = new BotLog();
+	/** What the script's move actions walk with; made when a script first moves. */
+	private @Nullable BotBody body;
 	/** Set while the bot has work, a job or work between jobs; not saved, it is set again after loading. */
 	private boolean working;
 	private int idleTicks;
@@ -197,15 +202,25 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			if (this.isNoAi() == allowed) {
 				this.setNoAi(!allowed);
 			}
+			if (this.home == null) {
+				this.home = this.blockPosition(); // where it was first spawned
+			}
 			// Before the goals, so they see whether a script runs this tick.
-			if (allowed && this.script != null && this.script.running()) {
-				ScriptRun run = this.script;
-				TickProfiler.time("bot.script", () -> run.tick(AntCraftConfig.scriptInstructionsPerTick()));
+			if (allowed && this.script != null) {
+				this.idleIfDone();
+				if (this.script.running()) {
+					ScriptRun run = this.script;
+					TickProfiler.time("bot.script", () -> run.tick(AntCraftConfig.scriptInstructionsPerTick()));
+				}
 			}
 			// Before the goals, which open the door ahead again this tick if the bot is still on its way through.
 			PathFollower.closeBehind(this, level);
 		}
 		super.tick();
+		// After the move, so the ticket goes along with the bot into the next chunk before it stops ticking there.
+		if (this.isRunningScript() && AntCraftConfig.botsLoadChunks()) {
+			BotChunks.keep(this);
+		}
 		BlockPos feet = this.blockPosition();
 		this.pathScaffold.removeIf(pos -> Math.max(Math.abs(pos.getX() - feet.getX()), Math.abs(pos.getZ() - feet.getZ())) > PATH_SCAFFOLD_RANGE);
 		this.idleTicks = this.working ? 0 : this.idleTicks + 1;
@@ -315,9 +330,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return all;
 	}
 
-	/** The storage block this bot brings its work to: its colony's core. */
+	/**
+	 * The storage block this bot brings its work to: its colony's core. Also the home of a script ({@code home()}),
+	 * which is where the bot was first spawned until a script or a colony sets it.
+	 */
 	public @Nullable BlockPos getHome() {
 		return this.home;
+	}
+
+	/** The home a script sees: {@link #getHome()}, or where the bot stands before its first tick has set it. */
+	public BlockPos getScriptHome() {
+		return this.home != null ? this.home : this.blockPosition();
 	}
 
 	public void setHome(@Nullable BlockPos home) {
@@ -353,6 +376,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.log.add(this.level().getGameTime(), Output.Level.INFO, "run " + name + (args.isEmpty() ? "" : " " + String.join(" ", args)));
 		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log, this.memory);
 		this.scriptSource = null;
+	}
+
+	/**
+	 * Starts {@code idle.py} once the script the bot ran ended, stopped or failed (docs/scripting.md, Idle, home and
+	 * death). Not for a colony member, which goes back to its colony's work until the colony makes way for scripts, nor
+	 * after {@code idle.py} itself ended, so a broken one is not started over and over.
+	 */
+	private void idleIfDone() {
+		if (this.script != null && !this.script.running() && this.colonyId == null && !this.script.name().equals(DefaultScripts.IDLE)) {
+			ServerScripts.idle().ifPresent(idle -> this.runScript(idle, List.of()));
+		}
 	}
 
 	/** Stops the script the bot runs, if any. */
@@ -400,6 +434,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/** What a script sees of this bot. */
 	private final class ScriptHost implements ScriptRun.Host {
+		@Override
+		public MoveApi.Body body() {
+			if (AntBot.this.body == null) {
+				AntBot.this.body = new BotBody(AntBot.this);
+			}
+			return AntBot.this.body;
+		}
+
 		@Override
 		public long gameTime() {
 			return AntBot.this.level().getGameTime();

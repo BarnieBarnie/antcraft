@@ -115,7 +115,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `/antcraft script list` | Lists the scripts found in `config/antcraft/scripts/` and `<world>/antcraft/scripts/`, with the error of each that does not compile. A script is named by its path without `.py`, with dots for folders (`lib/trees.py` is `lib.trees`); the world folder wins on a name clash |
 | `/antcraft script reload` | Loads the script folders again; a bot running a script whose file changed starts the new version from the top (one that no longer compiles stops, with the error in its log and its owner's chat) |
 | `/antcraft bot [bots] run <script> [args]` | Starts a script on bots (without `[bots]`, the nearest bot within 64 blocks), replacing what they ran; `[args]` are given to it as the list `ARGS`. A player who runs it becomes the bots' owner. While a bot runs a script it does no colony work |
-| `/antcraft bot [bots] stop` | Stops the bots' scripts and cancels their walk target (formerly `/antcraft stop`) |
+| `/antcraft bot [bots] stop` | Stops the bots' scripts and cancels their walk target (formerly `/antcraft stop`). A bot without a colony then runs `idle.py`, as it does once a script ends or fails: it walks home and waits there. `idle.py` is copied into `config/antcraft/scripts/` when the server starts, and the mod never overwrites it once you changed it |
 | `/antcraft bot [bots] status` | Each bot's script, whether it is running, finished, failed or stopped, the line it is at, its current action and how many instructions it ran |
 | `/antcraft bot [bots] log [n] [level]` | The last `n` (default 10) lines of each bot's log at or above `level` (`debug`, the default, `info`, `warn`, `error` or `print`), each with the game time it was written at |
 | `/antcraft profile start\|stop\|report` | Measures where server tick time goes: `start` forgets what was measured and starts, `stop` stops, `report` lists the ticks measured with their average and worst time, then each part of the bots' and colonies' work (pathfinding `path.find`, a bot's job choice `bot.jobChoice` and its ready checks per job type `bot.isReady.<job>`, its work per kind `bot.work.<goal>`, work between jobs `bot.upkeep`, a colony's survey `colony.survey` and its parts `survey.*`, the lava look-out `lava.look`, the build ghosts sent to players `ghosts`) with its time per tick, worst tick and calls, the costliest first. Parts nest, such as pathfinding inside a bot's work, so they do not add up to the tick |
@@ -157,6 +157,7 @@ Placed blueprints still being built show as amber ghosts to the colony's owner a
 | `replantMatchWaitTicks` | `2400` | How long, in ticks (20 per second), a felled 1x1 tree waits for a sapling of its own kind before a lumberjack replants it with any sapling. `0` takes any sapling right away |
 | `scriptInstructionsPerTick` | `2000` | How many instructions each bot's script may run a tick; a script that uses them up goes on the next tick, so an endless loop costs a busy bot, not a frozen server. At most `20000`: a higher value is lowered with a warning in the log, since every bot may use its whole budget every tick (30 bots at 20000 are 600000 instructions a tick on the server thread) |
 | `scriptChatLevel` | `error` | The lowest level of a script's output (`debug`, `info`, `warn` or `error`) that goes to the chat of its bot's owner; everything goes to the bot's log, and `print` and `say` always show in chat |
+| `botsLoadChunks` | `true` | A bot running a script keeps the chunks around it loaded, so it works on when its owner walks away, and `goto` loads (and generates, if need be) the chunks on its way. When `false`, `goto` stops with `not_loaded` at the edge of loaded terrain |
 
 ## Roadmap
 
@@ -165,7 +166,7 @@ The mod is turning from goal-driven colonies into **scripted bots**: the mod giv
 | Milestone | Goal |
 |-----------|------|
 | 1 | Language core: tokenizer, parser, compiler and a pausable VM with the builtins (done) |
-| 2 | Scripts in the game: script folders, `script list`/`reload`, `bot run`/`stop`/`status`/`log`, the instruction budget, output and logging, `say`, `wait`, `pos` (in progress: these are done; `home`, `goto` with chunk loading and `idle.py` are next) |
+| 2 | Scripts in the game: script folders, `script list`/`reload`, `bot run`/`stop`/`status`/`log`, the instruction budget, output and logging, `say`, `wait`, `pos`, `home`/`set_home`, `goto` with chunk loading, and `idle.py` (done) |
 | 3 | Core actions and senses: `mine`, `place`, `pick_up`, `craft`, `smelt`, `find_nearest`, `scan`, containers, `memory`; a tree punched into a wooden pickaxe by a script |
 | 4 | The goal-driven colony removed; its engine parts kept behind the actions |
 | 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home |

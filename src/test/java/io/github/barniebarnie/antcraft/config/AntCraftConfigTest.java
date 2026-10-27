@@ -142,6 +142,15 @@ class AntCraftConfigTest {
 	}
 
 	@Test
+	void botsLoadChunksUnlessTurnedOff() {
+		assertTrue(AntCraftConfig.parse(new Properties()).botsLoadChunks());
+		assertTrue(new AntCraftConfig.Values(true, 64).botsLoadChunks());
+		Properties props = new Properties();
+		props.setProperty("botsLoadChunks", " false ");
+		assertFalse(AntCraftConfig.parse(props).botsLoadChunks());
+	}
+
+	@Test
 	void readsTheScriptChatLevel() {
 		Properties props = new Properties();
 		props.setProperty("scriptChatLevel", " Warn ");
