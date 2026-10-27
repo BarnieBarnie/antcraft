@@ -121,7 +121,7 @@ public final class TaskPlanner {
 
 	private static <I> Plan<I> search(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		State<I> state = new State<>(new HashMap<>(stock));
-		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0}).need(state, item, count, new HashSet<>(), true);
+		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0, 0}).need(state, item, count, new HashSet<>(), true);
 		// Map.copyOf would iterate in an order that differs between runs.
 		return new Plan<>(List.copyOf(state.crafts), Collections.unmodifiableMap(state.gather), Collections.unmodifiableMap(state.missing));
 	}
@@ -225,17 +225,18 @@ public final class TaskPlanner {
 
 	/**
 	 * Everything {@link Search#need} decides depends on: the item, how many, the stock, whether
-	 * conversion recipes may make it and whether the plan is broken already.
+	 * conversion recipes may make it, whether the plan is broken already and whether it is for making fuel (which
+	 * burns its own fuel rather than make it).
 	 */
-	private record NeedKey<I>(I item, int count, Map<I, Integer> stock, boolean conversions, boolean cycle) {
-		static <I> NeedKey<I> of(State<I> state, I item, int count, boolean conversions) {
+	private record NeedKey<I>(I item, int count, Map<I, Integer> stock, boolean conversions, boolean cycle, boolean makingFuel) {
+		static <I> NeedKey<I> of(State<I> state, I item, int count, boolean conversions, boolean makingFuel) {
 			Map<I, Integer> stock = new HashMap<>();
 			state.stock.forEach((stocked, amount) -> {
 				if (amount > 0) {
 					stock.put(stocked, amount);
 				}
 			});
-			return new NeedKey<>(item, count, stock, conversions, state.cycle);
+			return new NeedKey<>(item, count, stock, conversions, state.cycle, makingFuel);
 		}
 	}
 
@@ -274,12 +275,14 @@ public final class TaskPlanner {
 	 * valid plan elsewhere; only a dead end caused by that is not remembered.
 	 *
 	 * @param conversionRecipes which recipes {@link #isConversion} found to be conversions
-	 * @param budget recipes still to expand, then the number of times the search ran into an item it is making
+	 * @param budget recipes still to expand, then the number of times the search ran into an item it is making, then
+	 *     how many fuels are being made around the current step
 	 */
 	private record Search<I>(RecipeBook<I> book, Predicate<I> gatherable, Map<NeedKey<I>, NeedResult<I>> memo,
 		Map<Recipe<I>, Boolean> conversionRecipes, int[] budget) {
 		private static final int LEFT = 0;
 		private static final int PATH_HITS = 1;
+		private static final int MAKING_FUEL = 2;
 
 		boolean exhausted() {
 			return this.budget[LEFT] <= 0;
@@ -303,7 +306,7 @@ public final class TaskPlanner {
 				this.budget[PATH_HITS]++;
 				return;
 			}
-			NeedKey<I> key = NeedKey.of(state, item, remaining, conversions);
+			NeedKey<I> key = NeedKey.of(state, item, remaining, conversions, this.budget[MAKING_FUEL] > 0);
 			NeedResult<I> known = this.memo.get(key);
 			if (known != null) {
 				known.replay(state);
@@ -383,11 +386,18 @@ public final class TaskPlanner {
 		 * Fuel for smelting {@code smelts} items. Either burns what is in stock in the book's order
 		 * of preference (gathering the rest), or first makes a better fuel, such as charcoal from
 		 * logs, when that uses up less. A fuel on {@code path} is being made already, so it is not
-		 * made again to fuel itself.
+		 * made again to fuel itself. Fuel for making fuel is only burnt or gathered, never made: making
+		 * fuel for every fuel and recipe at every level grows with the number of fuels to the power of
+		 * the depth and could hold up a server tick for ever (#309). Each fuel recipe tried spends the
+		 * expansion budget, and once it is spent the fuel is burnt.
 		 */
 		Map<I, Integer> fuel(State<I> state, int smelts, Set<I> path) {
 			State<I> best = state.copy();
 			Map<I, Integer> bestUsed = this.burn(best, smelts);
+			if (this.budget[MAKING_FUEL] > 0) {
+				state.assign(best);
+				return bestUsed;
+			}
 			List<Fuel<I>> fuels = this.book.fuels();
 			for (int rank = 0; rank < fuels.size(); rank++) {
 				for (I item : fuels.get(rank).items()) {
@@ -395,8 +405,18 @@ public final class TaskPlanner {
 						continue;
 					}
 					for (Recipe<I> recipe : this.book.recipesFor(item)) {
+						if (this.exhausted()) {
+							break;
+						}
+						this.budget[LEFT]--;
 						State<I> trial = state.copy();
-						Map<I, Integer> used = this.makeFuel(trial, smelts, rank, item, recipe, path);
+						Map<I, Integer> used;
+						this.budget[MAKING_FUEL]++;
+						try {
+							used = this.makeFuel(trial, smelts, rank, item, recipe, path);
+						} finally {
+							this.budget[MAKING_FUEL]--;
+						}
 						if (used != null && !trial.cycle && !trial.pruned && BY_SCORE.compare(trial.fuelScore(), best.fuelScore()) < 0) {
 							best = trial;
 							bestUsed = used;

@@ -1,10 +1,12 @@
 package io.github.barniebarnie.antcraft.colony;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import io.github.barniebarnie.antcraft.work.VanillaData;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -317,6 +319,59 @@ class TaskPlannerTest {
 		assertEquals(16, step.times());
 		assertEquals(Map.of("oak_log", 11), step.fuel());
 		assertTrue(plan.isReady());
+	}
+
+	/**
+	 * Many fuels, each smelted from ore in stock or crafted from a smelted item, so making one fuel needs fuel itself. The
+	 * fuel search used to make fuel to make fuel to make fuel, over every fuel and recipe at each level, and never ended
+	 * (#309). Fuel to make fuel is now only burnt or gathered.
+	 */
+	@Test
+	void makingFuelThatNeedsFuelPlansQuickly() {
+		int fuels = 12;
+		Map<String, List<TaskPlanner.Recipe<String>>> byOutput = new HashMap<>();
+		List<TaskPlanner.Fuel<String>> ranks = new ArrayList<>();
+		Map<String, Integer> stock = new HashMap<>(Map.of("raw_iron", 64));
+		for (int i = 0; i < fuels; i++) {
+			String fuel = "fuel_" + i;
+			// Better fuels first; each still burns longer than the log at the end.
+			ranks.add(new TaskPlanner.Fuel<>(Set.of(fuel), 3200 - 100 * i));
+			List<TaskPlanner.Recipe<String>> recipes = new ArrayList<>();
+			for (int r = 0; r < 2; r++) {
+				String ore = "ore_" + i + "_" + r;
+				stock.put(ore, 64);
+				if (i % 2 == 0) {
+					recipes.add(new TaskPlanner.Recipe<>(fuel, 1, Map.of(Set.of(ore), 1), true));
+				} else {
+					String smelted = "smelted_" + i + "_" + r;
+					byOutput.put(smelted, List.of(new TaskPlanner.Recipe<>(smelted, 1, Map.of(Set.of(ore), 1), true)));
+					recipes.add(recipe(fuel, 1, Map.of(Set.of(smelted), 1)));
+				}
+			}
+			byOutput.put(fuel, recipes);
+		}
+		ranks.add(new TaskPlanner.Fuel<>(Set.of("oak_log"), 300));
+		byOutput.put("iron_ingot", List.of(new TaskPlanner.Recipe<>("iron_ingot", 1, Map.of(Set.of("raw_iron"), 1), true)));
+		TaskPlanner.RecipeBook<String> book = new TaskPlanner.RecipeBook<>() {
+			@Override
+			public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+				return byOutput.getOrDefault(item, List.of());
+			}
+
+			@Override
+			public List<TaskPlanner.Fuel<String>> fuels() {
+				return ranks;
+			}
+		};
+
+		TaskPlanner.Plan<String> plan = assertTimeoutPreemptively(Duration.ofSeconds(5),
+			() -> planQuickly("iron_ingot", 64, stock, book, "oak_log"::equals));
+
+		TaskPlanner.Craft<String> ingots = smeltStepFor(plan, "iron_ingot");
+		assertEquals(64, ingots.times());
+		// The best fuel is made from ore in stock and burnt.
+		assertEquals(Map.of("fuel_0", 4), ingots.fuel(), "plan: " + plan);
+		assertEquals(Map.of(), plan.missing(), "plan: " + plan);
 	}
 
 	/**
