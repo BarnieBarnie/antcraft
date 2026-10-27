@@ -142,4 +142,28 @@ class VmBudgetTest {
 		assertEquals(Vm.Status.FINISHED, vm.run(1000));
 		assertEquals(List.of("hey!"), printed);
 	}
+
+	@Test
+	void chargedInstructionsCountAgainstThisAndLaterBudgets() {
+		Natives natives = Natives.standard(Output.lines(line -> {
+		}));
+		Vm[] holder = new Vm[1];
+		natives.register("costly", call -> {
+			holder[0].charge(4500);
+			return PyNone.NONE;
+		});
+		// Each loop pass runs a handful of instructions besides the call.
+		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "n = 0\nwhile True:\n    costly()\n    n += 1\n")), natives);
+		holder[0] = vm;
+		assertEquals(Vm.Status.RUNNING, vm.run(2000));
+		long first = vm.executed();
+		assertTrue(first >= 4500 && first < 4520, first + " instructions counted");
+		assertEquals(0L, vm.globals().get("n"));
+		// The rest of the charge uses up the whole of the next budget, and some of the one after.
+		assertEquals(Vm.Status.RUNNING, vm.run(2000));
+		assertEquals(first, vm.executed());
+		assertEquals(0L, vm.globals().get("n"));
+		assertEquals(Vm.Status.RUNNING, vm.run(2000));
+		assertEquals(1L, vm.globals().get("n"));
+	}
 }

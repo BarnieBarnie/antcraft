@@ -1,0 +1,63 @@
+package io.github.barniebarnie.antcraft.script;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import io.github.barniebarnie.antcraft.script.lang.PyList;
+import io.github.barniebarnie.antcraft.script.lang.PyTuple;
+import io.github.barniebarnie.antcraft.script.lang.ScriptError;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+/** Parsing selectors, the strings that pick items, blocks and entities (docs/scripting.md, Selectors). */
+class SelectorTest {
+	private static String error(Object value) {
+		return assertThrows(ScriptError.class, () -> Selector.parse(value)).getMessage();
+	}
+
+	@Test
+	void aNameWithoutNamespaceIsInMinecraft() {
+		assertEquals(new Selector(List.of("minecraft:oak_log"), List.of()), Selector.parse("oak_log"));
+	}
+
+	@Test
+	void aNameKeepsItsNamespace() {
+		assertEquals(new Selector(List.of("minecraft:oak_log"), List.of()), Selector.parse("minecraft:oak_log"));
+		assertEquals(new Selector(List.of("antcraft:bot_core"), List.of()), Selector.parse("antcraft:bot_core"));
+	}
+
+	@Test
+	void aHashSelectsATag() {
+		assertEquals(new Selector(List.of(), List.of("minecraft:logs")), Selector.parse("#minecraft:logs"));
+		assertEquals(new Selector(List.of(), List.of("c:ores/iron")), Selector.parse("#c:ores/iron"));
+		assertEquals(new Selector(List.of(), List.of("minecraft:logs")), Selector.parse("#logs"));
+	}
+
+	@Test
+	void aListOrTupleCombinesSelectors() {
+		Selector expected = new Selector(List.of("minecraft:oak_log", "minecraft:dirt"), List.of("minecraft:planks"));
+		assertEquals(expected, Selector.parse(new PyList(new ArrayList<>(List.of("oak_log", "#planks", "minecraft:dirt")))));
+		assertEquals(expected, Selector.parse(new PyTuple(List.of("oak_log", "#planks", "minecraft:dirt"))));
+	}
+
+	@Test
+	void printsAsTheSelectorsItHolds() {
+		assertEquals("'minecraft:oak_log'", Selector.parse("oak_log").toString());
+		assertEquals("['minecraft:oak_log', '#minecraft:logs']", Selector.parse(new PyList(new ArrayList<>(List.of("oak_log", "#logs")))).toString());
+	}
+
+	@Test
+	void rejectsBadInput() {
+		assertEquals("'' is not a selector: it is empty", error(""));
+		assertEquals("'#' is not a selector: a tag needs a name after '#'", error("#"));
+		assertEquals("'Oak Log' is not a selector: names use only a-z, 0-9, '_', '-', '.' and '/'", error("Oak Log"));
+		assertEquals("'a:b:c' is not a selector: a name has at most one ':'", error("a:b:c"));
+		assertEquals("':oak_log' is not a selector: the namespace before ':' is empty", error(":oak_log"));
+		assertEquals("'minecraft:' is not a selector: the name after ':' is empty", error("minecraft:"));
+		assertEquals("'mine/craft:x' is not a selector: a namespace uses only a-z, 0-9, '_', '-' and '.'", error("mine/craft:x"));
+		assertEquals("a selector is a str or a list of str, not 'int'", error(3L));
+		assertEquals("a selector is a str or a list of str, not 'list'", error(new PyList(new ArrayList<>(List.of(new PyList(new ArrayList<>()))))));
+		assertEquals("an empty list selects nothing", error(new PyList(new ArrayList<>())));
+	}
+}

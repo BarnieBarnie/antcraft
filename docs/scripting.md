@@ -106,14 +106,14 @@ Names are `snake_case`. The API is available as builtins in every script (no imp
 ### Types
 
 - **`Pos`**: `x`, `y`, `z`; `+` and `-` with another `Pos` or tuple; `up(n=1)`, `down`, `north`, `south`, `east`, `west`; `distance(other)`. Usable as a dict key.
-- **`Block`**: `id` (`"minecraft:oak_log"`), `pos`, `is_air`, `is_fluid`, `tags` (list).
-- **`Stack`**: `item`, `count`.
-- **`Entity`**: `id` (UUID string), `type`, `pos`, `health`, `valid` (false once it is gone or out of range).
+- **`Block`**: `id` (`"minecraft:oak_log"`), `pos`, `is_air`, `is_fluid`, `tags` (list of selectors such as `"#minecraft:logs"`). A snapshot of the block when it was read.
+- **`Stack`**: `item` (`"minecraft:oak_log"`), `count`. A snapshot.
+- **`Entity`**: `id` (UUID string), `type` (`"minecraft:cow"`), `pos`, `health` (`None` for an entity without health), `valid` (false once it is gone: dead, picked up or unloaded), `item` (the `Stack` of a dropped item, `None` for other entities). Read live; equal by UUID.
 - **`Result`**: returned by every action. Truthy when the action succeeded. `ok` (bool), `reason` (a string code, `None` on success), `value` (what the action produced, if anything, for example how many items `craft` made).
 
 ### Selectors
 
-Where an item or block is asked for, a string selects it: `"oak_log"` (namespace `minecraft:` assumed), `"minecraft:oak_log"`, a tag `"#minecraft:logs"` or `"#c:ores/iron"`, or a list of these.
+Where an item or block is asked for, a string selects it: `"oak_log"` (namespace `minecraft:` assumed), `"minecraft:oak_log"`, a tag `"#minecraft:logs"` or `"#c:ores/iron"`, or a list (or tuple) of these. A malformed selector, or a name or tag the game does not know, stops the script with an error at its line (`unknown block 'minecraft:oak_lgo'`).
 
 ### Senses (instant, do not pause)
 
@@ -137,6 +137,8 @@ Where an item or block is asked for, a string selects it: `"oak_log"` (namespace
 | `set_home(pos)` | sets the home (saved with the bot); returns nothing |
 | `deaths()` | how often the bot has died |
 | `reachable(pos)` | whether a path exists (costs pathfinding budget, may pause) |
+
+Details: `inventory()` lists the held stack first, then the inventory; `count` and `has` count both. The radius of `find_nearest` and `scan` is at most 32, that of `entities` and `items_near` at most 64; distances are measured from the block the bot stands in, and `entities` leaves the bot itself out. `find_nearest` and `scan` read only loaded blocks, nearest first (ties by y, x, z), and stop once `limit` matched. They charge the script one instruction per 8 blocks read and share a server-wide budget of 32768 blocks a tick; a search the budget cannot finish this tick goes on over the next ticks, pausing the script (a full search of radius 32 reads some 137,000 blocks). `time()` is the time of day, 0 to 23999.
 
 ### Actions (take ticks, return `Result`)
 
@@ -166,7 +168,7 @@ Later milestones add `build(blueprint, at, turn=0)` (the existing build-plan cod
 
 ### Memory
 
-`memory` is a dict that belongs to the bot and is saved with it. It survives restarts and script edits. Values must be plain data: numbers, strings, booleans, `None`, `Pos`, and lists, tuples and dicts of these.
+`memory` is a dict that belongs to the bot and is saved with it. It survives restarts and script edits. Values must be plain data: numbers, strings, booleans, `None`, `Pos`, and lists, tuples and dicts of these. Storing anything else (a function, a `Stack`, an `Entity`, or a list holding one) stops the script with an error at the line of the store. A list or dict already in `memory` can still be changed in place; a value that is no longer plain data when the bot is saved is left out of the save, with a warning in the bot's log.
 
 ```python
 if "chest" not in memory:

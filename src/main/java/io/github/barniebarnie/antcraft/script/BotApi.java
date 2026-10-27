@@ -17,6 +17,7 @@ public final class BotApi {
 
 	public static void register(Natives natives, ScriptRun run) {
 		Pos.register(natives);
+		SenseApi.register(natives, run);
 		natives.register("pos", call -> {
 			Args.bind("pos", call, 0);
 			return run.host().pos();

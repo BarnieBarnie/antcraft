@@ -85,6 +85,8 @@ public final class Vm {
 	private Status status = Status.RUNNING;
 	private ScriptError error;
 	private long executed;
+	/** Instructions {@link #charge charged} but not yet taken from a budget. */
+	private long debt;
 
 	public Vm(Code module, Natives natives) {
 		this(module, natives, DEFAULT_MAX_DEPTH);
@@ -143,7 +145,9 @@ public final class Vm {
 	 * suspended in a native call, finished or failed. A script that is not running is left as it is.
 	 */
 	public Status run(long budget) {
-		for (long left = budget; left > 0 && status == Status.RUNNING; left--) {
+		long left = budget - payDebt(budget);
+		while (left > 0 && status == Status.RUNNING) {
+			left--;
 			int depth = frames.size() - 1;
 			Frame frame = frames.get(depth);
 			Code code = frame.code;
@@ -155,8 +159,26 @@ public final class Vm {
 				error = e.file() == null ? place(e, depth, pc) : e;
 				status = Status.FAILED;
 			}
+			left -= payDebt(left);
 		}
 		return status;
+	}
+
+	/**
+	 * Counts {@code instructions} more against the script, as if it had run them: a native that does a lot of work,
+	 * such as reading many blocks, charges for it. They use up what is left of the current {@link #run}'s budget, and
+	 * what they exceed it by comes off the budgets of the next runs.
+	 */
+	public void charge(long instructions) {
+		executed += instructions;
+		debt += instructions;
+	}
+
+	/** Pays off as much of the charged instructions as {@code left} allows; gives how much was paid. */
+	private long payDebt(long left) {
+		long paid = Math.min(debt, Math.max(0, left));
+		debt -= paid;
+		return paid;
 	}
 
 	/**

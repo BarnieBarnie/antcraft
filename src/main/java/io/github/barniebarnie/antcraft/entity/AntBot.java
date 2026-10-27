@@ -17,11 +17,13 @@ import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotLog;
+import io.github.barniebarnie.antcraft.script.Memory;
 import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptLibrary;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.Output;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -97,6 +99,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable ScriptRun script;
 	/** The source of {@link #script} when it came from the script library, so a reload can tell whether it changed. */
 	private @Nullable String scriptSource;
+	/** The scripts' {@code memory}: outlives each script run, and is saved. */
+	private PyDict memory = Memory.create();
 	private final BotLog log = new BotLog();
 	/** Set while the bot has work, a job or work between jobs; not saved, it is set again after loading. */
 	private boolean working;
@@ -347,7 +351,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	public void runScript(String name, Code code, List<String> args) {
 		this.stopScript();
 		this.log.add(this.level().getGameTime(), Output.Level.INFO, "run " + name + (args.isEmpty() ? "" : " " + String.join(" ", args)));
-		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log);
+		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log, this.memory);
 		this.scriptSource = null;
 	}
 
@@ -427,6 +431,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		public void say(String text) {
 			AntBot.this.tellOwner(Component.literal("<" + AntBot.this.getName().getString() + "> " + text));
 		}
+
+		@Override
+		public AntBot bot() {
+			return AntBot.this;
+		}
 	}
 
 	@Override
@@ -478,6 +487,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.storeNullable("Owner", UUIDUtil.CODEC, this.owner);
+		Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
 		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
@@ -493,6 +503,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
+		this.memory = Memory.load(input);
 		this.scaffold.clear();
 		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
 		this.opened.clear();

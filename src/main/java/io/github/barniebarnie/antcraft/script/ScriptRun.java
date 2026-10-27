@@ -1,9 +1,11 @@
 package io.github.barniebarnie.antcraft.script;
 
+import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
 import java.util.ArrayList;
@@ -38,6 +40,11 @@ public final class ScriptRun {
 
 		/** Shows what the bot says, as {@code say} does. */
 		void say(String text);
+
+		/** The bot in its world, which the senses read ({@link SenseApi}); null where there is none, as in unit tests. */
+		default @Nullable AntBot bot() {
+			return null;
+		}
 	}
 
 	/** Something a script waits on that takes ticks, such as {@code wait(ticks)}. */
@@ -70,6 +77,11 @@ public final class ScriptRun {
 	private State state = State.RUNNING;
 
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log) {
+		this(name, code, args, host, log, Memory.create());
+	}
+
+	/** A run whose global {@code memory} is {@code memory}, the bot's, which outlives the run ({@link Memory}). */
+	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log, PyDict memory) {
 		this.name = name;
 		this.args = List.copyOf(args);
 		this.host = host;
@@ -78,6 +90,12 @@ public final class ScriptRun {
 		BotApi.register(natives, this);
 		this.vm = new Vm(code, natives);
 		this.vm.setGlobal("ARGS", new PyList(new ArrayList<>(args)));
+		this.vm.setGlobal("memory", memory);
+	}
+
+	/** Counts {@code instructions} against the script's budget for work a native did, such as a block search. */
+	void charge(long instructions) {
+		vm.charge(instructions);
 	}
 
 	/** Writes a line of output: to the log, and to the owner's chat from the chat level up. */

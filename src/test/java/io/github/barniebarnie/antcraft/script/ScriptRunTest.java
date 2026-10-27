@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -154,5 +155,25 @@ class ScriptRunTest {
 		ScriptRun zero = start("wait(0)\nwait(-5)\nprint('now')\n");
 		tick(zero, 2000);
 		assertEquals(ScriptRun.State.FINISHED, zero.state());
+	}
+
+	@Test
+	void memoryOutlivesTheRunThatFilledIt() {
+		PyDict memory = Memory.create();
+		ScriptRun first = new ScriptRun("t", Compiler.compile(Parser.parse("t.py", "memory['runs'] = memory.get('runs', 0) + 1\n")), List.of(), host, log, memory);
+		tick(first, 2000);
+		ScriptRun second = new ScriptRun("t", Compiler.compile(Parser.parse("t.py", "memory['runs'] = memory.get('runs', 0) + 1\nprint(memory)\n")), List.of(), host, log, memory);
+		tick(second, 2000);
+		assertEquals(ScriptRun.State.FINISHED, second.state());
+		assertEquals(List.of("[1 print] {'runs': 2}"), logLines());
+	}
+
+	@Test
+	void storingANonPlainValueInMemoryFailsTheScriptAtTheLine() {
+		ScriptRun run = start("x = 1\nmemory['f'] = print\nprint('after')\n");
+		tick(run, 2000);
+		assertEquals(ScriptRun.State.FAILED, run.state());
+		assertEquals(List.of("[0 error] t.py:2: memory holds only plain data (numbers, strings, booleans, None, Pos, and lists, "
+			+ "tuples and dicts of these), not 'builtin_function_or_method'"), logLines());
 	}
 }

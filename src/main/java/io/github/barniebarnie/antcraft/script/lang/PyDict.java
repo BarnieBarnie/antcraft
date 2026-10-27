@@ -12,6 +12,25 @@ import java.util.Map;
 public final class PyDict {
 	/** By {@link Values#key}: the key as first stored, and its value. */
 	private final LinkedHashMap<Object, Object[]> entries = new LinkedHashMap<>();
+	private final StoreCheck check;
+
+	/** Checks a key and value before they are stored; throws a {@link ScriptError} to refuse them. */
+	@FunctionalInterface
+	public interface StoreCheck {
+		void check(Object key, Object value);
+	}
+
+	public PyDict() {
+		this(null);
+	}
+
+	/**
+	 * A dict that runs {@code check} on every key and value stored into it, such as a bot's {@code memory}, which holds
+	 * plain data only. A refused store fails the script at its line.
+	 */
+	public PyDict(StoreCheck check) {
+		this.check = check;
+	}
 
 	/** The value of {@code key}, or null when it has none. */
 	public Object get(Object key) {
@@ -20,6 +39,9 @@ public final class PyDict {
 	}
 
 	public void put(Object key, Object value) {
+		if (check != null) {
+			check.check(key, value);
+		}
 		Object[] entry = entries.get(Values.key(key));
 		if (entry == null) {
 			entries.put(Values.key(key), new Object[] {key, value});
