@@ -20,4 +20,18 @@ public record NativeCall(String name, List<Object> args, Map<String, Object> kwa
 	public Object suspend() {
 		return SUSPEND;
 	}
+
+	/** A call the native hands to the VM, whose result becomes the result of the native's own call. */
+	record TailCall(Object callee, List<Object> args) {
+	}
+
+	/**
+	 * Lets the VM finish this call by calling {@code callee} (a script function or a native) with {@code args}: return
+	 * this from the native. The VM pushes a frame for a script function rather than calling back into Java, so a
+	 * native that needs a script function's results (such as {@code sorted} with a {@code key}) hands the work to a
+	 * function written in the script language, and the script stays pausable and plain data.
+	 */
+	public Object tailCall(Object callee, List<Object> args) {
+		return new TailCall(callee, List.copyOf(args));
+	}
 }

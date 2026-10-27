@@ -13,7 +13,7 @@ class VmTest {
 	/** Runs a script to its end and gives what it printed, one line per {@code print}. */
 	static String run(String source) {
 		List<String> printed = new ArrayList<>();
-		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", source)), Natives.standard(printed::add));
+		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", source)), Natives.standard(Output.lines(printed::add)));
 		Vm.Status status = vm.run(1_000_000);
 		if (status == Vm.Status.FAILED) {
 			throw vm.error();

@@ -13,11 +13,12 @@ import java.util.Set;
 /**
  * The values of a script and Python's rules for them. A value is a {@link Long} ({@code int}), {@link Double}
  * ({@code float}), {@link String} ({@code str}), {@link Boolean} ({@code bool}), {@link PyNone}, {@link PyList},
- * {@link PyTuple}, {@link PyDict}, {@link PyRange}, {@link PyFunction}, {@link PyNative} or {@link PyMethod}. Every
- * operation throws a {@link ScriptError} with CPython's message where the script did something Python would not allow.
+ * {@link PyTuple}, {@link PyDict}, {@link PyRange}, {@link PyDictView}, {@link Iter}, {@link PyFunction}, {@link PyNative}
+ * or {@link PyMethod}. Every operation throws a {@link ScriptError} with CPython's message where the script did something
+ * Python would not allow.
  */
 public final class Values {
-	private static final String OVERFLOW = "int overflow: the result does not fit in 64 bits";
+	static final String OVERFLOW = "int overflow: the result does not fit in 64 bits";
 
 	private Values() {
 	}
@@ -33,6 +34,7 @@ public final class Values {
 			case PyTuple t -> "tuple";
 			case PyDict d -> "dict";
 			case PyRange r -> "range";
+			case PyDictView v -> v.kind().typeName;
 			case PyFunction f -> "function";
 			case PyNative n -> "builtin_function_or_method";
 			case PyMethod m -> "builtin_function_or_method";
@@ -52,6 +54,7 @@ public final class Values {
 			case PyTuple t -> !t.items().isEmpty();
 			case PyDict d -> d.size() != 0;
 			case PyRange r -> r.length() != 0;
+			case PyDictView v -> v.dict().size() != 0;
 			default -> true;
 		};
 	}
@@ -112,6 +115,11 @@ public final class Values {
 			}
 			case PyRange r -> out.append("range(").append(r.start()).append(", ").append(r.stop())
 					.append(r.step() == 1 ? ")" : ", " + r.step() + ")");
+			case PyDictView v -> {
+				out.append(v.kind().typeName).append('(');
+				repr(new PyList(elements(v)), out, open);
+				out.append(')');
+			}
 			default -> out.append(value);
 		}
 	}
@@ -174,16 +182,16 @@ public final class Values {
 
 	// Equality, order and hashing
 
-	private static boolean isNumber(Object value) {
+	static boolean isNumber(Object value) {
 		return value instanceof Long || value instanceof Double || value instanceof Boolean;
 	}
 
 	/** The int value of a bool or int. */
-	private static long asLong(Object value) {
+	static long asLong(Object value) {
 		return value instanceof Boolean b ? (b ? 1 : 0) : (Long) value;
 	}
 
-	private static double asDouble(Object value) {
+	static double asDouble(Object value) {
 		return value instanceof Double d ? d : asLong(value);
 	}
 
@@ -234,6 +242,9 @@ public final class Values {
 			}
 			case PyRange r -> b instanceof PyRange s && r.length() == s.length()
 					&& (r.length() == 0 || r.start() == s.start() && (r.length() == 1 || r.step() == s.step()));
+			// Keys and items compare as sets, as in Python; values views are only equal to themselves.
+			case PyDictView v -> v.kind() != PyDictView.Kind.VALUES && b instanceof PyDictView w && w.kind() == v.kind()
+					&& v.dict().size() == w.dict().size() && elements(v).stream().allMatch(item -> contains(w, item));
 			default -> a.equals(b);
 		};
 	}
@@ -317,6 +328,7 @@ public final class Values {
 			}
 			case PyList l -> throw unhashable(value);
 			case PyDict d -> throw unhashable(value);
+			case PyDictView v -> throw unhashable(value);
 			default -> value;
 		};
 	}
@@ -343,6 +355,27 @@ public final class Values {
 			}
 			case PyDict d -> {
 				return d.containsKey(item);
+			}
+			case PyDictView v -> {
+				return switch (v.kind()) {
+					case KEYS -> v.dict().containsKey(item);
+					case VALUES -> elements(v).stream().anyMatch(x -> eq(x, item));
+					case ITEMS -> {
+						if (!(item instanceof PyTuple t) || t.items().size() != 2) {
+							yield false;
+						}
+						Object value = v.dict().get(t.items().get(0));
+						yield value != null && eq(value, t.items().get(1));
+					}
+				};
+			}
+			case Iter i -> {
+				for (Object next = i.next(); next != null; next = i.next()) {
+					if (eq(next, item)) {
+						return true;
+					}
+				}
+				return false;
 			}
 			case PyRange r -> {
 				if (item instanceof Long || item instanceof Boolean) {
@@ -425,7 +458,7 @@ public final class Values {
 				+ typeName(a) + "' and '" + typeName(b) + "'");
 	}
 
-	private static boolean isInt(Object value) {
+	static boolean isInt(Object value) {
 		return value instanceof Long || value instanceof Boolean;
 	}
 
@@ -719,6 +752,19 @@ public final class Values {
 		}
 	}
 
+	/** {@code len(value)}. */
+	public static long len(Object value) {
+		return switch (value) {
+			case String s -> s.codePointCount(0, s.length());
+			case PyList l -> l.items.size();
+			case PyTuple t -> t.items().size();
+			case PyDict d -> d.size();
+			case PyDictView v -> v.dict().size();
+			case PyRange r -> r.length();
+			default -> throw new ScriptError("object of type '" + typeName(value) + "' has no len()");
+		};
+	}
+
 	// Iteration
 
 	/** The items of an iterable value, copied, as {@code for} would visit them. */
@@ -737,7 +783,9 @@ public final class Values {
 			case PyList l -> new Iter.OfList(l);
 			case PyTuple t -> new Iter.OfTuple(t);
 			case String s -> new Iter.OfString(s);
-			case PyDict d -> new Iter.OfDict(d);
+			case PyDict d -> new Iter.OfDict(d, PyDictView.Kind.KEYS);
+			case PyDictView v -> new Iter.OfDict(v.dict(), v.kind());
+			case Iter i -> i;
 			case PyRange r -> new Iter.OfRange(r);
 			default -> throw new ScriptError("'" + typeName(iterable) + "' object is not iterable");
 		};

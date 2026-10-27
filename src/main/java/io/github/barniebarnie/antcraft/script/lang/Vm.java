@@ -115,12 +115,21 @@ public final class Vm {
 		return Collections.unmodifiableMap(globals);
 	}
 
-	/** The source line about to run, or 0 once the script has finished. */
+	/**
+	 * The source line about to run, or 0 once the script has finished. Inside a builtin written in the script language,
+	 * the line of the script that called it.
+	 */
 	public int line() {
 		if (frames.isEmpty()) {
 			return 0;
 		}
 		Frame frame = frames.getLast();
+		for (int i = frames.size() - 2; i >= 0 && frame.code.file().equals(Natives.BUILTINS_FILE); i--) {
+			frame = frames.get(i);
+			if (!frame.code.file().equals(Natives.BUILTINS_FILE)) {
+				return frame.code.lines()[frame.pc - 1];
+			}
+		}
 		return frame.code.lines()[Math.min(frame.pc, frame.code.size() - 1)];
 	}
 
@@ -130,18 +139,33 @@ public final class Vm {
 	 */
 	public Status run(long budget) {
 		for (long left = budget; left > 0 && status == Status.RUNNING; left--) {
-			Frame frame = frames.getLast();
+			int depth = frames.size() - 1;
+			Frame frame = frames.get(depth);
 			Code code = frame.code;
 			int pc = frame.pc++;
 			executed++;
 			try {
 				execute(frame, code.ops()[pc], code.args()[pc]);
 			} catch (ScriptError e) {
-				error = e.file() == null ? e.at(code.file(), code.lines()[pc]) : e;
+				error = e.file() == null ? place(e, depth, pc) : e;
 				status = Status.FAILED;
 			}
 		}
 		return status;
+	}
+
+	/**
+	 * Places an error at the instruction of frame {@code depth} that raised it; an error in a builtin written in the
+	 * script language ({@link Natives#BUILTINS_FILE}) is placed at the script's call of that builtin instead.
+	 */
+	private ScriptError place(ScriptError e, int depth, int pc) {
+		for (int i = depth; i >= 0; i--) {
+			Frame frame = frames.get(i);
+			if (!frame.code.file().equals(Natives.BUILTINS_FILE) || i == 0) {
+				return e.at(frame.code.file(), frame.code.lines()[i == depth ? pc : frame.pc - 1]);
+			}
+		}
+		throw new IllegalStateException("no frames");
 	}
 
 	/** Continues a suspended script: {@code value} becomes the result of the native call it waits on. */
@@ -309,6 +333,19 @@ public final class Vm {
 			}
 			case ASSERT_FAIL -> throw new ScriptError(arg == 1 ? "assertion failed: " + Values.str(f.pop())
 					: "assertion failed");
+			case FORMAT -> {
+				Code.FormatField field = (Code.FormatField) code.constants()[arg];
+				f.push(Format.field(f.pop(), field.conversion(), field.spec()));
+			}
+			case BUILD_STRING -> {
+				StringBuilder text = new StringBuilder();
+				f.pop(arg).forEach(part -> text.append((String) part));
+				f.push(text.toString());
+			}
+			case LIST_APPEND -> {
+				Object item = f.pop();
+				((PyList) f.stack[f.sp - 1 - arg]).items.add(item);
+			}
 		}
 	}
 
@@ -365,6 +402,8 @@ public final class Vm {
 				Collections.unmodifiableMap(kwargs)));
 		if (result == NativeCall.SUSPEND) {
 			status = Status.SUSPENDED;
+		} else if (result instanceof NativeCall.TailCall tail) {
+			call(tail.callee(), tail.args(), Map.of());
 		} else {
 			frames.getLast().push(switch (result) {
 				case null -> PyNone.NONE;

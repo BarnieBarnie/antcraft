@@ -76,5 +76,14 @@ public enum Op {
 	/** Pops the result and returns from the frame. */
 	RETURN,
 	/** Fails the script with "assertion failed", followed by the popped message when {@code arg} is 1. */
-	ASSERT_FAIL
+	ASSERT_FAIL,
+	/**
+	 * Replaces TOS with its text in an f-string: converted and formatted as the {@link Code.FormatField} in
+	 * {@code constants[arg]} says.
+	 */
+	FORMAT,
+	/** Pops {@code arg} strings and pushes them joined. */
+	BUILD_STRING,
+	/** Pops TOS and appends it to the list {@code arg} values below it (under a comprehension's iterators). */
+	LIST_APPEND
 }

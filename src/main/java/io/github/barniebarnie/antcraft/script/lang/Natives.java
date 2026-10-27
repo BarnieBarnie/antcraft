@@ -9,14 +9,23 @@ import java.util.Map;
  * builtins and the bot API are registered the same way.
  */
 public final class Natives {
+	/**
+	 * The file of the builtins written in the script language (see {@link Builtins}). An error in them is placed at the
+	 * script's call of the builtin.
+	 */
+	public static final String BUILTINS_FILE = "<builtins>";
+
 	private final Map<String, NativeFunction> functions = new HashMap<>();
 	private final Map<String, NativeFunction> methods = new HashMap<>();
 
-	/** The builtins every script has: {@code print} to {@code output}, and {@code range}. */
+	/**
+	 * The builtins and methods every script has (docs/scripting.md): {@code print}, {@code debug}, {@code info},
+	 * {@code warn} and {@code error} write to {@code output} at their level.
+	 */
 	public static Natives standard(Output output) {
 		Natives natives = new Natives();
-		natives.register("print", call -> print(call, output));
-		natives.register("range", Natives::range);
+		Builtins.register(natives, output);
+		Methods.register(natives);
 		return natives;
 	}
 
@@ -40,57 +49,5 @@ public final class Natives {
 	/** The method {@code name} of {@code type}, or null. */
 	public NativeFunction method(String type, String name) {
 		return methods.get(type + "." + name);
-	}
-
-	private static Object print(NativeCall call, Output output) {
-		String sep = " ";
-		for (Map.Entry<String, Object> kwarg : call.kwargs().entrySet()) {
-			if (!kwarg.getKey().equals("sep")) {
-				throw new ScriptError("'" + kwarg.getKey() + "' is an invalid keyword argument for print()");
-			}
-			if (kwarg.getValue() instanceof String s) {
-				sep = s;
-			} else if (!(kwarg.getValue() instanceof PyNone)) {
-				throw new ScriptError("sep must be None or a string, not " + Values.typeName(kwarg.getValue()));
-			}
-		}
-		StringBuilder line = new StringBuilder();
-		for (int i = 0; i < call.args().size(); i++) {
-			if (i > 0) {
-				line.append(sep);
-			}
-			line.append(Values.str(call.args().get(i)));
-		}
-		output.print(line.toString());
-		return PyNone.NONE;
-	}
-
-	private static Object range(NativeCall call) {
-		if (!call.kwargs().isEmpty()) {
-			throw new ScriptError("range() takes no keyword arguments");
-		}
-		int n = call.args().size();
-		if (n == 0) {
-			throw new ScriptError("range expected at least 1 argument, got 0");
-		}
-		if (n > 3) {
-			throw new ScriptError("range expected at most 3 arguments, got " + n);
-		}
-		long[] values = new long[n];
-		for (int i = 0; i < n; i++) {
-			Object arg = call.args().get(i);
-			if (arg instanceof Long l) {
-				values[i] = l;
-			} else if (arg instanceof Boolean b) {
-				values[i] = b ? 1 : 0;
-			} else {
-				throw new ScriptError("'" + Values.typeName(arg) + "' object cannot be interpreted as an integer");
-			}
-		}
-		return switch (n) {
-			case 1 -> new PyRange(0, values[0], 1);
-			case 2 -> new PyRange(values[0], values[1], 1);
-			default -> new PyRange(values[0], values[1], values[2]);
-		};
 	}
 }

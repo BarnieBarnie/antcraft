@@ -13,6 +13,10 @@ public record Code(String name, String file, Op[] ops, int[] args, int[] lines, 
 	public record CallShape(int positional, List<String> keywords) {
 	}
 
+	/** An f-string field's conversion ({@code 's'}, {@code 'r'}, {@code 'a'}, or {@code '\0'} for none) and format spec. */
+	public record FormatField(char conversion, String spec) {
+	}
+
 	public int size() {
 		return ops.length;
 	}

@@ -203,12 +203,20 @@ final class SubsetCheck {
 					c.keywords().forEach(k -> expr(k.value()));
 				}
 				case Ast.ListComp c -> {
-					for (Ast.Comprehension generator : c.generators()) {
-						target(generator.target());
-						expr(generator.iter());
-						generator.ifs().forEach(this::expr);
+					// As in Python, a comprehension has its own scope: its variables are not bound around it, and
+					// only its first iterable is evaluated in the scope around it.
+					expr(c.generators().getFirst().iter());
+					Names inner = new Names();
+					for (int i = 0; i < c.generators().size(); i++) {
+						Ast.Comprehension generator = c.generators().get(i);
+						inner.target(generator.target());
+						if (i > 0) {
+							inner.expr(generator.iter());
+						}
+						generator.ifs().forEach(inner::expr);
 					}
-					expr(c.elt());
+					inner.expr(c.elt());
+					inner.loads.stream().filter(load -> !inner.stores.contains(load.id())).forEach(loads::add);
 				}
 			}
 		}

@@ -40,7 +40,7 @@ class VmBudgetTest {
 			""";
 
 	private static Vm vm(String source, List<String> printed) {
-		return new Vm(Compiler.compile(Parser.parse("t.py", source)), Natives.standard(printed::add));
+		return new Vm(Compiler.compile(Parser.parse("t.py", source)), Natives.standard(Output.lines(printed::add)));
 	}
 
 	@Test
@@ -93,7 +93,7 @@ class VmBudgetTest {
 	@Test
 	void aNativeThatSuspendsPausesTheScriptUntilResumedWithTheCallsResult() {
 		List<String> printed = new ArrayList<>();
-		Natives natives = Natives.standard(printed::add);
+		Natives natives = Natives.standard(Output.lines(printed::add));
 		List<List<Object>> asked = new ArrayList<>();
 		natives.register("ask", call -> {
 			asked.add(call.args());
@@ -116,7 +116,7 @@ class VmBudgetTest {
 	@Test
 	void aNativeThatReturnsAValueDoesNotPause() {
 		List<String> printed = new ArrayList<>();
-		Natives natives = Natives.standard(printed::add);
+		Natives natives = Natives.standard(Output.lines(printed::add));
 		natives.register("twice", call -> (Long) call.args().get(0) * 2);
 		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "print(twice(21))")), natives);
 		assertEquals(Vm.Status.FINISHED, vm.run(1000));
@@ -126,7 +126,7 @@ class VmBudgetTest {
 	@Test
 	void nativesSeeKeywordArguments() {
 		List<String> printed = new ArrayList<>();
-		Natives natives = Natives.standard(printed::add);
+		Natives natives = Natives.standard(Output.lines(printed::add));
 		natives.register("near", call -> call.kwargs().getOrDefault("near", 0L));
 		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "print(near(1), near(1, near=3))")), natives);
 		assertEquals(Vm.Status.FINISHED, vm.run(1000));
@@ -136,7 +136,7 @@ class VmBudgetTest {
 	@Test
 	void methodsRegisteredForATypeAreCalledOnItsValues() {
 		List<String> printed = new ArrayList<>();
-		Natives natives = Natives.standard(printed::add);
+		Natives natives = Natives.standard(Output.lines(printed::add));
 		natives.registerMethod("str", "shout", call -> call.args().get(0) + "!");
 		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "s = 'hey'\nprint(s.shout())")), natives);
 		assertEquals(Vm.Status.FINISHED, vm.run(1000));

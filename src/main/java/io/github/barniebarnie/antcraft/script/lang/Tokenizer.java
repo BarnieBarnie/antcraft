@@ -569,4 +569,12 @@ public final class Tokenizer {
 	private static boolean isIdentifierPart(char c) {
 		return c == '_' || Character.isLetterOrDigit(c);
 	}
+
+	/** Whether {@code text} is a name. */
+	static boolean isIdentifier(String text) {
+		if (text.isEmpty() || !isIdentifierStart(text.charAt(0))) {
+			return false;
+		}
+		return text.chars().allMatch(c -> isIdentifierPart((char) c));
+	}
 }

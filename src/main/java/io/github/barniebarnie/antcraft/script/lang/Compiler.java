@@ -17,7 +17,8 @@ import java.util.Set;
  *
  * <p>Names follow Python's scoping without closures: at the top level every name is global; in a function a name is
  * local when the function binds it (assigns it, loops over it, defines it or has it as a parameter) and does not
- * declare it {@code global}, and global otherwise. A global that is not set falls back to the natives (builtins).
+ * declare it {@code global}, and global otherwise. A global that is not set falls back to the natives (builtins). A
+ * list comprehension is compiled inline, and its variables get hidden local slots of their own, so they do not leak.
  */
 public final class Compiler {
 	private final String file;
@@ -30,6 +31,13 @@ public final class Compiler {
 	private final List<Object> constants = new ArrayList<>();
 	private final Map<String, Integer> names = new HashMap<>();
 	private final Deque<Loop> loops = new ArrayDeque<>();
+	/**
+	 * The names of the local slots: the function's locals, then one slot for each variable of each comprehension. A
+	 * comprehension's variables are hidden slots, so they do not leak into the scope around it, even at the top level.
+	 */
+	private final List<String> localNames = new ArrayList<>();
+	/** The variables of the comprehensions being compiled, innermost first, by name. */
+	private final Deque<Map<String, Integer>> comprehensions = new ArrayDeque<>();
 	private int line;
 
 	/** A loop being compiled: where {@code continue} jumps to, and the {@code break} jumps to patch at its end. */
@@ -41,6 +49,9 @@ public final class Compiler {
 		this.name = name;
 		this.locals = locals;
 		this.line = line;
+		if (locals != null) {
+			localNames.addAll(locals.keySet());
+		}
 	}
 
 	/** Compiles a module; constructs that do not run yet are a {@link CompileError}. */
@@ -73,7 +84,7 @@ public final class Compiler {
 	private Code code(int paramCount, int defaultCount) {
 		String[] nameTable = new String[names.size()];
 		names.forEach((n, i) -> nameTable[i] = n);
-		String[] localTable = locals == null ? new String[0] : locals.keySet().toArray(String[]::new);
+		String[] localTable = localNames.toArray(String[]::new);
 		return new Code(name, file, ops.toArray(Op[]::new), args.stream().mapToInt(Integer::intValue).toArray(),
 				lines.stream().mapToInt(Integer::intValue).toArray(), constants.toArray(), nameTable, localTable,
 				paramCount, defaultCount);
@@ -282,21 +293,30 @@ public final class Compiler {
 		elements.forEach(this::store);
 	}
 
-	private boolean isLocal(String n) {
-		return locals != null && locals.containsKey(n);
+	/** The local slot of {@code n}: a comprehension's variable first, innermost comprehension first; else -1. */
+	private int slot(String n) {
+		for (Map<String, Integer> scope : comprehensions) {
+			Integer slot = scope.get(n);
+			if (slot != null) {
+				return slot;
+			}
+		}
+		return locals != null && locals.containsKey(n) ? locals.get(n) : -1;
 	}
 
 	private void loadName(String n) {
-		if (isLocal(n)) {
-			emit(Op.LOAD_LOCAL, locals.get(n));
+		int slot = slot(n);
+		if (slot >= 0) {
+			emit(Op.LOAD_LOCAL, slot);
 		} else {
 			emit(Op.LOAD_GLOBAL, name(n));
 		}
 	}
 
 	private void storeName(String n) {
-		if (isLocal(n)) {
-			emit(Op.STORE_LOCAL, locals.get(n));
+		int slot = slot(n);
+		if (slot >= 0) {
+			emit(Op.STORE_LOCAL, slot);
 		} else {
 			emit(Op.STORE_GLOBAL, name(n));
 		}
@@ -315,7 +335,24 @@ public final class Compiler {
 			case Ast.StrLit n -> constant(n, n.value());
 			case Ast.BoolLit n -> constant(n, n.value());
 			case Ast.NoneLit n -> constant(n, PyNone.NONE);
-			case Ast.FString f -> throw new CompileError(file, f.line(), f.col(), "f-strings are not available yet");
+			case Ast.FString f -> {
+				for (Ast.FString.Part part : f.parts()) {
+					switch (part) {
+						case Ast.FString.Text text -> {
+							at(f);
+							emit(Op.LOAD_CONST, constant(text.text()));
+						}
+						case Ast.FString.Value value -> {
+							expr(value.expr());
+							at(value.expr());
+							emit(Op.FORMAT, constant(new Code.FormatField(value.conversion(),
+									value.spec() == null ? "" : value.spec())));
+						}
+					}
+				}
+				at(f);
+				emit(Op.BUILD_STRING, f.parts().size());
+			}
 			case Ast.ListLit l -> {
 				l.elements().forEach(this::expr);
 				at(l);
@@ -376,9 +413,55 @@ public final class Compiler {
 			}
 			case Ast.Slice s -> throw new IllegalStateException("a slice is only compiled as an index");
 			case Ast.Call c -> call(c);
-			case Ast.ListComp c ->
-				throw new CompileError(file, c.line(), c.col(), "list comprehensions are not available yet");
+			case Ast.ListComp c -> listComp(c);
 		}
+	}
+
+	/**
+	 * {@code [elt for target in iter if test ...]}, inline: the new list stays under the iterators of its loops. As in
+	 * Python, the first iterable is evaluated in the scope around the comprehension, and the variables of its loops
+	 * are its own (hidden local slots), so they neither leak out nor overwrite variables of the same name.
+	 */
+	private void listComp(Ast.ListComp c) {
+		at(c);
+		emit(Op.BUILD_LIST, 0);
+		expr(c.generators().getFirst().iter());
+		SubsetCheck.Names bound = new SubsetCheck.Names();
+		c.generators().forEach(g -> bound.target(g.target()));
+		Map<String, Integer> scope = new HashMap<>();
+		for (String variable : bound.stores) {
+			scope.put(variable, localNames.size());
+			localNames.add(variable);
+		}
+		comprehensions.push(scope);
+		generator(c, 0);
+		comprehensions.pop();
+	}
+
+	private void generator(Ast.ListComp c, int index) {
+		Ast.Comprehension g = c.generators().get(index);
+		if (index > 0) {
+			expr(g.iter());
+		}
+		at(g);
+		emit(Op.GET_ITER, 0);
+		int top = here();
+		int toEnd = emit(Op.FOR_ITER, 0);
+		store(g.target());
+		for (Expr test : g.ifs()) {
+			expr(test);
+			at(g);
+			emit(Op.JUMP_IF_FALSE, top);
+		}
+		if (index + 1 < c.generators().size()) {
+			generator(c, index + 1);
+		} else {
+			expr(c.elt());
+			at(c);
+			emit(Op.LIST_APPEND, index + 1);
+		}
+		emit(Op.JUMP, top);
+		patch(toEnd, here());
 	}
 
 	private void constant(Expr literal, Object value) {

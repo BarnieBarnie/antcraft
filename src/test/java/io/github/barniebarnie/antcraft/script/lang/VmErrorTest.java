@@ -12,7 +12,7 @@ class VmErrorTest {
 	/** Runs a script that must fail and gives its error message. */
 	private static String fails(String source) {
 		List<String> printed = new ArrayList<>();
-		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", source)), Natives.standard(printed::add));
+		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", source)), Natives.standard(Output.lines(printed::add)));
 		assertEquals(Vm.Status.FAILED, vm.run(1_000_000));
 		assertEquals(Vm.Status.FAILED, vm.run(1_000_000));
 		return vm.error().getMessage();
@@ -115,7 +115,7 @@ class VmErrorTest {
 
 	@Test
 	void aNativeErrorNamesTheLineOfTheCall() {
-		Natives natives = Natives.standard(line -> {
+		Natives natives = Natives.standard((level, line) -> {
 		});
 		natives.register("boom", call -> {
 			throw new ScriptError("no tree near");
@@ -130,7 +130,7 @@ class VmErrorTest {
 
 	@Test
 	void resumingAScriptThatIsNotSuspendedIsAMistakeOfTheHost() {
-		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "pass")), Natives.standard(line -> {
+		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "pass")), Natives.standard((level, line) -> {
 		}));
 		assertThrows(IllegalStateException.class, () -> vm.resume(1L));
 	}
