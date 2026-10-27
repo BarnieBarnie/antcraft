@@ -81,6 +81,16 @@ class MoveApiTest {
 		}
 
 		@Override
+		public void startReach(Pos target) {
+			paths.add(target + " in reach");
+		}
+
+		@Override
+		public boolean inReach(Pos target) {
+			return false;
+		}
+
+		@Override
 		public MoveApi.PathStatus tickPath() {
 			return pathStatus;
 		}

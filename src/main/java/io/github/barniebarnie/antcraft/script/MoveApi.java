@@ -32,6 +32,11 @@ public final class MoveApi {
 	 * a way round a lake or a ridge, which leads away for a while, is not cut short.
 	 */
 	static final int STALL_TICKS = 2400;
+	/**
+	 * How far, in blocks from the bot's eyes to the block's centre, the block actions reach (docs/scripting.md, Actions);
+	 * a little short of a player's 4.5.
+	 */
+	public static final double REACH = 4.0;
 
 	/** What the move actions need of the bot. */
 	public interface Body {
@@ -48,6 +53,12 @@ public final class MoveApi {
 
 		/** Starts walking to within {@code near} blocks (Manhattan) of {@code target}, with the bot's path follower. */
 		void startPath(Pos target, int near);
+
+		/** Starts walking to where the bot sees {@code target} within {@link #REACH}, to work on it. */
+		void startReach(Pos target);
+
+		/** Whether the bot, where it stands, sees {@code target} within {@link #REACH}. */
+		boolean inReach(Pos target);
 
 		/** Advances the walk by a tick. */
 		PathStatus tickPath();
@@ -82,7 +93,7 @@ public final class MoveApi {
 			if (near < 0) {
 				throw new ScriptError("goto() near must be at least 0, not " + near);
 			}
-			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE)), call);
+			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call);
 		});
 	}
 
@@ -116,13 +127,28 @@ public final class MoveApi {
 	}
 
 	/**
+	 * The walk of the block actions ({@link WorkApi}): like {@code goto}, to where the bot sees {@code target} within
+	 * {@link #REACH}; {@code unreachable} when it cannot get there.
+	 */
+	static ScriptRun.Action reach(ScriptRun.Host host, Pos target) {
+		return new Goto(host, target, 0, true);
+	}
+
+	/** Like {@code goto(target, near)}, for the actions that walk to something first, such as {@code pick_up}. */
+	static ScriptRun.Action walk(ScriptRun.Host host, Pos target, int near) {
+		return new Goto(host, target, near, false);
+	}
+
+	/**
 	 * {@code goto(pos, near=0)}: loads the chunks of the next stretch of the way (or, with {@code botsLoadChunks} off,
 	 * gives up with {@code not_loaded} if one is not loaded), then walks with the bot's path follower, planning on as it goes.
+	 * With {@code reach}, it walks into reach of {@code target} instead ({@link #reach}).
 	 */
 	private static final class Goto implements ScriptRun.Action {
 		private final ScriptRun.Host host;
 		private final Pos target;
 		private final int near;
+		private final boolean reach;
 		private @Nullable Body body;
 		private @Nullable Result result;
 		private boolean walking;
@@ -131,10 +157,11 @@ public final class MoveApi {
 		private long closest = Long.MAX_VALUE;
 		private int stalled;
 
-		Goto(ScriptRun.Host host, Pos target, int near) {
+		Goto(ScriptRun.Host host, Pos target, int near, boolean reach) {
 			this.host = host;
 			this.target = target;
 			this.near = near;
+			this.reach = reach;
 		}
 
 		@Override
@@ -164,7 +191,11 @@ public final class MoveApi {
 			}
 			waited = 0;
 			if (!walking) {
-				body.startPath(target, near);
+				if (reach) {
+					body.startReach(target);
+				} else {
+					body.startPath(target, near);
+				}
 				walking = true;
 			}
 			switch (body.tickPath()) {

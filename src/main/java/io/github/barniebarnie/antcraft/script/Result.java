@@ -18,9 +18,25 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 	public static final String INTERRUPTED = "interrupted";
 	public static final String STOPPED = "stopped";
 	public static final String TIMEOUT = "timeout";
+	public static final String OUT_OF_REACH = "out_of_reach";
+	public static final String NO_TOOL = "no_tool";
+	public static final String NO_ITEM = "no_item";
+	public static final String NO_SPACE = "no_space";
+	public static final String BLOCKED = "blocked";
+	public static final String PROTECTED = "protected";
+	public static final String TARGET_GONE = "target_gone";
 
 	public static Result fail(String reason) {
 		return new Result(false, reason, PyNone.NONE);
+	}
+
+	/** A failure that still produced {@code value}, such as how many items {@code pick_up} took before it ran out of space. */
+	public static Result fail(String reason, Object value) {
+		return new Result(false, reason, value);
+	}
+
+	public static Result ok(Object value) {
+		return new Result(true, null, value);
 	}
 
 	@Override

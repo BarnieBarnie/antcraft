@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.script.MoveApi;
@@ -11,10 +12,13 @@ import net.minecraft.server.level.ServerLevel;
 final class BotBody implements MoveApi.Body {
 	private final AntBot bot;
 	private final PathFollower follower;
+	/** One per bot: goals compare by value (see {@link Goal.InSight}). */
+	private final Goal.Sight sight;
 
 	BotBody(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
+		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
 	}
 
 	@Override
@@ -45,6 +49,24 @@ final class BotBody implements MoveApi.Body {
 	@Override
 	public void startPath(Pos target, int near) {
 		this.follower.start(new Goal.Near(new BlockPos(clamp(target.x()), clamp(target.y()), clamp(target.z())), near));
+	}
+
+	@Override
+	public void startReach(Pos target) {
+		this.follower.start(this.reach(target));
+	}
+
+	@Override
+	public boolean inReach(Pos target) {
+		return this.reach(target).isReached(this.bot.blockPosition());
+	}
+
+	private Goal reach(Pos target) {
+		return new Goal.InSight(blockPos(target), MoveApi.REACH, this.sight);
+	}
+
+	private static BlockPos blockPos(Pos pos) {
+		return new BlockPos(clamp(pos.x()), clamp(pos.y()), clamp(pos.z()));
 	}
 
 	@Override

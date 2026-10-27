@@ -185,6 +185,17 @@ public final class ScriptRun {
 		return call.suspend();
 	}
 
+	/**
+	 * The result of an action done at once, without ticks (such as {@code equip}): logged at debug when it failed, as
+	 * an action's is.
+	 */
+	Result done(String describe, Result result) {
+		if (!result.ok()) {
+			write(Level.DEBUG, describe + " -> " + result.reason());
+		}
+		return result;
+	}
+
 	/** Ends the script at the end of the native call being made, as {@code stop()} does. */
 	Object requestStop(NativeCall call) {
 		this.stopRequested = true;

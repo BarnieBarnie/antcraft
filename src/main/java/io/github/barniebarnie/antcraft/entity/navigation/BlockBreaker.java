@@ -18,6 +18,8 @@ public class BlockBreaker {
 	private @Nullable BlockPos target;
 	private int progress;
 	private int total;
+	/** Whether drops of the last block broken with {@code collect} did not fit in the inventory and fell to the ground. */
+	private boolean spilled;
 
 	public BlockBreaker(AntBot bot) {
 		this.bot = bot;
@@ -61,10 +63,12 @@ public class BlockBreaker {
 				// Like a player without the right tool: the block goes, but drops nothing.
 				level.destroyBlock(pos, false, this.bot);
 			} else if (collect) {
+				this.spilled = false;
 				for (ItemStack drop : Block.getDrops(state, level, pos, level.getBlockEntity(pos), this.bot, tool)) {
 					ItemStack rest = this.bot.getInventory().addItem(drop);
 					if (!rest.isEmpty()) {
 						Block.popResource(level, pos, rest);
+						this.spilled = true;
 					}
 				}
 				level.destroyBlock(pos, false, this.bot);
@@ -79,6 +83,11 @@ public class BlockBreaker {
 			return true;
 		}
 		return false;
+	}
+
+	/** Whether some drops of the last block broken with {@code collect} did not fit in the bot's inventory. */
+	public boolean spilled() {
+		return this.spilled;
 	}
 
 	public void reset() {

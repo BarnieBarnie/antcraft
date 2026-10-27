@@ -145,20 +145,32 @@ Details: `inventory()` lists the held stack first, then the inventory; `count` a
 | Function | Does |
 |---|---|
 | `goto(pos, near=0)` | walk to within `near` blocks, digging, pillaring and bridging as the pathfinder allows. When the next stretch of the path enters an unloaded chunk, the bot loads it (see Chunk loading) and plans on; if it cannot be loaded, `goto` stops with `not_loaded` |
-| `mine(pos)` | walk into reach and break the block with the best tool carried; drops are picked up |
-| `place(pos, item, facing=None)` | walk into reach and place a block |
-| `pick_up(what=None, radius=8)` | collect dropped items |
-| `equip(item)` | hold an item |
-| `use(pos, item=None)` | use the held or given item on a block (bucket, hoe, bone meal, flint and steel) |
+| `mine(pos)` | walk into reach and break the block with the best tool carried; drops go straight into the inventory |
+| `place(pos, item, facing=None)` | walk into reach, hold the block item and place it; `facing` is `"north"`, `"south"`, `"east"`, `"west"`, `"up"` or `"down"` |
+| `pick_up(what=None, radius=8)` | walk to the dropped items `what` selects within `radius` (at most 16), nearest first, and take them; `value` is how many it took |
+| `equip(item)` | hold an item (at once) |
+| `use(pos, item=None)` | walk into reach and use the held item, or first hold `item`, on a block as a player's right click does (bucket, hoe, bone meal, flint and steel; with an empty hand, the block itself, such as a lever) |
 | `attack(entity)` | fight until the target is dead, gone, or the bot must flee |
 | `put(container, item, n=None)` | put items into a container (all matching when `n` is `None`) |
 | `take(container, item, n=None)` | take items out |
 | `craft(item, n=1, table=None)` | craft by one recipe from carried items; 3x3 recipes need a crafting table at `table` or within reach |
 | `smelt(item, n=1, furnace=None, fuel=None)` | load a furnace, wait, take the output |
-| `drop(item, n=None)` | drop items |
+| `drop(item, n=None)` | toss up to `n` items (all matching when `n` is `None`), the held ones first; `value` is how many. The bot does not pick up again by itself what it dropped, though `pick_up` takes it |
 | `wait(ticks)` | do nothing |
 | `say(text)` | show text above the bot and in its owner's chat |
 | `stop()` | end the script |
+
+The block actions (`mine`, `place`, `use`) walk, like `goto`, to where the bot sees the block within 4 blocks of its eyes, then work on it. Which reasons each can return:
+
+| Action | Reasons |
+|---|---|
+| `mine` | `target_gone` (air or a fluid there, or it went while the bot dug), `protected`, `no_tool` (no carried tool makes it drop anything, such as stone without a pickaxe), `out_of_reach`, `no_space` (the block is mined but drops that did not fit lie on the ground), `not_loaded`, `timeout` |
+| `place` | `no_item` (no block item `item` selects), `protected`, `blocked` (a block that cannot be replaced is there, or an entity stands there, or the block cannot stay there), `out_of_reach`, `not_loaded`, `timeout` |
+| `use` | `no_item`, `protected`, `blocked` (the use did nothing, such as a hoe on stone), `out_of_reach`, `not_loaded`, `timeout` |
+| `pick_up` | `target_gone` (no such item around, or it went before the bot took one), `no_space`, `out_of_reach` (some could not be walked to), `not_loaded`, `timeout` |
+| `equip`, `drop` | `no_item` |
+
+`protected` means the block may not be changed: outside the world's build height or border, under the server's spawn protection, and for `mine` a block that cannot be broken, such as bedrock. Placing and using go through the game's own code with a stand-in player at the bot, so blocks and items behave as for a player: a bucket fills, a hoe wears down.
 
 Later milestones add `build(blueprint, at, turn=0)` (the existing build-plan code as one action) and `till`, `plant` and `harvest` helpers.
 
