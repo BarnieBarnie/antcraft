@@ -130,7 +130,6 @@ class SubsetTest {
 	@Test
 	void otherStatementsOutsideTheSubsetAreNotSupported() {
 		rejects("del x", "bot.py:1:1: `del` is not supported");
-		rejects("assert x", "bot.py:1:1: `assert` is not supported");
 		rejects("import lib.trees as t", "bot.py:1:18: `import ... as` is not supported");
 		rejects("from m import *", "bot.py:1:15: `from ... import *` is not supported");
 		rejects("for x in xs:\n    pass\nelse:\n    pass", "bot.py:3:1: `else` on a loop is not supported");

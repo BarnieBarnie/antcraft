@@ -32,6 +32,7 @@ public final class AstDump {
 					.map(p -> p.defaultValue() == null ? p.name() : "(" + p.name() + " " + dump(p.defaultValue()) + ")")
 					.collect(Collectors.joining(" ")) + ") " + block(s.body()) + ")";
 			case Ast.Return s -> s.value() == null ? "return" : "(return " + dump(s.value()) + ")";
+			case Ast.Assert s -> "(assert " + dump(s.test()) + (s.message() == null ? "" : " " + dump(s.message())) + ")";
 			case Ast.Global s -> "(global " + String.join(" ", s.names()) + ")";
 			case Ast.Import s -> "(import " + String.join(" ", s.modules()) + ")";
 			case Ast.FromImport s -> "(from " + s.module() + " " + String.join(" ", s.names()) + ")";

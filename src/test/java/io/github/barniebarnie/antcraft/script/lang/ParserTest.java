@@ -137,6 +137,15 @@ class ParserTest {
 	}
 
 	@Test
+	void assertStatements() {
+		assertEquals("(assert (call mine (tuple 1 1 1)))", parse("assert mine((1, 1, 1))"));
+		assertEquals("(assert (cmp x == 1) 'x is not one')", parse("assert x == 1, 'x is not one'"));
+		Ast.Assert statement = assertInstanceOf(Ast.Assert.class, Parser.parse("t.py", "pass\n  \nassert x").body().get(1));
+		assertEquals(3, statement.line());
+		assertEquals(1, statement.col());
+	}
+
+	@Test
 	void ifElifElse() {
 		assertEquals("(if a [x] [(if b [y] [z])])", parse("if a:\n    x\nelif b:\n    y\nelse:\n    z\n"));
 		assertEquals("(if a [x y] [])", parse("if a: x; y"));

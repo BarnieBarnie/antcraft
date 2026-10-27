@@ -25,7 +25,7 @@ public final class Parser {
 			"yield");
 	/** Keywords of constructs outside the subset. */
 	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("class", "try", "except", "finally", "raise", "lambda",
-			"with", "yield", "async", "await", "nonlocal", "del", "assert");
+			"with", "yield", "async", "await", "nonlocal", "del");
 	/** Operators outside the subset. */
 	private static final Set<String> UNSUPPORTED_OPERATORS = Set.of("&", "|", "^", "~", "<<", ">>", "@", ":=", "&=", "|=",
 			"^=", "<<=", ">>=", "@=", "...");
@@ -130,6 +130,16 @@ public final class Parser {
 					}
 					Expr value = startsExpression(peek()) ? testList() : null;
 					return new Ast.Return(value, t.line(), t.col());
+				}
+				case "assert" -> {
+					next();
+					Expr test = test();
+					Expr message = null;
+					if (peek().isOp(",")) {
+						next();
+						message = test();
+					}
+					return new Ast.Assert(test, message, t.line(), t.col());
 				}
 				case "global" -> {
 					next();

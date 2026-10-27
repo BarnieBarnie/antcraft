@@ -73,6 +73,10 @@ public final class Ast {
 	public record Return(Expr value, int line, int col) implements Stmt {
 	}
 
+	/** {@code assert test, message}; {@code message} is null when left out. */
+	public record Assert(Expr test, Expr message, int line, int col) implements Stmt {
+	}
+
 	public record Global(List<String> names, int line, int col) implements Stmt {
 	}
 

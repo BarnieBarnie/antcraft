@@ -46,7 +46,7 @@ Files use the `.py` extension so every editor highlights them, but the language 
 ### Supported
 
 - **Values:** `int` (64-bit; overflow is an error), `float`, `str`, `bool`, `None`, `list`, `dict` (keys: `str`, `int`, `bool`, `Pos`), `tuple`, and the API's own types (see below).
-- **Statements:** assignment (including `+=` and friends, and tuple unpacking `a, b = ...`), `if`/`elif`/`else`, `while`, `for x in ...`, `break`, `continue`, `pass`, `def` with default and keyword arguments, `return`, `global`, `import name`, `from name import a, b`.
+- **Statements:** assignment (including `+=` and friends, and tuple unpacking `a, b = ...`), `if`/`elif`/`else`, `while`, `for x in ...`, `break`, `continue`, `pass`, `def` with default and keyword arguments, `return`, `assert test, message` (a failed assert stops the script with "assertion failed" and the message), `global`, `import name`, `from name import a, b`.
 - **Expressions:** arithmetic (`+ - * / // % **`, unary `-`), comparisons (chained `a < b < c` too), `and`/`or`/`not`, `in`/`not in`, `is`/`is not` (only for `None`), indexing and slicing, attribute access, calls, list and dict literals, conditional expressions (`a if c else b`), f-strings, list comprehensions.
 - **Builtins:** `print`, `debug`, `info`, `warn`, `error` (see Output and logging), `len`, `range`, `min`, `max`, `abs`, `round`, `sum`, `sorted`, `reversed`, `enumerate`, `zip`, `str`, `int`, `float`, `bool`, `list`, `dict`, `isinstance` (for the builtin types), `any`, `all`.
 - **Methods:** the common ones of `str` (`split`, `join`, `strip`, `startswith`, `endswith`, `replace`, `lower`, `upper`, `format`), `list` (`append`, `extend`, `pop`, `insert`, `remove`, `index`, `sort`), and `dict` (`get`, `keys`, `values`, `items`, `pop`, `setdefault`).
@@ -84,7 +84,7 @@ Every bot keeps a log (`/antcraft bot <name> log`). Lines have a level: `debug`,
 
 ### Pipeline
 
-Source is tokenized (with Python's `INDENT`/`DEDENT` rules), parsed into an AST, checked against the subset, and compiled to a compact bytecode per function. A stack VM with explicit frames runs the bytecode. None of this needs a world, so the whole language is unit tested with plain JUnit.
+Source is tokenized (with Python's `INDENT`/`DEDENT` rules), parsed into an AST, checked against the subset, and compiled to a compact bytecode per function. A stack VM with explicit frames runs the bytecode. None of this needs a world, so the whole language is unit tested with plain JUnit. Runtime errors mostly use CPython's messages (`list index out of range`, `'NoneType' object has no attribute 'pos'`) after the file and line, and calls nest at most 200 deep.
 
 ### Budget
 

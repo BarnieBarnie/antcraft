@@ -64,7 +64,7 @@ final class SubsetCheck {
 	}
 
 	/** The names a function body reads, binds and declares global, leaving out the bodies of nested functions. */
-	private static final class Names {
+	static final class Names {
 		final List<Ast.Name> loads = new ArrayList<>();
 		final Set<String> stores = new HashSet<>();
 		final Set<String> globals = new HashSet<>();
@@ -111,6 +111,10 @@ final class SubsetCheck {
 					if (s.value() != null) {
 						expr(s.value());
 					}
+				}
+				case Ast.Assert s -> {
+					expr(s.test());
+					expr(s.message());
 				}
 				case Ast.Global s -> globals.addAll(s.names());
 				case Ast.Import s -> s.modules().forEach(m -> stores.add(m.split("\\.")[0]));
