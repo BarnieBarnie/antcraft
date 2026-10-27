@@ -63,7 +63,7 @@ A compile error is reported when the script is loaded: `miner.py:12:5: expected 
 
 ### Output and logging
 
-Every bot keeps a log (`/antcraft bot <name> log`). Lines have a level: `debug`, `info`, `warn` or `error`. Each line goes to the log, and to the chat of the bot's owner when its level is at or above `scriptChatLevel` (config, default `error`).
+Every bot keeps a log (`/antcraft bot [bots] log`). Lines have a level: `debug`, `info`, `warn` or `error`. Each line goes to the log, and to the chat of the bot's owner when its level is at or above `scriptChatLevel` (config, default `error`).
 
 | Call | Level | Chat (default) | Log |
 |---|---|---|---|
@@ -221,11 +221,13 @@ Commands (single-player first; on a server they stay operator-only):
 ```
 /antcraft script list                       scripts found, with compile errors
 /antcraft script reload                     reload changed files; running bots restart their script
-/antcraft bot <name> run <script> [args]    start a script on a bot (args are given to it as the list ARGS)
-/antcraft bot <name> stop
-/antcraft bot <name> status                 script, line, current action, last result
-/antcraft bot <name> log [n] [level]        last n log lines at or above level (default debug)
+/antcraft bot [bots] run <script> [args]    start a script on a bot (args are given to it as the list ARGS)
+/antcraft bot [bots] stop
+/antcraft bot [bots] status                 script, line, current action, last result
+/antcraft bot [bots] log [n] [level]        last n log lines at or above level (default debug)
 ```
+
+`[bots]` is an entity selector; without it, the command acts on the nearest bot. A script is named by its path in its folder without `.py`, with dots for folders (`lib/trees.py` is `lib.trees`). A bot's owner, who gets its chat, is the player who placed its Bot Core, or who last started a script on it.
 
 A Bot Core item can carry a script name, so a new bot starts running it when placed. Writing scripts in a book and quill is out of scope for v1.
 

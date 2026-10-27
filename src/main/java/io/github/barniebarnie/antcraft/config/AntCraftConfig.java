@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.config;
 
 import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
 import java.io.IOException;
 import java.io.Reader;
@@ -9,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Consumer;
 import net.fabricmc.loader.api.FabricLoader;
@@ -28,17 +30,30 @@ public final class AntCraftConfig {
 	private static final List<Integer> DEFAULT_MINESHAFT_LEVELS = List.of(16, -16, -58);
 	/** Two minutes: long enough for a felled tree's decaying leaves to drop a sapling of its own kind. */
 	private static final int DEFAULT_REPLANT_MATCH_WAIT_TICKS = 2400;
+	public static final int DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK = 2000;
+	/** Every bot may use its whole budget every tick, so the cap bounds what scripts cost the server thread. */
+	public static final int MAX_SCRIPT_INSTRUCTIONS_PER_TICK = 20000;
+	public static final Output.Level DEFAULT_SCRIPT_CHAT_LEVEL = Output.Level.ERROR;
 
 	/**
 	 * {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from,
 	 * at least {@link Mineshaft#MIN_LEVEL_GAP} apart.
 	 * {@code colonyActionsRequireOp} limits the colony screen, both viewing and changes, to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
 	 * {@code replantMatchWaitTicks} is how long a felled 1x1 tree waits for a sapling of its own kind before any sapling will do.
+	 * {@code scriptInstructionsPerTick} is how many instructions each bot's script may run a tick, at most
+	 * {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}. {@code scriptChatLevel} is the lowest log level of a script's output that goes to
+	 * its bot's owner's chat ({@code print} always does).
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
-		int replantMatchWaitTicks) {
+		int replantMatchWaitTicks, int scriptInstructionsPerTick, Output.Level scriptChatLevel) {
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
 			this(enableOnDedicatedServer, maxBotsPerLevel, DEFAULT_MINESHAFT_LEVELS, false, DEFAULT_REPLANT_MATCH_WAIT_TICKS);
+		}
+
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
+			int replantMatchWaitTicks) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, mineshaftLevels, colonyActionsRequireOp, replantMatchWaitTicks,
+				DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, DEFAULT_SCRIPT_CHAT_LEVEL);
 		}
 	}
 
@@ -65,11 +80,23 @@ public final class AntCraftConfig {
 		props.setProperty("mineshaftLevels", String.join(",", values.mineshaftLevels().stream().map(String::valueOf).toList()));
 		props.setProperty("colonyActionsRequireOp", Boolean.toString(values.colonyActionsRequireOp()));
 		props.setProperty("replantMatchWaitTicks", Integer.toString(values.replantMatchWaitTicks()));
+		props.setProperty("scriptInstructionsPerTick", Integer.toString(values.scriptInstructionsPerTick()));
+		props.setProperty("scriptChatLevel", values.scriptChatLevel().name().toLowerCase(Locale.ROOT));
 		try (Writer writer = Files.newBufferedWriter(path)) {
-			props.store(writer, "AntCraft settings. Bots are disabled on dedicated servers unless enableOnDedicatedServer=true.");
+			props.store(writer, fileComment());
 		} catch (IOException e) {
 			AntCraft.LOGGER.error("Failed to write {}", path, e);
 		}
+	}
+
+	/** The comment at the top of the config file. */
+	public static String fileComment() {
+		return "AntCraft settings. Bots are disabled on dedicated servers unless enableOnDedicatedServer=true.\n"
+			+ "scriptInstructionsPerTick (default " + DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK + ", at most " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK
+			+ ") is per bot, and every bot may use its whole budget every tick:\n"
+			+ "30 bots at " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK + " are 600000 instructions a tick on the server thread, which can lag the game.\n"
+			+ "Raise it only for scripts that think a lot between actions, and measure with /antcraft profile.\n"
+			+ "scriptChatLevel (debug, info, warn or error) is the lowest level of script output shown in the bot owner's chat; print always shows.";
 	}
 
 	public static Values parse(Properties props) {
@@ -95,7 +122,25 @@ public final class AntCraftConfig {
 		levels = spaced;
 		boolean colonyActionsRequireOp = Boolean.parseBoolean(props.getProperty("colonyActionsRequireOp", "false").trim());
 		int replantMatchWaitTicks = nonNegativeInt(props, "replantMatchWaitTicks", DEFAULT_REPLANT_MATCH_WAIT_TICKS);
-		return new Values(enableOnDedicatedServer, maxBots, levels, colonyActionsRequireOp, replantMatchWaitTicks);
+		int scriptInstructions = Math.max(1, nonNegativeInt(props, "scriptInstructionsPerTick", DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK));
+		if (scriptInstructions > MAX_SCRIPT_INSTRUCTIONS_PER_TICK) {
+			warn.accept("scriptInstructionsPerTick " + scriptInstructions + " is above the cap of " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK
+				+ " (every bot may use its whole budget every tick, which can lag the server); using " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK);
+			scriptInstructions = MAX_SCRIPT_INSTRUCTIONS_PER_TICK;
+		}
+		Output.Level chatLevel = chatLevel(props.getProperty("scriptChatLevel", "error").trim(), warn);
+		return new Values(enableOnDedicatedServer, maxBots, levels, colonyActionsRequireOp, replantMatchWaitTicks, scriptInstructions, chatLevel);
+	}
+
+	/** A log level below print by name, in any case; {@code error}, with a warning, for anything else. */
+	private static Output.Level chatLevel(String name, Consumer<String> warn) {
+		for (Output.Level level : Output.Level.values()) {
+			if (level != Output.Level.PRINT && level.name().equalsIgnoreCase(name)) {
+				return level;
+			}
+		}
+		warn.accept("scriptChatLevel " + name + " is not one of debug, info, warn or error (print always shows); using error");
+		return DEFAULT_SCRIPT_CHAT_LEVEL;
 	}
 
 	/** The whole number under {@code key}, at least 0, or {@code fallback} when it is missing or not a number. */
@@ -125,6 +170,14 @@ public final class AntCraftConfig {
 
 	public static int replantMatchWaitTicks() {
 		return values.replantMatchWaitTicks();
+	}
+
+	public static int scriptInstructionsPerTick() {
+		return values.scriptInstructionsPerTick();
+	}
+
+	public static Output.Level scriptChatLevel() {
+		return values.scriptChatLevel();
 	}
 
 	public static int maxBotsPerLevel() {

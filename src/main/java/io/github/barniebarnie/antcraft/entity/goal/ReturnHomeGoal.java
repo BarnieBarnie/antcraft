@@ -50,9 +50,9 @@ public class ReturnHomeGoal extends net.minecraft.world.entity.ai.goal.Goal {
 		return this.available() && !this.bot.isWorking() && this.status == PathFollower.Status.RUNNING;
 	}
 
-	/** Not sent anywhere, not fighting. */
+	/** Not sent anywhere, not fighting, not running a script. */
 	private boolean available() {
-		return this.bot.getColonyId() != null && this.bot.getWalkTarget() == null && this.bot.getTarget() == null;
+		return this.bot.getColonyId() != null && this.bot.getWalkTarget() == null && this.bot.getTarget() == null && !this.bot.isRunningScript();
 	}
 
 	@Override

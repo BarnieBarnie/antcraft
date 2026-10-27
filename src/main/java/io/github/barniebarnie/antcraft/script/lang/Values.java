@@ -13,9 +13,9 @@ import java.util.Set;
 /**
  * The values of a script and Python's rules for them. A value is a {@link Long} ({@code int}), {@link Double}
  * ({@code float}), {@link String} ({@code str}), {@link Boolean} ({@code bool}), {@link PyNone}, {@link PyList},
- * {@link PyTuple}, {@link PyDict}, {@link PyRange}, {@link PyDictView}, {@link Iter}, {@link PyFunction}, {@link PyNative}
- * or {@link PyMethod}. Every operation throws a {@link ScriptError} with CPython's message where the script did something
- * Python would not allow.
+ * {@link PyTuple}, {@link PyDict}, {@link PyRange}, {@link PyDictView}, {@link Iter}, {@link PyFunction}, {@link PyNative},
+ * {@link PyMethod} or a {@link HostValue} of the host. Every operation throws a {@link ScriptError} with CPython's
+ * message where the script did something Python would not allow.
  */
 public final class Values {
 	static final String OVERFLOW = "int overflow: the result does not fit in 64 bits";
@@ -39,6 +39,7 @@ public final class Values {
 			case PyNative n -> "builtin_function_or_method";
 			case PyMethod m -> "builtin_function_or_method";
 			case Iter i -> i.typeName();
+			case HostValue h -> h.typeName();
 			default -> value.getClass().getSimpleName();
 		};
 	}
@@ -417,6 +418,13 @@ public final class Values {
 	 * Python's {@code +=} and {@code *=} do.
 	 */
 	public static Object binary(BinaryOp op, Object a, Object b, boolean inPlace) {
+		Object host = a instanceof HostValue h ? h.binary(op, b, false) : null;
+		if (host == null && b instanceof HostValue h) {
+			host = h.binary(op, a, true);
+		}
+		if (host != null) {
+			return host;
+		}
 		if (isNumber(a) && isNumber(b)) {
 			if (a instanceof Double || b instanceof Double) {
 				return floatOp(op, asDouble(a), asDouble(b));

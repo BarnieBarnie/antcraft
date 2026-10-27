@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -96,6 +97,64 @@ class AntCraftConfigTest {
 		Properties props = new Properties();
 		props.setProperty("maxBotsPerLevel", "-5");
 		assertEquals(0, AntCraftConfig.parse(props).maxBotsPerLevel());
+	}
+
+	@Test
+	void scriptSettingsDefault() {
+		AntCraftConfig.Values values = AntCraftConfig.parse(new Properties());
+		assertEquals(2000, values.scriptInstructionsPerTick());
+		assertEquals(Output.Level.ERROR, values.scriptChatLevel());
+		assertEquals(2000, new AntCraftConfig.Values(true, 64).scriptInstructionsPerTick());
+		assertEquals(Output.Level.ERROR, new AntCraftConfig.Values(true, 64).scriptChatLevel());
+	}
+
+	@Test
+	void readsTheScriptBudget() {
+		Properties props = new Properties();
+		props.setProperty("scriptInstructionsPerTick", " 5000 ");
+		List<String> warnings = new ArrayList<>();
+		assertEquals(5000, AntCraftConfig.parse(props, warnings::add).scriptInstructionsPerTick());
+		props.setProperty("scriptInstructionsPerTick", "20000");
+		assertEquals(20000, AntCraftConfig.parse(props, warnings::add).scriptInstructionsPerTick());
+		assertEquals(List.of(), warnings);
+		props.setProperty("scriptInstructionsPerTick", "lots");
+		assertEquals(2000, AntCraftConfig.parse(props).scriptInstructionsPerTick());
+		// A bot that may run no instructions could never run a script.
+		props.setProperty("scriptInstructionsPerTick", "0");
+		assertEquals(1, AntCraftConfig.parse(props).scriptInstructionsPerTick());
+	}
+
+	@Test
+	void aScriptBudgetAboveTheCapIsLoweredWithAWarning() {
+		Properties props = new Properties();
+		props.setProperty("scriptInstructionsPerTick", "50000");
+		List<String> warnings = new ArrayList<>();
+		assertEquals(20000, AntCraftConfig.parse(props, warnings::add).scriptInstructionsPerTick());
+		assertEquals(1, warnings.size(), "warnings: " + warnings);
+		String warning = warnings.getFirst();
+		assertTrue(warning.contains("scriptInstructionsPerTick") && warning.contains("50000") && warning.contains("20000"), warning);
+	}
+
+	@Test
+	void theConfigCommentWarnsOfTheLagRiskOfALargeScriptBudget() {
+		String comment = AntCraftConfig.fileComment();
+		assertTrue(comment.contains("scriptInstructionsPerTick") && comment.contains("20000") && comment.contains("lag"), comment);
+	}
+
+	@Test
+	void readsTheScriptChatLevel() {
+		Properties props = new Properties();
+		props.setProperty("scriptChatLevel", " Warn ");
+		assertEquals(Output.Level.WARN, AntCraftConfig.parse(props).scriptChatLevel());
+		props.setProperty("scriptChatLevel", "debug");
+		assertEquals(Output.Level.DEBUG, AntCraftConfig.parse(props).scriptChatLevel());
+		List<String> warnings = new ArrayList<>();
+		props.setProperty("scriptChatLevel", "loud");
+		assertEquals(Output.Level.ERROR, AntCraftConfig.parse(props, warnings::add).scriptChatLevel());
+		assertEquals(1, warnings.size(), "warnings: " + warnings);
+		// print always shows; there is no level above error to choose.
+		props.setProperty("scriptChatLevel", "print");
+		assertEquals(Output.Level.ERROR, AntCraftConfig.parse(props).scriptChatLevel());
 	}
 
 	@Test

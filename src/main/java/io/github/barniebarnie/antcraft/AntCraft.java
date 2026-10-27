@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import io.github.barniebarnie.antcraft.script.ServerScripts;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.resources.Identifier;
@@ -32,6 +33,7 @@ public class AntCraft implements ModInitializer {
 		ModComponents.register();
 		ModItems.register();
 		AntCraftCommands.register();
+		ServerScripts.register();
 		Blueprints.register();
 		ColonyNetworking.register();
 		ServerTickEvents.END_LEVEL_TICK.register(level -> TickProfiler.time("colony.survey", () -> ColonyManager.get(level).tick(level)));

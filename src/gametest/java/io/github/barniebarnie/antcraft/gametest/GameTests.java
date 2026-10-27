@@ -75,6 +75,29 @@ public final class GameTests {
 		});
 	}
 
+	/** Runs {@code cleanup} once the test passed or failed, such as to remove a player or file it added. */
+	public static void onEnd(GameTestHelper helper, Runnable cleanup) {
+		info(helper).addListener(new GameTestListener() {
+			@Override
+			public void testStructureLoaded(GameTestInfo test) {
+			}
+
+			@Override
+			public void testPassed(GameTestInfo test, GameTestRunner runner) {
+				cleanup.run();
+			}
+
+			@Override
+			public void testFailed(GameTestInfo test, GameTestRunner runner) {
+				cleanup.run();
+			}
+
+			@Override
+			public void testAddedForRerun(GameTestInfo old, GameTestInfo next, GameTestRunner runner) {
+			}
+		});
+	}
+
 	// ponytail: GameTestHelper has no getter for its test; reflection beats a mixin for test-only code.
 	private static GameTestInfo info(GameTestHelper helper) {
 		try {

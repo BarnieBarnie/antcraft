@@ -30,10 +30,14 @@ public final class BotActivation {
 	/**
 	 * Spawns a bot at {@code pos} for {@code player}, who used a Bot Core: it joins the nearest colony that
 	 * {@code player} may act on ({@link ColonyActions#mayAct}, counting from where the bot stands), or none. With no
-	 * player, such as a Bot Core used by a machine, it joins none.
+	 * player, such as a Bot Core used by a machine, it joins none. The player owns the bot (see {@link AntBot#getOwner}).
 	 */
 	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player) {
-		return activate(level, pos, mayJoin(player, pos));
+		AntBot bot = activate(level, pos, mayJoin(player, pos));
+		if (bot != null && player != null) {
+			bot.setOwner(player.getUUID());
+		}
+		return bot;
 	}
 
 	/** Which colonies a bot activated at {@code pos} by {@code player} may join; see {@link #activate(ServerLevel, BlockPos, Player)}. */

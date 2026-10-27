@@ -115,6 +115,11 @@ public final class Vm {
 		return Collections.unmodifiableMap(globals);
 	}
 
+	/** Sets the module global {@code name}, such as a value the host gives every script before it runs. */
+	public void setGlobal(String name, Object value) {
+		globals.put(name, value);
+	}
+
 	/**
 	 * The source line about to run, or 0 once the script has finished. Inside a builtin written in the script language,
 	 * the line of the script that called it.
@@ -361,6 +366,12 @@ public final class Vm {
 	}
 
 	private Object attribute(Object value, String name) {
+		if (value instanceof HostValue host) {
+			Object attribute = host.attribute(name);
+			if (attribute != null) {
+				return attribute;
+			}
+		}
 		String type = Values.typeName(value);
 		if (natives.method(type, name) != null) {
 			return new PyMethod(value, type, name);

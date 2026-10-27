@@ -2,6 +2,8 @@ package io.github.barniebarnie.antcraft.command;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -23,6 +25,11 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.BotLog;
+import io.github.barniebarnie.antcraft.script.ScriptLibrary;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.ServerScripts;
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Gatherables;
@@ -34,10 +41,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
+import net.minecraft.ChatFormatting;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
@@ -75,7 +85,8 @@ import net.minecraft.world.phys.Vec3;
  * /antcraft status
  * /antcraft profile start|stop|report   (server tick time, per part of the bots' and colonies' work)
  * /antcraft goto &lt;pos&gt; [bots]   (defaults to the nearest bot)
- * /antcraft stop [bots]
+ * /antcraft script list|reload
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]   (defaults to the nearest bot)
  * /antcraft colony info|order &lt;item&gt; &lt;count&gt;|cancel &lt;item&gt;|mineshaft &lt;pos&gt;|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony stock [set &lt;item|#tag&gt; &lt;count&gt;|remove &lt;item|#tag&gt;]
  * /antcraft colony blocked clear
@@ -93,6 +104,8 @@ public final class AntCraftCommands {
 	private static final int MAX_COPY_VOLUME = 32768;
 	/** Highest priority a project may get, and lowest below zero. */
 	private static final int MAX_PRIORITY = 100;
+	/** How many lines {@code bot log} shows without {@code n}. */
+	private static final int DEFAULT_LOG_LINES = 10;
 	private static final DynamicCommandExceptionType UNKNOWN_ITEM = new DynamicCommandExceptionType(
 		name -> Component.translatableEscape("commands.antcraft.colony.stock.unknown", name));
 
@@ -124,10 +137,12 @@ public final class AntCraftCommands {
 					.executes(ctx -> walkTo(ctx, nearestBot(ctx.getSource())))
 					.then(Commands.argument("bots", EntityArgument.entities())
 						.executes(ctx -> walkTo(ctx, bots(ctx))))))
-			.then(Commands.literal("stop").requires(OPERATOR)
-				.executes(ctx -> stop(ctx.getSource(), nearestBot(ctx.getSource())))
-				.then(Commands.argument("bots", EntityArgument.entities())
-					.executes(ctx -> stop(ctx.getSource(), bots(ctx)))))
+			.then(Commands.literal("script").requires(OPERATOR)
+				.then(Commands.literal("list").executes(ctx -> listScripts(ctx.getSource())))
+				.then(Commands.literal("reload").executes(ctx -> reloadScripts(ctx.getSource()))))
+			// The bots argument is optional: without it, the nearest bot. Literals win over the selector, so a bot cannot be named "run".
+			.then(botCommands(Commands.literal("bot").requires(OPERATOR), ctx -> nearestBot(ctx.getSource()))
+				.then(botCommands(Commands.argument("bots", EntityArgument.entities()), AntCraftCommands::bots)))
 			.then(Commands.literal("colony").requires(AntCraftCommands::operatorOrPlayer)
 				.then(Commands.literal("info").requires(OPERATOR).executes(ctx -> colonyInfo(ctx.getSource())))
 				.then(Commands.literal("trust").requires(AntCraftCommands::operatorOrPlayer)
@@ -823,8 +838,130 @@ public final class AntCraftCommands {
 		if (!checkAny(source, bots)) {
 			return 0;
 		}
-		bots.forEach(bot -> bot.setWalkTarget(null));
+		bots.forEach(bot -> {
+			bot.setWalkTarget(null);
+			bot.stopScript();
+		});
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.stop", bots.size()), false);
+		return bots.size();
+	}
+
+	/** The bots a {@code bot} subcommand acts on. */
+	@FunctionalInterface
+	private interface BotsArgument {
+		List<AntBot> get(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException;
+	}
+
+	/** {@code run <script> [args]|stop|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
+	private static <T extends ArgumentBuilder<CommandSourceStack, T>> T botCommands(T node, BotsArgument bots) {
+		return node
+			.then(Commands.literal("run")
+				.then(Commands.argument("script", StringArgumentType.string())
+					.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+						ServerScripts.library().scripts().stream().map(ScriptLibrary.Script::name), builder))
+					.executes(ctx -> runScript(ctx.getSource(), bots.get(ctx), StringArgumentType.getString(ctx, "script"), List.of()))
+					.then(Commands.argument("args", StringArgumentType.greedyString())
+						.executes(ctx -> runScript(ctx.getSource(), bots.get(ctx), StringArgumentType.getString(ctx, "script"),
+							List.of(StringArgumentType.getString(ctx, "args").trim().split("\\s+")))))))
+			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
+			.then(Commands.literal("status").executes(ctx -> scriptStatus(ctx.getSource(), bots.get(ctx))))
+			.then(Commands.literal("log")
+				.executes(ctx -> showLog(ctx.getSource(), bots.get(ctx), DEFAULT_LOG_LINES, "debug"))
+				.then(Commands.argument("n", IntegerArgumentType.integer(1, BotLog.CAPACITY))
+					.executes(ctx -> showLog(ctx.getSource(), bots.get(ctx), IntegerArgumentType.getInteger(ctx, "n"), "debug"))
+					.then(Commands.argument("level", StringArgumentType.word())
+						.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+							Stream.of(Output.Level.values()).map(level -> level.name().toLowerCase(Locale.ROOT)), builder))
+						.executes(ctx -> showLog(ctx.getSource(), bots.get(ctx), IntegerArgumentType.getInteger(ctx, "n"),
+							StringArgumentType.getString(ctx, "level"))))));
+	}
+
+	private static int listScripts(CommandSourceStack source) {
+		ScriptLibrary library = ServerScripts.library();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.script.list", library.scripts().size(),
+			ServerScripts.configFolder().toString(), ServerScripts.worldFolder(source.getServer()).toString()), false);
+		for (ScriptLibrary.Script script : library.scripts()) {
+			Component line = script.error() == null ? Component.literal(script.name())
+				: Component.literal(script.name() + ": " + script.error()).withStyle(ChatFormatting.RED);
+			source.sendSuccess(() -> line, false);
+		}
+		return library.scripts().size();
+	}
+
+	private static int reloadScripts(CommandSourceStack source) {
+		ServerScripts.Reload reload = ServerScripts.reload(source.getServer());
+		ScriptLibrary library = reload.library();
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.script.reload", library.scripts().size(), library.errors().size(),
+			reload.restarted()), true);
+		for (ScriptLibrary.Script script : library.errors()) {
+			source.sendFailure(Component.literal(script.error()));
+		}
+		return library.scripts().size();
+	}
+
+	private static int runScript(CommandSourceStack source, List<AntBot> bots, String name, List<String> args) {
+		if (!checkAllowed(source) || !checkAny(source, bots)) {
+			return 0;
+		}
+		Optional<ScriptLibrary.Script> found = ServerScripts.library().get(name);
+		if (found.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.unknown", name));
+			return 0;
+		}
+		ScriptLibrary.Script script = found.get();
+		if (script.code() == null) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.broken", name, script.error()));
+			return 0;
+		}
+		ServerPlayer player = source.getPlayer();
+		for (AntBot bot : bots) {
+			if (player != null) {
+				bot.setOwner(player.getUUID());
+			}
+			bot.setWalkTarget(null);
+			bot.runScript(script, args);
+		}
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.run", name, bots.size()), false);
+		return bots.size();
+	}
+
+	private static int scriptStatus(CommandSourceStack source, List<AntBot> bots) {
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		for (AntBot bot : bots) {
+			source.sendSuccess(() -> statusLine(bot), false);
+		}
+		return bots.size();
+	}
+
+	/** A bot's script, whether it runs, the line it is at, its current action and how many instructions it ran. */
+	static Component statusLine(AntBot bot) {
+		ScriptRun run = bot.getScript();
+		if (run == null) {
+			return Component.translatable("commands.antcraft.bot.status.none", bot.getName());
+		}
+		String action = run.action();
+		return Component.translatable("commands.antcraft.bot.status", bot.getName(), run.name(), run.state().name().toLowerCase(Locale.ROOT),
+			run.line(), action == null ? "-" : action, run.executed());
+	}
+
+	private static int showLog(CommandSourceStack source, List<AntBot> bots, int n, String levelName) {
+		Optional<Output.Level> level = Stream.of(Output.Level.values()).filter(value -> value.name().equalsIgnoreCase(levelName)).findFirst();
+		if (level.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.bot.log.level", levelName));
+			return 0;
+		}
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		for (AntBot bot : bots) {
+			List<BotLog.Entry> lines = bot.getLog().last(n, level.get());
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.log", bot.getName(), lines.size()), false);
+			for (BotLog.Entry entry : lines) {
+				source.sendSuccess(() -> Component.literal(entry.format()), false);
+			}
+		}
 		return bots.size();
 	}
 

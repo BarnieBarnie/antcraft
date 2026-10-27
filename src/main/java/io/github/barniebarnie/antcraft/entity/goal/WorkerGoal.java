@@ -169,7 +169,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 	@Override
 	public boolean canUse() {
 		if (!(this.bot.level() instanceof ServerLevel level) || this.bot.getWalkTarget() != null || this.bot.isWorking()
-				|| level.getGameTime() < this.nextCheck) {
+				|| this.bot.isRunningScript() || level.getGameTime() < this.nextCheck) {
 			return false;
 		}
 		this.nextCheck = level.getGameTime() + CHECK_TICKS;
@@ -181,7 +181,7 @@ public class WorkerGoal extends net.minecraft.world.entity.ai.goal.Goal {
 
 	@Override
 	public boolean canContinueToUse() {
-		return this.busy && this.bot.getWalkTarget() == null && this.bot.getColonyId() != null;
+		return this.busy && this.bot.getWalkTarget() == null && this.bot.getColonyId() != null && !this.bot.isRunningScript();
 	}
 
 	@Override

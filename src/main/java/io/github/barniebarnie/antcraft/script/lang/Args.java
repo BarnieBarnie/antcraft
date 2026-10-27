@@ -3,8 +3,11 @@ package io.github.barniebarnie.antcraft.script.lang;
 import java.util.List;
 import java.util.Map;
 
-/** Binds the arguments of a native call to its parameters, by position or by name, with CPython's messages. */
-final class Args {
+/**
+ * Binds the arguments of a native call to its parameters, by position or by name, with CPython's messages. Public for
+ * the natives of the host, such as the bot API.
+ */
+public final class Args {
 	private Args() {
 	}
 
@@ -47,7 +50,7 @@ final class Args {
 	}
 
 	/** Binds positional arguments only. */
-	static Object[] bind(String function, NativeCall call, int required, String... params) {
+	public static Object[] bind(String function, NativeCall call, int required, String... params) {
 		return bind(function, call.args(), call.kwargs(), required, params);
 	}
 
@@ -62,7 +65,7 @@ final class Args {
 	}
 
 	/** An int argument (a bool counts), with Python's message for anything else. */
-	static long integer(Object value) {
+	public static long integer(Object value) {
 		if (Values.isInt(value)) {
 			return Values.asLong(value);
 		}
@@ -70,7 +73,7 @@ final class Args {
 	}
 
 	/** Whether {@code value} is None or left out. */
-	static boolean absent(Object value) {
+	public static boolean absent(Object value) {
 		return value == null || value instanceof PyNone;
 	}
 
