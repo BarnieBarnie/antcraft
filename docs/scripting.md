@@ -337,7 +337,7 @@ Each milestone becomes one or more issues.
 2. **Scripts in the game.** Script folders, `script list`/`reload`, `bot run`/`stop`/`status`/`log`, the budget and its config cap, output and logging levels, `say`, `wait`, `pos`, `home`/`set_home`, `goto` with chunk loading, and `idle.py`. A bot walks where a script tells it and goes home when done. README roadmap rewritten for the new direction.
 3. **Core actions and senses.** `mine`, `place`, `pick_up`, `equip`, `inventory`/`count`/`has`, `block`, `find_nearest`, `scan`, `put`/`take`, `craft`, `smelt`, the `Result` reasons, `memory`. Acceptance: punch a tree to a wooden pickaxe as a script.
 4. **Remove the goal-driven colony** (see What stays and what goes). Every bot without a script runs `idle.py`; the benchmark runs 30 bots on a script. (Done.)
-5. **Reflexes, save/resume, imports, death.** Bots survive a reload mid-script; `import` and the default `lib/` folder; respawning at home.
+5. **Reflexes, save/resume, imports, death.** Bots survive a reload mid-script; `import` and the default `lib/` folder; respawning at home. Done.
 6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time.
 7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did.
 8. **Later.** Multiplayer permissions and sandbox limits per player, `try`/`except` and classes if scripts need them, an in-game script viewer or editor, sharing scripts through data packs, Litematica import.
