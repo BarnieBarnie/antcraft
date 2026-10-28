@@ -90,7 +90,7 @@ public class BenchmarkGameTest {
 		    n += 1
 		    goto(home() + ((n * 7) % 30 - 15, 0, (n * 11) % 30 - 15))
 		""";
-	/** Crafts planks and sticks from carried logs and drops the sticks, until the logs run out, then fails to craft on. */
+	/** Crafts planks and sticks from carried logs and drops the sticks, until the logs run out, then fails to craft on (#328). */
 	private static final String CRAFT = """
 		while True:
 		    craft("oak_planks", 4)
@@ -138,6 +138,12 @@ public class BenchmarkGameTest {
 			bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 64));
 		}
 	};
+	/**
+	 * Four logs each, for the craft case, which measures a loop of crafts and drops that soon fail at once, as the logs run
+	 * out: with four stacks each, the 30 bots dropped some 61,000 sticks, in 960 item entities that took about 8 ms of the
+	 * case's average tick to tick, vanilla's work rather than the scripts' (#328).
+	 */
+	private static final Consumer<AntBot> FEW_LOGS = bot -> bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 4));
 	static final List<Case> CASES = List.of(
 		new Case("loop", LOOP, 1200),
 		new Case("loop at the cap", LOOP, AntCraftConfig.MAX_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, bot -> {
@@ -146,7 +152,7 @@ public class BenchmarkGameTest {
 		new Case("scan r32", SCAN, 1200),
 		new Case("reachable", REACHABLE, 1200),
 		new Case("goto", GOTO, 1200),
-		new Case("craft", CRAFT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
+		new Case("craft", CRAFT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, FEW_LOGS),
 		new Case("busy", BUSY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
 		WORK);
 

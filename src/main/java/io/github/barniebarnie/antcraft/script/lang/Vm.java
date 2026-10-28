@@ -603,6 +603,7 @@ public final class Vm {
 				if (function == null) {
 					throw new ScriptError("name '" + n.name() + "' is not defined");
 				}
+				charge(natives.cost(n.name()));
 				callNative(callee, function, n.name(), args, kwargs);
 			}
 			case PyMethod m -> {

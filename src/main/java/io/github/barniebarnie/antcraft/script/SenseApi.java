@@ -51,17 +51,17 @@ public final class SenseApi {
 	}
 
 	public static void register(Natives natives, ScriptRun run) {
-		natives.register("inventory", call -> {
+		natives.register("inventory", 30, call -> {
 			Args.bind("inventory", call, 0);
 			PyList stacks = new PyList();
 			carried(bot(run, call)).forEach(stack -> stacks.items.add(stack(stack)));
 			return stacks;
 		});
-		natives.register("count", call -> {
+		natives.register("count", 50, call -> {
 			Object[] args = Args.bind("count", call, 1, "item");
 			return count(bot(run, call), Selector.parse(args[0]).items());
 		});
-		natives.register("has", call -> {
+		natives.register("has", 50, call -> {
 			Object[] args = Args.bind("has", call, 1, "item", "n");
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
 			return count(bot(run, call), Selector.parse(args[0]).items()) >= n;
@@ -71,7 +71,7 @@ public final class SenseApi {
 			ItemStack hand = bot(run, call).getMainHandItem();
 			return hand.isEmpty() ? PyNone.NONE : stack(hand);
 		});
-		natives.register("block", call -> {
+		natives.register("block", 30, call -> {
 			Object[] args = Args.bind("block", call, 1, "pos");
 			Pos pos = Pos.of(args[0]);
 			AntBot bot = bot(run, call);
@@ -91,17 +91,17 @@ public final class SenseApi {
 			}
 			return search(run, call, args[0], radius(args[1], 16, BlockScan.MAX_RADIUS), (int) Math.min(limit, Integer.MAX_VALUE), false);
 		});
-		natives.register("entities", call -> {
+		natives.register("entities", 120, call -> {
 			Object[] args = Args.bind("entities", call, 0, "what", "radius");
 			Predicate<Entity> what = Args.absent(args[0]) ? entity -> true : Selector.parse(args[0]).entities();
 			return near(bot(run, call), Entity.class, what, radius(args[1], 16, MAX_ENTITY_RADIUS));
 		});
-		natives.register("items_near", call -> {
+		natives.register("items_near", 10, call -> {
 			Object[] args = Args.bind("items_near", call, 0, "item", "radius");
 			Predicate<ItemStack> item = Args.absent(args[0]) ? stack -> true : Selector.parse(args[0]).items();
 			return near(bot(run, call), ItemEntity.class, entity -> item.test(entity.getItem()), radius(args[1], 16, MAX_ENTITY_RADIUS));
 		});
-		natives.register("container", call -> {
+		natives.register("container", 30, call -> {
 			Object[] args = Args.bind("container", call, 1, "pos");
 			AntBot bot = bot(run, call);
 			BlockPos at = blockPos(Pos.of(args[0]));

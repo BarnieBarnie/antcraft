@@ -17,6 +17,7 @@ public final class Natives {
 
 	private final Map<String, NativeFunction> functions = new HashMap<>();
 	private final Map<String, NativeFunction> methods = new HashMap<>();
+	private final Map<String, Long> costs = new HashMap<>();
 
 	/**
 	 * The builtins and methods every script has (docs/scripting.md): {@code print}, {@code debug}, {@code info},
@@ -29,9 +30,23 @@ public final class Natives {
 		return natives;
 	}
 
-	/** Registers {@code function} under {@code name}, replacing what was there. */
+	/** Registers {@code function} under {@code name}, replacing what was there; a call costs one instruction. */
 	public Natives register(String name, NativeFunction function) {
+		return register(name, 0, function);
+	}
+
+	/**
+	 * Registers {@code function} under {@code name}, replacing what was there. Each call counts {@code cost}
+	 * instructions against the script's budget on top of the instruction that makes it (see {@link Vm#charge}): a
+	 * native that touches the world takes far longer than an instruction, and its cost keeps a script that loops on
+	 * it within about the time its budget allows.
+	 */
+	public Natives register(String name, long cost, NativeFunction function) {
+		if (cost < 0) {
+			throw new IllegalArgumentException("cost " + cost + " of " + name + " is negative");
+		}
 		functions.put(name, function);
+		costs.put(name, cost);
 		return this;
 	}
 
@@ -44,6 +59,11 @@ public final class Natives {
 	/** The function registered under {@code name}, or null. */
 	public NativeFunction function(String name) {
 		return functions.get(name);
+	}
+
+	/** The instructions a call of the function {@code name} counts besides the call itself; 0 for one without a cost. */
+	public long cost(String name) {
+		return costs.getOrDefault(name, 0L);
 	}
 
 	/** The method {@code name} of {@code type}, or null. */

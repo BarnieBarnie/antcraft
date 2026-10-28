@@ -10,6 +10,14 @@ import io.github.barniebarnie.antcraft.script.lang.Values;
  * The bot API a script has besides the language's builtins (docs/scripting.md, The bot API): the natives of one
  * {@link ScriptRun}. Senses return at once; actions start a {@link ScriptRun.Action} and pause the script until it is done.
  * New senses and actions are registered here.
+ *
+ * <p>A native that is done at once and touches the world (such as {@code craft}, {@code drop}, {@code count} or
+ * {@code entities}) is registered with a cost in instructions (see {@link Natives#register(String, long,
+ * io.github.barniebarnie.antcraft.script.lang.NativeFunction)}), so a script that loops on it stays within about the time
+ * its budget allows. Each cost is the native's time per call in the benchmark divided by that of a plain instruction,
+ * about 20 ns there (#328). Natives that cost about an instruction ({@code pos}, {@code time}) have none, and nor do
+ * actions that pause the script, as a bot makes at most one of them a tick. Natives that read many blocks, such as
+ * {@code scan} or {@code reachable}, charge for the blocks they read instead.
  */
 public final class BotApi {
 	private BotApi() {

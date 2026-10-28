@@ -166,4 +166,34 @@ class VmBudgetTest {
 		assertEquals(Vm.Status.RUNNING, vm.run(2000));
 		assertEquals(1L, vm.globals().get("n"));
 	}
+
+	@Test
+	void aNativeWithACostUsesUpTheBudgetAsThatManyInstructionsEachCall() {
+		long[] calls = new long[2];
+		Natives natives = Natives.standard(Output.lines(line -> {
+		}));
+		natives.register("cheap", call -> {
+			calls[0]++;
+			return PyNone.NONE;
+		});
+		natives.register("dear", 200, call -> {
+			calls[1]++;
+			return PyNone.NONE;
+		});
+		assertEquals(200, natives.cost("dear"));
+		assertEquals(0, natives.cost("cheap"));
+		Vm cheap = new Vm(Compiler.compile(Parser.parse("t.py", "while True:\n    cheap()\n")), natives);
+		Vm dear = new Vm(Compiler.compile(Parser.parse("t.py", "while True:\n    dear()\n")), natives);
+		assertEquals(Vm.Status.RUNNING, cheap.run(10_000));
+		assertEquals(Vm.Status.RUNNING, dear.run(10_000));
+		// A loop pass is a few instructions plus the call, which counts as 200 more for dear().
+		long pass = 10_000 / calls[0];
+		assertTrue(pass >= 2 && pass <= 6, pass + " instructions a pass");
+		assertTrue(calls[1] >= 10_000 / (200 + pass) && calls[1] <= 10_000 / 200 + 1, calls[1] + " calls of dear()");
+		// What the last call cost beyond the budget comes off the next one.
+		assertTrue(dear.executed() >= 10_000 && dear.executed() < 10_000 + 200 + pass, dear.executed() + " instructions counted");
+		long before = calls[1];
+		assertEquals(Vm.Status.RUNNING, dear.run(10_000));
+		assertTrue(calls[1] - before <= 10_000 / 200 + 1);
+	}
 }
