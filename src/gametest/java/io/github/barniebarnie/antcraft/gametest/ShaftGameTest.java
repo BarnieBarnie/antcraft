@@ -324,17 +324,29 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		}, List.of("dug True"));
 	}
 
-	/** A husk in a cave the deepest landing opens up attacks the bot, and does not stop the dig for good (#387). */
+	/**
+	 * A husk in a cave the deepest landing opens up attacks the bot, and does not stop the dig for good (#387). The husk
+	 * stands still and strikes as often as a husk does while the bot is in its reach: a husk of its own finds the bot or
+	 * not, and walks into the column after it or not, by chance (#390).
+	 */
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aHuskInTheShaftDoesNotStopTheDig(GameTestHelper helper) {
 		helper.setBlock(3, 1, 4, Blocks.AIR);
 		helper.setBlock(3, 2, 4, Blocks.AIR);
 		Husk husk = helper.spawn(EntityTypes.HUSK, 3, 1, 4);
+		husk.setNoAi(true);
 		AntBot bot = miner(helper, COLUMN.size() - 1);
 		dig(helper, bot);
 		failOnError(helper, () -> bot);
+		int[] hits = {0};
+		helper.onEachTick(() -> {
+			if (helper.getTick() % 20 == 0 && husk.isWithinMeleeAttackRange(bot) && husk.hasLineOfSight(bot)
+				&& husk.doHurtTarget(helper.getLevel(), bot)) {
+				hits[0]++;
+			}
+		});
 		succeedWhenDug(helper, () -> {
-			helper.assertTrue(bot.getLastHurtByMob() == husk, "the husk never hit the bot");
+			helper.assertTrue(hits[0] > 0, "the husk never hit the bot");
 			return bot;
 		}, List.of("dug True"));
 	}

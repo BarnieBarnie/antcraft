@@ -265,11 +265,6 @@ public final class BuildApi {
 			}
 			Item item = step.item(current);
 			if (item != Items.AIR && !BotHands.equip(this.bot, stack -> stack.is(item))) {
-				// A block in place its walk broke drops where it stood: a moment to pick it up.
-				// ponytail: picked up only if it lands by the bot; collect it on breaking if bots go without.
-				if (this.breakingKept && this.waited++ < WAIT_TICKS) {
-					return false;
-				}
 				return this.finish(Result.MISSING_INGREDIENTS);
 			}
 			if (BotHands.isProtected(this.level, step.pos())) {

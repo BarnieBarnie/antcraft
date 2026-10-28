@@ -186,7 +186,7 @@ public class PathFollower {
 					this.path = null; // another bot placed scaffolding here since: plan around it
 					return Status.RUNNING;
 				}
-				this.breaker.tick(level, pos);
+				this.breaker.tick(level, pos, true); // into the inventory, as a build needs what its walk broke back at once
 				return Status.RUNNING;
 			}
 		}
