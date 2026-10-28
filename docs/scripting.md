@@ -142,7 +142,7 @@ Where an item or block is asked for, a string selects it: `"oak_log"` (namespace
 | `inventory()` | list of `Stack` |
 | `count(item)` | how many matching items the bot carries |
 | `has(item, n=1)` | `count(item) >= n` |
-| `matches(item, selector)` | whether an item id or a `Stack` is one the selector selects: `matches(s, "#minecraft:logs")` for a `Stack` from `container(p)`. An unknown item or selector stops the script with an error |
+| `matches(item, selector)` | whether an item id or a `Stack` is one the selector selects: `matches(s, "#minecraft:logs")` for a `Stack` from `container(p)`. A malformed item id (`'Oak Log' is not an item id: ...`), an unknown item or a bad selector stops the script with an error |
 | `held()` | the `Stack` in its hand or `None` |
 | `block(pos)` | `Block` (unloaded positions give `None`) |
 | `find_nearest(what, radius=32)` | nearest matching block's `Pos` the bot can see from its loaded surroundings, or `None` |
@@ -274,7 +274,7 @@ post_job("build", {"blueprint": "antcraft:farm", "at": colony()["core"] + (4, -1
 post_job("haul", {"item": "minecraft:oak_log", "n": 16})
 ```
 
-They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, `store(item)` (put all carried into the core) and `fetch(item, n)` (take from the core up to `n` carried). A mining role comes with the mining library of milestone 6.
+They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, `store(item)` (put all carried into the core) and `fetch(item, n)` (take from the core up to `n` carried; `item` may be a selector such as `"#minecraft:planks"`). A mining role comes with the mining library of milestone 6.
 
 ## Reflexes
 

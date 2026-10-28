@@ -112,26 +112,31 @@ public record Selector(List<String> ids, List<String> tags) {
 
 	/** {@code name} as a full id; {@code text} is the selector it came from, for the error. */
 	private static String id(String text, String name) {
+		return id(text, name, "a selector");
+	}
+
+	/** {@code name} as a full id; the error says {@code text} is not {@code what}. */
+	private static String id(String text, String name, String what) {
 		if (name.isEmpty()) {
-			throw bad(text, "it is empty");
+			throw bad(text, what, "it is empty");
 		}
 		int colon = name.indexOf(':');
 		if (colon != name.lastIndexOf(':')) {
-			throw bad(text, "a name has at most one ':'");
+			throw bad(text, what, "a name has at most one ':'");
 		}
 		String namespace = colon < 0 ? "minecraft" : name.substring(0, colon);
 		String path = name.substring(colon + 1);
 		if (namespace.isEmpty()) {
-			throw bad(text, "the namespace before ':' is empty");
+			throw bad(text, what, "the namespace before ':' is empty");
 		}
 		if (path.isEmpty()) {
-			throw bad(text, "the name after ':' is empty");
+			throw bad(text, what, "the name after ':' is empty");
 		}
 		if (!path.chars().allMatch(c -> namespaceChar(c) || c == '/')) {
-			throw bad(text, "names use only a-z, 0-9, '_', '-', '.' and '/'");
+			throw bad(text, what, "names use only a-z, 0-9, '_', '-', '.' and '/'");
 		}
 		if (!namespace.chars().allMatch(Selector::namespaceChar)) {
-			throw bad(text, "a namespace uses only a-z, 0-9, '_', '-' and '.'");
+			throw bad(text, what, "a namespace uses only a-z, 0-9, '_', '-' and '.'");
 		}
 		return namespace + ":" + path;
 	}
@@ -141,7 +146,11 @@ public record Selector(List<String> ids, List<String> tags) {
 	}
 
 	private static ScriptError bad(String text, String why) {
-		return new ScriptError(Values.repr(text) + " is not a selector: " + why);
+		return bad(text, "a selector", why);
+	}
+
+	private static ScriptError bad(String text, String what, String why) {
+		return new ScriptError(Values.repr(text) + " is not " + what + ": " + why);
 	}
 
 	/**
@@ -154,7 +163,7 @@ public record Selector(List<String> ids, List<String> tags) {
 			case Stack stack -> stack.item();
 			default -> throw new ScriptError("matches() item must be an item id or a Stack, not '" + Values.typeName(item) + "'");
 		};
-		String id = id(text, text);
+		String id = id(text, text, "an item id");
 		Item found = BuiltInRegistries.ITEM.getOptional(Identifier.parse(id))
 			.orElseThrow(() -> new ScriptError("unknown item '" + id + "'"));
 		return parse(selector).items().test(new ItemStack(found));

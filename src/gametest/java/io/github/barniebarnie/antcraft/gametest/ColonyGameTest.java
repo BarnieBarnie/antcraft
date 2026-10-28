@@ -351,6 +351,22 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** {@code fetch} takes a selector: one for {@code #minecraft:planks} takes birch planks from the core and leaves the dirt (#383). */
+	@GameTest(maxTicks = 20)
+	public void fetchForATagTakesMatchingItemsFromTheCore(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 3, 1, 1);
+		Container core = container(helper, 3, 1, 1);
+		core.setItem(0, new ItemStack(Items.DIRT, 2));
+		core.setItem(1, new ItemStack(Items.BIRCH_PLANKS, 5));
+		AntBot bot = member(helper, colony, 1, 1, 1);
+		BotScripts.run(bot, """
+			from colony.common import fetch
+			print(fetch('#minecraft:planks', 3), count('birch_planks'), count('dirt'))
+			""");
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True 3 0")), "printed " + printed(bot)));
+	}
+
 	/** A lumberjack alone fells the colony's tree, plants its sapling where it stood and puts the logs into the core. */
 	@GameTest(maxTicks = 600)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {

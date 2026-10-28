@@ -120,6 +120,8 @@ class SelectorTest {
 			assertThrows(ScriptError.class, () -> Selector.matches("dirt", "#no_such_tag")).getMessage());
 		assertEquals("unknown item 'minecraft:no_such_item'",
 			assertThrows(ScriptError.class, () -> Selector.matches("no_such_item", "dirt")).getMessage());
+		assertEquals("'Oak Log' is not an item id: names use only a-z, 0-9, '_', '-', '.' and '/'",
+			assertThrows(ScriptError.class, () -> Selector.matches("Oak Log", "dirt")).getMessage());
 		assertEquals("matches() item must be an item id or a Stack, not 'int'",
 			assertThrows(ScriptError.class, () -> Selector.matches(3L, "dirt")).getMessage());
 	}

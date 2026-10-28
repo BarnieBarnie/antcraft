@@ -28,7 +28,8 @@ def store(item):
 
 
 def fetch(item, n):
-    """Takes items from the core until the bot carries n of item, as far as the core has them; gives whether it does."""
-    if count(item) < n and any([s.item == item for s in container(core()) or []]):
+    """Takes items from the core until the bot carries n of item (an item id or a selector such as "#minecraft:planks"),
+    as far as the core has them; gives whether it does."""
+    if count(item) < n and any([matches(s, item) for s in container(core()) or []]):
         take(core(), item, n - count(item))
     return count(item) >= n
