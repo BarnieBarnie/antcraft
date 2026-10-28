@@ -21,6 +21,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 
@@ -116,6 +117,18 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			"Block('minecraft:oak_log', " + log + ") minecraft:oak_log " + log + " False False True",
 			"minecraft:water True minecraft:air True",
 			"None"));
+	}
+
+	/** A block's state: ints, bools and names by property, so a script tells ripe wheat (#369). */
+	@GameTest(maxTicks = 10)
+	public void blockStateGivesTheBlocksProperties(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		helper.setBlock(5, 0, 5, Blocks.FARMLAND);
+		helper.setBlock(5, 1, 5, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		helper.setBlock(1, 1, 1, Blocks.OAK_LOG);
+		ScriptRun run = run(helper, bot, "print(block(" + at(helper, 5, 1, 5) + ").state, block(" + at(helper, 1, 1, 1) + ").state, block("
+			+ at(helper, 1, 2, 1) + ").state)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("{'age': 7} {'axis': 'y'} {}"));
 	}
 
 	@GameTest(maxTicks = 10)

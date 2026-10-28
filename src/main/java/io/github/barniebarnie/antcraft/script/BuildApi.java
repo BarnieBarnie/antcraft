@@ -49,7 +49,11 @@ public final class BuildApi {
 
 	static void register(Natives natives, ScriptRun run) {
 		natives.register("blueprint", 30, call -> {
-			Object id = Args.bind("blueprint", call, 1, "id")[0];
+			Object[] args = Args.bind("blueprint", call, 1, "id", "at", "turn", "mirror");
+			Object id = args[0];
+			Pos at = Args.absent(args[1]) || args[1] == PyNone.NONE ? null : Pos.of(args[1]);
+			long turn = Args.absent(args[2]) ? 0 : Args.integer(args[2]);
+			boolean mirror = !Args.absent(args[3]) && Values.truthy(args[3]);
 			AntBot bot = WorkApi.bot(run, call);
 			Identifier parsed = Identifier.tryParse(Values.str(id));
 			Optional<Blueprint> blueprint = parsed == null ? Optional.empty() : Blueprints.get(parsed);
@@ -57,7 +61,7 @@ public final class BuildApi {
 				return PyNone.NONE;
 			}
 			Optional<StructureTemplate> template = ((ServerLevel) bot.level()).getServer().getStructureTemplateManager().get(blueprint.get().structure());
-			return describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template));
+			return describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template), at, turn, mirror);
 		});
 		natives.register("build", call -> {
 			Object[] args = Args.bind("build", call, 2, "blueprint", "at", "turn", "mirror");
@@ -87,20 +91,36 @@ public final class BuildApi {
 
 	/** {@code blueprint(id)}: its size, role, materials and spots relative to its origin, as plain data. */
 	static PyDict describe(Blueprint blueprint, BlueprintSummary summary) {
+		return describe(blueprint, summary, null, 0, false);
+	}
+
+	/**
+	 * {@code blueprint(id, at, turn, mirror)}: as {@link #describe(Blueprint, BlueprintSummary)}, with the spots where a copy
+	 * built at {@code at} (if not null) turned and mirrored as {@code build} does has them, in {@code at}'s dimension.
+	 */
+	static PyDict describe(Blueprint blueprint, BlueprintSummary summary, @Nullable Pos at, long turn, boolean mirror) {
 		PyDict dict = new PyDict();
 		dict.put("size", PyTuple.of((long) summary.size().getX(), (long) summary.size().getY(), (long) summary.size().getZ()));
 		dict.put("role", blueprint.role().<Object>map(Blueprint.Role::getSerializedName).orElse(PyNone.NONE));
 		PyDict materials = new PyDict();
 		summary.materials().forEach((item, count) -> materials.put(BuiltInRegistries.ITEM.getKey(item).toString(), (long) count));
 		dict.put("materials", materials);
-		dict.put("chests", spots(blueprint.chests()));
-		dict.put("work_spots", spots(blueprint.workSpots()));
+		if (at == null) {
+			dict.put("chests", spots(blueprint.chests(), null));
+			dict.put("work_spots", spots(blueprint.workSpots(), null));
+		} else {
+			BlockPos origin = WorkApi.blockPos(at);
+			Mirror mirrored = mirror ? Mirror.LEFT_RIGHT : Mirror.NONE;
+			Rotation rotation = Rotation.values()[(int) Math.floorMod(turn, 4)];
+			dict.put("chests", spots(blueprint.chestsAt(summary.size(), origin, mirrored, rotation), at.dimension()));
+			dict.put("work_spots", spots(blueprint.workSpotsAt(summary.size(), origin, mirrored, rotation), at.dimension()));
+		}
 		return dict;
 	}
 
-	private static PyList spots(List<BlockPos> spots) {
+	private static PyList spots(List<BlockPos> spots, @Nullable String dimension) {
 		PyList list = new PyList();
-		spots.forEach(spot -> list.items.add(new Pos(spot.getX(), spot.getY(), spot.getZ())));
+		spots.forEach(spot -> list.items.add(new Pos(spot.getX(), spot.getY(), spot.getZ(), dimension)));
 		return list;
 	}
 

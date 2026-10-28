@@ -7,8 +7,11 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.Memory;
+import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
+import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -22,12 +25,16 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -255,6 +262,142 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(run.state() == ScriptRun.State.STOPPED, "script " + run.state());
 			helper.assertTrue(printed(other).equals(List.of("logs None")), "other printed " + printed(other));
 			helper.assertTrue(takers(colony).equals(List.of(other.getStringUUID())), "takers " + takers(colony));
+		});
+	}
+
+	// the default colony scripts (#369)
+
+	/** Starts the bundled script {@code script} on {@code bot}, as a player does with {@code /antcraft bot run}. */
+	private static void runDefault(GameTestHelper helper, AntBot bot, String script) {
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + script);
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + script + ", 1]")), "run answered " + started);
+	}
+
+	/** Fails at once when a bot logs a warning or worse, or says something: the colony scripts do only when stuck. */
+	private static void failOnWarning(GameTestHelper helper, AntBot... bots) {
+		helper.onEachTick(() -> {
+			for (AntBot bot : bots) {
+				if (!BotScripts.log(bot, Output.Level.WARN).isEmpty()) {
+					StringBuilder at = new StringBuilder();
+					for (AntBot each : bots) {
+						at.append(' ').append(TestPositions.relative(helper, each.blockPosition()).toShortString());
+					}
+					helper.fail(bot.getScript().name() + " stuck: " + BotScripts.log(bot, Output.Level.DEBUG) + "; bots at" + at);
+				}
+			}
+		});
+	}
+
+	private static Container container(GameTestHelper helper, int x, int y, int z) {
+		return (Container) Objects.requireNonNull(helper.getBlockEntity(new BlockPos(x, y, z), BlockEntity.class));
+	}
+
+	private static Pos pos(GameTestHelper helper, int x, int y, int z) {
+		BlockPos at = helper.absolutePos(new BlockPos(x, y, z));
+		return new Pos(at.getX(), at.getY(), at.getZ());
+	}
+
+	/**
+	 * Milestone 7's acceptance: a builder takes a posted build of the cobble step, finds the core empty and asks for its
+	 * materials with haul jobs; a hauler brings them from a chest in the colony to the core, and the builder fetches them
+	 * there and builds.
+	 */
+	@GameTest(maxTicks = 200)
+	public void aBuilderAndAHaulerBuildAPostedCobbleStepFromAChest(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		helper.setBlock(1, 1, 1, Blocks.CHEST);
+		Container chest = container(helper, 1, 1, 1);
+		chest.setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		chest.setItem(1, new ItemStack(Items.OAK_STAIRS));
+		AntBot builder = member(helper, colony, 4, 1, 6);
+		AntBot hauler = member(helper, colony, 6, 1, 4);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		data.put("at", pos(helper, 3, 1, 3));
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		runDefault(helper, builder, "colony.builder");
+		runDefault(helper, hauler, "colony.hauler");
+		failOnWarning(helper, builder, hauler);
+		helper.succeedWhen(() -> {
+			WorkGameTest.assertCobbleStep(helper, 0);
+			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
+			helper.assertTrue(chest.isEmpty(), "the chest still holds " + chest.getItem(0) + ", " + chest.getItem(1));
+		});
+	}
+
+	/** A lumberjack alone fells the colony's tree, plants its sapling where it stood and puts the logs into the core. */
+	@GameTest(maxTicks = 600)
+	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {
+		helper.setBlock(5, 0, 5, Blocks.DIRT);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.OAK_LOG);
+		}
+		for (int y = 3; y <= 5; y++) {
+			int r = y == 5 ? 1 : 2;
+			for (int x = 5 - r; x <= 5 + r; x++) {
+				for (int z = 5 - r; z <= 5 + r; z++) {
+					boolean corner = Math.abs(x - 5) == r && Math.abs(z - 5) == r;
+					if (!corner && helper.getBlockState(new BlockPos(x, y, z)).isAir()) {
+						helper.setBlock(x, y, z, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+					}
+				}
+			}
+		}
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(5, 1, 5));
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "logs in the core: " + core.countItem(Items.OAK_LOG));
+		});
+	}
+
+	/**
+	 * A farmer alone farms the farm in colony_memory["buildings"]: harvests the ripe wheat, tills the dirt, plants every work
+	 * spot and stores the wheat in the core.
+	 */
+	@GameTest(maxTicks = 340)
+	public void aFarmerTillsPlantsAndHarvestsAFarm(GameTestHelper helper) {
+		List<BlockPos> spots = new ArrayList<>();
+		for (int x = 1; x <= 5; x++) {
+			for (int z = 1; z <= 5; z++) {
+				if (x == 3 && z == 3) {
+					helper.setBlock(x, 0, z, Blocks.WATER);
+				} else {
+					spots.add(new BlockPos(x, 0, z));
+					helper.setBlock(x, 0, z, Blocks.DIRT);
+				}
+			}
+		}
+		for (BlockPos ripe : List.of(new BlockPos(1, 0, 1), new BlockPos(5, 0, 5))) {
+			helper.setBlock(ripe, Blocks.FARMLAND);
+			helper.setBlock(ripe.above(), Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		}
+		Colony colony = colonyAt(helper, 7, 1, 7);
+		colony.setRadius(8);
+		PyDict farm = new PyDict();
+		farm.put("blueprint", "antcraft:farm");
+		farm.put("at", pos(helper, 1, 0, 1));
+		PyList buildings = new PyList();
+		buildings.items.add(farm);
+		colony.memory().put("buildings", buildings);
+		Container core = container(helper, 7, 1, 7);
+		core.setItem(0, new ItemStack(Items.WOODEN_HOE));
+		core.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 24));
+		AntBot farmer = member(helper, colony, 0, 1, 7);
+		runDefault(helper, farmer, "colony.farmer");
+		failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.FARMLAND, spot);
+				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
+			}
+			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
 		});
 	}
 

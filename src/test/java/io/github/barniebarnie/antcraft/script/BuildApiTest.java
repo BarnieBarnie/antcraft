@@ -49,4 +49,28 @@ class BuildApiTest {
 		assertEquals(10, chests.size());
 		assertEquals(new Pos(4, 0, 2), chests.getLast());
 	}
+
+	private static Blueprint parsed(String name) throws IOException {
+		return Blueprint.parse(JsonParser.parseString(Files.readString(Path.of("src/main/resources/data/antcraft/blueprint/" + name + ".json"))))
+			.getOrThrow();
+	}
+
+	/** Given where it is built, blueprint(id, at, turn) gives the spots in the world, turned as build turns the blocks. */
+	@Test
+	void blueprintAtAPlaceGivesItsSpotsThere() throws IOException {
+		Blueprint blueprint = parsed("cobble_generator");
+		BlueprintSummary summary = BlueprintSummary.of(Identifier.fromNamespaceAndPath("antcraft", "cobble_generator"), blueprint,
+			Optional.of(VanillaData.structure("cobble_generator")));
+		Pos at = new Pos(10, 64, 20, "minecraft:the_nether");
+		PyDict straight = BuildApi.describe(blueprint, summary, at, 0, false);
+		assertEquals(List.of(new Pos(13, 65, 21), new Pos(13, 65, 22)), ((PyList) straight.get("work_spots")).items);
+		assertEquals("minecraft:the_nether", ((Pos) ((PyList) straight.get("work_spots")).items.getFirst()).dimension());
+		PyTuple size = (PyTuple) straight.get("size");
+		long sx = (Long) size.items().get(0);
+		long sz = (Long) size.items().get(2);
+		// half a turn: the far corner of the structure comes to at
+		PyDict turned = BuildApi.describe(blueprint, summary, at, 2, false);
+		assertEquals(List.of(new Pos(10 + sx - 1 - 3, 65, 20 + sz - 1 - 1), new Pos(10 + sx - 1 - 3, 65, 20 + sz - 1 - 2)),
+			((PyList) turned.get("work_spots")).items);
+	}
 }

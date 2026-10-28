@@ -5,7 +5,9 @@ import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.VmState;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -44,12 +46,23 @@ public final class SavedValues implements VmState.HostCodec {
 			case Pos p -> p.dimension() == null ? PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z())
 				: PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z(), p.dimension());
 			case Stack s -> PyTuple.of(Stack.TYPE, s.item(), s.count());
-			case BlockInfo b -> PyTuple.of(BlockInfo.TYPE, b.id(), b.pos(), b.air(), b.fluid(), new PyTuple(new ArrayList<>(b.tags())));
+			case BlockInfo b -> PyTuple.of(BlockInfo.TYPE, b.id(), b.pos(), b.air(), b.fluid(), new PyTuple(new ArrayList<>(b.tags())),
+				new PyTuple(b.state().entrySet().stream().<Object>map(e -> PyTuple.of(e.getKey(), e.getValue())).toList()));
 			case Result r -> PyTuple.of(Result.TYPE, r.ok(), r.reason() == null ? PyNone.NONE : r.reason(), r.value());
 			case EntityInfo e -> PyTuple.of(EntityInfo.TYPE, e.uuid().toString(), e.type());
 			case PyDict d when d == colonyMemory.get() -> PyTuple.of(COLONY_MEMORY);
 			default -> null;
 		};
+	}
+
+	/** A block's state saved as (name, value) pairs; a block saved before #369 has none. */
+	private static Map<String, Object> state(PyTuple saved) {
+		Map<String, Object> state = new HashMap<>();
+		for (Object entry : saved.items()) {
+			List<Object> pair = ((PyTuple) entry).items();
+			state.put((String) pair.get(0), pair.get(1));
+		}
+		return state;
 	}
 
 	@Override
@@ -59,7 +72,7 @@ public final class SavedValues implements VmState.HostCodec {
 			case Pos.TYPE -> new Pos((Long) f.get(1), (Long) f.get(2), (Long) f.get(3), f.size() > 4 ? (String) f.get(4) : null);
 			case Stack.TYPE -> new Stack((String) f.get(1), (Long) f.get(2));
 			case BlockInfo.TYPE -> new BlockInfo((String) f.get(1), (Pos) f.get(2), (Boolean) f.get(3), (Boolean) f.get(4),
-					((PyTuple) f.get(5)).items().stream().map(String.class::cast).toList());
+					((PyTuple) f.get(5)).items().stream().map(String.class::cast).toList(), f.size() > 6 ? state((PyTuple) f.get(6)) : Map.of());
 			case Result.TYPE -> new Result((Boolean) f.get(1), f.get(2) instanceof String reason ? reason : null, f.get(3));
 			case EntityInfo.TYPE -> EntityInfo.saved(UUID.fromString((String) f.get(1)), (String) f.get(2), entities);
 			// ponytail: the colony the bot is in now; a bot no longer in one gets an empty dict that nothing shares

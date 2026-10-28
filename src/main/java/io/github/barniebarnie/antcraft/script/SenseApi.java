@@ -14,7 +14,9 @@ import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
@@ -26,6 +28,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Property;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -203,8 +206,22 @@ public final class SenseApi {
 
 	private static BlockInfo block(BlockState state, Pos pos) {
 		List<String> tags = state.tags().map(tag -> "#" + tag.location()).sorted().toList();
+		Map<String, Object> properties = new HashMap<>();
+		for (Property<?> property : state.getProperties()) {
+			properties.put(property.getName(), value(state, property));
+		}
 		return new BlockInfo(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString(), pos, state.isAir(),
-			!state.getFluidState().isEmpty(), tags);
+			!state.getFluidState().isEmpty(), tags, properties);
+	}
+
+	/** A block state property's value in a script: an int, a bool, or the name the game saves it by ({@code "north"}). */
+	private static <T extends Comparable<T>> Object value(BlockState state, Property<T> property) {
+		T value = state.getValue(property);
+		return switch (value) {
+			case Integer i -> (long) i;
+			case Boolean b -> b;
+			default -> property.getName(value);
+		};
 	}
 
 	private static BlockPos blockPos(Pos pos) {

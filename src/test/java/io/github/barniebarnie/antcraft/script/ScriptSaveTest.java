@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.util.ProblemReporter;
@@ -231,7 +232,8 @@ class ScriptSaveTest {
 	void valuesOfTheBotApiAreSavedAsPlainData() {
 		SavedValues values = new SavedValues(uuid -> null);
 		for (Object value : List.of(new Pos(1, -2, 3), new Stack("minecraft:dirt", 3),
-				new BlockInfo("minecraft:oak_log", new Pos(1, 2, 3), false, false, List.of("#minecraft:logs")),
+				new BlockInfo("minecraft:oak_log", new Pos(1, 2, 3), false, false, List.of("#minecraft:logs"), Map.of("axis", "y")),
+				new BlockInfo("minecraft:wheat", new Pos(1, 2, 3), false, false, List.of(), Map.of("age", 7L)),
 				Result.ok(4L), Result.fail(Result.UNREACHABLE))) {
 			Object saved = values.save(value);
 			assertNotNull(saved, value.toString());
@@ -241,6 +243,8 @@ class ScriptSaveTest {
 		assertEquals("minecraft:the_nether", nether.dimension());
 		assertEquals(new Pos(1, 2, 3), values.load(PyTuple.of(Pos.TYPE, 1L, 2L, 3L)), "a Pos saved before #349");
 		assertNull(((Pos) values.load(PyTuple.of(Pos.TYPE, 1L, 2L, 3L))).dimension());
+		assertEquals(new BlockInfo("minecraft:dirt", new Pos(1, 2, 3), false, false, List.of(), Map.of()),
+			values.load(PyTuple.of(BlockInfo.TYPE, "minecraft:dirt", new Pos(1, 2, 3), false, false, new PyTuple(List.of()))), "a Block saved before #369");
 		UUID id = UUID.randomUUID();
 		EntityInfo gone = (EntityInfo) values.load(values.save(EntityInfo.saved(id, "minecraft:cow", uuid -> null)));
 		assertFalse(gone.valid());

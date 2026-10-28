@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.script.lang.Parser;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -73,5 +74,13 @@ class DefaultScriptsTest {
 		Map<String, String> bundled = DefaultScripts.bundled();
 		assertTrue(bundled.containsKey("lib/home.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
+	}
+
+	@Test
+	void theColonyScriptsAreBundled() {
+		Map<String, String> bundled = DefaultScripts.bundled();
+		for (String role : List.of("common", "lumberjack", "hauler", "builder", "farmer")) {
+			assertTrue(bundled.containsKey("colony/" + role + ".py"), "bundled " + bundled.keySet());
+		}
 	}
 }

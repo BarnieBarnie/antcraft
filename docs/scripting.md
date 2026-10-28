@@ -92,7 +92,7 @@ A module's top level runs once per bot run, the first time any module imports it
 
 A module that is not there fails the script at the line of the import (`No module named 'lib.trees'`), and so does a name a module does not have (`cannot import name 'fel' from 'lib.trees'`). A module that does not compile fails the script with its own file and line (`lib/trees.py:4: ...`), and an error while a module runs names that module's file. Circular imports fail with the cycle: `circular import: lib.a -> lib.b -> lib.a`.
 
-The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
+The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`). The default colony scripts live under `colony/` (see Colony scripts). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
 
 ## Runtime
 
@@ -123,7 +123,7 @@ Names are `snake_case`. The API is available as builtins in every script (no imp
 ### Types
 
 - **`Pos`**: `x`, `y`, `z`; `+` and `-` with another `Pos` or tuple; `up(n=1)`, `down`, `north`, `south`, `east`, `west`; `distance(other)`. Usable as a dict key. `dimension` is the id of the dimension a position from `pos()`, `home()` or `portals()` is in, such as `"minecraft:overworld"`, and `None` for a position the script made, which means the dimension the bot is in (a tuple has none either). Every function that takes a position refuses one whose `dimension` is not the bot's: an action fails at once with `wrong_dimension` (`goto`, `travel`, `mine`, `place`, `use`, `put`, `take`, and `craft`'s `table` and `smelt`'s `furnace`), `reachable` gives `False` and `block` and `container` give `None`. Only `set_home` takes one from any dimension, and `distance` and `+`, `-` work on the coordinates alone. A `Pos` made from another with `+`, `-` or a step keeps its dimension (the left one's, if both have one). The dimension takes no part in `==` or printing: positions compare by their coordinates, so `pos() == home()` is true at the home's coordinates in any dimension; compare `dimension()` with `home_dimension()` too. It is saved with the script and in `memory`.
-- **`Block`**: `id` (`"minecraft:oak_log"`), `pos`, `is_air`, `is_fluid`, `tags` (list of selectors such as `"#minecraft:logs"`). A snapshot of the block when it was read.
+- **`Block`**: `id` (`"minecraft:oak_log"`), `pos`, `is_air`, `is_fluid`, `tags` (list of selectors such as `"#minecraft:logs"`), `state` (a dict of the block state's properties: an int, a bool or a name, such as `{'age': 7}` for ripe wheat or `{'axis': 'y'}` for a log standing up). A snapshot of the block when it was read.
 - **`Stack`**: `item` (`"minecraft:oak_log"`), `count`. A snapshot.
 - **`Entity`**: `id` (UUID string), `type` (`"minecraft:cow"`), `pos`, `health` (`None` for an entity without health), `valid` (false once it is gone: dead, picked up or unloaded), `item` (the `Stack` of a dropped item, `None` for other entities). Read live; equal by UUID.
 - **`Result`**: returned by every action. Truthy when the action succeeded. `ok` (bool), `reason` (a string code, `None` on success), `value` (what the action produced, if anything, for example how many items `craft` made).
@@ -155,7 +155,7 @@ Where an item or block is asked for, a string selects it: `"oak_log"` (namespace
 | `dimension()`, `home_dimension()` | the id of the dimension the bot is in, and of its home's, such as `"minecraft:overworld"` |
 | `portals()` | list of `Pos`, each with its `dimension`: both ends of the nether portals the bot went through, newest first (see Travelling between dimensions) |
 | `deaths()` | how often the bot has died |
-| `blueprint(id)` | a blueprint as plain data, or `None` for an id the server has no blueprint for: a dict with `size` (a tuple `(x, y, z)`), `role` (`"storage"`, `"farm"`, `"generator"` or `None`), `materials` (a dict of item id to how many `build` places) and `chests` and `work_spots` (lists of `Pos` relative to the origin, unturned), so a hauler can fetch materials before the builder starts |
+| `blueprint(id, at=None, turn=0, mirror=False)` | a blueprint as plain data, or `None` for an id the server has no blueprint for: a dict with `size` (a tuple `(x, y, z)`), `role` (`"storage"`, `"farm"`, `"generator"` or `None`), `materials` (a dict of item id to how many `build` places) and `chests` and `work_spots` (lists of `Pos` relative to the origin, unturned), so a hauler can fetch materials before the builder starts. Given `at` (and `turn` and `mirror`, as `build` takes them), `chests` and `work_spots` are where a copy built there has them, in the dimension of `at` |
 | `colony()` | the bot's colony as a dict, or `None` for a bot in no colony: `core` (a `Pos` with the core's `dimension`), `radius`, `members` (list of bot UUID strings) and `owner` (a player's UUID string, or `None`). Plain data, a snapshot. A member in another dimension than its core (it went through a portal or respawned at a home elsewhere) stays a member: `colony()` and `colony_memory` work the same there, and `core.dimension` tells the script to travel first, as `put` and `take` at the core fail with `wrong_dimension` until it does |
 | `reachable(pos, near=0)` | `True` if the bot could walk to within `near` blocks of `pos` from where it stands, `False` if not; plans without moving (costs pathfinding budget, may pause) |
 
@@ -202,7 +202,7 @@ The block actions (`mine`, `place`, `use`, `put`, `take`, and `craft` and `smelt
 
 Placing and using go through the game's own code with a stand-in player at the bot, so blocks and items behave as for a player: a bucket fills, a hoe wears down.
 
-Later milestones add `till`, `plant` and `harvest` helpers.
+A farm needs no helpers of its own: `use(soil, "#minecraft:hoes")` tills, `place(soil.up(), "wheat_seeds")` plants, `block(soil.up()).state["age"]` tells ripe wheat (7) and `mine` harvests it (see `colony.farmer`).
 
 ### Reason codes
 
@@ -247,6 +247,31 @@ if j is not None:
     put(colony()["core"], "oak_log")
     finish_job(j["id"])
 ```
+
+### Colony scripts
+
+The mod's default colony scripts do what the goal-driven colony did, with the API every script has, so a player gets a working colony out of the box and an example to change. Each runs on a colony member (`/antcraft bot run colony.lumberjack`, or a Bot Core with `/antcraft core script colony.lumberjack`), works alone, and works with the others through the job board and the core. In no colony, each says so and stops.
+
+| Script | Does |
+|---|---|
+| `colony.lumberjack` | Fells the trees within the colony's radius: a trunk of logs standing on dirt with leaves at its top, so log walls are left alone. Mines it from the ground up, picks up what fell, plants a sapling it carries where the trunk stood and puts the logs into the core. With no tree left it waits 10 seconds and looks again |
+| `colony.hauler` | Takes `haul` jobs and brings the items to the core. Without jobs it waits at home, out of the way of builds |
+| `colony.builder` | Takes `build` jobs: takes the blueprint's materials from the core and builds. While the core lacks some, it posts a `haul` job for each (one per item and build) and tries again every two seconds; alone, it waits for a player to fill the core. A building with a role is added to `colony_memory["buildings"]` (the job's data). Another reason than `missing_ingredients` (such as `blocked`) gives the job back to the board, with a warning in its log, and it tries again 10 seconds later |
+| `colony.farmer` | Farms the work spots (the soil blocks) of each building in `colony_memory["buildings"]` whose blueprint has the role `farm`: harvests ripe wheat, tills dirt and grass, plants wheat seeds, picks up what lies around and stores the wheat in the core, every 10 seconds. It takes a hoe and seeds from the core when it carries none |
+
+Their jobs' data, dicts of plain data:
+
+| Kind | Data |
+|---|---|
+| `build` | `blueprint` (an id), `at` (the lowest corner), `turn` and `mirror` (optional, as `build` takes them) |
+| `haul` | `item` (an item id), `n` (optional; all found without it), `from` (optional: the container to take from; else every chest and barrel within the colony's radius that holds the item, nearest first) and `to` (optional: the container to bring to; else the core). The builder adds `for`, the id of its build job |
+
+```python
+post_job("build", {"blueprint": "antcraft:farm", "at": colony()["core"] + (4, -1, 0)})
+post_job("haul", {"item": "minecraft:oak_log", "n": 16})
+```
+
+They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, `store(item)` (put all carried into the core) and `fetch(item, n)` (take from the core up to `n` carried). A mining role comes with the mining library of milestone 6.
 
 ## Reflexes
 
@@ -319,7 +344,7 @@ Scripts are loaded from two folders; the world folder wins on a name clash:
 - `config/antcraft/scripts/` for every world (share scripts by copying files here);
 - `<world>/antcraft/scripts/` for one world.
 
-The mod copies its default scripts (for now `idle.py` and the library module `lib/home.py`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
+The mod copies its default scripts (`idle.py`, the library module `lib/home.py` and the colony scripts under `colony/`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
 
 Commands (single-player first; on a server they stay operator-only):
 
@@ -403,7 +428,7 @@ Each milestone becomes one or more issues.
 4. **Remove the goal-driven colony** (see What stays and what goes). Every bot without a script runs `idle.py`; the benchmark runs 30 bots on a script. (Done.)
 5. **Reflexes, save/resume, imports, death.** Bots survive a reload mid-script; `import` and the default `lib/` folder; respawning at home. Done.
 6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time.
-7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done so far: `colony()` and `colony_memory` (a member in another dimension than its core stays a member), and the job board (see Jobs).
+7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done: `colony()` and `colony_memory` (a member in another dimension than its core stays a member), the job board (see Jobs), Bot Cores that carry a script, `build`, and the colony scripts (see Colony scripts).
 8. **Later.** Multiplayer permissions and sandbox limits per player, `try`/`except` and classes if scripts need them, an in-game script viewer or editor, sharing scripts through data packs, Litematica import.
 
 ## Open questions
