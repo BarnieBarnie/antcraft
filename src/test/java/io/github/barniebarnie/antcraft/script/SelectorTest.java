@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import io.github.barniebarnie.antcraft.script.lang.PyList;
@@ -8,10 +10,19 @@ import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import java.util.ArrayList;
 import java.util.List;
+import net.minecraft.SharedConstants;
+import net.minecraft.server.Bootstrap;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /** Parsing selectors, the strings that pick items, blocks and entities (docs/scripting.md, Selectors). */
 class SelectorTest {
+	@BeforeAll
+	static void bootstrap() {
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+	}
+
 	private static String error(Object value) {
 		return assertThrows(ScriptError.class, () -> Selector.parse(value)).getMessage();
 	}
@@ -59,5 +70,28 @@ class SelectorTest {
 		assertEquals("a selector is a str or a list of str, not 'int'", error(3L));
 		assertEquals("a selector is a str or a list of str, not 'list'", error(new PyList(new ArrayList<>(List.of(new PyList(new ArrayList<>()))))));
 		assertEquals("an empty list selects nothing", error(new PyList(new ArrayList<>())));
+	}
+
+	@Test
+	void aRepeatedSelectorIsParsedAndLookedUpOnce() {
+		Selector.clearCache();
+		Selector name = Selector.parse("oak_log");
+		assertSame(name, Selector.parse("oak_log"));
+		assertSame(name.items(), Selector.parse("oak_log").items());
+		assertSame(name.blocks(), Selector.parse("oak_log").blocks());
+		PyList list = new PyList(new ArrayList<>(List.of("oak_log", "dirt")));
+		Selector both = Selector.parse(list);
+		assertSame(both, Selector.parse(new PyTuple(List.of("oak_log", "dirt"))));
+		list.items.add("stone");
+		assertEquals(new Selector(List.of("minecraft:oak_log", "minecraft:dirt", "minecraft:stone"), List.of()), Selector.parse(list));
+	}
+
+	@Test
+	void clearingTheCacheLooksSelectorsUpAgain() {
+		Selector name = Selector.parse("oak_log");
+		var items = name.items();
+		Selector.clearCache();
+		assertNotSame(name, Selector.parse("oak_log"));
+		assertNotSame(items, Selector.parse("oak_log").items());
 	}
 }

@@ -28,6 +28,9 @@ public final class ServerScripts {
 
 	public static void register() {
 		ServerLifecycleEvents.SERVER_STARTED.register(ServerScripts::reload);
+		// Cached selectors know which tags exist; a reload or another world's data packs may change that.
+		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> Selector.clearCache());
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> Selector.clearCache());
 	}
 
 	public static Path configFolder() {

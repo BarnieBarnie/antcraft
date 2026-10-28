@@ -97,6 +97,12 @@ public class BenchmarkGameTest {
 		    craft("stick", 4)
 		    drop("stick")
 		""";
+	/** Counts carried items by name and by tag, over and over (#340). */
+	private static final String COUNT = """
+		while True:
+		    count("oak_log")
+		    has("#minecraft:planks", 4)
+		""";
 	/** What the issue asks of a busy script: a tight loop, a scan of radius 32, find_nearest, goto and craft, mixed. */
 	private static final String BUSY = """
 		n = 0
@@ -153,6 +159,7 @@ public class BenchmarkGameTest {
 		new Case("reachable", REACHABLE, 1200),
 		new Case("goto", GOTO, 1200),
 		new Case("craft", CRAFT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, FEW_LOGS),
+		new Case("count", COUNT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
 		new Case("busy", BUSY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
 		WORK);
 

@@ -6,7 +6,10 @@ import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import net.minecraft.core.Registry;
@@ -26,20 +29,60 @@ import net.minecraft.world.level.block.state.BlockState;
  * What a script asks for by name (docs/scripting.md, Selectors): {@code "oak_log"} (namespace {@code minecraft:}
  * assumed), {@code "minecraft:oak_log"}, a tag {@code "#minecraft:logs"}, or a list or tuple of these. Parsing is pure;
  * {@link #blocks}, {@link #items} and {@link #entities} look the names up in the game's registries.
+ * <p>
+ * Parsed selectors and their predicates are cached, as scripts ask for the same ones in loops (#340). The predicates
+ * read tags live, but whether a tag exists is checked once, so {@link #clearCache} runs when data packs reload.
  *
  * @param ids full ids such as {@code minecraft:oak_log}
  * @param tags full tag ids, without the {@code #}
  */
 public record Selector(List<String> ids, List<String> tags) {
 	private static final String TYPE_ERROR = "a selector is a str or a list of str, not '";
+	/** ponytail: a cache is cleared whole when it grows past this; an LRU if scripts make many selectors. */
+	private static final int CACHE_SIZE = 1024;
+	/** Parsed selectors by the str, or the list of str, they came from. */
+	private static final Map<Object, Selector> PARSED = new ConcurrentHashMap<>();
+	private static final Map<Selector, Predicate<BlockState>> BLOCKS = new ConcurrentHashMap<>();
+	private static final Map<Selector, Predicate<ItemStack>> ITEMS = new ConcurrentHashMap<>();
+	private static final Map<Selector, Predicate<Entity>> ENTITIES = new ConcurrentHashMap<>();
 
 	public Selector {
 		ids = List.copyOf(ids);
 		tags = List.copyOf(tags);
 	}
 
+	/** Forgets every cached selector, so tags are looked up again (after a data pack reload). */
+	public static void clearCache() {
+		PARSED.clear();
+		BLOCKS.clear();
+		ITEMS.clear();
+		ENTITIES.clear();
+	}
+
+	private static <K, V> V cached(Map<K, V> cache, K key, Function<K, V> compute) {
+		V found = cache.get(key);
+		if (found == null) {
+			found = compute.apply(key);
+			if (cache.size() >= CACHE_SIZE) {
+				cache.clear();
+			}
+			cache.put(key, found);
+		}
+		return found;
+	}
+
 	/** {@code value} as a selector: a str, or a list or tuple of str. */
 	public static Selector parse(Object value) {
+		Object key = switch (value) {
+			case String s -> s;
+			case PyList list when list.items.stream().allMatch(String.class::isInstance) -> List.copyOf(list.items);
+			case PyTuple tuple when tuple.items().stream().allMatch(String.class::isInstance) -> List.copyOf(tuple.items());
+			default -> null;
+		};
+		return key == null ? parseUncached(value) : cached(PARSED, key, k -> parseUncached(value));
+	}
+
+	private static Selector parseUncached(Object value) {
 		List<Object> parts = switch (value) {
 			case String s -> List.of(s);
 			case PyList list -> list.items;
@@ -103,6 +146,10 @@ public record Selector(List<String> ids, List<String> tags) {
 
 	/** Which blocks this selects; an unknown block or block tag fails the script. */
 	public Predicate<BlockState> blocks() {
+		return cached(BLOCKS, this, Selector::resolveBlocks);
+	}
+
+	private Predicate<BlockState> resolveBlocks() {
 		Set<Block> blocks = resolve(BuiltInRegistries.BLOCK, "block");
 		List<TagKey<Block>> tags = this.tags(BuiltInRegistries.BLOCK, Registries.BLOCK, "block");
 		return state -> blocks.contains(state.getBlock()) || tags.stream().anyMatch(state::is);
@@ -110,6 +157,10 @@ public record Selector(List<String> ids, List<String> tags) {
 
 	/** Which item stacks this selects; an unknown item or item tag fails the script. */
 	public Predicate<ItemStack> items() {
+		return cached(ITEMS, this, Selector::resolveItems);
+	}
+
+	private Predicate<ItemStack> resolveItems() {
 		Set<Item> items = resolve(BuiltInRegistries.ITEM, "item");
 		List<TagKey<Item>> tags = this.tags(BuiltInRegistries.ITEM, Registries.ITEM, "item");
 		return stack -> !stack.isEmpty() && (items.contains(stack.getItem()) || tags.stream().anyMatch(stack::is));
@@ -117,6 +168,10 @@ public record Selector(List<String> ids, List<String> tags) {
 
 	/** Which entities this selects by type; an unknown entity type or entity type tag fails the script. */
 	public Predicate<Entity> entities() {
+		return cached(ENTITIES, this, Selector::resolveEntities);
+	}
+
+	private Predicate<Entity> resolveEntities() {
 		Set<EntityType<?>> types = resolve(BuiltInRegistries.ENTITY_TYPE, "entity type");
 		List<TagKey<EntityType<?>>> tags = this.tags(BuiltInRegistries.ENTITY_TYPE, Registries.ENTITY_TYPE, "entity type");
 		return entity -> types.contains(entity.getType()) || tags.stream().anyMatch(entity.getType().builtInRegistryHolder()::is);
