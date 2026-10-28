@@ -302,8 +302,10 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		ScriptRun run = run(helper, bot, "y = pos().y - 3\nm = mineshaft([y])\n"
 			+ "print(m['top'], m['top'].y == pos().y, block(m['hatch']).id, m['level'][y]['landing'], m['levels'] == [y])\n"
-			+ "print(mineshaft_at(m['top'], m['levels']) == m)\n");
-		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 6, 1, 6) + " True minecraft:stone " + printed(helper, 7, -2, 6) + " True", "True"));
+			+ "print(mineshaft_at(m['top'], m['levels']) == m)\n"
+			+ "print(mineshaft([y], branches=1, length=2) == mineshaft_at(m['top'], m['levels'], branches=1, length=2))\n");
+		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 6, 1, 6) + " True minecraft:stone " + printed(helper, 7, -2, 6) + " True", "True",
+			"True"));
 	}
 	/**
 	 * mineshaft(levels, near) puts the top on the ground of its column, whatever height near is at: a block above the

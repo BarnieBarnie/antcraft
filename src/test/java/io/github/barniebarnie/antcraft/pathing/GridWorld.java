@@ -58,7 +58,7 @@ public final class GridWorld implements WorldView {
 	}
 
 	/** Fills the box between two corners (inclusive). */
-	GridWorld fill(int x1, int y1, int z1, int x2, int y2, int z2, char block) {
+	public GridWorld fill(int x1, int y1, int z1, int x2, int y2, int z2, char block) {
 		for (int x = Math.min(x1, x2); x <= Math.max(x1, x2); x++) {
 			for (int y = Math.min(y1, y2); y <= Math.max(y1, y2); y++) {
 				for (int z = Math.min(z1, z2); z <= Math.max(z1, z2); z++) {

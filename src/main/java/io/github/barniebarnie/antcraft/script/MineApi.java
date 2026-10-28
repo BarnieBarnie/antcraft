@@ -26,7 +26,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The senses {@code mineshaft(levels, near=None)}, {@code mineshaft_at(top, levels, round=0, branches=4, length=16)} and
+ * The senses {@code mineshaft(levels, near=None, branches=4, length=16)}, {@code mineshaft_at(top, levels, round=0, branches=4, length=16)} and
  * {@code ore_vein(pos)} (docs/scripting.md, Senses): where a ladder shaft can go and what it looks like, from
  * {@link Mineshaft}, and the ore veins its branches uncover, as plain data for the mining library.
  */
@@ -36,8 +36,10 @@ public final class MineApi {
 
 	static void register(Natives natives, ScriptRun run) {
 		natives.register("mineshaft", call -> {
-			Object[] args = Args.bind("mineshaft", call, 1, "levels", "near");
+			Object[] args = Args.bind("mineshaft", call, 1, "levels", "near", "branches", "length");
 			List<Integer> levels = levels(args[0]);
+			int branches = count(args[2], Mineshaft.DEFAULT_BRANCHES_PER_SIDE, "branches", 1);
+			int length = count(args[3], Mineshaft.DEFAULT_BRANCH_LENGTH, "length", 1);
 			Pos near = Args.absent(args[1]) || args[1] == PyNone.NONE ? run.host().pos() : Pos.of(args[1]);
 			AntBot bot = WorkApi.bot(run, call);
 			if (run.elsewhere(near)) {
@@ -50,7 +52,7 @@ public final class MineApi {
 			// ponytail: charged per block read as the block searches are, estimated, not measured; benchmark it in #380. A
 			// site search reads some 3,000 blocks for a site found at once, up to some 300,000 in one tick where every spot is
 			// blocked; share SenseApi.SCAN_BUDGET over ticks if that shows in the tick time.
-			Object result = Mineshaft.diggableOnGroundNextTo(WorkApi.blockPos(near), levels, List.of(), world)
+			Object result = Mineshaft.diggableOnGroundNextTo(WorkApi.blockPos(near), levels, branches, length, List.of(), world)
 				.<Object>map(shaft -> describe(shaft, 0, run.host().pos().dimension())).orElse(PyNone.NONE);
 			run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
 			return result;

@@ -76,6 +76,10 @@ public final class SenseApi {
 			carried(bot(run, call)).forEach(stack -> stacks.items.add(stack(stack)));
 			return stacks;
 		});
+		natives.register("free_slots", 20, call -> {
+			Args.bind("free_slots", call, 0);
+			return bot(run, call).getInventory().getItems().stream().filter(ItemStack::isEmpty).count();
+		});
 		natives.register("count", 20, call -> {
 			Object[] args = Args.bind("count", call, 1, "item");
 			return count(bot(run, call), Selector.parse(args[0]).items());

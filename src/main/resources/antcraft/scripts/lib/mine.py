@@ -15,11 +15,13 @@ from lib.shaft import dig, seal, put_block, result, FILL, TORCHES
 # What mining ore gives, which goes into the landing chest.
 ORES = ["minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecraft:raw_gold", "minecraft:redstone",
         "minecraft:lapis_lazuli", "minecraft:diamond", "minecraft:emerald", "minecraft:quartz", "minecraft:ancient_debris"]
-# How much of what it digs it keeps to wall fluid off with; the rest goes into the chest too.
+# What digging gives that it has no use for, which goes into the chest whole.
+JUNK = ["minecraft:gravel", "minecraft:flint", "minecraft:dirt", "minecraft:granite", "minecraft:diorite", "minecraft:andesite",
+        "minecraft:tuff", "minecraft:calcite", "minecraft:sand", "minecraft:red_sand", "minecraft:clay_ball"]
+# How much of the rest of what it digs it keeps to wall fluid off with; the rest goes into the chest too.
 KEEP = 64
-# ponytail: a bot carries 27 stacks and its hand; it empties itself with a few slots free, as one block of a vein may
-# drop more than one kind.
-FULL = 24
+# It empties itself with this many slots free, as one block of a vein may drop more than one kind.
+FREE = 3
 
 
 def site(r=0):
@@ -44,8 +46,8 @@ def dug(p):
 
 
 def unload(chest):
-    """Puts the ore it carries and what it dug beyond KEEP into the chest; None once done, else a result."""
-    for item in ORES:
+    """Puts the ore and junk it carries and what it dug beyond KEEP into the chest; None once done, else a result."""
+    for item in ORES + JUNK:
         if has(item):
             r = put(chest, item)
             if not r:
@@ -65,7 +67,7 @@ def unload(chest):
 
 def room(chest):
     """Empties the bot into the chest when its inventory is nearly full."""
-    if len(inventory()) >= FULL:
+    if free_slots() <= FREE:
         return unload(chest)
     return None
 

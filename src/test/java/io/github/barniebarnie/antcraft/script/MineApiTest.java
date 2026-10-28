@@ -85,6 +85,19 @@ class MineApiTest {
 		assertTrue(Mineshaft.diggableNextTo(NEAR, LEVELS, List.of(), lava).isEmpty());
 	}
 
+	/** mineshaft(levels, near, branches, length) checks a site with the hall of its own size, not the default 12 (#389). */
+	@Test
+	void aSmallerShaftsSiteIsCheckedWithItsOwnHall() {
+		GridWorld world = new GridWorld().fill(-24, 0, -24, 24, NEAR.getY() - 1, 24, '#');
+		Mineshaft small = Mineshaft.diggableOnGroundNextTo(NEAR, LEVELS, 1, 2, List.of(), world).orElseThrow();
+		assertEquals(3, small.hall(20).size());
+		assertEquals(2, small.branches(20).getFirst().cells().size() / 2);
+		// Water where the default hall reaches, past the small one's.
+		BlockPos water = new Mineshaft(small.top(), LEVELS).hall(20).get(8);
+		world.set(water.getX(), water.getY(), water.getZ(), 'W');
+		assertEquals(small, Mineshaft.diggableOnGroundNextTo(NEAR, LEVELS, 1, 2, List.of(), world).orElseThrow());
+	}
+
 	@Test
 	void mineshaftAtGivesTheSameShaftBack() {
 		Mineshaft shaft = Mineshaft.diggableNextTo(NEAR, LEVELS, List.of(), new GridWorld()).orElseThrow();

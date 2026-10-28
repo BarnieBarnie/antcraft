@@ -223,20 +223,22 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 */
 	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
 		return diggableNextTo(core, levels, avoid, world).orElseGet(() ->
-			spots(candidates(core).stream(), levels, avoid).findFirst().orElseGet(() -> new Mineshaft(core.offset(2, 0, 2), levels)).aboveBedrock(world));
+			spots(candidates(core).stream(), levels, DEFAULT_BRANCHES_PER_SIDE, DEFAULT_BRANCH_LENGTH, avoid).findFirst().orElseGet(() -> new Mineshaft(core.offset(2, 0, 2), levels)).aboveBedrock(world));
 	}
 
 	/** As {@link #nextTo}, but empty where no spot is diggable, instead of the first spot. */
 	public static Optional<Mineshaft> diggableNextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
-		return diggable(spots(candidates(core).stream(), levels, avoid), world);
+		return diggable(spots(candidates(core).stream(), levels, DEFAULT_BRANCHES_PER_SIDE, DEFAULT_BRANCH_LENGTH, avoid), world);
 	}
 
 	/**
 	 * As {@link #diggableNextTo}, but each spot's top on the {@link #ground} of its column rather than at {@code core}'s height;
-	 * spots with no ground in reach are left out.
+	 * spots with no ground in reach are left out. Each spot is a shaft of {@code branchesPerSide} branches of {@code branchLength}
+	 * a side, and checked with halls of that size.
 	 */
-	public static Optional<Mineshaft> diggableOnGroundNextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
-		return diggable(spots(candidates(core).stream().flatMap(top -> ground(top, world).stream()), levels, avoid), world);
+	public static Optional<Mineshaft> diggableOnGroundNextTo(BlockPos core, List<Integer> levels, int branchesPerSide, int branchLength,
+		List<BoundingBox> avoid, WorldView world) {
+		return diggable(spots(candidates(core).stream().flatMap(top -> ground(top, world).stream()), levels, branchesPerSide, branchLength, avoid), world);
 	}
 
 	private static Optional<Mineshaft> diggable(Stream<Mineshaft> spots, WorldView world) {
@@ -261,9 +263,9 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	}
 
 	/** New shafts at {@code tops} that are clear of the {@code avoid} areas, in order. */
-	private static Stream<Mineshaft> spots(Stream<BlockPos> tops, List<Integer> levels, List<BoundingBox> avoid) {
+	private static Stream<Mineshaft> spots(Stream<BlockPos> tops, List<Integer> levels, int branchesPerSide, int branchLength, List<BoundingBox> avoid) {
 		return tops
-			.map(top -> new Mineshaft(top, levels))
+			.map(top -> new Mineshaft(top, levels, branchesPerSide, branchLength, DEFAULT_TORCH_SPACING))
 			.filter(shaft -> avoid.stream().noneMatch(area -> sharesColumns(shaft.area(), area)));
 	}
 
