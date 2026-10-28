@@ -1,9 +1,11 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.gametest.mixin.AutosaveAccessor;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -19,6 +21,7 @@ import java.util.function.Consumer;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -35,7 +38,7 @@ import org.slf4j.LoggerFactory;
  * worst server tick, where the time went (see {@link TickProfiler}), the script instructions run per tick and what the
  * bots were at; the run fails if a case's average tick reaches {@link #TICK_BUDGET_MS}. A script that stops is logged with
  * its error and counted as {@code stopped}. The cases that only sense, walk or craft come first and leave the world as it
- * is; {@link #WORK}, which fells the trees and mines, comes last. Bots that die count
+ * is; {@link #WORK}, which fells the trees and mines, comes last but for the build case, which may dig. Bots that die count
  * as {@code dead}. Manual-only: {@code ./gradlew runGameTest -Pbenchmark} runs it.
  */
 public class BenchmarkGameTest {
@@ -145,6 +148,70 @@ public class BenchmarkGameTest {
 		    craft("oak_planks", 4)
 		    drop("oak_planks")
 		""";
+	/** Reads its colony over and over, with 30 members (#380). */
+	private static final String COLONY = """
+		while True:
+		    colony()
+		""";
+	/** Posts four jobs each, some 120 on the board, then lists them and takes and drops one over and over (#380). */
+	private static final String JOBS = """
+		for i in range(4):
+		    post_job("dig", {"n": i})
+		while True:
+		    jobs()
+		    job = take_job()
+		    if job:
+		        drop_job(job["id"])
+		""";
+	/** Describes the warehouse blueprint, and where its spots are when built at a spot (#380). */
+	private static final String BLUEPRINT = """
+		while True:
+		    blueprint("antcraft:warehouse")
+		    blueprint("antcraft:warehouse", home() + (0, 0, -12))
+		""";
+	/** Matches item ids against a name and a tag, and its free slots (#380). */
+	private static final String MATCHES = """
+		while True:
+		    matches("oak_log", "#minecraft:logs")
+		    matches("stick", "oak_log")
+		    free_slots()
+		""";
+	/** Reads the ore vein the nearest ore is in, over and over (#380). */
+	private static final String ORE_VEIN = """
+		ore = find_nearest(["coal_ore", "iron_ore"], radius=12)
+		while True:
+		    ore_vein(ore)
+		""";
+	/** Describes a shaft from its top, as the mining library does each round (#380). */
+	private static final String MINESHAFT_AT = """
+		while True:
+		    mineshaft_at(home() + (0, 0, -12), [pos().y - 4, pos().y - 8])
+		""";
+	/** Finds a shaft site of two levels in the ground beside the bot, the first spot fit (#380). */
+	private static final String MINESHAFT = """
+		while True:
+		    mineshaft([pos().y - 4, pos().y - 8])
+		""";
+	/**
+	 * Finds no shaft site, the worst case of {@code mineshaft} (#380): every spot reads its column, five halls of 48 blocks
+	 * a side in the ground and stone or the air beside the area, and its last level's hall is in the bedrock at the
+	 * world's bottom (y -64), so none fits.
+	 */
+	private static final String MINESHAFT_NONE = """
+		y = pos().y
+		while True:
+		    assert mineshaft([y - 3, y - 5, y - 7, y - 9, y - 11, -64], branches=16) is None, "a site fits"
+		""";
+	/** Builds the warehouse without its blocks: plans it and fails for missing ingredients, over and over (#380). */
+	private static final String BUILD = """
+		while True:
+		    build("antcraft:warehouse", home() + (0, 0, -12))
+		""";
+	/** Members of the colony of the core the benchmark puts in the area. */
+	private static final Consumer<AntBot> MEMBER = bot -> {
+		ColonyManager colonies = ColonyManager.get((ServerLevel) bot.level());
+		colonies.join(bot, colonies.nearest(bot.blockPosition(), ColonyManager.JOIN_DISTANCE).orElseThrow());
+	};
 	/**
 	 * What a player's working script mixes: senses, walks and block work. Fells the trees, mines the ores it finds, goes
 	 * home. It names what to pick up, as {@code pick_up} without {@code what} fails with an internal error.
@@ -196,20 +263,30 @@ public class BenchmarkGameTest {
 		new Case("smelt", SMELT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600,
 			bot -> bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64))),
 		new Case("busy", BUSY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
-		WORK);
+		new Case("colony", COLONY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, MEMBER),
+		new Case("jobs", JOBS, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, MEMBER),
+		new Case("blueprint", BLUEPRINT, 600),
+		new Case("matches", MATCHES, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, LOGS),
+		new Case("ore_vein", ORE_VEIN, 600),
+		new Case("mineshaft_at", MINESHAFT_AT, 600),
+		new Case("mineshaft", MINESHAFT, 600),
+		new Case("mineshaft none", MINESHAFT_NONE, 600),
+		WORK,
+		new Case("build", BUILD, 600));
 
 	private static int totalTicks() {
 		return CASES.stream().mapToInt(c -> WARM_UP_TICKS + c.ticks() + 1).sum();
 	}
 
-	@GameTest(structure = "antcraft-gametest:benchmark", maxTicks = 20_000, manualOnly = true)
+	@GameTest(structure = "antcraft-gametest:benchmark", maxTicks = 30_000, manualOnly = true)
 	public void thirtyBotsRunningScripts(GameTestHelper helper) {
 		GameTests.start(helper);
 		ground(helper);
 		for (int[] tree : new int[][] {{4, 4}, {12, 3}, {20, 4}, {30, 3}, {43, 5}, {44, 16}, {43, 28}, {3, 20}, {4, 42}, {16, 44}, {28, 44}, {42, 43}}) {
 			tree(helper, tree[0], tree[1]);
 		}
-		helper.assertTrue(totalTicks() < 20_000, "the cases take " + totalTicks() + " ticks");
+		helper.setBlock(24, GROUND + 1, 10, ModBlocks.COLONY_CORE);
+		helper.assertTrue(totalTicks() < 30_000, "the cases take " + totalTicks() + " ticks");
 		new Run(helper).register();
 	}
 
@@ -303,6 +380,7 @@ public class BenchmarkGameTest {
 				report.worstTickMs(), Math.round(instructions)));
 			this.helper.assertTrue(report.averageTickMs() < TICK_BUDGET_MS, c.name() + ": average tick " + report.averageTickMs() + " ms");
 			for (AntBot bot : this.bots) {
+				ColonyManager.get(this.helper.getLevel()).leave(bot);
 				bot.discard();
 			}
 			this.bots.clear();

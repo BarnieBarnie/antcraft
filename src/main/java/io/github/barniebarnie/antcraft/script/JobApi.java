@@ -19,6 +19,9 @@ import org.jspecify.annotations.Nullable;
  * is claimed in one step however the script's instruction budget falls.
  */
 public final class JobApi {
+	/** The instructions {@code jobs} counts for each job it lists, its data decoded: some 0.15 µs a job (#380). */
+	static final long JOB_COST = 8;
+
 	private JobApi() {
 	}
 
@@ -37,20 +40,21 @@ public final class JobApi {
 			String kind = kindOrAny(args[0]);
 			PyList list = new PyList();
 			board(WorkApi.bot(run, call)).ifPresent(board -> board.jobs(kind).forEach(job -> list.items.add(job(job))));
+			run.charge(JOB_COST * list.items.size());
 			return list;
 		});
-		natives.register("take_job", 10, call -> {
+		natives.register("take_job", 30, call -> {
 			Object[] args = Args.bind("take_job", call, 0, "kind");
 			String kind = kindOrAny(args[0]);
 			AntBot bot = WorkApi.bot(run, call);
 			return board(bot).flatMap(board -> board.take(kind, bot.getUUID())).<Object>map(JobApi::job).orElse(PyNone.NONE);
 		});
-		natives.register("finish_job", 10, call -> {
+		natives.register("finish_job", 20, call -> {
 			long id = Args.integer(Args.bind("finish_job", call, 1, "id")[0]);
 			AntBot bot = WorkApi.bot(run, call);
 			return board(bot).map(board -> board.finish(id, bot.getUUID())).orElse(false);
 		});
-		natives.register("drop_job", 10, call -> {
+		natives.register("drop_job", 20, call -> {
 			long id = Args.integer(Args.bind("drop_job", call, 1, "id")[0]);
 			AntBot bot = WorkApi.bot(run, call);
 			return board(bot).map(board -> board.drop(id, bot.getUUID())).orElse(false);

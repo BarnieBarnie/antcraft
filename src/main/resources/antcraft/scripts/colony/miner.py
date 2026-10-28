@@ -31,13 +31,15 @@ def site():
     c = core()
     s = colony_memory.setdefault("mineshaft", {})
     if "top" not in s:
-        # ponytail: picking and storing is no atomic step; two miners started on one tick could each pick, the last kept
         m = mineshaft(s.get("levels", LEVELS), near=c)
-        if m is None:
-            return None
-        s["top"] = m["top"]
-        s["levels"] = m["levels"]
-        post_job("shaft")
+        # The search may go on over ticks, pausing the script: another miner may have picked meanwhile.
+        # ponytail: what is between the check and storing is atomic only while the instruction budget lasts
+        if "top" not in s:
+            if m is None:
+                return None
+            s["top"] = m["top"]
+            s["levels"] = m["levels"]
+            post_job("shaft")
     kept = {}
     for k, v in s.items():
         kept[k] = v

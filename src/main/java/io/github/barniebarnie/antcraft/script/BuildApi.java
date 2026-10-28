@@ -56,7 +56,7 @@ public final class BuildApi {
 	}
 
 	static void register(Natives natives, ScriptRun run) {
-		natives.register("blueprint", 30, call -> {
+		natives.register("blueprint", 100, call -> {
 			Object[] args = Args.bind("blueprint", call, 1, "id", "at", "turn", "mirror");
 			Object id = args[0];
 			Pos at = Args.absent(args[1]) || args[1] == PyNone.NONE ? null : Pos.of(args[1]);
@@ -88,7 +88,7 @@ public final class BuildApi {
 	}
 
 	/** The plan of blueprint {@code id} with its lowest corner at {@code at}, mirrored if asked, then turned {@code turn} quarters clockwise. */
-	// ponytail: planned in one tick; spread over ticks as the path budget does if large blueprints show in the tick time.
+	// ponytail: planned in one tick, the warehouse in some 13 µs (#380); spread over ticks as the path budget does if larger blueprints show in the tick time.
 	private static Optional<BuildPlan> plan(ServerLevel level, String id, BlockPos at, long turn, boolean mirror) {
 		Identifier parsed = Identifier.tryParse(id);
 		Optional<Blueprint> blueprint = parsed == null ? Optional.empty() : Blueprints.get(parsed);

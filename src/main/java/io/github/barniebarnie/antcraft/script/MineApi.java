@@ -45,19 +45,10 @@ public final class MineApi {
 			if (run.elsewhere(near)) {
 				return PyNone.NONE;
 			}
-			LoadedBlocks loaded = new LoadedBlocks(bot.level());
-			long[] reads = {0};
-			LoadedWorldView world = new LoadedWorldView(new LevelWorldView(bot.level(), bot.getInventory(), bot.getMainHandItem(), Set.of()),
-				pos -> ++reads[0] > 0 && loaded.loaded(pos) != null);
-			// ponytail: charged per block read as the block searches are, estimated, not measured; benchmark it in #380. A
-			// site search reads some 3,000 blocks for a site found at once, up to some 300,000 in one tick where every spot is
-			// blocked; share SenseApi.SCAN_BUDGET over ticks if that shows in the tick time.
-			Object result = Mineshaft.diggableOnGroundNextTo(WorkApi.blockPos(near), levels, branches, length, List.of(), world)
-				.<Object>map(shaft -> describe(shaft, 0, run.host().pos().dimension())).orElse(PyNone.NONE);
-			run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
-			return result;
+			SiteSearch search = new SiteSearch(run, bot, WorkApi.blockPos(near), levels, branches, length);
+			return search.tick() ? search.result() : run.start(search, call);
 		});
-		natives.register("mineshaft_at", 30, call -> {
+		natives.register("mineshaft_at", 1500, call -> {
 			Object[] args = Args.bind("mineshaft_at", call, 2, "top", "levels", "round", "branches", "length");
 			Pos top = Pos.of(args[0]);
 			List<Integer> levels = levels(args[1]);
@@ -70,7 +61,7 @@ public final class MineApi {
 			return describe(new Mineshaft(WorkApi.blockPos(top), levels, branches, length, Mineshaft.DEFAULT_TORCH_SPACING), round,
 				run.host().pos().dimension());
 		});
-		natives.register("ore_vein", call -> {
+		natives.register("ore_vein", 10, call -> {
 			Object[] args = Args.bind("ore_vein", call, 1, "pos");
 			Pos pos = Pos.of(args[0]);
 			AntBot bot = WorkApi.bot(run, call);
@@ -87,6 +78,51 @@ public final class MineApi {
 			run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
 			return vein;
 		});
+	}
+
+	/**
+	 * {@code mineshaft}'s search for a site: the spots beside {@code near} one at a time, while the server's
+	 * {@link SenseApi#SCAN_BUDGET} has blocks left this tick, as a block search reads them; one that cannot finish this tick
+	 * goes on over the next ticks, pausing the script. A spot with every level fit reads some 3,000 blocks with the default
+	 * levels, and a search where no spot fits up to some 300,000 (#380).
+	 */
+	// ponytail: a spot is read whole once begun, so a tick can read one spot's blocks past the budget; split spots if that shows.
+	private static final class SiteSearch implements ScriptRun.Action {
+		private final ScriptRun run;
+		private final AntBot bot;
+		private final Mineshaft.SiteSearch search;
+		private long reads;
+
+		SiteSearch(ScriptRun run, AntBot bot, BlockPos near, List<Integer> levels, int branches, int length) {
+			this.run = run;
+			this.bot = bot;
+			this.search = new Mineshaft.SiteSearch(near, levels, branches, length, List.of());
+		}
+
+		@Override
+		public boolean tick() {
+			long time = this.bot.level().getGameTime();
+			// Made anew each tick: it remembers chunks, which may unload between ticks.
+			LoadedBlocks loaded = new LoadedBlocks(this.bot.level());
+			long[] reads = {0};
+			LoadedWorldView world = new LoadedWorldView(new LevelWorldView(this.bot.level(), this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()),
+				pos -> ++reads[0] > 0 && loaded.loaded(pos) != null);
+			boolean done = this.search.step(world, () -> reads[0] < SenseApi.SCAN_BUDGET.available(time));
+			SenseApi.SCAN_BUDGET.spend(time, (int) Math.min(reads[0], Integer.MAX_VALUE));
+			this.run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
+			this.reads += reads[0];
+			return done;
+		}
+
+		@Override
+		public Object result() {
+			return this.search.found().<Object>map(shaft -> MineApi.describe(shaft, 0, this.run.host().pos().dimension())).orElse(PyNone.NONE);
+		}
+
+		@Override
+		public String describe() {
+			return "mineshaft (" + this.reads + " blocks read)";
+		}
 	}
 
 	/** An optional whole-number argument {@code name}, {@code absent} when not given, at least {@code min}. */

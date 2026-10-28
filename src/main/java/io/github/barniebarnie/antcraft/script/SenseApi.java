@@ -89,7 +89,7 @@ public final class SenseApi {
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
 			return count(bot(run, call), Selector.parse(args[0]).items()) >= n;
 		});
-		natives.register("matches", call -> {
+		natives.register("matches", 15, call -> {
 			Object[] args = Args.bind("matches", call, 2, "item", "selector");
 			return Selector.matches(args[0], args[1]);
 		});
@@ -152,7 +152,7 @@ public final class SenseApi {
 			}
 			return stacks;
 		});
-		natives.register("colony", 10, call -> {
+		natives.register("colony", 35, call -> {
 			Args.bind("colony", call, 0);
 			return bot(run, call).getColony().<Object>map(SenseApi::colony).orElse(PyNone.NONE);
 		});

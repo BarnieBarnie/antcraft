@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.pathing.GridWorld;
@@ -96,6 +97,35 @@ class MineApiTest {
 		BlockPos water = new Mineshaft(small.top(), LEVELS).hall(20).get(8);
 		world.set(water.getX(), water.getY(), water.getZ(), 'W');
 		assertEquals(small, Mineshaft.diggableOnGroundNextTo(NEAR, LEVELS, 1, 2, List.of(), world).orElseThrow());
+	}
+
+	/**
+	 * mineshaft(levels) searches a spot at a time while the tick's block search budget lasts, and goes on from there on
+	 * the next tick (#380): with a budget of one spot a step, a search whose third spot is the first that fits takes three
+	 * steps and finds what the whole search at once does; with none left, a step tries nothing.
+	 */
+	@Test
+	void aSiteSearchGoesOnSpotBySpot() {
+		GridWorld world = new GridWorld().fill(-24, 0, -24, 24, NEAR.getY() - 1, 24, '#');
+		for (BlockPos top : Mineshaft.candidates(NEAR).subList(0, 2)) {
+			world.set(top.getX(), top.getY() - 3, top.getZ(), 'W');
+		}
+		Mineshaft.SiteSearch search = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
+		int steps = 0;
+		boolean done;
+		do {
+			boolean[] tried = {false};
+			done = search.step(world, () -> !tried[0] && (tried[0] = true));
+			steps++;
+		} while (!done);
+		assertEquals(3, steps);
+		Mineshaft whole = Mineshaft.diggableOnGroundNextTo(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of(), world)
+			.orElseThrow();
+		assertEquals(whole, search.found().orElseThrow());
+		assertEquals(Mineshaft.candidates(NEAR).get(2), whole.top());
+		Mineshaft.SiteSearch starved = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
+		assertFalse(starved.step(world, () -> false));
+		assertTrue(starved.found().isEmpty());
 	}
 
 	@Test

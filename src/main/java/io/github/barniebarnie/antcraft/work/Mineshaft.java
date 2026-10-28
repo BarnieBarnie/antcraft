@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.BooleanSupplier;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
@@ -26,6 +27,7 @@ import net.minecraft.util.StringRepresentable;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import org.jspecify.annotations.Nullable;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
@@ -238,7 +240,45 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 */
 	public static Optional<Mineshaft> diggableOnGroundNextTo(BlockPos core, List<Integer> levels, int branchesPerSide, int branchLength,
 		List<BoundingBox> avoid, WorldView world) {
-		return diggable(spots(candidates(core).stream().flatMap(top -> ground(top, world).stream()), levels, branchesPerSide, branchLength, avoid), world);
+		SiteSearch search = new SiteSearch(core, levels, branchesPerSide, branchLength, avoid);
+		search.step(world, () -> true);
+		return search.found();
+	}
+
+	/**
+	 * {@link #diggableOnGroundNextTo}, a spot at a time, so that a search may go on over several ticks, as long as each
+	 * tick's block search budget allows (#380).
+	 */
+	public static final class SiteSearch {
+		private final List<BlockPos> tops;
+		private final List<Integer> levels;
+		private final int branchesPerSide;
+		private final int branchLength;
+		private final List<BoundingBox> avoid;
+		private int next;
+		private @Nullable Mineshaft found;
+
+		public SiteSearch(BlockPos core, List<Integer> levels, int branchesPerSide, int branchLength, List<BoundingBox> avoid) {
+			this.tops = candidates(core);
+			this.levels = levels;
+			this.branchesPerSide = branchesPerSide;
+			this.branchLength = branchLength;
+			this.avoid = avoid;
+		}
+
+		/** Tries the next spots in {@code world} while {@code more} holds before each; true once one fits or none is left. */
+		public boolean step(WorldView world, BooleanSupplier more) {
+			while (this.found == null && this.next < this.tops.size() && more.getAsBoolean()) {
+				Stream<BlockPos> top = ground(this.tops.get(this.next++), world).stream();
+				this.found = diggable(spots(top, this.levels, this.branchesPerSide, this.branchLength, this.avoid), world).orElse(null);
+			}
+			return this.found != null || this.next == this.tops.size();
+		}
+
+		/** The spot that fits, once {@link #step} found it. */
+		public Optional<Mineshaft> found() {
+			return Optional.ofNullable(this.found);
+		}
 	}
 
 	private static Optional<Mineshaft> diggable(Stream<Mineshaft> spots, WorldView world) {
@@ -284,7 +324,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 * four corners of each ring before the spots along its sides. The innermost corners leave a block
 	 * between the column and the core.
 	 */
-	static List<BlockPos> candidates(BlockPos core) {
+	public static List<BlockPos> candidates(BlockPos core) {
 		List<BlockPos> spots = new ArrayList<>();
 		for (int r = 2; r <= SITE_RANGE; r += SITE_STEP) {
 			// A new shaft's area reaches a block past its top each way, so the top of a spot is a block further out than the ring.

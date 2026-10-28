@@ -294,7 +294,8 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	 * world terrain at any height (y 7 in one run), so the level is a few blocks under the floor rather than y 20, and
 	 * the column and hall are stone, not whatever terrain is there.
 	 */
-	@GameTest(maxTicks = 10)
+	// Each mineshaft() waits while the tick's block search budget is spent, as by the big scan beside it (#380).
+	@GameTest(maxTicks = 30)
 	public void mineshaftGivesASiteWithALandingAtTheLevel(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(5, -4, 5, 20, -1, 7)) {
 			helper.setBlock(pos, Blocks.STONE);
@@ -311,7 +312,8 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	 * mineshaft(levels, near) puts the top on the ground of its column, whatever height near is at: a block above the
 	 * ground and a block into it (a dip) give the same top as near on the ground.
 	 */
-	@GameTest(maxTicks = 10)
+	// Each mineshaft() waits while the tick's block search budget is spent, as by the big scan beside it (#380).
+	@GameTest(maxTicks = 30)
 	public void mineshaftPutsTheTopOnTheGround(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(5, -4, 5, 20, -1, 7)) {
 			helper.setBlock(pos, Blocks.STONE);
