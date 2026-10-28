@@ -153,7 +153,10 @@ public class BenchmarkGameTest {
 		while True:
 		    colony()
 		""";
-	/** Posts four jobs each, some 120 on the board, then lists them and takes and drops one over and over (#380). */
+	/**
+	 * Posts four jobs each, some 120 on the board, then lists them and takes and drops one over and over (#380), and posts
+	 * a job and cancels it (#394).
+	 */
 	private static final String JOBS = """
 		for i in range(4):
 		    post_job("dig", {"n": i})
@@ -162,6 +165,7 @@ public class BenchmarkGameTest {
 		    job = take_job()
 		    if job:
 		        drop_job(job["id"])
+		    finish_job(post_job("haul", {"item": "minecraft:oak_log", "n": 16}))
 		""";
 	/** Describes the warehouse blueprint, and where its spots are when built at a spot (#380). */
 	private static final String BLUEPRINT = """

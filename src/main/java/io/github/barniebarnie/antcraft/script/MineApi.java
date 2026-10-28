@@ -86,7 +86,8 @@ public final class MineApi {
 	 * goes on over the next ticks, pausing the script. A spot with every level fit reads some 3,000 blocks with the default
 	 * levels, and a search where no spot fits up to some 300,000 (#380).
 	 */
-	// ponytail: a spot is read whole once begun, so a tick can read one spot's blocks past the budget; split spots if that shows.
+	// ponytail: a spot is read whole once begun, so a tick can read one spot's blocks past the budget; split spots if that shows
+	// (worst tick 3 ms with no spot fit, #394).
 	private static final class SiteSearch implements ScriptRun.Action {
 		private final ScriptRun run;
 		private final AntBot bot;

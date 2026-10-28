@@ -26,7 +26,7 @@ public final class JobApi {
 	}
 
 	public static void register(Natives natives, ScriptRun run) {
-		natives.register("post_job", 10, call -> {
+		natives.register("post_job", 35, call -> {
 			Object[] args = Args.bind("post_job", call, 1, "kind", "data");
 			String kind = kind(args[0]);
 			Object data = Args.absent(args[1]) ? PyNone.NONE : args[1];
