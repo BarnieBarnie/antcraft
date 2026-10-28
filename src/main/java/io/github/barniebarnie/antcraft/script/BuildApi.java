@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -48,7 +49,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
 /**
- * {@code build(blueprint, at, turn=0, mirror=False)} and the sense {@code blueprint(id)} (docs/scripting.md, Actions and
+ * {@code build(blueprint, at, turn=0, mirror=False, job=None)} and the sense {@code blueprint(id)} (docs/scripting.md, Actions and
  * Senses): a blueprint built from what the bot carries, step by step as {@link BuildPlan} orders it.
  */
 public final class BuildApi {
@@ -72,18 +73,19 @@ public final class BuildApi {
 			return describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template), at, turn, mirror);
 		});
 		natives.register("build", call -> {
-			Object[] args = Args.bind("build", call, 2, "blueprint", "at", "turn", "mirror");
+			Object[] args = Args.bind("build", call, 2, "blueprint", "at", "turn", "mirror", "job");
 			String id = Values.str(args[0]);
 			Pos at = Pos.of(args[1]);
 			long turn = Args.absent(args[2]) ? 0 : Args.integer(args[2]);
 			boolean mirror = !Args.absent(args[3]) && Values.truthy(args[3]);
+			Long job = Args.absent(args[4]) || args[4] == PyNone.NONE ? null : Args.integer(args[4]);
 			AntBot bot = WorkApi.bot(run, call);
 			String describe = "build(" + Values.repr(id) + ", " + at + (turn == 0 ? "" : ", turn=" + turn) + (mirror ? ", mirror=True" : "") + ")";
 			Optional<BuildPlan> plan = plan((ServerLevel) bot.level(), id, WorkApi.blockPos(at), turn, mirror);
 			if (plan.isEmpty()) {
 				return run.done(describe, Result.fail(Result.NO_BLUEPRINT));
 			}
-			return run.start(new Build(run, bot, plan.get(), at, describe), call, at);
+			return run.start(new Build(run, bot, plan.get(), at, describe, job), call, at);
 		});
 	}
 
@@ -143,9 +145,9 @@ public final class BuildApi {
 	 * ({@link AntBot#takeBuildScaffold}). Its walks break a block of the blueprint already in place only where no other
 	 * walk reaches, placing it again after.
 	 * Another bot standing where a block goes is asked to make way ({@link AntBot#makeWay}), and an idle one keeps off
-	 * while the bot holds a {@code "build"} job off its colony's job board (colony.builder takes one per build), and else
-	 * until {@link #HOLD_TICKS} after the bot's last build, so across calls; a player or mob gets a moment to go before
-	 * the build gives blocked.
+	 * while the bot holds the build's job off its colony's job board ({@code job=}, as colony.builder passes), or without
+	 * one while it holds any {@code "build"} job and else until {@link #HOLD_TICKS} after the bot's last build, so across
+	 * calls; a player or mob gets a moment to go before the build gives blocked.
 	 */
 	// ponytail: no scooping fluids out of the way and no stand-ins; the old BuilderGoal had them, add back when a blueprint needs them.
 	private static final class Build implements ScriptRun.Action {
@@ -162,6 +164,8 @@ public final class BuildApi {
 		private final BuildPlan plan;
 		private final Pos at;
 		private final String describe;
+		/** The job board id of the job this build is for, which the make-way hold follows; null for none given. */
+		private final @Nullable Long job;
 		private final BuildPlan.Progress progress = new BuildPlan.Progress();
 		private final BlockBreaker breaker;
 		private ScriptRun.@Nullable Action walk;
@@ -185,13 +189,14 @@ public final class BuildApi {
 		private long placed;
 		private @Nullable Result result;
 
-		Build(ScriptRun run, AntBot bot, BuildPlan plan, Pos at, String describe) {
+		Build(ScriptRun run, AntBot bot, BuildPlan plan, Pos at, String describe, @Nullable Long job) {
 			this.run = run;
 			this.bot = bot;
 			this.level = (ServerLevel) bot.level();
 			this.plan = plan;
 			this.at = at;
 			this.describe = describe;
+			this.job = job;
 			this.breaker = new BlockBreaker(bot);
 			for (BuildPlan.Step step : plan.steps()) {
 				this.spots.put(step.pos(), step);
@@ -281,10 +286,12 @@ public final class BuildApi {
 					if (this.bot.getBoundingBox().intersects(spot)) {
 						this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
 					}
-					// ponytail: any "build" job the bot holds, not this build's own: Java does not know which job a build is for.
+					Long job = this.job;
+					BooleanSupplier hold = job == null
+						? () -> this.level.getGameTime() - this.bot.getLastBuilt() <= HOLD_TICKS || this.bot.holdsJob("build")
+						: () -> this.bot.holdsJob(job);
 					for (Entity other : this.level.getEntities(this.bot, spot, entity -> entity instanceof AntBot)) {
-						((AntBot) other).makeWay(this.spots.keySet(), () -> this.bot.isAlive()
-							&& (this.level.getGameTime() - this.bot.getLastBuilt() <= HOLD_TICKS || this.bot.holdsJob("build")));
+						((AntBot) other).makeWay(this.spots.keySet(), () -> this.bot.isAlive() && hold.getAsBoolean());
 					}
 					return false;
 				}

@@ -395,6 +395,34 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * As {@link #anIdleBotKeepsOffWhileTheBuilderHoldsItsBuildJob}, with a builder holding two build jobs that gives up the
+	 * first after missing_ingredients (two seconds later, once the build no longer asks) and holds on to the second: the
+	 * hold follows the job passed to {@code build}, so the idle bot goes back home once that job is done, though the
+	 * builder still holds a build job (#396).
+	 */
+	// Measured: passes at tick 51; with any build job holding, it never goes back while the second one is held.
+	@GameTest(maxTicks = 100)
+	public void anIdleBotGoesBackOnceTheBuildsOwnJobIsDone(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		AntBot idle = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.05, 1, 3.5));
+		AntBot builder = member(helper, colony, 1, 1, 6);
+		WorkGameTest.carryCobbleStep(builder, 1);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		BotScripts.run(builder, "a = take_job('build')\nb = take_job('build')\nprint(build('antcraft:cobble_step', "
+			+ WorkGameTest.at(helper, 3, 1, 3) + ", job=a['id']).reason)\nwait(40)\nfinish_job(a['id'])\nwait(300)\nprint('end')\n");
+		failOnError(helper, builder);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(printed(builder), List.of("missing_ingredients"), "printed");
+			helper.assertValueEqual(idle.blockPosition(), helper.absolutePos(new BlockPos(4, 1, 3)), "where the idle bot stands");
+			helper.assertValueEqual(idle.getWaysMade(), 1, "times the idle bot made way");
+		});
+	}
+
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
 	@GameTest(maxTicks = 80)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {

@@ -441,26 +441,41 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * The scaffold a cancelled build left with the bot, kept through a save, expires {@link AntBot#BUILD_SCAFFOLD_TICKS}
-	 * later when no build is called again (#391): the bot takes the dirt in its reach down into its inventory, leaves the
-	 * dirt out of reach standing, and its save holds none after.
+	 * later when no build is called again (#391): the bot takes the dirt in its reach down into its inventory at once. The
+	 * dirt out of reach it keeps, saved, for its next build, wherever that is, to take down (#396).
 	 */
-	@GameTest(maxTicks = 20)
+	// Measured: passes at tick 54.
+	@GameTest(maxTicks = 110)
 	public void aLeftBuildScaffoldExpires(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
 		helper.setBlock(2, 1, 6, Blocks.DIRT);
 		helper.setBlock(2, 2, 6, Blocks.DIRT);
 		helper.setBlock(6, 1, 1, Blocks.DIRT);
-		bot.leaveBuildScaffold("build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")",
+		bot.leaveBuildScaffold("build('antcraft:cobble_step', " + WorkGameTest.at(helper, 1, 1, 1) + ")",
 			Set.of(helper.absolutePos(new BlockPos(2, 1, 6)), helper.absolutePos(new BlockPos(2, 2, 6)), helper.absolutePos(new BlockPos(6, 1, 1))));
 		AntBot loaded = saveAndLoad(helper, bot);
 		helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "not saved: " + saved(helper, loaded));
 		loaded.tickCount += AntBot.BUILD_SCAFFOLD_TICKS;
+		ScriptRun[] build = new ScriptRun[1];
+		helper.onEachTick(() -> {
+			if (build[0] == null && helper.getBlockState(new BlockPos(2, 1, 6)).isAir()) {
+				helper.assertBlockPresent(Blocks.AIR, 2, 2, 6);
+				helper.assertBlockPresent(Blocks.DIRT, 6, 1, 1);
+				helper.assertValueEqual(loaded.getInventory().countItem(Items.DIRT), 2, "dirt carried");
+				helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "the dirt out of reach is forgotten: " + saved(helper, loaded));
+				WorkGameTest.carryCobbleStep(loaded, 2);
+				build[0] = BotScripts.run(loaded, "r = build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n");
+			}
+			if (build[0] != null && build[0].state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(loaded, Output.Level.DEBUG));
+			}
+		});
 		helper.succeedWhen(() -> {
+			helper.assertTrue(build[0] != null && build[0].state() == ScriptRun.State.FINISHED, "not built yet");
+			helper.assertValueEqual(prints(loaded).stream().map(BotLog.Entry::text).toList(), List.of("True None"), "printed");
+			WorkGameTest.assertCobbleStep(helper, 0);
+			helper.assertBlockPresent(Blocks.AIR, 6, 1, 1);
 			helper.assertFalse(saved(helper, loaded).contains("BuildScaffold"), "still saved: " + saved(helper, loaded));
-			helper.assertBlockPresent(Blocks.AIR, 2, 1, 6);
-			helper.assertBlockPresent(Blocks.AIR, 2, 2, 6);
-			helper.assertBlockPresent(Blocks.DIRT, 6, 1, 1);
-			helper.assertValueEqual(loaded.getInventory().countItem(Items.DIRT), 2, "dirt carried");
 		});
 	}
 

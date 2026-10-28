@@ -45,7 +45,7 @@ def build_job(job):
         return
     while True:
         short = gather(plan["materials"])
-        r = build(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False))
+        r = build(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False), job=job["id"])
         if r:
             break
         if r.reason != "missing_ingredients":

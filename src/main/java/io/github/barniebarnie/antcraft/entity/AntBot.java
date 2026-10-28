@@ -132,12 +132,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final Map<BlockPos, Long> opened = new HashMap<>();
 	/**
 	 * The scaffold of builds that ended before taking it down (cancelled), by the build ({@code build(...)} as it was
-	 * called), for the next build to take down. Saved, until {@link #buildScaffoldUntil}.
+	 * called), for the next build to take down. Saved; what of it is in reach is taken down at {@link #buildScaffoldUntil}.
 	 */
 	private final Map<String, Set<BlockPos>> buildScaffold = new HashMap<>();
 	/** How long, in ticks, the bot keeps the scaffold a build left before it takes down what it can reach: five minutes. */
 	public static final int BUILD_SCAFFOLD_TICKS = 6000;
-	/** The {@link #tickCount} after which the bot takes {@link #buildScaffold} down. Saved as the ticks left. */
+	/** The {@link #tickCount} at which the bot takes down what of {@link #buildScaffold} is in its reach. Saved as the ticks left. */
 	private int buildScaffoldUntil;
 	/** The game time the bot last worked on a build; see {@link #noteBuilding()}. Not saved. */
 	private long lastBuilt;
@@ -332,26 +332,32 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/**
 	 * Takes the scaffold no build came by to take down ({@link #BUILD_SCAFFOLD_TICKS}) down: the blocks in the bot's reach
-	 * that are still scaffold go at once, into its inventory; the rest is left standing.
+	 * that are still scaffold go at once, into its inventory. The rest it keeps for its next build, wherever that is, to
+	 * walk to and take down ({@link #takeBuildScaffold}), and looks again in {@link #BUILD_SCAFFOLD_TICKS}.
 	 */
-	// ponytail: at once and only what is in reach, not walked to and broken tick by tick, as it happens once in five minutes at most.
+	// ponytail: no walking off to it outside a build: only builds leave scaffold, so the bot is a builder and builds again.
 	private void takeDownExpiredScaffold(ServerLevel level) {
 		for (Set<BlockPos> scaffold : this.buildScaffold.values()) {
-			for (BlockPos pos : scaffold) {
+			scaffold.removeIf(pos -> {
 				BlockState state = level.getBlockState(pos);
-				if (state.getBlock().asItem().getDefaultInstance().is(PathFollower.FAST_SCAFFOLD_BLOCKS)
-					&& this.getEyePosition().distanceToSqr(Vec3.atCenterOf(pos)) <= MoveApi.REACH * MoveApi.REACH) {
-					for (ItemStack drop : Block.getDrops(state, level, pos, null)) {
-						ItemStack rest = this.getInventory().addItem(drop);
-						if (!rest.isEmpty()) {
-							Block.popResource(level, pos, rest);
-						}
-					}
-					level.destroyBlock(pos, false, this);
+				if (!state.getBlock().asItem().getDefaultInstance().is(PathFollower.FAST_SCAFFOLD_BLOCKS)) {
+					return true;
 				}
-			}
+				if (this.getEyePosition().distanceToSqr(Vec3.atCenterOf(pos)) > MoveApi.REACH * MoveApi.REACH) {
+					return false;
+				}
+				for (ItemStack drop : Block.getDrops(state, level, pos, null)) {
+					ItemStack rest = this.getInventory().addItem(drop);
+					if (!rest.isEmpty()) {
+						Block.popResource(level, pos, rest);
+					}
+				}
+				level.destroyBlock(pos, false, this);
+				return true;
+			});
 		}
-		this.buildScaffold.clear();
+		this.buildScaffold.values().removeIf(Set::isEmpty);
+		this.buildScaffoldUntil = this.tickCount + BUILD_SCAFFOLD_TICKS;
 	}
 
 	/** Notes that the bot works on a build this tick: the bots it asked to make way keep off a while after ({@link #getLastBuilt}). */
@@ -363,6 +369,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	public boolean holdsJob(String kind) {
 		return this.getColony().map(found -> found.colony().jobs().jobs(kind).stream()
 			.anyMatch(job -> job.taker().filter(this.getUUID()::equals).isPresent())).orElse(false);
+	}
+
+	/** Whether the bot holds job {@code id}, taken off its colony's job board. */
+	public boolean holdsJob(long id) {
+		return this.getColony().map(found -> found.colony().jobs().jobs(null).stream()
+			.anyMatch(job -> job.id() == id && job.taker().filter(this.getUUID()::equals).isPresent())).orElse(false);
 	}
 
 	/** The game time the bot last worked on a build ({@link #noteBuilding}). */
