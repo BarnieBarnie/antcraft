@@ -1,13 +1,16 @@
 package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
+import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.SharedConstants;
@@ -93,5 +96,31 @@ class SelectorTest {
 		Selector.clearCache();
 		assertNotSame(name, Selector.parse("oak_log"));
 		assertNotSame(items, Selector.parse("oak_log").items());
+	}
+
+	@Test
+	void matchesAnItemIdOrStackAgainstASelector() {
+		VanillaData.bindTags();
+		assertTrue(Selector.matches("minecraft:birch_log", "birch_log"));
+		assertTrue(Selector.matches("birch_log", "minecraft:birch_log"));
+		assertFalse(Selector.matches("minecraft:birch_log", "oak_log"));
+		assertTrue(Selector.matches("minecraft:birch_log", "#minecraft:logs"));
+		assertTrue(Selector.matches(new Stack("minecraft:birch_log", 3), "#logs"));
+		assertFalse(Selector.matches(new Stack("minecraft:dirt", 3), "#logs"));
+		assertTrue(Selector.matches("minecraft:oak_planks", new PyList(new ArrayList<>(List.of("dirt", "#planks")))));
+		assertFalse(Selector.matches("minecraft:stone", new PyTuple(List.of("dirt", "#planks"))));
+	}
+
+	@Test
+	void matchesFailsOnAnUnknownSelectorOrItem() {
+		VanillaData.bindTags();
+		assertEquals("unknown item 'minecraft:no_such_item'",
+			assertThrows(ScriptError.class, () -> Selector.matches("dirt", "no_such_item")).getMessage());
+		assertEquals("unknown item tag '#minecraft:no_such_tag'",
+			assertThrows(ScriptError.class, () -> Selector.matches("dirt", "#no_such_tag")).getMessage());
+		assertEquals("unknown item 'minecraft:no_such_item'",
+			assertThrows(ScriptError.class, () -> Selector.matches("no_such_item", "dirt")).getMessage());
+		assertEquals("matches() item must be an item id or a Stack, not 'int'",
+			assertThrows(ScriptError.class, () -> Selector.matches(3L, "dirt")).getMessage());
 	}
 }

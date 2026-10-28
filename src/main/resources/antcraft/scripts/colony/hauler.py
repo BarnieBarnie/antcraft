@@ -3,7 +3,8 @@
 # waits at home. Run it on a colony member with `/antcraft bot run colony.hauler`.
 #
 # A haul job's data is a dict:
-#   "item"  the item id, such as "minecraft:cobblestone"
+#   "item"  a selector: an item id such as "minecraft:cobblestone", a tag such
+#           as "#minecraft:logs", or a list of these
 #   "n"     how many (optional; all it finds when left out)
 #   "from"  the container to take them from (optional; else every chest and
 #           barrel in the colony that holds them, nearest first)
@@ -23,7 +24,7 @@ def holders(item):
     """The containers in the colony that hold item, nearest first; the core left out."""
     found = []
     for p in scan(CONTAINERS, radius=32):
-        if p != core() and in_colony(p) and any([s.item == item for s in container(p) or []]):
+        if p != core() and in_colony(p) and any([matches(s, item) for s in container(p) or []]):
             found.append(p)
     return found
 

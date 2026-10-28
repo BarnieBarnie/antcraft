@@ -144,6 +144,22 @@ public record Selector(List<String> ids, List<String> tags) {
 		return new ScriptError(Values.repr(text) + " is not a selector: " + why);
 	}
 
+	/**
+	 * {@code matches(item, selector)}: whether the item, an id such as {@code "birch_log"} or a {@link Stack}, is one
+	 * {@code selector} selects. An unknown item, or an unknown item or tag in the selector, fails the script.
+	 */
+	public static boolean matches(Object item, Object selector) {
+		String text = switch (item) {
+			case String s -> s;
+			case Stack stack -> stack.item();
+			default -> throw new ScriptError("matches() item must be an item id or a Stack, not '" + Values.typeName(item) + "'");
+		};
+		String id = id(text, text);
+		Item found = BuiltInRegistries.ITEM.getOptional(Identifier.parse(id))
+			.orElseThrow(() -> new ScriptError("unknown item '" + id + "'"));
+		return parse(selector).items().test(new ItemStack(found));
+	}
+
 	/** Which blocks this selects; an unknown block or block tag fails the script. */
 	public Predicate<BlockState> blocks() {
 		return cached(BLOCKS, this, Selector::resolveBlocks);

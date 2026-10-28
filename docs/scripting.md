@@ -142,6 +142,7 @@ Where an item or block is asked for, a string selects it: `"oak_log"` (namespace
 | `inventory()` | list of `Stack` |
 | `count(item)` | how many matching items the bot carries |
 | `has(item, n=1)` | `count(item) >= n` |
+| `matches(item, selector)` | whether an item id or a `Stack` is one the selector selects: `matches(s, "#minecraft:logs")` for a `Stack` from `container(p)`. An unknown item or selector stops the script with an error |
 | `held()` | the `Stack` in its hand or `None` |
 | `block(pos)` | `Block` (unloaded positions give `None`) |
 | `find_nearest(what, radius=32)` | nearest matching block's `Pos` the bot can see from its loaded surroundings, or `None` |
@@ -266,7 +267,7 @@ Their jobs' data, dicts of plain data:
 | Kind | Data |
 |---|---|
 | `build` | `blueprint` (an id), `at` (the lowest corner), `turn` and `mirror` (optional, as `build` takes them) |
-| `haul` | `item` (an item id), `n` (optional; all found without it), `from` (optional: the container to take from; else every chest and barrel within the colony's radius that holds the item, nearest first) and `to` (optional: the container to bring to; else the core). The builder adds `for`, the id of its build job |
+| `haul` | `item` (a selector: an item id, a tag such as `"#minecraft:logs"` or a list of these), `n` (optional; all found without it), `from` (optional: the container to take from; else every chest and barrel within the colony's radius that holds the item, nearest first) and `to` (optional: the container to bring to; else the core). The builder adds `for`, the id of its build job |
 
 ```python
 post_job("build", {"blueprint": "antcraft:farm", "at": colony()["core"] + (4, -1, 0)})

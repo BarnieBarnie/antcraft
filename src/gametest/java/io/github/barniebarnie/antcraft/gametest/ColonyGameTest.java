@@ -326,6 +326,29 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
+	@GameTest(maxTicks = 80)
+	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		helper.setBlock(1, 1, 1, Blocks.CHEST);
+		Container chest = container(helper, 1, 1, 1);
+		chest.setItem(0, new ItemStack(Items.DIRT, 2));
+		chest.setItem(1, new ItemStack(Items.BIRCH_LOG, 3));
+		Container core = container(helper, 6, 1, 1);
+		AntBot hauler = member(helper, colony, 6, 1, 4);
+		PyDict data = new PyDict();
+		data.put("item", "#minecraft:logs");
+		colony.jobs().post("haul", Memory.encode(data), hauler.getUUID());
+		runDefault(helper, hauler, "colony.hauler");
+		failOnWarning(helper, hauler);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core.countItem(Items.BIRCH_LOG) == 3, "birch logs in the core: " + core.countItem(Items.BIRCH_LOG));
+			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
+			helper.assertTrue(chest.countItem(Items.DIRT) == 2, "dirt in the chest: " + chest.countItem(Items.DIRT));
+		});
+	}
+
 	/** A lumberjack alone fells the colony's tree, plants its sapling where it stood and puts the logs into the core. */
 	@GameTest(maxTicks = 600)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {
