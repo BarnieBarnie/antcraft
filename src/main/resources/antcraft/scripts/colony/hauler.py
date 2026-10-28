@@ -1,6 +1,6 @@
 # A colony hauler: takes "haul" jobs off the colony's job board and brings the
 # items to the Colony Core, or to the container the job names. Without jobs it
-# waits at home. Run it on a colony member with `/antcraft bot run colony.hauler`.
+# waits where it is. Run it on a colony member with `/antcraft bot run colony.hauler`.
 #
 # A haul job's data is a dict:
 #   "item"  a selector: an item id such as "minecraft:cobblestone", a tag such
@@ -15,7 +15,6 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from colony.common import core, in_colony
-from lib.home import go_home
 
 CONTAINERS = ["chest", "trapped_chest", "barrel"]
 
@@ -49,7 +48,6 @@ def haul(job):
 while True:
     job = take_job("haul")
     if job is None:
-        go_home()  # out of the way: a bot standing where a block goes blocks a build
         wait(40)
     else:
         haul(job)

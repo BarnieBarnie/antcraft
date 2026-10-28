@@ -164,6 +164,8 @@ public final class BuildApi {
 		private @Nullable BlockPos breaking;
 		private boolean unloaded;
 		private int waited;
+		/** Whether the build was cancelled: the bots it asked to make way may come back. */
+		private boolean cancelled;
 		/** Every spot the blueprint puts a block or air in, where no scaffold goes. */
 		private final Set<BlockPos> spots = new HashSet<>();
 		/** The bot's scaffold already up when the build started, not the build's to take down. */
@@ -269,7 +271,7 @@ public final class BuildApi {
 						this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
 					}
 					for (Entity other : this.level.getEntities(this.bot, spot, entity -> entity instanceof AntBot)) {
-						((AntBot) other).makeWay(this.spots);
+						((AntBot) other).makeWay(this.spots, () -> this.result == null && !this.cancelled && this.bot.isAlive());
 					}
 					return false;
 				}
@@ -364,6 +366,7 @@ public final class BuildApi {
 
 		@Override
 		public void cancel() {
+			this.cancelled = true;
 			if (this.walk != null) {
 				this.walk.cancel();
 				this.walk = null;

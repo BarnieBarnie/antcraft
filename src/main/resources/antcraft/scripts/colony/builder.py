@@ -17,7 +17,6 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from colony.common import fetch, store
-from lib.home import go_home
 
 
 def gather(materials):
@@ -66,7 +65,6 @@ def build_job(job):
 while True:
     job = take_job("build")
     if job is None:
-        go_home()  # out of the way of other builds
         wait(40)
     else:
         build_job(job)

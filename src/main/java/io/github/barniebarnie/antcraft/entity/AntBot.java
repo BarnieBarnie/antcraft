@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
@@ -250,10 +251,16 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/**
 	 * Asks the bot to step out of {@code spots}, where another bot builds: its reflexes (see {@link Reflexes}) take it
-	 * out of them for a second, ending its script's current action with {@code interrupted} if it stands in them.
+	 * out of them for a second, ending its script's current action with {@code interrupted} if it stands in them. An
+	 * idle bot keeps off them while {@code building} holds.
 	 */
-	public void makeWay(Set<BlockPos> spots) {
-		this.reflexes.makeWay(spots);
+	public void makeWay(Set<BlockPos> spots, BooleanSupplier building) {
+		this.reflexes.makeWay(spots, building);
+	}
+
+	/** How many times its reflexes made way for another bot's build (see {@link Reflexes}), for the game tests. */
+	public int getWaysMade() {
+		return this.reflexes.waysMade();
 	}
 
 	/** How many flights from a hostile mob its reflexes planned (see {@link Reflexes}), for the game tests. */

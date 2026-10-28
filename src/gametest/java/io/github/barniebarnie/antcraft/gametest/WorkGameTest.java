@@ -42,6 +42,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
@@ -787,6 +788,24 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		carryCobbleStep(bot, 2);
 		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
 			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/**
+	 * An idle bot whose home is in the farm's last row, standing over the edge into the row before, is asked to make way
+	 * when the builder gets to that row, and keeps off the site until the build is done, though the planks in the last
+	 * row take the builder a while to clear: it does not go back home before its block goes there, and is asked once.
+	 */
+	@GameTest(maxTicks = 380)
+	public void buildMovesAnIdleBotHomedOnTheSiteOnce(GameTestHelper helper) {
+		helper.setBlock(1, 1, 5, Blocks.OAK_PLANKS);
+		AntBot idle = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1, 5.05));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 7);
+		Identifier id = AntCraft.id("farm");
+		Blueprint blueprint = Blueprints.get(id).orElseThrow();
+		BlueprintSummary.of(id, blueprint, helper.getLevel().getServer().getStructureTemplateManager().get(blueprint.structure())).materials()
+			.forEach((item, count) -> bot.getInventory().addItem(new ItemStack(item, count)));
+		expect(helper, bot, "r = build('antcraft:farm', " + at(helper, 1, 1, 1) + ")\nprint(r.ok, r.reason)\n",
+			List.of("True None"), () -> helper.assertValueEqual(idle.getWaysMade(), 1, "times the idle bot made way"));
 	}
 
 	/** The building bot standing where the step's second cobblestone goes, beside the first moves off it and finishes. */

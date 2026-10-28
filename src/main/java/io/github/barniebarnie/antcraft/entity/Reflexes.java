@@ -10,6 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -93,6 +94,10 @@ final class Reflexes {
 	private @Nullable Set<BlockPos> wayFor;
 	/** The bot's tick count until which it makes way for {@link #wayFor}. */
 	private int wayUntil;
+	/** Whether the build that asked is still on: an idle bot keeps off its spots until then. */
+	private BooleanSupplier building = () -> false;
+	/** How many times the bot made way for a build, for the game tests. */
+	private int waysMade;
 
 	Reflexes(AntBot bot) {
 		this.bot = bot;
@@ -147,6 +152,9 @@ final class Reflexes {
 		Kind was = this.active;
 		boolean holds = kind != null && this.plan(level, kind, kind == was, hostile);
 		this.active = holds ? kind : null;
+		if (this.active == Kind.MAKE_WAY && was != Kind.MAKE_WAY) {
+			this.waysMade++;
+		}
 		if (was == Kind.FLEE && this.active != Kind.FLEE) {
 			this.fleeing = false;
 			this.flight.stop();
@@ -157,15 +165,26 @@ final class Reflexes {
 		return holds;
 	}
 
-	/** Asks the bot to step out of {@code spots}, another bot's build, for the next {@link #MAKE_WAY_TICKS} ticks. */
-	void makeWay(Set<BlockPos> spots) {
+	/**
+	 * Asks the bot to step out of {@code spots}, another bot's build, for the next {@link #MAKE_WAY_TICKS} ticks; an idle
+	 * bot keeps off them, standing where it stepped to, while {@code building} holds, so it does not walk back home onto
+	 * the site.
+	 */
+	void makeWay(Set<BlockPos> spots, BooleanSupplier building) {
 		this.wayFor = spots;
 		this.wayUntil = this.bot.tickCount + MAKE_WAY_TICKS;
+		this.building = building;
 	}
 
-	/** Whether the bot was asked to make way of late and still stands in one of the spots. */
+	/** Whether the bot was asked to make way of late and still stands in one of the spots, or is idle and the build is still on. */
 	private boolean inTheWay() {
-		if (this.wayFor == null || this.bot.tickCount > this.wayUntil) {
+		if (this.wayFor == null) {
+			return false;
+		}
+		if (this.bot.isIdling() && this.building.getAsBoolean()) {
+			return true;
+		}
+		if (this.bot.tickCount > this.wayUntil) {
 			this.wayFor = null;
 			return false;
 		}
@@ -181,6 +200,11 @@ final class Reflexes {
 	/** How many flights from a hostile mob the bot planned so far. */
 	int flightPlans() {
 		return this.flightPlans;
+	}
+
+	/** How many times the bot made way for a build so far. */
+	int waysMade() {
+		return this.waysMade;
 	}
 
 	/** Whether a reflex holds the bot. */
@@ -235,7 +259,7 @@ final class Reflexes {
 				Set<BlockPos> spots = this.wayFor;
 				Predicate<BlockPos> avoid = pos -> spots.contains(pos) || spots.contains(pos.above());
 				if (!avoid.test(feet)) {
-					this.target = feet; // only over the edge of a spot: back to the middle of its block
+					this.target = feet; // over the edge of a spot, or idle off the site: in the middle of its block
 					return true;
 				}
 				return this.stepAside(world, feet, same, avoid);
