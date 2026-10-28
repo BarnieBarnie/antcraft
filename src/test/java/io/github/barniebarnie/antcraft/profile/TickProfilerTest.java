@@ -46,6 +46,8 @@ class TickProfilerTest {
 		assertEquals(2, report.ticks());
 		assertEquals(20.0, report.averageTickMs(), 1e-9);
 		assertEquals(30.0, report.worstTickMs(), 1e-9);
+		// Which tick was the worst, counted from 1 since started, to tell a slow start from a spike later on.
+		assertEquals(2, report.worstTick());
 		// The costliest part first.
 		assertEquals(List.of("survey", "path"), report.parts().stream().map(TickProfiler.PartReport::name).toList());
 		TickProfiler.PartReport path = report.parts().get(1);
@@ -111,7 +113,7 @@ class TickProfilerTest {
 		profiler.end("path", a);
 		profiler.endTick();
 		List<String> lines = profiler.report().lines();
-		assertEquals("1 ticks: average 2.00 ms, worst 2.00 ms", lines.getFirst());
+		assertEquals("1 ticks: average 2.00 ms, worst 2.00 ms (tick 1)", lines.getFirst());
 		assertEquals("path: 2.00 ms/tick, worst 2.00 ms, 1 calls", lines.get(1));
 	}
 }

@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.gametest.mixin.AutosaveAccessor;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
@@ -176,13 +177,24 @@ public class BenchmarkGameTest {
 		private int index = -1;
 		private long caseStart;
 		private long executedAtStart;
+		/** The ticks there were until the server's next autosave when the run began. */
+		private int autosaveIn;
 
 		Run(GameTestHelper helper) {
 			this.helper = helper;
 		}
 
 		void register() {
+			// The server's autosave, every 6000 ticks, writes the world in one tick: 25 to 35 ms here, the worst tick of
+			// whichever case it falls in (it was the reachable case's, at server tick 6000, #329). It is vanilla's and comes
+			// the same without bots, so it is put off until the cases are done.
+			this.autosaveIn = this.autosave().antcraft$getTicksUntilAutosave();
+			this.autosave().antcraft$setTicksUntilAutosave(Integer.MAX_VALUE);
 			this.helper.onEachTick(this::tick);
+		}
+
+		private AutosaveAccessor autosave() {
+			return (AutosaveAccessor) this.helper.getLevel().getServer();
 		}
 
 		private void tick() {
@@ -193,6 +205,7 @@ public class BenchmarkGameTest {
 				}
 				this.index++;
 				if (this.index == CASES.size()) {
+					this.autosave().antcraft$setTicksUntilAutosave(this.autosaveIn);
 					LOGGER.info("Benchmark: summary, {} bots\n  {}", BOTS, String.join("\n  ", this.summary));
 					this.helper.succeed();
 					return;

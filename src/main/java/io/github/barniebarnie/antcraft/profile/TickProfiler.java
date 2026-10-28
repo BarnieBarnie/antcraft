@@ -34,12 +34,16 @@ public final class TickProfiler {
 	public record PartReport(String name, long calls, double msPerTick, double worstTickMs, double totalMs) {
 	}
 
-	/** The server ticks measured and the parts, the costliest in all first. */
-	public record Report(long ticks, double averageTickMs, double worstTickMs, List<PartReport> parts) {
+	/**
+	 * The server ticks measured and the parts, the costliest in all first. {@code worstTick} is which tick was the worst,
+	 * counted from 1 since started, which tells a slow start, such as code the JVM has not compiled yet, from a spike later on.
+	 */
+	public record Report(long ticks, double averageTickMs, double worstTickMs, long worstTick, List<PartReport> parts) {
 		/** The report as lines of text: the ticks, then a line per part. */
 		public List<String> lines() {
 			List<String> lines = new ArrayList<>();
-			lines.add(String.format(Locale.ROOT, "%d ticks: average %.2f ms, worst %.2f ms", this.ticks, this.averageTickMs, this.worstTickMs));
+			lines.add(String.format(Locale.ROOT, "%d ticks: average %.2f ms, worst %.2f ms (tick %d)", this.ticks, this.averageTickMs, this.worstTickMs,
+				this.worstTick));
 			for (PartReport part : this.parts) {
 				lines.add(String.format(Locale.ROOT, "%s: %.2f ms/tick, worst %.2f ms, %d calls", part.name(), part.msPerTick(), part.worstTickMs(),
 					part.calls()));
@@ -55,6 +59,7 @@ public final class TickProfiler {
 	private long ticks;
 	private long tickTotal;
 	private long worstTick;
+	private long worstTickAt;
 
 	public TickProfiler(LongSupplier clock) {
 		this.clock = clock;
@@ -66,6 +71,7 @@ public final class TickProfiler {
 		this.ticks = 0;
 		this.tickTotal = 0;
 		this.worstTick = 0;
+		this.worstTickAt = 0;
 		this.tickStart = OFF;
 		this.running = true;
 	}
@@ -93,7 +99,10 @@ public final class TickProfiler {
 		this.tickStart = OFF;
 		this.ticks++;
 		this.tickTotal += time;
-		this.worstTick = Math.max(this.worstTick, time);
+		if (time > this.worstTick) {
+			this.worstTick = time;
+			this.worstTickAt = this.ticks;
+		}
 		for (Part part : this.parts.values()) {
 			part.worstTick = Math.max(part.worstTick, part.thisTick);
 			part.thisTick = 0;
@@ -143,6 +152,6 @@ public final class TickProfiler {
 			.map(entry -> new PartReport(entry.getKey(), entry.getValue().calls, entry.getValue().total / NANOS_PER_MS / perTick,
 				Math.max(entry.getValue().worstTick, entry.getValue().thisTick) / NANOS_PER_MS, entry.getValue().total / NANOS_PER_MS))
 			.sorted(Comparator.comparingDouble(PartReport::totalMs).reversed().thenComparing(PartReport::name)).toList();
-		return new Report(this.ticks, this.tickTotal / NANOS_PER_MS / perTick, this.worstTick / NANOS_PER_MS, parts);
+		return new Report(this.ticks, this.tickTotal / NANOS_PER_MS / perTick, this.worstTick / NANOS_PER_MS, this.worstTickAt, parts);
 	}
 }

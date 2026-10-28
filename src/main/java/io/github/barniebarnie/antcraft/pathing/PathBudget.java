@@ -7,7 +7,10 @@ package io.github.barniebarnie.antcraft.pathing;
  * Server thread only.
  */
 public final class PathBudget {
-	/** Half a search of the most nodes a bot plans with (see PathFollower), some 10 to 20 milliseconds of a tick. */
+	/**
+	 * Half a search of the most nodes a bot plans with (see PathFollower): some 7 milliseconds of a tick on average, and up
+	 * to 15 in the worst tick, in the bot benchmark's reachable case, where 30 bots plan all the time (#329).
+	 */
 	// ponytail: fixed share; measured with the bot benchmark (BenchmarkGameTest), tune from play-tests.
 	public static final int NODES_PER_TICK = 2000;
 	/** The server's budget, which every bot's path follower shares. */

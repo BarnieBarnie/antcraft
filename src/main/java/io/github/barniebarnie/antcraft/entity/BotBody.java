@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.Path;
 import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
 import net.minecraft.core.BlockPos;
@@ -98,7 +99,7 @@ final class BotBody implements MoveApi.Body {
 				if (nodes <= 0 || this.done()) {
 					return 0;
 				}
-				int expanded = search.run(nodes);
+				int expanded = TickProfiler.time("path.plan", () -> search.run(nodes));
 				PathBudget.SERVER.spend(tick, expanded);
 				return expanded;
 			}
