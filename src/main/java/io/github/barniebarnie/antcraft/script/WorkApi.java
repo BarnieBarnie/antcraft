@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -79,7 +80,14 @@ public final class WorkApi {
 			if (radius < 0 || radius > MAX_PICK_UP_RADIUS) {
 				throw new ScriptError("radius must be from 0 to " + MAX_PICK_UP_RADIUS + ", not " + radius);
 			}
-			return run.start(new PickUp(run, bot(run, call), item, (int) radius, Values.repr(args[0])), call);
+			StringJoiner given = new StringJoiner(", ", "pick_up(", ")");
+			if (!Args.absent(args[0])) {
+				given.add(Values.repr(args[0]));
+			}
+			if (!Args.absent(args[1])) {
+				given.add("radius=" + radius);
+			}
+			return run.start(new PickUp(run, bot(run, call), item, (int) radius, given.toString()), call);
 		});
 	}
 
@@ -330,7 +338,7 @@ public final class WorkApi {
 		private final ScriptRun run;
 		private final AntBot bot;
 		private final Predicate<ItemStack> item;
-		private final String what;
+		private final String describe;
 		private final Vec3 center;
 		private final int radius;
 		/** Items the bot could not walk to. */
@@ -344,12 +352,12 @@ public final class WorkApi {
 		private long taken;
 		private @Nullable Result result;
 
-		PickUp(ScriptRun run, AntBot bot, Predicate<ItemStack> item, int radius, String what) {
+		PickUp(ScriptRun run, AntBot bot, Predicate<ItemStack> item, int radius, String describe) {
 			this.run = run;
 			this.bot = bot;
 			this.item = item;
 			this.radius = radius;
-			this.what = what;
+			this.describe = describe;
 			this.center = bot.position();
 			this.before = BotHands.count(bot, item);
 		}
@@ -449,7 +457,7 @@ public final class WorkApi {
 
 		@Override
 		public String describe() {
-			return "pick_up(" + this.what + ", radius=" + this.radius + ")";
+			return this.describe;
 		}
 	}
 }

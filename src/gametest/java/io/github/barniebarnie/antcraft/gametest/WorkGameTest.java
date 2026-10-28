@@ -365,6 +365,23 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None 2 2 0"), () -> helper.assertItemEntityPresent(Items.HEART_OF_THE_SEA));
 	}
 
+	@GameTest(maxTicks = 100)
+	public void pickUpWithoutWhatTakesAnyItemAround(GameTestHelper helper) {
+		helper.spawnItem(Items.NAUTILUS_SHELL, new BlockPos(5, 1, 5));
+		helper.spawnItem(Items.HEART_OF_THE_SEA, new BlockPos(1, 1, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "r = pick_up(radius=6)\nprint(r.ok, r.value, count('nautilus_shell'), count('heart_of_the_sea'))\n",
+			List.of("True 2 1 1"), () -> helper.assertValueEqual(bot.getScript().lastResult(), "pick_up(radius=6) -> ok, 2", "last result"));
+	}
+
+	@GameTest(maxTicks = 100)
+	public void pickUpWithNoArgumentsTakesAnyItemAround(GameTestHelper helper) {
+		helper.spawnItem(Items.NAUTILUS_SHELL, new BlockPos(5, 1, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "r = pick_up()\nprint(r.ok, r.value, count('nautilus_shell'))\n",
+			List.of("True 1 1"), () -> helper.assertValueEqual(bot.getScript().lastResult(), "pick_up() -> ok, 1", "last result"));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void pickUpWithNothingAroundIsTargetGone(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
