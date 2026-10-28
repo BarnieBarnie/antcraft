@@ -246,9 +246,12 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A bot idle at home, far from every player and other test, holds no chunk ticket (#327): its chunk unloads, and the
 	 * bot with it. Once the chunk loads again, as when a player comes near, the bot carries on with {@code idle.py}: it
-	 * walks to the home set while it was away.
+	 * walks to the home set while it was away. The bot's entities load from disk in the background, through the IO worker,
+	 * both when it is first put on the far spot and when its chunk loads again; while other tests' chunks are saved that
+	 * can take seconds, and the server runs hundreds of ticks meanwhile. So those waits have a budget in wall-clock time
+	 * ({@link GameTests#waitAtMost}).
 	 */
-	@GameTest(maxTicks = 240)
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 240)
 	public void anIdleBotLetsItsChunkUnloadAndCarriesOnWhenItLoads(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		int chunkX = -1875;
@@ -283,6 +286,8 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			}
 			bot.discard();
 		});
+		GameTests.waitAtMost(helper, () -> unloaded[0] ? !(level.getEntity(id) instanceof AntBot reloaded && reloaded != bot)
+			: !idled[0] && !level.isPositionEntityTicking(start), () -> unloaded[0] ? "bot not reloaded" : "bot not ticking on its spot");
 		helper.onEachTick(() -> {
 			if (!unloaded[0]) {
 				ScriptRun run = bot.getScript();
@@ -361,25 +366,52 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** A bot next to a lit nether portal goes through it with {@code travel} and arrives in the Nether, its script going on there (#350). */
-	@GameTest(maxTicks = 240)
+	/**
+	 * The lower west corner of a portal frame at a far spot of its own in the Overworld, with the chunks a bot's ticket
+	 * would load loaded. The spots lie 1024 blocks apart, 128 in the Nether, so no portal test comes out of another's
+	 * portal in either dimension, as the tests in a batch would in the Nether a few blocks apart (#359).
+	 */
+	private static BlockPos portalSpot(ServerLevel level) {
+		ChunkPos spot = new ChunkPos(3750, 64 * FAR_SPOTS.getAndIncrement());
+		for (int cx = spot.x() - 3; cx <= spot.x() + 3; cx++) {
+			for (int cz = spot.z() - 3; cz <= spot.z() + 3; cz++) {
+				level.getChunk(cx, cz);
+			}
+		}
+		return new BlockPos(spot.getMinBlockX() + 4, 300, spot.getMinBlockZ() + 8);
+	}
+
+	/**
+	 * A bot next to a lit nether portal goes through it with {@code travel} and arrives in the Nether, its script going on
+	 * there (#350). At a {@link #portalSpot}. The bot travels once it ticks on that spot and the Nether chunk it comes out
+	 * in ticks entities: both chunks are new, and their entities load in the background (see {@link GameTests#waitAtMost}).
+	 */
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 240)
 	public void travelTakesTheBotThroughANetherPortal(GameTestHelper helper) {
-		buildPortal(helper.getLevel(), helper.absolutePos(new BlockPos(2, 0, 4)));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 2);
+		ServerLevel level = helper.getLevel();
+		BlockPos corner = portalSpot(level);
+		buildPortal(level, corner);
+		BlockPos start = corner.offset(1, 1, -2);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.teleportTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
 		UUID id = bot.getUUID();
-		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
 		GameTests.onEnd(helper, () -> {
 			if (nether.getEntity(id) instanceof AntBot there) {
 				there.discard();
 			}
+			bot.discard();
 		});
 		failOnError(helper, bot);
-		// Where the portal leads, an eighth of the way from the Nether's origin; the bot travels once that ticks entities.
-		BlockPos there = new BlockPos(Math.floorDiv(bot.getBlockX(), 8), 64, Math.floorDiv(bot.getBlockZ(), 8));
+		// Where the portal leads, an eighth of the way from the Nether's origin.
+		BlockPos there = new BlockPos(Math.floorDiv(start.getX(), 8), 64, Math.floorDiv(start.getZ(), 8));
 		boolean[] started = {false};
+		GameTests.waitAtMost(helper, () -> !started[0], () -> "chunks not ticking entities: Overworld "
+			+ level.isPositionEntityTicking(start) + ", Nether " + nether.isPositionEntityTicking(there));
 		helper.onEachTick(() -> {
+			BotChunks.keep(level, ChunkPos.containing(start));
 			BotChunks.keep(nether, ChunkPos.containing(there));
-			if (!started[0] && nether.isPositionEntityTicking(there)) {
+			if (!started[0] && level.isPositionEntityTicking(start) && nether.isPositionEntityTicking(there)) {
 				BotScripts.run(bot, "r = travel(find_nearest('nether_portal'))\nprint(r.ok, dimension())\nwait(1000)\n");
 				started[0] = true;
 			}
@@ -413,29 +445,37 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A bot in the Nether whose home is in the Overworld goes home through a portal next to it: its {@code idle.py} finds
-	 * the portal, travels, and walks home from the portal it comes out of, which is the one in the test area (#350).
+	 * the portal, travels, and walks home from the portal it comes out of, which is the one next to its home (#350). At a
+	 * {@link #portalSpot}, waiting for its chunks as {@link #travelTakesTheBotThroughANetherPortal} does.
 	 */
-	@GameTest(maxTicks = 240)
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 320)
 	public void anIdleBotInTheNetherGoesHomeThroughAPortal(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		// The Overworld end, which the portal in the Nether leads to: nearer its way out than any other portal.
-		buildPortal(level, helper.absolutePos(new BlockPos(2, 0, 4)));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		BlockPos overworldCorner = portalSpot(level);
+		buildPortal(level, overworldCorner);
+		BlockPos home = overworldCorner.offset(4, 1, -2);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.teleportTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5);
 		UUID id = bot.getUUID();
-		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 1));
 		bot.setHome(home);
 		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
 		BlockPos corner = new BlockPos(Math.floorDiv(home.getX(), 8) - 1, 100, Math.floorDiv(home.getZ(), 8));
 		GameTests.onEnd(helper, () -> {
-			if (nether.getEntity(id) instanceof AntBot there) {
-				there.discard();
+			for (ServerLevel in : List.of(level, nether)) {
+				if (in.getEntity(id) instanceof AntBot there) {
+					there.discard();
+				}
 			}
 		});
-		// Once the Nether chunk ticks entities, the portal goes up there and the bot is put next to it.
+		// Once both chunks tick entities, the portal goes up in the Nether and the bot is put next to it.
 		boolean[] sent = {false};
+		GameTests.waitAtMost(helper, () -> !sent[0], () -> "chunks not ticking entities: Overworld "
+			+ level.isPositionEntityTicking(home) + ", Nether " + nether.isPositionEntityTicking(corner));
 		helper.onEachTick(() -> {
+			BotChunks.keep(level, ChunkPos.containing(home));
 			BotChunks.keep(nether, ChunkPos.containing(corner));
-			if (sent[0] || !nether.isPositionEntityTicking(corner)) {
+			if (sent[0] || !level.isPositionEntityTicking(home) || !nether.isPositionEntityTicking(corner)) {
 				return;
 			}
 			buildPortal(nether, corner);
@@ -452,8 +492,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A bot that went into the Nether through a portal and is then more than 32 blocks from it, at the end of a tunnel,
 	 * goes home through the portal it remembers: its {@code idle.py} finds no portal near and travels to the remembered
-	 * one (#354). Far from the test area, so the portals of the other portal tests, a few blocks away in the Nether, are
-	 * not the nearest.
+	 * one (#354). Far from the test area and the other portal tests, so their portals are not the nearest.
 	 */
 	@GameTest(maxTicks = 700)
 	public void anIdleBotFarFromThePortalItCameThroughGoesHomeThroughIt(GameTestHelper helper) {
@@ -524,9 +563,10 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	 * An idle bot whose home is in the Nether and whose nearest remembered portal was broken travels there, finds it gone
 	 * ({@code no_portal}), forgets it, and goes through the next portal it remembers, more than 32 blocks off on the other
 	 * side (#358). In the Overworld, far from the test area so no other test's portal is near, and without waiting for a
-	 * Nether chunk: the test ends as the bot goes through.
+	 * Nether chunk: the test ends as the bot goes through. The bot's entities still load in the background once it is put
+	 * on the far spot, so that wait has a budget in wall-clock time ({@link GameTests#waitAtMost}).
 	 */
-	@GameTest(maxTicks = 480)
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 480)
 	public void anIdleBotWhoseNearestRememberedPortalIsGoneGoesThroughTheNext(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		ChunkPos spot = new ChunkPos(-1875, -1875 - 16 * FAR_SPOTS.getAndIncrement());
@@ -558,6 +598,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			bot.discard();
 		});
 		failOnError(helper, bot);
+		GameTests.waitAtMost(helper, () -> !bot.isRemoved() && !level.isPositionEntityTicking(bot.blockPosition()), () -> "bot not ticking on its spot");
 		helper.onEachTick(() -> BotChunks.keep(level, spot));
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION,

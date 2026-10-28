@@ -82,6 +82,8 @@ final class Reflexes {
 	private @Nullable Vec3 fledFrom;
 	/** The bot's tick count when its last flight failed. */
 	private int flightFailedAt = -FLEE_RETRY_TICKS;
+	/** How many flights the bot planned, for the game tests. */
+	private int flightPlans;
 
 	Reflexes(AntBot bot) {
 		this.bot = bot;
@@ -143,6 +145,11 @@ final class Reflexes {
 		return holds;
 	}
 
+	/** How many flights from a hostile mob the bot planned so far. */
+	int flightPlans() {
+		return this.flightPlans;
+	}
+
 	/** Whether a reflex holds the bot. */
 	boolean active() {
 		return this.active != null;
@@ -186,6 +193,7 @@ final class Reflexes {
 					return this.fleeing = false;
 				}
 				this.flight.start(goal);
+				this.flightPlans++;
 				this.fledFrom = hostile.position();
 				PathFollower.Status status = this.flight.tick();
 				return status == PathFollower.Status.FAILED ? this.flightFailed() : (this.fleeing = status == PathFollower.Status.RUNNING);

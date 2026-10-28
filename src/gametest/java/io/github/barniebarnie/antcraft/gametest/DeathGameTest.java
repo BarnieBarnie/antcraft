@@ -14,7 +14,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.locks.LockSupport;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -47,12 +46,6 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		}
 		method.invoke(this, helper);
 	}
-
-	/** The shortest tick {@link #aBotRespawnsAtAHomeWhoseChunkIsNotLoaded} lets the server run: 5 ms. */
-	private static final long PACED_TICK_NANOS = 5_000_000L;
-
-	/** How long {@link #aBotRespawnsAtAHomeWhoseChunkIsNotLoaded} waits for the home chunk once the respawn is due: 15 s. */
-	private static final long HOME_LOAD_NANOS = 15_000_000_000L;
 
 	private static final String SCRIPT ="""
 		memory['runs'] = memory.get('runs', 0) + 1
@@ -208,9 +201,8 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 	 * A bot whose home chunk nothing keeps loaded loads it when its wait is over and respawns there, once the chunk ticks
 	 * entities. The chunk's entities load from disk in the background, which can take the IO worker seconds while other
 	 * tests save their chunks, and an idle test server runs thousands of ticks meanwhile. So the chunk wait has a budget in
-	 * wall-clock time ({@link #HOME_LOAD_NANOS}) instead of in ticks, and the test fails as soon as it is spent. The server is
-	 * paced to at most one tick per {@link #PACED_TICK_NANOS}, so {@code maxTicks}, the respawn time plus that budget in
-	 * paced ticks and some to spare, is never reached first.
+	 * wall-clock time ({@link GameTests#waitAtMost}) instead of in ticks, and the test fails as soon as it is spent;
+	 * {@code maxTicks} is the respawn time plus that budget in paced ticks and some to spare, never reached first.
 	 */
 	@GameTest(maxTicks = 3400)
 	public void aBotRespawnsAtAHomeWhoseChunkIsNotLoaded(GameTestHelper helper) {
@@ -226,22 +218,10 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 				again.discard();
 			}
 		});
-		long[] lastTick = {System.nanoTime()};
-		long[] due = {-1};
-		helper.onEachTick(() -> {
-			long wait = lastTick[0] + PACED_TICK_NANOS - System.nanoTime();
-			if (wait > 0) {
-				LockSupport.parkNanos(wait);
-			}
-			lastTick[0] = System.nanoTime();
+		GameTests.waitAtMost(helper, () -> {
 			BotRespawns.Pending respawn = BotRespawns.get(level).pending(id);
-			if (due[0] < 0 && respawn != null && respawn.at() <= level.getGameTime()) {
-				due[0] = lastTick[0];
-			}
-			if (due[0] >= 0 && lastTick[0] - due[0] > HOME_LOAD_NANOS) {
-				helper.fail("not respawned " + HOME_LOAD_NANOS / 1_000_000_000L + " s after it was due");
-			}
-		});
+			return respawn != null && respawn.at() <= level.getGameTime();
+		}, () -> "due but not respawned");
 		helper.runAfterDelay(5, () -> bot.kill(level));
 		helper.succeedWhen(() -> {
 			Entity entity = level.getEntity(id);
@@ -249,5 +229,23 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			BlockPos at = Objects.requireNonNull(entity).blockPosition();
 			helper.assertTrue(at.getX() == home.getX() && at.getZ() == home.getZ(), "respawned at " + at + ", home " + home);
 		});
+	}
+
+	/**
+	 * The cleanup at the end of every test ({@link GameTests#start}) forgets a bot waiting to respawn at a home in the test's
+	 * area also when the home is in another dimension, where the bot waits (#346), so it does not come back into the next
+	 * test there.
+	 */
+	@GameTest(maxTicks = 20)
+	public void testEndCleanupForgetsARespawnWaitingInAnotherLevel(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)), Level.NETHER);
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		bot.kill(helper.getLevel());
+		helper.assertTrue(BotRespawns.get(nether).pending(id) != null, "no respawn waiting in the Nether");
+		GameTests.forgetRespawns(helper.getLevel().getServer(), helper.getBounds());
+		helper.assertTrue(BotRespawns.get(nether).pending(id) == null, "respawn still waiting in the Nether");
+		helper.succeed();
 	}
 }

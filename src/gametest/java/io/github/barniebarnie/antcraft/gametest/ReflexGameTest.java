@@ -206,6 +206,42 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		fleeFrom(helper, bot, husk);
 	}
 
+	/**
+	 * A bot low on health walled in by bedrock, with nothing to pillar with, and a husk outside finds no way to flee: it
+	 * tries again every 20 ticks ({@code Reflexes.FLEE_RETRY_TICKS}), not every tick (#345).
+	 */
+	@GameTest(maxTicks = 90)
+	public void aWalledInBotDoesNotPlanAFlightEveryTick(GameTestHelper helper) {
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 2; z <= 4; z++) {
+				for (int y = 0; y <= 3; y++) {
+					if (x != 3 || z != 3 || y == 0 || y == 3) {
+						helper.setBlock(x, y, z, Blocks.BEDROCK);
+					}
+				}
+			}
+		}
+		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 3);
+		husk.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.setHealth(4);
+		BotScripts.run(bot, WAIT);
+		long[] lastPlan = {-1};
+		int[] plans = {0};
+		helper.onEachTick(() -> {
+			if (bot.getFlightPlans() == plans[0]) {
+				return;
+			}
+			long now = helper.getTick();
+			if (lastPlan[0] >= 0 && now - lastPlan[0] < 20) {
+				helper.fail("planned again " + (now - lastPlan[0]) + " ticks after a failed flight");
+			}
+			plans[0] = bot.getFlightPlans();
+			lastPlan[0] = now;
+		});
+		helper.succeedWhen(() -> helper.assertTrue(plans[0] >= 3, "flights planned " + plans[0]));
+	}
+
 	/** Brings the bot to low health once its script waits, and passes once it is out of the husk's reach. */
 	private static void fleeFrom(GameTestHelper helper, AntBot bot, Husk husk) {
 		husk.setNoAi(true);

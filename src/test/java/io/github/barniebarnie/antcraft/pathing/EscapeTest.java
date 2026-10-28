@@ -25,6 +25,13 @@ class EscapeTest {
 	}
 
 	@Test
+	void doesNotStepIntoANetherPortal() {
+		// A portal to the north, where it would step first (#351).
+		GridWorld world = GridWorld.flat(4).fill(0, 1, -1, 0, 2, -1, 'P');
+		assertEquals(Optional.of(FEET.east()), Escape.stepAside(world, FEET, pos -> false));
+	}
+
+	@Test
 	void doesNotStepIntoAWallOrOntoLavaOrOverAHole() {
 		GridWorld world = GridWorld.flat(4)
 			.fill(0, 1, -1, 0, 2, -1, '#') // a wall to the north

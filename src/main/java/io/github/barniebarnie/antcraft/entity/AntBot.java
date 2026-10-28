@@ -243,6 +243,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.reflexes.move();
 	}
 
+	/** How many flights from a hostile mob its reflexes planned (see {@link Reflexes}), for the game tests. */
+	public int getFlightPlans() {
+		return this.reflexes.flightPlans();
+	}
+
 	/** A bot fleeing a hostile mob (see {@link Reflexes}) takes on no target. */
 	@Override
 	public void setTarget(@Nullable LivingEntity target) {
