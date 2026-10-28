@@ -3,6 +3,9 @@ package io.github.barniebarnie.antcraft.entity;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.pathing.Path;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
+import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
 import net.minecraft.core.BlockPos;
@@ -81,6 +84,35 @@ final class BotBody implements MoveApi.Body {
 	@Override
 	public void stopPath() {
 		this.follower.stop();
+	}
+
+	@Override
+	public MoveApi.Plan plan(Pos target, int near) {
+		PathFinder.Search search = this.follower.plan(new Goal.Near(blockPos(target), near));
+		return new MoveApi.Plan() {
+			@Override
+			public int run() {
+				// The follower's clock: the budget is the one every bot's path follower shares.
+				long tick = BotBody.this.level().getServer().getTickCount();
+				int nodes = PathBudget.SERVER.available(tick);
+				if (nodes <= 0 || this.done()) {
+					return 0;
+				}
+				int expanded = search.run(nodes);
+				PathBudget.SERVER.spend(tick, expanded);
+				return expanded;
+			}
+
+			@Override
+			public boolean done() {
+				return search.path().isPresent();
+			}
+
+			@Override
+			public boolean found() {
+				return search.path().map(Path::complete).orElse(false);
+			}
+		};
 	}
 
 	private ServerLevel level() {

@@ -25,6 +25,7 @@
 			"io.github.barniebarnie.antcraft.gametest.ScriptGameTest",
 			"io.github.barniebarnie.antcraft.gametest.SenseGameTest",
 			"io.github.barniebarnie.antcraft.gametest.MoveGameTest",
+			"io.github.barniebarnie.antcraft.gametest.ReachableGameTest",
 			"io.github.barniebarnie.antcraft.gametest.WorkGameTest",
 			"io.github.barniebarnie.antcraft.gametest.CraftGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BenchmarkGameTest"

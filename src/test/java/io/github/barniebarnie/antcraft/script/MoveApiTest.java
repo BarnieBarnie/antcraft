@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
@@ -26,6 +27,11 @@ class MoveApiTest {
 		final List<String> paths = new ArrayList<>();
 		MoveApi.PathStatus pathStatus = MoveApi.PathStatus.RUNNING;
 		boolean pathStopped;
+		/** Plans asked for, as target and near. */
+		final List<String> plans = new ArrayList<>();
+		/** How many nodes the next plan expands before it is done, and whether it then found a path. */
+		int planNodes = 10;
+		boolean planFound = true;
 
 		@Override
 		public long gameTime() {
@@ -98,6 +104,34 @@ class MoveApiTest {
 		@Override
 		public void stopPath() {
 			pathStopped = true;
+		}
+
+		@Override
+		public MoveApi.Plan plan(Pos target, int near) {
+			plans.add(target + " near " + near);
+			int nodes = planNodes;
+			boolean found = planFound;
+			return new MoveApi.Plan() {
+				int expanded;
+
+				/** A tick's share of the path budget: all of it, as no other bot plans. */
+				@Override
+				public int run() {
+					int ran = Math.min(PathBudget.NODES_PER_TICK, nodes - expanded);
+					expanded += ran;
+					return ran;
+				}
+
+				@Override
+				public boolean done() {
+					return expanded >= nodes;
+				}
+
+				@Override
+				public boolean found() {
+					return found;
+				}
+			};
 		}
 	}
 
@@ -248,5 +282,66 @@ class MoveApiTest {
 		tick(run);
 		assertEquals(ScriptRun.State.FAILED, run.state());
 		assertEquals(List.of("t.py:1: goto() near must be at least 0, not -1"), log.last(100, Level.ERROR).stream().map(BotLog.Entry::text).toList());
+	}
+
+	@Test
+	void reachablePlansWithoutWalking() {
+		ScriptRun run = start("print(reachable((3, 64, 4)), reachable((5, 64, 5), near=2))\n");
+		tick(run);
+		assertEquals(List.of("True True"), printed());
+		assertEquals(List.of("Pos(3, 64, 4) near 0", "Pos(5, 64, 5) near 2"), bot.plans);
+		assertEquals(List.of(), bot.paths);
+	}
+
+	@Test
+	void reachableIsFalseWhereThePlanFindsNoWay() {
+		bot.planFound = false;
+		ScriptRun run = start("print(reachable((3, 64, 4)))\n");
+		tick(run);
+		assertEquals(List.of("False"), printed());
+	}
+
+	/** An unloaded position is not reachable, and reachable loads no chunks to find out. */
+	@Test
+	void reachableIsFalseForAnUnloadedPosition() {
+		loadChunks(true);
+		bot.loadedUpToX = 0;
+		ScriptRun run = start("print(reachable((100, 64, 0)))\n");
+		tick(run);
+		assertEquals(List.of("False"), printed());
+		assertEquals(List.of(), bot.plans);
+		assertEquals(List.of(), bot.loadRequests);
+	}
+
+	/**
+	 * A plan longer than a tick's share of the server's path budget goes on over the next ticks, pausing the script, and
+	 * charges the script an instruction per node.
+	 */
+	@Test
+	void aLongPlanPausesTheScriptAndCostsInstructions() {
+		bot.planNodes = PathBudget.NODES_PER_TICK * 2 + 100;
+		ScriptRun run = start("print(reachable((3, 64, 4)))\n");
+		tick(run);
+		assertEquals(ScriptRun.State.RUNNING, run.state());
+		assertTrue(run.action() != null && run.action().startsWith("reachable"), "action " + run.action());
+		tick(run);
+		assertEquals(List.of(), printed());
+		assertTrue(run.action() != null && run.action().startsWith("reachable"), "action " + run.action());
+		tick(run);
+		assertTrue(run.action() == null, "still planning: " + run.action());
+		// The charged instructions use up this tick's budget and the next ones' before the script goes on.
+		for (int i = 0; i < 5 && run.state() == ScriptRun.State.RUNNING; i++) {
+			tick(run);
+		}
+		assertEquals(List.of("True"), printed());
+		assertTrue(run.executed() >= bot.planNodes, run.executed() + " instructions");
+	}
+
+	@Test
+	void reachableChecksItsArguments() {
+		ScriptRun run = start("reachable((1, 2, 3), near=-1)\n");
+		tick(run);
+		assertEquals(ScriptRun.State.FAILED, run.state());
+		assertEquals(List.of("t.py:1: reachable() near must be at least 0, not -1"), log.last(100, Level.ERROR).stream().map(BotLog.Entry::text).toList());
 	}
 }

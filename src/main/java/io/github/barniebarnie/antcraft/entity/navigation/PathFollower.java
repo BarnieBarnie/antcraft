@@ -4,6 +4,8 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
+import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
+import io.github.barniebarnie.antcraft.pathing.LoadedWorldView;
 import io.github.barniebarnie.antcraft.pathing.MoveType;
 import io.github.barniebarnie.antcraft.pathing.Path;
 import io.github.barniebarnie.antcraft.pathing.PathBudget;
@@ -226,11 +228,27 @@ public class PathFollower {
 		ServerLevel level = (ServerLevel) this.bot.level();
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level))
 			.from(this.bot.blockPosition());
-		PathFinder.Options options = new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
+		PathFinder.Options options = this.options();
 		this.path = null;
 		this.search = PathFinder.search(world, this.bot.blockPosition(), this.goal, options);
 		this.searchWorld = world;
 		return this.search(level);
+	}
+
+	private PathFinder.Options options() {
+		return new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
+	}
+
+	/**
+	 * A search for the path {@link #start} would plan to {@code goal} from where the bot stands, but over loaded blocks
+	 * only (see {@link LoadedWorldView}), to run without following it, such as for a script's {@code reachable}.
+	 */
+	public PathFinder.Search plan(Goal goal) {
+		ServerLevel level = (ServerLevel) this.bot.level();
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level))
+			.from(this.bot.blockPosition());
+		LoadedBlocks loaded = new LoadedBlocks(level);
+		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), this.bot.blockPosition(), goal, this.options());
 	}
 
 	/**

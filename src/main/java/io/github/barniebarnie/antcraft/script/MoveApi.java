@@ -12,7 +12,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()} and {@code set_home(pos)}.
+ * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()} and {@code set_home(pos)},
+ * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
  */
 public final class MoveApi {
@@ -37,6 +38,8 @@ public final class MoveApi {
 	 * a little short of a player's 4.5.
 	 */
 	public static final double REACH = 4.0;
+	/** What a node of a {@code reachable} plan costs the script in instructions: a node takes far longer than one. */
+	public static final int INSTRUCTIONS_PER_NODE = 1;
 
 	/** What the move actions need of the bot. */
 	public interface Body {
@@ -65,6 +68,27 @@ public final class MoveApi {
 
 		/** Stops the walk. */
 		void stopPath();
+
+		/**
+		 * Starts planning, without walking, a path from where the bot stands to within {@code near} blocks (Manhattan) of
+		 * {@code target}, as {@link #startPath} would plan it but over loaded blocks only, loading no chunks.
+		 */
+		Plan plan(Pos target, int near);
+	}
+
+	/** A path being planned for {@code reachable}, a slice of nodes at a time. */
+	public interface Plan {
+		/**
+		 * Runs the search for as many nodes as this tick has left in the server's path budget, which every bot's path
+		 * follower shares (see PathBudget); returns how many it expanded.
+		 */
+		int run();
+
+		/** Whether the search is over. */
+		boolean done();
+
+		/** Once {@link #done}: whether it found a whole path to the target. */
+		boolean found();
 	}
 
 	public enum PathStatus {
@@ -95,6 +119,60 @@ public final class MoveApi {
 			}
 			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call);
 		});
+		natives.register("reachable", call -> {
+			Object[] args = Args.bind("reachable", call, 1, "pos", "near");
+			Pos target = Pos.of(args[0]);
+			long near = Args.absent(args[1]) ? 0 : Args.integer(args[1]);
+			if (near < 0) {
+				throw new ScriptError("reachable() near must be at least 0, not " + near);
+			}
+			Body body = run.host().body();
+			long chunkX = Math.floorDiv(target.x(), 16);
+			long chunkZ = Math.floorDiv(target.z(), 16);
+			if (chunkX != (int) chunkX || chunkZ != (int) chunkZ || !body.chunkLoaded((int) chunkX, (int) chunkZ)) {
+				return false;
+			}
+			Reachable reachable = new Reachable(run, body.plan(target, (int) Math.min(near, Integer.MAX_VALUE)));
+			if (reachable.tick()) {
+				return reachable.result();
+			}
+			return run.start(reachable, call);
+		});
+	}
+
+	/**
+	 * {@code reachable(pos, near=0)}: a plan run a share of the server's path budget at a time, charging the script
+	 * {@link #INSTRUCTIONS_PER_NODE} per node, and pausing it while the plan goes on over the next ticks.
+	 */
+	private static final class Reachable implements ScriptRun.Action {
+		private final ScriptRun run;
+		private final Plan plan;
+		private int expanded;
+
+		Reachable(ScriptRun run, Plan plan) {
+			this.run = run;
+			this.plan = plan;
+		}
+
+		@Override
+		public boolean tick() {
+			if (!this.plan.done()) {
+				int ran = this.plan.run();
+				this.expanded += ran;
+				this.run.charge((long) ran * INSTRUCTIONS_PER_NODE);
+			}
+			return this.plan.done();
+		}
+
+		@Override
+		public Object result() {
+			return this.plan.done() && this.plan.found();
+		}
+
+		@Override
+		public String describe() {
+			return "reachable (" + this.expanded + " nodes searched)";
+		}
 	}
 
 	/**
