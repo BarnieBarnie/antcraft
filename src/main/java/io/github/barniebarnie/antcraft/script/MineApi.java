@@ -81,13 +81,11 @@ public final class MineApi {
 	}
 
 	/**
-	 * {@code mineshaft}'s search for a site: the spots beside {@code near} one at a time, while the server's
+	 * {@code mineshaft}'s search for a site: the spots beside {@code near} a block at a time, while the server's
 	 * {@link SenseApi#SCAN_BUDGET} has blocks left this tick, as a block search reads them; one that cannot finish this tick
-	 * goes on over the next ticks, pausing the script. A spot with every level fit reads some 3,000 blocks with the default
-	 * levels, and a search where no spot fits up to some 300,000 (#380).
+	 * goes on over the next ticks, pausing the script, inside a spot if need be (#398). A spot with every level fit reads
+	 * some 3,000 blocks with the default levels, and a search where no spot fits up to some 300,000 (#380).
 	 */
-	// ponytail: a spot is read whole once begun, so a tick can read one spot's blocks past the budget; split spots if that shows
-	// (worst tick 3 ms with no spot fit, #394).
 	private static final class SiteSearch implements ScriptRun.Action {
 		private final ScriptRun run;
 		private final AntBot bot;

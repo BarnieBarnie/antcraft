@@ -6,6 +6,8 @@ import io.github.barniebarnie.antcraft.pathing.WorldView;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -246,8 +248,8 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	}
 
 	/**
-	 * {@link #diggableOnGroundNextTo}, a spot at a time, so that a search may go on over several ticks, as long as each
-	 * tick's block search budget allows (#380).
+	 * {@link #diggableOnGroundNextTo}, a block at a time, so that a search may go on over several ticks, as long as each
+	 * tick's block search budget allows (#380), pausing inside a spot where the budget runs out there (#398).
 	 */
 	public static final class SiteSearch {
 		private final List<BlockPos> tops;
@@ -257,6 +259,11 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 		private final List<BoundingBox> avoid;
 		private int next;
 		private @Nullable Mineshaft found;
+		/** The spot being checked, its blocks left to check for {@link #isDiggable}, then its column left to check for bedrock. */
+		private @Nullable Mineshaft spot;
+		private Iterator<BlockPos> cells = Collections.emptyIterator();
+		private Iterator<BlockPos> column = Collections.emptyIterator();
+		private int bedrock;
 
 		public SiteSearch(BlockPos core, List<Integer> levels, int branchesPerSide, int branchLength, List<BoundingBox> avoid) {
 			this.tops = candidates(core);
@@ -266,13 +273,35 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			this.avoid = avoid;
 		}
 
-		/** Tries the next spots in {@code world} while {@code more} holds before each; true once one fits or none is left. */
+		/**
+		 * Goes on with the search in {@code world} while {@code more} holds before each block it checks (or column whose
+		 * ground it finds); true once a spot fits or none is left.
+		 */
 		public boolean step(WorldView world, BooleanSupplier more) {
-			while (this.found == null && this.next < this.tops.size() && more.getAsBoolean()) {
-				Stream<BlockPos> top = ground(this.tops.get(this.next++), world).stream();
-				this.found = diggable(spots(top, this.levels, this.branchesPerSide, this.branchLength, this.avoid), world).orElse(null);
+			while (this.found == null && (this.spot != null || this.next < this.tops.size()) && more.getAsBoolean()) {
+				if (this.spot == null) {
+					Stream<BlockPos> top = ground(this.tops.get(this.next++), world).stream();
+					this.spot = spots(top, this.levels, this.branchesPerSide, this.branchLength, this.avoid).findFirst().orElse(null);
+					if (this.spot != null) {
+						this.cells = this.spot.diggableCells().iterator();
+						this.column = this.spot.bedrockColumn().iterator();
+						this.bedrock = Integer.MIN_VALUE;
+					}
+				} else if (this.cells.hasNext()) {
+					if (blocksShaft(world, this.cells.next())) {
+						this.spot = null;
+					}
+				} else if (this.column.hasNext()) {
+					BlockPos pos = this.column.next();
+					if (world.isBedrock(pos)) {
+						this.bedrock = Math.max(this.bedrock, pos.getY());
+					}
+				} else {
+					this.found = this.spot.above(this.bedrock);
+					this.spot = null;
+				}
 			}
-			return this.found != null || this.next == this.tops.size();
+			return this.found != null || this.spot == null && this.next == this.tops.size();
 		}
 
 		/** The spot that fits, once {@link #step} found it. */
@@ -343,9 +372,19 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 * no hall does: miners dig those without walling fluid off. Nor may either dig next to a nether portal.
 	 */
 	private boolean isDiggable(WorldView world) {
+		return this.diggableCells().noneMatch(pos -> blocksShaft(world, pos));
+	}
+
+	/** The blocks {@link #isDiggable} checks: the column down to the first level, then the halls. */
+	private Stream<BlockPos> diggableCells() {
 		int bottom = this.levels.isEmpty() ? this.top.getY() : this.levels.getFirst();
 		Stream<BlockPos> halls = this.levels.stream().flatMap(y -> this.hall(y).stream()).flatMap(cell -> Stream.of(cell, cell.above()));
-		return Stream.concat(this.column(bottom), halls).noneMatch(pos -> world.isHazard(pos) || world.isBedrock(pos) || nextToPortal(world, pos));
+		return Stream.concat(this.column(bottom), halls);
+	}
+
+	/** Whether {@code pos} keeps a shaft from being dug there: a fluid, bedrock, or a nether portal next to it. */
+	private static boolean blocksShaft(WorldView world, BlockPos pos) {
+		return world.isHazard(pos) || world.isBedrock(pos) || nextToPortal(world, pos);
 	}
 
 	/** Whether a nether portal is next to {@code pos}: digging it would break the portal's frame. */
@@ -355,8 +394,16 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 
 	/** This shaft without the levels at or below bedrock in its column. */
 	private Mineshaft aboveBedrock(WorldView world) {
-		int bottom = this.levels.isEmpty() ? this.top.getY() : this.levels.getLast();
-		int bedrock = this.column(bottom).filter(world::isBedrock).mapToInt(BlockPos::getY).max().orElse(Integer.MIN_VALUE);
+		return this.above(this.bedrockColumn().filter(world::isBedrock).mapToInt(BlockPos::getY).max().orElse(Integer.MIN_VALUE));
+	}
+
+	/** The column {@link #aboveBedrock} looks for bedrock in: down to the last level. */
+	private Stream<BlockPos> bedrockColumn() {
+		return this.column(this.levels.isEmpty() ? this.top.getY() : this.levels.getLast());
+	}
+
+	/** This shaft without the levels at or below {@code bedrock}. */
+	private Mineshaft above(int bedrock) {
 		return this.withLevels(this.levels.stream().filter(y -> y > bedrock).toList());
 	}
 

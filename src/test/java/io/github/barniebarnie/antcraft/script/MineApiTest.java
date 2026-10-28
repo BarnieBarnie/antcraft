@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.pathing.GridWorld;
+import io.github.barniebarnie.antcraft.pathing.LoadedWorldView;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.Values;
@@ -100,25 +101,29 @@ class MineApiTest {
 	}
 
 	/**
-	 * mineshaft(levels) searches a spot at a time while the tick's block search budget lasts, and goes on from there on
-	 * the next tick (#380): with a budget of one spot a step, a search whose third spot is the first that fits takes three
-	 * steps and finds what the whole search at once does; with none left, a step tries nothing.
+	 * mineshaft(levels) searches while the tick's block search budget lasts, and goes on from there on the next tick
+	 * (#380), pausing inside a spot where the budget runs out there (#398): with a budget of 100 blocks a step, a search
+	 * whose third spot is the first that fits reads at most a block's checks (and a column's ground) past it in each step,
+	 * takes many steps and finds what the whole search at once does; with none left, a step tries nothing.
 	 */
 	@Test
-	void aSiteSearchGoesOnSpotBySpot() {
-		GridWorld world = new GridWorld().fill(-24, 0, -24, 24, NEAR.getY() - 1, 24, '#');
+	void aSiteSearchPausesInsideASpot() {
+		GridWorld grid = new GridWorld().fill(-24, 0, -24, 24, NEAR.getY() - 1, 24, '#');
 		for (BlockPos top : Mineshaft.candidates(NEAR).subList(0, 2)) {
-			world.set(top.getX(), top.getY() - 3, top.getZ(), 'W');
+			grid.set(top.getX(), top.getY() - 3, top.getZ(), 'W');
 		}
+		long[] reads = {0};
+		LoadedWorldView world = new LoadedWorldView(grid, pos -> ++reads[0] > 0);
 		Mineshaft.SiteSearch search = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
 		int steps = 0;
 		boolean done;
 		do {
-			boolean[] tried = {false};
-			done = search.step(world, () -> !tried[0] && (tried[0] = true));
+			reads[0] = 0;
+			done = search.step(world, () -> reads[0] < 100);
+			assertTrue(reads[0] < 100 + 2 * 20, "step " + steps + " read " + reads[0] + " blocks");
 			steps++;
 		} while (!done);
-		assertEquals(3, steps);
+		assertTrue(steps > 10, "took " + steps + " steps");
 		Mineshaft whole = Mineshaft.diggableOnGroundNextTo(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of(), world)
 			.orElseThrow();
 		assertEquals(whole, search.found().orElseThrow());
