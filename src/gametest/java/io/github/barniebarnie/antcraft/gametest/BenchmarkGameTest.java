@@ -34,8 +34,8 @@ import org.slf4j.LoggerFactory;
  * worst server tick, where the time went (see {@link TickProfiler}), the script instructions run per tick and what the
  * bots were at; the run fails if a case's average tick reaches {@link #TICK_BUDGET_MS}. A script that stops is logged with
  * its error and counted as {@code stopped}. The cases that only sense, walk or craft come first and leave the world as it
- * is; {@link #WORK}, which fells the trees and mines, comes last. Bots that die (a pillaring bot can place its block where
- * another bot stands) count as {@code dead}. Manual-only: {@code ./gradlew runGameTest -Pbenchmark} runs it.
+ * is; {@link #WORK}, which fells the trees and mines, comes last. Bots that die count
+ * as {@code dead}. Manual-only: {@code ./gradlew runGameTest -Pbenchmark} runs it.
  */
 public class BenchmarkGameTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger("AntCraft game tests");

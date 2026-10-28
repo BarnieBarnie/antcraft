@@ -39,6 +39,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
+import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
@@ -172,9 +173,9 @@ public class PathFollower {
 		if (step.type() != MoveType.PILLAR) {
 			for (BlockPos pos : step.places()) {
 				if (!world.canStandOn(pos)) {
-					if (!this.placeBlock(level, pos)) {
+					if (this.placeBlock(level, pos) == Placed.NO_SCAFFOLD) {
 						this.path = null; // out of scaffold blocks: plan again without placing
-					}
+					} // in someone's way: wait for them to leave, or plan again once the step's time is up
 					return Status.RUNNING;
 				}
 			}
@@ -388,19 +389,34 @@ public class PathFollower {
 			this.bot.getJumpControl().jump(); // afloat, it swims up until high enough to place in the water under it
 		}
 		if (this.bot.getY() >= below.getY() + 1.0) {
-			if (!this.placeBlock(level, below)) {
+			if (this.placeBlock(level, below) == Placed.NO_SCAFFOLD) {
 				this.path = null;
 			}
 		}
 	}
 
-	/** Places one of the bot's scaffold blocks at {@code pos}, recorded as its scaffold. Returns false when it carries none. */
-	public boolean placeBlock(ServerLevel level, BlockPos pos) {
+	/** What {@link #placeBlock} did. */
+	public enum Placed {
+		PLACED,
+		/** The bot carries no scaffold block. */
+		NO_SCAFFOLD,
+		/** An entity, such as another bot, is in the way: placed there, the block would shut it in and suffocate it. */
+		OBSTRUCTED
+	}
+
+	/**
+	 * Places one of the bot's scaffold blocks at {@code pos}, recorded as its scaffold, unless it carries none or an
+	 * entity that blocks building, such as another bot, overlaps the block, as for a player.
+	 */
+	public Placed placeBlock(ServerLevel level, BlockPos pos) {
 		SimpleContainer inventory = this.bot.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
 			if (stack.is(this.scaffold) && stack.getItem() instanceof BlockItem blockItem) {
 				BlockState state = blockItem.getBlock().defaultBlockState();
+				if (!level.isUnobstructed(state, pos, CollisionContext.empty())) {
+					return Placed.OBSTRUCTED;
+				}
 				Vec3 center = Vec3.atCenterOf(pos);
 				this.bot.getLookControl().setLookAt(center.x, center.y, center.z);
 				level.setBlockAndUpdate(pos, state);
@@ -410,10 +426,10 @@ public class PathFollower {
 				stack.shrink(1);
 				// Placed only to get somewhere: other bots leave it alone while this one is near.
 				this.bot.addPathScaffold(pos);
-				return true;
+				return Placed.PLACED;
 			}
 		}
-		return false;
+		return Placed.NO_SCAFFOLD;
 	}
 
 	public static int scaffoldCount(Container inventory) {

@@ -539,6 +539,41 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Two bots at the bottom of a one-wide shaft, one carrying dirt to pillar up. It does not place its scaffold into the
+	 * other bot, which would suffocate it, but waits; once the other bot is gone, it pillars up.
+	 */
+	@GameTest(maxTicks = 120)
+	public void doesNotPlaceScaffoldIntoAnotherBot(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 6, Blocks.BEDROCK);
+		fill(helper, 3, 1, 3, 3, 7, 3, Blocks.AIR);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		AntBot climber = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		climber.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		GameTests.walkTo(climber, helper.absolutePos(new BlockPos(3, 4, 3)));
+		BlockPos feet = helper.absolutePos(new BlockPos(3, 1, 3));
+		helper.onEachTick(() -> {
+			if (other.isAlive()) {
+				for (BlockPos pos : List.of(feet, feet.above())) {
+					if (!helper.getLevel().getBlockState(pos).isAir()) {
+						helper.fail("placed " + helper.getLevel().getBlockState(pos) + " into the other bot at " + pos.subtract(helper.absolutePos(BlockPos.ZERO)));
+					}
+				}
+				if (helper.getTick() >= 40) {
+					helper.assertFalse(GameTests.walked(climber), "the climber gave up while the other bot was in the way");
+					other.discard();
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertFalse(other.isAlive(), "the other bot is still in the shaft");
+			helper.assertTrue(GameTests.walked(climber), "still walking, at " + climber.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(climber.blockPosition().distManhattan(helper.absolutePos(new BlockPos(3, 4, 3))) <= 1,
+				"stopped at " + climber.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+		});
+	}
+
+	/**
 	 * A bot with no role pillars up in a one-wide corridor. Another bot without scaffold blocks
 	 * then has to get past the pillar: it gives up instead of digging it out from under the first.
 	 */
