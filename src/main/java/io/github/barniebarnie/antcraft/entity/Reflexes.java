@@ -18,9 +18,11 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.AABB;
@@ -70,6 +72,8 @@ final class Reflexes {
 	static final int FLEE_RETRY_TICKS = 20;
 	/** How far, in blocks, the mob may move from where it stood when the flight was planned before the bot plans again. */
 	private static final double MOB_MOVED = 4;
+	/** How many ticks a fleeing bot waits between blows at a mob in its reach, as {@code MeleeAttackGoal} does. */
+	private static final int STRIKE_TICKS = 20;
 	/** How long, in ticks, a bot asked to make way keeps out of the build's spots after the last ask. */
 	private static final int MAKE_WAY_TICKS = 20;
 
@@ -88,6 +92,8 @@ final class Reflexes {
 	private @Nullable Vec3 fledFrom;
 	/** The bot's tick count when its last flight failed. */
 	private int flightFailedAt = -FLEE_RETRY_TICKS;
+	/** The bot's tick count when it last struck the mob it flees. */
+	private int struckAt = -STRIKE_TICKS;
 	/** How many flights the bot planned, for the game tests. */
 	private int flightPlans;
 	/** The spots of the build that last asked the bot to make way, or null. */
@@ -162,7 +168,26 @@ final class Reflexes {
 		if (this.active == Kind.FLEE && was != Kind.FLEE) {
 			this.bot.setTarget(null);
 		}
+		if (this.active == Kind.FLEE) {
+			this.strike(level, hostile);
+		}
 		return holds;
+	}
+
+	/**
+	 * Strikes {@code hostile} when it is in the bot's reach and the bot's last blow is a second ago: a fleeing bot does not
+	 * chase a mob, but one that keeps up with it, such as one climbing a ladder right under it, it fights off as it runs
+	 * (#395), rather than take its blows all the way.
+	 */
+	private void strike(ServerLevel level, @Nullable Mob hostile) {
+		if (hostile == null || this.bot.tickCount - this.struckAt < STRIKE_TICKS || !this.bot.isWithinMeleeAttackRange(hostile)
+			|| !this.bot.getSensing().hasLineOfSight(hostile)) {
+			return;
+		}
+		Tools.equipBestWeapon(this.bot);
+		this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+		this.bot.doHurtTarget(level, hostile);
+		this.struckAt = this.bot.tickCount;
 	}
 
 	/**

@@ -390,4 +390,54 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> bot, List.of("dug True", "down True True", "up True"));
 	}
+
+	/**
+	 * A bot low on health climbing out of the shaft with a husk right below it in the column strikes back as it flees,
+	 * rather than take the husk's blows all the way up (#395). The husk climbs after the bot (kept just below it, up to
+	 * under the hatch) and strikes every second while the bot is in its reach, from the first tick: two blows kill the
+	 * bot before it can climb out. The husk is nearly dead, so one blow of the bot's kills it.
+	 */
+	@GameTest(maxTicks = 120)
+	public void aBotFleeingUpTheShaftStrikesTheMobBelowIt(GameTestHelper helper) {
+		helper.setBlock(COLUMN.getFirst(), Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, Direction.NORTH)
+			.setValue(TrapDoorBlock.HALF, Half.TOP));
+		for (BlockPos cell : COLUMN.subList(1, COLUMN.size())) {
+			helper.setBlock(cell, Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 2, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+		bot.setHealth(AntCraftConfig.botFleeHealth());
+		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
+		husk.setNoAi(true);
+		husk.setHealth(2);
+		run(helper, bot, """
+			import lib.shaft
+			memory["shaft"] = {"top": pos() + (0, 4, 0), "levels": [pos().y + 1, pos().y - 1]}
+			while not lib.shaft.to_surface():
+			    wait(5)
+			print("out")
+			""");
+		failOnError(helper, () -> bot);
+		BlockPos bottom = helper.absolutePos(COLUMN.getLast());
+		helper.onEachTick(() -> {
+			if (!bot.isAlive()) {
+				helper.fail("the bot died: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+			if (!husk.isAlive()) {
+				return;
+			}
+			// Climbs after the bot, up to the cell under the hatch, which it cannot open.
+			double y = Math.max(bottom.getY(), Math.min(bottom.getY() + 3, bot.getY() - 1));
+			husk.teleportTo(bottom.getX() + 0.5, y, bottom.getZ() + 0.5);
+			if (helper.getTick() % 20 == 1 && husk.isWithinMeleeAttackRange(bot) && husk.hasLineOfSight(bot)) {
+				husk.doHurtTarget(helper.getLevel(), bot);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(!husk.isAlive(), "the bot did not strike the husk");
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of("out")), "printed " + log);
+			helper.assertTrue(TestPositions.relative(helper, bot.blockPosition()).getY() == 6, "not on the ground");
+		});
+	}
 }
