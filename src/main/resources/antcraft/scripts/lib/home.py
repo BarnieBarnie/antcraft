@@ -25,13 +25,19 @@ def portal_out():
 
 
 def to_home_dimension():
-    """Goes through a nether portal (portal_out()) into the home's dimension; gives whether the bot is there."""
+    """Goes through a nether portal (portal_out()) into the home's dimension; gives whether the bot is there. A
+    remembered portal that is gone (no_portal) is forgotten, so it tries the next."""
     if dimension() == home_dimension():
         return True
     if dimension() not in NETHER_PORTAL_WORLDS or home_dimension() not in NETHER_PORTAL_WORLDS:
         return False
     portal = portal_out()
-    return portal is not None and bool(travel(portal))
+    while portal is not None:
+        result = travel(portal)
+        if result.reason != "no_portal":
+            return bool(result)
+        portal = portal_out()
+    return False
 
 
 def go_home(tries=3):

@@ -449,6 +449,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.portals;
 	}
 
+	/** Sets the nether portals the bot remembers, newest first, each with its dimension. */
+	public void setPortals(List<Pos> portals) {
+		this.portals = List.copyOf(portals);
+	}
+
+	/** Forgets a portal remembered at {@code portal} in the bot's dimension: one found gone ({@code travel}). */
+	public void forgetPortal(Pos portal) {
+		String dimension = this.level().dimension().identifier().toString();
+		this.portals = this.portals.stream().filter(p -> !(p.equals(portal) && dimension.equals(p.dimension()))).toList();
+	}
+
 	/**
 	 * A nether portal block {@code entity} overlaps, if any: a bot is in the portal it goes through, and on the one it comes
 	 * out of, though the block at its feet may be the one beside.

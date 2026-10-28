@@ -104,6 +104,17 @@ final class BotBody implements MoveApi.Body {
 	}
 
 	@Override
+	public boolean noPortalAt(Pos portal) {
+		BlockPos at = blockPos(portal);
+		return this.level().isLoaded(at) && !this.level().getBlockState(at).is(Blocks.NETHER_PORTAL);
+	}
+
+	@Override
+	public void forgetPortal(Pos portal) {
+		this.bot.forgetPortal(portal);
+	}
+
+	@Override
 	public void clearPortalCooldown() {
 		this.bot.setPortalCooldown(0);
 	}

@@ -114,6 +114,15 @@ public final class MoveApi {
 			return List.of();
 		}
 
+		/** Whether the block at {@code portal} is loaded and is no nether portal: a portal there is gone. */
+		default boolean noPortalAt(Pos portal) {
+			return false;
+		}
+
+		/** Forgets a nether portal remembered at {@code portal}, in the bot's dimension ({@link #portals}). */
+		default void forgetPortal(Pos portal) {
+		}
+
 		/**
 		 * Ends the bot's portal cooldown, so the portal takes it at once: a mob that came through a portal is otherwise not
 		 * taken back for 15 seconds, and never while it stands in one.
@@ -280,6 +289,14 @@ public final class MoveApi {
 			Body body = host.body();
 			if (body.dimension().hashCode() != from) {
 				result = Result.OK;
+				return true;
+			}
+			// Only a loaded block tells, so a portal in a chunk not loaded yet is not forgotten.
+			if (body.noPortalAt(portal)) {
+				cancel();
+				walk = null;
+				body.forgetPortal(portal);
+				result = Result.fail(Result.NO_PORTAL);
 				return true;
 			}
 			body.clearPortalCooldown();

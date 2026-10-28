@@ -19,6 +19,7 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 	public static final String INTERRUPTED = "interrupted";
 	public static final String STOPPED = "stopped";
 	public static final String TIMEOUT = "timeout";
+	public static final String NO_PORTAL = "no_portal";
 	public static final String OUT_OF_REACH = "out_of_reach";
 	public static final String NO_TOOL = "no_tool";
 	public static final String NO_ITEM = "no_item";

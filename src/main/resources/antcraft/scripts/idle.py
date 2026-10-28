@@ -2,7 +2,8 @@
 # failed: walk home, then wait there. home() is where the bot was first spawned,
 # until a script calls set_home(pos). In another dimension than its home's, the
 # bot goes through a nether portal within 32 blocks, or else the nearest one it
-# went through before in this dimension, and waits where it is without either.
+# went through before in this dimension (the next one if that is gone), and
+# waits where it is without any.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -26,13 +27,19 @@ def portal_out():
 
 
 def to_home_dimension():
-    """Goes through a nether portal (portal_out()) into the home's dimension; gives whether the bot is there."""
+    """Goes through a nether portal (portal_out()) into the home's dimension; gives whether the bot is there. A
+    remembered portal that is gone (no_portal) is forgotten, so it tries the next."""
     if dimension() == home_dimension():
         return True
     if dimension() not in NETHER_PORTAL_WORLDS or home_dimension() not in NETHER_PORTAL_WORLDS:
         return False
     portal = portal_out()
-    return portal is not None and bool(travel(portal))
+    while portal is not None:
+        result = travel(portal)
+        if result.reason != "no_portal":
+            return bool(result)
+        portal = portal_out()
+    return False
 
 
 while True:

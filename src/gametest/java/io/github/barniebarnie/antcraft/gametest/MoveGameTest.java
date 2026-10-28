@@ -22,6 +22,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.TicketStorage;
@@ -516,6 +517,52 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(phase[0] == 2 && nether.getEntity(id) == null, "bot not back through the portal yet: phase " + phase[0]);
 			helper.assertTrue(level.getEntity(id) instanceof AntBot back && back.blockPosition().equals(home),
 				"bot not home: " + level.getEntity(id));
+		});
+	}
+
+	/**
+	 * An idle bot whose home is in the Nether and whose nearest remembered portal was broken travels there, finds it gone
+	 * ({@code no_portal}), forgets it, and goes through the next portal it remembers, more than 32 blocks off on the other
+	 * side (#358). In the Overworld, far from the test area so no other test's portal is near, and without waiting for a
+	 * Nether chunk: the test ends as the bot goes through.
+	 */
+	@GameTest(maxTicks = 480)
+	public void anIdleBotWhoseNearestRememberedPortalIsGoneGoesThroughTheNext(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		ChunkPos spot = new ChunkPos(-1875, -1875 - 16 * FAR_SPOTS.getAndIncrement());
+		for (int cx = spot.x() - 3; cx <= spot.x() + 3; cx++) {
+			for (int cz = spot.z() - 3; cz <= spot.z() + 3; cz++) {
+				level.getChunk(cx, cz);
+			}
+		}
+		// The gone portal to the west, the next one to the east: neither within 32 blocks of the other or the start.
+		BlockPos start = new BlockPos(spot.getMinBlockX() + 2, 300, spot.getMinBlockZ() + 8);
+		for (int x = -11; x <= 40; x++) {
+			for (int z = -2; z <= 2; z++) {
+				level.setBlockAndUpdate(start.offset(x, -1, z), Blocks.STONE.defaultBlockState());
+			}
+		}
+		BlockPos next = buildPortal(level, start.offset(38, -1, 0));
+		Pos gone = new Pos(start.getX() - 10, start.getY(), start.getZ()).in("minecraft:overworld");
+		Pos kept = new Pos(next.getX(), next.getY(), next.getZ()).in("minecraft:overworld");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.teleportTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
+		bot.setHome(new BlockPos(Math.floorDiv(start.getX(), 8), 100, Math.floorDiv(start.getZ(), 8)), Level.NETHER);
+		bot.setPortals(List.of(gone, kept));
+		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
+		GameTests.onEnd(helper, () -> {
+			if (nether.getEntity(id) instanceof AntBot there) {
+				there.discard();
+			}
+			bot.discard();
+		});
+		failOnError(helper, bot);
+		helper.onEachTick(() -> BotChunks.keep(level, spot));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION,
+				"bot not through a portal yet: at " + bot.blockPosition() + ", portals " + describe(bot.getPortals()));
+			helper.assertTrue(describe(bot.getPortals()).equals(describe(List.of(kept))), "portals " + describe(bot.getPortals()));
 		});
 	}
 }

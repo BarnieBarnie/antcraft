@@ -41,6 +41,8 @@ class MoveApiTest {
 		/** How often travel cleared the portal cooldown. */
 		int cooldownClears;
 		List<Pos> portals = List.of();
+		/** Where a loaded block is not a nether portal. */
+		List<Pos> noPortal = List.of();
 
 		@Override
 		public long gameTime() {
@@ -129,6 +131,16 @@ class MoveApiTest {
 		@Override
 		public List<Pos> portals() {
 			return portals;
+		}
+
+		@Override
+		public boolean noPortalAt(Pos portal) {
+			return noPortal.contains(portal);
+		}
+
+		@Override
+		public void forgetPortal(Pos portal) {
+			portals = portals.stream().filter(p -> !p.equals(portal)).toList();
 		}
 
 		@Override
@@ -505,6 +517,41 @@ class MoveApiTest {
 		assertEquals(List.of("wrong_dimension"), printed());
 		assertEquals(List.of(), bot.paths);
 		assertEquals("travel(Pos(3, 65, 4)) -> wrong_dimension", run.lastResult());
+	}
+
+	/**
+	 * {@code travel} to a position where the loaded block is no nether portal (one broken since) fails with
+	 * {@code no_portal} and the bot forgets a portal remembered there, keeping the others (#358).
+	 */
+	@Test
+	void travelToAPortalThatIsGoneIsNoPortalAndForgetsIt() {
+		Pos gone = new Pos(3, 65, 4, "minecraft:overworld");
+		Pos other = new Pos(40, 64, 4, "minecraft:overworld");
+		bot.portals = List.of(gone, other);
+		bot.noPortal = List.of(gone);
+		ScriptRun run = start("print(travel(portals()[0]).reason)\nprint(portals())\n");
+		tick(run);
+		tick(run);
+		assertEquals(List.of("no_portal", "[Pos(40, 64, 4)]"), printed());
+		assertEquals(List.of(other), bot.portals);
+		assertEquals(List.of(), bot.paths);
+	}
+
+	/** A portal broken while the bot walks to it: travel stops the walk and fails with {@code no_portal} (#358). */
+	@Test
+	void travelStopsWhenThePortalIsBrokenOnTheWay() {
+		Pos portal = new Pos(3, 65, 4, "minecraft:overworld");
+		bot.portals = List.of(portal);
+		ScriptRun run = start("print(travel(portals()[0]).reason)\n");
+		tick(run);
+		tick(run);
+		assertTrue(run.walking(), "not walking");
+		bot.noPortal = List.of(portal);
+		tick(run);
+		tick(run);
+		assertEquals(List.of("no_portal"), printed());
+		assertTrue(bot.pathStopped, "walk not stopped");
+		assertEquals(List.of(), bot.portals);
 	}
 
 	/** {@code portals()} lists the portals the bot went through, newest first, each with its dimension (#354). */
