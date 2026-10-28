@@ -94,6 +94,12 @@ final class CachedWorldView implements WorldView {
 		return this.answer(pos, HAZARD, this.hazard);
 	}
 
+	/** Not cached: asked only of hazards, which are few. */
+	@Override
+	public boolean isPortal(BlockPos pos) {
+		return this.world.isPortal(pos);
+	}
+
 	@Override
 	public boolean isWater(BlockPos pos) {
 		return this.answer(pos, WATER, this.water);

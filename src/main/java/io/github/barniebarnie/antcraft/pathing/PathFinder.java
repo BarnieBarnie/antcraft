@@ -414,7 +414,20 @@ public final class PathFinder {
 		}
 
 		private boolean open(BlockPos pos) {
-			return this.world.isPassable(pos) && !this.world.isHazard(pos);
+			return this.world.isPassable(pos) && (!this.world.isHazard(pos) || this.world.isPortal(pos) && this.entersPortal(pos));
+		}
+
+		/**
+		 * A path enters a nether portal only at its feet and head standing on a goal of one block, as {@code travel}
+		 * walks to the portal's floor block (see MoveApi); any other walk goes round, or finds no way.
+		 */
+		private boolean entersPortal(BlockPos pos) {
+			BlockPos target = switch (this.goal) {
+				case Goal.Block(BlockPos at) -> at;
+				case Goal.Near(BlockPos at, int range) when range == 0 -> at;
+				default -> null;
+			};
+			return pos.equals(target) || pos.below().equals(target);
 		}
 
 		/** Open, or a door or fence gate a bot moving {@code dir} opens by hand. */

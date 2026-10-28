@@ -496,6 +496,35 @@ class PathFinderTest {
 	}
 
 	@Test
+	void walksAroundANetherPortalInTheWay() {
+		// A portal three blocks high at x=2, z=-1..1, in an obsidian frame, with room round it.
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -2, 2, 4, 2, 'B').fill(2, 1, -1, 2, 3, 1, 'P');
+		Path path = find(world, new BlockPos(4, 1, 0), FULL);
+
+		assertTrue(path.complete(), "no way: " + path.steps());
+		assertTrue(path.steps().stream().noneMatch(s -> world.at(s.to()) == 'P' || world.at(s.to().above()) == 'P'), "went through the portal: " + path.steps());
+	}
+
+	@Test
+	void findsNoWayWhenOnlyANetherPortalLeadsThere() {
+		// A wall across the floor, of stone but for the portal's obsidian frame: the bot may dig, but not next to the portal.
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 4, 10, 'B').fill(2, 1, -2, 2, 4, 2, '#').fill(2, 1, -1, 2, 3, 1, 'P');
+		Path path = find(world, new BlockPos(4, 1, 0), new PathFinder.Options(true, false, 10_000, 3));
+
+		assertFalse(path.complete(), "went through the portal or its frame: " + path.steps());
+	}
+
+	/** travel(portal) walks to the portal's floor block, so a goal of that one block may be entered. */
+	@Test
+	void entersANetherPortalThatIsTheGoal() {
+		GridWorld world = GridWorld.flat(10).fill(2, 1, -2, 2, 4, 2, 'B').fill(2, 1, -1, 2, 3, 1, 'P');
+		Path path = PathFinder.find(world, START, new Goal.Near(new BlockPos(2, 1, 0), 0), FULL);
+
+		assertTrue(path.complete(), "did not enter: " + path.steps());
+		assertEquals(new BlockPos(2, 1, 0), path.end());
+	}
+
+	@Test
 	void stepsUpThroughADoorOneBlockHigher() {
 		// A wall at x=2 on a step one block up, with a shut door in it at the step's height.
 		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 10, 1, 10, 'B').fill(2, 2, -10, 2, 4, 10, 'B').door(2, 2, 0, Direction.Axis.X);

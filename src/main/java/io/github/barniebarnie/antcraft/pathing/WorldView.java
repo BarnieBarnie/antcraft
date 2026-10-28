@@ -14,6 +14,11 @@ public interface WorldView {
 	/** Never enter, stand on, or open up next to this block (lava, fire, any fluid), except to swim in it if {@link #isWater}. */
 	boolean isHazard(BlockPos pos);
 
+	/** A nether portal: a {@link #isHazard hazard} a path enters only to stand in it at its goal, to go through on purpose. */
+	default boolean isPortal(BlockPos pos) {
+		return false;
+	}
+
 	/** Water a bot can swim in: at the surface where the block above is open, and up through it from below. */
 	default boolean isWater(BlockPos pos) {
 		return false;

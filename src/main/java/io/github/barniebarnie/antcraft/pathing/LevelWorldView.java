@@ -130,7 +130,13 @@ public class LevelWorldView implements WorldView {
 			|| state.is(Blocks.POWDER_SNOW)
 			|| state.is(Blocks.CAMPFIRE)
 			|| state.is(Blocks.SOUL_CAMPFIRE)
-			|| state.is(Blocks.WITHER_ROSE);
+			|| state.is(Blocks.WITHER_ROSE)
+			|| state.is(Blocks.NETHER_PORTAL);
+	}
+
+	@Override
+	public boolean isPortal(BlockPos pos) {
+		return this.blocks.get(pos).is(Blocks.NETHER_PORTAL);
 	}
 
 	/** Water a bot can swim through: no collision box, and not a bubble column, which drags it along. */

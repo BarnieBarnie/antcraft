@@ -33,6 +33,11 @@ public final class LoadedWorldView implements WorldView {
 	}
 
 	@Override
+	public boolean isPortal(BlockPos pos) {
+		return this.loaded.test(pos) && this.world.isPortal(pos);
+	}
+
+	@Override
 	public boolean isWater(BlockPos pos) {
 		return this.loaded.test(pos) && this.world.isWater(pos);
 	}

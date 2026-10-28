@@ -329,6 +329,33 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		return inside;
 	}
 
+	/** A {@code goto} whose straight way crosses a lit nether portal walks round it and stays in the Overworld (#351). */
+	@GameTest(maxTicks = 100)
+	public void gotoWalksRoundANetherPortalInTheWay(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		buildPortal(level, helper.absolutePos(new BlockPos(2, 0, 4)));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 2);
+		UUID id = bot.getUUID();
+		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
+		GameTests.onEnd(helper, () -> {
+			if (nether.getEntity(id) instanceof AntBot there) {
+				there.discard();
+			}
+		});
+		BlockPos target = helper.absolutePos(new BlockPos(3, 1, 6));
+		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, dimension())\nwait(1000)\n");
+		failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			if (level.getBlockState(bot.blockPosition()).is(Blocks.NETHER_PORTAL) || bot.isRemoved()) {
+				helper.fail("bot walked into the portal");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(printed(bot).contains("True minecraft:overworld"), "printed " + printed(bot));
+			helper.assertTrue(bot.blockPosition().equals(target), "bot at " + bot.blockPosition());
+		});
+	}
+
 	/** A bot next to a lit nether portal goes through it with {@code travel} and arrives in the Nether, its script going on there (#350). */
 	@GameTest(maxTicks = 240)
 	public void travelTakesTheBotThroughANetherPortal(GameTestHelper helper) {
