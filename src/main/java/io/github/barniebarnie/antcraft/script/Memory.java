@@ -90,6 +90,14 @@ public final class Memory {
 	 * why.
 	 */
 	public static void save(PyDict memory, ValueOutput output, Consumer<String> problems) {
+		CompoundTag tag = toTag(memory, problems);
+		if (!tag.getListOrEmpty("dict").isEmpty()) {
+			output.store(KEY, CompoundTag.CODEC, tag);
+		}
+	}
+
+	/** {@code memory} as a tag, as {@link #save} stores it; entries no longer plain data are left out, as there. */
+	public static CompoundTag toTag(PyDict memory, Consumer<String> problems) {
 		ListTag entries = new ListTag();
 		for (Map.Entry<Object, Object> entry : memory.items()) {
 			try {
@@ -104,11 +112,16 @@ public final class Memory {
 			tag.put("v", encode(entry.getValue()));
 			entries.add(tag);
 		}
-		if (!entries.isEmpty()) {
-			CompoundTag tag = new CompoundTag();
-			tag.put("dict", entries);
-			output.store(KEY, CompoundTag.CODEC, tag);
-		}
+		CompoundTag tag = new CompoundTag();
+		tag.put("dict", entries);
+		return tag;
+	}
+
+	/** A memory with what {@link #toTag} made {@code tag} of. */
+	public static PyDict fromTag(CompoundTag tag) {
+		PyDict memory = create();
+		fill(memory, tag.getListOrEmpty("dict"));
+		return memory;
 	}
 
 	/** Whether all of {@code memory} is still plain data, as it was when stored. */
@@ -136,9 +149,7 @@ public final class Memory {
 				// a broken save: the script starts again from the top too
 			}
 		}
-		PyDict memory = create();
-		saved.ifPresent(tag -> fill(memory, tag.getListOrEmpty("dict")));
-		return memory;
+		return saved.map(Memory::fromTag).orElseGet(Memory::create);
 	}
 
 	/** Each value as a compound with one entry, named by its type. */

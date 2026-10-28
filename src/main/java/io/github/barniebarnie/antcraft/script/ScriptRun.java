@@ -81,6 +81,11 @@ public final class ScriptRun {
 		default @Nullable Entity entity(UUID uuid) {
 			return null;
 		}
+
+		/** The {@code colony_memory} of the bot's colony, a dict every member shares, or {@code None} outside a colony. */
+		default Object colonyMemory() {
+			return PyNone.NONE;
+		}
 	}
 
 	/** Something a script waits on that takes ticks, such as {@code wait(ticks)}. */
@@ -222,7 +227,7 @@ public final class ScriptRun {
 		this.args = saved.args();
 		this.host = host;
 		this.log = log;
-		this.vm = VmState.load(state, code, this.natives(), this.loader(library), Vm.DEFAULT_MAX_DEPTH, new SavedValues(host::entity),
+		this.vm = VmState.load(state, code, this.natives(), this.loader(library), Vm.DEFAULT_MAX_DEPTH, new SavedValues(host::entity, host::colonyMemory),
 				Memory::create);
 		this.recall = this.vm.status() == Vm.Status.SUSPENDED;
 		this.progress = saved.progress();
@@ -256,7 +261,7 @@ public final class ScriptRun {
 	public Saved save() {
 		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
 		try {
-			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity)), saveProgress, null, this.lastResult);
+			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, null, this.lastResult);
 		} catch (VmState.NotSaveable e) {
 			return new Saved(this.name, this.args, null, 0, e.getMessage(), this.lastResult);
 		}
@@ -318,6 +323,8 @@ public final class ScriptRun {
 			return;
 		}
 		Vm.Status status;
+		// Each tick, so it follows the bot into and out of a colony, and a resumed run uses the colony's live dict.
+		vm.setBuiltin("colony_memory", host.colonyMemory());
 		try {
 			if (recall) {
 				recall = false;

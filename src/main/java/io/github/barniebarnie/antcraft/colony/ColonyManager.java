@@ -12,9 +12,11 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
+import org.jspecify.annotations.Nullable;
 
 /** All colonies in one dimension, saved with the world. */
 public class ColonyManager extends SavedData {
@@ -37,6 +39,27 @@ public class ColonyManager extends SavedData {
 
 	public static ColonyManager get(ServerLevel level) {
 		return level.getDataStorage().computeIfAbsent(TYPE);
+	}
+
+	/** A colony and the level its core is in. */
+	public record Found(ServerLevel level, Colony colony) {
+	}
+
+	/**
+	 * The colony {@code id} in whichever dimension its core is: a member can be in another one (#353), as when it went
+	 * through a portal or respawned at a home elsewhere.
+	 */
+	public static Optional<Found> find(MinecraftServer server, @Nullable UUID id) {
+		if (id == null) {
+			return Optional.empty();
+		}
+		for (ServerLevel level : server.getAllLevels()) {
+			Optional<Colony> colony = get(level).byId(id);
+			if (colony.isPresent()) {
+				return Optional.of(new Found(level, colony.get()));
+			}
+		}
+		return Optional.empty();
 	}
 
 	// Colonies are changed in place (members, owner, trust, radius); there are few, so always save rather than track each change.
@@ -93,7 +116,8 @@ public class ColonyManager extends SavedData {
 		if (bot.getColonyId() == null) {
 			return;
 		}
-		this.byId(bot.getColonyId()).ifPresent(colony -> colony.members().remove(bot.getUUID()));
+		// Its colony may be in another dimension than the bot (#353).
+		bot.getColony().ifPresent(found -> found.colony().members().remove(bot.getUUID()));
 		bot.setColonyId(null);
 	}
 }

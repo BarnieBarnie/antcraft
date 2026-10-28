@@ -2,6 +2,9 @@ package io.github.barniebarnie.antcraft.colony;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.script.Memory;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -10,6 +13,7 @@ import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
+import net.minecraft.nbt.CompoundTag;
 
 /**
  * A colony: its core block (storage), member bots, radius and the players who may change it. What a colony does with its
@@ -25,7 +29,8 @@ public class Colony {
 		UUIDUtil.CODEC.listOf().optionalFieldOf("members", List.of()).forGetter(c -> List.copyOf(c.members)),
 		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
 		UUIDUtil.CODEC.optionalFieldOf("owner").forGetter(Colony::owner),
-		UUIDUtil.CODEC.listOf().optionalFieldOf("trusted", List.of()).forGetter(c -> List.copyOf(c.trusted))
+		UUIDUtil.CODEC.listOf().optionalFieldOf("trusted", List.of()).forGetter(c -> List.copyOf(c.trusted)),
+		CompoundTag.CODEC.optionalFieldOf("memory").forGetter(Colony::savedMemory)
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -36,13 +41,17 @@ public class Colony {
 	/** Players the owner lets change the colony, besides the owner. */
 	private final Set<UUID> trusted = new LinkedHashSet<>();
 	private int radius;
+	/** The scripts' {@code colony_memory}, shared by every member (docs/scripting.md, Memory). */
+	private final PyDict memory;
 
 	public Colony(UUID id, BlockPos core, List<UUID> members, int radius) {
-		this(id, core, members, radius, Optional.empty(), List.of());
+		this(id, core, members, radius, Optional.empty(), List.of(), Optional.empty());
 	}
 
-	private Colony(UUID id, BlockPos core, List<UUID> members, int radius, Optional<UUID> owner, List<UUID> trusted) {
+	private Colony(UUID id, BlockPos core, List<UUID> members, int radius, Optional<UUID> owner, List<UUID> trusted,
+			Optional<CompoundTag> memory) {
 		this.id = id;
+		this.memory = memory.map(Memory::fromTag).orElseGet(Memory::create);
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
 		this.radius = radius;
@@ -99,5 +108,16 @@ public class Colony {
 
 	public void setRadius(int radius) {
 		this.radius = radius;
+	}
+
+	/** The scripts' {@code colony_memory}: plain data only, as a bot's {@code memory}, and saved with the colony. */
+	public PyDict memory() {
+		return this.memory;
+	}
+
+	/** What is saved of {@link #memory}: nothing while it is empty; entries no longer plain data are left out with a warning. */
+	private Optional<CompoundTag> savedMemory() {
+		return this.memory.size() == 0 ? Optional.empty()
+			: Optional.of(Memory.toTag(this.memory, problem -> AntCraft.LOGGER.warn("Colony {}: colony_{}", this.id, problem)));
 	}
 }

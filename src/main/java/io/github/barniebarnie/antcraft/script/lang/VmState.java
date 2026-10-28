@@ -86,7 +86,10 @@ public final class VmState {
 			}
 		};
 
-		/** {@code value} as a value of the language, or null when it cannot be saved. */
+		/**
+		 * {@code value} as a value of the language, or null when it cannot be saved. It is also asked for each dict, and a
+		 * dict it saves is saved as a host value: by reference, not its content.
+		 */
 		@Nullable Object save(Object value);
 
 		/** The host value {@link #save} made {@code saved} of. */
@@ -300,6 +303,11 @@ public final class VmState {
 				case PyTuple tuple -> {
 					fields.addAll(tuple.items());
 					yield TUPLE;
+				}
+				// A dict the host holds, such as a colony's shared memory: saved by the host's reference, not copied.
+				case PyDict dict when host.save(dict) != null -> {
+					fields.add(host.save(dict));
+					yield HOST;
 				}
 				case PyDict dict -> {
 					fields.add(dict.checked());

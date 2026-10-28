@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.io.IOException;
@@ -35,6 +36,12 @@ class ScriptSaveTest {
 	private static final class FakeHost implements ScriptRun.Host {
 		long time;
 		final List<String> chat = new ArrayList<>();
+		Object colonyMemory = PyNone.NONE;
+
+		@Override
+		public Object colonyMemory() {
+			return colonyMemory;
+		}
 
 		@Override
 		public long gameTime() {
@@ -240,5 +247,39 @@ class ScriptSaveTest {
 		assertEquals(id.toString(), gone.attribute("id"));
 		assertEquals("minecraft:cow", gone.attribute("type"));
 		assertEquals(EntityInfo.saved(id, "minecraft:pig", uuid -> null), gone);
+	}
+
+	/**
+	 * {@code colony_memory} is the colony's live dict (#365): a saved run keeps no copy of it, and a resumed one, its own
+	 * references to it included, sees what other members stored meanwhile; outside a colony it is {@code None}.
+	 */
+	@Test
+	void colonyMemoryIsNotCopiedIntoTheSaveAndRebindsOnResume() throws IOException {
+		ScriptLibrary library = library("c.py", """
+				cm = colony_memory
+				cm['n'] = 1
+				wait(5)
+				cm['seen'] = cm['n']
+				print(colony_memory['seen'])
+				""", "n.py", "print(colony_memory)\n");
+		FakeHost host = new FakeHost();
+		PyDict shared = Memory.create();
+		host.colonyMemory = shared;
+		BotLog log = new BotLog(100);
+		ScriptRun run = runFor(new ScriptRun("c", library.load("c"), List.of(), host, log, Memory.create(), library), host, 2, 2000);
+		assertEquals("wait(5)", run.action());
+		ScriptRun.Saved saved = roundTrip(run.save());
+		shared.put("n", 7L); // another member stores meanwhile
+		ScriptRun resumed = ScriptRun.resume(saved, library.load("c"), host, log, Memory.create(), library);
+		runFor(resumed, host, 20, 2000);
+		assertEquals("{'n': 7, 'seen': 7}", Values.repr(shared));
+		assertEquals(1, lines(log).size(), lines(log).toString());
+		assertTrue(lines(log).getFirst().endsWith("print] 7"), lines(log).toString());
+
+		FakeHost outside = new FakeHost();
+		BotLog none = new BotLog(100);
+		runFor(new ScriptRun("n", library.load("n"), List.of(), outside, none), outside, 2, 2000);
+		assertEquals(1, lines(none).size(), lines(none).toString());
+		assertTrue(lines(none).getFirst().endsWith("print] None"), lines(none).toString());
 	}
 }

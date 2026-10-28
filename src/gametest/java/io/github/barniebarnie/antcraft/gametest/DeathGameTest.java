@@ -1,8 +1,11 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -96,6 +99,32 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(printed.contains("run 2 deaths 1"), "printed " + printed);
 			helper.assertTrue(owner.messages().stream().anyMatch(message -> message.text().contains("died")), "owner told " + owner.messages());
 			helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(1, 1, 1), 2.0);
+		});
+	}
+
+	/**
+	 * A colony member that dies stays a member while it waits, and respawns one (#353): its script, run again from the top,
+	 * sees its colony.
+	 */
+	@GameTest(maxTicks = 440)
+	public void aColonyMemberThatDiesRespawnsAMember(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		BotScripts.run(bot, "c = colony()\nprint('deaths', deaths(), 'colony', c is not None and c['radius'])\nwhile True:\n    wait(5)\n");
+		helper.runAfterDelay(5, () -> {
+			bot.kill(helper.getLevel());
+			helper.assertTrue(colony.members().contains(id), "left the colony on death: " + colony.members());
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again != bot, "not respawned");
+			List<String> printed = BotScripts.log(Objects.requireNonNull(again), Output.Level.PRINT);
+			helper.assertTrue(printed.contains("deaths 1 colony 32"), "printed " + printed);
+			helper.assertTrue(colony.id().equals(again.getColonyId()) && colony.members().contains(id), "members " + colony.members());
 		});
 	}
 

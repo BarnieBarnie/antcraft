@@ -1,17 +1,21 @@
 package io.github.barniebarnie.antcraft.script;
 
+import io.github.barniebarnie.antcraft.colony.Colony;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -27,7 +31,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The senses of the bot API (docs/scripting.md, Senses): {@code inventory}, {@code count}, {@code has}, {@code held},
  * {@code block}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
- * {@code time} and {@code is_day}. They read the world around the script's bot and return at once; only a block search
+ * {@code time}, {@code is_day} and {@code colony}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
  */
 public final class SenseApi {
@@ -48,6 +52,18 @@ public final class SenseApi {
 	public static final int MAX_ENTITY_RADIUS = 64;
 
 	private SenseApi() {
+	}
+
+	/** {@code colony()}: plain data, with the core in the dimension of its level, which need not be the bot's (#353). */
+	private static PyDict colony(ColonyManager.Found found) {
+		Colony colony = found.colony();
+		BlockPos core = colony.core();
+		PyDict dict = new PyDict();
+		dict.put("core", new Pos(core.getX(), core.getY(), core.getZ(), found.level().dimension().identifier().toString()));
+		dict.put("radius", (long) colony.radius());
+		dict.put("members", new PyList(new ArrayList<>(colony.members().stream().map(UUID::toString).toList())));
+		dict.put("owner", colony.owner().<Object>map(UUID::toString).orElse(PyNone.NONE));
+		return dict;
 	}
 
 	public static void register(Natives natives, ScriptRun run) {
@@ -124,6 +140,10 @@ public final class SenseApi {
 				}
 			}
 			return stacks;
+		});
+		natives.register("colony", 10, call -> {
+			Args.bind("colony", call, 0);
+			return bot(run, call).getColony().<Object>map(SenseApi::colony).orElse(PyNone.NONE);
 		});
 		natives.register("deaths", call -> {
 			Args.bind("deaths", call, 0);

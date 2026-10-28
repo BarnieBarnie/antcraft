@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.script;
 
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.VmState;
@@ -7,6 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import net.minecraft.world.entity.Entity;
 import org.jspecify.annotations.Nullable;
 
@@ -16,11 +18,24 @@ import org.jspecify.annotations.Nullable;
  * saved as a tuple that starts with its type name.
  */
 public final class SavedValues implements VmState.HostCodec {
-	private final Function<UUID, @Nullable Entity> entities;
+	/** How the colony's {@code colony_memory} is saved: by reference, never a copy of it. */
+	private static final String COLONY_MEMORY = "ColonyMemory";
 
-	/** Values whose entities are looked up, once they are used, with {@code entities}. */
+	private final Function<UUID, @Nullable Entity> entities;
+	private final Supplier<Object> colonyMemory;
+
+	/** Values whose entities are looked up, once they are used, with {@code entities}; no colony memory. */
 	public SavedValues(Function<UUID, @Nullable Entity> entities) {
+		this(entities, () -> PyNone.NONE);
+	}
+
+	/**
+	 * Values whose entities are looked up with {@code entities}, and in which the bot's {@code colony_memory}, as
+	 * {@code colonyMemory} gives it, is saved as a reference that loads as the colony's live dict (#365).
+	 */
+	public SavedValues(Function<UUID, @Nullable Entity> entities, Supplier<Object> colonyMemory) {
 		this.entities = entities;
+		this.colonyMemory = colonyMemory;
 	}
 
 	@Override
@@ -32,6 +47,7 @@ public final class SavedValues implements VmState.HostCodec {
 			case BlockInfo b -> PyTuple.of(BlockInfo.TYPE, b.id(), b.pos(), b.air(), b.fluid(), new PyTuple(new ArrayList<>(b.tags())));
 			case Result r -> PyTuple.of(Result.TYPE, r.ok(), r.reason() == null ? PyNone.NONE : r.reason(), r.value());
 			case EntityInfo e -> PyTuple.of(EntityInfo.TYPE, e.uuid().toString(), e.type());
+			case PyDict d when d == colonyMemory.get() -> PyTuple.of(COLONY_MEMORY);
 			default -> null;
 		};
 	}
@@ -46,6 +62,8 @@ public final class SavedValues implements VmState.HostCodec {
 					((PyTuple) f.get(5)).items().stream().map(String.class::cast).toList());
 			case Result.TYPE -> new Result((Boolean) f.get(1), f.get(2) instanceof String reason ? reason : null, f.get(3));
 			case EntityInfo.TYPE -> EntityInfo.saved(UUID.fromString((String) f.get(1)), (String) f.get(2), entities);
+			// ponytail: the colony the bot is in now; a bot no longer in one gets an empty dict that nothing shares
+			case COLONY_MEMORY -> colonyMemory.get() instanceof PyDict live ? live : Memory.create();
 			default -> throw new IllegalArgumentException("unknown saved value " + f.getFirst());
 		};
 	}

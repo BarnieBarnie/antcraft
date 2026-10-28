@@ -16,12 +16,14 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -308,6 +310,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.colonyId;
 	}
 
+	/** The bot's colony, with the level of its core, which can be another dimension than the bot's (#353). */
+	public Optional<ColonyManager.Found> getColony() {
+		return this.level() instanceof ServerLevel level ? ColonyManager.find(level.getServer(), this.colonyId) : Optional.empty();
+	}
+
 	/** Set through {@link ColonyManager#join} and {@link ColonyManager#leave}, which also keep the member list in sync. */
 	public void setColonyId(@Nullable UUID colonyId) {
 		this.colonyId = colonyId;
@@ -555,6 +562,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		public AntBot bot() {
 			return AntBot.this;
 		}
+
+		@Override
+		public Object colonyMemory() {
+			return AntBot.this.getColony().<Object>map(found -> found.colony().memory()).orElse(PyNone.NONE);
+		}
 	}
 
 	/**
@@ -569,7 +581,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (!dying || !(this.level() instanceof ServerLevel level)) {
 			return;
 		}
-		ColonyManager.get(level).leave(this);
+		OptionalLong respawnTime = BotRespawns.respawnTime(AntCraftConfig.values(), level.getGameTime());
+		// A bot that comes back stays a member, and respawns one (#353); one that does not leaves its colony.
+		if (respawnTime.isEmpty()) {
+			ColonyManager.get(level).leave(this);
+		}
 		this.deaths++;
 		BlockPos at = this.blockPosition();
 		String line = "died at " + at.getX() + ", " + at.getY() + ", " + at.getZ() + ": " + how.getString();
@@ -582,7 +598,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		boolean library = this.scriptSource != null;
 		Code code = this.scriptCode;
 		this.stopScript();
-		BotRespawns.respawnTime(AntCraftConfig.values(), level.getGameTime()).ifPresent(time -> {
+		respawnTime.ifPresent(time -> {
 			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
 			this.saveWithoutId(output);
 			// Waits in its home's dimension, which may not be the one it died in.
