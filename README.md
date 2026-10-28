@@ -1,6 +1,6 @@
 # AntCraft
 
-A Fabric mod for Minecraft that adds bots you program. Each bot runs a script written in a small subset of Python: it walks where the script sends it, mines, places, crafts, smelts and fills chests, and the script decides what comes next. A bot with nothing to run walks home and waits there. Colonies that split work between bots come back later as a library of default scripts (see the Roadmap).
+A Fabric mod for Minecraft that adds bots you program. Each bot runs a script written in a small subset of Python: it walks where the script sends it, mines, places, crafts, smelts and fills chests, and the script decides what comes next. A bot with nothing to run walks home, through a nether portal if its home is in another dimension, and waits there. Colonies that split work between bots come back later as a library of default scripts (see the Roadmap).
 
 The bots are in-game entities and are not linked to real accounts. This is a hobby project, made for fun in your own worlds.
 
@@ -19,7 +19,7 @@ AntCraft must be installed on the server and on every player's client: it adds i
 
 1. Craft a Bot Core and use it on a block: a bot appears there, and you own it.
 2. Write a script, such as `config/antcraft/scripts/hello.py`, and run it on the bot with `/antcraft bot run hello`. [docs/scripting.md](docs/scripting.md) describes the language and every action and sense, with examples such as punching a tree into a wooden pickaxe.
-3. When the script ends, fails or is stopped (`/antcraft bot stop`), the bot runs `idle.py`: it walks home, where it was first spawned, and waits there.
+3. When the script ends, fails or is stopped (`/antcraft bot stop`), the bot runs `idle.py`: it walks home, where it was first spawned (or where a script moved it with `set_home`), and waits there.
 
 **Crafting a Bot Core** (shaped):
 
@@ -29,11 +29,21 @@ AntCraft must be installed on the server and on every player's client: it adds i
  . I .      R = block of copper
 ```
 
-Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory, which they drop when they die; a dead bot comes back at its home ten seconds later and runs its script again (config `botRespawn`, `botRespawnTicks`). They fight hostile mobs (except creepers, for now).
+Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory. They fight hostile mobs (except creepers, for now), but flee at low health instead (see Reflexes).
 
-Bots find their own way: they walk, jump, swim, drop up to 3 blocks, dig through blocks in the way, and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, or blocks next to lava or water, and walk round what players build with (glass, fences, walls, doors) rather than through it.
+**Death.** A dead bot drops its items where it died, like a player, and comes back at its home ten seconds later, in its home's dimension even when it died in another (config `botRespawn`, `botRespawnTicks`). It keeps its name, owner, home, log, `memory` and the portals it remembers, and runs its last script again from the top with the same arguments (or `idle.py`). A respawn still waiting is saved with the world.
 
-**Scripts.** Every bot runs a script, and only a script decides what it does. Without one, or once its script ended, stopped or failed, it runs `idle.py` (walk home, then wait), whether or not it is in a colony; a bot that never ran a script does too. `idle.py` is copied into `config/antcraft/scripts/` when the server starts, and the mod never overwrites it once you changed it, so you can give your bots other idle habits. When `idle.py` itself ends or fails, it is not started again. A bot's home is where it was first spawned, until a script moves it with `set_home(pos)`.
+Bots find their own way: they walk, jump, swim, drop up to 3 blocks, dig through blocks in the way, and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, or blocks next to lava or water, never plan through lava, fire or a fall that hurts, and walk round what players build with (glass, fences, walls, doors) rather than through it. They walk round nether portals too, and never dig at a portal's frame: only `travel` takes a bot through one.
+
+**Reflexes** run every tick before the script and cannot be turned off: a bot steps out of fire and lava, swims up when its air runs low (`botSurfaceAir`), steps out from under falling blocks, and at or below `botFleeHealth` it flees a hostile mob near it, home or away, without fighting back. An action a reflex cuts short ends with `interrupted`.
+
+**Nether.** Bots go between the Overworld and the Nether through nether portals as players do: `travel(portal)` walks into one, and the script carries on in the other dimension. A bot remembers both ends of each portal it went through (`portals()`, the newest 8, kept through death) and forgets one it finds broken. Positions carry their dimension, and an action given a position in another dimension fails with `wrong_dimension`. The end portal is not supported.
+
+**Scripts.** Every bot runs a script, and only a script decides what it does. Without one, or once its script ended, stopped or failed, it runs `idle.py` (walk home, then wait), whether or not it is in a colony; a bot that never ran a script does too. From another dimension than its home's, `idle.py` goes through a nether portal within 32 blocks, or else the nearest one it remembers, and without any waits where it is. When `idle.py` itself ends or fails, it is not started again. A bot's home is where it was first spawned, until a script moves it with `set_home(pos)`.
+
+Scripts `import` modules from the script folders. The mod's default scripts, `idle.py` and the library module `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`), are copied into `config/antcraft/scripts/` each time the server starts; the mod never overwrites one you changed, so you can give your bots other idle habits, and a deleted one comes back.
+
+Running scripts are saved with the world: after a reload a bot resumes at the same instruction, inside the action it was doing. If the script or a module it imported changed, it starts again from the top with the same arguments, keeping `memory`.
 
 **Colonies:** craft a Colony Core (chest in the middle, iron ingots in the corners, blocks of copper on the sides) and place it: you own the colony, it stores 54 stacks, and bots activated within 32 blocks of it by a player who may change it join it. For now a colony is only its core, its members, its radius and who may change it: the goal-driven colony, which surveyed its area, posted jobs and built blueprints by itself, was removed in milestone 4 of [docs/scripting.md](docs/scripting.md), and colony work comes back as scripts in milestone 7. Worlds saved with a goal-driven colony load: the colony keeps its core, members, radius, owner and trusted players, and its jobs, stock targets, orders, projects, builds and mineshaft are dropped. Breaking the core dissolves the colony and drops its contents.
 
@@ -89,7 +99,7 @@ Ghosts are drawn as the blocks themselves, textured and see-through, fully lit s
 | `/antcraft colony trust list [colony]` | Names the owner and the trusted players of the same colony `trust` would act on, so an owner who is not an operator can see whom their colony trusts; another player's colony is refused |
 | `/antcraft colony radius <blocks>` | Sets the nearest colony's radius (default 32) |
 
-**Server load:** 30 bots running scripts keep well within the server's 50 ms a tick (see the bot benchmark under Development). All bots together expand at most 2000 path nodes a tick (`PathBudget`): a bot whose path search runs out of them waits where it stands and goes on with it the next tick, so many bots planning at once spread their searches over several ticks rather than stall one. A search asks the world about each block once, and reads blocks from the loaded chunks without asking the chunk source each time.
+**Server load:** 30 bots running scripts keep well within the server's 50 ms a tick (see the bot benchmark under Development). All bots together expand at most 2000 path nodes a tick (`PathBudget`): a bot whose path search runs out of them waits where it stands and goes on with it the next tick, so many bots planning at once spread their searches over several ticks rather than stall one. A search asks the world about each block once, and reads blocks from the loaded chunks without asking the chunk source each time. `find_nearest` and `scan` share a budget of 32768 blocks a tick the same way, and senses that touch the world at once (`craft`, `count`, `entities` and the like) count about their time in script instructions, so a loop of them cannot stall the server either.
 
 **Config** (`config/antcraft.properties`):
 
@@ -100,6 +110,10 @@ Ghosts are drawn as the blocks themselves, textured and see-through, fully lit s
 | `colonyActionsRequireOp` | `false` | When `true`, only operators can change colonies, owners and trusted players included, and Bot Core bots of other players join no colony |
 | `scriptInstructionsPerTick` | `2000` | How many instructions each bot's script may run a tick; a script that uses them up goes on the next tick, so an endless loop costs a busy bot, not a frozen server. At most `20000`: a higher value is lowered with a warning in the log, since every bot may use its whole budget every tick (30 bots at 20000 are 600000 instructions a tick on the server thread) |
 | `scriptChatLevel` | `error` | The lowest level of a script's output (`debug`, `info`, `warn` or `error`) that goes to the chat of its bot's owner; everything goes to the bot's log, and `print` and `say` always show in chat |
+| `botRespawn` | `true` | Whether a dead bot comes back at its home |
+| `botRespawnTicks` | `200` | Ticks a dead bot waits before it comes back |
+| `botFleeHealth` | `6` | Health (of 20) at or below which a bot flees a hostile mob within 8 blocks instead of fighting; `0` never |
+| `botSurfaceAir` | `100` | Air (of 300 ticks) below which a bot under water swims up to breathe; `0` never |
 | `botsLoadChunks` | `true` | A bot running a script keeps the chunks around it loaded, so it works on when its owner walks away, and `goto` loads (and generates, if need be) the chunks on its way. When `false`, `goto` stops with `not_loaded` at the edge of loaded terrain |
 
 The goal-driven colony's options, `mineshaftLevels` and `replantMatchWaitTicks`, are gone: a config file that still has them loads, and they are dropped when the file is written again.
@@ -114,8 +128,8 @@ The mod has turned from goal-driven colonies into **scripted bots**: the mod giv
 | 2 | Scripts in the game: script folders, `script list`/`reload`, `bot run`/`stop`/`status`/`log`, the instruction budget, output and logging, `say`, `wait`, `pos`, `home`/`set_home`, `goto` with chunk loading, and `idle.py` (done) |
 | 3 | Core actions and senses: `mine`, `place`, `pick_up`, `craft`, `smelt`, `find_nearest`, `scan`, containers, `memory`; a tree punched into a wooden pickaxe by a script (done) |
 | 4 | The goal-driven colony removed; its engine parts kept behind the actions; every bot without a script runs `idle.py` (done) |
-| 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home (done) |
-| 6 | Mining library: the mineshaft, dug and laddered, every time |
+| 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home, travel through nether portals (done) |
+| 6 | Mining library: `lib/shaft.py`, the mineshaft, dug and laddered, every time (not started) |
 | 7 | Colony again: shared colony memory and a script-level job board, Bot Cores that carry a script, `build` as an action |
 | 8 | Later: per-player limits, more of Python, an in-game script viewer, scripts in data packs, Litematica import |
 
@@ -124,12 +138,13 @@ Done before the change of direction: the bot entity, pathfinding that digs, pill
 ## Architecture
 
 - **Bot entity**: custom `PathfinderMob` rendered with a player model and skin. Cheap enough for many bots, and does not appear in the tab list.
-- **Scripts**: each bot runs one script at a time on a pausable VM with a per-tick instruction budget (`script/lang`); actions such as `goto`, `mine` and `craft` take ticks and pause the script until they are done (`script/*Api`). See [docs/scripting.md](docs/scripting.md).
-- **Navigation**: custom A* over block costs (walk, dig, place, climb, swim), followed by `PathFollower`.
+- **Scripts**: each bot runs one script at a time on a pausable VM with a per-tick instruction budget (`script/lang`); actions such as `goto`, `mine` and `craft` take ticks and pause the script until they are done (`script/*Api`). The VM's state is plain data, saved with the bot and resumed on load. See [docs/scripting.md](docs/scripting.md).
+- **Reflexes**: Java, always on, before the script each tick (`entity/Reflexes`).
+- **Navigation**: custom A* over block costs (walk, dig, place, climb, swim), followed by `PathFollower`, with a shared node budget (`PathBudget`); it goes round nether portals unless the bot travels.
 - **Colony**: core, member list, radius and who may change it, persisted as world saved data.
 - **Blueprints**: designed outside the game and imported as files, with roles and chest and work spots; the client previews them as ghosts. No network or API calls from inside Minecraft.
 - **Bot creation**: bots are crafted, not spawned from nothing.
-- **Combat**: bots defend themselves against hostile mobs.
+- **Combat**: bots defend themselves against hostile mobs, and flee at low health.
 - **Gating**: `AntCraftConfig` checks whether the server is dedicated and has opted in before allowing any bot to spawn.
 
 ## Development
