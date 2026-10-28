@@ -27,6 +27,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -160,8 +161,8 @@ public final class BotHands {
 
 	/**
 	 * Places the held block item at {@code pos}, which must be air or another block that may be replaced, turned to
-	 * {@code facing} if given and the block can face that way, and to {@code half} if given and it has one (a trapdoor or
-	 * stairs). False when it cannot be placed there, such as where an
+	 * {@code facing} if given and the block can face that way, and to {@code half} if given and it has one (a trapdoor,
+	 * stairs or a slab). False when it cannot be placed there, such as where an
 	 * entity stands or where the block cannot stay.
 	 */
 	public static boolean place(AntBot bot, BlockPos pos, @Nullable Direction facing, @Nullable Half half) {
@@ -189,6 +190,9 @@ public final class BotHands {
 		BlockState state = placed;
 		if (half != null && state.hasProperty(BlockStateProperties.HALF)) {
 			state = state.setValue(BlockStateProperties.HALF, half);
+		}
+		if (half != null && state.hasProperty(BlockStateProperties.SLAB_TYPE)) {
+			state = state.setValue(BlockStateProperties.SLAB_TYPE, half == Half.TOP ? SlabType.TOP : SlabType.BOTTOM);
 		}
 		for (EnumProperty<Direction> property : FACINGS) {
 			if (facing != null && state.hasProperty(property) && property.getPossibleValues().contains(facing)) {

@@ -43,7 +43,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
@@ -423,6 +425,21 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockProperty(new BlockPos(6, 1, 6), FurnaceBlock.FACING, Direction.EAST);
 				helper.assertBlockProperty(new BlockPos(6, 1, 5), RotatedPillarBlock.AXIS, Direction.Axis.X);
 				helper.assertBlockPresent(Blocks.OAK_LOG, 6, 2, 5);
+			});
+	}
+
+	/** half sets a slab's type; a slab placed onto a slab is blocked, as onto any block, rather than made a double slab. */
+	@GameTest(maxTicks = 60)
+	public void placeHalfTopGivesATopSlab(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SLAB, 3));
+		expect(helper, bot, "r = place(" + at(helper, 5, 1, 5) + ", 'oak_slab', half='top')\n"
+				+ "s = place(" + at(helper, 5, 1, 4) + ", 'oak_slab', half='bottom')\n"
+				+ "t = place(" + at(helper, 5, 1, 4) + ", 'oak_slab', half='top')\n"
+				+ "print(r.ok, s.ok, t.ok, t.reason, count('oak_slab'))\n",
+			List.of("True True False blocked 1"), () -> {
+				helper.assertBlockProperty(new BlockPos(5, 1, 5), SlabBlock.TYPE, SlabType.TOP);
+				helper.assertBlockProperty(new BlockPos(5, 1, 4), SlabBlock.TYPE, SlabType.BOTTOM);
 			});
 	}
 
