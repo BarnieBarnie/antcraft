@@ -6,12 +6,17 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.Memory;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -186,6 +191,83 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(copy[0] != null, "not saved yet");
 			helper.assertTrue(Values.repr(colony.memory()).equals("{'a': 7, 'b': 7}"), "colony memory " + Values.repr(colony.memory()));
+		});
+	}
+
+	/** The takers of the colony's jobs, oldest job first, null for an open one. */
+	private static List<String> takers(Colony colony) {
+		return colony.jobs().jobs(null).stream().map(job -> job.taker().map(UUID::toString).orElse(null)).toList();
+	}
+
+	/**
+	 * The job board (#368): one member posts two jobs, and two others running the same script each take a different
+	 * one, which {@code jobs()} lists with its taker.
+	 */
+	@GameTest(maxTicks = 30)
+	public void twoBotsRunningTheSameScriptTakeDifferentJobs(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 1, 1, 1);
+		AntBot poster = member(helper, colony, 3, 1, 3);
+		AntBot first = member(helper, colony, 5, 1, 5);
+		AntBot second = member(helper, colony, 6, 1, 3);
+		BotScripts.run(poster, "wait(2)\nprint(post_job('haul', {'n': 1}), post_job('haul', [2, 'logs']))\n");
+		String worker = """
+			j = None
+			while j is None:
+			    j = take_job('haul')
+			    wait(1)
+			print(j['id'], j['kind'], j['data'], j['poster'] == POSTER, len(jobs('haul')), len(jobs('build')))
+			wait(100)
+			""".replace("POSTER", "'" + poster.getStringUUID() + "'");
+		BotScripts.run(first, worker);
+		BotScripts.run(second, worker);
+		failOnError(helper, poster, first, second);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(printed(poster).equals(List.of("1 2")), "poster printed " + printed(poster));
+			List<String> both = new ArrayList<>(printed(first));
+			both.addAll(printed(second));
+			helper.assertTrue(both.stream().sorted().toList().equals(List.of("1 haul {'n': 1} True 2 0", "2 haul [2, 'logs'] True 2 0")),
+				"workers printed " + printed(first) + " and " + printed(second));
+			helper.assertTrue(Set.copyOf(takers(colony)).equals(Set.of(first.getStringUUID(), second.getStringUUID())),
+				"takers " + takers(colony));
+		});
+	}
+
+	/** A bot whose script is stopped gives back its job, and another member takes it (#368). */
+	@GameTest(maxTicks = 30)
+	public void aStoppedBotsJobGoesBackAndAnotherTakesIt(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 1, 1, 1);
+		AntBot stopped = member(helper, colony, 3, 1, 3);
+		AntBot other = member(helper, colony, 5, 1, 5);
+		colony.jobs().post("haul", Memory.encode("logs"), stopped.getUUID());
+		ScriptRun run = BotScripts.run(stopped, "print(take_job()['data'])\nwait(100)\n");
+		failOnError(helper, stopped, other);
+		boolean[] started = {false};
+		helper.onEachTick(() -> {
+			if (!started[0] && printed(stopped).equals(List.of("logs"))) {
+				started[0] = true;
+				helper.assertTrue(takers(colony).equals(List.of(stopped.getStringUUID())), "takers " + takers(colony));
+				stopped.stopScript(); // as /antcraft bot stop does
+				helper.assertTrue(takers(colony).equals(Collections.singletonList(null)), "not given back: " + takers(colony));
+				BotScripts.run(other, "print(take_job('haul')['data'], take_job())\nwait(100)\n");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.STOPPED, "script " + run.state());
+			helper.assertTrue(printed(other).equals(List.of("logs None")), "other printed " + printed(other));
+			helper.assertTrue(takers(colony).equals(List.of(other.getStringUUID())), "takers " + takers(colony));
+		});
+	}
+
+	/** Outside a colony there is no job board: {@code take_job} and {@code jobs} give None and [], {@code post_job} fails at its line. */
+	@GameTest(maxTicks = 10)
+	public void aBotOutsideAColonyHasNoJobBoard(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = BotScripts.run(bot, "print(take_job(), jobs(), finish_job(1), drop_job(1))\npost_job('haul')\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FAILED, "script " + run.state());
+			helper.assertTrue(printed(bot).equals(List.of("None [] False False")), "printed " + printed(bot));
+			List<String> log = BotScripts.log(bot, Output.Level.ERROR);
+			helper.assertTrue(log.getLast().equals("test.py:2: post_job() needs the bot to be in a colony"), "log " + log);
 		});
 	}
 }

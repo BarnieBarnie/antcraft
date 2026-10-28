@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import org.jspecify.annotations.Nullable;
@@ -152,8 +151,8 @@ public final class Memory {
 		return saved.map(Memory::fromTag).orElseGet(Memory::create);
 	}
 
-	/** Each value as a compound with one entry, named by its type. */
-	private static Tag encode(Object value) {
+	/** Each value as a compound with one entry, named by its type; {@code value} must be plain data ({@link #checkPlain}). */
+	public static CompoundTag encode(Object value) {
 		CompoundTag tag = new CompoundTag();
 		switch (value) {
 			case Long l -> tag.putLong("int", l);
@@ -190,7 +189,8 @@ public final class Memory {
 		return list;
 	}
 
-	private static Object decode(CompoundTag tag) {
+	/** The value {@link #encode} made {@code tag} of. */
+	public static Object decode(CompoundTag tag) {
 		if (tag.contains("int")) {
 			return tag.getLongOr("int", 0);
 		}

@@ -225,6 +225,29 @@ if c is not None and "chests" not in colony_memory:
     colony_memory["chests"] = [c["core"]]
 ```
 
+### Jobs
+
+A colony has a job board, so its members split work by role: one posts "haul these logs", another takes it, and no two take the same job. A script can pause anywhere when it uses up its budget, so a board kept in `colony_memory` could not claim a job in one step; these natives do, at once:
+
+| Call | |
+|---|---|
+| `post_job(kind, data=None)` | adds an open job: `kind` a string, `data` plain data (a copy is kept); returns its id, an int that counts up per colony. Outside a colony it fails the script at its line |
+| `jobs(kind=None)` | the open and taken jobs of `kind` (or of every kind), oldest first, as dicts: `id`, `kind`, `data`, `taker` (the bot's UUID string, or `None` while open) and `poster`. `[]` outside a colony |
+| `take_job(kind=None)` | claims the oldest open job of `kind` (or of any kind) for this bot and returns it as `jobs` lists it, or `None` when there is none, or outside a colony |
+| `finish_job(id)` | removes the job, whoever holds it; `True` if it was on the board |
+| `drop_job(id)` | gives a taken job back to the board, open again; `True` if it was taken |
+
+A job does not stay claimed forever: it goes back to the board when its taker's script ends, fails or is stopped (also by `/antcraft bot stop`, or by starting another script on the bot), when the taker leaves the colony, and when the bot is removed. A bot that dies keeps its jobs: it respawns and runs its script again, and `jobs()` shows it what it held. The board is saved with the colony.
+
+```python
+j = take_job("haul")
+if j is not None:
+    for p in j["data"]:
+        take(p, "oak_log")
+    put(colony()["core"], "oak_log")
+    finish_job(j["id"])
+```
+
 ## Reflexes
 
 Reflexes run every tick in Java, before the script, and cannot be turned off by a script:
@@ -380,7 +403,7 @@ Each milestone becomes one or more issues.
 4. **Remove the goal-driven colony** (see What stays and what goes). Every bot without a script runs `idle.py`; the benchmark runs 30 bots on a script. (Done.)
 5. **Reflexes, save/resume, imports, death.** Bots survive a reload mid-script; `import` and the default `lib/` folder; respawning at home. Done.
 6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time.
-7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done so far: `colony()` and `colony_memory` (a member in another dimension than its core stays a member).
+7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done so far: `colony()` and `colony_memory` (a member in another dimension than its core stays a member), and the job board (see Jobs).
 8. **Later.** Multiplayer permissions and sandbox limits per player, `try`/`except` and classes if scripts need them, an in-game script viewer or editor, sharing scripts through data packs, Litematica import.
 
 ## Open questions

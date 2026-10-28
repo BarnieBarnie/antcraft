@@ -208,6 +208,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				if (this.script != null && this.script.running()) {
 					ScriptRun run = this.script;
 					TickProfiler.time("bot.script", () -> run.tick(AntCraftConfig.scriptInstructionsPerTick()));
+					if (!run.running() && !this.isDeadOrDying()) {
+						this.releaseJobs(); // it ended, failed or stopped itself
+					}
 				}
 			}
 			// Before the goals, which open the door ahead again this tick if the bot is still on its way through.
@@ -406,12 +409,26 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 	}
 
-	/** Stops the script the bot runs, if any. */
+	/** Stops the script the bot runs, if any, and gives back the colony jobs it took (#368). */
 	public void stopScript() {
+		if (this.stopScriptKeepingJobs()) {
+			this.releaseJobs();
+		}
+	}
+
+	/** Stops the script the bot runs, if any; whether it ran one. A bot that dies keeps its jobs, to see them again once back. */
+	private boolean stopScriptKeepingJobs() {
 		if (this.script != null && this.script.running()) {
 			this.script.stop();
 			this.log.add(this.level().getGameTime(), Output.Level.INFO, "stopped " + this.script.name());
+			return true;
 		}
+		return false;
+	}
+
+	/** Gives back the jobs the bot took from its colony's job board, as when its script ended, failed or was stopped. */
+	private void releaseJobs() {
+		this.getColony().ifPresent(found -> found.colony().jobs().release(this.getUUID()::equals));
 	}
 
 	/**
@@ -597,7 +614,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		ScriptRun last = this.idling ? null : this.script;
 		boolean library = this.scriptSource != null;
 		Code code = this.scriptCode;
-		this.stopScript();
+		this.stopScriptKeepingJobs();
 		respawnTime.ifPresent(time -> {
 			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
 			this.saveWithoutId(output);
@@ -652,6 +669,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	@Override
 	public void remove(RemovalReason reason) {
 		this.sayBubble.remove();
+		if (reason == RemovalReason.DISCARDED) {
+			this.releaseJobs(); // gone for good; one that died is KILLED, and keeps its jobs to respawn with
+		}
 		super.remove(reason);
 	}
 

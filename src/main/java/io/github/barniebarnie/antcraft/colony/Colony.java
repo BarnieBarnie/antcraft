@@ -30,7 +30,8 @@ public class Colony {
 		Codec.INT.optionalFieldOf("radius", DEFAULT_RADIUS).forGetter(Colony::radius),
 		UUIDUtil.CODEC.optionalFieldOf("owner").forGetter(Colony::owner),
 		UUIDUtil.CODEC.listOf().optionalFieldOf("trusted", List.of()).forGetter(c -> List.copyOf(c.trusted)),
-		CompoundTag.CODEC.optionalFieldOf("memory").forGetter(Colony::savedMemory)
+		CompoundTag.CODEC.optionalFieldOf("memory").forGetter(Colony::savedMemory),
+		JobBoard.CODEC.optionalFieldOf("job_board").forGetter(c -> c.jobs.unused() ? Optional.empty() : Optional.of(c.jobs))
 	).apply(i, Colony::new));
 
 	private final UUID id;
@@ -43,14 +44,17 @@ public class Colony {
 	private int radius;
 	/** The scripts' {@code colony_memory}, shared by every member (docs/scripting.md, Memory). */
 	private final PyDict memory;
+	/** The scripts' job board (#368). */
+	private final JobBoard jobs;
 
 	public Colony(UUID id, BlockPos core, List<UUID> members, int radius) {
-		this(id, core, members, radius, Optional.empty(), List.of(), Optional.empty());
+		this(id, core, members, radius, Optional.empty(), List.of(), Optional.empty(), Optional.empty());
 	}
 
 	private Colony(UUID id, BlockPos core, List<UUID> members, int radius, Optional<UUID> owner, List<UUID> trusted,
-			Optional<CompoundTag> memory) {
+			Optional<CompoundTag> memory, Optional<JobBoard> jobs) {
 		this.id = id;
+		this.jobs = jobs.orElseGet(JobBoard::new);
 		this.memory = memory.map(Memory::fromTag).orElseGet(Memory::create);
 		this.core = core;
 		this.members = new LinkedHashSet<>(members);
@@ -113,6 +117,15 @@ public class Colony {
 	/** The scripts' {@code colony_memory}: plain data only, as a bot's {@code memory}, and saved with the colony. */
 	public PyDict memory() {
 		return this.memory;
+	}
+
+	/**
+	 * The job board, after giving back the jobs of takers no longer members: a member that leaves gives back its jobs
+	 * anyway, and this catches one that did not, such as a stale member.
+	 */
+	public JobBoard jobs() {
+		this.jobs.release(taker -> !this.members.contains(taker));
+		return this.jobs;
 	}
 
 	/** What is saved of {@link #memory}: nothing while it is empty; entries no longer plain data are left out with a warning. */
