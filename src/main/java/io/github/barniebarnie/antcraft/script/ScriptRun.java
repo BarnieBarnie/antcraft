@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.script.lang.Code;
+import io.github.barniebarnie.antcraft.script.lang.ModuleLoader;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
@@ -12,7 +13,11 @@ import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -91,6 +96,8 @@ public final class ScriptRun {
 	private final Host host;
 	private final BotLog log;
 	private final Vm vm;
+	/** The modules the script imported from the library, by name, with the source they had then. */
+	private final Map<String, String> imported = new LinkedHashMap<>();
 	private @Nullable Action action;
 	private boolean stopRequested;
 	private @Nullable String lastResult;
@@ -102,6 +109,14 @@ public final class ScriptRun {
 
 	/** A run whose global {@code memory} is {@code memory}, the bot's, which outlives the run ({@link Memory}). */
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log, PyDict memory) {
+		this(name, code, args, host, log, memory, ScriptLibrary.empty());
+	}
+
+	/**
+	 * A run of the script {@code name} that imports its modules from {@code library} (docs/scripting.md, Modules). Every
+	 * module sees the bot API and {@code memory}; {@code ARGS} is a global of the script itself.
+	 */
+	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log, PyDict memory, ScriptLibrary library) {
 		this.name = name;
 		this.file = code.file();
 		this.args = List.copyOf(args);
@@ -109,9 +124,20 @@ public final class ScriptRun {
 		this.log = log;
 		Natives natives = Natives.standard(this::write);
 		BotApi.register(natives, this);
-		this.vm = new Vm(code, natives);
+		this.vm = new Vm(name, code, natives, new ModuleLoader() {
+			@Override
+			public @Nullable Code load(String module) {
+				library.get(module).ifPresent(script -> imported.put(module, script.source()));
+				return library.load(module);
+			}
+
+			@Override
+			public boolean isPackage(String module) {
+				return library.isPackage(module);
+			}
+		});
 		this.vm.setGlobal("ARGS", new PyList(new ArrayList<>(args)));
-		this.vm.setGlobal("memory", memory);
+		this.vm.setBuiltin("memory", memory);
 	}
 
 	/** Counts {@code instructions} against the script's budget for work a native did, such as a block search. */
@@ -263,6 +289,17 @@ public final class ScriptRun {
 	static String describe(String action, Result result) {
 		String line = action + " -> " + (result.ok() ? "ok" : result.reason());
 		return result.value() instanceof PyNone ? line : line + ", " + Values.repr(result.value());
+	}
+
+	/** The modules the script imported from its library, by name, with the source each had when it was imported. */
+	public Map<String, String> imported() {
+		return Collections.unmodifiableMap(imported);
+	}
+
+	/** Whether a module the script imported has another source in {@code library}, or is gone from it. */
+	public boolean importsChanged(ScriptLibrary library) {
+		return imported.entrySet().stream().anyMatch(module -> !Objects.equals(module.getValue(),
+				library.get(module.getKey()).map(ScriptLibrary.Script::source).orElse(null)));
 	}
 
 	/** How many instructions the script ran so far. */

@@ -212,9 +212,26 @@ public final class Compiler {
 			}
 			case Ast.Global s -> {
 			}
-			case Ast.Import s -> throw new CompileError(file, s.line(), s.col(), "`import` is not available yet");
-			case Ast.FromImport s ->
-				throw new CompileError(file, s.line(), s.col(), "`from ... import` is not available yet");
+			case Ast.Import s -> {
+				// import a.b.c imports a, a.b and a.b.c, and binds a.
+				for (String module : s.modules()) {
+					String top = module.split("\\.")[0];
+					if (!top.equals(module)) {
+						emit(Op.IMPORT, name(module));
+						emit(Op.POP, 0);
+					}
+					emit(Op.IMPORT, name(top));
+					storeName(top);
+				}
+			}
+			case Ast.FromImport s -> {
+				emit(Op.IMPORT, name(s.module()));
+				for (String imported : s.names()) {
+					emit(Op.IMPORT_FROM, name(imported));
+					storeName(imported);
+				}
+				emit(Op.POP, 0);
+			}
 		}
 	}
 

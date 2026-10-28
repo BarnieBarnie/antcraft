@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.CompileError;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
+import io.github.barniebarnie.antcraft.script.lang.ModuleLoader;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -20,8 +21,9 @@ import org.jspecify.annotations.Nullable;
  * The scripts found in the script folders, compiled (docs/scripting.md, Files and commands). A script is named by its
  * path in its folder without {@code .py}, with dots for folders, as a module is imported: {@code lib/trees.py} is
  * {@code lib.trees}. A script that does not compile is kept with its error, so {@code /antcraft script list} can show it.
+ * Its scripts are the modules scripts import, and its folders their packages.
  */
-public final class ScriptLibrary {
+public final class ScriptLibrary implements ModuleLoader {
 	/** One script file: compiled to {@code code}, or with the {@code error} that kept it from compiling. */
 	public record Script(String name, Path path, String source, @Nullable Code code, @Nullable String error) {
 	}
@@ -65,6 +67,33 @@ public final class ScriptLibrary {
 		} catch (CompileError e) {
 			return new Script(name, file, source, null, e.getMessage());
 		}
+	}
+
+	/** No scripts. */
+	public static ScriptLibrary empty() {
+		return new ScriptLibrary(Map.of());
+	}
+
+	/** The compiled script {@code name}, or null when there is none; one that does not compile throws its error again. */
+	@Override
+	public @Nullable Code load(String name) {
+		Script script = scripts.get(name);
+		if (script == null) {
+			return null;
+		}
+		if (script.code() != null) {
+			return script.code();
+		}
+		String file = name.replace('.', '/') + ".py";
+		Compiler.compile(Parser.parse(file, script.source())); // throws the compile error, placed in its file
+		throw new CompileError(file, 1, 1, String.valueOf(script.error()));
+	}
+
+	/** Whether scripts are named under {@code name}, as those of a folder are. */
+	@Override
+	public boolean isPackage(String name) {
+		String prefix = name + ".";
+		return scripts.keySet().stream().anyMatch(script -> script.startsWith(prefix));
 	}
 
 	/** Every script, by name. */

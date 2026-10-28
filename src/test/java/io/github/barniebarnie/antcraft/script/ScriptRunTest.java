@@ -1,15 +1,22 @@
 package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /** A script run on a bot, one server tick at a time, with a host standing in for the bot. */
 class ScriptRunTest {
@@ -195,5 +202,56 @@ class ScriptRunTest {
 		assertEquals(ScriptRun.State.FAILED, run.state());
 		assertEquals(List.of("[0 error] t.py:2: memory holds only plain data (numbers, strings, booleans, None, Pos, and lists, "
 			+ "tuples and dicts of these), not 'builtin_function_or_method'"), logLines());
+	}
+
+	@TempDir
+	Path folder;
+
+	/** The library of {@link #folder} after writing {@code files} (path, source, path, source...) into it. */
+	private ScriptLibrary library(String... files) throws IOException {
+		for (int i = 0; i < files.length; i += 2) {
+			Path file = folder.resolve(files[i]);
+			Files.createDirectories(file.getParent());
+			Files.writeString(file, files[i + 1]);
+		}
+		return ScriptLibrary.load(List.of(folder));
+	}
+
+	private ScriptRun start(ScriptLibrary library, String name) {
+		ScriptLibrary.Script script = library.get(name).orElseThrow();
+		return new ScriptRun(name, script.code(), List.of(), host, log, Memory.create(), library);
+	}
+
+	@Test
+	void aScriptImportsModulesOfTheLibraryWhichSeeTheBotApiAndMemory() throws IOException {
+		String dig = "def show():\n    memory['shown'] = True\n    say('digging')\ndef where():\n    return pos()\n";
+		ScriptLibrary library = library("miner.py", "import lib.dig\nfrom lib.dig import where\nlib.dig.show()\nprint(where())\n",
+				"lib/dig.py", dig);
+		ScriptRun run = start(library, "miner");
+		tick(run, 2000);
+		assertEquals(ScriptRun.State.FINISHED, run.state());
+		assertEquals(List.of("[0 print] digging", "[0 print] Pos(4, 64, -2)"), logLines());
+		assertEquals(Map.of("lib.dig", dig), run.imported());
+	}
+
+	@Test
+	void aModuleThatDoesNotCompileFailsTheImportWithItsFileAndLine() throws IOException {
+		ScriptLibrary library = library("miner.py", "x = 1\nimport lib.bad\n", "lib/bad.py", "x = 1\nif True\n    pass\n");
+		ScriptRun run = start(library, "miner");
+		tick(run, 2000);
+		assertEquals(ScriptRun.State.FAILED, run.state());
+		assertEquals(List.of("[0 error] lib/bad.py:2: expected ':' after 'if' condition"), logLines());
+	}
+
+	@Test
+	void aRunTellsWhetherAModuleItImportedChanged() throws IOException {
+		ScriptLibrary before = library("miner.py", "import lib.dig\nwait(100)\n", "lib/dig.py", "x = 1\n", "other.py", "y = 1\n");
+		ScriptRun run = start(before, "miner");
+		tick(run, 2000);
+		assertFalse(run.importsChanged(before));
+		assertFalse(run.importsChanged(library("other.py", "y = 2\n")), "a module it did not import changed");
+		assertTrue(run.importsChanged(library("lib/dig.py", "x = 2\n")));
+		Files.delete(folder.resolve("lib/dig.py"));
+		assertTrue(run.importsChanged(ScriptLibrary.load(List.of(folder))), "the module is gone");
 	}
 }

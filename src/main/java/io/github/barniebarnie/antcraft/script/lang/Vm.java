@@ -13,8 +13,13 @@ import java.util.Map;
 /**
  * Runs compiled scripts a number of instructions at a time. A stack machine with explicit frames: a script calling a
  * function pushes a frame rather than recursing in Java, so the VM can stop after any instruction and continue later
- * from exactly there. Its whole state (frames with their code position, locals and operand stack; the globals; whether
- * it waits for a native) is plain data, so a running script can be saved.
+ * from exactly there. Its whole state (frames with their code position, locals and operand stack; the modules with their
+ * globals, by name; whether it waits for a native) is plain data, so a running script can be saved.
+ *
+ * <p>The script is the main module; {@code import} runs the top level of another module of the {@link ModuleLoader} in a
+ * frame of its own, once per run, and every module has its own globals. A function sees the globals of the module that
+ * defined it. A name a module does not define is looked up in the {@link #setBuiltin builtin values}, then the natives,
+ * which every module shares.
  *
  * <p>A native function can suspend the script ({@link NativeCall#suspend()}); the host then resumes it with the call's
  * result ({@link #resume}). Bot actions work this way.
@@ -38,18 +43,24 @@ public final class Vm {
 		FAILED
 	}
 
-	/** A running call of a function, or of the module's top level. */
+	/** A running call of a function, or of a module's top level. */
 	static final class Frame {
 		final Code code;
+		/** The module whose globals the code sees. */
+		final PyModule module;
+		/** Whether this runs the top level of an imported module, which is imported once the frame returns. */
+		final boolean imports;
 		int pc;
 		/** Null where a local is not set yet. */
 		final Object[] locals;
 		Object[] stack = new Object[8];
 		int sp;
 
-		Frame(Code code, Object[] locals) {
+		Frame(Code code, Object[] locals, PyModule module, boolean imports) {
 			this.code = code;
 			this.locals = locals;
+			this.module = module;
+			this.imports = imports;
 		}
 
 		void push(Object value) {
@@ -80,7 +91,12 @@ public final class Vm {
 
 	private final Natives natives;
 	private final int maxDepth;
-	private final Map<String, Object> globals = new LinkedHashMap<>();
+	private final ModuleLoader loader;
+	/** Every module of the run, by name, in the order their import started; the main module first. */
+	private final Map<String, PyModule> modules = new LinkedHashMap<>();
+	private final PyModule main;
+	/** Values every module sees, such as {@code memory}; a module's own global of the same name hides one. */
+	private final Map<String, Object> builtins = new LinkedHashMap<>();
 	private final List<Frame> frames = new ArrayList<>();
 	private Status status = Status.RUNNING;
 	private ScriptError error;
@@ -88,14 +104,30 @@ public final class Vm {
 	/** Instructions {@link #charge charged} but not yet taken from a budget. */
 	private long debt;
 
+	/** The name of the main module of a VM made without one. */
+	public static final String MAIN = "__main__";
+
+	/** A VM without modules to import. */
 	public Vm(Code module, Natives natives) {
 		this(module, natives, DEFAULT_MAX_DEPTH);
 	}
 
 	public Vm(Code module, Natives natives, int maxDepth) {
+		this(MAIN, module, natives, ModuleLoader.NONE, maxDepth);
+	}
+
+	/** A VM that runs {@code module} as the module {@code name}, importing modules from {@code loader}. */
+	public Vm(String name, Code module, Natives natives, ModuleLoader loader) {
+		this(name, module, natives, loader, DEFAULT_MAX_DEPTH);
+	}
+
+	public Vm(String name, Code module, Natives natives, ModuleLoader loader, int maxDepth) {
 		this.natives = natives;
 		this.maxDepth = maxDepth;
-		frames.add(new Frame(module, new Object[module.locals().length]));
+		this.loader = loader;
+		this.main = new PyModule(name);
+		modules.put(name, main);
+		frames.add(new Frame(module, new Object[module.locals().length], main, false));
 	}
 
 	public Status status() {
@@ -112,14 +144,24 @@ public final class Vm {
 		return executed;
 	}
 
-	/** The module's globals, by name; read-only. */
+	/** The main module's globals, by name; read-only. */
 	public Map<String, Object> globals() {
-		return Collections.unmodifiableMap(globals);
+		return Collections.unmodifiableMap(main.globals());
 	}
 
-	/** Sets the module global {@code name}, such as a value the host gives every script before it runs. */
+	/** Sets the main module's global {@code name}. */
 	public void setGlobal(String name, Object value) {
-		globals.put(name, value);
+		main.globals().put(name, value);
+	}
+
+	/** Sets a value every module sees under {@code name}, as it sees the natives, such as {@code memory}. */
+	public void setBuiltin(String name, Object value) {
+		builtins.put(name, value);
+	}
+
+	/** The modules of the run, by name, in the order their import started: the main module first; read-only. */
+	public Map<String, PyModule> modules() {
+		return Collections.unmodifiableMap(modules);
 	}
 
 	/**
@@ -217,8 +259,8 @@ public final class Vm {
 				f.push(value);
 			}
 			case STORE_LOCAL -> f.locals[arg] = f.pop();
-			case LOAD_GLOBAL -> f.push(global(code.names()[arg]));
-			case STORE_GLOBAL -> globals.put(code.names()[arg], f.pop());
+			case LOAD_GLOBAL -> f.push(global(f.module, code.names()[arg]));
+			case STORE_GLOBAL -> f.module.globals().put(code.names()[arg], f.pop());
 			case POP -> f.pop();
 			case DUP -> f.push(f.peek());
 			case DUP2 -> {
@@ -333,7 +375,7 @@ public final class Vm {
 			}
 			case MAKE_FUNCTION -> {
 				Code function = (Code) code.constants()[arg];
-				f.push(new PyFunction(function, List.copyOf(f.pop(function.defaultCount()))));
+				f.push(new PyFunction(function, List.copyOf(f.pop(function.defaultCount())), f.module));
 			}
 			case CALL -> {
 				List<Object> args = f.pop(arg);
@@ -354,6 +396,8 @@ public final class Vm {
 				frames.removeLast();
 				if (frames.isEmpty()) {
 					status = Status.FINISHED;
+				} else if (f.imports) {
+					imported(f.module); // the IMPORT that started it runs again and finds it
 				} else {
 					frames.getLast().push(result);
 				}
@@ -377,11 +421,103 @@ public final class Vm {
 				Object item = f.pop();
 				((PyList) f.stack[f.sp - 1 - arg]).items.add(item);
 			}
+			case IMPORT -> {
+				PyModule module = importModule(code.names()[arg]);
+				if (module == null) {
+					f.pc--;
+				} else {
+					f.push(module);
+				}
+			}
+			case IMPORT_FROM -> {
+				PyModule module = (PyModule) f.peek();
+				String name = code.names()[arg];
+				Object value = module.globals().get(name);
+				if (value == null) {
+					String submodule = module.name() + "." + name;
+					if (!modules.containsKey(submodule) && !loader.isPackage(submodule) && load(submodule) == null) {
+						throw new ScriptError("cannot import name '" + name + "' from '" + module.name() + "'");
+					}
+					value = importModule(submodule);
+				}
+				if (value == null) {
+					f.pc--;
+				} else {
+					f.push(value);
+				}
+			}
 		}
 	}
 
-	private Object global(String name) {
-		Object value = globals.get(name);
+	/**
+	 * The module {@code name}, once it and every package above it are imported. Imports the first of them that is not
+	 * imported yet: a package without a file of its own at once, a module by pushing a frame for its top level, in which
+	 * case this gives null and the caller runs its instruction again once that frame returned.
+	 */
+	private PyModule importModule(String name) {
+		int dot = -1;
+		while (true) {
+			dot = name.indexOf('.', dot + 1);
+			String prefix = dot < 0 ? name : name.substring(0, dot);
+			PyModule module = modules.get(prefix);
+			if (module == null) {
+				Code code = load(prefix);
+				if (code == null && !loader.isPackage(prefix)) {
+					throw new ScriptError("No module named '" + prefix + "'");
+				}
+				if (code != null && frames.size() >= maxDepth) {
+					throw new ScriptError("maximum recursion depth exceeded");
+				}
+				module = new PyModule(prefix);
+				modules.put(prefix, module);
+				if (code != null) {
+					frames.add(new Frame(code, new Object[code.locals().length], module, true));
+					return null;
+				}
+				imported(module);
+			} else if (!module.loaded()) {
+				throw circular(prefix);
+			}
+			if (dot < 0) {
+				return module;
+			}
+		}
+	}
+
+	/** The top level of module {@code name}, or null when the loader has none; its compile error is placed in its file. */
+	private Code load(String name) {
+		try {
+			return loader.load(name);
+		} catch (CompileError e) {
+			throw new ScriptError(e.file(), e.line(), e.detail());
+		}
+	}
+
+	/** Marks {@code module} imported, and binds it in its package, as {@code import lib.trees} makes {@code lib.trees}. */
+	private void imported(PyModule module) {
+		module.setLoaded();
+		int dot = module.name().lastIndexOf('.');
+		if (dot >= 0) {
+			modules.get(module.name().substring(0, dot)).globals().put(module.name().substring(dot + 1), module);
+		}
+	}
+
+	/**
+	 * The error for importing {@code name} while its top level runs, naming the modules of the cycle. The modules whose
+	 * top level runs are the main module and those not imported yet, in the order they started.
+	 */
+	private ScriptError circular(String name) {
+		List<String> running = modules.values().stream().filter(m -> !m.loaded()).map(PyModule::name).toList();
+		List<String> cycle = new ArrayList<>(running.subList(running.indexOf(name), running.size()));
+		cycle.add(name);
+		return new ScriptError("circular import: " + String.join(" -> ", cycle));
+	}
+
+	private Object global(PyModule module, String name) {
+		Object value = module.globals().get(name);
+		if (value == null) {
+			value = builtins.get(name);
+		}
 		if (value != null) {
 			return value;
 		}
@@ -402,6 +538,9 @@ public final class Vm {
 		if (natives.method(type, name) != null) {
 			return new PyMethod(value, type, name);
 		}
+		if (value instanceof PyModule module) {
+			throw new ScriptError("module '" + module.name() + "' has no attribute '" + name + "'");
+		}
 		throw new ScriptError("'" + type + "' object has no attribute '" + name + "'");
 	}
 
@@ -411,7 +550,8 @@ public final class Vm {
 				if (frames.size() >= maxDepth) {
 					throw new ScriptError("maximum recursion depth exceeded");
 				}
-				frames.add(new Frame(function.code(), bind(function, args, kwargs)));
+				PyModule module = function.module() == null ? main : function.module();
+				frames.add(new Frame(function.code(), bind(function, args, kwargs), module, false));
 			}
 			case PyNative n -> {
 				NativeFunction function = natives.function(n.name());

@@ -258,11 +258,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.scriptSource = script.source();
 	}
 
-	/** Starts the compiled script {@code code} under {@code name}, replacing the script the bot runs; its first instructions run next tick. */
+	/**
+	 * Starts the compiled script {@code code} under {@code name}, replacing the script the bot runs; its first instructions
+	 * run next tick. It imports its modules from the server's script library.
+	 */
 	public void runScript(String name, Code code, List<String> args) {
 		this.stopScript();
 		this.log.add(this.level().getGameTime(), Output.Level.INFO, "run " + name + (args.isEmpty() ? "" : " " + String.join(" ", args)));
-		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log, this.memory);
+		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log, this.memory, ServerScripts.library());
 		this.scriptSource = null;
 		this.idling = false;
 	}

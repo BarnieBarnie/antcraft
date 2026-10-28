@@ -90,5 +90,16 @@ public enum Op {
 	/** Pops {@code arg} strings and pushes them joined. */
 	BUILD_STRING,
 	/** Pops TOS and appends it to the list {@code arg} values below it (under a comprehension's iterators). */
-	LIST_APPEND
+	LIST_APPEND,
+	/**
+	 * Pushes the module {@code names[arg]} (dotted, such as {@code lib.trees}) after importing it and each package above
+	 * it that is not imported yet: a module not imported yet gets a frame that runs its top level, and the instruction runs
+	 * again once that frame returns.
+	 */
+	IMPORT,
+	/**
+	 * Pushes the attribute {@code names[arg]} of the module at TOS, keeping the module: its global of that name, else its
+	 * submodule of that name, imported as {@link #IMPORT} does.
+	 */
+	IMPORT_FROM
 }

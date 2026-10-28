@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
@@ -65,5 +66,12 @@ class DefaultScriptsTest {
 		String idle = DefaultScripts.bundled().get(DefaultScripts.IDLE + ".py");
 		assertNotNull(idle);
 		Compiler.compile(Parser.parse("idle.py", idle));
+	}
+
+	@Test
+	void theBundledLibraryModulesLiveUnderLibAndCompile() {
+		Map<String, String> bundled = DefaultScripts.bundled();
+		assertTrue(bundled.containsKey("lib/home.py"), "bundled " + bundled.keySet());
+		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 }

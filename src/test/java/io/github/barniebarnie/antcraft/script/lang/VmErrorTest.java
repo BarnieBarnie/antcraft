@@ -134,11 +134,4 @@ class VmErrorTest {
 		}));
 		assertThrows(IllegalStateException.class, () -> vm.resume(1L));
 	}
-
-	@Test
-	void constructsNotCompiledYetAreACompileError() {
-		CompileError error = assertThrows(CompileError.class,
-				() -> Compiler.compile(Parser.parse("t.py", "x = 1\nimport lib.trees")));
-		assertEquals("t.py:2:1: `import` is not available yet", error.getMessage());
-	}
 }

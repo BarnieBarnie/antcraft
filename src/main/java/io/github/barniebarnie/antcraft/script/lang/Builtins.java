@@ -47,7 +47,7 @@ final class Builtins {
 		Code module = Compiler.compile(Parser.parse(Natives.BUILTINS_FILE, PRELUDE));
 		for (Object constant : module.constants()) {
 			if (constant instanceof Code code && code.name().equals(name)) {
-				return new PyFunction(code, List.of());
+				return new PyFunction(code, List.of(), null);
 			}
 		}
 		throw new IllegalStateException("no builtin " + name);

@@ -24,8 +24,8 @@ import java.util.TreeMap;
 public final class DefaultScripts {
 	/** The script a bot runs when it has nothing else to do: walk home and wait. */
 	public static final String IDLE = "idle";
-	/** The bundled scripts, by path in the script folder. */
-	private static final List<String> FILES = List.of(IDLE + ".py");
+	/** The bundled scripts, by path in the script folder; the library modules scripts import live under {@code lib/}. */
+	private static final List<String> FILES = List.of(IDLE + ".py", "lib/home.py");
 	/** Holds, per script, the hash of the version last copied. */
 	static final String RECORD = ".antcraft-defaults";
 

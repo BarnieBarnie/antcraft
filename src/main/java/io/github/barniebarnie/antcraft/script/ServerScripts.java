@@ -47,8 +47,9 @@ public final class ServerScripts {
 	}
 
 	/**
-	 * Loads the script folders again, creating them if missing. Bots running a library script whose file changed start
-	 * it again from the top; one that no longer compiles is stopped, with the error in its log and its owner's chat.
+	 * Loads the script folders again, creating them if missing. Bots running a library script whose file, or the file of a
+	 * module it imported, changed start it again from the top; one whose script no longer compiles is stopped, with the
+	 * error in its log and its owner's chat.
 	 */
 	public static Reload reload(MinecraftServer server) {
 		List<Path> folders = List.of(configFolder(), worldFolder(server));
@@ -101,7 +102,7 @@ public final class ServerScripts {
 			return false;
 		}
 		Optional<ScriptLibrary.Script> found = library.get(run.name());
-		if (found.isEmpty() || found.get().source().equals(oldSource)) {
+		if (found.isEmpty() || found.get().source().equals(oldSource) && !run.importsChanged(library)) {
 			return false;
 		}
 		ScriptLibrary.Script script = found.get();

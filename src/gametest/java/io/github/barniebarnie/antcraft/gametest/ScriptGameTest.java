@@ -203,6 +203,46 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A script imports a module of the world script folder, and {@code /antcraft script reload} after only that module
+	 * changed starts the script again with the new version. The test writes its own script and module, under names of its own.
+	 */
+	@GameTest(maxTicks = 40)
+	public void importsALibraryModuleAndRestartsWhenOnlyTheModuleChanged(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		String id = UUID.randomUUID().toString().substring(0, 8);
+		String name = "import_test_" + id;
+		String library = "import_lib_" + id;
+		Path folder = ServerScripts.worldFolder(helper.getLevel().getServer());
+		Path script = folder.resolve(name + ".py");
+		Path module = folder.resolve(library).resolve("words.py");
+		GameTests.onEnd(helper, () -> {
+			try {
+				Files.deleteIfExists(script);
+				Files.deleteIfExists(module);
+				Files.deleteIfExists(module.getParent());
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		});
+		write(module, "def word():\n    return 'one'\n");
+		write(script, "from " + library + ".words import word\nprint(word())\nwhile True:\n    wait(1)\n");
+		BotScripts.command(helper, "antcraft script reload");
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
+
+		helper.runAfterDelay(5, () -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			write(module, "def word():\n    return 'two'\n");
+			List<String> reloaded = BotScripts.command(helper, "antcraft script reload");
+			helper.assertTrue(reloaded.size() == 1 && reloaded.getFirst().endsWith(", 1]"), "reload answered " + reloaded);
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one", "two")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
+		});
+	}
+
 	private static void write(Path file, String source) {
 		try {
 			Files.createDirectories(file.getParent());

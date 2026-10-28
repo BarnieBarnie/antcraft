@@ -81,7 +81,18 @@ The log keeps a bot's last 200 lines and is saved with the bot, so `/antcraft bo
 
 ### Modules
 
-`import trees` loads `trees.py` from the script folders (see Files), runs its top level once per bot and binds its names under `trees`. Default library modules live under `lib/` and are imported as `import lib.trees`. Circular imports are an error.
+A module is a script of the script folders (see Files and commands), named as scripts are: `trees.py` is `trees`, `lib/trees.py` is `lib.trees`.
+
+- `import trees` runs the top level of `trees.py` and binds the module to `trees`, so its names are `trees.count`, `trees.fell(...)`.
+- `import lib.trees` imports `lib` and then `lib.trees`, and binds `lib`; the module is `lib.trees`. A folder without a file of its own (such as `lib/`) is a package that holds its modules.
+- `from lib.trees import fell, count` binds the names given. `from lib import trees` binds the module `lib.trees`.
+- `import ... as` and `from ... import *` are not supported.
+
+A module's top level runs once per bot run, the first time any module imports it; later imports bind the module already loaded. Each module has its own globals, and a function sees the globals of the module that defined it, wherever it is called from. The builtins, the bot API and `memory` are visible in every module; `ARGS` is a global of the script the bot runs.
+
+A module that is not there fails the script at the line of the import (`No module named 'lib.trees'`), and so does a name a module does not have (`cannot import name 'fel' from 'lib.trees'`). A module that does not compile fails the script with its own file and line (`lib/trees.py:4: ...`), and an error while a module runs names that module's file. Circular imports fail with the cycle: `circular import: lib.a -> lib.b -> lib.a`.
+
+The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
 
 ## Runtime
 
@@ -238,13 +249,13 @@ Scripts are loaded from two folders; the world folder wins on a name clash:
 - `config/antcraft/scripts/` for every world (share scripts by copying files here);
 - `<world>/antcraft/scripts/` for one world.
 
-The mod copies its default scripts (for now `idle.py`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
+The mod copies its default scripts (for now `idle.py` and the library module `lib/home.py`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
 
 Commands (single-player first; on a server they stay operator-only):
 
 ```
 /antcraft script list                       scripts found, with compile errors
-/antcraft script reload                     reload changed files; running bots restart their script
+/antcraft script reload                     reload changed files; a bot whose script or imported module changed restarts it
 /antcraft bot [bots] run <script> [args]    start a script on a bot (args are given to it as the list ARGS)
 /antcraft bot [bots] stop
 /antcraft bot [bots] status                 script, line, current action, last result

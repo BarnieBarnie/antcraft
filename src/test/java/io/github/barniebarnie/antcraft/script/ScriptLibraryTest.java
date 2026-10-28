@@ -1,10 +1,13 @@
 package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.github.barniebarnie.antcraft.script.lang.CompileError;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -69,6 +72,23 @@ class ScriptLibraryTest {
 		assertEquals("bad.py:1:8: expected ':' after 'if' condition", bad.error());
 		assertEquals(List.of("bad", "classy"), library.errors().stream().map(ScriptLibrary.Script::name).toList());
 		assertTrue(library.get("classy").orElseThrow().error().startsWith("classy.py:1:1: "), library.get("classy").orElseThrow().error());
+	}
+
+	@Test
+	void modulesAreLoadedByNameAndFoldersArePackages() throws IOException {
+		Path config = temp.resolve("config");
+		write(config.resolve("lib/trees.py"), "x = 1\n");
+		write(config.resolve("lib/deep/shaft.py"), "y = 1\n");
+		write(config.resolve("lib/bad.py"), "x = 1\nif True\n    pass\n");
+		ScriptLibrary library = ScriptLibrary.load(List.of(config));
+		assertEquals("lib/trees.py", library.load("lib.trees").file());
+		assertNull(library.load("lib.nothing"));
+		CompileError error = assertThrows(CompileError.class, () -> library.load("lib.bad"));
+		assertEquals("lib/bad.py:2:8: expected ':' after 'if' condition", error.getMessage());
+		assertTrue(library.isPackage("lib"));
+		assertTrue(library.isPackage("lib.deep"));
+		assertFalse(library.isPackage("lib.trees"));
+		assertFalse(library.isPackage("li"));
 	}
 
 	@Test
