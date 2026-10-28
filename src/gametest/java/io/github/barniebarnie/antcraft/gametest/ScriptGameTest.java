@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -436,6 +437,26 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 				helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
 			}
 		});
+	}
+
+	/**
+	 * The scaffold a cancelled build left with the bot, kept through a save, is dropped {@link AntBot#BUILD_SCAFFOLD_TICKS}
+	 * later when that build is never called again: the bot's save holds none after.
+	 */
+	@GameTest(maxTicks = 20)
+	public void aLeftBuildScaffoldExpires(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.leaveBuildScaffold("build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")", Set.of(helper.absolutePos(new BlockPos(3, 1, 3))));
+		AntBot loaded = saveAndLoad(helper, bot);
+		helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "not saved: " + saved(helper, loaded));
+		loaded.tickCount += AntBot.BUILD_SCAFFOLD_TICKS;
+		helper.succeedWhen(() -> helper.assertFalse(saved(helper, loaded).contains("BuildScaffold"), "still saved: " + saved(helper, loaded)));
+	}
+
+	private static CompoundTag saved(GameTestHelper helper, AntBot bot) {
+		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+		bot.saveWithoutId(output);
+		return output.buildResult();
 	}
 
 	/**

@@ -809,6 +809,28 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * As {@link #buildWalksKeepTheBlocksInPlace}, without dirt: no walk reaches the second cobblestone's spot without
+	 * breaking a block in place, so the bot breaks the stairs as a last resort, places them again and finishes.
+	 */
+	@GameTest(maxTicks = 80)
+	public void buildShutInByItsBlueprintWithoutDirtBreaksThroughAndFinishes(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
+		helper.setBlock(3, 2, 3, Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.EAST));
+		for (int y = 1; y <= 2; y++) {
+			helper.setBlock(0, y, 3, Blocks.GLASS);
+			for (int x = 1; x <= 2; x++) {
+				helper.setBlock(x, y, 2, Blocks.GLASS);
+				helper.setBlock(x, y, 4, Blocks.GLASS);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_AXE));
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n",
+			List.of("True None"), () -> assertCobbleStep(helper, 0));
+	}
+
 	/** A step too high to reach and nothing to pillar with but what the blueprint needs: blocked, and nothing placed up there. */
 	@GameTest(maxTicks = 40)
 	public void buildOutOfReachWithoutScaffoldIsBlocked(GameTestHelper helper) {

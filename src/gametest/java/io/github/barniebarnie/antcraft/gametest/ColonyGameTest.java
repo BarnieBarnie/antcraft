@@ -328,6 +328,39 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * An idle bot homed where the cobble step's second cobblestone goes, standing over the edge where the first goes, is
+	 * asked to make way once (#388): the builder finds one cobblestone in the core, stops with missing_ingredients and
+	 * builds on once the second is put there, and the idle bot keeps off the site in between instead of going back home.
+	 */
+	@GameTest(maxTicks = 200)
+	public void anIdleBotMakesWayOnceForABuildThatGoesOnAfterMissingIngredients(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE));
+		core.setItem(1, new ItemStack(Items.OAK_STAIRS));
+		AntBot idle = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.05, 1, 3.5));
+		AntBot builder = member(helper, colony, 1, 1, 6);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		data.put("at", pos(helper, 3, 1, 3));
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		runDefault(helper, builder, "colony.builder");
+		failOnWarning(helper, builder);
+		boolean[] given = {false};
+		helper.onEachTick(() -> {
+			if (!given[0] && !colony.jobs().jobs("haul").isEmpty()) {
+				given[0] = true;
+				core.setItem(2, new ItemStack(Items.COBBLESTONE));
+			}
+		});
+		helper.succeedWhen(() -> {
+			WorkGameTest.assertCobbleStep(helper, 0);
+			helper.assertValueEqual(idle.getWaysMade(), 1, "times the idle bot made way");
+		});
+	}
+
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
 	@GameTest(maxTicks = 80)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {
