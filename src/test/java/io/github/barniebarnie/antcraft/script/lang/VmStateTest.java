@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -286,6 +287,20 @@ class VmStateTest {
 				compile("for i in range(10):\n    print(i + 1)\n"), natives(new ArrayList<>()), new Library(Map.of()),
 				Vm.DEFAULT_MAX_DEPTH, THINGS, VmStateTest::checkedDict));
 		assertEquals("t.py changed since the save", e.getMessage());
+	}
+
+	/** memory is read back out of a save whose script changed since, without the code: the bot saves it only there (#341). */
+	@Test
+	void aBuiltinIsReadFromTheSaveOfAChangedScript() throws Exception {
+		String source = "memory['x'] = [1, (2, thing(3))]\nmemory['y'] = memory['x']\nmemory['d'] = {'k': 'v'}\nfor i in range(100):\n    pass\n";
+		Vm vm = vm(source, Map.of(), new ArrayList<>());
+		vm.run(60);
+		byte[] saved = VmState.save(vm, THINGS);
+		PyDict memory = (PyDict) VmState.loadBuiltin(saved, "memory", THINGS, VmStateTest::checkedDict);
+		assertTrue(memory.checked(), "memory checks what it stores");
+		assertEquals("{'x': [1, (2, Thing(3))], 'y': [1, (2, Thing(3))], 'd': {'k': 'v'}}", Values.repr(memory));
+		assertSame(memory.get("x"), memory.get("y"));
+		assertNull(VmState.loadBuiltin(saved, "nothing", THINGS, VmStateTest::checkedDict));
 	}
 
 	@Test

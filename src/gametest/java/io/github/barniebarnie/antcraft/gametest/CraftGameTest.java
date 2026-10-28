@@ -307,6 +307,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True None 1 1 1"));
 	}
 
+	/** The same with the smoker given as {@code furnace}: it skips the raw iron the smoker cannot cook. */
+	@GameTest(maxTicks = 250)
+	public void smeltTriesEachItemForTheStationAtFurnace(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, "r = smelt(['raw_iron', 'beef'], furnace=" + furnaceAt(helper) + ")\n"
+				+ "print(r.ok, r.reason, r.value, count('cooked_beef'), count('raw_iron'))\n",
+			List.of("True None 1 1 1"));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void smeltWhatNoRecipeSmeltsIsNoRecipe(GameTestHelper helper) {
 		furnace(helper);

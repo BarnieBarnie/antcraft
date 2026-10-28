@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
+import io.github.barniebarnie.antcraft.script.lang.VmState;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.RegistryAccess;
@@ -18,6 +19,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.level.storage.ValueInput;
 import org.junit.jupiter.api.Test;
 
 /** A bot's {@code memory} (docs/scripting.md, Memory): plain data only, saved with the bot. */
@@ -41,7 +43,7 @@ class MemoryTest {
 		TagValueOutput output = TagValueOutput.createWithoutContext(ProblemReporter.DISCARDING);
 		Memory.save(memory, output, problems::add);
 		CompoundTag saved = output.buildResult();
-		return Memory.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, saved));
+		return Memory.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, saved), null);
 	}
 
 	@Test
@@ -71,10 +73,31 @@ class MemoryTest {
 			+ "tuples and dicts of these), not 'builtin_function_or_method'", run(loaded, "memory['f'] = len\n"));
 	}
 
+	/** A bot saves memory once: inside its script's saved state when that holds it, which still gives it back (#341). */
+	@Test
+	void memorySavedOnlyInTheScriptsStateLoadsFromThere() throws Exception {
+		PyDict memory = Memory.create();
+		Natives natives = Natives.standard(Output.lines(line -> { }));
+		Pos.register(natives);
+		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", "memory['home'] = p\nmemory['l'] = [1, 'a']\nfor i in range(100):\n    pass\n")), natives);
+		vm.setBuiltin("memory", memory);
+		vm.setGlobal("p", new Pos(1, 2, 3));
+		vm.run(30);
+		byte[] state = VmState.save(vm, new SavedValues(uuid -> null));
+		ValueInput noTag = TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, new CompoundTag());
+		PyDict loaded = Memory.load(noTag, state);
+		assertEquals("{'home': Pos(1, 2, 3), 'l': [1, 'a']}", Values.repr(loaded));
+		assertEquals("error: t.py:1: memory holds only plain data (numbers, strings, booleans, None, Pos, and lists, "
+			+ "tuples and dicts of these), not 'builtin_function_or_method'", run(loaded, "memory['f'] = len\n"));
+		// Nothing saved, or a broken state: an empty memory.
+		assertEquals("{}", Values.repr(Memory.load(noTag, null)));
+		assertEquals("{}", Values.repr(Memory.load(noTag, new byte[] {1, 2, 3})));
+	}
+
 	@Test
 	void anEmptyMemoryLoadsEmpty() {
 		assertEquals("{}", Values.repr(roundTrip(Memory.create(), new ArrayList<>())));
-		assertEquals("{}", Values.repr(Memory.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, new CompoundTag()))));
+		assertEquals("{}", Values.repr(Memory.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, new CompoundTag()), null)));
 	}
 
 	@Test

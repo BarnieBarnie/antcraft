@@ -455,7 +455,32 @@ public final class VmState {
 	public static Vm load(byte[] saved, Code main, Natives natives, ModuleLoader loader, int maxDepth, HostCodec host,
 			Supplier<PyDict> checkedDict) throws Unloadable {
 		List<Raw> raws = new ArrayList<>();
-		Object[] body;
+		Object[] body = read(saved, raws);
+		try {
+			return new Reader(raws, body, main, natives, loader, maxDepth, host, checkedDict).read();
+		} catch (RuntimeException e) { // a save that does not fit the code, such as one written by hand
+			throw new Unloadable("the save cannot be read: " + e);
+		}
+	}
+
+	/**
+	 * The builtin {@code name} of a VM {@link #save saved}, such as {@code memory}, read without the script's code, so
+	 * also when the script changed since; null if the VM had none. It must hold plain data only: no functions or code.
+	 *
+	 * @throws Unloadable when the save is broken or the builtin holds code
+	 */
+	public static @Nullable Object loadBuiltin(byte[] saved, String name, HostCodec host, Supplier<PyDict> checkedDict) throws Unloadable {
+		List<Raw> raws = new ArrayList<>();
+		Object[] body = read(saved, raws);
+		try {
+			return new Reader(raws, body, null, null, null, 0, host, checkedDict).builtin(name);
+		} catch (RuntimeException e) {
+			throw new Unloadable("the save cannot be read: " + e);
+		}
+	}
+
+	/** The body of {@code saved}, with its objects added to {@code raws}. */
+	private static Object[] read(byte[] saved, List<Raw> raws) throws Unloadable {
 		try {
 			DataInputStream in = new DataInputStream(new ByteArrayInputStream(saved));
 			if (in.readInt() != MAGIC) {
@@ -470,14 +495,9 @@ public final class VmState {
 				byte kind = in.readByte();
 				raws.add(new Raw(kind, readFields(in)));
 			}
-			body = readFields(in);
+			return readFields(in);
 		} catch (IOException | RuntimeException e) {
 			throw new Unloadable("the save cannot be read: " + e.getMessage());
-		}
-		try {
-			return new Reader(raws, body, main, natives, loader, maxDepth, host, checkedDict).read();
-		} catch (RuntimeException e) { // a save that does not fit the code, such as one written by hand
-			throw new Unloadable("the save cannot be read: " + e);
 		}
 	}
 
@@ -546,6 +566,22 @@ public final class VmState {
 
 		private int nextInt() {
 			return Math.toIntExact((Long) next());
+		}
+
+		/** Only the builtin {@code name}, skipping the rest; its lists and dicts are made as they are reached. */
+		@Nullable Object builtin(String name) {
+			at = 4; // main module, status, executed, debt
+			int fingerprints = nextInt();
+			at += 2 * fingerprints;
+			int moduleCount = nextInt();
+			at += moduleCount;
+			for (int i = nextInt(); i > 0; i--) {
+				if (next().equals(name)) {
+					return value(next());
+				}
+				at++;
+			}
+			return null;
 		}
 
 		Vm read() throws Unloadable {
@@ -697,6 +733,27 @@ public final class VmState {
 				return built[id];
 			}
 			Object[] f = raws.get(id).fields();
+			// Lists and dicts are made up front by read, and only here by builtin: made first, so a loop through them ends.
+			switch (raws.get(id).kind()) {
+				case LIST -> {
+					PyList list = new PyList();
+					built[id] = list;
+					for (Object item : f) {
+						list.items.add(value(item));
+					}
+					return list;
+				}
+				case DICT -> {
+					PyDict dict = (Boolean) f[0] ? checkedDict.get() : new PyDict();
+					built[id] = dict;
+					for (int i = 1; i < f.length; i += 2) {
+						dict.putUnchecked(value(f[i]), value(f[i + 1]));
+					}
+					return dict;
+				}
+				default -> {
+				}
+			}
 			Object value;
 			try {
 				value = switch (raws.get(id).kind()) {

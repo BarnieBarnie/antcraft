@@ -191,9 +191,9 @@ public final class MoveApi {
 
 	/**
 	 * The chunks, as {@code {x, z}}, that the way from {@code from} straight towards {@code to} crosses in its next
-	 * {@link #STRETCH} blocks, and those within {@link #BAND} of them.
+	 * {@link #STRETCH} blocks, and those within {@code band} of them.
 	 */
-	static List<long[]> stretch(Pos from, Pos to) {
+	static List<long[]> stretch(Pos from, Pos to, int band) {
 		Set<String> seen = new HashSet<>();
 		List<long[]> chunks = new ArrayList<>();
 		double dx = to.x() - from.x();
@@ -205,8 +205,8 @@ public final class MoveApi {
 			long z = length == 0 ? from.z() : Math.round(from.z() + dz * d / length);
 			long chunkX = Math.floorDiv(x, 16);
 			long chunkZ = Math.floorDiv(z, 16);
-			for (long cx = chunkX - BAND; cx <= chunkX + BAND; cx++) {
-				for (long cz = chunkZ - BAND; cz <= chunkZ + BAND; cz++) {
+			for (long cx = chunkX - band; cx <= chunkX + band; cx++) {
+				for (long cz = chunkZ - band; cz <= chunkZ + band; cz++) {
 					if (seen.add(cx + "," + cz)) {
 						chunks.add(new long[] {cx, cz});
 					}
@@ -266,7 +266,8 @@ public final class MoveApi {
 			// Also renewed on the loaded ones, which keeps them from unloading before the bot gets there.
 			boolean renew = loads && ticks++ % RENEW_TICKS == 0;
 			boolean missing = false;
-			for (long[] chunk : stretch(at, target)) {
+			// A bot that loads no chunks has no ticket to need the band around its way loaded: only the way itself.
+			for (long[] chunk : stretch(at, target, loads ? BAND : 0)) {
 				int x = (int) chunk[0];
 				int z = (int) chunk[1];
 				boolean loaded = body.chunkLoaded(x, z);

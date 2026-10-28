@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Stream;
@@ -24,8 +25,12 @@ import org.jspecify.annotations.Nullable;
  * Its scripts are the modules scripts import, and its folders their packages.
  */
 public final class ScriptLibrary implements ModuleLoader {
-	/** One script file: compiled to {@code code}, or with the {@code error} that kept it from compiling. */
-	public record Script(String name, Path path, String source, @Nullable Code code, @Nullable String error) {
+	/** One script file: compiled to {@code code}, or with the {@code compileError} that kept it from compiling. */
+	public record Script(String name, Path path, String source, @Nullable Code code, @Nullable CompileError compileError) {
+		/** The compile error's message, placed in its file; null if it compiled. */
+		public @Nullable String error() {
+			return compileError == null ? null : compileError.getMessage();
+		}
 	}
 
 	private final Map<String, Script> scripts;
@@ -60,12 +65,12 @@ public final class ScriptLibrary implements ModuleLoader {
 		try {
 			source = Files.readString(file);
 		} catch (IOException e) {
-			return new Script(name, file, "", null, relative + ": cannot be read: " + e.getMessage());
+			return new Script(name, file, "", null, new CompileError(relative, 1, 1, "cannot be read: " + e.getMessage()));
 		}
 		try {
 			return new Script(name, file, source, Compiler.compile(Parser.parse(relative, source)), null);
 		} catch (CompileError e) {
-			return new Script(name, file, source, null, e.getMessage());
+			return new Script(name, file, source, null, e);
 		}
 	}
 
@@ -74,7 +79,7 @@ public final class ScriptLibrary implements ModuleLoader {
 		return new ScriptLibrary(Map.of());
 	}
 
-	/** The compiled script {@code name}, or null when there is none; one that does not compile throws its error again. */
+	/** The compiled script {@code name}, or null when there is none; one that does not compile throws its kept error. */
 	@Override
 	public @Nullable Code load(String name) {
 		Script script = scripts.get(name);
@@ -84,9 +89,7 @@ public final class ScriptLibrary implements ModuleLoader {
 		if (script.code() != null) {
 			return script.code();
 		}
-		String file = name.replace('.', '/') + ".py";
-		Compiler.compile(Parser.parse(file, script.source())); // throws the compile error, placed in its file
-		throw new CompileError(file, 1, 1, String.valueOf(script.error()));
+		throw Objects.requireNonNull(script.compileError());
 	}
 
 	/** Whether scripts are named under {@code name}, as those of a folder are. */

@@ -620,9 +620,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (this.deaths > 0) {
 			output.putInt("Deaths", this.deaths);
 		}
-		Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
-		this.log.save(output);
 		ScriptRun.Saved running = this.isRunningScript() ? this.script.save() : this.savedScript;
+		// The script's saved state holds memory too, so it is saved on its own only when that does not (#341).
+		if (running == null || running.vm() == null || !Memory.isPlain(this.memory)) {
+			Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
+		}
+		this.log.save(output);
 		if (running != null) {
 			running.store(output);
 			output.putBoolean("ScriptIdling", this.isRunningScript() ? this.idling : this.savedIdling);
@@ -645,9 +648,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.deaths = input.getIntOr("Deaths", 0);
-		this.memory = Memory.load(input);
 		this.log.load(input);
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
+		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());
 		this.savedIdling = input.getBooleanOr("ScriptIdling", false);
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.

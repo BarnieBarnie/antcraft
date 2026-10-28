@@ -6,11 +6,13 @@ import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
+import io.github.barniebarnie.antcraft.script.lang.VmState;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.nbt.CompoundTag;
@@ -18,6 +20,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A bot's {@code memory} (docs/scripting.md, Memory): a dict that belongs to the bot, outlives its scripts and is saved
@@ -108,10 +111,33 @@ public final class Memory {
 		}
 	}
 
-	/** The memory saved with the bot, or an empty one. */
-	public static PyDict load(ValueInput input) {
+	/** Whether all of {@code memory} is still plain data, as it was when stored. */
+	public static boolean isPlain(PyDict memory) {
+		try {
+			checkPlain(memory);
+			return true;
+		} catch (ScriptError e) {
+			return false;
+		}
+	}
+
+	/**
+	 * The memory saved with the bot: on its own, or else in the saved state {@code vm} of the script it ran, which then
+	 * holds it (also when the script changed since); an empty one if neither has it.
+	 */
+	public static PyDict load(ValueInput input, byte @Nullable [] vm) {
+		Optional<CompoundTag> saved = input.read(KEY, CompoundTag.CODEC);
+		if (saved.isEmpty() && vm != null) {
+			try {
+				if (VmState.loadBuiltin(vm, "memory", new SavedValues(uuid -> null), Memory::create) instanceof PyDict memory) {
+					return memory;
+				}
+			} catch (VmState.Unloadable e) {
+				// a broken save: the script starts again from the top too
+			}
+		}
 		PyDict memory = create();
-		input.read(KEY, CompoundTag.CODEC).ifPresent(tag -> fill(memory, tag.getListOrEmpty("dict")));
+		saved.ifPresent(tag -> fill(memory, tag.getListOrEmpty("dict")));
 		return memory;
 	}
 

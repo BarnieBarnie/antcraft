@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -85,6 +86,9 @@ class ScriptLibraryTest {
 		assertNull(library.load("lib.nothing"));
 		CompileError error = assertThrows(CompileError.class, () -> library.load("lib.bad"));
 		assertEquals("lib/bad.py:2:8: expected ':' after 'if' condition", error.getMessage());
+		// The error kept when the library loaded, not one from compiling the module again.
+		assertSame(library.get("lib.bad").orElseThrow().compileError(), error);
+		assertSame(error, assertThrows(CompileError.class, () -> library.load("lib.bad")));
 		assertTrue(library.isPackage("lib"));
 		assertTrue(library.isPackage("lib.deep"));
 		assertFalse(library.isPackage("lib.trees"));

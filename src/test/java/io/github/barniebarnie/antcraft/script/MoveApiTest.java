@@ -23,6 +23,8 @@ class MoveApiTest {
 		Pos home = new Pos(0, 64, 0);
 		/** The chunks up to this x are loaded; those east of it not. */
 		int loadedUpToX = Integer.MAX_VALUE;
+		/** How far from z = 0, in chunks, chunks are loaded. */
+		int loadedZ = Integer.MAX_VALUE;
 		/** Chunks asked to load, in order. */
 		final List<String> loadRequests = new ArrayList<>();
 		final List<String> paths = new ArrayList<>();
@@ -74,7 +76,7 @@ class MoveApiTest {
 
 		@Override
 		public boolean chunkLoaded(int x, int z) {
-			return x <= loadedUpToX;
+			return x <= loadedUpToX && Math.abs(z) <= loadedZ;
 		}
 
 		@Override
@@ -215,6 +217,20 @@ class MoveApiTest {
 		assertEquals(List.of("False not_loaded"), printed());
 		assertEquals(List.of(), bot.loadRequests);
 		assertEquals(List.of(), bot.paths);
+	}
+
+	/** Without chunk loading, only the chunks the way crosses need to be loaded: a strip one chunk wide will do (#341). */
+	@Test
+	void withoutChunkLoadingGotoWalksALoadedStripBesideUnloadedChunks() {
+		loadChunks(false);
+		bot.loadedZ = 0;
+		ScriptRun run = start("r = goto((100, 64, 0))\nprint(r.ok, r.reason)\n");
+		tick(run);
+		tick(run);
+		assertEquals(List.of("Pos(100, 64, 0) near 0"), bot.paths);
+		bot.pathStatus = MoveApi.PathStatus.ARRIVED;
+		tick(run);
+		assertEquals(List.of("True None"), printed());
 	}
 
 	/** A bot runs a walk while its goto goes on, and not while it waits (#327: an idle bot holds its chunks only then). */

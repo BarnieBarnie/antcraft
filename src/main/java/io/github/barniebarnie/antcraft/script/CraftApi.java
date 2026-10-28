@@ -316,6 +316,9 @@ public final class CraftApi {
 		boolean any = false;
 		boolean smeltable = false;
 		Set<Item> tried = new HashSet<>();
+		// With furnace, items the station there cannot cook are skipped too, if its chunk is loaded to tell.
+		BlockPos station = furnace == null ? null : WorkApi.blockPos(furnace);
+		RecipeType<? extends AbstractCookingRecipe> stationType = station != null && level.isLoaded(station) ? cooking(level.getBlockState(station)) : null;
 		for (int i = 0; i < carried.getContainerSize(); i++) {
 			ItemStack stack = carried.getItem(i);
 			if (stack.isEmpty() || !wanted.test(stack)) {
@@ -327,6 +330,9 @@ public final class CraftApi {
 				continue;
 			}
 			smeltable = true;
+			if (stationType != null && cooked(level, stationType, new ItemStack(input)).isEmpty()) {
+				continue;
+			}
 			// Without furnace, each item the selector takes gets its turn: the station in reach may cook only some.
 			Pos at = furnace != null ? furnace : inReach(run, bot, state -> {
 				RecipeType<? extends AbstractCookingRecipe> type = cooking(state);
@@ -338,7 +344,7 @@ public final class CraftApi {
 			}
 		}
 		if (smeltable) {
-			return run.done(describe, Result.fail(Result.NO_FURNACE));
+			return run.done(describe, Result.fail(stationType != null ? Result.NO_RECIPE : Result.NO_FURNACE));
 		}
 		boolean recipe = any || !selector.tags().isEmpty()
 			|| selector.ids().stream().anyMatch(id -> !smelted(level, new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.parse(id)))).isEmpty());
