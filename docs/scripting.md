@@ -92,7 +92,7 @@ A module's top level runs once per bot run, the first time any module imports it
 
 A module that is not there fails the script at the line of the import (`No module named 'lib.trees'`), and so does a name a module does not have (`cannot import name 'fel' from 'lib.trees'`). A module that does not compile fails the script with its own file and line (`lib/trees.py:4: ...`), and an error while a module runs names that module's file. Circular imports fail with the cycle: `circular import: lib.a -> lib.b -> lib.a`.
 
-The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
+The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
 
 ## Runtime
 
@@ -114,7 +114,7 @@ Because the VM's state is plain data (frames, operand stacks, globals, the call 
 
 The action a script was in starts again on load with the same arguments, as if the script had just called it: `goto` plans its path again from where the bot stands, `mine` walks back to its block, and so on. `wait` goes on with the ticks it had left. An action that is done at once when called again gives its result and the script goes on.
 
-The save holds a fingerprint of the compiled code of the script and of each module it imported (which changes with the source, line numbers included). If one of them changed since, is gone or no longer compiles, the script starts again from the top instead, with its arguments and keeping `memory`, and the bot's log says why (`miner.py changed since the save: miner starts again from the top`). So does a script that held a value that cannot be saved. A bot saved before scripts were saved with it runs `idle.py`. A script that is gone from the script folders when the bot loads is not resumed: the bot runs `idle.py`, with a warning in its log. A bot resumes its script on its first tick after loading, once the script folders are read. A bot that dies does not resume: it runs its script again from the top when it respawns (see Idle, home and death), also when it died before it resumed the script it was saved running.
+The save holds a fingerprint of the compiled code of the script and of each module it imported (which changes with the source, line numbers included). If one of them changed since, is gone or no longer compiles, the script starts again from the top instead, with its arguments and keeping `memory`, and the bot's log says why (`miner.py changed since the save: miner starts again from the top`). So does a script that held a value that cannot be saved. A bot saved before scripts were saved with it runs `idle.py`. A script that is gone from the script folders when the bot loads is not resumed: the bot runs `idle.py`, with a warning in its log. A bot resumes its script on its first tick after loading, once the script folders are read. A bot that goes through a portal resumes at once in the other dimension with the code it ran, also a script not from the library (see Travelling between dimensions). A bot that dies does not resume: it runs its script again from the top when it respawns (see Idle, home and death), also when it died before it resumed the script it was saved running.
 
 ## The bot API
 
@@ -163,6 +163,7 @@ Details: `inventory()` lists the held stack first, then the inventory; `count` a
 | Function | Does |
 |---|---|
 | `goto(pos, near=0)` | walk to within `near` blocks, digging, pillaring and bridging as the pathfinder allows. When the next stretch of the path enters an unloaded chunk, the bot loads it (see Chunk loading) and plans on; if it cannot be loaded, `goto` stops with `not_loaded`. A `pos` whose `dimension` is not the bot's, such as `home()` in another dimension than the home's, fails at once with `wrong_dimension`; a tuple or a `Pos` without a dimension goes anywhere in the bot's dimension |
+| `travel(portal)` | walk into the nether portal at `portal` (any of its blocks, such as `find_nearest("nether_portal")` gives) and go through it to the other dimension; ok once the bot is there, `timeout` when it stood in the portal a second without going. See Travelling between dimensions |
 | `mine(pos)` | walk into reach and break the block with the best tool carried; drops go straight into the inventory |
 | `place(pos, item, facing=None)` | walk into reach, hold the block item and place it; `facing` is `"north"`, `"south"`, `"east"`, `"west"`, `"up"` or `"down"` |
 | `pick_up(what=None, radius=8)` | walk to the dropped items `what` selects within `radius` (at most 16), nearest first, and take them; `value` is how many it took. Items it cannot walk to are skipped: it fails with `out_of_reach` only when it took none |
@@ -200,7 +201,7 @@ Later milestones add `build(blueprint, at, turn=0)` (the existing build-plan cod
 
 ### Reason codes
 
-`unreachable`, `wrong_dimension` (`goto` to a `Pos` of another dimension, such as `home()` from another dimension than the home's), `no_path_budget` (only seen if a script asks again in the same tick), `out_of_reach`, `not_loaded`, `no_tool` (needs a better tool), `no_item`, `no_space` (inventory or container full), `no_recipe`, `missing_ingredients`, `no_table`, `no_furnace`, `blocked` (something is in the way), `protected` (the block may not be changed, for example by claim rules), `target_gone`, `interrupted` (a reflex took over; any action that takes ticks, `wait` too, can end with it, see Reflexes), `stopped`, `timeout`.
+`unreachable`, `wrong_dimension` (`goto` to a `Pos` of another dimension, such as `home()` from another dimension than the home's), `no_path_budget` (only seen if a script asks again in the same tick), `out_of_reach`, `not_loaded`, `no_tool` (needs a better tool), `no_item`, `no_space` (inventory or container full), `no_recipe`, `missing_ingredients`, `no_table`, `no_furnace`, `blocked` (something is in the way), `protected` (the block may not be changed, for example by claim rules), `target_gone`, `interrupted` (a reflex took over; any action that takes ticks, `wait` too, can end with it, see Reflexes), `stopped`, `timeout` (also `travel` when the portal did not take the bot).
 
 ### Memory
 
@@ -223,12 +224,23 @@ Reflexes run every tick in Java, before the script, and cannot be turned off by 
 
 The nearer danger comes first, in the order of the list. A reflex takes over only where it has a way out: a bot walled in by fire, or under water with no air within reach, is left to its script.
 
+### Travelling between dimensions
+
+A bot goes between the Overworld and the Nether through a nether portal, as a player does: `travel(portal)` walks into the portal, which takes the bot at once (mobs do not wait in a portal as players do), and the bot comes out of the portal on the other side, which the game finds or builds as for a player. The game keeps a mob that came through a portal from going back for 15 seconds, and for as long as it stands in a portal; `travel` lifts that, so a bot can go back at once, while a bot that only walks through a portal on its way is held by it as any mob. The script goes on in the other dimension, inside `travel`, which then gives ok: the game makes the bot anew there from its save, and the new bot carries on with the same script, the running action and all (see Save and resume), also a script not from the script library. Bots find a portal with `find_nearest("nether_portal")`; they do not remember portals, and the end portal is not supported. In another dimension than its home's, `go_home` in `lib/home.py`, and so `idle.py`, goes through a nether portal within 32 blocks when the home is in the Overworld or the Nether, and walks home from where it comes out:
+
+```python
+if dimension() != home_dimension():
+    portal = find_nearest("nether_portal")
+    if portal is not None and travel(portal):
+        goto(home())
+```
+
 When a reflex takes over, the running action ends with `interrupted`. While the reflex holds the bot the script does not run; once the danger is past, the script goes on with that result and decides what to do next. Thresholds are config options, not script options, in v1; 0 turns the drowning or the fleeing reflex off.
 
 ## Idle, home and death
 
 - **Home.** Every bot has a home: where it was first spawned, changed with `set_home(pos)`.
-- **Idle.** A bot without a script, or whose script ended, stopped or failed, runs `idle.py` from the default library: walk home, then wait there. This holds for every bot, a colony member as much as any other, and for a bot loaded from a world saved before milestone 4 with colony work under way: what it was doing is forgotten and it runs `idle.py`. Players can replace it with their own `idle.py` in a script folder, like any other default script. When `idle.py` itself ends or fails, it is not started again. An idle bot keeps its chunk loaded only while it walks (see Chunk loading).
+- **Idle.** A bot without a script, or whose script ended, stopped or failed, runs `idle.py` from the default library: walk home, then wait there. It goes home with `go_home` from `lib/home.py`, so from another dimension than its home's through a nether portal within 32 blocks; without one it waits where it is (see Travelling between dimensions). This holds for every bot, a colony member as much as any other, and for a bot loaded from a world saved before milestone 4 with colony work under way: what it was doing is forgotten and it runs `idle.py`. Players can replace it with their own `idle.py` in a script folder, like any other default script. When `idle.py` itself ends or fails, it is not started again. An idle bot keeps its chunk loaded only while it walks (see Chunk loading).
 - **Death.** A bot that dies drops its items where it died, like a player (its inventory and what it holds or wears), and its log and its owner's chat get a line saying where and how it died. It respawns at its home, in the dimension of its home (also when it died in another), after `botRespawnTicks` (config, default 200, 10 seconds), with full health. It keeps its UUID, name, skin, owner, home, log and `memory`, and starts its last script again from the top with the same arguments: a library script as the library has it then, and `idle.py` when it was idle or its script is no longer in the library. `botRespawn = false` (config) makes death final instead. A script can tell it respawned from `memory`, or from `deaths()`, how often the bot has died. The wait is saved with the world, so a bot waiting to respawn when the server stops still comes back. When the time is up and the chunk of its home is not loaded, the bot loads it with a short chunk ticket (with `botsLoadChunks` on; otherwise it waits until a player loads it).
 
 ## Chunk loading

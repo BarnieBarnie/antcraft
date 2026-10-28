@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
- * and {@code home_dimension()},
+ * and {@code home_dimension()}, {@code travel(portal)},
  * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
  */
@@ -45,6 +45,11 @@ public final class MoveApi {
 	 * cost the server, and a charge at cost would hold a script up for seconds after each plan.
 	 */
 	public static final int INSTRUCTIONS_PER_NODE = 1;
+	/**
+	 * How long {@code travel} waits in the portal for the bot to change dimension before it gives up with {@code timeout};
+	 * a portal takes a mob on the tick after it steps in.
+	 */
+	public static final int TRAVEL_WAIT_TICKS = 20;
 
 	/** What the move actions need of the bot. */
 	public interface Body {
@@ -86,6 +91,21 @@ public final class MoveApi {
 		 * {@code target}, as {@link #startPath} would plan it but over loaded blocks only, loading no chunks.
 		 */
 		Plan plan(Pos target, int near);
+
+		/**
+		 * The block of the nether portal at {@code portal} that the bot stands in to go through: the bottom one of its column,
+		 * as far as it is loaded.
+		 */
+		default Pos portalFloor(Pos portal) {
+			return portal;
+		}
+
+		/**
+		 * Ends the bot's portal cooldown, so the portal takes it at once: a mob that came through a portal is otherwise not
+		 * taken back for 15 seconds, and never while it stands in one.
+		 */
+		default void clearPortalCooldown() {
+		}
 
 		/** How long a walk waits for the chunks ahead to load before it gives up with {@code not_loaded}. */
 		default int loadWaitTicks() {
@@ -153,6 +173,10 @@ public final class MoveApi {
 			}
 			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call);
 		});
+		natives.register("travel", call -> {
+			Pos portal = Pos.of(Args.bind("travel", call, 1, "portal")[0]);
+			return run.start(new Travel(run.host(), portal), call);
+		});
 		natives.register("reachable", call -> {
 			Object[] args = Args.bind("reachable", call, 1, "pos", "near");
 			Pos target = Pos.of(args[0]);
@@ -206,6 +230,93 @@ public final class MoveApi {
 		@Override
 		public String describe() {
 			return "reachable (" + this.expanded + " nodes searched)";
+		}
+	}
+
+	/**
+	 * {@code travel(portal)}: walks into the nether portal at {@code portal} and waits there until the portal takes the bot
+	 * to the other dimension. Vanilla makes the bot anew there from its save, so the script resumes in this action in the
+	 * new dimension; its progress is the dimension it started in, and it is ok once the bot is in another one.
+	 */
+	private static final class Travel implements ScriptRun.Action {
+		private final ScriptRun.Host host;
+		private final Pos portal;
+		/**
+		 * The hash of the dimension the bot started in, its progress.
+		 * ponytail: the hash stands in for the id, which a long cannot hold; two ids that hash alike read as no change.
+		 * Save the id itself if datapack dimensions ever collide.
+		 */
+		private int from;
+		private ScriptRun.@Nullable Action walk;
+		private @Nullable Result result;
+		private int waited;
+
+		Travel(ScriptRun.Host host, Pos portal) {
+			this.host = host;
+			this.portal = portal;
+			this.from = host.body().dimension().hashCode();
+		}
+
+		@Override
+		public boolean tick() {
+			Body body = host.body();
+			if (body.dimension().hashCode() != from) {
+				result = Result.OK;
+				return true;
+			}
+			body.clearPortalCooldown();
+			if (walk == null && waited == 0) {
+				walk = new Goto(host, body.portalFloor(portal), 0, false);
+			}
+			if (walk != null) {
+				if (!walk.tick()) {
+					return false;
+				}
+				Result walked = (Result) walk.result();
+				walk = null;
+				if (!walked.ok()) {
+					result = walked;
+					return true;
+				}
+			}
+			// In the portal: it takes the bot next tick, unless something keeps it out.
+			if (++waited > TRAVEL_WAIT_TICKS) {
+				result = Result.fail(Result.TIMEOUT);
+				return true;
+			}
+			return false;
+		}
+
+		@Override
+		public long progress() {
+			return from;
+		}
+
+		@Override
+		public void restore(long progress) {
+			from = (int) progress;
+		}
+
+		@Override
+		public Object result() {
+			return result == null ? Result.fail(Result.STOPPED) : result;
+		}
+
+		@Override
+		public boolean walks() {
+			return true;
+		}
+
+		@Override
+		public void cancel() {
+			if (walk != null) {
+				walk.cancel();
+			}
+		}
+
+		@Override
+		public String describe() {
+			return "travel(" + portal + ")";
 		}
 	}
 

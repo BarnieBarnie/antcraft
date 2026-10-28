@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Blocks;
 
 /** What the move actions of a script ({@link MoveApi}) do with a bot: its home, chunks and path follower. */
 final class BotBody implements MoveApi.Body {
@@ -81,6 +82,20 @@ final class BotBody implements MoveApi.Body {
 
 	private static BlockPos blockPos(Pos pos) {
 		return new BlockPos(clamp(pos.x()), clamp(pos.y()), clamp(pos.z()));
+	}
+
+	@Override
+	public Pos portalFloor(Pos portal) {
+		BlockPos at = blockPos(portal);
+		while (this.level().isLoaded(at.below()) && this.level().getBlockState(at.below()).is(Blocks.NETHER_PORTAL)) {
+			at = at.below();
+		}
+		return new Pos(at.getX(), at.getY(), at.getZ());
+	}
+
+	@Override
+	public void clearPortalCooldown() {
+		this.bot.setPortalCooldown(0);
 	}
 
 	@Override

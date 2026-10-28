@@ -343,18 +343,37 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (saved == null) {
 			return;
 		}
-		this.savedScript = null;
 		Optional<ScriptLibrary.Script> found = saved.name().equals(DefaultScripts.IDLE) ? ServerScripts.idle()
 			: ServerScripts.library().get(saved.name()).filter(script -> script.code() != null);
 		if (found.isEmpty()) {
+			this.savedScript = null;
 			this.log.add(this.level().getGameTime(), Output.Level.WARN, saved.name() + " is gone or does not compile: not resumed");
 			return;
 		}
-		this.script = ScriptRun.resume(saved, found.get().code(), new ScriptHost(), this.log, this.memory, ServerScripts.library());
+		this.resumeSavedScript(found.get().code(), found.get().source());
+	}
+
+	/** Resumes the script the bot was saved running, compiled to {@code code}. */
+	private void resumeSavedScript(Code code, @Nullable String source) {
+		ScriptRun.Saved saved = Objects.requireNonNull(this.savedScript);
+		this.savedScript = null;
+		this.script = ScriptRun.resume(saved, code, new ScriptHost(), this.log, this.memory, ServerScripts.library());
 		this.memory = this.script.memory();
-		this.scriptCode = found.get().code();
-		this.scriptSource = found.get().source();
+		this.scriptCode = code;
+		this.scriptSource = source;
 		this.idling = this.savedIdling;
+	}
+
+	/**
+	 * Going through a portal, vanilla makes the bot anew in the other dimension from {@code old}'s save; the new bot goes on
+	 * with the script the old one ran, at once and with its code, so one not from the script library goes on too.
+	 */
+	@Override
+	public void restoreFrom(Entity old) {
+		super.restoreFrom(old);
+		if (old instanceof AntBot from && this.savedScript != null && from.scriptCode != null) {
+			this.resumeSavedScript(from.scriptCode, from.scriptSource);
+		}
 	}
 
 	/** Stops the script the bot runs, if any. */

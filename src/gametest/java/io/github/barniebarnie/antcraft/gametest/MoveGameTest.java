@@ -10,16 +10,21 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.TicketStorage;
+import net.minecraft.world.level.portal.PortalShape;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -295,6 +300,100 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(level.getEntity(id) instanceof AntBot reloaded && reloaded.blockPosition().equals(newHome)
 				&& reloaded.getScript() != null && reloaded.getScript().name().equals(DefaultScripts.IDLE),
 				"reloaded bot not at its new home running idle.py: " + level.getEntity(id));
+		});
+	}
+
+	/**
+	 * A lit nether portal two wide and three high across x, its frame's lower west corner at {@code corner}, on a stone
+	 * floor with air around it, two blocks deep on either side. Gives the portal's lower west block.
+	 */
+	private static BlockPos buildPortal(ServerLevel level, BlockPos corner) {
+		for (int x = -1; x <= 4; x++) {
+			for (int z = -2; z <= 2; z++) {
+				level.setBlockAndUpdate(corner.offset(x, 0, z), Blocks.STONE.defaultBlockState());
+				for (int y = 1; y <= 5; y++) {
+					level.setBlockAndUpdate(corner.offset(x, y, z), Blocks.AIR.defaultBlockState());
+				}
+			}
+		}
+		for (int i = 0; i <= 3; i++) {
+			level.setBlockAndUpdate(corner.offset(i, 0, 0), Blocks.OBSIDIAN.defaultBlockState());
+			level.setBlockAndUpdate(corner.offset(i, 4, 0), Blocks.OBSIDIAN.defaultBlockState());
+		}
+		for (int y = 1; y <= 3; y++) {
+			level.setBlockAndUpdate(corner.offset(0, y, 0), Blocks.OBSIDIAN.defaultBlockState());
+			level.setBlockAndUpdate(corner.offset(3, y, 0), Blocks.OBSIDIAN.defaultBlockState());
+		}
+		BlockPos inside = corner.offset(1, 1, 0);
+		PortalShape.findEmptyPortalShape(level, inside, Direction.Axis.X).orElseThrow().createPortalBlocks(level);
+		return inside;
+	}
+
+	/** A bot next to a lit nether portal goes through it with {@code travel} and arrives in the Nether, its script going on there (#350). */
+	@GameTest(maxTicks = 240)
+	public void travelTakesTheBotThroughANetherPortal(GameTestHelper helper) {
+		buildPortal(helper.getLevel(), helper.absolutePos(new BlockPos(2, 0, 4)));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 2);
+		UUID id = bot.getUUID();
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		GameTests.onEnd(helper, () -> {
+			if (nether.getEntity(id) instanceof AntBot there) {
+				there.discard();
+			}
+		});
+		failOnError(helper, bot);
+		// Where the portal leads, an eighth of the way from the Nether's origin; the bot travels once that ticks entities.
+		BlockPos there = new BlockPos(Math.floorDiv(bot.getBlockX(), 8), 64, Math.floorDiv(bot.getBlockZ(), 8));
+		boolean[] started = {false};
+		helper.onEachTick(() -> {
+			BotChunks.keep(nether, ChunkPos.containing(there));
+			if (!started[0] && nether.isPositionEntityTicking(there)) {
+				BotScripts.run(bot, "r = travel(find_nearest('nether_portal'))\nprint(r.ok, dimension())\nwait(1000)\n");
+				started[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(nether.getEntity(id) instanceof AntBot, "bot not in the Nether");
+			List<String> printed = printed((AntBot) Objects.requireNonNull(nether.getEntity(id)));
+			helper.assertTrue(printed.contains("True minecraft:the_nether"), "printed " + printed);
+		});
+	}
+
+	/**
+	 * A bot in the Nether whose home is in the Overworld goes home through a portal next to it: its {@code idle.py} finds
+	 * the portal, travels, and walks home from the portal it comes out of, which is the one in the test area (#350).
+	 */
+	@GameTest(maxTicks = 240)
+	public void anIdleBotInTheNetherGoesHomeThroughAPortal(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		// The Overworld end, which the portal in the Nether leads to: nearer its way out than any other portal.
+		buildPortal(level, helper.absolutePos(new BlockPos(2, 0, 4)));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		UUID id = bot.getUUID();
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 1));
+		bot.setHome(home);
+		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
+		BlockPos corner = new BlockPos(Math.floorDiv(home.getX(), 8) - 1, 100, Math.floorDiv(home.getZ(), 8));
+		GameTests.onEnd(helper, () -> {
+			if (nether.getEntity(id) instanceof AntBot there) {
+				there.discard();
+			}
+		});
+		// Once the Nether chunk ticks entities, the portal goes up there and the bot is put next to it.
+		boolean[] sent = {false};
+		helper.onEachTick(() -> {
+			BotChunks.keep(nether, ChunkPos.containing(corner));
+			if (sent[0] || !nether.isPositionEntityTicking(corner)) {
+				return;
+			}
+			buildPortal(nether, corner);
+			bot.teleportTo(nether, corner.getX() + 1.5, corner.getY() + 1, corner.getZ() - 0.5, Set.of(), 0, 0, false);
+			sent[0] = true;
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(sent[0] && nether.getEntity(id) == null, "bot not through the portal yet");
+			helper.assertTrue(level.getEntity(id) instanceof AntBot back && back != bot && back.blockPosition().equals(home),
+				"bot not home: " + level.getEntity(id));
 		});
 	}
 }

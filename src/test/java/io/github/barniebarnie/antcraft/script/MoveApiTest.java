@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.pathing.PathBudget;
+import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
@@ -37,6 +38,8 @@ class MoveApiTest {
 		/** How many nodes the next plan expands before it is done, and whether it then found a path. */
 		int planNodes = 10;
 		boolean planFound = true;
+		/** How often travel cleared the portal cooldown. */
+		int cooldownClears;
 
 		@Override
 		public long gameTime() {
@@ -120,6 +123,17 @@ class MoveApiTest {
 		@Override
 		public void stopPath() {
 			pathStopped = true;
+		}
+
+		@Override
+		public void clearPortalCooldown() {
+			cooldownClears++;
+		}
+
+		/** The portal's bottom block: one below what the script gave. */
+		@Override
+		public Pos portalFloor(Pos portal) {
+			return new Pos(portal.x(), portal.y() - 1, portal.z());
 		}
 
 		@Override
@@ -372,6 +386,67 @@ class MoveApiTest {
 		ScriptRun run = start("goto(home())\nwait(10)\n");
 		tick(run);
 		assertEquals("goto(Pos(5, 64, 5)) -> wrong_dimension", run.lastResult());
+	}
+
+	/**
+	 * {@code travel(portal)} walks into the portal's bottom block, clearing the bot's portal cooldown as it goes, and is
+	 * ok once the bot is in another dimension (#350).
+	 */
+	@Test
+	void travelWalksIntoThePortalAndIsOkInTheOtherDimension() {
+		ScriptRun run = start("r = travel((3, 65, 4))\nprint(r.ok, r.reason, dimension())\n");
+		tick(run);
+		tick(run);
+		assertEquals(List.of("Pos(3, 64, 4) near 0"), bot.paths);
+		assertEquals("travel(Pos(3, 65, 4))", run.action());
+		assertTrue(run.walking(), "not walking");
+		assertTrue(bot.cooldownClears > 0, "portal cooldown not cleared");
+		bot.pathStatus = MoveApi.PathStatus.ARRIVED;
+		tick(run);
+		assertEquals(List.of(), printed());
+		bot.dimension = "minecraft:the_nether";
+		tick(run);
+		assertEquals(List.of("True None minecraft:the_nether"), printed());
+	}
+
+	/**
+	 * Going through a portal makes the bot anew in the other dimension from its save (vanilla), so travel goes on there
+	 * as a resumed action: it is ok, and does not walk to the portal's coordinates in the new dimension.
+	 */
+	@Test
+	void aTravelResumedInTheOtherDimensionIsOk() {
+		Code code = Compiler.compile(Parser.parse("t.py", "r = travel((3, 64, 4))\nprint(r.ok, dimension())\n"));
+		ScriptRun run = new ScriptRun("t", code, List.of(), bot, log);
+		tick(run);
+		tick(run);
+		ScriptRun.Saved saved = run.save();
+		bot.dimension = "minecraft:the_nether";
+		bot.paths.clear();
+		ScriptRun resumed = ScriptRun.resume(saved, code, bot, log, Memory.create(), ScriptLibrary.empty());
+		tick(resumed);
+		assertEquals(List.of("True minecraft:the_nether"), printed());
+		assertEquals(List.of(), bot.paths);
+	}
+
+	/** A bot that walked into the portal but does not go through it gives up with {@code timeout}. */
+	@Test
+	void travelThatDoesNotChangeDimensionTimesOut() {
+		bot.pathStatus = MoveApi.PathStatus.ARRIVED;
+		ScriptRun run = start("print(travel((3, 64, 4)).reason)\n");
+		for (int i = 0; i <= MoveApi.TRAVEL_WAIT_TICKS + 2; i++) {
+			tick(run);
+		}
+		assertEquals(List.of("timeout"), printed());
+	}
+
+	/** A portal the bot cannot walk to is {@code unreachable}, as for {@code goto}. */
+	@Test
+	void travelToAPortalOutOfReachIsUnreachable() {
+		bot.pathStatus = MoveApi.PathStatus.FAILED;
+		ScriptRun run = start("print(travel((3, 64, 4)).reason)\n");
+		tick(run);
+		tick(run);
+		assertEquals(List.of("unreachable"), printed());
 	}
 
 	@Test
