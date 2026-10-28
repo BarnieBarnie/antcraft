@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
+import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -229,6 +230,10 @@ class ScriptSaveTest {
 			assertNotNull(saved, value.toString());
 			assertEquals(value, values.load(saved));
 		}
+		Pos nether = (Pos) values.load(values.save(new Pos(1, 2, 3, "minecraft:the_nether")));
+		assertEquals("minecraft:the_nether", nether.dimension());
+		assertEquals(new Pos(1, 2, 3), values.load(PyTuple.of(Pos.TYPE, 1L, 2L, 3L)), "a Pos saved before #349");
+		assertNull(((Pos) values.load(PyTuple.of(Pos.TYPE, 1L, 2L, 3L))).dimension());
 		UUID id = UUID.randomUUID();
 		EntityInfo gone = (EntityInfo) values.load(values.save(EntityInfo.saved(id, "minecraft:cow", uuid -> null)));
 		assertFalse(gone.valid());

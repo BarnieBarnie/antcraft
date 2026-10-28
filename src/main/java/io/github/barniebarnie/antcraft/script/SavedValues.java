@@ -26,7 +26,8 @@ public final class SavedValues implements VmState.HostCodec {
 	@Override
 	public @Nullable Object save(Object value) {
 		return switch (value) {
-			case Pos p -> PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z());
+			case Pos p -> p.dimension() == null ? PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z())
+				: PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z(), p.dimension());
 			case Stack s -> PyTuple.of(Stack.TYPE, s.item(), s.count());
 			case BlockInfo b -> PyTuple.of(BlockInfo.TYPE, b.id(), b.pos(), b.air(), b.fluid(), new PyTuple(new ArrayList<>(b.tags())));
 			case Result r -> PyTuple.of(Result.TYPE, r.ok(), r.reason() == null ? PyNone.NONE : r.reason(), r.value());
@@ -39,7 +40,7 @@ public final class SavedValues implements VmState.HostCodec {
 	public Object load(Object saved) {
 		List<Object> f = ((PyTuple) saved).items();
 		return switch ((String) f.getFirst()) {
-			case Pos.TYPE -> new Pos((Long) f.get(1), (Long) f.get(2), (Long) f.get(3));
+			case Pos.TYPE -> new Pos((Long) f.get(1), (Long) f.get(2), (Long) f.get(3), f.size() > 4 ? (String) f.get(4) : null);
 			case Stack.TYPE -> new Stack((String) f.get(1), (Long) f.get(2));
 			case BlockInfo.TYPE -> new BlockInfo((String) f.get(1), (Pos) f.get(2), (Boolean) f.get(3), (Boolean) f.get(4),
 					((PyTuple) f.get(5)).items().stream().map(String.class::cast).toList());

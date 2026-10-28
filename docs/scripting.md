@@ -122,7 +122,7 @@ Names are `snake_case`. The API is available as builtins in every script (no imp
 
 ### Types
 
-- **`Pos`**: `x`, `y`, `z`; `+` and `-` with another `Pos` or tuple; `up(n=1)`, `down`, `north`, `south`, `east`, `west`; `distance(other)`. Usable as a dict key.
+- **`Pos`**: `x`, `y`, `z`; `+` and `-` with another `Pos` or tuple; `up(n=1)`, `down`, `north`, `south`, `east`, `west`; `distance(other)`. Usable as a dict key. `dimension` is the id of the dimension a position from `home()` is in, such as `"minecraft:overworld"`, and `None` for any other position, which means the dimension the bot is in (a tuple has none either). A `Pos` made from another with `+`, `-` or a step keeps its dimension (the left one's, if both have one). The dimension takes no part in `==` or printing: positions compare by their coordinates, so `pos() == home()` is true at the home's coordinates in any dimension; compare `dimension()` with `home_dimension()` too. It is saved with the script and in `memory`.
 - **`Block`**: `id` (`"minecraft:oak_log"`), `pos`, `is_air`, `is_fluid`, `tags` (list of selectors such as `"#minecraft:logs"`). A snapshot of the block when it was read.
 - **`Stack`**: `item` (`"minecraft:oak_log"`), `count`. A snapshot.
 - **`Entity`**: `id` (UUID string), `type` (`"minecraft:cow"`), `pos`, `health` (`None` for an entity without health), `valid` (false once it is gone: dead, picked up or unloaded), `item` (the `Stack` of a dropped item, `None` for other entities). Read live; equal by UUID.
@@ -150,7 +150,7 @@ Where an item or block is asked for, a string selects it: `"oak_log"` (namespace
 | `items_near(item=None, radius=16)` | list of dropped item `Entity` |
 | `container(pos)` | list of `Stack` in a chest, barrel or furnace, or `None` |
 | `time()`, `is_day()` | world time of day |
-| `home()` | the bot's home `Pos`: where it was first spawned, until `set_home` changes it |
+| `home()` | the bot's home `Pos`, with the home's `dimension`: where it was first spawned, until `set_home` changes it |
 | `set_home(pos)` | sets the home, in the dimension the bot is in (both saved with the bot); returns nothing |
 | `dimension()`, `home_dimension()` | the id of the dimension the bot is in, and of its home's, such as `"minecraft:overworld"` |
 | `deaths()` | how often the bot has died |
@@ -162,7 +162,7 @@ Details: `inventory()` lists the held stack first, then the inventory; `count` a
 
 | Function | Does |
 |---|---|
-| `goto(pos, near=0)` | walk to within `near` blocks, digging, pillaring and bridging as the pathfinder allows. When the next stretch of the path enters an unloaded chunk, the bot loads it (see Chunk loading) and plans on; if it cannot be loaded, `goto` stops with `not_loaded`. `goto(home())` in another dimension than the home's fails at once with `wrong_dimension` (so does any `goto` to the home's coordinates there) |
+| `goto(pos, near=0)` | walk to within `near` blocks, digging, pillaring and bridging as the pathfinder allows. When the next stretch of the path enters an unloaded chunk, the bot loads it (see Chunk loading) and plans on; if it cannot be loaded, `goto` stops with `not_loaded`. A `pos` whose `dimension` is not the bot's, such as `home()` in another dimension than the home's, fails at once with `wrong_dimension`; a tuple or a `Pos` without a dimension goes anywhere in the bot's dimension |
 | `mine(pos)` | walk into reach and break the block with the best tool carried; drops go straight into the inventory |
 | `place(pos, item, facing=None)` | walk into reach, hold the block item and place it; `facing` is `"north"`, `"south"`, `"east"`, `"west"`, `"up"` or `"down"` |
 | `pick_up(what=None, radius=8)` | walk to the dropped items `what` selects within `radius` (at most 16), nearest first, and take them; `value` is how many it took. Items it cannot walk to are skipped: it fails with `out_of_reach` only when it took none |
@@ -200,7 +200,7 @@ Later milestones add `build(blueprint, at, turn=0)` (the existing build-plan cod
 
 ### Reason codes
 
-`unreachable`, `wrong_dimension` (`goto(home())` from another dimension than the home's), `no_path_budget` (only seen if a script asks again in the same tick), `out_of_reach`, `not_loaded`, `no_tool` (needs a better tool), `no_item`, `no_space` (inventory or container full), `no_recipe`, `missing_ingredients`, `no_table`, `no_furnace`, `blocked` (something is in the way), `protected` (the block may not be changed, for example by claim rules), `target_gone`, `interrupted` (a reflex took over; any action that takes ticks, `wait` too, can end with it, see Reflexes), `stopped`, `timeout`.
+`unreachable`, `wrong_dimension` (`goto` to a `Pos` of another dimension, such as `home()` from another dimension than the home's), `no_path_budget` (only seen if a script asks again in the same tick), `out_of_reach`, `not_loaded`, `no_tool` (needs a better tool), `no_item`, `no_space` (inventory or container full), `no_recipe`, `missing_ingredients`, `no_table`, `no_furnace`, `blocked` (something is in the way), `protected` (the block may not be changed, for example by claim rules), `target_gone`, `interrupted` (a reflex took over; any action that takes ticks, `wait` too, can end with it, see Reflexes), `stopped`, `timeout`.
 
 ### Memory
 

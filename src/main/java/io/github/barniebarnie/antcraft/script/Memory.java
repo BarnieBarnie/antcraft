@@ -150,7 +150,12 @@ public final class Memory {
 			case String s -> tag.putString("str", s);
 			case Boolean b -> tag.putBoolean("bool", b);
 			case PyNone n -> tag.putBoolean("none", true);
-			case Pos p -> tag.putLongArray("pos", new long[] {p.x(), p.y(), p.z()});
+			case Pos p -> {
+				tag.putLongArray("pos", new long[] {p.x(), p.y(), p.z()});
+				if (p.dimension() != null) {
+					tag.putString("dimension", p.dimension());
+				}
+			}
 			case PyList list -> tag.put("list", encodeAll(list.items));
 			case PyTuple tuple -> tag.put("tuple", encodeAll(tuple.items()));
 			case PyDict dict -> {
@@ -189,7 +194,7 @@ public final class Memory {
 		}
 		if (tag.contains("pos")) {
 			long[] xyz = tag.getLongArray("pos").orElse(new long[3]);
-			return new Pos(xyz[0], xyz[1], xyz[2]);
+			return new Pos(xyz[0], xyz[1], xyz[2], tag.getString("dimension").orElse(null));
 		}
 		if (tag.contains("list")) {
 			return new PyList(decodeAll(tag.getListOrEmpty("list")));

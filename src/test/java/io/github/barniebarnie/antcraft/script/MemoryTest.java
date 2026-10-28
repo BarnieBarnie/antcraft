@@ -94,6 +94,17 @@ class MemoryTest {
 		assertEquals("{}", Values.repr(Memory.load(noTag, new byte[] {1, 2, 3})));
 	}
 
+	/** A position from {@code home()} keeps its dimension in memory (#349). */
+	@Test
+	void aPositionKeepsItsDimension() {
+		PyDict memory = Memory.create();
+		memory.put("home", new Pos(1, 2, 3, "minecraft:the_nether"));
+		memory.put("here", new Pos(4, 5, 6));
+		PyDict loaded = roundTrip(memory, new ArrayList<>());
+		assertEquals("minecraft:the_nether", ((Pos) loaded.get("home")).dimension());
+		assertEquals(null, ((Pos) loaded.get("here")).dimension());
+	}
+
 	@Test
 	void anEmptyMemoryLoadsEmpty() {
 		assertEquals("{}", Values.repr(roundTrip(Memory.create(), new ArrayList<>())));

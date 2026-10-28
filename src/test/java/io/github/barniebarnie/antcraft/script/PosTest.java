@@ -15,11 +15,16 @@ import org.junit.jupiter.api.Test;
 class PosTest {
 	/** Runs {@code source} with a global {@code p} = {@code Pos(1, 2, 3)} and gives what it printed. */
 	private static String run(String source) {
+		return run(source, new Pos(1, 2, 3));
+	}
+
+	/** Runs {@code source} with a global {@code p} = {@code pos} and gives what it printed. */
+	private static String run(String source, Pos pos) {
 		List<String> printed = new ArrayList<>();
 		Natives natives = Natives.standard(Output.lines(printed::add));
 		Pos.register(natives);
 		Vm vm = new Vm(Compiler.compile(Parser.parse("t.py", source)), natives);
-		vm.setGlobal("p", new Pos(1, 2, 3));
+		vm.setGlobal("p", pos);
 		Vm.Status status = vm.run(100_000);
 		if (status == Vm.Status.FAILED) {
 			return "error: " + vm.error().getMessage();
@@ -58,6 +63,22 @@ class PosTest {
 			d[p.up().down()] = 2
 			print(p == p.up().down(), p == (1, 2, 3), d[p])
 			"""));
+	}
+
+	/**
+	 * A position from {@code home()} carries its dimension: it prints as any other, compares by its coordinates, and
+	 * what is made from it keeps the dimension. One a script made has none (#349).
+	 */
+	@Test
+	void keepsItsDimensionThroughArithmeticButNotInEqualityOrPrinting() {
+		Pos nether = new Pos(1, 2, 3, "minecraft:the_nether");
+		assertEquals("Pos(1, 2, 3) minecraft:the_nether True 1",
+			run("print(p, p.dimension, p == p.down().up(), len({p: 1, p.up().down(): 2}))", nether));
+		assertEquals(new Pos(1, 2, 3), nether);
+		assertEquals(new Pos(1, 2, 3).hashCode(), nether.hashCode());
+		assertEquals("minecraft:the_nether minecraft:the_nether minecraft:the_nether minecraft:the_nether",
+			run("print(p.up().dimension, (p + (1, 0, 0)).dimension, ((1, 0, 0) + p).dimension, ((1, 0, 0) - p).dimension)", nether));
+		assertEquals("None None", run("print(p.dimension, (p + p).dimension)"));
 	}
 
 	@Test

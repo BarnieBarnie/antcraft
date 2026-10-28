@@ -347,6 +347,23 @@ class MoveApiTest {
 			"log " + log.last(100, Level.DEBUG));
 	}
 
+	/**
+	 * A position the script made has no dimension and goes anywhere in the bot's dimension, even to the home's
+	 * coordinates; {@code home()} and positions made from it carry the home's dimension (#349).
+	 */
+	@Test
+	void onlyAPositionFromAnotherDimensionIsRefused() {
+		bot.home = new Pos(5, 64, 5);
+		bot.dimension = "minecraft:the_nether";
+		bot.pathStatus = MoveApi.PathStatus.ARRIVED;
+		ScriptRun run = start("print(goto((5, 64, 5)).ok)\nprint(goto(home().up()).reason)\n");
+		for (int i = 0; i < 4; i++) {
+			tick(run);
+		}
+		assertEquals(List.of("True", "wrong_dimension"), printed());
+		assertEquals(List.of("Pos(5, 64, 5) near 0"), bot.paths);
+	}
+
 	/** {@code /antcraft bot status} shows a {@code wrong_dimension} goto as the last result. */
 	@Test
 	void gotoHomeInAnotherDimensionIsTheLastResult() {

@@ -125,7 +125,7 @@ public final class MoveApi {
 	static void register(Natives natives, ScriptRun run) {
 		natives.register("home", call -> {
 			Args.bind("home", call, 0);
-			return run.host().body().home();
+			return run.host().body().home().in(run.host().body().homeDimension());
 		});
 		natives.register("home_dimension", call -> {
 			Args.bind("home_dimension", call, 0);
@@ -148,8 +148,7 @@ public final class MoveApi {
 				throw new ScriptError("goto() near must be at least 0, not " + near);
 			}
 			Body body = run.host().body();
-			// ponytail: any goto to the home's coordinates counts as going home; a Pos carries no dimension to tell them apart.
-			if (target.equals(body.home()) && !body.dimension().equals(body.homeDimension())) {
+			if (target.dimension() != null && !target.dimension().equals(body.dimension())) {
 				return run.done("goto(" + target + (near == 0 ? "" : ", near=" + near) + ")", Result.fail(Result.WRONG_DIMENSION));
 			}
 			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call);

@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.Ast;
 import io.github.barniebarnie.antcraft.script.lang.HostValue;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
@@ -14,9 +15,23 @@ import org.jspecify.annotations.Nullable;
  * with another {@code Pos} or a tuple of three ints; {@code up(n=1)}, {@code down}, {@code north}, {@code south},
  * {@code east} and {@code west} as in the game (north is towards -z, east towards +x); {@code distance(other)}.
  * Immutable, so it is usable as a dict key.
+ *
+ * <p>{@code dimension} is the id of the dimension the position is in, such as {@code minecraft:overworld}, for a
+ * position from {@code home()}, or null for one the script made, which means the dimension the bot is in. What is made
+ * from a position keeps its dimension. It takes no part in equality or printing: positions compare by their coordinates.
  */
-public record Pos(long x, long y, long z) implements HostValue {
+public record Pos(long x, long y, long z, @Nullable String dimension) implements HostValue {
 	public static final String TYPE = "Pos";
+
+	/** A position in no particular dimension: the one the bot is in. */
+	public Pos(long x, long y, long z) {
+		this(x, y, z, null);
+	}
+
+	/** This position in {@code dimension}. */
+	public Pos in(@Nullable String dimension) {
+		return new Pos(x, y, z, dimension);
+	}
 
 	/** Registers the methods of {@code Pos}. */
 	public static void register(Natives natives) {
@@ -68,7 +83,8 @@ public record Pos(long x, long y, long z) implements HostValue {
 
 	private Pos plus(Pos other, int sign) {
 		try {
-			return new Pos(Math.addExact(x, sign * other.x), Math.addExact(y, sign * other.y), Math.addExact(z, sign * other.z));
+			return new Pos(Math.addExact(x, sign * other.x), Math.addExact(y, sign * other.y), Math.addExact(z, sign * other.z),
+				dimension != null ? dimension : other.dimension);
 		} catch (ArithmeticException e) {
 			throw new ScriptError("int overflow: the result does not fit in 64 bits");
 		}
@@ -85,6 +101,7 @@ public record Pos(long x, long y, long z) implements HostValue {
 			case "x" -> x;
 			case "y" -> y;
 			case "z" -> z;
+			case "dimension" -> dimension == null ? PyNone.NONE : dimension;
 			default -> null;
 		};
 	}
@@ -100,6 +117,16 @@ public record Pos(long x, long y, long z) implements HostValue {
 			case SUB -> reflected ? pos.plus(this, -1) : plus(pos, -1);
 			default -> null;
 		};
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		return other instanceof Pos pos && x == pos.x && y == pos.y && z == pos.z;
+	}
+
+	@Override
+	public int hashCode() {
+		return Long.hashCode(x) * 961 + Long.hashCode(y) * 31 + Long.hashCode(z);
 	}
 
 	@Override
