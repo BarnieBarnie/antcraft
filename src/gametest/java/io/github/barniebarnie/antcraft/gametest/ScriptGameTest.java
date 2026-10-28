@@ -18,6 +18,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -28,6 +29,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -157,10 +159,8 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		failOnError(helper, () -> loaded[0]);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(loaded[0] != null, "not saved yet");
-			// ponytail: what status shows; the loaded copy is not found by its UUID in a command, as it took the old bot's
-			helper.assertTrue(loaded[0].getScript() != null, "not resumed yet");
-			String last = loaded[0].getScript().lastResult();
-			helper.assertTrue(("goto(Pos(" + xyz + ")) -> unreachable").equals(last), "last result " + last);
+			List<String> status = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " status");
+			helper.assertTrue(status.size() == 1 && status.getFirst().contains(", goto(Pos(" + xyz + ")) -> unreachable, "), "status " + status);
 		});
 	}
 
@@ -313,8 +313,10 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
 		bot.saveWithoutId(output);
 		bot.discard();
-		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		// Loaded before it joins the level, as from a chunk, so the level looks it up by the UUID it loaded.
+		AntBot copy = Objects.requireNonNull(ModEntities.ANT_BOT.create(helper.getLevel(), EntitySpawnReason.LOAD));
 		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+		helper.getLevel().addFreshEntity(copy);
 		return copy;
 	}
 

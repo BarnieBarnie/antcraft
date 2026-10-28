@@ -49,9 +49,10 @@ public final class GameTests {
 			}
 		});
 		// A bot that died in the test would otherwise come back at its home in the test's area after the test, into
-		// whatever test runs there next.
+		// whatever test runs there next. Every level: a bot waits in the level of its home, not of where it died.
 		AABB bounds = helper.getBounds();
-		onEnd(helper, () -> BotRespawns.get(helper.getLevel()).forget(home -> bounds.contains(Vec3.atCenterOf(home))));
+		onEnd(helper, () -> helper.getLevel().getServer().getAllLevels()
+			.forEach(level -> BotRespawns.get(level).forget(home -> bounds.contains(Vec3.atCenterOf(home)))));
 	}
 
 	/** Runs {@code cleanup} once the test passed or failed, such as to remove a player or file it added. */
