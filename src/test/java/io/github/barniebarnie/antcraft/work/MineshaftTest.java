@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import io.github.barniebarnie.antcraft.pathing.GridWorld;
 import io.github.barniebarnie.antcraft.pathing.WorldView;
 import java.util.HashMap;
 import java.util.function.Function;
@@ -448,6 +449,37 @@ class MineshaftTest {
 		// Below the first level the builder walls fluid off, so it does not move the site.
 		BlockPos deep = first.top().offset(0, -30, 0);
 		assertEquals(first, Mineshaft.nextTo(core, levels, List.of(), rock(deep::equals, pos -> false)));
+	}
+
+	@Test
+	void siteSkipsASpotWhoseColumnOrHallRunsIntoANetherPortal() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 20);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), new GridWorld());
+		// A portal in the stairs' way: walking down them would step into it.
+		BlockPos stairs = first.stairs().get(5).above();
+		Mineshaft second = Mineshaft.nextTo(core, levels, List.of(), new GridWorld().set(stairs.getX(), stairs.getY(), stairs.getZ(), 'P'));
+		assertFalse(second.area().isInside(stairs), "shaft at " + second.top() + " runs into the portal at " + stairs);
+		// A portal in the first level's hall: digging it out would break the portal.
+		BlockPos hall = first.hall(40).getLast();
+		Mineshaft third = Mineshaft.nextTo(core, levels, List.of(), new GridWorld().set(hall.getX(), hall.getY(), hall.getZ(), 'P'));
+		assertFalse(third.hall(40).contains(hall), "shaft at " + third.top() + " digs its hall through the portal at " + hall);
+	}
+
+	@Test
+	void siteSkipsASpotThatWouldDigNextToANetherPortal() {
+		BlockPos core = new BlockPos(0, 64, 0);
+		List<Integer> levels = List.of(40, 20);
+		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), new GridWorld());
+		// A portal right beside the first level's hall: the hall's side is its frame, so digging the hall would break it.
+		List<BlockPos> hall = first.hall(40);
+		BlockPos middle = hall.get(hall.size() / 2);
+		BlockPos step = hall.get(hall.size() / 2 + 1).subtract(middle);
+		BlockPos portal = middle.above().offset(step.getZ(), 0, step.getX());
+		assertFalse(dug(first).contains(portal));
+		Mineshaft second = Mineshaft.nextTo(core, levels, List.of(), new GridWorld().set(portal.getX(), portal.getY(), portal.getZ(), 'P'));
+		BlockPos frame = portal;
+		assertFalse(dug(second).stream().anyMatch(pos -> pos.distManhattan(frame) == 1), "shaft at " + second.top() + " digs next to the portal at " + portal);
 	}
 
 	@Test

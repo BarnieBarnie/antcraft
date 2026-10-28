@@ -15,7 +15,7 @@ import net.minecraft.core.Direction;
  * 'H' = a ladder (climbed, unbreakable), 'T' = a trapdoor over a ladder (stood on shut, climbed through open),
  * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal).
  */
-final class GridWorld implements WorldView {
+public final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
 	private final Map<BlockPos, Direction> stairs = new HashMap<>();
 	private final Map<BlockPos, Direction.Axis> doors = new HashMap<>();
@@ -39,7 +39,7 @@ final class GridWorld implements WorldView {
 		return !this.placingForbidden && !this.noPlacing.contains(pos);
 	}
 
-	GridWorld set(int x, int y, int z, char block) {
+	public GridWorld set(int x, int y, int z, char block) {
 		this.blocks.put(new BlockPos(x, y, z), block);
 		return this;
 	}

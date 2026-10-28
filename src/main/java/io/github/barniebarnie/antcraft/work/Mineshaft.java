@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.work;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.barniebarnie.antcraft.pathing.WorldView;
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -254,12 +255,17 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 
 	/**
 	 * Whether the column runs into no fluid or bedrock from the ground down to the first level, and
-	 * no hall does: miners dig those without walling fluid off.
+	 * no hall does: miners dig those without walling fluid off. Nor may either dig next to a nether portal.
 	 */
 	private boolean isDiggable(WorldView world) {
 		int bottom = this.levels.isEmpty() ? this.top.getY() : this.levels.getFirst();
 		Stream<BlockPos> halls = this.levels.stream().flatMap(y -> this.hall(y).stream()).flatMap(cell -> Stream.of(cell, cell.above()));
-		return Stream.concat(this.column(bottom), halls).noneMatch(pos -> world.isHazard(pos) || world.isBedrock(pos));
+		return Stream.concat(this.column(bottom), halls).noneMatch(pos -> world.isHazard(pos) || world.isBedrock(pos) || nextToPortal(world, pos));
+	}
+
+	/** Whether a nether portal is next to {@code pos}: digging it would break the portal's frame. */
+	private static boolean nextToPortal(WorldView world, BlockPos pos) {
+		return Arrays.stream(Direction.values()).anyMatch(dir -> world.isPortal(pos.relative(dir)));
 	}
 
 	/** This shaft without the levels at or below bedrock in its column. */
