@@ -9,7 +9,8 @@
 # delete it and the default comes back when the server starts.
 #
 # ponytail: a copy of go_home in lib/home.py, kept here so a changed or broken
-# lib/home.py does not change or stop every idle bot (#352).
+# lib/home.py does not change or stop every idle bot (#352). IdleCopiesTest
+# fails when portal_out, to_home_dimension or NETHER_PORTAL_WORLDS differ.
 
 # The dimensions a nether portal goes between.
 NETHER_PORTAL_WORLDS = ("minecraft:overworld", "minecraft:the_nether")
