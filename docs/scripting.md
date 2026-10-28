@@ -77,7 +77,7 @@ Every bot keeps a log (`/antcraft bot [bots] log`). Lines have a level: `debug`,
 
 `print` is meant for the player, so it always goes to both, whatever the chat level. `error(...)` only reports; it does not stop the script.
 
-The log keeps a bot's last 200 lines and is saved with the bot, so `/antcraft bot log` still shows what happened before a restart. `say(text)` goes to the log as a `print` line and to the owner's chat, and floats above the bot for five seconds; a new `say` replaces it. `/antcraft bot status` shows the last action the script finished with its result, such as `goto(Pos(4, 70, -2)) -> unreachable` or `craft('stick') -> ok, 4`.
+The log keeps a bot's last 200 lines and is saved with the bot, so `/antcraft bot log` still shows what happened before a restart. `say(text)` goes to the log as a `print` line and to the owner's chat, and floats above the bot for five seconds; a new `say` replaces it. `/antcraft bot status` shows the last action the script finished with its result, such as `goto(Pos(4, 70, -2)) -> unreachable` or `craft('stick') -> ok, 4`; that result is saved with the bot too.
 
 ### Modules
 

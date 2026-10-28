@@ -119,9 +119,11 @@ public final class ScriptRun {
 	/**
 	 * A running script as saved with its bot (docs/scripting.md, Save and resume): its name and arguments, the state of
 	 * its VM ({@link VmState}) and how far its action got. Without a VM state (the script held a value that cannot be
-	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads.
+	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads. {@code lastResult} is
+	 * its last action's result, which {@code /antcraft bot status} shows.
 	 */
-	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, @Nullable String problem) {
+	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, @Nullable String problem,
+			@Nullable String lastResult) {
 		private static final String KEY = "Script";
 
 		public Saved {
@@ -142,6 +144,9 @@ public final class ScriptRun {
 			if (problem != null) {
 				tag.putString("problem", problem);
 			}
+			if (lastResult != null) {
+				tag.putString("lastResult", lastResult);
+			}
 			output.store(KEY, CompoundTag.CODEC, tag);
 		}
 
@@ -154,7 +159,8 @@ public final class ScriptRun {
 					args.add(list.getStringOr(i, ""));
 				}
 				return new Saved(tag.getStringOr("name", ""), args, tag.getByteArray("vm").orElse(null),
-						tag.getLongOr("progress", 0), tag.getString("problem").orElse(null));
+						tag.getLongOr("progress", 0), tag.getString("problem").orElse(null),
+						tag.getString("lastResult").orElse(null));
 			});
 		}
 	}
@@ -229,25 +235,30 @@ public final class ScriptRun {
 	 * with {@code memory}, with a line in the log that says why.
 	 */
 	public static ScriptRun resume(Saved saved, Code code, Host host, BotLog log, PyDict memory, ScriptLibrary library) {
+		ScriptRun run = null;
 		String why = saved.problem();
 		if (saved.vm() != null) {
 			try {
-				return new ScriptRun(saved, saved.vm(), code, host, log, library);
+				run = new ScriptRun(saved, saved.vm(), code, host, log, library);
 			} catch (VmState.Unloadable e) {
 				why = e.getMessage();
 			}
 		}
-		log.add(host.gameTime(), Level.INFO, (why == null ? "" : why + ": ") + saved.name() + " starts again from the top");
-		return new ScriptRun(saved.name(), code, saved.args(), host, log, memory, library);
+		if (run == null) {
+			log.add(host.gameTime(), Level.INFO, (why == null ? "" : why + ": ") + saved.name() + " starts again from the top");
+			run = new ScriptRun(saved.name(), code, saved.args(), host, log, memory, library);
+		}
+		run.lastResult = saved.lastResult();
+		return run;
 	}
 
 	/** Saves the run with the bot; see {@link #resume}. */
 	public Saved save() {
 		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
 		try {
-			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity)), saveProgress, null);
+			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity)), saveProgress, null, this.lastResult);
 		} catch (VmState.NotSaveable e) {
-			return new Saved(this.name, this.args, null, 0, e.getMessage());
+			return new Saved(this.name, this.args, null, 0, e.getMessage(), this.lastResult);
 		}
 	}
 

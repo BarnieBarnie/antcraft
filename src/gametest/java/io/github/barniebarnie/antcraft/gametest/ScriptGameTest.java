@@ -141,6 +141,29 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The last action's result is saved with the bot, so {@code /antcraft bot status} still shows it after a reload. */
+	@GameTest(maxTicks = 80)
+	public void theLastResultSurvivesASaveAndLoad(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos target = helper.absolutePos(new BlockPos(4, 6, 4));
+		String xyz = target.getX() + ", " + target.getY() + ", " + target.getZ();
+		runLibraryScript(helper, bot, "save_result_", "goto((" + xyz + "))\nwait(1000)\n");
+		AntBot[] loaded = new AntBot[1];
+		helper.onEachTick(() -> {
+			if (loaded[0] == null && "wait(1000)".equals(bot.getScript().action())) {
+				loaded[0] = saveAndLoad(helper, bot);
+			}
+		});
+		failOnError(helper, () -> loaded[0]);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(loaded[0] != null, "not saved yet");
+			// ponytail: what status shows; the loaded copy is not found by its UUID in a command, as it took the old bot's
+			helper.assertTrue(loaded[0].getScript() != null, "not resumed yet");
+			String last = loaded[0].getScript().lastResult();
+			helper.assertTrue(("goto(Pos(" + xyz + ")) -> unreachable").equals(last), "last result " + last);
+		});
+	}
+
 	/** The bot's log is saved with it, so {@code /antcraft bot log} still shows it after a reload. */
 	@GameTest(maxTicks = 20)
 	public void theLogSurvivesASaveAndLoad(GameTestHelper helper) {
