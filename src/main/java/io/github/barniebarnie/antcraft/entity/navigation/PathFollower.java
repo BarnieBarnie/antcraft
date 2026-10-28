@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
@@ -87,6 +88,7 @@ public class PathFollower {
 	private boolean mayBreak = true;
 	private int maxNodes = MAX_NODES;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
+	private Predicate<BlockPos> mayPlaceAt = pos -> true;
 
 	public PathFollower(AntBot bot) {
 		this.bot = bot;
@@ -111,6 +113,11 @@ public class PathFollower {
 	/** Which blocks paths may place as scaffolding; {@link #SCAFFOLD_BLOCKS} unless set. */
 	public void setScaffold(TagKey<Item> scaffold) {
 		this.scaffold = scaffold;
+	}
+
+	/** Where paths may place scaffold blocks, anywhere unless set; applies from the next path planned. */
+	public void setMayPlaceAt(Predicate<BlockPos> mayPlaceAt) {
+		this.mayPlaceAt = mayPlaceAt;
 	}
 
 	/** Which blocks paths and {@link #placeBlock} may place as scaffolding. */
@@ -238,7 +245,7 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level));
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt);
 		PathFinder.Options options = this.options();
 		this.path = null;
 		this.search = PathFinder.search(world, this.bot.blockPosition(), this.goal, options);
@@ -256,7 +263,7 @@ public class PathFollower {
 	 */
 	public PathFinder.Search plan(Goal goal) {
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level));
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt);
 		LoadedBlocks loaded = new LoadedBlocks(level);
 		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), this.bot.blockPosition(), goal, this.options());
 	}

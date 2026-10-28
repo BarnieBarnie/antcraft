@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
@@ -16,8 +17,11 @@ import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -127,10 +131,16 @@ public final class BuildApi {
 	/**
 	 * Works through the plan's steps in order: walks into reach of the next one the world does not match yet, breaks what is
 	 * in its way and places its block from what the bot carries. The world holds the progress, so a build called again, or
-	 * resumed after a save, goes on where it stopped; its value, the blocks placed, is saved as its progress.
+	 * resumed after a save, goes on where it stopped; its value, the blocks placed, is saved as its progress. Where no walk
+	 * reaches a block, it stands on blocks already built or pillars up with the scaffold blocks it takes down by hand
+	 * (dirt), never where the blueprint puts a block, and once the blueprint stands it takes that scaffold down again.
 	 */
-	// ponytail: no scooping fluids out of the way, no stand-ins and no scaffolding; the old BuilderGoal had them, add back when a blueprint needs them.
+	// ponytail: no scooping fluids out of the way and no stand-ins; the old BuilderGoal had them, add back when a blueprint needs them.
+	// ponytail: the scaffold to take down is not saved, and comes down only once the build is done: a build resumed after
+	// a save, or one that stops short, leaves its scaffold up. Save it with the progress if that shows.
 	private static final class Build implements ScriptRun.Action {
+		/** How long the bot steps back to the middle of its block when it stands over the edge of the spot it places in. */
+		private static final int NUDGE_TICKS = 10;
 		private final ScriptRun run;
 		private final AntBot bot;
 		private final ServerLevel level;
@@ -144,6 +154,15 @@ public final class BuildApi {
 		private @Nullable BlockPos walked;
 		private @Nullable BlockPos breaking;
 		private boolean unloaded;
+		private int nudged;
+		/** Every spot the blueprint puts a block or air in, where no scaffold goes. */
+		private final Set<BlockPos> spots = new HashSet<>();
+		/** The bot's scaffold already up when the build started, not the build's to take down. */
+		private final Set<BlockPos> before;
+		/** The scaffold blocks the build's walks placed. */
+		private final Set<BlockPos> scaffold = new HashSet<>();
+		/** Whether the blueprint stands and the build is taking its scaffold down. */
+		private boolean takingDown;
 		private long placed;
 		private @Nullable Result result;
 
@@ -155,6 +174,11 @@ public final class BuildApi {
 			this.at = at;
 			this.describe = describe;
 			this.breaker = new BlockBreaker(bot);
+			for (BuildPlan.Step step : plan.steps()) {
+				this.spots.add(step.pos());
+				step.otherHalf().ifPresent(half -> this.spots.add(half.pos()));
+			}
+			this.before = bot.getProtectedScaffold();
 		}
 
 		/** The block at {@code pos}, or air for one not loaded, noting that the plan could not be read. */
@@ -173,12 +197,19 @@ public final class BuildApi {
 				return true;
 			}
 			if (this.walk != null) {
+				for (BlockPos pos : this.bot.getProtectedScaffold()) {
+					if (!this.before.contains(pos)) {
+						this.scaffold.add(pos);
+					}
+				}
 				if (!this.walk.tick()) {
 					return false;
 				}
 				Result walked = (Result) this.walk.result();
 				this.walk = null;
-				if (!walked.ok()) {
+				if (this.takingDown && !walked.ok()) {
+					this.scaffold.remove(this.walked); // ponytail: scaffold no walk reaches stays up
+				} else if (!walked.ok()) {
 					return this.finish(Result.UNREACHABLE.equals(walked.reason()) ? Result.BLOCKED : walked.reason());
 				}
 			}
@@ -194,7 +225,7 @@ public final class BuildApi {
 				return this.walkTo(this.at, null);
 			}
 			if (next.isEmpty()) {
-				return this.finish(this.plan.nextStep(this::state).isEmpty() ? null : Result.BLOCKED);
+				return this.plan.nextStep(this::state).isEmpty() ? this.takeDown() : this.finish(Result.BLOCKED);
 			}
 			BuildPlan.Step step = next.get();
 			BlockState current = this.state(step.pos());
@@ -217,8 +248,14 @@ public final class BuildApi {
 			}
 			BlockState state = step.isPlaced(current) ? current.setValue(BlockStateProperties.WATERLOGGED, step.isWaterlogged()) : step.dry();
 			if (!step.isPlaced(current) && !this.level.isUnobstructed(state, step.pos(), CollisionContext.empty())) {
+				// Only in its own way, standing off the middle of its block over the edge of the spot: it steps back first.
+				if (this.nudged++ < NUDGE_TICKS && this.level.isUnobstructed(this.bot, state.getCollisionShape(this.level, step.pos()).move(step.pos()))) {
+					this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
+					return false;
+				}
 				return this.finish(Result.BLOCKED);
 			}
+			this.nudged = 0;
 			step.otherHalf().ifPresent(other -> this.level.setBlockAndUpdate(other.pos(), other.state()));
 			this.level.setBlockAndUpdate(step.pos(), step.isPlaced(current) ? state : Block.updateFromNeighbourShapes(state, this.level, step.pos()));
 			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
@@ -230,6 +267,25 @@ public final class BuildApi {
 			if (!step.isPlaced(current)) {
 				this.placed++;
 			}
+			return false;
+		}
+
+		/** Takes the scaffold down, the highest block first, so a pillar comes down under the bot; then the build is done. */
+		private boolean takeDown() {
+			this.takingDown = true;
+			this.scaffold.removeIf(pos -> !this.state(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.FAST_SCAFFOLD_BLOCKS));
+			Optional<BlockPos> top = this.scaffold.stream().max(Comparator.comparingInt(BlockPos::getY));
+			if (top.isEmpty()) {
+				return this.finish(null);
+			}
+			if (!this.inReach(top.get())) {
+				if (top.get().equals(this.walked)) {
+					this.scaffold.remove(top.get());
+					return false;
+				}
+				return this.walkTo(EntityInfo.pos(top.get()), top.get());
+			}
+			this.breaking = top.get();
 			return false;
 		}
 
@@ -257,11 +313,13 @@ public final class BuildApi {
 				return this.finish(pos == null ? Result.NOT_LOADED : Result.BLOCKED);
 			}
 			this.walked = pos == null ? WorkApi.blockPos(this.at) : pos;
+			this.run.host().body().setBuildScaffold(this.takingDown ? spot -> false : spot -> !this.spots.contains(WorkApi.blockPos(spot)));
 			this.walk = MoveApi.reach(this.run.host(), target);
 			return false;
 		}
 
 		private boolean finish(@Nullable String reason) {
+			this.run.host().body().setBuildScaffold(null);
 			this.result = reason == null ? Result.ok(this.placed) : Result.fail(reason, this.placed);
 			return true;
 		}
@@ -283,6 +341,7 @@ public final class BuildApi {
 				this.walk = null;
 			}
 			this.breaker.reset();
+			this.run.host().body().setBuildScaffold(null);
 		}
 
 		@Override

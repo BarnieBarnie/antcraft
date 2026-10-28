@@ -10,12 +10,14 @@ import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
 import java.util.List;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
+import org.jspecify.annotations.Nullable;
 
 /** What the move actions of a script ({@link MoveApi}) do with a bot: its home, chunks and path follower. */
 final class BotBody implements MoveApi.Body {
@@ -74,6 +76,12 @@ final class BotBody implements MoveApi.Body {
 	@Override
 	public void startReach(Pos target) {
 		this.follower.start(this.reach(target));
+	}
+
+	@Override
+	public void setBuildScaffold(@Nullable Predicate<Pos> mayPlace) {
+		this.follower.setScaffold(mayPlace == null ? PathFollower.SCAFFOLD_BLOCKS : PathFollower.FAST_SCAFFOLD_BLOCKS);
+		this.follower.setMayPlaceAt(mayPlace == null ? pos -> true : pos -> mayPlace.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
 	}
 
 	@Override

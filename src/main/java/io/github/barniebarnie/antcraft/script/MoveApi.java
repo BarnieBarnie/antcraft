@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -85,6 +86,14 @@ public final class MoveApi {
 
 		/** Starts walking to where the bot sees {@code target} within {@link #REACH}, to work on it. */
 		void startReach(Pos target);
+
+		/**
+		 * How the next walks pillar up: with {@code mayPlace} set, as {@code build} does, only with scaffold blocks the bot
+		 * takes down again by hand, and only where {@code mayPlace} says, such as nowhere its blueprint puts a block; null
+		 * for any scaffold block anywhere.
+		 */
+		default void setBuildScaffold(@Nullable Predicate<Pos> mayPlace) {
+		}
 
 		/** Whether the bot, where it stands, sees {@code target} within {@link #REACH}. */
 		boolean inReach(Pos target);

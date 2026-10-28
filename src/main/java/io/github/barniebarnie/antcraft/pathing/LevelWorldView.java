@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.pathing;
 
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -29,6 +30,7 @@ public class LevelWorldView implements WorldView {
 	private final SimpleContainer inventory;
 	private final ItemStack hand;
 	private final Set<BlockPos> keep;
+	private Predicate<BlockPos> mayPlace = pos -> true;
 	/** The level's blocks, looked up fast (see {@link LoadedBlocks}). */
 	private final LoadedBlocks blocks;
 
@@ -39,6 +41,17 @@ public class LevelWorldView implements WorldView {
 		this.hand = hand;
 		this.keep = keep;
 		this.blocks = new LoadedBlocks(level);
+	}
+
+	/** Paths place scaffold only where {@code mayPlace} says, such as nowhere a build puts a block. */
+	public LevelWorldView placingOnly(Predicate<BlockPos> mayPlace) {
+		this.mayPlace = mayPlace;
+		return this;
+	}
+
+	@Override
+	public boolean mayPlace(BlockPos pos) {
+		return this.mayPlace.test(pos);
 	}
 
 	@Override

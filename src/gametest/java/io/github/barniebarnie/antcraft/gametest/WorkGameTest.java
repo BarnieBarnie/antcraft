@@ -1,6 +1,18 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.blueprint.Blueprint;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
+import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.work.BuildPlan;
+import io.github.barniebarnie.antcraft.work.RegionPlan;
+import java.util.Optional;
+import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotApi;
@@ -691,6 +703,62 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		});
 		expect(helper, bot, "r = " + build + "\nprint(r.ok, r.reason, r.value)\nwhile count('cobblestone') == 0:\n    wait(1)\nr = " + build
 			+ "\nprint(r.ok, r.reason, r.value)\n", List.of("False missing_ingredients 1", "True None 2"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/**
+	 * A bot with the starter house's materials and some dirt builds the whole house, pillaring up with the dirt where it
+	 * cannot reach, and takes the dirt down again: none is left standing, and it carries all of it.
+	 */
+	// Measured: passes at tick 567.
+	@GameTest(maxTicks = 1100)
+	public void buildPillarsWithDirtForTheStarterHouseAndTakesItDown(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 7);
+		ServerLevel level = helper.getLevel();
+		Identifier id = AntCraft.id("starter_house");
+		Blueprint blueprint = Blueprints.get(id).orElseThrow();
+		Optional<StructureTemplate> template = level.getServer().getStructureTemplateManager().get(blueprint.structure());
+		BlueprintSummary.of(id, blueprint, template).materials().forEach((item, count) -> {
+			for (int i = 0; i < count; i++) {
+				bot.getInventory().addItem(new ItemStack(item));
+			}
+		});
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		BuildPlan plan = RegionPlan.load(template.orElseThrow(), helper.absolutePos(new BlockPos(1, 1, 1)), Mirror.NONE, Rotation.NONE,
+			blueprint.palette()).orElseThrow();
+		expect(helper, bot, "r = build('antcraft:starter_house', " + at(helper, 1, 1, 1) + ")\nprint(r.ok, r.reason, count('dirt'))\n",
+			List.of("True None 16"), () -> {
+				helper.assertTrue(plan.nextStep(level::getBlockState).isEmpty(), "not built: " + plan.nextStep(level::getBlockState));
+				for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+					helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
+				}
+			});
+	}
+
+	/**
+	 * A block too high to reach from the ground (the one-block test blueprint {@code two_palettes}, cobblestone): the bot
+	 * pillars up to it with dirt, places it, and takes the pillar down again, getting its dirt back.
+	 */
+	@GameTest(maxTicks = 110)
+	public void buildPillarsUpWithDirtToAHighBlockAndTakesThePillarDown(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		expect(helper, bot, "r = build('antcraft-gametest:two_palettes', " + at(helper, 3, 7, 3) + ")\nprint(r.ok, r.reason, r.value, count('dirt'))\n",
+			List.of("True None 1 16"), () -> {
+				helper.assertBlockPresent(Blocks.COBBLESTONE, 3, 7, 3);
+				for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 6, 7)) {
+					helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
+				}
+			});
+	}
+
+	/** A step too high to reach and nothing to pillar with but what the blueprint needs: blocked, and nothing placed up there. */
+	@GameTest(maxTicks = 40)
+	public void buildOutOfReachWithoutScaffoldIsBlocked(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 7, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
+			List.of("False blocked 0 2"), () -> helper.assertBlockPresent(Blocks.AIR, 3, 7, 3));
 	}
 
 	/** An id no blueprint has gives no_blueprint, and blueprint() None for it. */
