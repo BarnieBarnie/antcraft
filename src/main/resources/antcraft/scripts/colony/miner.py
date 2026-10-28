@@ -1,5 +1,6 @@
 # A colony miner: the colony mines through one shared ladder shaft beside its
-# Colony Core. The first miner picks the site, posts a "shaft" job and digs it
+# Colony Core. The first miner claims the site with a "shaft_site" job (others
+# wait while it is taken), picks it, posts a "shaft" job and digs it
 # (lib.shaft); then a "mine" job per level goes on the board, and each miner
 # takes one, mines a round of that level's branches (lib.mine), brings the ore
 # from the landing chest to the core and posts the level again, so the miners
@@ -25,21 +26,37 @@ LEVELS = [16, -16, -54]
 ORES = lib.mine.ORES
 
 
+def claim():
+    """The colony's "shaft_site" job once this bot holds the oldest, which lets it pick the site; None while another
+    miner holds it. Ids count up, so of two miners that post one at once only the one holding the older picks."""
+    if not jobs("shaft_site"):
+        post_job("shaft_site")
+    j = take_job("shaft_site")
+    if j is not None and jobs("shaft_site")[0]["id"] != j["id"]:
+        finish_job(j["id"])
+        j = None
+    return j
+
+
 def site():
-    """The colony's shaft, picked beside the core by the first miner, also kept in this bot's memory["shaft"] where
-    lib.shaft and lib.mine read it; None where none can be dug."""
-    c = core()
+    """The colony's shaft, picked beside the core by the miner holding the "shaft_site" job (others wait for it), also
+    kept in this bot's memory["shaft"] where lib.shaft and lib.mine read it; None where none can be dug."""
     s = colony_memory.setdefault("mineshaft", {})
-    if "top" not in s:
-        m = mineshaft(s.get("levels", LEVELS), near=c)
-        # The search may go on over ticks, pausing the script: another miner may have picked meanwhile.
-        # ponytail: what is between the check and storing is atomic only while the instruction budget lasts
+    while "top" not in s:
+        j = claim()
+        if j is None:
+            wait(20)
+            continue
+        # Checked again: a miner that held the claim before stores the site before it gives the claim up.
         if "top" not in s:
+            m = mineshaft(s.get("levels", LEVELS), near=core())
             if m is None:
+                finish_job(j["id"])
                 return None
             s["top"] = m["top"]
             s["levels"] = m["levels"]
             post_job("shaft")
+        finish_job(j["id"])
     kept = {}
     for k, v in s.items():
         kept[k] = v

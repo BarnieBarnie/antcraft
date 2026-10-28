@@ -12,10 +12,12 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -586,10 +588,10 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * for each of {@code miners} positions, ladders, a trapdoor, torches and a chest in the core, and runs colony.miner on a member at each.
 	 */
 	private static List<AntBot> miners(GameTestHelper helper, Colony colony, BlockPos... at) {
-		Container core = container(helper, 0, 6, 0);
+		Container core = (Container) Objects.requireNonNull(helper.getLevel().getBlockEntity(colony.core()));
 		core.setItem(0, new ItemStack(Items.LADDER, 8));
 		core.setItem(1, new ItemStack(Items.TORCH, 8));
-		core.setItem(2, new ItemStack(Items.CHEST));
+		core.setItem(2, new ItemStack(Items.CHEST, 2));
 		core.setItem(3, new ItemStack(Items.OAK_TRAPDOOR));
 		for (int i = 0; i < at.length; i++) {
 			core.setItem(4 + i, new ItemStack(Items.STONE_PICKAXE));
@@ -608,12 +610,19 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(pos, Blocks.STONE);
 		}
 		MINER_IRON.forEach(pos -> helper.setBlock(pos, Blocks.IRON_ORE));
-		Colony colony = colonyAt(helper, 0, 6, 0);
+		return mineColony(helper, 0, 1);
+	}
+
+	/** A colony at (o, 6, o) whose colony_memory["mineshaft"] asks for a level at each of {@code levels} (test-area heights). */
+	private static Colony mineColony(GameTestHelper helper, int o, int... levels) {
+		Colony colony = colonyAt(helper, o, 6, o);
 		colony.setRadius(7);
 		PyDict shaft = new PyDict();
-		PyList levels = new PyList();
-		levels.items.add((long) helper.absolutePos(new BlockPos(0, 1, 0)).getY());
-		shaft.put("levels", levels);
+		PyList heights = new PyList();
+		for (int y : levels) {
+			heights.items.add((long) helper.absolutePos(new BlockPos(0, y, 0)).getY());
+		}
+		shaft.put("levels", heights);
 		shaft.put("branches", 1L);
 		shaft.put("length", 2L);
 		colony.memory().put("mineshaft", shaft);
@@ -651,13 +660,28 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		succeedWhenMined(helper, colony, () -> { });
 	}
 
-	/** Two miners share the colony's one shaft: neither picks a second site, and both work from the one picked first. */
-	@GameTest(maxTicks = MINER_TICKS)
+	/**
+	 * Two miners started on the same tick share the colony's one shaft (#393): neither picks a second site, one shaft job
+	 * is posted, and with a level each both take a mine job and mine a round. In a wide area, as the two halls go opposite
+	 * ways: stone up to y 5 from (0, 0, 0) to (15, 5, 15), the core at (4, 6, 4), the shaft's top at (7, 6, 7), the hall of
+	 * level 3 east from (9, 3, 7) to (11, 3, 7) and that of level 1 west from (5, 1, 7) to (3, 1, 7).
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1000)
 	public void twoMinersShareOneShaft(GameTestHelper helper) {
-		Colony colony = mineColony(helper);
-		List<AntBot> bots = miners(helper, colony, new BlockPos(1, 6, 1), new BlockPos(1, 6, 6));
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 15, 5, 15)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		Colony colony = mineColony(helper, 4, 1, 3);
+		List<AntBot> bots = miners(helper, colony, new BlockPos(5, 6, 5), new BlockPos(5, 6, 10));
 		String[] first = new String[1];
+		Set<Long> shaftJobs = new HashSet<>();
+		Set<UUID> mined = new HashSet<>();
 		helper.onEachTick(() -> {
+			colony.jobs().jobs("shaft").forEach(job -> shaftJobs.add(job.id()));
+			colony.jobs().jobs("mine").forEach(job -> job.taker().ifPresent(mined::add));
+			if (shaftJobs.size() > 1) {
+				helper.fail("shaft jobs posted: " + shaftJobs);
+			}
 			String top = sharedTop(colony);
 			if (first[0] == null) {
 				first[0] = top;
@@ -670,10 +694,42 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		});
-		succeedWhenMined(helper, colony, () -> {
-			for (AntBot bot : bots) {
-				helper.assertTrue(bot.getMemory().get("shaft") != null, "a miner never took the shared shaft");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(Values.repr(pos(helper, 7, 6, 7)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
+			for (int x = 3; x <= 5; x++) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(x, 2, 7)).isAir(), "level 1 hall not dug at x " + x);
+				helper.assertTrue(helper.getBlockState(new BlockPos(x + 6, 4, 7)).isAir(), "level 3 hall not dug at x " + (x + 6));
 			}
+			helper.assertTrue(shaftJobs.size() == 1, "shaft jobs posted: " + shaftJobs);
+			for (AntBot bot : bots) {
+				helper.assertTrue(mined.contains(bot.getUUID()), "a miner never took a mine job");
+			}
+		});
+	}
+
+	/**
+	 * A miner does not search for a site while another member holds the colony's "shaft_site" claim (#393), and picks it
+	 * once the claim goes back to the board.
+	 */
+	@GameTest(maxTicks = 130)
+	public void aMinerWaitsWhileAnotherClaimsTheSite(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		// The holder's claim goes back to the board when its script ends.
+		AntBot holder = member(helper, colony, 6, 6, 6);
+		BotScripts.run(holder, "wait(50)\n");
+		colony.jobs().post("shaft_site", Memory.encode(PyNone.NONE), holder.getUUID());
+		colony.jobs().take("shaft_site", holder.getUUID());
+		miners(helper, colony, new BlockPos(1, 6, 1));
+		helper.onEachTick(() -> {
+			if (helper.getTick() == 45) {
+				helper.assertTrue(sharedTop(colony) == null, "picked while claimed: " + sharedTop(colony));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() > 45, "claimed");
+			helper.assertTrue(Values.repr(pos(helper, 3, 6, 3)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
+			helper.assertTrue(colony.jobs().jobs("shaft_site").isEmpty(), "claims left " + colony.jobs().jobs("shaft_site"));
+			helper.assertTrue(colony.jobs().jobs("shaft").size() == 1, "shaft jobs " + colony.jobs().jobs("shaft"));
 		});
 	}
 }
