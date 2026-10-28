@@ -89,6 +89,7 @@ public class PathFollower {
 	private int maxNodes = MAX_NODES;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 	private Predicate<BlockPos> mayPlaceAt = pos -> true;
+	private Predicate<BlockPos> keep = pos -> false;
 
 	public PathFollower(AntBot bot) {
 		this.bot = bot;
@@ -118,6 +119,11 @@ public class PathFollower {
 	/** Where paths may place scaffold blocks, anywhere unless set; applies from the next path planned. */
 	public void setMayPlaceAt(Predicate<BlockPos> mayPlaceAt) {
 		this.mayPlaceAt = mayPlaceAt;
+	}
+
+	/** Blocks paths never break, besides others' scaffold, none unless set; applies from the next path planned. */
+	public void setKeep(Predicate<BlockPos> keep) {
+		this.keep = keep;
 	}
 
 	/** Which blocks paths and {@link #placeBlock} may place as scaffolding. */
@@ -245,7 +251,7 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt);
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep);
 		PathFinder.Options options = this.options();
 		this.path = null;
 		this.search = PathFinder.search(world, this.bot.blockPosition(), this.goal, options);
@@ -263,7 +269,7 @@ public class PathFollower {
 	 */
 	public PathFinder.Search plan(Goal goal) {
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt);
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep);
 		LoadedBlocks loaded = new LoadedBlocks(level);
 		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), this.bot.blockPosition(), goal, this.options());
 	}

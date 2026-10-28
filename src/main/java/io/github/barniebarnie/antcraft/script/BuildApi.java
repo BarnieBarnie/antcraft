@@ -18,8 +18,10 @@ import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -136,14 +138,14 @@ public final class BuildApi {
 	 * resumed after a save, goes on where it stopped; its value, the blocks placed, is saved as its progress. Where no walk
 	 * reaches a block, it stands on blocks already built or pillars up with the scaffold blocks it takes down by hand
 	 * (dirt), never where the blueprint puts a block, and once the blueprint stands, or the build stops short of it, it
-	 * takes that scaffold down again; the scaffold is saved with the progress, so a resumed build takes it down too.
+	 * takes that scaffold down again; the scaffold is saved with the progress, so a resumed build takes it down too. A
+	 * build cancelled (a reflex, stop) leaves its scaffold with the bot, saved, for its next call there to take down.
+	 * Its walks never break a block of the blueprint already in place.
 	 * Another bot standing where a block goes is asked to make way ({@link AntBot#makeWay}); a player or mob gets a
 	 * moment to go before the build gives blocked.
 	 */
 	// ponytail: no scooping fluids out of the way and no stand-ins; the old BuilderGoal had them, add back when a blueprint needs them.
-	// ponytail: a build interrupted by a reflex or stopped leaves its scaffold up; its next call starts with none.
-	// ponytail: walks may still break blocks the build placed; it places them again, as the world holds its progress.
-	// Keep them from paths (as LevelWorldView keeps others' scaffold) if a build shows going round in circles.
+	// ponytail: a cancelled build's scaffold stays up until the same build (blueprint, place, turn, mirror) is called again.
 	private static final class Build implements ScriptRun.Action {
 		/**
 		 * How long, in ticks, the bot waits for what stands where it places to go: itself stepping back to the middle of its
@@ -166,8 +168,8 @@ public final class BuildApi {
 		private int waited;
 		/** Whether the build was cancelled: the bots it asked to make way may come back. */
 		private boolean cancelled;
-		/** Every spot the blueprint puts a block or air in, where no scaffold goes. */
-		private final Set<BlockPos> spots = new HashSet<>();
+		/** The step of every spot the blueprint puts a block or air in, where no scaffold goes. */
+		private final Map<BlockPos, BuildPlan.Step> spots = new HashMap<>();
 		/** The bot's scaffold already up when the build started, not the build's to take down. */
 		private final Set<BlockPos> before;
 		/** The scaffold blocks the build's walks placed. */
@@ -188,10 +190,11 @@ public final class BuildApi {
 			this.describe = describe;
 			this.breaker = new BlockBreaker(bot);
 			for (BuildPlan.Step step : plan.steps()) {
-				this.spots.add(step.pos());
-				step.otherHalf().ifPresent(half -> this.spots.add(half.pos()));
+				this.spots.put(step.pos(), step);
+				step.otherHalf().ifPresent(half -> this.spots.put(half.pos(), half));
 			}
 			this.before = bot.getProtectedScaffold();
+			this.scaffold.addAll(bot.takeBuildScaffold(describe));
 		}
 
 		/** The block at {@code pos}, or air for one not loaded, noting that the plan could not be read. */
@@ -271,7 +274,7 @@ public final class BuildApi {
 						this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
 					}
 					for (Entity other : this.level.getEntities(this.bot, spot, entity -> entity instanceof AntBot)) {
-						((AntBot) other).makeWay(this.spots, () -> this.result == null && !this.cancelled && this.bot.isAlive());
+						((AntBot) other).makeWay(this.spots.keySet(), () -> this.result == null && !this.cancelled && this.bot.isAlive());
 					}
 					return false;
 				}
@@ -338,7 +341,7 @@ public final class BuildApi {
 				return this.finish(pos == null ? Result.NOT_LOADED : Result.BLOCKED);
 			}
 			this.walked = pos == null ? WorkApi.blockPos(this.at) : pos;
-			this.run.host().body().setBuildScaffold(this.takingDown ? spot -> false : spot -> !this.spots.contains(WorkApi.blockPos(spot)));
+			this.run.host().body().setBuildScaffold(this.takingDown ? spot -> false : spot -> !this.spots.containsKey(WorkApi.blockPos(spot)), this::inPlace);
 			this.walk = MoveApi.reach(this.run.host(), target);
 			return false;
 		}
@@ -349,7 +352,7 @@ public final class BuildApi {
 				this.stopping = reason;
 				return this.takeDown();
 			}
-			this.run.host().body().setBuildScaffold(null);
+			this.run.host().body().setBuildScaffold(null, spot -> false);
 			this.result = reason == null ? Result.ok(this.placed) : Result.fail(reason, this.placed);
 			return true;
 		}
@@ -372,7 +375,18 @@ public final class BuildApi {
 				this.walk = null;
 			}
 			this.breaker.reset();
-			this.run.host().body().setBuildScaffold(null);
+			this.run.host().body().setBuildScaffold(null, spot -> false);
+			if (this.result == null) {
+				this.bot.leaveBuildScaffold(this.describe, this.scaffold);
+			}
+		}
+
+		/** Whether the blueprint has its block in place at {@code spot}, which walks keep. */
+		private boolean inPlace(Pos spot) {
+			BlockPos pos = WorkApi.blockPos(spot);
+			BuildPlan.Step step = this.spots.get(pos);
+			BlockState state = step == null || step.isClear() ? null : new LoadedBlocks(this.level).loaded(pos);
+			return state != null && step.isPlaced(state);
 		}
 
 		@Override

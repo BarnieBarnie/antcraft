@@ -79,9 +79,10 @@ final class BotBody implements MoveApi.Body {
 	}
 
 	@Override
-	public void setBuildScaffold(@Nullable Predicate<Pos> mayPlace) {
+	public void setBuildScaffold(@Nullable Predicate<Pos> mayPlace, Predicate<Pos> keep) {
 		this.follower.setScaffold(mayPlace == null ? PathFollower.SCAFFOLD_BLOCKS : PathFollower.FAST_SCAFFOLD_BLOCKS);
 		this.follower.setMayPlaceAt(mayPlace == null ? pos -> true : pos -> mayPlace.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
+		this.follower.setKeep(pos -> keep.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
 	}
 
 	@Override

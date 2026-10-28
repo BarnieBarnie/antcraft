@@ -31,6 +31,7 @@ public class LevelWorldView implements WorldView {
 	private final ItemStack hand;
 	private final Set<BlockPos> keep;
 	private Predicate<BlockPos> mayPlace = pos -> true;
+	private Predicate<BlockPos> kept = pos -> false;
 	/** The level's blocks, looked up fast (see {@link LoadedBlocks}). */
 	private final LoadedBlocks blocks;
 
@@ -46,6 +47,12 @@ public class LevelWorldView implements WorldView {
 	/** Paths place scaffold only where {@code mayPlace} says, such as nowhere a build puts a block. */
 	public LevelWorldView placingOnly(Predicate<BlockPos> mayPlace) {
 		this.mayPlace = mayPlace;
+		return this;
+	}
+
+	/** Paths never break a block {@code kept} says, besides those kept already, such as one a build has in place. */
+	public LevelWorldView keeping(Predicate<BlockPos> kept) {
+		this.kept = kept;
 		return this;
 	}
 
@@ -163,7 +170,7 @@ public class LevelWorldView implements WorldView {
 	public float breakTicks(BlockPos pos) {
 		BlockState state = this.blocks.get(pos);
 		// Leave containers, other block entities, blocks the caller keeps and what players build with alone.
-		if (state.hasBlockEntity() || this.keep.contains(pos) || isBuilt(state)) {
+		if (state.hasBlockEntity() || this.keep.contains(pos) || this.kept.test(pos) || isBuilt(state)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));

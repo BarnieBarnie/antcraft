@@ -27,6 +27,8 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
+import java.util.stream.Collectors;
+import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
@@ -126,6 +128,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 */
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
 	private final Map<BlockPos, Long> opened = new HashMap<>();
+	/**
+	 * The scaffold of builds that ended before taking it down (cancelled), by the build ({@code build(...)} as it was
+	 * called), for the next call of that build to take down. Saved.
+	 */
+	// ponytail: kept until that build is called again, however long; drop old ones if bots pile them up.
+	private final Map<String, Set<BlockPos>> buildScaffold = new HashMap<>();
 	/** The nether portals the bot went through, both ends, newest first ({@link MoveApi#remember}). Saved. */
 	private List<Pos> portals = List.of();
 	/** Whether the bot came through a nether portal and has yet to remember where it came out, on its first tick. Not saved. */
@@ -291,6 +299,19 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Records a block placed while following a path, so other bots leave it alone while this bot is near it. */
 	public void addPathScaffold(BlockPos pos) {
 		this.pathScaffold.add(pos.immutable());
+	}
+
+	/** Leaves {@code scaffold}, put up by {@code build} and not taken down, for the next call of that build ({@link #takeBuildScaffold}). */
+	public void leaveBuildScaffold(String build, Set<BlockPos> scaffold) {
+		if (!scaffold.isEmpty()) {
+			this.buildScaffold.computeIfAbsent(build, key -> new HashSet<>()).addAll(scaffold);
+		}
+	}
+
+	/** The scaffold {@code build} left ({@link #leaveBuildScaffold}), which the caller now takes down; none left after. */
+	public Set<BlockPos> takeBuildScaffold(String build) {
+		Set<BlockPos> scaffold = this.buildScaffold.remove(build);
+		return scaffold == null ? Set.of() : scaffold;
 	}
 
 	/** Blocks other bots must not break: path scaffold this bot is still near. */
@@ -765,7 +786,13 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
 		}
+		if (!this.buildScaffold.isEmpty()) {
+			output.store("BuildScaffold", BUILD_SCAFFOLD_CODEC, this.buildScaffold.entrySet().stream()
+				.collect(Collectors.toMap(Map.Entry::getKey, entry -> List.copyOf(entry.getValue()))));
+		}
 	}
+
+	private static final Codec<Map<String, List<BlockPos>>> BUILD_SCAFFOLD_CODEC = Codec.unboundedMap(Codec.STRING, BlockPos.CODEC.listOf());
 
 	/**
 	 * Fields older versions saved and this one ignores: a role ({@code Role}, {@code RoleSetByPlayer}, {@code ScaffoldRole}),
@@ -790,5 +817,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));
+		this.buildScaffold.clear();
+		input.read("BuildScaffold", BUILD_SCAFFOLD_CODEC).ifPresent(left -> left.forEach((build, scaffold) -> this.buildScaffold.put(build, new HashSet<>(scaffold))));
 	}
 }

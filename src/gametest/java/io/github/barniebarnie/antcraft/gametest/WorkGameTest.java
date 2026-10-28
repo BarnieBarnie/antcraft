@@ -44,6 +44,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
@@ -765,6 +766,41 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 7, 3) + ")\nprint(r.ok, r.reason, r.value, count('dirt'))\n",
 			List.of("False missing_ingredients 1 16"), () -> {
+				for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 6, 7)) {
+					helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
+				}
+			});
+	}
+
+	/**
+	 * The cobble step with its first cobblestone and its stairs in place, and the bot shut in a glass corridor they end:
+	 * breaking the stairs with its axe would be the shortest way to see where the second cobblestone goes, but a build's
+	 * walks keep the blocks it has in place, so it pillars up with dirt instead, and the stairs stay.
+	 */
+	@GameTest(maxTicks = 80)
+	public void buildWalksKeepTheBlocksInPlace(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
+		BlockState stairs = Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.EAST);
+		helper.setBlock(3, 2, 3, stairs);
+		for (int y = 1; y <= 2; y++) {
+			helper.setBlock(0, y, 3, Blocks.GLASS);
+			for (int x = 1; x <= 2; x++) {
+				helper.setBlock(x, y, 2, Blocks.GLASS);
+				helper.setBlock(x, y, 4, Blocks.GLASS);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(3, 2, 3)).equals(stairs) || !helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.COBBLESTONE)) {
+				helper.fail("a block in place was broken");
+			}
+		});
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('dirt'))\n",
+			List.of("True None 1 16"), () -> {
+				assertCobbleStep(helper, 0);
 				for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 6, 7)) {
 					helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
 				}

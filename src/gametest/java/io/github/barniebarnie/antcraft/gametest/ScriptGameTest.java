@@ -406,6 +406,39 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A build stopped once it pillared up with dirt and placed the high block, before the pillar is down, leaves the
+	 * pillar with the bot, which is saved with it: the same build called again on the loaded bot takes the pillar down.
+	 */
+	@GameTest(maxTicks = 110)
+	public void aStoppedBuildCalledAgainTakesItsScaffoldDown(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		String build = "r = build('antcraft-gametest:two_palettes', " + WorkGameTest.at(helper, 3, 7, 3) + ")\n";
+		BotScripts.run(bot, build);
+		AntBot[] loaded = new AntBot[1];
+		ScriptRun[] again = new ScriptRun[1];
+		helper.onEachTick(() -> {
+			if (loaded[0] == null && helper.getBlockState(new BlockPos(3, 7, 3)).is(Blocks.COBBLESTONE)) {
+				bot.stopScript();
+				loaded[0] = saveAndLoad(helper, bot);
+				again[0] = BotScripts.run(loaded[0], build + "print(r.ok, r.reason, r.value, count('dirt'))\n");
+			}
+			if (again[0] != null && again[0].state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(loaded[0], Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(again[0] != null && again[0].state() == ScriptRun.State.FINISHED, "not built again yet");
+			List<String> printed = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
+			helper.assertValueEqual(printed, List.of("True None 0 16"), "printed");
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 6, 7)) {
+				helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
+			}
+		});
+	}
+
+	/**
 	 * A bot saved in the middle of a {@code goto} and loaded again walks on to the same target, and the script goes on
 	 * after the call with its result, without starting again.
 	 */

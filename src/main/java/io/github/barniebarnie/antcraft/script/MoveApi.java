@@ -90,9 +90,9 @@ public final class MoveApi {
 		/**
 		 * How the next walks pillar up: with {@code mayPlace} set, as {@code build} does, only with scaffold blocks the bot
 		 * takes down again by hand, and only where {@code mayPlace} says, such as nowhere its blueprint puts a block; null
-		 * for any scaffold block anywhere.
+		 * for any scaffold block anywhere. Nor do they break a block {@code keep} says, such as one its blueprint has in place.
 		 */
-		default void setBuildScaffold(@Nullable Predicate<Pos> mayPlace) {
+		default void setBuildScaffold(@Nullable Predicate<Pos> mayPlace, Predicate<Pos> keep) {
 		}
 
 		/** Whether the bot, where it stands, sees {@code target} within {@link #REACH}. */
