@@ -31,6 +31,7 @@ public final class BotApi {
 		CraftApi.register(natives, run);
 		BuildApi.register(natives, run);
 		JobApi.register(natives, run);
+		MineApi.register(natives, run);
 		natives.register("pos", call -> {
 			Args.bind("pos", call, 0);
 			return run.host().pos();

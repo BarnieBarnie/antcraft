@@ -173,7 +173,9 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("smelt", "smelt('dirt', furnace=h).reason"),
 		Map.entry("build", "build('antcraft:cobble_step', h).reason"),
 		Map.entry("block", "block(h)"),
-		Map.entry("container", "container(h)"));
+		Map.entry("container", "container(h)"),
+		Map.entry("mineshaft", "mineshaft([0], near=h)"),
+		Map.entry("mineshaft_at", "mineshaft_at(h, [0])"));
 
 	/**
 	 * The bot natives and {@code Pos} methods that take no position, or take one on purpose from any dimension:
@@ -201,7 +203,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			source.append("print('").append(name).append("', ").append(call).append(")\n");
 			expected.add(name + " " + switch (name) {
 				case "reachable" -> "False";
-				case "block", "container" -> "None";
+				case "block", "container", "mineshaft", "mineshaft_at" -> "None";
 				default -> Result.WRONG_DIMENSION;
 			});
 		});

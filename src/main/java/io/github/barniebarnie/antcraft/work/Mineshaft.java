@@ -220,13 +220,25 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	 * left out. Other blocks that cannot be broken, such as barriers, do not move the site.
 	 */
 	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
-		List<Mineshaft> spots = candidates(core).stream()
+		return diggableNextTo(core, levels, avoid, world).orElseGet(() ->
+			spots(core, levels, avoid).findFirst().orElseGet(() -> new Mineshaft(core.offset(2, 0, 2), levels)).aboveBedrock(world));
+	}
+
+	/** As {@link #nextTo}, but empty where no spot is diggable, instead of the first spot. */
+	public static Optional<Mineshaft> diggableNextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
+		return spots(core, levels, avoid).filter(shaft -> shaft.isDiggable(world)).findFirst().map(shaft -> shaft.aboveBedrock(world));
+	}
+
+	/** New shafts at the {@link #candidates} beside {@code core} that are clear of the {@code avoid} areas, nearest first. */
+	private static Stream<Mineshaft> spots(BlockPos core, List<Integer> levels, List<BoundingBox> avoid) {
+		return candidates(core).stream()
 			.map(top -> new Mineshaft(top, levels))
-			.filter(shaft -> avoid.stream().noneMatch(area -> sharesColumns(shaft.area(), area)))
-			.toList();
-		Mineshaft site = spots.stream().filter(shaft -> shaft.isDiggable(world)).findFirst()
-			.orElseGet(() -> spots.isEmpty() ? new Mineshaft(core.offset(2, 0, 2), levels) : spots.getFirst());
-		return site.aboveBedrock(world);
+			.filter(shaft -> avoid.stream().noneMatch(area -> sharesColumns(shaft.area(), area)));
+	}
+
+	/** Where a ladder shaft's hatch goes: in the ground, over the top ladder. */
+	public BlockPos hatch() {
+		return this.top.below();
 	}
 
 	/** Whether {@code a} and {@code b} cover any of the same block columns, at whatever height. */
@@ -572,11 +584,6 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 			this.batch(batches, steps.size(), above);
 		}
 		return new BuildPlan(List.copyOf(steps.values()), batches);
-	}
-
-	/** Where a ladder shaft's hatch goes: in the ground, over the top ladder. */
-	private BlockPos hatch() {
-		return this.top.below();
 	}
 
 	/**

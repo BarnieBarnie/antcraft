@@ -138,7 +138,7 @@ The mod has turned from goal-driven colonies into **scripted bots**: the mod giv
 | 3 | Core actions and senses: `mine`, `place`, `pick_up`, `craft`, `smelt`, `find_nearest`, `scan`, containers, `memory`; a tree punched into a wooden pickaxe by a script (done) |
 | 4 | The goal-driven colony removed; its engine parts kept behind the actions; every bot without a script runs `idle.py` (done) |
 | 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home, travel through nether portals (done) |
-| 6 | Mining library: `lib/shaft.py`, the mineshaft, dug and laddered, every time (not started) |
+| 6 | Mining library: `lib/shaft.py`, the mineshaft, dug and laddered, every time (started: the senses `mineshaft(levels)` and `mineshaft_at(top, levels)` give a script where a ladder shaft goes and its ladders, landings, chests, halls, branches and torches) |
 | 7 | Colony again: shared colony memory (`colony()`, `colony_memory`), a script-level job board (`post_job`, `take_job`), Bot Cores that carry a script, `build` as an action, and the default colony scripts `colony.lumberjack`, `colony.hauler`, `colony.builder` and `colony.farmer` (done) |
 | 8 | Later: per-player limits, more of Python, an in-game script viewer, scripts in data packs, Litematica import |
 

@@ -287,4 +287,22 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(printed.equals(List.of("42 True")), "printed " + printed);
 		});
 	}
+
+	/**
+	 * mineshaft(levels) picks the nearest diggable site beside the bot, its top on the ground the bot stands on, with a
+	 * landing at the level; mineshaft_at gives the same shaft back from its top. Test areas stand a few blocks above
+	 * world terrain at any height (y 7 in one run), so the level is a few blocks under the floor rather than y 20, and
+	 * the column and hall are stone, not whatever terrain is there.
+	 */
+	@GameTest(maxTicks = 10)
+	public void mineshaftGivesASiteWithALandingAtTheLevel(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(5, -4, 5, 20, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = run(helper, bot, "y = pos().y - 3\nm = mineshaft([y])\n"
+			+ "print(m['top'], m['top'].y == pos().y, block(m['hatch']).id, m['level'][y]['landing'], m['levels'] == [y])\n"
+			+ "print(mineshaft_at(m['top'], m['levels']) == m)\n");
+		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 6, 1, 6) + " True minecraft:stone " + printed(helper, 7, -2, 6) + " True", "True"));
+	}
 }
