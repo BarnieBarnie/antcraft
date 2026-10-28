@@ -51,6 +51,9 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 	/** The shortest tick {@link #aBotRespawnsAtAHomeWhoseChunkIsNotLoaded} lets the server run: 5 ms. */
 	private static final long PACED_TICK_NANOS = 5_000_000L;
 
+	/** How long {@link #aBotRespawnsAtAHomeWhoseChunkIsNotLoaded} waits for the home chunk once the respawn is due: 15 s. */
+	private static final long HOME_LOAD_NANOS = 15_000_000_000L;
+
 	private static final String SCRIPT ="""
 		memory['runs'] = memory.get('runs', 0) + 1
 		print('run', memory['runs'], 'deaths', deaths())
@@ -203,11 +206,13 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A bot whose home chunk nothing keeps loaded loads it when its wait is over and respawns there, once the chunk ticks
-	 * entities. The chunk's entities load from disk in the background, which can take the IO worker a second or more while
-	 * other tests save their chunks; an idle test server runs thousands of ticks meanwhile, so this test paces the server to
-	 * at most one tick per {@link #PACED_TICK_NANOS}, as a busy one would be.
+	 * entities. The chunk's entities load from disk in the background, which can take the IO worker seconds while other
+	 * tests save their chunks, and an idle test server runs thousands of ticks meanwhile. So the chunk wait has a budget in
+	 * wall-clock time ({@link #HOME_LOAD_NANOS}) instead of in ticks, and the test fails as soon as it is spent. The server is
+	 * paced to at most one tick per {@link #PACED_TICK_NANOS}, so {@code maxTicks}, the respawn time plus that budget in
+	 * paced ticks and some to spare, is never reached first.
 	 */
-	@GameTest(maxTicks = 1000)
+	@GameTest(maxTicks = 3400)
 	public void aBotRespawnsAtAHomeWhoseChunkIsNotLoaded(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		UUID id = bot.getUUID();
@@ -222,12 +227,20 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		long[] lastTick = {System.nanoTime()};
+		long[] due = {-1};
 		helper.onEachTick(() -> {
 			long wait = lastTick[0] + PACED_TICK_NANOS - System.nanoTime();
 			if (wait > 0) {
 				LockSupport.parkNanos(wait);
 			}
 			lastTick[0] = System.nanoTime();
+			BotRespawns.Pending respawn = BotRespawns.get(level).pending(id);
+			if (due[0] < 0 && respawn != null && respawn.at() <= level.getGameTime()) {
+				due[0] = lastTick[0];
+			}
+			if (due[0] >= 0 && lastTick[0] - due[0] > HOME_LOAD_NANOS) {
+				helper.fail("not respawned " + HOME_LOAD_NANOS / 1_000_000_000L + " s after it was due");
+			}
 		});
 		helper.runAfterDelay(5, () -> bot.kill(level));
 		helper.succeedWhen(() -> {
