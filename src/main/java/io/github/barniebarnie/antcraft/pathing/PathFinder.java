@@ -35,11 +35,11 @@ public final class PathFinder {
 	 */
 	public static final int MAX_WATER_DROP = 8;
 	/**
-	 * Swimming one block up a water column, such as a waterfall. Measured at about 8 ticks a block (see
+	 * Swimming one block up a water column, such as a waterfall. Measured at about 6 ticks a block (see
 	 * {@code PathingGameTest.swimUpCostMatchesTheTimeARiseTakes}), so a climb up a long waterfall is not mistaken for
 	 * a shortcut.
 	 */
-	public static final double SWIM_UP_COST = 8.0;
+	public static final double SWIM_UP_COST = 6.0;
 
 	/** Climbing a block up or down a ladder: vanilla climbs at 0.2 blocks a tick and slides down at 0.15. */
 	public static final double CLIMB_COST = 6.0;

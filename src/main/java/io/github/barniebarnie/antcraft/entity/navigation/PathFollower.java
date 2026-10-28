@@ -157,8 +157,9 @@ public class PathFollower {
 			return Status.RUNNING;
 		}
 
-		Step step = this.path.steps().get(this.stepIndex);
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), Set.of());
+		this.skipRisenPast(feet, world);
+		Step step = this.path.steps().get(this.stepIndex);
 
 		for (BlockPos pos : step.breaks()) {
 			if (!world.isPassable(pos)) {
@@ -203,6 +204,10 @@ public class PathFollower {
 			}
 			if (step.type() != MoveType.SWIM && this.bot.isInWater()) {
 				this.bot.getJumpControl().jump(); // rise and climb out onto the bank
+			} else if (step.type() == MoveType.SWIM && step.to().getY() > this.stepFrom().getY()) {
+				// Stroke up every tick, also the one it reaches the block: left to FloatGoal, which strokes on four ticks
+				// in five, a rise up a water column would take a different time each run (see PathFinder.SWIM_UP_COST).
+				this.bot.getJumpControl().jump();
 			}
 		}
 
@@ -371,6 +376,36 @@ public class PathFollower {
 		if (step.type() == MoveType.CLIMB_UP) {
 			this.bot.getJumpControl().jump(); // a mob on a ladder climbs while it jumps
 		}
+	}
+
+	/**
+	 * Skips the swim steps up a water column that the bot has already risen past. Afloat, it bobs above the block it
+	 * swims into at the foot of the column, so it never stands in that block to finish the step; it must not wait out
+	 * the step's budget while it drifts up.
+	 */
+	private void skipRisenPast(BlockPos feet, LevelWorldView world) {
+		List<Step> steps = this.path.steps();
+		int index = this.stepIndex;
+		while (index + 1 < steps.size()) {
+			BlockPos to = steps.get(index).to();
+			Step next = steps.get(index + 1);
+			if (steps.get(index).type() != MoveType.SWIM || next.type() != MoveType.SWIM || !next.to().equals(to.above())
+					|| feet.getX() != to.getX() || feet.getZ() != to.getZ() || feet.getY() <= to.getY()) {
+				break;
+			}
+			index++;
+		}
+		if (index != this.stepIndex) {
+			this.stepIndex = index;
+			this.stepTicks = 0;
+			this.stepBudget = this.budgetFor(world);
+			this.replansWithoutProgress = 0;
+		}
+	}
+
+	/** Where the current step starts: the end of the step before it, or the start of the path. */
+	private BlockPos stepFrom() {
+		return this.stepIndex == 0 ? this.path.start() : this.path.steps().get(this.stepIndex - 1).to();
 	}
 
 	private boolean centered(BlockPos pos) {

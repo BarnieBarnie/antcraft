@@ -692,6 +692,9 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		double startY = 3.0;
 		double endY = 8.0;
 		long[] crossed = {-1, -1};
+		// The rise speed on the last tick, and the first tick it dropped while rising from startY to endY.
+		double[] lastRise = {Double.NaN};
+		String[] slowed = {null};
 		helper.onEachTick(() -> {
 			double y = bot.getY() - helper.absolutePos(BlockPos.ZERO).getY();
 			if (crossed[0] < 0 && y >= startY) {
@@ -700,10 +703,17 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			if (crossed[1] < 0 && y >= endY) {
 				crossed[1] = helper.getTick();
 			}
+			double rise = bot.getDeltaMovement().y;
+			if (crossed[0] >= 0 && crossed[1] < 0 && slowed[0] == null && rise < lastRise[0] - 0.005) {
+				slowed[0] = "at y " + y + " on tick " + helper.getTick() + ", from " + lastRise[0] + " to " + rise;
+			}
+			lastRise[0] = rise;
 		});
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(crossed[1] >= 0, "not up yet, at " + TestPositions.relative(helper, bot.blockPosition()));
+			// A stroke missed slows the rise, so the time it takes would vary from run to run.
+			helper.assertTrue(slowed[0] == null, "the bot rose slower " + slowed[0]);
 			double perBlock = (crossed[1] - crossed[0]) / (endY - startY);
 			helper.assertTrue(Math.abs(perBlock - PathFinder.SWIM_UP_COST) <= PathFinder.SWIM_UP_COST / 4,
 				"rising took " + perBlock + " ticks per block, but SWIM_UP_COST is " + PathFinder.SWIM_UP_COST);

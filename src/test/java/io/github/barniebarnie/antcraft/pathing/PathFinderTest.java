@@ -232,16 +232,17 @@ class PathFinderTest {
 
 		assertTrue(path.complete(), "cannot rise: " + path.steps());
 		assertEquals(3 * PathFinder.SWIM_UP_COST + PathFinder.WALK_COST + PathFinder.JUMP_COST, path.cost(), 1e-9);
-		// Measured at about 8 ticks a block (see PathingGameTest.swimUpCostMatchesTheTimeARiseTakes).
-		assertTrue(PathFinder.SWIM_UP_COST >= 6 && PathFinder.SWIM_UP_COST <= 10, "SWIM_UP_COST " + PathFinder.SWIM_UP_COST);
+		// Measured at about 6 ticks a block (see PathingGameTest.swimUpCostMatchesTheTimeARiseTakes).
+		assertTrue(PathFinder.SWIM_UP_COST >= 5 && PathFinder.SWIM_UP_COST <= 8, "SWIM_UP_COST " + PathFinder.SWIM_UP_COST);
 	}
 
 	@Test
 	void takesStairsRatherThanAWaterfallThatIsSlowerToSwimUp() {
-		// The waterfall of swimsUpAWaterfallToTheTopOfACliff, and stairs up the cliff 4 blocks along it. Swimming up the
-		// waterfall is a few blocks shorter, but rising 3 blocks in water takes longer than walking round to the stairs.
+		// The waterfall of swimsUpAWaterfallToTheTopOfACliff, and stairs up the cliff 2 blocks along it. Swimming up the
+		// waterfall is a few blocks shorter, but swimming in and rising 3 blocks in water takes longer than walking round
+		// to the stairs.
 		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 10, 4, 10, '#').fill(2, 1, 0, 2, 4, 0, 'W')
-			.fill(0, 1, 4, 0, 1, 4, '#').fill(1, 1, 4, 1, 2, 4, '#').fill(2, 1, 4, 2, 3, 4, '#');
+			.fill(0, 1, 2, 0, 1, 2, '#').fill(1, 1, 2, 1, 2, 2, '#').fill(2, 1, 2, 2, 3, 2, '#');
 		Path path = find(world, new BlockPos(4, 5, 0), WALK_ONLY);
 
 		assertTrue(path.complete(), "no way up: " + path.steps());
