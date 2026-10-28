@@ -120,4 +120,12 @@ public class ColonyManager extends SavedData {
 		bot.getColony().ifPresent(found -> found.colony().members().remove(bot.getUUID()));
 		bot.setColonyId(null);
 	}
+
+	/**
+	 * Takes {@code member} out of every colony, in every level, for a dead bot that does not come back (its respawn was
+	 * dropped, #379); its jobs go back to the board as {@link Colony#jobs} drops non-members' jobs.
+	 */
+	public static void leave(MinecraftServer server, UUID member) {
+		server.getAllLevels().forEach(level -> get(level).colonies.values().forEach(colony -> colony.members().remove(member)));
+	}
 }

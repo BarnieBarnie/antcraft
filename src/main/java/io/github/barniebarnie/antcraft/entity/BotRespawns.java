@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.entity;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import java.util.LinkedHashMap;
@@ -16,6 +17,7 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
@@ -85,10 +87,14 @@ public final class BotRespawns extends SavedData {
 		return this.pending.get(id);
 	}
 
-	/** Drops the waits of the bots whose home matches {@code home}: they stay dead. */
-	public void forget(Predicate<BlockPos> home) {
-		if (this.pending.values().removeIf(respawn -> home.test(respawn.home()))) {
-			this.setDirty();
+	/** Drops the waits of the bots whose home matches {@code home}: they stay dead, and leave their colony. */
+	public void forget(MinecraftServer server, Predicate<BlockPos> home) {
+		for (Pending respawn : List.copyOf(this.pending.values())) {
+			if (home.test(respawn.home())) {
+				this.pending.remove(respawn.id());
+				ColonyManager.leave(server, respawn.id());
+				this.setDirty();
+			}
 		}
 	}
 

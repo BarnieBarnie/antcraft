@@ -60,7 +60,7 @@ public final class GameTests {
 
 	/** Forgets every bot waiting to respawn at a home in {@code bounds}, in every level: what {@link #start} does at a test's end. */
 	static void forgetRespawns(MinecraftServer server, AABB bounds) {
-		server.getAllLevels().forEach(level -> BotRespawns.get(level).forget(home -> bounds.contains(Vec3.atCenterOf(home))));
+		server.getAllLevels().forEach(level -> BotRespawns.get(level).forget(server, home -> bounds.contains(Vec3.atCenterOf(home))));
 	}
 
 	/** The shortest tick {@link #waitAtMost} lets the server run: 5 ms. */

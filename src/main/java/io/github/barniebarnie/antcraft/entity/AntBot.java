@@ -633,6 +633,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	static boolean respawn(ServerLevel level, BotRespawns.Pending respawn) {
 		AntBot bot = ModEntities.ANT_BOT.create(level, new EntitySpawnRequest(EntitySpawnReason.LOAD, true));
 		if (bot == null) {
+			ColonyManager.leave(level.getServer(), respawn.id()); // it never comes back
 			return true;
 		}
 		bot.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), respawn.bot()));

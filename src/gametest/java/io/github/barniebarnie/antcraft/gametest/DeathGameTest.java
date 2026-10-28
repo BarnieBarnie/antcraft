@@ -21,6 +21,7 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
@@ -126,6 +127,29 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(printed.contains("deaths 1 colony 32"), "printed " + printed);
 			helper.assertTrue(colony.id().equals(again.getColonyId()) && colony.members().contains(id), "members " + colony.members());
 		});
+	}
+
+	/**
+	 * A dead member whose respawn is dropped (here by the cleanup at a test's end) leaves its colony and gives back the jobs
+	 * it took, as one that dies with {@code botRespawn} off does (#379).
+	 */
+	@GameTest(maxTicks = 20)
+	public void aDroppedRespawnLeavesTheColonyAndGivesBackItsJobs(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		long job = colony.jobs().post("haul", new CompoundTag(), id);
+		helper.assertTrue(colony.jobs().take("haul", id).isPresent(), "job not taken");
+		bot.kill(helper.getLevel());
+		helper.assertTrue(colony.members().contains(id), "left the colony on death: " + colony.members());
+		GameTests.forgetRespawns(helper.getLevel().getServer(), helper.getBounds());
+		helper.assertFalse(colony.members().contains(id), "still a member: " + colony.members());
+		helper.assertTrue(colony.jobs().jobs("haul").stream().allMatch(j -> j.id() != job || j.taker().isEmpty()),
+			"job still taken: " + colony.jobs().jobs("haul"));
+		helper.succeed();
 	}
 
 	/**
@@ -252,7 +276,7 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		}
 		bot.setHome(home);
 		GameTests.onEnd(helper, () -> {
-			BotRespawns.get(level).forget(home::equals);
+			BotRespawns.get(level).forget(level.getServer(), home::equals);
 			if (level.getEntity(id) instanceof AntBot again) {
 				again.discard();
 			}
