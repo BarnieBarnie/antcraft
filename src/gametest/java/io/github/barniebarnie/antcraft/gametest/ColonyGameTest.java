@@ -35,6 +35,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -386,9 +387,58 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(maxTicks = 340)
 	public void aFarmerTillsPlantsAndHarvestsAFarm(GameTestHelper helper) {
+		List<BlockPos> spots = farm(helper, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
+				new ItemStack(Items.WHEAT_SEEDS, 24));
+		Container core = container(helper, 7, 1, 7);
+		helper.succeedWhen(() -> {
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.FARMLAND, spot);
+				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
+			}
+			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
+		});
+	}
+
+	/**
+	 * With carrots in the core the farmer plants carrots, harvests the ripe ones and stores what it does not replant (#377).
+	 * The core's 16 carrots all go into the 16 bare spots, so carrots back in the core came from the harvest.
+	 */
+	@GameTest(maxTicks = 240)
+	public void aFarmerGrowsCarrotsFromTheCore(GameTestHelper helper) {
+		List<BlockPos> spots = farm(helper, Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, 7), 8,
+				new ItemStack(Items.CARROT, 16));
+		Container core = container(helper, 7, 1, 7);
+		helper.succeedWhen(() -> {
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.FARMLAND, spot);
+				helper.assertBlockPresent(Blocks.CARROTS, spot.above());
+				helper.assertTrue(helper.getBlockState(spot.above()).getValue(CropBlock.AGE) < 7, "ripe carrots left at " + spot);
+			}
+			helper.assertTrue(core.countItem(Items.CARROT) > 0, "carrots in the core: " + core.countItem(Items.CARROT));
+		});
+	}
+
+	/** A farmer with no seeds harvests ripe potatoes and replants them with potatoes from the harvest (#377). */
+	@GameTest(maxTicks = 100)
+	public void aFarmerReplantsHarvestedPotatoes(GameTestHelper helper) {
+		farm(helper, Blocks.POTATOES.defaultBlockState().setValue(CropBlock.AGE, 7), 2);
+		helper.succeedWhen(() -> {
+			for (BlockPos ripe : List.of(new BlockPos(1, 1, 1), new BlockPos(2, 1, 1))) {
+				helper.assertBlockPresent(Blocks.POTATOES, ripe);
+				helper.assertTrue(helper.getBlockState(ripe).getValue(CropBlock.AGE) < 7, "not harvested at " + ripe);
+			}
+		});
+	}
+
+	/**
+	 * Lays a 5 by 5 farm of dirt with water in its middle at (1, 0, 1), with {@code ripe} on farmland on its first
+	 * {@code ripeSpots} work spots (row by row from (1, 0, 1)), notes it in colony_memory["buildings"] of a colony with its
+	 * core at (7, 1, 7), puts a wooden hoe and {@code items} in the core and starts colony.farmer; gives the work spots.
+	 */
+	private static List<BlockPos> farm(GameTestHelper helper, BlockState ripe, int ripeSpots, ItemStack... items) {
 		List<BlockPos> spots = new ArrayList<>();
-		for (int x = 1; x <= 5; x++) {
-			for (int z = 1; z <= 5; z++) {
+		for (int z = 1; z <= 5; z++) {
+			for (int x = 1; x <= 5; x++) {
 				if (x == 3 && z == 3) {
 					helper.setBlock(x, 0, z, Blocks.WATER);
 				} else {
@@ -397,9 +447,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
-		for (BlockPos ripe : List.of(new BlockPos(1, 0, 1), new BlockPos(5, 0, 5))) {
-			helper.setBlock(ripe, Blocks.FARMLAND);
-			helper.setBlock(ripe.above(), Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+		for (BlockPos spot : spots.subList(0, ripeSpots)) {
+			helper.setBlock(spot, Blocks.FARMLAND);
+			helper.setBlock(spot.above(), ripe);
 		}
 		Colony colony = colonyAt(helper, 7, 1, 7);
 		colony.setRadius(8);
@@ -411,17 +461,13 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		colony.memory().put("buildings", buildings);
 		Container core = container(helper, 7, 1, 7);
 		core.setItem(0, new ItemStack(Items.WOODEN_HOE));
-		core.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 24));
+		for (int i = 0; i < items.length; i++) {
+			core.setItem(i + 1, items[i]);
+		}
 		AntBot farmer = member(helper, colony, 0, 1, 7);
 		runDefault(helper, farmer, "colony.farmer");
 		failOnWarning(helper, farmer);
-		helper.succeedWhen(() -> {
-			for (BlockPos spot : spots) {
-				helper.assertBlockPresent(Blocks.FARMLAND, spot);
-				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
-			}
-			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
-		});
+		return spots;
 	}
 
 	/** Outside a colony there is no job board: {@code take_job} and {@code jobs} give None and [], {@code post_job} fails at its line. */

@@ -1,17 +1,24 @@
 # A colony farmer: tills, plants and harvests the work spots of the colony's
-# farms and stores the wheat in the Colony Core. It farms every building in
+# farms and stores the harvest in the Colony Core. It farms every building in
 # colony_memory["buildings"] whose blueprint has the role "farm" (colony.builder
 # adds what it builds there), carries a hoe from the core when it has none, and
-# replants from the seeds it harvests. Run it on a colony member with
+# grows wheat, carrots, potatoes and beetroot from the seeds the core holds.
+# What it harvests it replants with the same crop, and it keeps one of each
+# harvest that is its own seed. Run it on a colony member with
 # `/antcraft bot run colony.farmer`.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from colony.common import core, fetch, store
 
-CROP = "minecraft:wheat"
-SEEDS = "minecraft:wheat_seeds"
-RIPE = 7  # the age of grown wheat
+# (crop block, seed item, harvest item, ripe age); wheat first, so it is planted
+# where the bot carries several kinds of seed.
+CROPS = [
+    ("minecraft:wheat", "minecraft:wheat_seeds", "minecraft:wheat", 7),
+    ("minecraft:carrots", "minecraft:carrot", "minecraft:carrot", 7),
+    ("minecraft:potatoes", "minecraft:potato", "minecraft:potato", 7),
+    ("minecraft:beetroots", "minecraft:beetroot_seeds", "minecraft:beetroot", 3),
+]
 SOIL = ["minecraft:dirt", "minecraft:grass_block"]
 
 
@@ -26,15 +33,22 @@ def farm_spots():
 
 
 def tend(soil):
-    """Harvests the crop on soil when it is ripe, tills the soil and plants seeds."""
+    """Harvests the crop on soil when it is ripe, tills the soil and plants the
+    seeds of the crop it harvested, or else of the first crop it has seeds of."""
     crop = block(soil.up())
-    if crop.id == CROP and crop.state["age"] >= RIPE:
-        mine(soil.up())
-        crop = block(soil.up())
+    seeds = [c[1] for c in CROPS]
+    for c in CROPS:
+        if crop.id == c[0] and crop.state["age"] >= c[3]:
+            mine(soil.up())
+            crop = block(soil.up())
+            seeds = [c[1]] + seeds
     if block(soil).id in SOIL and crop.is_air:
         use(soil, "#minecraft:hoes")
-    if block(soil).id == "minecraft:farmland" and block(soil.up()).is_air and has(SEEDS):
-        place(soil.up(), SEEDS)
+    if block(soil).id == "minecraft:farmland" and block(soil.up()).is_air:
+        for seed in seeds:
+            if has(seed):
+                place(soil.up(), seed)
+                break
 
 
 while True:
@@ -43,9 +57,18 @@ while True:
         for hoe in ["minecraft:iron_hoe", "minecraft:stone_hoe", "minecraft:wooden_hoe"]:
             if fetch(hoe, 1):
                 break
-    fetch(SEEDS, len(spots))
+    bare = len([s for s in spots if block(s.up()).is_air])
+    for c in CROPS:
+        if bare > 0:
+            fetch(c[1], bare)
+            bare -= count(c[1])
     for soil in spots:
         tend(soil)
-    pick_up([CROP, SEEDS])
-    store(CROP)
+    pick_up([i for c in CROPS for i in c[1:3]])
+    for c in CROPS:
+        if c[2] == c[1]:
+            if count(c[2]) > 1:
+                put(core(), c[2], count(c[2]) - 1)
+        else:
+            store(c[2])
     wait(200 if spots else 400)
