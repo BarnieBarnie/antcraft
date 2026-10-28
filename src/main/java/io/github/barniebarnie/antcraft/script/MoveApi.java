@@ -3,17 +3,19 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
+import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
  * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
- * and {@code home_dimension()}, {@code travel(portal)},
+ * and {@code home_dimension()}, {@code travel(portal)}, {@code portals()},
  * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
  */
@@ -50,6 +52,13 @@ public final class MoveApi {
 	 * a portal takes a mob on the tick after it steps in.
 	 */
 	public static final int TRAVEL_WAIT_TICKS = 20;
+	/** How many portals a bot remembers ({@code portals()}): the newest. */
+	public static final int MAX_PORTALS = 8;
+	/**
+	 * How near, in blocks along each axis, a portal remembered must be to one remembered before, in the same dimension,
+	 * to replace it.
+	 */
+	public static final int SAME_PORTAL = 16;
 
 	/** What the move actions need of the bot. */
 	public interface Body {
@@ -98,6 +107,11 @@ public final class MoveApi {
 		 */
 		default Pos portalFloor(Pos portal) {
 			return portal;
+		}
+
+		/** The nether portals the bot went through, both ends, newest first, each with its dimension ({@link #remember}). */
+		default List<Pos> portals() {
+			return List.of();
 		}
 
 		/**
@@ -176,6 +190,10 @@ public final class MoveApi {
 		natives.register("travel", call -> {
 			Pos portal = Pos.of(Args.bind("travel", call, 1, "portal")[0]);
 			return run.start(new Travel(run.host(), portal), call);
+		});
+		natives.register("portals", call -> {
+			Args.bind("portals", call, 0);
+			return new PyList(new ArrayList<>(run.host().body().portals()));
 		});
 		natives.register("reachable", call -> {
 			Object[] args = Args.bind("reachable", call, 1, "pos", "near");
@@ -318,6 +336,23 @@ public final class MoveApi {
 		public String describe() {
 			return "travel(" + portal + ")";
 		}
+	}
+
+	/**
+	 * {@code portals} with {@code portal}, which has a dimension, put first: in place of any in the same dimension within
+	 * {@link #SAME_PORTAL} blocks, which are the same portal or one beside it, and keeping the newest {@link #MAX_PORTALS}.
+	 */
+	public static List<Pos> remember(List<Pos> portals, Pos portal) {
+		List<Pos> kept = new ArrayList<>();
+		kept.add(portal);
+		for (Pos old : portals) {
+			long apart = Math.max(Math.abs(old.x() - portal.x()), Math.max(Math.abs(old.y() - portal.y()), Math.abs(old.z() - portal.z())));
+			boolean same = Objects.equals(old.dimension(), portal.dimension()) && apart <= SAME_PORTAL;
+			if (!same && kept.size() < MAX_PORTALS) {
+				kept.add(old);
+			}
+		}
+		return List.copyOf(kept);
 	}
 
 	/**

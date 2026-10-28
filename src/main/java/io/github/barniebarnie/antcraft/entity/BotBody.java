@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
@@ -91,6 +92,11 @@ final class BotBody implements MoveApi.Body {
 			at = at.below();
 		}
 		return new Pos(at.getX(), at.getY(), at.getZ());
+	}
+
+	@Override
+	public List<Pos> portals() {
+		return this.bot.getPortals();
 	}
 
 	@Override

@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotLog;
 import io.github.barniebarnie.antcraft.script.DefaultScripts;
+import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
@@ -29,6 +30,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 
 /** Scripted bots moving (docs/scripting.md, milestone 2): {@code goto}, chunk loading, {@code home}, {@code set_home} and {@code idle.py}. */
 public class MoveGameTest implements CustomTestMethodInvoker {
@@ -381,9 +385,29 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(nether.getEntity(id) instanceof AntBot, "bot not in the Nether");
-			List<String> printed = printed((AntBot) Objects.requireNonNull(nether.getEntity(id)));
+			AntBot through = (AntBot) Objects.requireNonNull(nether.getEntity(id));
+			List<String> printed = printed(through);
 			helper.assertTrue(printed.contains("True minecraft:the_nether"), "printed " + printed);
+			// It remembers both ends of the portal, the end it came out of first, and they survive a save and load (#354).
+			List<Pos> portals = through.getPortals();
+			helper.assertTrue(portals.size() == 2 && "minecraft:the_nether".equals(portals.get(0).dimension())
+				&& "minecraft:overworld".equals(portals.get(1).dimension()), "portals " + portals);
+			helper.assertTrue(isPortal(nether, portals.get(0)) && isPortal(helper.getLevel(), portals.get(1)), "not portal blocks: " + portals);
+			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, nether.registryAccess());
+			through.saveWithoutId(output);
+			AntBot loaded = new AntBot(ModEntities.ANT_BOT, nether);
+			loaded.load(TagValueInput.create(ProblemReporter.DISCARDING, nether.registryAccess(), output.buildResult()));
+			helper.assertTrue(describe(loaded.getPortals()).equals(describe(portals)), "loaded portals " + describe(loaded.getPortals()));
 		});
+	}
+
+	private static boolean isPortal(ServerLevel level, Pos pos) {
+		return level.getBlockState(new BlockPos((int) pos.x(), (int) pos.y(), (int) pos.z())).is(Blocks.NETHER_PORTAL);
+	}
+
+	/** Positions with their dimensions, which {@link Pos#equals} leaves out. */
+	private static List<String> describe(List<Pos> portals) {
+		return portals.stream().map(portal -> portal + " " + portal.dimension()).toList();
 	}
 
 	/**
@@ -420,6 +444,77 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(sent[0] && nether.getEntity(id) == null, "bot not through the portal yet");
 			helper.assertTrue(level.getEntity(id) instanceof AntBot back && back != bot && back.blockPosition().equals(home),
+				"bot not home: " + level.getEntity(id));
+		});
+	}
+
+	/**
+	 * A bot that went into the Nether through a portal and is then more than 32 blocks from it, at the end of a tunnel,
+	 * goes home through the portal it remembers: its {@code idle.py} finds no portal near and travels to the remembered
+	 * one (#354). Far from the test area, so the portals of the other portal tests, a few blocks away in the Nether, are
+	 * not the nearest.
+	 */
+	@GameTest(maxTicks = 700)
+	public void anIdleBotFarFromThePortalItCameThroughGoesHomeThroughIt(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		ChunkPos spot = new ChunkPos(1875, -1875 - 16 * FAR_SPOTS.getAndIncrement());
+		for (int cx = spot.x() - 3; cx <= spot.x() + 3; cx++) {
+			for (int cz = spot.z() - 3; cz <= spot.z() + 3; cz++) {
+				level.getChunk(cx, cz);
+			}
+		}
+		BlockPos overworldCorner = new BlockPos(spot.getMinBlockX() + 4, 300, spot.getMinBlockZ() + 8);
+		buildPortal(level, overworldCorner);
+		BlockPos home = overworldCorner.offset(1, 1, -2);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.teleportTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5);
+		bot.setHome(home);
+		UUID id = bot.getUUID();
+		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
+		// The portal the Overworld one leads to, and a closed tunnel from in front of it to the east.
+		BlockPos corner = new BlockPos(Math.floorDiv(overworldCorner.getX(), 8), 100, Math.floorDiv(overworldCorner.getZ(), 8));
+		int length = 42;
+		BlockPos far = corner.offset(4 + length, 1, -1);
+		GameTests.onEnd(helper, () -> {
+			for (ServerLevel in : List.of(level, nether)) {
+				if (in.getEntity(id) instanceof AntBot there) {
+					there.discard();
+				}
+			}
+		});
+		failOnError(helper, bot);
+		// 0: waiting for the chunks; 1: the bot travels; 2: the bot, through and remembering the portal, was put at the far
+		// end of the tunnel and idles.
+		int[] phase = {0};
+		helper.onEachTick(() -> {
+			BotChunks.keep(level, spot);
+			boolean ticking = level.isPositionEntityTicking(home);
+			for (int x = corner.getX() - 1; x <= far.getX() + 8; x += 8) {
+				BlockPos at = new BlockPos(x, corner.getY(), corner.getZ());
+				BotChunks.keep(nether, ChunkPos.containing(at));
+				ticking &= nether.isPositionEntityTicking(at);
+			}
+			if (phase[0] == 0 && ticking) {
+				buildPortal(nether, corner);
+				for (int x = 5; x <= 5 + length; x++) {
+					for (int z = -3; z <= 0; z++) {
+						for (int y = 0; y <= 4; y++) {
+							boolean inside = z >= -2 && z <= -1 && y >= 1 && y <= 3 && x < 5 + length;
+							nether.setBlockAndUpdate(corner.offset(x, y, z), (inside ? Blocks.AIR : Blocks.STONE).defaultBlockState());
+						}
+					}
+				}
+				BotScripts.run(bot, "travel(find_nearest('nether_portal'))\nwait(100000)\n");
+				phase[0] = 1;
+			} else if (phase[0] == 1 && nether.getEntity(id) instanceof AntBot there && there.getPortals().size() == 2) {
+				there.teleportTo(nether, far.getX() + 0.5, far.getY(), far.getZ() + 0.5, Set.of(), 0, 0, false);
+				there.stopScript();
+				phase[0] = 2;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(phase[0] == 2 && nether.getEntity(id) == null, "bot not back through the portal yet: phase " + phase[0]);
+			helper.assertTrue(level.getEntity(id) instanceof AntBot back && back.blockPosition().equals(home),
 				"bot not home: " + level.getEntity(id));
 		});
 	}

@@ -25,6 +25,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
@@ -56,6 +59,7 @@ import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -119,6 +123,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 */
 	private final Set<BlockPos> pathScaffold = new HashSet<>();
 	private final Map<BlockPos, Long> opened = new HashMap<>();
+	/** The nether portals the bot went through, both ends, newest first ({@link MoveApi#remember}). Saved. */
+	private List<Pos> portals = List.of();
+	/** Whether the bot came through a nether portal and has yet to remember where it came out, on its first tick. Not saved. */
+	private boolean arriving;
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -180,6 +188,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			if (this.home == null) {
 				this.home = this.blockPosition(); // where it was first spawned
 				this.homeDimension = level.dimension();
+			}
+			if (this.arriving) {
+				// Vanilla places the bot on the exit portal only after it made it anew (restoreFrom).
+				this.arriving = false;
+				this.rememberPortal(level, portalIn(this).orElse(this.blockPosition()));
 			}
 			this.sayBubble.tick();
 			// A dead bot lies there for a second before it is gone; it does nothing meanwhile.
@@ -371,6 +384,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	@Override
 	public void restoreFrom(Entity old) {
 		super.restoreFrom(old);
+		// Only through a nether portal, not a command's teleport or an end portal.
+		portalIn(old).ifPresent(entry -> {
+			this.rememberPortal(old.level(), entry);
+			this.arriving = true;
+		});
 		if (old instanceof AntBot from && this.savedScript != null && from.scriptCode != null) {
 			this.resumeSavedScript(from.scriptCode, from.scriptSource);
 		}
@@ -424,6 +442,24 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Puts {@code body} in place of {@link #getBody()}, as game tests do to stand in for parts of it. */
 	public void setBody(MoveApi.Body body) {
 		this.body = body;
+	}
+
+	/** The nether portals the bot went through ({@code portals()} in a script). */
+	public List<Pos> getPortals() {
+		return this.portals;
+	}
+
+	/**
+	 * A nether portal block {@code entity} overlaps, if any: a bot is in the portal it goes through, and on the one it comes
+	 * out of, though the block at its feet may be the one beside.
+	 */
+	private static Optional<BlockPos> portalIn(Entity entity) {
+		return BlockPos.betweenClosedStream(entity.getBoundingBox()).filter(at -> entity.level().getBlockState(at).is(Blocks.NETHER_PORTAL))
+			.findFirst().map(BlockPos::immutable);
+	}
+
+	private void rememberPortal(Level level, BlockPos at) {
+		this.portals = MoveApi.remember(this.portals, new Pos(at.getX(), at.getY(), at.getZ()).in(level.dimension().identifier().toString()));
 	}
 
 	public BotLog getLog() {
@@ -654,6 +690,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			running.store(output);
 			output.putBoolean("ScriptIdling", this.isRunningScript() ? this.idling : this.savedIdling);
 		}
+		if (!this.portals.isEmpty()) {
+			output.store("Portals", GlobalPos.CODEC.listOf(), this.portals.stream().map(portal -> GlobalPos.of(
+				ResourceKey.create(Registries.DIMENSION, Identifier.parse(Objects.requireNonNull(portal.dimension()))),
+				new BlockPos((int) portal.x(), (int) portal.y(), (int) portal.z()))).toList());
+		}
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
 		}
@@ -676,6 +717,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
 		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());
 		this.savedIdling = input.getBooleanOr("ScriptIdling", false);
+		this.portals = input.read("Portals", GlobalPos.CODEC.listOf()).orElse(List.of()).stream()
+			.map(portal -> new Pos(portal.pos().getX(), portal.pos().getY(), portal.pos().getZ()).in(portal.dimension().identifier().toString()))
+			.toList();
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));

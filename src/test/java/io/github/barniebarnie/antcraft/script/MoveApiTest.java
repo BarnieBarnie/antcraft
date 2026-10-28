@@ -40,6 +40,7 @@ class MoveApiTest {
 		boolean planFound = true;
 		/** How often travel cleared the portal cooldown. */
 		int cooldownClears;
+		List<Pos> portals = List.of();
 
 		@Override
 		public long gameTime() {
@@ -123,6 +124,11 @@ class MoveApiTest {
 		@Override
 		public void stopPath() {
 			pathStopped = true;
+		}
+
+		@Override
+		public List<Pos> portals() {
+			return portals;
 		}
 
 		@Override
@@ -464,6 +470,37 @@ class MoveApiTest {
 		tick(run);
 		tick(run);
 		assertEquals(List.of("unreachable"), printed());
+	}
+
+	/** {@code portals()} lists the portals the bot went through, newest first, each with its dimension (#354). */
+	@Test
+	void scriptsReadTheRememberedPortals() {
+		bot.portals = List.of(new Pos(1, 65, 2).in("minecraft:the_nether"), new Pos(8, 64, 16).in("minecraft:overworld"));
+		ScriptRun run = start("for p in portals():\n    print(p, p.dimension)\n");
+		tick(run);
+		assertEquals(List.of("Pos(1, 65, 2) minecraft:the_nether", "Pos(8, 64, 16) minecraft:overworld"), printed());
+	}
+
+	/**
+	 * A portal remembered goes first, in place of one in the same dimension within {@link MoveApi#SAME_PORTAL} blocks of
+	 * it, and only the newest {@link MoveApi#MAX_PORTALS} are kept.
+	 */
+	@Test
+	void rememberingAPortalReplacesOneNearItAndKeepsTheNewest() {
+		Pos a = new Pos(0, 64, 0).in("minecraft:overworld");
+		Pos b = new Pos(0, 64, 0).in("minecraft:the_nether");
+		List<Pos> portals = MoveApi.remember(MoveApi.remember(List.of(), a), b);
+		assertEquals(List.of(b, a), portals);
+		assertEquals("minecraft:overworld", portals.get(1).dimension());
+		Pos nearA = new Pos(1, 65, 0).in("minecraft:overworld");
+		portals = MoveApi.remember(portals, nearA);
+		assertEquals(List.of(nearA, b), portals);
+		for (int i = 1; i <= MoveApi.MAX_PORTALS; i++) {
+			portals = MoveApi.remember(portals, new Pos(100L * i, 64, 0).in("minecraft:overworld"));
+		}
+		assertEquals(MoveApi.MAX_PORTALS, portals.size());
+		assertEquals(new Pos(100L * MoveApi.MAX_PORTALS, 64, 0), portals.getFirst());
+		assertFalse(portals.contains(b), "oldest kept");
 	}
 
 	@Test
