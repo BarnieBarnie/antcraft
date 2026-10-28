@@ -42,7 +42,7 @@ Bots find their own way: they walk, jump, swim, drop up to 3 blocks, dig through
 
 **Scripts.** Every bot runs a script, and only a script decides what it does. Without one, or once its script ended, stopped or failed, it runs `idle.py` (walk home, then wait), whether or not it is in a colony; a bot that never ran a script does too. From another dimension than its home's, `idle.py` goes through a nether portal within 32 blocks, or else the nearest one it remembers, and without any waits where it is. When `idle.py` itself ends or fails, it is not started again. A bot's home is where it was first spawned, until a script moves it with `set_home(pos)`.
 
-Scripts `import` modules from the script folders. The mod's default scripts, `idle.py`, the library module `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`) and the colony scripts under `colony/` (see Colonies), are copied into `config/antcraft/scripts/` each time the server starts; the mod never overwrites one you changed, so you can give your bots other idle habits, and a deleted one comes back.
+Scripts `import` modules from the script folders. The mod's default scripts, `idle.py`, the library modules `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`) and `lib/shaft.py` (`dig_shaft(levels)` digs and ladders a mineshaft, `to_level(level)` and `to_surface()` climb it) and the colony scripts under `colony/` (see Colonies), are copied into `config/antcraft/scripts/` each time the server starts; the mod never overwrites one you changed, so you can give your bots other idle habits, and a deleted one comes back.
 
 Running scripts are saved with the world: after a reload a bot resumes at the same instruction, inside the action it was doing. If the script or a module it imported changed, it starts again from the top with the same arguments, keeping `memory`.
 
@@ -138,7 +138,7 @@ The mod has turned from goal-driven colonies into **scripted bots**: the mod giv
 | 3 | Core actions and senses: `mine`, `place`, `pick_up`, `craft`, `smelt`, `find_nearest`, `scan`, containers, `memory`; a tree punched into a wooden pickaxe by a script (done) |
 | 4 | The goal-driven colony removed; its engine parts kept behind the actions; every bot without a script runs `idle.py` (done) |
 | 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home, travel through nether portals (done) |
-| 6 | Mining library: `lib/shaft.py`, the mineshaft, dug and laddered, every time (started: the senses `mineshaft(levels)` and `mineshaft_at(top, levels)` give a script where a ladder shaft goes and its ladders, landings, chests, halls, branches and torches) |
+| 6 | Mining library: `lib/shaft.py`, the mineshaft, dug and laddered, every time (started: the senses `mineshaft(levels)` and `mineshaft_at(top, levels)` give a script where a ladder shaft goes and its ladders, landings, chests, halls, branches and torches, and `lib/shaft.py` digs it, past gravel, air and water, and climbs it) |
 | 7 | Colony again: shared colony memory (`colony()`, `colony_memory`), a script-level job board (`post_job`, `take_job`), Bot Cores that carry a script, `build` as an action, and the default colony scripts `colony.lumberjack`, `colony.hauler`, `colony.builder` and `colony.farmer` (done) |
 | 8 | Later: per-player limits, more of Python, an in-game script viewer, scripts in data packs, Litematica import |
 

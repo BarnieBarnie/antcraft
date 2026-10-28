@@ -92,7 +92,17 @@ A module's top level runs once per bot run, the first time any module imports it
 
 A module that is not there fails the script at the line of the import (`No module named 'lib.trees'`), and so does a name a module does not have (`cannot import name 'fel' from 'lib.trees'`). A module that does not compile fails the script with its own file and line (`lib/trees.py:4: ...`), and an error while a module runs names that module's file. Circular imports fail with the cycle: `circular import: lib.a -> lib.b -> lib.a`.
 
-The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`). The default colony scripts live under `colony/` (see Colony scripts). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
+The mod's default library modules live under `lib/` and are copied with `idle.py` (see Files and commands); for now `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`) and `lib/shaft.py`. The default colony scripts live under `colony/` (see Colony scripts). A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed.
+
+`lib/shaft.py` digs the ladder shaft `mineshaft` describes (see Senses) and takes the bot up and down it:
+
+| Function | |
+|---|---|
+| `dig_shaft(levels)` | digs the shaft down to the heights `levels`, top down: each block of the column with a ladder in it (the hatch's too, to climb out by), and at each level its chamber with the chest and a torch. Before it mines a block it stands on it, and once in, it makes the blocks round it solid with a block it dug (cobblestone and the like): water, lava and air are walled off, gravel and sand dug out first, and what flowed or fell in meanwhile is dug again or drains. A bot places no block where it stands, so the ladders go in two blocks above it as it goes down, and the last two from the deepest chamber, where it ends. A reflex that takes over (a mob, lava) is waited out and the step tried again. Gives a dict: `ok`, `reason` (`None`, or why it stopped: `no_site` where `mineshaft` finds none, `missing_ingredients`, or an action's reason), `at` (the block it stopped at, or `None`) and `missing` (a dict of item to how many it lacks: ladders, torches and chests for what is left to do, a pickaxe (`#minecraft:pickaxes`), or `minecraft:cobblestone` when it has nothing left to wall off with). It checks what it carries before it digs at all, so a bot short of ladders stops at once and goes on once given them; making what it lacks is the caller's work |
+| `to_level(level)`, `to_surface()` | climb to the chamber of a level, or out onto the ground beside the top; give `goto`'s result |
+| `shaft(levels=None)` | the shaft as `mineshaft` gives it: the one kept in `memory["shaft"]` (its `top` and `levels`), else a new site for `levels`, which is kept there. Forget it with `memory.pop("shaft")` to dig another |
+
+How far the shaft is dug is read from the world, not kept, so `dig_shaft` called again after a restart, a reload or a failure goes on where it stopped; a bot saved in the middle of it resumes in place (see Save and resume).
 
 ## Runtime
 
@@ -348,7 +358,7 @@ Scripts are loaded from two folders; the world folder wins on a name clash:
 - `config/antcraft/scripts/` for every world (share scripts by copying files here);
 - `<world>/antcraft/scripts/` for one world.
 
-The mod copies its default scripts (`idle.py`, the library module `lib/home.py` and the colony scripts under `colony/`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
+The mod copies its default scripts (`idle.py`, the library modules `lib/home.py` and `lib/shaft.py` and the colony scripts under `colony/`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
 
 Commands (single-player first; on a server they stay operator-only):
 
@@ -390,22 +400,21 @@ r = craft("wooden_pickaxe", table=table_spot)
 say("pickaxe!" if r else f"no pickaxe: {r.reason}")
 ```
 
-A miner with a library function:
+A miner with a library function (`lib.shaft`, see Modules):
 
 ```python
 import lib.shaft
 
-chest = memory.get("chest") or find_nearest("chest")
-memory["chest"] = chest
-while True:
-    r = lib.shaft.dig_down(to_y=16, ladders=True)
-    if not r:
-        say(f"shaft stopped: {r.reason}")
-        break
-    for ore in scan("#c:ores/iron", radius=8):
-        mine(ore)
-    goto(chest, near=2)
-    put(chest, "#c:raw_materials")
+r = lib.shaft.dig_shaft([40, 20])
+while not r["ok"]:
+    say(f"shaft stopped: {r['reason']} {r['missing']}")
+    wait(200)  # give it what it lacks meanwhile
+    r = lib.shaft.dig_shaft([40, 20])
+chest = lib.shaft.shaft()["level"][20]["chest"]
+for ore in scan("#c:ores/iron", radius=8):
+    mine(ore)
+put(chest, "#c:raw_materials")
+lib.shaft.to_surface()
 ```
 
 ## What stays and what goes
@@ -431,7 +440,7 @@ Each milestone becomes one or more issues.
 3. **Core actions and senses.** `mine`, `place`, `pick_up`, `equip`, `inventory`/`count`/`has`, `block`, `find_nearest`, `scan`, `put`/`take`, `craft`, `smelt`, the `Result` reasons, `memory`. Acceptance: punch a tree to a wooden pickaxe as a script.
 4. **Remove the goal-driven colony** (see What stays and what goes). Every bot without a script runs `idle.py`; the benchmark runs 30 bots on a script. (Done.)
 5. **Reflexes, save/resume, imports, death.** Bots survive a reload mid-script; `import` and the default `lib/` folder; respawning at home. Done.
-6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time. Started: the senses `mineshaft` and `mineshaft_at` (see Senses).
+6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time. Started: the senses `mineshaft` and `mineshaft_at` (see Senses), and `lib/shaft.py` (see Modules), which digs a shaft to two levels and climbs out in eleven game tests, ten of them past seeded pockets of gravel, air and water beside the column, and goes on after a save half-way down or once given the ladders it lacked.
 7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done: `colony()` and `colony_memory` (a member in another dimension than its core stays a member), the job board (see Jobs), Bot Cores that carry a script, `build`, and the colony scripts (see Colony scripts). Done; a mining role waits for milestone 6.
 8. **Later.** Multiplayer permissions and sandbox limits per player, `try`/`except` and classes if scripts need them, an in-game script viewer or editor, sharing scripts through data packs, Litematica import.
 

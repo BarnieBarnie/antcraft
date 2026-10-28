@@ -311,7 +311,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Saves {@code bot} as a world save does, removes it and loads the save as a new bot, as loading the world does. */
-	private static AntBot saveAndLoad(GameTestHelper helper, AntBot bot) {
+	static AntBot saveAndLoad(GameTestHelper helper, AntBot bot) {
 		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
 		bot.saveWithoutId(output);
 		bot.discard();
