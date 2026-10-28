@@ -143,12 +143,13 @@ public final class BuildApi {
 	 * ({@link AntBot#takeBuildScaffold}). Its walks break a block of the blueprint already in place only where no other
 	 * walk reaches, placing it again after.
 	 * Another bot standing where a block goes is asked to make way ({@link AntBot#makeWay}), and an idle one keeps off
+	 * while the bot holds a {@code "build"} job off its colony's job board (colony.builder takes one per build), and else
 	 * until {@link #HOLD_TICKS} after the bot's last build, so across calls; a player or mob gets a moment to go before
 	 * the build gives blocked.
 	 */
 	// ponytail: no scooping fluids out of the way and no stand-ins; the old BuilderGoal had them, add back when a blueprint needs them.
 	private static final class Build implements ScriptRun.Action {
-		/** How long, in ticks, an idle bot asked to make way keeps off after the build: long enough to fetch what it missed. */
+		/** How long, in ticks, an idle bot asked to make way keeps off after the build, outside a build job: long enough to fetch what it missed. */
 		private static final int HOLD_TICKS = 200;
 		/**
 		 * How long, in ticks, the bot waits for what stands where it places to go: itself stepping back to the middle of its
@@ -169,9 +170,8 @@ public final class BuildApi {
 		private @Nullable BlockPos breaking;
 		private boolean unloaded;
 		private int waited;
-		/** Whether no walk reached without breaking a block in place: from then on, walks may. */
-		// ponytail: for the rest of the call once one walk needed it; reset per step if bots break more than they need to.
-		private boolean breakingKept;
+		/** The block no walk reached without breaking a block in place, so walks to it may; walks to other blocks keep them. */
+		private @Nullable BlockPos breakingKept;
 		/** The step of every spot the blueprint puts a block or air in, where no scaffold goes. */
 		private final Map<BlockPos, BuildPlan.Step> spots = new HashMap<>();
 		/** The bot's scaffold already up when the build started, not the build's to take down. */
@@ -230,8 +230,8 @@ public final class BuildApi {
 				this.walk = null;
 				if (this.takingDown && !walked.ok()) {
 					this.scaffold.remove(this.walked); // ponytail: scaffold no walk reaches stays up
-				} else if (Result.UNREACHABLE.equals(walked.reason()) && !this.breakingKept) {
-					this.breakingKept = true;
+				} else if (Result.UNREACHABLE.equals(walked.reason()) && this.walked != null && !this.walked.equals(this.breakingKept)) {
+					this.breakingKept = this.walked;
 					this.walked = null;
 				} else if (!walked.ok()) {
 					return this.finish(Result.UNREACHABLE.equals(walked.reason()) ? Result.BLOCKED : walked.reason());
@@ -281,8 +281,10 @@ public final class BuildApi {
 					if (this.bot.getBoundingBox().intersects(spot)) {
 						this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
 					}
+					// ponytail: any "build" job the bot holds, not this build's own: Java does not know which job a build is for.
 					for (Entity other : this.level.getEntities(this.bot, spot, entity -> entity instanceof AntBot)) {
-						((AntBot) other).makeWay(this.spots.keySet(), () -> this.bot.isAlive() && this.level.getGameTime() - this.bot.getLastBuilt() <= HOLD_TICKS);
+						((AntBot) other).makeWay(this.spots.keySet(), () -> this.bot.isAlive()
+							&& (this.level.getGameTime() - this.bot.getLastBuilt() <= HOLD_TICKS || this.bot.holdsJob("build")));
 					}
 					return false;
 				}
@@ -346,14 +348,14 @@ public final class BuildApi {
 		/** Walks into reach of {@code target}; when it already walked to {@code pos} and is still not there, gives up. */
 		private boolean walkTo(Pos target, @Nullable BlockPos pos) {
 			if (pos == null ? this.walked != null && this.walked.equals(WorkApi.blockPos(this.at)) : pos.equals(this.walked)) {
-				if (pos == null || this.breakingKept) {
+				if (pos == null || pos.equals(this.breakingKept)) {
 					return this.finish(pos == null ? Result.NOT_LOADED : Result.BLOCKED);
 				}
-				this.breakingKept = true;
+				this.breakingKept = pos;
 			}
 			this.walked = pos == null ? WorkApi.blockPos(this.at) : pos;
 			this.run.host().body().setBuildScaffold(this.takingDown ? spot -> false : spot -> !this.spots.containsKey(WorkApi.blockPos(spot)),
-				this.breakingKept ? spot -> false : this::inPlace);
+				pos != null && pos.equals(this.breakingKept) ? spot -> false : this::inPlace);
 			this.walk = MoveApi.reach(this.run.host(), target);
 			return false;
 		}

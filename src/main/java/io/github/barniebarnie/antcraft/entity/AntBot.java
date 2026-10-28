@@ -64,7 +64,9 @@ import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -133,10 +135,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 * called), for the next build to take down. Saved, until {@link #buildScaffoldUntil}.
 	 */
 	private final Map<String, Set<BlockPos>> buildScaffold = new HashMap<>();
-	/** How long, in ticks, the bot keeps the scaffold a build left before it drops it: five minutes. */
+	/** How long, in ticks, the bot keeps the scaffold a build left before it takes down what it can reach: five minutes. */
 	public static final int BUILD_SCAFFOLD_TICKS = 6000;
-	/** The {@link #tickCount} after which the bot drops {@link #buildScaffold}. Saved as the ticks left. */
-	// ponytail: dropped, not taken down: the dirt stays where no build came by in five minutes.
+	/** The {@link #tickCount} after which the bot takes {@link #buildScaffold} down. Saved as the ticks left. */
 	private int buildScaffoldUntil;
 	/** The game time the bot last worked on a build; see {@link #noteBuilding()}. Not saved. */
 	private long lastBuilt;
@@ -203,7 +204,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				this.setNoAi(!allowed);
 			}
 			if (!this.buildScaffold.isEmpty() && this.tickCount > this.buildScaffoldUntil) {
-				this.buildScaffold.clear();
+				this.takeDownExpiredScaffold(level);
 			}
 			if (this.home == null) {
 				this.home = this.blockPosition(); // where it was first spawned
@@ -329,9 +330,39 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return scaffold;
 	}
 
+	/**
+	 * Takes the scaffold no build came by to take down ({@link #BUILD_SCAFFOLD_TICKS}) down: the blocks in the bot's reach
+	 * that are still scaffold go at once, into its inventory; the rest is left standing.
+	 */
+	// ponytail: at once and only what is in reach, not walked to and broken tick by tick, as it happens once in five minutes at most.
+	private void takeDownExpiredScaffold(ServerLevel level) {
+		for (Set<BlockPos> scaffold : this.buildScaffold.values()) {
+			for (BlockPos pos : scaffold) {
+				BlockState state = level.getBlockState(pos);
+				if (state.getBlock().asItem().getDefaultInstance().is(PathFollower.FAST_SCAFFOLD_BLOCKS)
+					&& this.getEyePosition().distanceToSqr(Vec3.atCenterOf(pos)) <= MoveApi.REACH * MoveApi.REACH) {
+					for (ItemStack drop : Block.getDrops(state, level, pos, null)) {
+						ItemStack rest = this.getInventory().addItem(drop);
+						if (!rest.isEmpty()) {
+							Block.popResource(level, pos, rest);
+						}
+					}
+					level.destroyBlock(pos, false, this);
+				}
+			}
+		}
+		this.buildScaffold.clear();
+	}
+
 	/** Notes that the bot works on a build this tick: the bots it asked to make way keep off a while after ({@link #getLastBuilt}). */
 	public void noteBuilding() {
 		this.lastBuilt = this.level().getGameTime();
+	}
+
+	/** Whether the bot holds a job of {@code kind} it took off its colony's job board. */
+	public boolean holdsJob(String kind) {
+		return this.getColony().map(found -> found.colony().jobs().jobs(kind).stream()
+			.anyMatch(job -> job.taker().filter(this.getUUID()::equals).isPresent())).orElse(false);
 	}
 
 	/** The game time the bot last worked on a build ({@link #noteBuilding}). */

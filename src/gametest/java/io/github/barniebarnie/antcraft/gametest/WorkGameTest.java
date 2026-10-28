@@ -831,6 +831,46 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None"), () -> assertCobbleStep(helper, 0));
 	}
 
+	/**
+	 * Breaking through is for one step only (#391). The cobble step with its first cobblestone and stairs in place, the
+	 * bot in a glass corridor they end, glass round the second cobblestone's spot and in the air spot above it: no walk
+	 * sees that spot without breaking both blocks in place, so the bot breaks them, places the cobblestone and puts the
+	 * stairs back. The glass above, to be cleared, it then sees only from beyond a dirt wall of the corridor or by
+	 * breaking the stairs again, the shorter way; the walk there goes through the dirt and keeps the stairs.
+	 */
+	// Measured: passes at tick 68.
+	@GameTest(maxTicks = 140)
+	public void buildBreaksThroughBlocksInPlaceForOneStepOnly(GameTestHelper helper) {
+		BlockState stairs = Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.EAST);
+		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
+		helper.setBlock(3, 2, 3, stairs);
+		helper.setBlock(4, 2, 3, Blocks.GLASS);
+		for (BlockPos pos : List.of(new BlockPos(4, 1, 2), new BlockPos(4, 1, 4), new BlockPos(5, 1, 3), new BlockPos(0, 1, 3),
+			new BlockPos(1, 1, 2), new BlockPos(2, 1, 2), new BlockPos(3, 1, 2), new BlockPos(1, 1, 4), new BlockPos(3, 1, 4), new BlockPos(1, 1, 5),
+			new BlockPos(5, 1, 5), new BlockPos(2, 1, 6), new BlockPos(3, 1, 6), new BlockPos(4, 1, 6))) {
+			helper.setBlock(pos, Blocks.GLASS);
+			if (pos.getX() != 4 || pos.getZ() == 6) {
+				helper.setBlock(pos.above(), Blocks.GLASS);
+			}
+		}
+		helper.setBlock(2, 1, 4, Blocks.DIRT);
+		helper.setBlock(2, 2, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_AXE));
+		boolean[] backInPlace = {false};
+		helper.onEachTick(() -> {
+			boolean inPlace = helper.getBlockState(new BlockPos(3, 2, 3)).is(Blocks.OAK_STAIRS);
+			if (backInPlace[0] && !inPlace) {
+				helper.fail("the stairs were broken again");
+			}
+			backInPlace[0] |= inPlace && helper.getBlockState(new BlockPos(4, 1, 3)).is(Blocks.COBBLESTONE);
+		});
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n",
+			List.of("True None"), () -> assertCobbleStep(helper, 0));
+	}
+
 	/** A step too high to reach and nothing to pillar with but what the blueprint needs: blocked, and nothing placed up there. */
 	@GameTest(maxTicks = 40)
 	public void buildOutOfReachWithoutScaffoldIsBlocked(GameTestHelper helper) {

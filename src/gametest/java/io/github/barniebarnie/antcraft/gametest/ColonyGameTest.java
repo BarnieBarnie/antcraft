@@ -364,6 +364,37 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * As {@link #anIdleBotMakesWayOnceForABuildThatGoesOnAfterMissingIngredients}, with a builder whose fetch takes 300
+	 * ticks, longer than the hold after its last build: the idle bot keeps off the site while the builder holds its build
+	 * job (#391), and is asked once.
+	 */
+	@GameTest(maxTicks = 500)
+	public void anIdleBotKeepsOffWhileTheBuilderHoldsItsBuildJob(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		AntBot idle = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.05, 1, 3.5));
+		AntBot builder = member(helper, colony, 1, 1, 6);
+		WorkGameTest.carryCobbleStep(builder, 1);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		String build = "build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")";
+		BotScripts.run(builder, "job = take_job('build')\nprint(" + build + ".reason)\nwait(300)\nprint(" + build + ".reason)\nfinish_job(job['id'])\n");
+		boolean[] given = {false};
+		helper.onEachTick(() -> {
+			if (!given[0] && printed(builder).size() == 1) {
+				given[0] = true;
+				builder.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(printed(builder), List.of("missing_ingredients", "None"), "printed");
+			WorkGameTest.assertCobbleStep(helper, 0);
+			helper.assertValueEqual(idle.getWaysMade(), 1, "times the idle bot made way");
+		});
+	}
+
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
 	@GameTest(maxTicks = 80)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {

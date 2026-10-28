@@ -440,17 +440,28 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The scaffold a cancelled build left with the bot, kept through a save, is dropped {@link AntBot#BUILD_SCAFFOLD_TICKS}
-	 * later when that build is never called again: the bot's save holds none after.
+	 * The scaffold a cancelled build left with the bot, kept through a save, expires {@link AntBot#BUILD_SCAFFOLD_TICKS}
+	 * later when no build is called again (#391): the bot takes the dirt in its reach down into its inventory, leaves the
+	 * dirt out of reach standing, and its save holds none after.
 	 */
 	@GameTest(maxTicks = 20)
 	public void aLeftBuildScaffoldExpires(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
-		bot.leaveBuildScaffold("build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")", Set.of(helper.absolutePos(new BlockPos(3, 1, 3))));
+		helper.setBlock(2, 1, 6, Blocks.DIRT);
+		helper.setBlock(2, 2, 6, Blocks.DIRT);
+		helper.setBlock(6, 1, 1, Blocks.DIRT);
+		bot.leaveBuildScaffold("build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")",
+			Set.of(helper.absolutePos(new BlockPos(2, 1, 6)), helper.absolutePos(new BlockPos(2, 2, 6)), helper.absolutePos(new BlockPos(6, 1, 1))));
 		AntBot loaded = saveAndLoad(helper, bot);
 		helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "not saved: " + saved(helper, loaded));
 		loaded.tickCount += AntBot.BUILD_SCAFFOLD_TICKS;
-		helper.succeedWhen(() -> helper.assertFalse(saved(helper, loaded).contains("BuildScaffold"), "still saved: " + saved(helper, loaded)));
+		helper.succeedWhen(() -> {
+			helper.assertFalse(saved(helper, loaded).contains("BuildScaffold"), "still saved: " + saved(helper, loaded));
+			helper.assertBlockPresent(Blocks.AIR, 2, 1, 6);
+			helper.assertBlockPresent(Blocks.AIR, 2, 2, 6);
+			helper.assertBlockPresent(Blocks.DIRT, 6, 1, 1);
+			helper.assertValueEqual(loaded.getInventory().countItem(Items.DIRT), 2, "dirt carried");
+		});
 	}
 
 	private static CompoundTag saved(GameTestHelper helper, AntBot bot) {
