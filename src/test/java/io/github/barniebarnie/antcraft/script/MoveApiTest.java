@@ -140,7 +140,7 @@ class MoveApiTest {
 
 		@Override
 		public void forgetPortal(Pos portal) {
-			portals = portals.stream().filter(p -> !p.equals(portal)).toList();
+			portals = MoveApi.forget(portals, portal, dimension);
 		}
 
 		@Override
@@ -552,6 +552,35 @@ class MoveApiTest {
 		assertEquals(List.of("no_portal"), printed());
 		assertTrue(bot.pathStopped, "walk not stopped");
 		assertEquals(List.of(), bot.portals);
+	}
+
+	/** {@code travel} to another block of a gone remembered portal forgets it too (#361). */
+	@Test
+	void travelToAnotherBlockOfAGonePortalForgetsIt() {
+		Pos remembered = new Pos(10, 64, 10, "minecraft:overworld");
+		Pos other = new Pos(40, 64, 10, "minecraft:overworld");
+		bot.portals = List.of(remembered, other);
+		bot.noPortal = List.of(new Pos(10, 65, 10));
+		ScriptRun run = start("print(travel((10, 65, 10)).reason)\nprint(portals())\n");
+		tick(run);
+		tick(run);
+		assertEquals(List.of("no_portal", "[Pos(40, 64, 10)]"), printed());
+	}
+
+	/**
+	 * A gone portal is forgotten with every remembered portal in the bot's dimension within {@link MoveApi#SAME_PORTAL}
+	 * blocks of it along each axis; those further away, or in another dimension, are kept (#361).
+	 */
+	@Test
+	void forgettingAPortalForgetsTheSamePortalOnly() {
+		Pos gone = new Pos(10, 65, 10);
+		Pos sameBlock = new Pos(10, 65, 10).in("minecraft:overworld");
+		Pos near = new Pos(10 + MoveApi.SAME_PORTAL, 64, 10 - MoveApi.SAME_PORTAL).in("minecraft:overworld");
+		Pos far = new Pos(10 + MoveApi.SAME_PORTAL + 1, 65, 10).in("minecraft:overworld");
+		Pos nether = new Pos(10, 64, 10).in("minecraft:the_nether");
+		List<Pos> kept = MoveApi.forget(List.of(sameBlock, near, far, nether), gone, "minecraft:overworld");
+		assertEquals(List.of(far, nether), kept);
+		assertEquals("minecraft:the_nether", kept.get(1).dimension());
 	}
 
 	/** {@code portals()} lists the portals the bot went through, newest first, each with its dimension (#354). */

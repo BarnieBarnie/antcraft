@@ -454,10 +454,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.portals = List.copyOf(portals);
 	}
 
-	/** Forgets a portal remembered at {@code portal} in the bot's dimension: one found gone ({@code travel}). */
+	/** Forgets the portals remembered as the same portal as {@code portal} in the bot's dimension: one found gone ({@code travel}). */
 	public void forgetPortal(Pos portal) {
-		String dimension = this.level().dimension().identifier().toString();
-		this.portals = this.portals.stream().filter(p -> !(p.equals(portal) && dimension.equals(p.dimension()))).toList();
+		this.portals = MoveApi.forget(this.portals, portal, this.level().dimension().identifier().toString());
 	}
 
 	/**

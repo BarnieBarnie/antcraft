@@ -119,7 +119,7 @@ public final class MoveApi {
 			return false;
 		}
 
-		/** Forgets a nether portal remembered at {@code portal}, in the bot's dimension ({@link #portals}). */
+		/** Forgets the nether portals remembered as the same portal as {@code portal}, in the bot's dimension ({@link #forget}). */
 		default void forgetPortal(Pos portal) {
 		}
 
@@ -363,13 +363,25 @@ public final class MoveApi {
 		List<Pos> kept = new ArrayList<>();
 		kept.add(portal);
 		for (Pos old : portals) {
-			long apart = Math.max(Math.abs(old.x() - portal.x()), Math.max(Math.abs(old.y() - portal.y()), Math.abs(old.z() - portal.z())));
-			boolean same = Objects.equals(old.dimension(), portal.dimension()) && apart <= SAME_PORTAL;
-			if (!same && kept.size() < MAX_PORTALS) {
+			if (!samePortal(old, portal, portal.dimension()) && kept.size() < MAX_PORTALS) {
 				kept.add(old);
 			}
 		}
 		return List.copyOf(kept);
+	}
+
+	/**
+	 * {@code portals} without those that are the same portal as the gone one at {@code portal} in {@code dimension}, the
+	 * bot's: in that dimension and within {@link #SAME_PORTAL} blocks of it ({@code travel}, {@code no_portal}).
+	 */
+	public static List<Pos> forget(List<Pos> portals, Pos portal, String dimension) {
+		return portals.stream().filter(old -> !samePortal(old, portal, dimension)).toList();
+	}
+
+	/** Whether {@code old} is in {@code dimension} and within {@link #SAME_PORTAL} blocks of {@code portal} along each axis. */
+	private static boolean samePortal(Pos old, Pos portal, String dimension) {
+		long apart = Math.max(Math.abs(old.x() - portal.x()), Math.max(Math.abs(old.y() - portal.y()), Math.abs(old.z() - portal.z())));
+		return Objects.equals(old.dimension(), dimension) && apart <= SAME_PORTAL;
 	}
 
 	/**
