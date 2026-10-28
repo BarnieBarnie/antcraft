@@ -583,15 +583,16 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Fills the area with stone up to y 5, plants {@link #MINER_IRON} in the walls of the hall, founds a colony at (0, 6, 0)
 	 * whose colony_memory["mineshaft"] asks for a small shaft (one level at y 1, a branch each side of 2), with a stone pickaxe
-	 * for each of {@code miners} positions, ladders, torches and a chest in the core, and runs colony.miner on a member at each.
+	 * for each of {@code miners} positions, ladders, a trapdoor, torches and a chest in the core, and runs colony.miner on a member at each.
 	 */
 	private static List<AntBot> miners(GameTestHelper helper, Colony colony, BlockPos... at) {
 		Container core = container(helper, 0, 6, 0);
 		core.setItem(0, new ItemStack(Items.LADDER, 8));
 		core.setItem(1, new ItemStack(Items.TORCH, 8));
 		core.setItem(2, new ItemStack(Items.CHEST));
+		core.setItem(3, new ItemStack(Items.OAK_TRAPDOOR));
 		for (int i = 0; i < at.length; i++) {
-			core.setItem(3 + i, new ItemStack(Items.STONE_PICKAXE));
+			core.setItem(4 + i, new ItemStack(Items.STONE_PICKAXE));
 		}
 		List<AntBot> bots = new ArrayList<>();
 		for (BlockPos pos : at) {
@@ -625,14 +626,15 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		return top == null ? null : Values.repr(top);
 	}
 
-	/** Succeeds once the shaft at (3, 6, 3) is dug to y 1 and laddered, its hall mined and the iron in the core. */
+	/** Succeeds once the shaft at (3, 6, 3) is dug to y 1, laddered and shut, its hall mined and the iron in the core. */
 	private static void succeedWhenMined(GameTestHelper helper, Colony colony, Runnable more) {
 		Container core = container(helper, 0, 6, 0);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(Values.repr(pos(helper, 3, 6, 3)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
-			for (int y = 1; y <= 5; y++) {
+			for (int y = 1; y <= 4; y++) {
 				helper.assertBlockPresent(Blocks.LADDER, new BlockPos(3, y, 3));
 			}
+			helper.assertBlockPresent(Blocks.OAK_TRAPDOOR, new BlockPos(3, 5, 3));
 			for (int x = 5; x <= 7; x++) {
 				helper.assertTrue(helper.getBlockState(new BlockPos(x, 2, 3)).isAir(), "hall not dug at x " + x);
 			}

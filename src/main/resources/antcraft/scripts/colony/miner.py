@@ -3,9 +3,9 @@
 # (lib.shaft); then a "mine" job per level goes on the board, and each miner
 # takes one, mines a round of that level's branches (lib.mine), brings the ore
 # from the landing chest to the core and posts the level again, so the miners
-# take turns, the level mined least first. Ladders, torches, chests and
-# pickaxes come from the core. Run it on a colony member with
-# `/antcraft bot run colony.miner`.
+# take turns, the level mined least first. Ladders, a wooden trapdoor for the
+# hatch, torches, chests and pickaxes come from the core. Run it on a colony
+# member with `/antcraft bot run colony.miner`.
 #
 # The shaft is kept in colony_memory["mineshaft"]: top and levels once picked.
 # Set it before the first miner runs to choose the levels (heights) and the size

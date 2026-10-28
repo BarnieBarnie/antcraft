@@ -8,12 +8,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.level.block.Fallable;
 import org.jspecify.annotations.Nullable;
 
 /**
  * A block in a script, the {@code Block} type (docs/scripting.md, Types): {@code id} such as
  * {@code minecraft:oak_log}, {@code pos}, {@code is_air}, {@code is_fluid} (water or lava, flowing or not, and
- * waterlogged blocks), {@code tags}, the block's tags as selectors such as {@code #minecraft:logs}, and {@code state}, its
+ * waterlogged blocks), {@code falls} (a block that falls when nothing holds it up: gravel, sand, concrete powder, an
+ * anvil), {@code tags}, the block's tags as selectors such as {@code #minecraft:logs}, and {@code state}, its
  * block state properties by name (an int, a bool or a string, such as {@code {'age': 7}} for ripe wheat). A snapshot of
  * the block when it was read.
  */
@@ -37,6 +41,7 @@ public record BlockInfo(String id, Pos pos, boolean air, boolean fluid, List<Str
 			case "pos" -> pos;
 			case "is_air" -> air;
 			case "is_fluid" -> fluid;
+			case "falls" -> BuiltInRegistries.BLOCK.getValue(Identifier.parse(id)) instanceof Fallable;
 			case "tags" -> new PyList(new ArrayList<>(tags));
 			case "state" -> {
 				PyDict dict = new PyDict();

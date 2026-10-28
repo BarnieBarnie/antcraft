@@ -17,11 +17,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
@@ -37,9 +41,15 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	/** About twice the slowest pass measured (398 ticks). */
 	private static final int MAX_TICKS = 800;
 	private static final List<BlockPos> LANDINGS = List.of(new BlockPos(5, 3, 4), new BlockPos(3, 1, 4));
+	/**
+	 * Digs the shaft, retrying every second, and climbs out. The site is kept in memory up front, as {@code mineshaft} would
+	 * pick it in plain stone: {@code mineshaft} checks the halls, which run into the areas of the tests beside this one,
+	 * and their water or lava would move it (#387).
+	 */
 	private static final String SCRIPT = """
 		import lib.shaft
 		y = pos().y
+		memory["shaft"] = {"top": pos() + (3, 0, 3), "levels": [y - 3, y - 5]}
 		r = lib.shaft.dig_shaft([y - 3, y - 5])
 		while not r["ok"]:
 		    print(r["reason"], r["missing"])
@@ -58,11 +68,12 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		method.invoke(this, helper);
 	}
 
-	/** A bot on the ground with a stone pickaxe and {@code ladders} ladders, 2 torches and 2 chests. */
+	/** A bot on the ground with a stone pickaxe, {@code ladders} ladders, an oak trapdoor, 2 torches and 2 chests. */
 	private static AntBot miner(GameTestHelper helper, int ladders) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 6, 1);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
 		bot.getInventory().addItem(new ItemStack(Items.LADDER, ladders));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_TRAPDOOR));
 		bot.getInventory().addItem(new ItemStack(Items.TORCH, 2));
 		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
 		return bot;
@@ -70,7 +81,11 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 
 	/** Starts {@link #SCRIPT} on {@code bot} from the world's script folder, as {@code /antcraft bot run} does. */
 	private static void dig(GameTestHelper helper, AntBot bot) {
-		String name = BotScripts.libraryScript(helper, "shaft_", SCRIPT);
+		run(helper, bot, SCRIPT);
+	}
+
+	private static void run(GameTestHelper helper, AntBot bot, String script) {
+		String name = BotScripts.libraryScript(helper, "shaft_", script);
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 	}
@@ -86,8 +101,9 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * Succeeds once the script printed {@code printed}, the last line it prints, with a ladder facing north in every block of the column,
-	 * a torch and a chest at each landing, and the bot on the ground.
+	 * Succeeds once the script printed {@code printed}, the last line it prints, with a shut trapdoor in the hatch and a
+	 * ladder in every block of the column under it, both facing north, a torch and a chest at each landing, and the bot on
+	 * the ground.
 	 */
 	private static void succeedWhenDug(GameTestHelper helper, Supplier<AntBot> bot, List<String> printed) {
 		helper.succeedWhen(() -> {
@@ -103,7 +119,11 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		if (!log.equals(printed)) {
 			return "printed " + log;
 		}
-		for (BlockPos cell : COLUMN) {
+		BlockState hatch = helper.getBlockState(COLUMN.getFirst());
+		if (!hatch.is(BlockTags.WOODEN_TRAPDOORS) || hatch.getValue(TrapDoorBlock.OPEN) || hatch.getValue(TrapDoorBlock.FACING) != Direction.NORTH) {
+			return "no shut hatch";
+		}
+		for (BlockPos cell : COLUMN.subList(1, COLUMN.size())) {
 			BlockState state = helper.getBlockState(cell);
 			if (!state.is(Blocks.LADDER) || state.getValue(LadderBlock.FACING) != Direction.NORTH) {
 				return "no ladder at " + cell.toShortString();
@@ -175,7 +195,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		if (seed != 0) {
 			pockets(helper, seed);
 		}
-		AntBot bot = miner(helper, COLUMN.size());
+		AntBot bot = miner(helper, COLUMN.size() - 1);
 		dig(helper, bot);
 		failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> bot, List.of("dug True"));
@@ -241,7 +261,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	/** A bot saved once the column is past the first level resumes in the middle of its digging, and finishes. */
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aBotSavedHalfWayDownResumesAndFinishes(GameTestHelper helper) {
-		AntBot first = miner(helper, COLUMN.size());
+		AntBot first = miner(helper, COLUMN.size() - 1);
 		dig(helper, first);
 		AntBot[] bot = {first};
 		helper.onEachTick(() -> {
@@ -258,12 +278,12 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot with 3 ladders of the 5 the shaft takes stops before it digs, with what it lacks; given 2 more, it digs the
+	 * A bot with 2 ladders of the 4 the shaft takes stops before it digs, with what it lacks; given 2 more, it digs the
 	 * shaft.
 	 */
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aBotWithoutEnoughLaddersSaysWhatItLacksAndGoesOnOnceGivenThem(GameTestHelper helper) {
-		AntBot bot = miner(helper, 3);
+		AntBot bot = miner(helper, 2);
 		dig(helper, bot);
 		String lacks = "missing_ingredients {'minecraft:ladder': 2}";
 		boolean[] given = {false};
@@ -276,5 +296,58 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		});
 		failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> bot, List.of(lacks, "dug True"));
+	}
+
+	/** A water source in the ground beside the hatch is walled off before the bot digs the hatch, and the shaft is dug (#387). */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aWaterSourceBesideTheHatchIsSealed(GameTestHelper helper) {
+		helper.setBlock(4, 5, 5, Blocks.WATER);
+		digsAShaftSealing(helper, new BlockPos(4, 5, 5));
+	}
+
+	/** Lava flowing towards the column is walled off once the column reaches it, and the shaft is dug (#387). */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void lavaFlowingIntoTheColumnIsSealed(GameTestHelper helper) {
+		helper.setBlock(4, 4, 6, Blocks.LAVA);
+		helper.setBlock(4, 4, 5, Blocks.AIR);
+		digsAShaftSealing(helper, new BlockPos(4, 4, 5));
+	}
+
+	/** A bot digs the shaft in plain stone but for a fluid that runs into {@code sealed}, which ends up walled off. */
+	private static void digsAShaftSealing(GameTestHelper helper, BlockPos sealed) {
+		AntBot bot = miner(helper, COLUMN.size() - 1);
+		dig(helper, bot);
+		failOnError(helper, () -> bot);
+		succeedWhenDug(helper, () -> {
+			helper.assertTrue(helper.getBlockState(sealed).getFluidState().isEmpty(), "no wall at " + sealed.toShortString());
+			return bot;
+		}, List.of("dug True"));
+	}
+
+	/** A husk in a cave the deepest landing opens up attacks the bot, and does not stop the dig for good (#387). */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aHuskInTheShaftDoesNotStopTheDig(GameTestHelper helper) {
+		helper.setBlock(3, 1, 4, Blocks.AIR);
+		helper.setBlock(3, 2, 4, Blocks.AIR);
+		Husk husk = helper.spawn(EntityTypes.HUSK, 3, 1, 4);
+		AntBot bot = miner(helper, COLUMN.size() - 1);
+		dig(helper, bot);
+		failOnError(helper, () -> bot);
+		succeedWhenDug(helper, () -> {
+			helper.assertTrue(bot.getLastHurtByMob() == husk, "the husk never hit the bot");
+			return bot;
+		}, List.of("dug True"));
+	}
+
+	/** The bot climbs out through the shut hatch, back down to the deepest landing and out again; the hatch is shut after (#387). */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void theBotPassesTheShutHatchBothWays(GameTestHelper helper) {
+		AntBot bot = miner(helper, COLUMN.size() - 1);
+		run(helper, bot, SCRIPT + """
+			print("down", lib.shaft.to_level(y - 5).ok, pos().y == y - 5)
+			print("up", lib.shaft.to_surface().ok)
+			""");
+		failOnError(helper, () -> bot);
+		succeedWhenDug(helper, () -> bot, List.of("dug True", "down True True", "up True"));
 	}
 }

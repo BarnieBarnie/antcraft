@@ -2,21 +2,22 @@
 # lib.shaft.dig_shaft([40, 20]), lib.shaft.to_level(20), lib.shaft.to_surface().
 # A module of the mod's default library (lib/).
 #
-# The shaft is the one mineshaft() picks: a column of ladders under its top, a
-# chamber at each level with a torch and a chest. Which shaft is kept in
-# memory["shaft"]; how far it is dug is read from the world, so a bot that is
-# reloaded, restarted or given more ladders goes on where it stopped.
+# The shaft is the one mineshaft() picks: a column of ladders under its top, shut
+# by a wooden trapdoor in the hatch, a chamber at each level with a torch and a
+# chest. Which shaft is kept in memory["shaft"]; how far it is dug is read from
+# the world, so a bot that is reloaded, restarted or given more ladders goes on
+# where it stopped.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
 LADDER = "minecraft:ladder"
+# What shuts the hatch, so mobs and players do not fall in: bots open it to climb through.
+HATCH = ("#minecraft:wooden_trapdoors",)
 TORCHES = ("minecraft:torch", "minecraft:wall_torch")
 CHEST = "minecraft:chest"
 # What it walls fluid, air and falling blocks off with: what digging stone gives.
 FILL = ["cobblestone", "cobbled_deepslate", "dirt", "stone", "deepslate", "andesite", "diorite", "granite", "tuff", "netherrack"]
-# ponytail: the common falling blocks, not concrete powder or anvils.
-FALLING = ("minecraft:gravel", "minecraft:suspicious_gravel", "minecraft:sand", "minecraft:red_sand", "minecraft:suspicious_sand")
 # Reasons to try a step again: a reflex took over (a mob, lava), it was slow, or
 # something passed through the block, such as falling gravel.
 AGAIN = ("interrupted", "timeout", "blocked")
@@ -44,20 +45,32 @@ def shaft(levels=None):
 
 
 def column(m):
-    """The cells of the column, from the hatch down: a ladder goes in each, the hatch's too, to climb out by."""
+    """The cells of the column, from the hatch down: a ladder goes in each, and the trapdoor in the hatch."""
     return [m["hatch"]] + [ladder[0] for ladder in m["ladders"]]
 
 
 def is_block(p, ids):
+    """Whether the block at p is one of ids, block ids or tags."""
     b = block(p)
-    return b is not None and b.id in ids
+    return b is not None and (b.id in ids or any([t in ids for t in b.tags]))
+
+
+def is_fluid(p):
+    b = block(p)
+    return b is not None and b.is_fluid
+
+
+def done(p, m):
+    """Whether the column cell p has its ladder, or its trapdoor in the hatch."""
+    return is_block(p, HATCH if p == m["hatch"] else (LADDER,))
 
 
 def missing(m):
-    """The ladders, torches and chests the rest of the shaft takes that the bot does not carry, and a pickaxe."""
+    """The ladders, trapdoor, torches and chests the rest of the shaft takes that the bot does not carry, and a pickaxe."""
     need = {}
     wants = {
-        LADDER: len([c for c in column(m) if not is_block(c, (LADDER,))]),
+        LADDER: len([c for c in column(m)[1:] if not is_block(c, (LADDER,))]),
+        HATCH[0]: 0 if is_block(m["hatch"], HATCH) else 1,
         "minecraft:torch": len([y for y in m["levels"] if not is_block(m["level"][y]["landing"], TORCHES)]),
         CHEST: len([y for y in m["levels"] if not is_block(m["level"][y]["chest"], (CHEST,))]),
     }
@@ -76,9 +89,9 @@ def seal(p, stand):
         b = block(p)
         if b is None:
             return result("not_loaded", p)
-        if pos() != stand and (b.id in FALLING or b.is_air or b.is_fluid):
+        if pos() != stand and (b.falls or b.is_air or b.is_fluid):
             goto(stand)  # rather than a way the action would dig to see p
-        if b.id in FALLING:
+        if b.falls:
             r = mine(p)
             wait(4)  # what was on it falls in
         elif b.is_air or b.is_fluid:
@@ -104,9 +117,14 @@ def dig(p, opened, stand, fall=False):
         if b is None:
             return result("not_loaded", p)
         if b.is_fluid and pos() != p:
-            failure = seal(p, stand)  # a fluid is not mined: fill it, then dig the block
+            # Walls off what flows in beside p first, such as a pond by the hatch, and waits for p to drain: filled
+            # alone, p would fill again once dug. Else fills p, a fluid is not mined, and digs the block.
+            sides = [s for s in (p.north(), p.south(), p.east(), p.west()) if s not in opened and is_fluid(s)]
+            failure = seal(sides[0] if sides else p, stand)
             if failure:
                 return failure
+            if sides:
+                wait(10)
             continue
         if not b.is_air and not b.is_fluid and b.id != LADDER and b.id not in TORCHES:
             if pos() != stand:
@@ -146,12 +164,21 @@ def put_block(p, item, ids, facing=None):
     return result("timeout", p)
 
 
-def ladders(cells, lowest):
-    """Puts a ladder into each cell of the column at or above the height lowest that has none. A bot places no block
-    where it stands, so the ladders go in two blocks above its feet as it digs down, and the last two from a landing."""
-    for p in cells:
-        if p.y >= lowest and not is_block(p, (LADDER,)):
-            failure = put_block(p, "ladder", (LADDER,), "north")
+def ladders(m, lowest):
+    """Puts a ladder into each cell of the column at or above the height lowest that has none, and the trapdoor into the
+    hatch. A bot places no block where it stands, so they go in two blocks above its feet as it digs down, and the last
+    two from a landing."""
+    for p in column(m):
+        if p.y >= lowest and not done(p, m):
+            if p != m["hatch"]:
+                failure = put_block(p, "ladder", (LADDER,), "north")
+            else:
+                failure = None
+                if is_block(p, (LADDER,)):
+                    r = mine(p)  # put in to climb in by from the rim
+                    failure = None if r else result(r.reason, p)
+                # Facing north like the ladders, which a bot climbs it through by.
+                failure = failure or put_block(p, HATCH[0], HATCH, "north")
             if failure:
                 return failure
     return None
@@ -205,8 +232,8 @@ def dig_landing(level, cell, opened):
 
 def dig_shaft(levels):
     """Digs the ladder shaft down to the heights levels (see mineshaft), top down: each block of the column, a ladder in
-    each, and at each level its chamber with a torch and a chest. Walls water, lava and air off and digs out what falls
-    in. Ends in the chamber of the deepest level. Gives result(): ok, or the reason it stopped (no_site where no shaft
+    each, a trapdoor in the hatch, and at each level its chamber with a torch and a chest. Walls water, lava and air off
+    and digs out what falls in. Ends in the chamber of the deepest level. Gives result(): ok, or the reason it stopped (no_site where no shaft
     can be dug, missing_ingredients with missing, the items it lacks, before it digs at all, or an action's reason with
     at, where)."""
     m = shaft(levels)
@@ -222,7 +249,7 @@ def dig_shaft(levels):
         opened = opened + [level["landing"], level["landing"].up(), level["chest"]]
     above = m["top"]
     for p in cells:
-        if not is_block(p, (LADDER,)):
+        if not done(p, m):
             # The bot stands on p, mines it and falls in.
             failure = dig(p, opened, above, True)
             if failure:
@@ -230,7 +257,7 @@ def dig_shaft(levels):
             if pos().y > p.y:
                 failure = put_block(p, "ladder", (LADDER,), "north")  # it stood on the rim of the hole: climb in by it
             else:
-                failure = ladders(cells, pos().y + 2)
+                failure = ladders(m, pos().y + 2)
             if failure:
                 return failure
         # A chamber is dug from the cell under its level, where the bot stays in the middle of the column: from the
@@ -245,7 +272,7 @@ def dig_shaft(levels):
     if failure:
         return failure
     goto(deepest["landing"])
-    return ladders(cells, cells[-1].y) or result()
+    return ladders(m, cells[-1].y) or result()
 
 
 def to_level(level):
