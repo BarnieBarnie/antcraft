@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.JsonParser;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
-import io.github.barniebarnie.antcraft.network.ColonyNetworking;
+import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import io.github.barniebarnie.antcraft.work.VanillaData;
 import io.netty.buffer.Unpooled;
 import java.io.IOException;
@@ -133,7 +133,7 @@ class BlueprintSummaryTest {
 		assertEquals(new Vec3i(32, 32, 32), summary.size());
 		assertFalse(summary.materials().isEmpty());
 		RegistryFriendlyByteBuf buf = buffer();
-		ColonyNetworking.BlueprintList.STREAM_CODEC.encode(buf, new ColonyNetworking.BlueprintList(List.of(summary)));
+		BlueprintNetworking.BlueprintList.STREAM_CODEC.encode(buf, new BlueprintNetworking.BlueprintList(List.of(summary)));
 		assertTrue(buf.readableBytes() < 4096, buf.readableBytes() + " bytes");
 	}
 
@@ -141,28 +141,28 @@ class BlueprintSummaryTest {
 	@Test
 	void theBlocksOfTheLargestStructureFitInOnePayload() {
 		BlueprintBlocks big = cube(48, 20000);
-		List<ColonyNetworking.BlueprintBlocksReply> replies = ColonyNetworking.BlueprintBlocksReply.of(big);
-		assertEquals(List.of(new ColonyNetworking.BlueprintBlocksReply(big, 0, 1)), replies);
+		List<BlueprintNetworking.BlueprintBlocksReply> replies = BlueprintNetworking.BlueprintBlocksReply.of(big);
+		assertEquals(List.of(new BlueprintNetworking.BlueprintBlocksReply(big, 0, 1)), replies);
 		RegistryFriendlyByteBuf buf = buffer();
-		ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, replies.getFirst());
-		assertTrue(buf.readableBytes() < ColonyNetworking.PAYLOAD_LIMIT / 2, buf.readableBytes() + " bytes");
-		assertEquals(big, ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf).blocks());
+		BlueprintNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, replies.getFirst());
+		assertTrue(buf.readableBytes() < BlueprintNetworking.PAYLOAD_LIMIT / 2, buf.readableBytes() + " bytes");
+		assertEquals(big, BlueprintNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf).blocks());
 	}
 
 	/** Blocks too many for one payload are sent in parts, each well under the limit, which the client puts back together. */
 	@Test
 	void blocksTooManyForAPayloadAreSentInPartsAndPutBackTogether() {
 		BlueprintBlocks huge = cube(80, 20000);
-		List<ColonyNetworking.BlueprintBlocksReply> replies = ColonyNetworking.BlueprintBlocksReply.of(huge);
+		List<BlueprintNetworking.BlueprintBlocksReply> replies = BlueprintNetworking.BlueprintBlocksReply.of(huge);
 		assertTrue(replies.size() > 1, replies.size() + " parts");
 		BlueprintBlocksCache cache = new BlueprintBlocksCache();
 		assertEquals(Optional.empty(), cache.get(huge.id(), id -> true));
-		for (ColonyNetworking.BlueprintBlocksReply reply : replies.reversed()) {
+		for (BlueprintNetworking.BlueprintBlocksReply reply : replies.reversed()) {
 			assertEquals(Optional.empty(), cache.get(huge.id(), id -> true), "whole before every part arrived");
 			RegistryFriendlyByteBuf buf = buffer();
-			ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, reply);
-			assertTrue(buf.readableBytes() < ColonyNetworking.PAYLOAD_LIMIT, buf.readableBytes() + " bytes");
-			ColonyNetworking.BlueprintBlocksReply decoded = ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf);
+			BlueprintNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, reply);
+			assertTrue(buf.readableBytes() < BlueprintNetworking.PAYLOAD_LIMIT, buf.readableBytes() + " bytes");
+			BlueprintNetworking.BlueprintBlocksReply decoded = BlueprintNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf);
 			assertEquals(reply, decoded);
 			cache.receive(decoded.blocks(), decoded.part(), decoded.parts());
 		}
@@ -228,34 +228,34 @@ class BlueprintSummaryTest {
 
 	@Test
 	void blueprintListRoundTripsThroughItsStreamCodec() throws IOException {
-		ColonyNetworking.BlueprintList list = new ColonyNetworking.BlueprintList(List.of(bundled("cobble_step"), bundled("starter_house"),
+		BlueprintNetworking.BlueprintList list = new BlueprintNetworking.BlueprintList(List.of(bundled("cobble_step"), bundled("starter_house"),
 			new BlueprintSummary(id("farm"), "blueprint.antcraft.farm", Optional.of(Blueprint.Role.FARM), Vec3i.ZERO, new LinkedHashMap<>())));
 		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
-		ColonyNetworking.BlueprintList.STREAM_CODEC.encode(buf, list);
-		assertEquals(list, ColonyNetworking.BlueprintList.STREAM_CODEC.decode(buf));
+		BlueprintNetworking.BlueprintList.STREAM_CODEC.encode(buf, list);
+		assertEquals(list, BlueprintNetworking.BlueprintList.STREAM_CODEC.decode(buf));
 		assertEquals(0, buf.readableBytes());
 	}
 
 	@Test
 	void blueprintBlocksRequestAndReplyRoundTripThroughTheirStreamCodecs() throws IOException {
-		ColonyNetworking.BlueprintBlocksRequest request = new ColonyNetworking.BlueprintBlocksRequest(id("starter_house"));
+		BlueprintNetworking.BlueprintBlocksRequest request = new BlueprintNetworking.BlueprintBlocksRequest(id("starter_house"));
 		RegistryFriendlyByteBuf buf = buffer();
-		ColonyNetworking.BlueprintBlocksRequest.STREAM_CODEC.encode(buf, request);
-		assertEquals(request, ColonyNetworking.BlueprintBlocksRequest.STREAM_CODEC.decode(buf));
+		BlueprintNetworking.BlueprintBlocksRequest.STREAM_CODEC.encode(buf, request);
+		assertEquals(request, BlueprintNetworking.BlueprintBlocksRequest.STREAM_CODEC.decode(buf));
 		for (BlueprintBlocks blocks : List.of(bundledBlocks("starter_house"), bundledBlocks("cobble_step"), new BlueprintBlocks(id("lost"), Vec3i.ZERO, List.of()))) {
-			ColonyNetworking.BlueprintBlocksReply reply = new ColonyNetworking.BlueprintBlocksReply(blocks, 0, 1);
-			ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, reply);
-			assertEquals(reply, ColonyNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf));
+			BlueprintNetworking.BlueprintBlocksReply reply = new BlueprintNetworking.BlueprintBlocksReply(blocks, 0, 1);
+			BlueprintNetworking.BlueprintBlocksReply.STREAM_CODEC.encode(buf, reply);
+			assertEquals(reply, BlueprintNetworking.BlueprintBlocksReply.STREAM_CODEC.decode(buf));
 			assertEquals(0, buf.readableBytes());
 		}
 	}
 
 	@Test
 	void chooseBlueprintRoundTripsThroughItsStreamCodec() {
-		ColonyNetworking.ChooseBlueprint choose = new ColonyNetworking.ChooseBlueprint(InteractionHand.OFF_HAND, id("cobble_step"));
+		BlueprintNetworking.ChooseBlueprint choose = new BlueprintNetworking.ChooseBlueprint(InteractionHand.OFF_HAND, id("cobble_step"));
 		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
-		ColonyNetworking.ChooseBlueprint.STREAM_CODEC.encode(buf, choose);
-		assertEquals(choose, ColonyNetworking.ChooseBlueprint.STREAM_CODEC.decode(buf));
+		BlueprintNetworking.ChooseBlueprint.STREAM_CODEC.encode(buf, choose);
+		assertEquals(choose, BlueprintNetworking.ChooseBlueprint.STREAM_CODEC.decode(buf));
 	}
 
 	@Test

@@ -15,7 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jspecify.annotations.Nullable;
 
-/** The heart of a colony: placing it founds a colony, its storage holds what the bots gather. */
+/** The heart of a colony: placing it founds a colony, and it stores items like a double chest. */
 public class ColonyCoreBlock extends BaseEntityBlock {
 	public ColonyCoreBlock(Properties properties) {
 		super(properties);
@@ -29,21 +29,14 @@ public class ColonyCoreBlock extends BaseEntityBlock {
 		}
 	}
 
-	/**
-	 * A colony a player founds starts its starter projects and is owned by that player; one placed otherwise, such as
-	 * by a test, starts with no projects and no owner.
-	 */
+	/** A colony a player founds is owned by that player; one placed otherwise, such as by a test, has no owner. */
 	@Override
 	public void setPlacedBy(Level level, BlockPos pos, BlockState state, @Nullable LivingEntity by, ItemStack stack) {
 		super.setPlacedBy(level, pos, state, by, stack);
 		if (level instanceof ServerLevel serverLevel) {
-			ColonyManager manager = ColonyManager.get(serverLevel);
-			manager.byCore(pos).ifPresent(colony -> {
-				if (by instanceof Player player) {
-					colony.setOwner(player.getUUID());
-				}
-				manager.startProjects(serverLevel, colony);
-			});
+			if (by instanceof Player player) {
+				ColonyManager.get(serverLevel).byCore(pos).ifPresent(colony -> colony.setOwner(player.getUUID()));
+			}
 		}
 	}
 

@@ -48,10 +48,10 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 3)));
 
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null, "still walking");
+			helper.assertTrue(GameTests.walked(bot), "still walking");
 			int cobble = bot.getInventory().countItem(Items.COBBLESTONE) + (bot.getMainHandItem().is(Items.COBBLESTONE) ? 1 : 0);
 			helper.assertTrue(cobble > 0, "mined stone did not drop cobblestone");
 		});

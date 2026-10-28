@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotLog;
+import io.github.barniebarnie.antcraft.script.DefaultScripts;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -20,13 +21,15 @@ import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.gametest.framework.GameTestHelper;
-import net.minecraft.world.Container;
-import net.minecraft.world.item.Items;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 
-/** Bots running scripts (docs/scripting.md, milestone 2): output, budget, errors, reloading and the goals they replace. */
+/** Bots running scripts (docs/scripting.md, milestones 2 and 4): output, budget, errors, reloading, and idle.py for every bot without a script. */
 public class ScriptGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -144,32 +147,81 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	/**
-	 * A colony bot running a script leaves the colony's work alone: the cobblestone beside it stays where it is. Without
-	 * the script, it stores it in the core within 40 ticks (see {@code AntBotGameTest.colonyBotLeavesAnItemJustOutsideItsTestAreaAlone}).
-	 */
-	@GameTest(maxTicks = 100)
-	public void aBotRunningAScriptDoesNoColonyWork(GameTestHelper helper) {
+	/** Fails at once when {@code bot}'s script fails, rather than waiting out the test. */
+	private static void failOnError(GameTestHelper helper, AntBot bot) {
+		helper.onEachTick(() -> {
+			List<String> errors = bot.getLog().last(BotLog.CAPACITY, Output.Level.ERROR).stream()
+				.filter(entry -> entry.level() == Output.Level.ERROR).map(BotLog.Entry::text).toList();
+			if (!errors.isEmpty()) {
+				helper.fail("script error: " + errors);
+			}
+		});
+	}
+
+	/** Succeeds once {@code bot} runs {@code idle.py} and has stood at {@code home} for 20 ticks. */
+	private static void succeedWhenIdleAtHome(GameTestHelper helper, AntBot bot, BlockPos home) {
+		int[] homeTicks = {0};
+		helper.onEachTick(() -> {
+			ScriptRun run = bot.getScript();
+			boolean idle = run != null && run.name().equals(DefaultScripts.IDLE) && run.running();
+			homeTicks[0] = idle && bot.blockPosition().equals(home) ? homeTicks[0] + 1 : 0;
+		});
+		helper.succeedWhen(() -> {
+			ScriptRun run = bot.getScript();
+			helper.assertTrue(run != null && run.name().equals(DefaultScripts.IDLE), "bot runs " + (run == null ? "nothing" : run.name()));
+			helper.assertTrue(homeTicks[0] >= 20, "bot not home 20 ticks, at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+		});
+	}
+
+	/** A bot that never ran a script runs {@code idle.py}: it walks home and waits there. */
+	@GameTest(maxTicks = 120)
+	public void aBotThatNeverRanAScriptWalksHomeAndWaits(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
+		bot.setHome(home);
+		failOnError(helper, bot);
+		succeedWhenIdleAtHome(helper, bot, home);
+	}
+
+	/** A colony member whose script is stopped with {@code /antcraft bot stop} runs {@code idle.py} and walks home. */
+	@GameTest(maxTicks = 140)
+	public void aColonyBotWhoseScriptIsStoppedRunsIdle(GameTestHelper helper) {
 		helper.setBlock(1, 1, 1, ModBlocks.COLONY_CORE);
 		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow();
-		colony.setStockTargets(List.of());
-		helper.spawnItem(Items.COBBLESTONE, new BlockPos(6, 1, 4));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.setHome(home);
 		BotScripts.run(bot, "while True:\n    wait(10)\n");
-		Container core = (Container) helper.getBlockEntity(new BlockPos(1, 1, 1), BlockEntity.class);
-		helper.onEachTick(() -> {
-			helper.assertFalse(bot.isWorking(), "bot took colony work");
-			helper.assertTrue(core.countItem(Items.COBBLESTONE) == 0, "core got the cobblestone");
-		});
-
-		helper.runAfterDelay(80, () -> {
-			helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(6, 1, 4), 1.0);
-			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
-			// Stopping the script gives the bot back to its colony.
+		failOnError(helper, bot);
+		helper.runAfterDelay(10, () -> {
+			helper.assertTrue(bot.isRunningScript() && bot.getScript().name().equals("test"), "bot runs " + bot.getScript().name());
 			BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " stop");
-			helper.assertFalse(bot.isRunningScript(), "script not stopped");
-			helper.succeed();
 		});
+		succeedWhenIdleAtHome(helper, bot, home);
+	}
+
+	/**
+	 * A bot saved by an older version, in a colony and with a job's role, its scaffold and a walk target, loads and runs
+	 * {@code idle.py}; the fields it no longer knows are ignored.
+	 */
+	@GameTest(maxTicks = 120)
+	public void aBotSavedWithColonyWorkLoadsAndRunsIdle(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
+		bot.setHome(home);
+		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+		bot.saveWithoutId(output);
+		bot.discard();
+		CompoundTag saved = output.buildResult();
+		saved.store("Colony", UUIDUtil.CODEC, UUID.randomUUID());
+		saved.putString("Role", "miner");
+		saved.putBoolean("RoleSetByPlayer", true);
+		saved.store("WalkTarget", BlockPos.CODEC, helper.absolutePos(new BlockPos(1, 1, 6)));
+		saved.store("Scaffold", BlockPos.CODEC.listOf(), List.of(helper.absolutePos(new BlockPos(3, 1, 3))));
+		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), saved));
+		failOnError(helper, copy);
+		succeedWhenIdleAtHome(helper, copy, home);
 	}
 }

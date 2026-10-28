@@ -2,23 +2,16 @@ package io.github.barniebarnie.antcraft.client;
 
 import io.github.barniebarnie.antcraft.blueprint.BlueprintGhost;
 import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
-import io.github.barniebarnie.antcraft.blueprint.PreviewRefusal;
 import io.github.barniebarnie.antcraft.client.render.GhostRenderer;
-import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
-import io.github.barniebarnie.antcraft.colony.SiteRules;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
-import io.github.barniebarnie.antcraft.network.ColonyNetworking;
 import java.util.Optional;
-import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.phys.BlockHitResult;
@@ -26,23 +19,15 @@ import net.minecraft.world.phys.HitResult;
 
 /**
  * The ghost of the blueprint a held Blueprint is set to, where the player looks: turned with a key or by scrolling while
- * sneaking, mirrored with another key, red where the server would refuse it as far as the client knows, and placed with a
- * right-click (see {@link BlueprintItem#setPlacer}). The client learns the nearest colony it may place for, and its rules,
- * from the server ({@link ColonyNetworking.SiteRulesRequest}) every second while it holds a Blueprint.
+ * sneaking, and mirrored with another key. Placing it for a colony to build is gone with the goal-driven colony; building
+ * comes back as a script action in milestone 7 of docs/scripting.md.
  */
 public final class BlueprintPreview {
-	/** How often, in ticks, the client asks for the colony's rules while it holds a Blueprint. */
-	private static final int RULES_INTERVAL = 20;
-
 	private static Rotation rotation = Rotation.NONE;
 	private static Mirror mirror = Mirror.NONE;
-	private static volatile Optional<SiteRules> rules = Optional.empty();
-	private static int ticks;
-	private static final PreviewRefusal REFUSAL = new PreviewRefusal();
 
 	private BlueprintPreview() {
 	}
-
 	/** The blueprint the player's Blueprint is set to, the main hand first, if they hold one set to a blueprint. */
 	static Optional<ChosenBlueprint> held(Player player) {
 		for (InteractionHand hand : InteractionHand.values()) {
@@ -62,7 +47,7 @@ public final class BlueprintPreview {
 		return ClientBlueprints.blocks(chosen.id()).map(blueprint -> BlueprintGhost.centredOn(blueprint, BlueprintGhost.target(looked, face), rotation, mirror));
 	}
 
-	/** Each client tick: the turn and mirror keys, and asking for the rules while a Blueprint is held. */
+	/** Each client tick: the turn and mirror keys while a Blueprint is held. */
 	static void tick(Minecraft client, KeyMapping rotate, KeyMapping flip) {
 		boolean holding = client.player != null && held(client.player).isPresent();
 		while (rotate.consumeClick()) {
@@ -74,13 +59,6 @@ public final class BlueprintPreview {
 			if (holding) {
 				mirror = BlueprintGhost.flip(mirror);
 			}
-		}
-		if (!holding) {
-			ticks = 0;
-			return;
-		}
-		if (ticks++ % RULES_INTERVAL == 0 && ClientPlayNetworking.canSend(ColonyNetworking.SiteRulesRequest.TYPE)) {
-			ClientPlayNetworking.send(new ColonyNetworking.SiteRulesRequest());
 		}
 	}
 
@@ -102,49 +80,19 @@ public final class BlueprintPreview {
 		return true;
 	}
 
-	/** The colony's rules the server last sent. */
-	static void setRules(Optional<SiteRules> received) {
-		rules = received;
-	}
-
-	/** Forgets the rules and resets the turn, on leaving the server. */
+	/** Resets the turn, on leaving the server. */
 	static void reset() {
-		rules = Optional.empty();
 		rotation = Rotation.NONE;
 		mirror = Mirror.NONE;
-		REFUSAL.reset();
 	}
 
-	/**
-	 * Draws the ghost at the block the player looks at, red if it would be refused, which is worked out only when the
-	 * placement or the rules change ({@link PreviewRefusal}); called where the client collects what to draw for the frame.
-	 */
+	/** Draws the ghost at the block the player looks at; called where the client collects what to draw for the frame. */
 	static void draw(Minecraft client, LevelRenderContext context) {
 		HitResult hit = client.hitResult;
 		if (client.player == null || !(hit instanceof BlockHitResult block) || hit.getType() != HitResult.Type.BLOCK) {
 			return;
 		}
 		held(client.player).flatMap(chosen -> ghost(chosen, block.getBlockPos(), block.getDirection())).ifPresent(ghost ->
-			GhostRenderer.submit(context, ghost, ghost::blocks, REFUSAL.get(ghost, rules).isPresent() ? GhostRenderer.REFUSED : GhostRenderer.VALID));
-	}
-
-	/**
-	 * Asks the server to place the held blueprint where its ghost stands for the right-click {@code context}. With no colony
-	 * known to place for, says so on the action bar instead; any other refusal is the server's to give.
-	 */
-	static void place(UseOnContext context) {
-		Optional<ChosenBlueprint> chosen = BlueprintItem.chosen(context.getItemInHand());
-		Optional<BlueprintGhost> ghost = chosen.flatMap(blueprint -> ghost(blueprint, context.getClickedPos(), context.getClickedFace()));
-		Player player = context.getPlayer();
-		if (ghost.isEmpty() || player == null || !ClientPlayNetworking.canSend(ColonyNetworking.PlaceBlueprint.TYPE)) {
-			return;
-		}
-		Optional<SiteRules> known = rules;
-		if (known.isEmpty()) {
-			player.sendOverlayMessage(BlueprintPlacement.Refusal.NO_COLONY.message().copy().withStyle(ChatFormatting.RED));
-			return;
-		}
-		BlueprintGhost placed = ghost.get();
-		ClientPlayNetworking.send(new ColonyNetworking.PlaceBlueprint(known.get().core(), chosen.get().id(), placed.at(), placed.rotation(), placed.mirror()));
+			GhostRenderer.submit(context, ghost, ghost::blocks, GhostRenderer.VALID));
 	}
 }

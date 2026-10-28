@@ -17,7 +17,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 
 /**
  * The blocks of a blueprint's structure, which a client asks for when it previews the blueprint
- * ({@link io.github.barniebarnie.antcraft.network.ColonyNetworking.BlueprintBlocksRequest}) rather than getting those of
+ * ({@link io.github.barniebarnie.antcraft.network.BlueprintNetworking.BlueprintBlocksRequest}) rather than getting those of
  * every blueprint with the list. The blocks are the structure's own, of the palette the blueprint builds, relative to its origin, unturned, without
  * air and inside its size, kept in layer order (by y, then z, then x); turn them with
  * {@link io.github.barniebarnie.antcraft.work.RegionPlan#placed} and {@link BlockState#mirror}/{@link BlockState#rotate}
@@ -30,7 +30,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.Block> blocks) {
 	/**
 	 * The most bytes the blocks may take in one part of a reply, well under the game's limit for a payload to a client (see
-	 * {@link io.github.barniebarnie.antcraft.network.ColonyNetworking#PAYLOAD_LIMIT}); see {@link #parts()}.
+	 * {@link io.github.barniebarnie.antcraft.network.BlueprintNetworking#PAYLOAD_LIMIT}); see {@link #parts()}.
 	 */
 	public static final int MAX_BLOCK_BYTES = 900_000;
 

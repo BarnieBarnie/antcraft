@@ -4,18 +4,18 @@ A quick tour of the codebase for new contributors. For the gameplay design and r
 
 ## What it is
 
-AntCraft is a server-side Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot entities (`AntBot`) that join a colony (a Colony Core block) and, all alike, work through a shared job board: chopping trees, mining, farming, crafting, hauling and building. Milestone M5, the blueprint builder, is in progress.
+AntCraft is a Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot entities (`AntBot`) that run scripts written in a small subset of Python: the script decides what a bot does, through actions such as `goto`, `mine` and `craft` and senses such as `find_nearest`. A bot without a script runs `idle.py` (walk home, wait). The design and milestones are in [docs/scripting.md](docs/scripting.md); the goal-driven colony it replaced was removed in milestone 4.
 
 ## Source sets
 
 | Directory | Purpose |
 |-----------|---------|
 | `src/main/java` | Mod logic, runs on the server (about 13k lines) |
-| `src/client/java` | Client only: the bot renderer and the colony screen (`K` key) |
+| `src/client/java` | Client only: the bot renderer, the blueprint picker and its preview ghost |
 | `src/test/java` | JUnit unit tests for pure logic |
 | `src/gametest/java` | Fabric GameTests: real bots on a headless server |
 | `src/main/resources` | `fabric.mod.json`, lang, textures, recipes, tags, loot tables |
-| `tools/skins.py` | Generates the bot skins, one per kind of job (needs Pillow) |
+| `tools/skins.py` | Generates the work skins under `textures/entity/bot/` (needs Pillow) |
 | `scripts/check.sh` | Gradle wrapper that prints a short PASS/FAIL summary |
 
 The main package is `io.github.barniebarnie.antcraft`.
@@ -24,41 +24,29 @@ The main package is `io.github.barniebarnie.antcraft`.
 
 All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
 
-- **`AntCraft.java`**: the entrypoint. It loads the config, registers blocks, entities, items, commands and networking, and hooks `ColonyManager.tick` into `END_LEVEL_TICK`. Start reading here.
+- **`AntCraft.java`**: the entrypoint. It loads the config and registers blocks, entities, items, commands, scripts, blueprints and networking. Start reading here.
 - **`config/`**: `AntCraftConfig` reads `config/antcraft.properties` and holds the fair-play gate, `botsAllowed(server)`. Dedicated servers must opt in.
 - **`registry/`**: `ModBlocks`, `ModEntities`, `ModItems`. Plain registration.
-- **`block/`, `item/`**: `ColonyCoreBlock` and its block entity (54 slots), and `BotCoreItem`, which activates a bot.
+- **`block/`, `item/`**: `ColonyCoreBlock` and its block entity (54 slots), `BotCoreItem`, which activates a bot, and `BlueprintItem`, which picks a blueprint.
 - **`entity/`**
-  - `AntBot`: the mob itself, with a 27-slot inventory, the type of its last job (for its skin), home, colony id and scaffold bookkeeping. `registerGoals()` lists every goal in priority order, so it shows how a bot "thinks".
-  - `Tools` (picks the best tool or weapon), `BotSkins`.
-  - `goal/`: `WorkerGoal`, every colony bot's work loop, and the executors it runs jobs on (`LumberjackGoal`, `MinerGoal`, `FarmerGoal`, `BuilderGoal`, `CrafterGoal`, `HaulerGoal`), plus:
-    - `ColonyWorkGoal`: the shared base class of the executors. It handles travel, reach, tool upgrades, and the work a bot does between jobs (`upkeep`).
-    - `WorkerGoal`: claims the best job by `JobScore` and runs it on the `Executor` of its type; with no job it does the work between jobs, such as storing, arming and taking scaffolding down.
-  - `navigation/`: `PathFollower` carries out paths step by step (dig, place scaffold, move); `BlockBreaker` breaks blocks over time like a player.
+  - `AntBot`: the mob itself, with a 27-slot inventory, home, owner, colony id, its script and log and the scripts' `memory`. Each tick it runs its script (or `idle.py`), before its few vanilla goals (float, fight, look around).
+  - `BotBody` (what move actions do with a bot), `BotHands` (mining, placing, using, dropping and picking up, as a player would), `BotChunks` (chunk tickets), `Tools` (picks the best tool or weapon), `BotSkins`.
+  - `navigation/`: `PathFollower` carries out paths step by step (dig, place scaffold, move, open doors); `BlockBreaker` breaks blocks over time like a player; `LineOfSight`.
+- **`script/`**: the scripting runtime. `lang/` is the language (tokenizer, parser, compiler, pausable VM, builtins), pure and unit-tested. `ScriptRun` runs one script on a bot a tick at a time; `BotApi` registers the natives, split into `MoveApi`, `SenseApi`, `WorkApi` and `CraftApi`; `ScriptLibrary`, `ServerScripts` and `DefaultScripts` load the script folders and copy `idle.py`.
 - **`pathing/`**: a custom A* (`PathFinder`) over the `WorldView` interface. `LevelWorldView` backs it with a live world; tests use `GridWorld`. `MoveType`, `Step`, `Path` and `Goal` describe moves and targets.
-- **`colony/`**: the colony's brain.
-  - `ColonyManager`: the `SavedData` holding all colonies in a level. Its `tick()` runs a **survey** every 5 seconds per colony: it releases stale claims, rechecks blocked steps, surveys crops, the mine, builds, storage, stock and trees.
-  - `Colony`: a colony's persistent state, saved with Codecs. Note the `withAlternative` codecs, which keep old saves loading. Do not break them.
-  - `JobBoard`, `Job`, `JobType`, `JobScore`: the blackboard. Each job has at most one bot, and each bot at most one job.
-  - `TaskPlanner` (an order into crafting steps), `StockPlanner` (stock targets into orders), `Stockkeeping` (what moves between the core and storage). These are generic over the item type, so they can be unit-tested without a game.
-  - `Territory`, `TripClaims`, `ToolUpgrade`, `DefaultStock`.
-  - `ColonyActions`: changes a player makes. Commands and the screen share it, and it validates client input.
-  - `ColonyStatus`: one snapshot used by both `/antcraft colony info` and the screen, so the two never disagree.
-- **`work/`**: world logic and plain-data plans.
-  - `BuildPlan`: ordered clear and place steps, split into batches. Progress lives in the world: a step is done once the world matches it.
-  - `Mineshaft`, `Terraform`, `RegionPlan` (`build copy`, `build load`), `StorageArea`, `Field`: generators for plans and sites.
-  - `TreeScanner`, `Replanting`, `TreeRetry`, `OreRevisit`, `Revisit`: tree and ore logic and retry bookkeeping.
-  - `Storage` (moving items between inventories), `GameRecipeBook` (the real recipes behind the `TaskPlanner` interface), `ToolKind`, `PickaxeTier`, `Fuels`.
+- **`colony/`**: `Colony` (core, members, radius, owner, trusted players; saved with a Codec that ignores the fields older versions wrote), `ColonyManager` (the `SavedData` holding a level's colonies), `ColonyActions` (who may change a colony), `BotActivation` (a Bot Core into a bot), and `TaskPlanner` (an order into crafting steps, generic over the item type so it is unit-tested without a game).
+- **`work/`**: world logic and plain-data plans the actions build on or will: `BuildPlan` (ordered clear and place steps in batches; progress lives in the world), `RegionPlan` (structures into plans), `Mineshaft`, `OreVein`, `Mining`, `Storage` (moving items between containers, crafting from one), `Crafting`, `GameRecipeBook` (the real recipes behind `TaskPlanner`), `ToolKind`, `PickaxeTier`, `Fuels`.
+- **`blueprint/`**: the blueprint library loaded from data packs, and what the picker and preview ghost need of it.
 - **`command/`**: `AntCraftCommands`, the whole `/antcraft` Brigadier tree.
-- **`network/`**: `ColonyNetworking`, the payload records between the screen and the server.
+- **`network/`**: `BlueprintNetworking`, the payload records between the blueprint picker and the server.
 
 ## Runtime flow
 
-1. A player places a Colony Core, and `ColonyManager.create` makes a colony.
-2. A Bot Core used within 32 blocks of it spawns an `AntBot`, which joins the colony.
-3. Every 5 seconds the survey posts jobs (trees, crops, branches, builds), and places orders.
-4. Each bot's `WorkerGoal` claims a job from the board, finds a path, does the work and brings the loot to the core. Between jobs bots move surplus to the storage chests.
-5. Everything persists through Codecs in `Colony` and `AntBot` (`ValueInput` and `ValueOutput`).
+1. A player uses a Bot Core: an `AntBot` spawns, owned by that player, and joins the nearest colony they may change, if any.
+2. On its first tick the bot has no script, so it runs `idle.py`: it walks home, where it spawned, and waits.
+3. `/antcraft bot run <script>` starts a script instead. Each tick `ScriptRun` resumes the current action (a walk, a dig) and, once it is done, runs the script on within its instruction budget until the next action pauses it.
+4. When the script ends, fails or is stopped, the bot runs `idle.py` again.
+5. Everything persists through Codecs in `Colony` and `AntBot` (`ValueInput` and `ValueOutput`); scripts themselves are not saved yet (milestone 5).
 
 ## Workflow rules
 
@@ -76,7 +64,7 @@ These come from [CLAUDE.md](CLAUDE.md).
 ```sh
 scripts/check.sh                       # full build, the same as CI
 scripts/check.sh test                  # unit tests
-scripts/check.sh runGameTest -PgameTest='antcraft-gametest:miner_game_test*'
+scripts/check.sh runGameTest -PgameTest='antcraft-gametest:work_game_test*'
 ./gradlew runClient                    # play-test
 ```
 
@@ -98,6 +86,6 @@ Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case
 
 ## Good first places to start
 
-- **Add a job type**: implement `WorkerGoal.Executor` and register it in `WorkerGoal`, following the existing executors.
-- **M5 leftovers**: importing Litematica files into a `BuildPlan`, and material lists for imported structures. `RegionPlan.load` (`.nbt`) is the closest example, and it can be unit-tested.
-- **Small, isolated logic** in `work/` or the colony planners, covered by unit tests, for fast feedback.
+- **Add a script action or sense**: follow `WorkApi` or `SenseApi`, with a game test per reason code it returns (see `WorkGameTest`).
+- **The language**: a builtin or method scripts are missing, in `script/lang`, covered by unit tests, for fast feedback.
+- **Small, isolated logic** in `work/` or `pathing/`, covered by unit tests.

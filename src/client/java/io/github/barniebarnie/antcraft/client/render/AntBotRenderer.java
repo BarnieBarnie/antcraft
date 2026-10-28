@@ -16,7 +16,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.PlayerModelType;
 import net.minecraft.world.entity.player.PlayerSkin;
 
-/** Renders bots with the player model, in the skin of the kind of job they took last (see {@link BotSkins}). */
+/** Renders bots with the player model, in their skin (see {@link BotSkins}). */
 public class AntBotRenderer extends HumanoidMobRenderer<AntBot, AvatarRenderState, PlayerModel> {
 	private static final Map<Identifier, PlayerSkin> SKINS = new HashMap<>();
 
@@ -37,7 +37,7 @@ public class AntBotRenderer extends HumanoidMobRenderer<AntBot, AvatarRenderStat
 	@Override
 	public void extractRenderState(AntBot entity, AvatarRenderState state, float partialTicks) {
 		super.extractRenderState(entity, state, partialTicks);
-		state.skin = SKINS.computeIfAbsent(BotSkins.texture(entity.getJobType(), entity.getUUID()),
+		state.skin = SKINS.computeIfAbsent(BotSkins.texture(entity.getUUID()),
 			texture -> new PlayerSkin(new ClientAsset.ResourceTexture(texture), null, null, PlayerModelType.WIDE, true));
 		state.showCape = false;
 	}

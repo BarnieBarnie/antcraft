@@ -5,8 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.mojang.serialization.JsonOps;
-import io.github.barniebarnie.antcraft.colony.StockPlanner;
-import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -286,20 +284,6 @@ class MineshaftTest {
 	}
 
 	@Test
-	void anOpenOrderMakesTheLevelOfItsIngredientsChosen() {
-		List<Integer> levels = List.of(16, -16, -58);
-		List<StockPlanner.Target<Item>> coal = List.of(new StockPlanner.Target<>(item -> item == Items.COAL, List.of(), 32));
-		assertEquals(Optional.of(16), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(Set.of(), coal, Map.of())));
-		Set<Item> diamondPickaxe = Stockkeeping.wantedForOrders(Map.of(Items.DIAMOND_PICKAXE, 1), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
-		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(levels, Stockkeeping.wanted(diamondPickaxe, coal, Map.of())));
-		// An iron pickaxe wants raw iron, so a level with iron beats the deeper one without.
-		List<StockPlanner.Target<Item>> gold = List.of(new StockPlanner.Target<>(item -> item == Items.RAW_GOLD, List.of(), 8));
-		assertEquals(Optional.of(-58), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(Set.of(), gold, Map.of())));
-		Set<Item> ironPickaxe = Stockkeeping.wantedForOrders(Map.of(Items.IRON_PICKAXE, 1), Map.of(), VanillaData.recipeBook(), VanillaData.gatherable());
-		assertEquals(Optional.of(16), Mineshaft.chooseLevel(List.of(16, -58), Stockkeeping.wanted(ironPickaxe, gold, Map.of())));
-	}
-
-	@Test
 	void minesOnlyWhileTheColonyWantsWhatMiningYields() {
 		assertFalse(Mineshaft.yieldsWanted(item -> false));
 		assertFalse(Mineshaft.yieldsWanted(item -> item == Items.OAK_LOG || item == Items.WHEAT));
@@ -370,16 +354,16 @@ class MineshaftTest {
 	}
 
 	@Test
-	void siteBesideTheCoreKeepsClearOfStorageAndField() {
+	void siteBesideTheCoreKeepsClearOfTheAreasToAvoid() {
 		BlockPos core = new BlockPos(0, 64, 0);
 		List<Integer> levels = List.of(40);
 		Mineshaft first = Mineshaft.nextTo(core, levels, List.of(), ROCK);
-		// Storage was chosen first, right where the shaft would go.
-		StorageArea storage = new StorageArea(first.top().offset(-1, 0, 0));
-		Field field = new Field(core.offset(-4, -1, -4));
-		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(storage.area(), field.area()), ROCK);
-		assertFalse(shaft.area().intersects(storage.area()), "shaft overlaps storage at " + shaft.top());
-		assertFalse(shaft.area().intersects(field.area()), "shaft overlaps the field at " + shaft.top());
+		// An area right where the shaft would go, and another beside the core.
+		BoundingBox taken = BoundingBox.fromCorners(first.top().offset(-1, 0, -1), first.top().offset(1, 1, 1));
+		BoundingBox other = BoundingBox.fromCorners(core.offset(-6, -1, -6), core.offset(-2, -1, -2));
+		Mineshaft shaft = Mineshaft.nextTo(core, levels, List.of(taken, other), ROCK);
+		assertFalse(shaft.area().intersects(taken), "shaft overlaps the first area at " + shaft.top());
+		assertFalse(shaft.area().intersects(other), "shaft overlaps the second area at " + shaft.top());
 	}
 
 	/** The positions of a batch's steps, but for the walls and floors it keeps solid. */

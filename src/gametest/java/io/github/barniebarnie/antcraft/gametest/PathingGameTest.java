@@ -1,18 +1,10 @@
 package io.github.barniebarnie.antcraft.gametest;
 
-import io.github.barniebarnie.antcraft.colony.Colony;
-import io.github.barniebarnie.antcraft.colony.ColonyManager;
-import io.github.barniebarnie.antcraft.colony.Job;
-import io.github.barniebarnie.antcraft.colony.JobType;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
-import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.work.LevelTreeView;
-import io.github.barniebarnie.antcraft.work.Mineshaft;
-import io.github.barniebarnie.antcraft.work.Terraform;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
@@ -94,13 +86,13 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	private static void succeedWhenAt(GameTestHelper helper, AntBot bot, BlockPos relativeTarget) {
 		BlockPos target = helper.absolutePos(relativeTarget);
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null, "still walking, at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(GameTests.walked(bot), "still walking, at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			helper.assertTrue(bot.blockPosition().distManhattan(target) <= 1, "stopped at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 		});
 	}
 
 	/**
-	 * Path searches and colony surveys read blocks through {@link LoadedBlocks}: the blocks of loaded chunks as the level
+	 * Path searches and block scans read blocks through {@link LoadedBlocks}: the blocks of loaded chunks as the level
 	 * has them, and nothing of a chunk that is not loaded, which stays unloaded, rather than holding up the tick loading it.
 	 */
 	@GameTest(maxTicks = 5)
@@ -118,7 +110,6 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		int z = SectionPos.blockToSectionCoord(far.getZ());
 		helper.assertFalse(level.hasChunk(x, z), "the far chunk is loaded already");
 		helper.assertTrue(blocks.loaded(far) == null, "a state for a chunk that is not loaded");
-		helper.assertFalse(new LevelTreeView(level).isLog(far), "a log in a chunk that is not loaded");
 		helper.assertFalse(level.hasChunk(x, z), "the far chunk was loaded");
 		helper.succeed();
 	}
@@ -128,7 +119,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		room(helper, 0);
 		fill(helper, 4, 1, 1, 4, 6, 6, Blocks.DIRT);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 3)));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 1, 3));
 	}
@@ -143,7 +134,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 4, 1, 1, 4, 7, 5, Blocks.OAK_FENCE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_AXE));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 1)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 1)));
 
 		helper.onEachTick(() -> {
 			for (int y = 1; y <= 7; y++) {
@@ -164,7 +155,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 4, 1, 1, 4, 7, 5, Blocks.IRON_BARS);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_PICKAXE));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 1)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 1)));
 
 		helper.onEachTick(() -> {
 			for (int y = 1; y <= 7; y++) {
@@ -186,7 +177,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	public void climbsALadderUpThroughAShutTrapdoorAndShutsIt(GameTestHelper helper) {
 		BlockPos hatch = hatch(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 5, 1)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 5, 1)));
 
 		succeedWhenThroughTheHatch(helper, bot, new BlockPos(3, 5, 1), hatch);
 	}
@@ -196,7 +187,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	public void climbsALadderDownThroughAShutTrapdoorAndShutsIt(GameTestHelper helper) {
 		BlockPos hatch = hatch(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 5, 1);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 1, 1)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 1, 1)));
 
 		succeedWhenThroughTheHatch(helper, bot, new BlockPos(3, 1, 1), hatch);
 	}
@@ -217,7 +208,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	private static void succeedWhenThroughTheHatch(GameTestHelper helper, AntBot bot, BlockPos relativeTarget, BlockPos hatch) {
 		BlockPos target = helper.absolutePos(relativeTarget);
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			helper.assertTrue(helper.getBlockState(hatch).is(Blocks.OAK_TRAPDOOR), "the trapdoor is gone");
 			helper.assertFalse(helper.getBlockState(hatch).getValue(TrapDoorBlock.OPEN), "left the trapdoor open");
 			for (int y = 1; y <= 3; y++) {
@@ -233,7 +224,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		scaffoldingColumn(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
 		// Near the block above the top, so standing on the top is the only way to get there.
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 6, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 6, 3)));
 
 		succeedWhenAtWithTheColumnStanding(helper, bot, new BlockPos(3, 5, 3));
 	}
@@ -244,7 +235,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		room(helper, 0);
 		scaffoldingColumn(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 5, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 1, 1)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 1, 1)));
 
 		succeedWhenAtWithTheColumnStanding(helper, bot, new BlockPos(3, 1, 2));
 	}
@@ -267,7 +258,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().equals(target) && bot.onGround(), "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().equals(target) && bot.onGround(), "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			helper.assertFalse(bot.isShiftKeyDown(), "still sneaking");
 		});
 	}
@@ -284,11 +275,11 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(3, y, 3, Blocks.VINE.defaultBlockState().setValue(VineBlock.SOUTH, true));
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(3, 4, 5)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 4, 5)));
 
 		BlockPos target = helper.absolutePos(new BlockPos(3, 4, 5));
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			for (int y = 1; y <= 3; y++) {
 				helper.assertTrue(helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.VINE), "the vine is gone at y " + y);
 			}
@@ -305,11 +296,11 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(door, lower);
 		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 3)));
 
 		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			helper.assertTrue(helper.getBlockState(door).is(Blocks.OAK_DOOR), "the door is gone");
 			helper.assertFalse(helper.getBlockState(door).getValue(DoorBlock.OPEN), "left the door open");
 		});
@@ -319,7 +310,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * Like {@link #walksThroughAClosedDoorAndShutsIt}, but counts the door's state changes: open once, shut once, no
 	 * flicker while the bot walks up to it. Both facings, so the shut panel is once on the near and once on the far side.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 60)
 	public void opensAndShutsADoorFacingEastOnceOnTheWayThrough(GameTestHelper helper) {
 		opensAndShutsADoorOnce(helper, Direction.EAST);
 	}
@@ -379,7 +370,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * whole room, the doorway is on the floor with a hole above it, and the bot drops into it from the step, and the
 	 * door opens and shuts once.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 70)
 	public void opensAndShutsADoorOnceDroppingIntoIt(GameTestHelper helper) {
 		room(helper, 0);
 		fill(helper, 1, 1, 1, 3, 1, 6, Blocks.BEDROCK);
@@ -396,7 +387,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	/** Sends the bot to {@code relativeTarget} and succeeds once it is there and the door opened and shut once on the way. */
 	private static void succeedWhenThroughTheDoorOnce(GameTestHelper helper, AntBot bot, BlockPos door, BlockPos relativeTarget) {
 		BlockPos target = helper.absolutePos(relativeTarget);
-		bot.setWalkTarget(target);
+		// Into the target block itself: stopping as soon as it is within a block of it can leave the bot in the swing of the door.
+		GameTests.walkTo(bot, target, 0);
 
 		// Counts every open and shut, also one undone in the same tick, which a once-a-tick look at the door would miss.
 		BlockPos at = helper.absolutePos(door);
@@ -429,8 +421,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
-			helper.assertTrue(changes[0] == 2, "the door changed state " + changes[0] + " times");
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(changes[0] == 2, "the door changed state " + changes[0] + " times, bot at " + bot.position().subtract(Vec3.atLowerCornerOf(helper.absolutePos(BlockPos.ZERO))));
 			listeners.unregister(counter);
 		});
 	}
@@ -443,11 +435,11 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		BlockPos gate = new BlockPos(4, 1, 3);
 		helper.setBlock(gate, Blocks.OAK_FENCE_GATE.defaultBlockState().setValue(FenceGateBlock.FACING, Direction.EAST));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 1, 3)));
 
 		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getWalkTarget() == null && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(target) <= 1, "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
 			helper.assertFalse(helper.getBlockState(gate).getValue(FenceGateBlock.OPEN), "left the gate open");
 		});
 	}
@@ -465,13 +457,13 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(door, lower);
 		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 1, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 1, 3)));
 
 		// Waits a few ticks in the doorway first, so the walk has wholly ended before the bot leaves.
 		boolean[] left = {false};
 		int[] waited = {0};
 		helper.onEachTick(() -> {
-			if (left[0] || bot.getWalkTarget() != null || ++waited[0] < 5) {
+			if (left[0] || !GameTests.walked(bot) || ++waited[0] < 5) {
 				return;
 			}
 			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(door)), "stopped at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)) + ", not in the doorway");
@@ -499,12 +491,12 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(door, lower);
 		helper.setBlock(door.above(), lower.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 1, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 1, 3)));
 
 		boolean[] left = {false};
 		int[] waited = {0};
 		helper.onEachTick(() -> {
-			if (left[0] || bot.getWalkTarget() != null || ++waited[0] < 5) {
+			if (left[0] || !GameTests.walked(bot) || ++waited[0] < 5) {
 				return;
 			}
 			helper.assertTrue(helper.getBlockState(door).getValue(DoorBlock.OPEN), "shut the door on the bot");
@@ -530,7 +522,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 3, 1, 1, 4, 3, 6, Blocks.AIR);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 4, 3);
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 16));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 4, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 4, 3)));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
 	}
@@ -541,43 +533,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 5, 1, 1, 6, 3, 6, Blocks.BEDROCK);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 16));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 4, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 4, 3)));
 
-		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
-	}
-
-	/**
-	 * As {@link #pillarsUpToLedge}, but a colony's mineshaft hall runs along z=3 at the bot's feet and a branch
-	 * leaves it at x=4, right where the bot would pillar. It gets onto the ledge without placing a block in them.
-	 */
-	@GameTest(maxTicks = 120)
-	public void pillarsAroundMineshaftHallsAndBranches(GameTestHelper helper) {
-		room(helper, 0);
-		fill(helper, 5, 1, 1, 6, 3, 6, Blocks.BEDROCK);
-		helper.setBlock(6, 1, 6, ModBlocks.COLONY_CORE);
-		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(6, 1, 6))).orElseThrow();
-		colony.setStockTargets(List.of());
-		// An old shaft whose level at y=1 lands at (7, 1, 3), with its hall running west along z=3.
-		int level = helper.absolutePos(new BlockPos(0, 1, 0)).getY();
-		Mineshaft shaft = new Mineshaft(helper.absolutePos(new BlockPos(7, 5, 3)), List.of(level), Mineshaft.DEFAULT_BRANCHES_PER_SIDE,
-			Mineshaft.DEFAULT_BRANCH_LENGTH, Mineshaft.DEFAULT_TORCH_SPACING, Mineshaft.DEFAULT_ROUNDS, Mineshaft.Layout.STAIRCASE);
-		colony.setMineshaft(shaft);
-		colony.removeBuild(shaft.plan());
-		Set<BlockPos> open = new HashSet<>();
-		shaft.hall(level).forEach(cell -> open.addAll(List.of(cell, cell.above())));
-		shaft.branches(level).forEach(branch -> open.addAll(branch.cells()));
-		helper.assertTrue(open.contains(helper.absolutePos(new BlockPos(4, 1, 3))), "the hall does not run through the pillar spot");
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 16));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 4, 3)));
-
-		helper.onEachTick(() -> {
-			for (BlockPos pos : open) {
-				if (helper.getLevel().getBlockState(pos).is(Blocks.COBBLESTONE)) {
-					helper.fail("placed a block in the mineshaft at " + TestPositions.relative(helper, pos).toShortString());
-				}
-			}
-		});
 		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
 	}
 
@@ -592,18 +549,18 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 1, 1, 4, 6, 7, 6, Blocks.BEDROCK);
 		AntBot owner = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		owner.getInventory().addItem(new ItemStack(Items.DIRT, 16));
-		owner.setWalkTarget(helper.absolutePos(new BlockPos(3, 4, 3)));
+		GameTests.walkTo(owner, helper.absolutePos(new BlockPos(3, 4, 3)));
 		AntBot other = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
 		Set<BlockPos> pillar = new HashSet<>();
 		helper.onEachTick(() -> {
-			if (pillar.isEmpty() && owner.getWalkTarget() == null) {
+			if (pillar.isEmpty() && GameTests.walked(owner)) {
 				for (int y = 1; y <= 6; y++) {
 					if (helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.DIRT)) {
 						pillar.add(new BlockPos(3, y, 3));
 					}
 				}
 				helper.assertFalse(pillar.isEmpty(), "the owner did not pillar");
-				other.setWalkTarget(helper.absolutePos(new BlockPos(6, 1, 3)));
+				GameTests.walkTo(other, helper.absolutePos(new BlockPos(6, 1, 3)));
 			}
 			for (BlockPos pos : pillar) {
 				if (!helper.getBlockState(pos).is(Blocks.DIRT)) {
@@ -613,7 +570,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertFalse(pillar.isEmpty(), "the owner has not pillared yet");
-			helper.assertTrue(other.getWalkTarget() == null, "the other bot is still walking");
+			helper.assertTrue(GameTests.walked(other), "the other bot is still walking");
 		});
 	}
 
@@ -623,7 +580,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		room(helper, 2);
 		fill(helper, 1, 1, 1, 5, 2, 5, Blocks.WATER);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 2, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 3, 6)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 3, 6)));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 3, 6));
 	}
@@ -638,7 +595,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		room(helper, 2);
 		fill(helper, 2, 1, 1, 5, 2, 6, Blocks.WATER);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 3, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 3, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 3, 3)));
 		double startX = 3.5;
 		double endX = 5.0;
 		long[] crossed = {-1, -1};
@@ -676,7 +633,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(3, 4, 3, Blocks.WATER);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 5);
 		// Let the waterfall run down before planning.
-		helper.runAfterDelay(40, () -> bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 5, 3))));
+		helper.runAfterDelay(40, () -> GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 5, 3))));
 
 		succeedWhenAt(helper, bot, new BlockPos(5, 5, 3));
 	}
@@ -696,7 +653,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(2, 10, 3, Blocks.BEDROCK);
 		helper.setBlock(3, 10, 3, Blocks.WATER);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 5);
-		helper.runAfterDelay(60, () -> bot.setWalkTarget(helper.absolutePos(new BlockPos(5, 11, 3))));
+		helper.runAfterDelay(60, () -> GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 11, 3))));
 		double startY = 3.0;
 		double endY = 8.0;
 		long[] crossed = {-1, -1};
@@ -731,7 +688,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(5, 1, 3, Blocks.WATER);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
 		// Let the water flow down the channel before planning.
-		helper.runAfterDelay(40, () -> bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 2, 3))));
+		helper.runAfterDelay(40, () -> GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 2, 3))));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 2, 3));
 	}
@@ -749,121 +706,9 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		fill(helper, 3, 1, 1, 5, 1, 6, Blocks.WATER);
 		fill(helper, 6, 1, 1, 6, 1, 6, Blocks.BEDROCK);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, fall + 1, 3);
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(6, 2, 3)));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 2, 3)));
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt by the fall"));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 2, 3));
-	}
-
-	/**
-	 * Ground at y=1..2 that a terraform levels at y=2, with a hill left on it, and a bedrock wall across it but for a gap
-	 * at the far end. Returns the colony that levels it.
-	 */
-	private static Colony levelledGroundBehindAWall(GameTestHelper helper) {
-		fill(helper, 0, 0, 0, 15, 0, 15, Blocks.STONE);
-		fill(helper, 0, 1, 0, 15, 2, 15, Blocks.DIRT);
-		fill(helper, 8, 3, 0, 8, 5, 14, Blocks.BEDROCK);
-		helper.setBlock(14, 3, 14, Blocks.DIRT);
-		helper.setBlock(15, 3, 15, ModBlocks.COLONY_CORE);
-		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(15, 3, 15))).orElseThrow();
-		colony.setRadius(16);
-		colony.setStockTargets(List.of());
-		int height = helper.absolutePos(new BlockPos(0, 2, 0)).getY();
-		colony.addBuild(Terraform.plan(helper.getLevel()::getBlockState, helper.absolutePos(new BlockPos(0, 1, 0)),
-			helper.absolutePos(new BlockPos(15, 4, 15)), height).orElseThrow());
-		return colony;
-	}
-
-	/**
-	 * A bot with a golden shovel walks past the wall of {@link #levelledGroundBehindAWall}. Digging under the wall is
-	 * quicker than walking round, but the ground is as the terraform wants it and no step of it, so nothing would fill
-	 * the holes: the bot walks round.
-	 */
-	private static void walksRoundTheWall(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 3, 0);
-		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(10, 3, 0)));
-
-		helper.onEachTick(() -> {
-			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
-				if (!helper.getBlockState(pos).is(Blocks.DIRT)) {
-					helper.fail("dug a hole in the levelled ground at " + pos.toShortString());
-				}
-			}
-		});
-		succeedWhenAt(helper, bot, new BlockPos(10, 3, 0));
-	}
-
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
-	public void walksRoundRatherThanDigIntoLevelledGround(GameTestHelper helper) {
-		levelledGroundBehindAWall(helper);
-		walksRoundTheWall(helper);
-	}
-
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
-	public void walksRoundRatherThanDigIntoGroundLevelledBefore(GameTestHelper helper) {
-		Colony colony = levelledGroundBehindAWall(helper);
-		// The hill dug, and every batch of the terraform done.
-		helper.setBlock(14, 3, 14, Blocks.AIR);
-		colony.postBuildJobs();
-		for (Job job : colony.board().jobs().stream().filter(job -> job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA).toList()) {
-			colony.finishBatch(job.id());
-			colony.board().complete(job.id());
-		}
-		helper.assertTrue(colony.builds().isEmpty(), "the terraform is not done: " + colony.builds());
-		walksRoundTheWall(helper);
-	}
-
-	/**
-	 * A bot with no blocks to pillar on at the bottom of a pit 3 deep in ground a terraform levels: it cannot get out
-	 * without digging into that ground, so it may, from inside it.
-	 */
-	@GameTest(maxTicks = 300)
-	public void getsOutOfAPitInLevelledGround(GameTestHelper helper) {
-		fill(helper, 0, 1, 0, 7, 3, 7, Blocks.DIRT);
-		fill(helper, 3, 1, 3, 3, 3, 3, Blocks.AIR);
-		helper.setBlock(6, 4, 6, Blocks.DIRT);
-		helper.setBlock(7, 4, 7, ModBlocks.COLONY_CORE);
-		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(7, 4, 7))).orElseThrow();
-		colony.setStockTargets(List.of());
-		int height = helper.absolutePos(new BlockPos(0, 3, 0)).getY();
-		colony.addBuild(Terraform.plan(helper.getLevel()::getBlockState, helper.absolutePos(new BlockPos(0, 1, 0)),
-			helper.absolutePos(new BlockPos(6, 5, 6)), height).orElseThrow());
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(0, 4, 0)));
-
-		succeedWhenAt(helper, bot, new BlockPos(0, 4, 0));
-	}
-
-	/**
-	 * A bot with no blocks at the bottom of a pit 2 deep in the levelled ground of {@link #levelledGroundBehindAWall},
-	 * beside the wall. Tunnelling under the wall is quicker than walking round, but from the pit the bot may break only
-	 * the ground it needs to climb out, beside the pit: it climbs out and walks round.
-	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 350)
-	public void leavesAPitInLevelledGroundWithoutDiggingOtherHoles(GameTestHelper helper) {
-		Colony colony = levelledGroundBehindAWall(helper);
-		helper.setBlock(14, 3, 14, Blocks.AIR);
-		colony.postBuildJobs();
-		for (Job job : colony.board().jobs().stream().filter(job -> job.type() == JobType.BUILD || job.type() == JobType.CLEAR_AREA).toList()) {
-			colony.finishBatch(job.id());
-			colony.board().complete(job.id());
-		}
-		helper.assertTrue(colony.builds().isEmpty(), "the terraform is not done: " + colony.builds());
-		fill(helper, 6, 1, 1, 6, 2, 1, Blocks.AIR);
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
-		bot.getInventory().addItem(new ItemStack(Items.GOLDEN_SHOVEL));
-		bot.setWalkTarget(helper.absolutePos(new BlockPos(10, 3, 0)));
-
-		helper.onEachTick(() -> {
-			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 15, 2, 15)) {
-				boolean besidePit = Math.abs(pos.getX() - 6) <= 1 && Math.abs(pos.getZ() - 1) <= 1;
-				if (!besidePit && !helper.getBlockState(pos).is(Blocks.DIRT)) {
-					helper.fail("dug a hole in the levelled ground at " + pos.toShortString());
-				}
-			}
-		});
-		succeedWhenAt(helper, bot, new BlockPos(10, 3, 0));
 	}
 }

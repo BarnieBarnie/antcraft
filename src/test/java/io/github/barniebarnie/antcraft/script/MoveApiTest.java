@@ -158,8 +158,8 @@ class MoveApiTest {
 
 	private static void loadChunks(boolean on) {
 		AntCraftConfig.Values d = new AntCraftConfig.Values(true, 64);
-		AntCraftConfig.setValues(new AntCraftConfig.Values(d.enableOnDedicatedServer(), d.maxBotsPerLevel(), d.mineshaftLevels(),
-			d.colonyActionsRequireOp(), d.replantMatchWaitTicks(), d.scriptInstructionsPerTick(), d.scriptChatLevel(), on));
+		AntCraftConfig.setValues(new AntCraftConfig.Values(d.enableOnDedicatedServer(), d.maxBotsPerLevel(), d.colonyActionsRequireOp(),
+			d.scriptInstructionsPerTick(), d.scriptChatLevel(), on));
 	}
 
 	@Test

@@ -1,35 +1,18 @@
 package io.github.barniebarnie.antcraft.work;
 
-import io.github.barniebarnie.antcraft.colony.Colony;
-import io.github.barniebarnie.antcraft.colony.Job;
-import io.github.barniebarnie.antcraft.colony.ToolUpgrade;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
-import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
-import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import org.jspecify.annotations.Nullable;
 
-/**
- * A kind of tool bots work with (pickaxes, axes, hoes) and its tiers, worst first, with the
- * in-world side of {@link ToolUpgrade}: which one a bot carries, swapping it for a better one from
- * storage, and ordering one from the colony. Tiers the colony cannot craft yet (copper and iron need
- * smelting, netherite smithing) are listed so they rank right; they are only ordered once their
- * materials can be made from the core's stock.
- */
+/** A kind of tool bots work with (pickaxes, axes, hoes) and its tiers, worst first, and which one a bot carries. */
 public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 	public static final ToolKind PICKAXE = new ToolKind(ItemTags.PICKAXES, List.of(Items.WOODEN_PICKAXE, Items.STONE_PICKAXE,
 		Items.COPPER_PICKAXE, Items.IRON_PICKAXE, Items.DIAMOND_PICKAXE, Items.NETHERITE_PICKAXE));
@@ -47,8 +30,12 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 		return stack.is(this.tag);
 	}
 
+	/** Where {@code tool} ranks among the tiers, worst first: -1 for none, 0 for a tool of this kind that is no tier. */
 	public int rank(@Nullable Item tool) {
-		return ToolUpgrade.rank(this.tiers, tool);
+		if (tool == null) {
+			return -1;
+		}
+		return Math.max(this.tiers.indexOf(tool), 0);
 	}
 
 	/** The best-ranked tool of this kind in the bot's hand or inventory, or null without one. */
@@ -62,109 +49,5 @@ public record ToolKind(TagKey<Item> tag, List<Item> tiers) {
 			}
 		}
 		return best;
-	}
-
-	/** The best tool in {@code stock} that beats {@code current}. */
-	public Optional<Item> betterIn(Map<Item, Integer> stock, @Nullable Item current) {
-		return ToolUpgrade.bestInStock(this.tiers, current, stock);
-	}
-
-	/**
-	 * The best tool in {@code storage} that beats what the bot carries, to go and fetch. If there
-	 * is none and the bot is in {@code colony}, orders the best tier the colony can make instead.
-	 * A bot without a tool of this kind only fetches one, unless it {@code needs} one now: a job that
-	 * can be done without one orders none. It leaves a tool another member's job declares and that
-	 * member lacks, and one an open job declares when another fits (see {@link #toTake}), and orders no pickaxe above the best one a job on the board declares.
-	 */
-	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony) {
-		return this.findUpgrade(level, bot, storage, colony, () -> false);
-	}
-
-	public Optional<Item> findUpgrade(ServerLevel level, AntBot bot, Container storage, @Nullable Colony colony, BooleanSupplier needs) {
-		Item current = this.bestCarried(bot);
-		Map<Item, Integer> stock = Storage.stock(storage);
-		if (colony == null) {
-			return this.betterIn(stock, current);
-		}
-		Optional<Item> better = this.toTake(level, bot, current, stock, colony);
-		if (better.isEmpty() && (current != null || needs.getAsBoolean())) {
-			// A pickaxe's tier is what jobs need it for (the ores it harvests), so none better than a job on the board
-			// declares; stock targets order better ones for the core. Axes and hoes upgrade as far as the colony can make.
-			Item ceiling = this != PICKAXE ? null : colony.board().jobs().stream().flatMap(job -> job.tool().stream())
-				.filter(this.tiers::contains).max(Comparator.comparingInt(this::rank)).orElse(this.tiers.getFirst());
-			ToolUpgrade.toOrder(this.tiers, current, this.spare(level, colony), colony.orders(), GameRecipeBook.of(level.getServer()),
-				Gatherables::isGatherable, ceiling).ifPresent(tool -> colony.addOrder(tool, 1));
-		}
-		return better;
-	}
-
-	/**
-	 * The tool in {@code stock} that beats {@code current} for {@code bot} to take (see {@link ToolUpgrade#toTake}): not one
-	 * another member's job waits for, nor one an open job declares unless nothing else gets the bot the tier its own job
-	 * declares, or any tool when it carries none.
-	 */
-	public Optional<Item> toTake(ServerLevel level, AntBot bot, @Nullable Item current, Map<Item, Integer> stock, Colony colony) {
-		Item need = colony.board().jobOf(bot.getUUID()).flatMap(Job::tool).filter(this.tiers::contains)
-			.orElse(current == null ? this.tiers.getFirst() : null);
-		return ToolUpgrade.toTake(this.tiers, current, stock, this.waiting(level, colony, bot.getUUID()), this.open(colony), need);
-	}
-
-	/** What of {@code stock} no member's job waits for and no open job declares (see {@link ToolUpgrade#unreserved}): tools to spare. */
-	public Map<Item, Integer> unclaimed(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
-		return ToolUpgrade.unreserved(this.tiers, ToolUpgrade.unreserved(this.tiers, stock, this.waiting(level, colony, null)), this.open(colony));
-	}
-
-	/** The tools of this kind the claimed jobs of members other than {@code except} declare and they lack. */
-	private List<Item> waiting(ServerLevel level, Colony colony, @Nullable UUID except) {
-		return colony.members().stream().filter(id -> !id.equals(except))
-			.flatMap(id -> colony.board().jobOf(id).flatMap(Job::tool).filter(this.tiers::contains)
-				.filter(tool -> level.getEntity(id) instanceof AntBot other && this.rank(this.bestCarried(other)) < this.rank(tool)).stream())
-			.toList();
-	}
-
-	/** The tools of this kind open jobs declare. */
-	private List<Item> open(Colony colony) {
-		return colony.board().jobs().stream().filter(job -> job.isOpen() && !job.givenUp())
-			.flatMap(job -> job.tool().filter(this.tiers::contains).stream()).toList();
-	}
-
-	/** What the colony {@linkplain Storage#spare holds} beyond the tool of this kind each member works with. */
-	public Map<Item, Integer> spare(ServerLevel level, Colony colony) {
-		return Storage.spare(level, colony, this::bestCarried);
-	}
-
-	/** Orders the best tier above {@code current} the colony can make, unless a better one is already in stock or on order. */
-	public void order(ServerLevel level, Colony colony, @Nullable Item current, Map<Item, Integer> stock) {
-		ToolUpgrade.toOrder(this.tiers, current, stock, colony.orders(), GameRecipeBook.of(level.getServer()), Gatherables::isGatherable)
-			.ifPresent(tool -> colony.addOrder(tool, 1));
-	}
-
-	/**
-	 * Takes one {@code target} from {@code storage} and leaves the tools of this kind it replaces
-	 * there. Does nothing if someone else took it first.
-	 */
-	public void swap(AntBot bot, Container storage, Item target) {
-		int slot = -1;
-		for (int i = 0; i < storage.getContainerSize() && slot < 0; i++) {
-			if (storage.getItem(i).is(target)) {
-				slot = i;
-			}
-		}
-		if (slot < 0) {
-			return;
-		}
-		SimpleContainer inventory = bot.getInventory();
-		ItemStack rest = inventory.addItem(storage.removeItem(slot, 1));
-		if (!rest.isEmpty()) {
-			HopperBlockEntity.addItem(null, storage, rest, null);
-			storage.setChanged();
-			return;
-		}
-		int rank = this.rank(target);
-		ItemStack hand = bot.getMainHandItem();
-		if (this.is(hand) && this.rank(hand.getItem()) < rank) {
-			bot.setItemSlot(EquipmentSlot.MAINHAND, HopperBlockEntity.addItem(null, storage, hand, null));
-		}
-		Storage.moveItems(inventory, storage, stack -> this.is(stack) && this.rank(stack.getItem()) < rank);
 	}
 }

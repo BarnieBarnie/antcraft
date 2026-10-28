@@ -1,0 +1,615 @@
+[
+  {
+    "id": [
+      0,
+      0,
+      0,
+      786692
+    ],
+    "core": [
+      10,
+      64,
+      10
+    ],
+    "members": [
+      [
+        0,
+        0,
+        0,
+        45173
+      ]
+    ],
+    "jobs": [
+      {
+        "id": [
+          -974391199,
+          -65125861,
+          -1490599451,
+          518548295
+        ],
+        "type": "chop_tree",
+        "target": [
+          15,
+          64,
+          15
+        ],
+        "claimed_by": [
+          0,
+          0,
+          0,
+          45173
+        ]
+      }
+    ],
+    "radius": 40,
+    "orders": {
+      "minecraft:torch": 16
+    },
+    "mineshaft": {
+      "top": [
+        2,
+        64,
+        2
+      ],
+      "levels": [
+        60
+      ],
+      "branches_per_side": 1,
+      "branch_length": 3,
+      "torch_spacing": 4
+    },
+    "builds": {
+      "7035b827-6892-4ef2-83d6-008bb8d92ff8": {
+        "steps": [
+          {
+            "pos": [
+              2,
+              66,
+              2
+            ]
+          },
+          {
+            "pos": [
+              2,
+              65,
+              2
+            ]
+          },
+          {
+            "pos": [
+              2,
+              63,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              64,
+              2
+            ],
+            "state": "minecraft:torch"
+          },
+          {
+            "pos": [
+              3,
+              65,
+              2
+            ]
+          },
+          {
+            "pos": [
+              3,
+              64,
+              2
+            ]
+          },
+          {
+            "pos": [
+              3,
+              62,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              63,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              4,
+              63,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              63,
+              2
+            ]
+          },
+          {
+            "pos": [
+              3,
+              64,
+              3
+            ]
+          },
+          {
+            "pos": [
+              3,
+              63,
+              4
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              4,
+              63,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              63,
+              3
+            ]
+          },
+          {
+            "pos": [
+              3,
+              61,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              62,
+              4
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              4,
+              62,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              62,
+              3
+            ]
+          },
+          {
+            "pos": [
+              2,
+              63,
+              4
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              63,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              63,
+              3
+            ]
+          },
+          {
+            "pos": [
+              2,
+              62,
+              4
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              62,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              62,
+              3
+            ]
+          },
+          {
+            "pos": [
+              2,
+              60,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              61,
+              4
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              61,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              61,
+              3
+            ]
+          },
+          {
+            "pos": [
+              2,
+              62,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              62,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              62,
+              2
+            ]
+          },
+          {
+            "pos": [
+              2,
+              61,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              61,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              61,
+              2
+            ]
+          },
+          {
+            "pos": [
+              2,
+              59,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              3,
+              60,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              2,
+              60,
+              2
+            ],
+            "state": "minecraft:torch"
+          },
+          {
+            "pos": [
+              1,
+              61,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              61,
+              2
+            ]
+          },
+          {
+            "pos": [
+              1,
+              59,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              60,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              60,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              1,
+              60,
+              2
+            ]
+          },
+          {
+            "pos": [
+              0,
+              62,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              0,
+              61,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              0,
+              61,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              0,
+              61,
+              2
+            ]
+          },
+          {
+            "pos": [
+              0,
+              59,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              0,
+              60,
+              1
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              0,
+              60,
+              3
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              0,
+              60,
+              2
+            ]
+          },
+          {
+            "pos": [
+              -1,
+              62,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              -2,
+              61,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              -1,
+              61,
+              2
+            ]
+          },
+          {
+            "pos": [
+              -1,
+              59,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              -2,
+              60,
+              2
+            ],
+            "state": "minecraft:cobblestone",
+            "any_solid": true
+          },
+          {
+            "pos": [
+              -1,
+              60,
+              2
+            ]
+          },
+          {
+            "pos": [
+              2,
+              60,
+              1
+            ],
+            "state": {
+              "properties": {
+                "waterlogged": "false",
+                "type": "single",
+                "facing": "south"
+              },
+              "id": "minecraft:chest"
+            }
+          }
+        ],
+        "batches": [
+          {
+            "from": 0,
+            "to": 37
+          },
+          {
+            "from": 37,
+            "to": 58,
+            "needs": [
+              0
+            ]
+          }
+        ]
+      }
+    },
+    "field": [
+      20,
+      64,
+      20
+    ],
+    "projects": [
+      {
+        "id": "7035b827-6892-4ef2-83d6-008bb8d92ff8",
+        "name": "mineshaft",
+        "plans": [
+          "7035b827-6892-4ef2-83d6-008bb8d92ff8"
+        ]
+      },
+      {
+        "id": "058563c9-911a-4718-a410-75d90f500eae",
+        "name": "tools",
+        "plans": [],
+        "stock": [
+          {
+            "match": "#minecraft:pickaxes",
+            "count": 2,
+            "make": [
+              "minecraft:diamond_pickaxe",
+              "minecraft:iron_pickaxe",
+              "minecraft:stone_pickaxe",
+              "minecraft:wooden_pickaxe"
+            ]
+          }
+        ],
+        "starter": false
+      }
+    ],
+    "owner": [
+      0,
+      0,
+      0,
+      161
+    ],
+    "trusted": [
+      [
+        0,
+        0,
+        0,
+        162
+      ]
+    ]
+  }
+]

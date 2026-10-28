@@ -213,8 +213,7 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	}
 
 	/**
-	 * The site the colony picks by itself, for a new shaft: on a side of the core clear of the
-	 * {@code avoid} areas (field, storage), where the column runs into no fluid or bedrock down
+	 * A site for a new shaft beside {@code core}: on a side of it clear of the {@code avoid} areas, where the column runs into no fluid or bedrock down
 	 * to the first level, and no hall does. Deeper down the builder walls fluid off. Failing such a
 	 * spot, the first one clear of the areas. Levels the column cannot be dug down to for bedrock are
 	 * left out. Other blocks that cannot be broken, such as barriers, do not move the site.
@@ -222,11 +221,16 @@ public record Mineshaft(BlockPos top, List<Integer> levels, int branchesPerSide,
 	public static Mineshaft nextTo(BlockPos core, List<Integer> levels, List<BoundingBox> avoid, WorldView world) {
 		List<Mineshaft> spots = candidates(core).stream()
 			.map(top -> new Mineshaft(top, levels))
-			.filter(shaft -> avoid.stream().noneMatch(area -> Sites.sharesColumns(shaft.area(), area)))
+			.filter(shaft -> avoid.stream().noneMatch(area -> sharesColumns(shaft.area(), area)))
 			.toList();
 		Mineshaft site = spots.stream().filter(shaft -> shaft.isDiggable(world)).findFirst()
 			.orElseGet(() -> spots.isEmpty() ? new Mineshaft(core.offset(2, 0, 2), levels) : spots.getFirst());
 		return site.aboveBedrock(world);
+	}
+
+	/** Whether {@code a} and {@code b} cover any of the same block columns, at whatever height. */
+	private static boolean sharesColumns(BoundingBox a, BoundingBox b) {
+		return a.minX() <= b.maxX() && a.maxX() >= b.minX() && a.minZ() <= b.maxZ() && a.maxZ() >= b.minZ();
 	}
 
 	/**

@@ -1,6 +1,5 @@
 package io.github.barniebarnie.antcraft.work;
 
-import io.github.barniebarnie.antcraft.colony.Job;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Comparator;
 import java.util.List;
@@ -76,14 +75,6 @@ public final class PickaxeTier {
 	 */
 	public static Item forBranch(int y, Predicate<Item> wanted) {
 		return Mineshaft.ores(y).stream().anyMatch(wanted) ? forLevel(y, wanted) : ToolKind.PICKAXE.tiers().getFirst();
-	}
-
-	/**
-	 * The pickaxe a miner gets for the branch {@code job}: the one the job declares, which the board scores it by and
-	 * {@code WorkerGoal.lostTool} checks, or for a job from an old save without one, {@link #forBranch(int, Predicate)}.
-	 */
-	public static Item forBranch(Job job, Predicate<Item> wanted) {
-		return job.tool().orElseGet(() -> forBranch(job.target().getY(), wanted));
 	}
 
 	/**

@@ -64,12 +64,8 @@ import org.jspecify.annotations.Nullable;
  * before the chunk's biomes were known.
  */
 public final class GhostRenderer {
-	/** A ghost that may be placed: pale blue. */
+	/** A blueprint's preview: pale blue. */
 	public static final int VALID = 0x80C0FF;
-	/** A ghost the server would refuse: red. */
-	public static final int REFUSED = 0xFF4040;
-	/** A placed build's blocks still to be built: amber. */
-	public static final int PLANNED = 0xFFC040;
 	private static final int STROKE_ALPHA = 0xC0;
 	private static final float STROKE_WIDTH = 2.0F;
 	private static final Direction[] DIRECTIONS = Direction.values();
@@ -107,8 +103,7 @@ public final class GhostRenderer {
 	}
 
 	/**
-	 * Submits the blocks of {@code ghost} at their positions for this frame, tinted {@code rgb} (see {@link #VALID} and
-	 * {@link #REFUSED}). {@code blocks} is asked for only when the ghost is worked out anew: when no ghost equal to
+	 * Submits the blocks of {@code ghost} at their positions for this frame, tinted {@code rgb} (see {@link #VALID}). {@code blocks} is asked for only when the ghost is worked out anew: when no ghost equal to
 	 * {@code ghost} was drawn in the last frame with the same tint.
 	 */
 	public static void submit(

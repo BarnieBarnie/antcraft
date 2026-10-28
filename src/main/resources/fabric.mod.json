@@ -3,7 +3,7 @@
 	"id": "antcraft",
 	"version": "${version}",
 	"name": "AntCraft",
-	"description": "Colonies of virtual bots that gather resources and build structures together. Install on both the server and every client. Singleplayer by default; dedicated servers must opt in.",
+	"description": "Bots you program with scripts in a small subset of Python: they walk, mine, place, craft and smelt as you tell them. Install on both the server and every client. Singleplayer by default; dedicated servers must opt in.",
 	"authors": [
 		"BarnieBarnie"
 	],

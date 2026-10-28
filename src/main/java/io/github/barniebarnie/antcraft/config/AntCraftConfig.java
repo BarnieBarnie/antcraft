@@ -2,14 +2,11 @@ package io.github.barniebarnie.antcraft.config;
 
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.script.lang.Output;
-import io.github.barniebarnie.antcraft.work.Mineshaft;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.function.Consumer;
@@ -26,41 +23,33 @@ import net.minecraft.server.MinecraftServer;
 public final class AntCraftConfig {
 	private static final String FILE_NAME = "antcraft.properties";
 	private static final int DEFAULT_MAX_BOTS = 64;
-	/** Iron and copper, gold and lapis, diamonds and redstone. */
-	private static final List<Integer> DEFAULT_MINESHAFT_LEVELS = List.of(16, -16, -58);
-	/** Two minutes: long enough for a felled tree's decaying leaves to drop a sapling of its own kind. */
-	private static final int DEFAULT_REPLANT_MATCH_WAIT_TICKS = 2400;
+	/** Options of the goal-driven colony, gone in milestone 4 of docs/scripting.md; dropped from the file when it is written again. */
+	private static final String[] REMOVED = {"mineshaftLevels", "replantMatchWaitTicks"};
 	public static final int DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK = 2000;
 	/** Every bot may use its whole budget every tick, so the cap bounds what scripts cost the server thread. */
 	public static final int MAX_SCRIPT_INSTRUCTIONS_PER_TICK = 20000;
 	public static final Output.Level DEFAULT_SCRIPT_CHAT_LEVEL = Output.Level.ERROR;
 
 	/**
-	 * {@code mineshaftLevels} are the heights at which a new colony mineshaft gets a landing to branch-mine from,
-	 * at least {@link Mineshaft#MIN_LEVEL_GAP} apart.
-	 * {@code colonyActionsRequireOp} limits the colony screen, both viewing and changes, to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
-	 * {@code replantMatchWaitTicks} is how long a felled 1x1 tree waits for a sapling of its own kind before any sapling will do.
+	 * {@code colonyActionsRequireOp} limits changing colonies to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
 	 * {@code scriptInstructionsPerTick} is how many instructions each bot's script may run a tick, at most
 	 * {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}. {@code scriptChatLevel} is the lowest log level of a script's output that goes to
 	 * its bot's owner's chat ({@code print} always does). {@code botsLoadChunks} is whether bots running a script keep their
 	 * chunk loaded and {@code goto} loads the chunks on its way.
 	 */
-	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
-		int replantMatchWaitTicks, int scriptInstructionsPerTick, Output.Level scriptChatLevel, boolean botsLoadChunks) {
-		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
-			int replantMatchWaitTicks, int scriptInstructionsPerTick, Output.Level scriptChatLevel) {
-			this(enableOnDedicatedServer, maxBotsPerLevel, mineshaftLevels, colonyActionsRequireOp, replantMatchWaitTicks, scriptInstructionsPerTick,
-				scriptChatLevel, true);
+	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+		Output.Level scriptChatLevel, boolean botsLoadChunks) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+			Output.Level scriptChatLevel) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, true);
 		}
 
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel) {
-			this(enableOnDedicatedServer, maxBotsPerLevel, DEFAULT_MINESHAFT_LEVELS, false, DEFAULT_REPLANT_MATCH_WAIT_TICKS);
+			this(enableOnDedicatedServer, maxBotsPerLevel, false);
 		}
 
-		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, List<Integer> mineshaftLevels, boolean colonyActionsRequireOp,
-			int replantMatchWaitTicks) {
-			this(enableOnDedicatedServer, maxBotsPerLevel, mineshaftLevels, colonyActionsRequireOp, replantMatchWaitTicks,
-				DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, DEFAULT_SCRIPT_CHAT_LEVEL);
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, DEFAULT_SCRIPT_CHAT_LEVEL);
 		}
 	}
 
@@ -84,12 +73,13 @@ public final class AntCraftConfig {
 
 		props.setProperty("enableOnDedicatedServer", Boolean.toString(values.enableOnDedicatedServer()));
 		props.setProperty("maxBotsPerLevel", Integer.toString(values.maxBotsPerLevel()));
-		props.setProperty("mineshaftLevels", String.join(",", values.mineshaftLevels().stream().map(String::valueOf).toList()));
 		props.setProperty("colonyActionsRequireOp", Boolean.toString(values.colonyActionsRequireOp()));
-		props.setProperty("replantMatchWaitTicks", Integer.toString(values.replantMatchWaitTicks()));
 		props.setProperty("scriptInstructionsPerTick", Integer.toString(values.scriptInstructionsPerTick()));
 		props.setProperty("scriptChatLevel", values.scriptChatLevel().name().toLowerCase(Locale.ROOT));
 		props.setProperty("botsLoadChunks", Boolean.toString(values.botsLoadChunks()));
+		for (String removed : REMOVED) {
+			props.remove(removed);
+		}
 		try (Writer writer = Files.newBufferedWriter(path)) {
 			props.store(writer, fileComment());
 		} catch (IOException e) {
@@ -116,21 +106,7 @@ public final class AntCraftConfig {
 	public static Values parse(Properties props, Consumer<String> warn) {
 		boolean enableOnDedicatedServer = Boolean.parseBoolean(props.getProperty("enableOnDedicatedServer", "false").trim());
 		int maxBots = nonNegativeInt(props, "maxBotsPerLevel", DEFAULT_MAX_BOTS);
-		List<Integer> levels;
-		try {
-			levels = Arrays.stream(props.getProperty("mineshaftLevels", "").split(",")).map(String::trim).map(Integer::parseInt).toList();
-		} catch (NumberFormatException e) {
-			levels = DEFAULT_MINESHAFT_LEVELS;
-		}
-		List<Integer> spaced = Mineshaft.spaced(levels);
-		List<Integer> dropped = levels.stream().distinct().filter(y -> !spaced.contains(y)).toList();
-		if (!dropped.isEmpty()) {
-			warn.accept("mineshaftLevels " + levels + ": levels must be at least " + Mineshaft.MIN_LEVEL_GAP
-				+ " blocks apart, or branches cut into the next level's hall; dropped " + dropped + ", using " + spaced);
-		}
-		levels = spaced;
 		boolean colonyActionsRequireOp = Boolean.parseBoolean(props.getProperty("colonyActionsRequireOp", "false").trim());
-		int replantMatchWaitTicks = nonNegativeInt(props, "replantMatchWaitTicks", DEFAULT_REPLANT_MATCH_WAIT_TICKS);
 		int scriptInstructions = Math.max(1, nonNegativeInt(props, "scriptInstructionsPerTick", DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK));
 		if (scriptInstructions > MAX_SCRIPT_INSTRUCTIONS_PER_TICK) {
 			warn.accept("scriptInstructionsPerTick " + scriptInstructions + " is above the cap of " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK
@@ -139,8 +115,7 @@ public final class AntCraftConfig {
 		}
 		Output.Level chatLevel = chatLevel(props.getProperty("scriptChatLevel", "error").trim(), warn);
 		boolean botsLoadChunks = Boolean.parseBoolean(props.getProperty("botsLoadChunks", "true").trim());
-		return new Values(enableOnDedicatedServer, maxBots, levels, colonyActionsRequireOp, replantMatchWaitTicks, scriptInstructions, chatLevel,
-			botsLoadChunks);
+		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks);
 	}
 
 	/** A log level below print by name, in any case; {@code error}, with a warning, for anything else. */
@@ -171,16 +146,8 @@ public final class AntCraftConfig {
 		return botsAllowed(server.isDedicatedServer(), values.enableOnDedicatedServer());
 	}
 
-	public static List<Integer> mineshaftLevels() {
-		return values.mineshaftLevels();
-	}
-
 	public static boolean colonyActionsRequireOp() {
 		return values.colonyActionsRequireOp();
-	}
-
-	public static int replantMatchWaitTicks() {
-		return values.replantMatchWaitTicks();
 	}
 
 	public static int scriptInstructionsPerTick() {

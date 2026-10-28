@@ -1,9 +1,7 @@
 package io.github.barniebarnie.antcraft.pathing;
 
-import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import java.util.Set;
-import java.util.function.Predicate;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -24,7 +22,6 @@ import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import org.jspecify.annotations.Nullable;
 
 /** {@link WorldView} backed by a live level. Break times assume the bot uses its best tool for each block. */
 public class LevelWorldView implements WorldView {
@@ -34,12 +31,6 @@ public class LevelWorldView implements WorldView {
 	private final Set<BlockPos> keep;
 	/** The level's blocks, looked up fast (see {@link LoadedBlocks}). */
 	private final LoadedBlocks blocks;
-	/** Where colonies want no scaffold, looked up once per view, the first time a path asks. */
-	private @Nullable Predicate<BlockPos> keepOpen;
-	/** Ground colonies level, looked up once per view, the first time a path asks. */
-	private @Nullable Predicate<BlockPos> keepGround;
-	/** Where the bot stands, if the caller says: from inside kept ground, the bot may dig its way out (see {@link #from}). */
-	private @Nullable BlockPos from;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
@@ -48,25 +39,6 @@ public class LevelWorldView implements WorldView {
 		this.hand = hand;
 		this.keep = keep;
 		this.blocks = new LoadedBlocks(level);
-	}
-
-	/**
-	 * This view for a bot standing at {@code feet}. A bot that stands inside ground a colony keeps, such as at the bottom
-	 * of a pit a terraform has yet to fill, may break that ground in the columns at and beside its own, from its feet up,
-	 * so it can dig a stair out without blocks to pillar on, but no other hole in the ground.
-	 */
-	public LevelWorldView from(BlockPos feet) {
-		this.from = feet;
-		return this;
-	}
-
-	/** Paths place scaffold anywhere but where a colony keeps blocks open (see {@link ColonyManager#keepOpen}), whatever work the bot is on. */
-	@Override
-	public boolean mayPlace(BlockPos pos) {
-		if (this.keepOpen == null) {
-			this.keepOpen = ColonyManager.keepOpen(this.level);
-		}
-		return !this.keepOpen.test(pos);
 	}
 
 	@Override
@@ -171,25 +143,11 @@ public class LevelWorldView implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		BlockState state = this.blocks.get(pos);
-		// Leave containers, other block entities, blocks the caller keeps, what colony builders built, ground a colony
-		// levels and what players build with alone.
-		if (state.hasBlockEntity() || this.keep.contains(pos) || ColonyManager.isProtected(this.level, pos) || isBuilt(state)) {
-			return -1;
-		}
-		if (this.keepGround == null) {
-			Predicate<BlockPos> ground = ColonyManager.keepGround(this.level);
-			BlockPos feet = this.from;
-			this.keepGround = feet != null && ground.test(feet) ? ground.and(p -> !inPit(feet, p)) : ground;
-		}
-		if (this.keepGround.test(pos)) {
+		// Leave containers, other block entities, blocks the caller keeps and what players build with alone.
+		if (state.hasBlockEntity() || this.keep.contains(pos) || isBuilt(state)) {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));
-	}
-
-	/** {@code pos} is in the column at {@code feet} or one beside it, diagonals too, from the feet up. */
-	private static boolean inPit(BlockPos feet, BlockPos pos) {
-		return pos.getY() >= feet.getY() && Math.abs(pos.getX() - feet.getX()) <= 1 && Math.abs(pos.getZ() - feet.getZ()) <= 1;
 	}
 
 	/**

@@ -157,7 +157,7 @@ public class PathFollower {
 		}
 
 		Step step = this.path.steps().get(this.stepIndex);
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()).from(this.bot.blockPosition());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), Set.of());
 
 		for (BlockPos pos : step.breaks()) {
 			if (!world.isPassable(pos)) {
@@ -226,8 +226,7 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level))
-			.from(this.bot.blockPosition());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level));
 		PathFinder.Options options = this.options();
 		this.path = null;
 		this.search = PathFinder.search(world, this.bot.blockPosition(), this.goal, options);
@@ -245,8 +244,7 @@ public class PathFollower {
 	 */
 	public PathFinder.Search plan(Goal goal) {
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level))
-			.from(this.bot.blockPosition());
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level));
 		LoadedBlocks loaded = new LoadedBlocks(level);
 		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), this.bot.blockPosition(), goal, this.options());
 	}
@@ -410,9 +408,8 @@ public class PathFollower {
 				level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);
 				this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 				stack.shrink(1);
-				// Placed only to get somewhere, whatever the job: the bot takes it down again once done (see BuilderGoal).
+				// Placed only to get somewhere: other bots leave it alone while this one is near.
 				this.bot.addPathScaffold(pos);
-				this.bot.addScaffold(pos);
 				return true;
 			}
 		}

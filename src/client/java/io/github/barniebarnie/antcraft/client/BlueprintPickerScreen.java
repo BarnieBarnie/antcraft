@@ -3,7 +3,7 @@ package io.github.barniebarnie.antcraft.client;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
-import io.github.barniebarnie.antcraft.network.ColonyNetworking;
+import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import java.util.List;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -17,7 +17,7 @@ import net.minecraft.world.InteractionHand;
 
 /**
  * Lists the blueprints the server sent ({@link ClientBlueprints}) with their size, role and materials; choosing one sets
- * the Blueprint item in {@link #hand} to it ({@link ColonyNetworking.ChooseBlueprint}) and closes the screen.
+ * the Blueprint item in {@link #hand} to it ({@link BlueprintNetworking.ChooseBlueprint}) and closes the screen.
  */
 public class BlueprintPickerScreen extends Screen {
 	private static final int TOP = 30;
@@ -42,7 +42,7 @@ public class BlueprintPickerScreen extends Screen {
 	/** Opens the picker for the Blueprint in {@code hand}, if the server takes the choice. */
 	static void open(InteractionHand hand) {
 		Minecraft client = Minecraft.getInstance();
-		if (client.player == null || client.gui.screen() != null || !ClientPlayNetworking.canSend(ColonyNetworking.ChooseBlueprint.TYPE)) {
+		if (client.player == null || client.gui.screen() != null || !ClientPlayNetworking.canSend(BlueprintNetworking.ChooseBlueprint.TYPE)) {
 			return;
 		}
 		client.gui.setScreen(new BlueprintPickerScreen(hand, BlueprintItem.chosen(client.player.getItemInHand(hand))));
@@ -73,7 +73,7 @@ public class BlueprintPickerScreen extends Screen {
 	}
 
 	private void choose(BlueprintSummary blueprint) {
-		ClientPlayNetworking.send(new ColonyNetworking.ChooseBlueprint(this.hand, blueprint.id()));
+		ClientPlayNetworking.send(new BlueprintNetworking.ChooseBlueprint(this.hand, blueprint.id()));
 		this.onClose();
 	}
 

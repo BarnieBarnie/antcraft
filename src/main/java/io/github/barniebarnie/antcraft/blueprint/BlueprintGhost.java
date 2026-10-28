@@ -1,10 +1,7 @@
 package io.github.barniebarnie.antcraft.blueprint;
 
-import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
-import io.github.barniebarnie.antcraft.colony.SiteRules;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import java.util.List;
-import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.Vec3i;
@@ -14,7 +11,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 /**
  * A blueprint as the client previews it before placing: standing at {@code at}, its lowest corner, mirrored then turned the
- * way a placement is (see {@link BlueprintPlacement#place}), so the ghost shows what the colony would build.
+ * way {@link RegionPlan#placed} places a structure's blocks.
  */
 public record BlueprintGhost(BlueprintBlocks blueprint, BlockPos at, Rotation rotation, Mirror mirror) {
 	/** The ghost of {@code blueprint} centred sideways on {@code target}, standing on its level (see {@link #origin}). */
@@ -53,7 +50,7 @@ public record BlueprintGhost(BlueprintBlocks blueprint, BlockPos at, Rotation ro
 		return mirror == Mirror.NONE ? Mirror.LEFT_RIGHT : Mirror.NONE;
 	}
 
-	/** The blocks to draw: the blueprint's, where the colony would place them and turned as it would. */
+	/** The blocks to draw: the blueprint's, where they would stand, turned and mirrored. */
 	public List<BlueprintSummary.Block> blocks() {
 		return this.blueprint.blocks().stream()
 			.map(block -> new BlueprintSummary.Block(RegionPlan.placed(block.pos(), this.blueprint.size(), this.at, this.mirror, this.rotation),
@@ -61,25 +58,10 @@ public record BlueprintGhost(BlueprintBlocks blueprint, BlockPos at, Rotation ro
 			.toList();
 	}
 
-	/** The box the structure fills; the server checks the same box (see {@link BlueprintPlacement#site}). */
+	/** The box the structure fills. */
 	public BoundingBox area() {
 		Vec3i size = this.blueprint.size();
 		return BoundingBox.fromCorners(RegionPlan.placed(BlockPos.ZERO, size, this.at, this.mirror, this.rotation),
 			RegionPlan.placed(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), size, this.at, this.mirror, this.rotation));
-	}
-
-	/**
-	 * Why the server would refuse placing it here, as far as the client can tell from the {@code rules} of the colony it
-	 * would be placed for: none known, no structure, or the colony's own reasons (see {@link SiteRules#check}).
-	 */
-	public Optional<BlueprintPlacement.Refusal> refusal(Optional<SiteRules> rules) {
-		if (rules.isEmpty()) {
-			return Optional.of(BlueprintPlacement.Refusal.NO_COLONY);
-		}
-		Vec3i size = this.blueprint.size();
-		if (size.getX() <= 0 || size.getY() <= 0 || size.getZ() <= 0) {
-			return Optional.of(BlueprintPlacement.Refusal.NO_STRUCTURE);
-		}
-		return rules.get().check(this.area());
 	}
 }

@@ -4,13 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.github.barniebarnie.antcraft.colony.Job;
-import io.github.barniebarnie.antcraft.colony.JobType;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import org.junit.jupiter.api.BeforeAll;
@@ -68,19 +61,4 @@ class PickaxeTierTest {
 		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.forBranch(-58, item -> item == Items.RAW_IRON));
 	}
 
-	/** The miner fetches and orders the pickaxe its branch job declares, the one the board scores it by. */
-	@Test
-	void minerGetsThePickaxeItsBranchJobDeclares() {
-		Job wooden = branchJob(16, Optional.of(Items.WOODEN_PICKAXE));
-		// Only stone wanted at the iron level: a wooden pickaxe, not the stone one the level's iron would need.
-		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.forBranch(wooden, item -> item == Items.COBBLESTONE));
-		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.forBranch(wooden, item -> item == Items.RAW_IRON));
-		// A job from an old save, without a tool: worked out as the board does.
-		assertEquals(Items.WOODEN_PICKAXE, PickaxeTier.forBranch(branchJob(16, Optional.empty()), item -> item == Items.COBBLESTONE));
-		assertEquals(Items.STONE_PICKAXE, PickaxeTier.forBranch(branchJob(16, Optional.empty()), item -> item == Items.RAW_IRON));
-	}
-
-	private static Job branchJob(int y, Optional<Item> tool) {
-		return new Job(UUID.randomUUID(), JobType.MINE_BRANCH, new BlockPos(0, y, 0), Optional.empty(), 0L, List.of(), Optional.empty(), 0, 0L, 0L, tool, 0);
-	}
 }

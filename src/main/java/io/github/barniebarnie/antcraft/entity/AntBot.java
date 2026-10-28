@@ -1,18 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
-import io.github.barniebarnie.antcraft.colony.JobType;
-import io.github.barniebarnie.antcraft.colony.Territory;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
-import io.github.barniebarnie.antcraft.entity.goal.BuilderGoal;
-import io.github.barniebarnie.antcraft.entity.goal.CrafterGoal;
-import io.github.barniebarnie.antcraft.entity.goal.FarmerGoal;
-import io.github.barniebarnie.antcraft.entity.goal.HaulerGoal;
-import io.github.barniebarnie.antcraft.entity.goal.LumberjackGoal;
-import io.github.barniebarnie.antcraft.entity.goal.MinerGoal;
-import io.github.barniebarnie.antcraft.entity.goal.ReturnHomeGoal;
-import io.github.barniebarnie.antcraft.entity.goal.WalkToTargetGoal;
-import io.github.barniebarnie.antcraft.entity.goal.WorkerGoal;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -32,17 +21,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Stream;
 import net.minecraft.core.BlockPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.syncher.EntityDataAccessor;
-import net.minecraft.network.syncher.EntityDataSerializers;
-import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
@@ -73,10 +57,9 @@ import net.minecraft.world.level.storage.ValueOutput;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A colony worker. Carries an inventory, picks up items, defends itself
- * against hostile mobs and can be sent to a target position. In a colony it
- * takes whatever job the colony has (see {@link WorkerGoal}); without one it
- * does no work. While it runs a script ({@link #runScript}), it does no colony work: the script decides what it does.
+ * A bot. Carries an inventory, picks up items and defends itself against hostile mobs. What it does is up to the script it
+ * runs ({@link #runScript}); without one, or once its script ended, stopped or failed, it runs {@code idle.py} (walk home,
+ * wait), whether or not it is in a colony.
  */
 public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private static final int INVENTORY_SIZE = 27;
@@ -86,14 +69,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 * ponytail: a distance stands in for "still needed"; a bot coming back over a bridge it left may have to bridge again.
 	 */
 	private static final int PATH_SCAFFOLD_RANGE = 8;
-	/**
-	 * The type of the job the bot took last, empty before its first, synched so clients can dress the bot for its
-	 * work. Not saved: a bot loads in its own skin until it takes a job.
-	 */
-	public static final EntityDataAccessor<String> DATA_JOB = SynchedEntityData.defineId(AntBot.class, EntityDataSerializers.STRING);
 
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
-	private @Nullable BlockPos walkTarget;
 	private @Nullable BlockPos home;
 	private @Nullable UUID colonyId;
 	/** The player who placed the bot's Bot Core, or who last started a script on it; gets the script's chat. Saved. */
@@ -107,16 +84,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final BotLog log = new BotLog();
 	/** What the script's move actions walk with; made when a script first moves. */
 	private @Nullable BotBody body;
-	/** Set while the bot has work, a job or work between jobs; not saved, it is set again after loading. */
-	private boolean working;
-	private int idleTicks;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
 	private int holdAgainstCurrentUntil = -1;
-	/** Where the bot steps aside to until {@link #stepAsideUntil}, whatever its goals want; see {@link #stepAside}. Not saved. */
-	private @Nullable BlockPos stepAsideTo;
-	private int stepAsideUntil = -1;
-	/** Scaffold blocks the bot placed for its current work and still has to take down; saved, so cleanup survives unloading. */
-	private final Set<BlockPos> scaffold = new HashSet<>();
 	/**
 	 * Every block the bot placed while following a path, which other bots leave alone until the bot
 	 * has moved on (see {@link #PATH_SCAFFOLD_RANGE}). Not saved: after loading they are left standing, unprotected.
@@ -127,7 +96,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
 		this.setCanPickUpLoot(true);
-		// Tools and weapons are the colony's property: always drop what is in hand.
+		// Always drop what is in hand, as the rest of the inventory, when it dies.
 		this.setGuaranteedDrop(EquipmentSlot.MAINHAND);
 	}
 
@@ -139,12 +108,6 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			.add(Attributes.FOLLOW_RANGE, 32.0);
 	}
 
-	@Override
-	protected void defineSynchedData(SynchedEntityData.Builder builder) {
-		super.defineSynchedData(builder);
-		builder.define(DATA_JOB, "");
-	}
-
 	public static int countIn(ServerLevel level) {
 		return level.getEntities(ModEntities.ANT_BOT, AntBot::isAlive).size();
 	}
@@ -153,27 +116,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
-		this.goalSelector.addGoal(2, new WalkToTargetGoal(this));
-		this.goalSelector.addGoal(2, new ReturnHomeGoal(this));
-		// All colony work: jobs from the board, and what is left to do between them.
-		this.goalSelector.addGoal(3, new WorkerGoal(this, new LumberjackGoal(this), new FarmerGoal(this), new MinerGoal(this),
-			new CrafterGoal(this), new HaulerGoal(this), new BuilderGoal(this)));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
 		// Creepers are left alone until bots can fight at range.
 		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true,
-			(target, level) -> !(target instanceof Creeper) && this.mayTarget(level, target)));
-	}
-
-	/** Colony members only go after mobs inside the colony, so they are not lured away. */
-	private boolean mayTarget(ServerLevel level, LivingEntity target) {
-		if (this.colonyId == null) {
-			return true;
-		}
-		return ColonyManager.get(level).byId(this.colonyId)
-			.map(colony -> Territory.of(colony).mayTarget(target.blockPosition()))
-			.orElse(true);
+			(target, level) -> !(target instanceof Creeper)));
 	}
 
 	/**
@@ -205,10 +153,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			if (this.home == null) {
 				this.home = this.blockPosition(); // where it was first spawned
 			}
-			// Before the goals, so they see whether a script runs this tick.
-			if (allowed && this.script != null) {
+			if (allowed) {
 				this.idleIfDone();
-				if (this.script.running()) {
+				if (this.script != null && this.script.running()) {
 					ScriptRun run = this.script;
 					TickProfiler.time("bot.script", () -> run.tick(AntCraftConfig.scriptInstructionsPerTick()));
 				}
@@ -223,7 +170,6 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 		BlockPos feet = this.blockPosition();
 		this.pathScaffold.removeIf(pos -> Math.max(Math.abs(pos.getX() - feet.getX()), Math.abs(pos.getZ() - feet.getZ())) > PATH_SCAFFOLD_RANGE);
-		this.idleTicks = this.working ? 0 : this.idleTicks + 1;
 	}
 
 	/**
@@ -247,69 +193,6 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.setTarget(target);
 	}
 
-	public @Nullable BlockPos getWalkTarget() {
-		return this.walkTarget;
-	}
-
-	public void setWalkTarget(@Nullable BlockPos target) {
-		this.walkTarget = target;
-		if (target == null) {
-			this.getNavigation().stop();
-		}
-	}
-
-	/**
-	 * Steps to the middle of {@code to} for the next {@code ticks} ticks, over what its goals want, such as out of a
-	 * spot another bot places a block in. Its goals keep running, so it goes back to its work after.
-	 */
-	public void stepAside(BlockPos to, int ticks) {
-		this.stepAsideTo = to;
-		this.stepAsideUntil = this.tickCount + ticks;
-	}
-
-	@Override
-	protected void customServerAiStep(ServerLevel level) {
-		super.customServerAiStep(level);
-		// After the goals and before the move control, so the step aside wins this tick.
-		if (this.stepAsideTo != null && this.tickCount < this.stepAsideUntil) {
-			this.getMoveControl().setWantedPosition(this.stepAsideTo.getX() + 0.5, this.stepAsideTo.getY(), this.stepAsideTo.getZ() + 0.5, 1.0);
-		}
-	}
-
-	/** The type of the job the bot took last, or empty before its first. */
-	public Optional<JobType> getJobType() {
-		String id = this.entityData.get(DATA_JOB);
-		return Stream.of(JobType.values()).filter(type -> type.getSerializedName().equals(id)).findFirst();
-	}
-
-	public void setJobType(JobType type) {
-		this.entityData.set(DATA_JOB, type.getSerializedName());
-	}
-
-	/** Whether the bot has work in progress, such as a claimed job. */
-	public boolean isWorking() {
-		return this.working;
-	}
-
-	public void setWorking(boolean working) {
-		this.working = working;
-	}
-
-	/** Ticks since the bot last had work. */
-	public int getIdleTicks() {
-		return this.idleTicks;
-	}
-
-	/** Scaffold blocks this bot placed and still has to take down. Saved with the bot; callers change it in place. */
-	public Set<BlockPos> getScaffold() {
-		return this.scaffold;
-	}
-
-	/** Records a scaffold block the bot placed for its work, to take down once done with it. */
-	public void addScaffold(BlockPos pos) {
-		this.scaffold.add(pos.immutable());
-	}
-
 	/**
 	 * Doors and fence gates the bot opened on its way, each with the game time a path step last walked through it, to
 	 * shut again once the bot is through and clear of them (see {@link PathFollower#closeBehind}). Callers change it in place.
@@ -323,17 +206,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.pathScaffold.add(pos.immutable());
 	}
 
-	/** Blocks other bots must not break: scaffold this bot will take down, and path scaffold it is still near. */
+	/** Blocks other bots must not break: path scaffold this bot is still near. */
 	public Set<BlockPos> getProtectedScaffold() {
-		Set<BlockPos> all = new HashSet<>(this.scaffold);
-		all.addAll(this.pathScaffold);
-		return all;
+		return Set.copyOf(this.pathScaffold);
 	}
 
-	/**
-	 * The storage block this bot brings its work to: its colony's core. Also the home of a script ({@code home()}),
-	 * which is where the bot was first spawned until a script or a colony sets it.
-	 */
+	/** The bot's home ({@code home()} in a script): where it was first spawned, until a script sets it ({@code set_home}). */
 	public @Nullable BlockPos getHome() {
 		return this.home;
 	}
@@ -379,12 +257,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	/**
-	 * Starts {@code idle.py} once the script the bot ran ended, stopped or failed (docs/scripting.md, Idle, home and
-	 * death). Not for a colony member, which goes back to its colony's work until the colony makes way for scripts, nor
-	 * after {@code idle.py} itself ended, so a broken one is not started over and over.
+	 * Starts {@code idle.py} when the bot runs no script: it never ran one, or the one it ran ended, stopped or failed
+	 * (docs/scripting.md, Idle, home and death). Not after {@code idle.py} itself ended, so a broken one is not started
+	 * over and over.
 	 */
 	private void idleIfDone() {
-		if (this.script != null && !this.script.running() && this.colonyId == null && !this.script.name().equals(DefaultScripts.IDLE)) {
+		if (this.script == null || (!this.script.running() && !this.script.name().equals(DefaultScripts.IDLE))) {
 			ServerScripts.idle().ifPresent(idle -> this.runScript(idle, List.of()));
 		}
 	}
@@ -397,7 +275,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 	}
 
-	/** Whether the bot runs a script, which keeps its colony work from running. */
+	/** Whether the bot runs a script. */
 	public boolean isRunningScript() {
 		return this.script != null && this.script.running();
 	}
@@ -529,29 +407,27 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	protected void addAdditionalSaveData(ValueOutput output) {
 		super.addAdditionalSaveData(output);
 		this.writeInventoryToTag(output);
-		output.storeNullable("WalkTarget", BlockPos.CODEC, this.walkTarget);
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.storeNullable("Owner", UUIDUtil.CODEC, this.owner);
 		Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
-		output.store("Scaffold", BlockPos.CODEC.listOf(), List.copyOf(this.scaffold));
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
 		}
 	}
 
-	/** Bots saved with a role ({@code Role}, {@code RoleSetByPlayer}, {@code ScaffoldRole}) load without it, as workers like any other. */
+	/**
+	 * Fields older versions saved and this one ignores: a role ({@code Role}, {@code RoleSetByPlayer}, {@code ScaffoldRole}),
+	 * the walk target ({@code WalkTarget}) and the goal-driven colony's scaffold to take down ({@code Scaffold}).
+	 */
 	@Override
 	protected void readAdditionalSaveData(ValueInput input) {
 		super.readAdditionalSaveData(input);
 		this.readInventoryFromTag(input);
-		this.walkTarget = input.read("WalkTarget", BlockPos.CODEC).orElse(null);
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.memory = Memory.load(input);
-		this.scaffold.clear();
-		input.read("Scaffold", BlockPos.CODEC.listOf()).ifPresent(this.scaffold::addAll);
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));

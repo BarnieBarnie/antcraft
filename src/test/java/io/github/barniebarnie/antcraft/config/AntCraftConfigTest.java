@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 class AntCraftConfigTest {
-	// Parsing the mineshaft levels loads Mineshaft, which reads Items.
 	@BeforeAll
 	static void bootstrap() {
 		SharedConstants.tryDetectVersion();
@@ -26,20 +25,7 @@ class AntCraftConfigTest {
 		AntCraftConfig.Values values = AntCraftConfig.parse(new Properties());
 		assertFalse(values.enableOnDedicatedServer());
 		assertEquals(64, values.maxBotsPerLevel());
-		assertEquals(List.of(16, -16, -58), values.mineshaftLevels());
 		assertFalse(values.colonyActionsRequireOp());
-		assertEquals(2400, values.replantMatchWaitTicks());
-	}
-
-	@Test
-	void readsTheReplantMatchWait() {
-		Properties props = new Properties();
-		props.setProperty("replantMatchWaitTicks", " 600 ");
-		assertEquals(600, AntCraftConfig.parse(props).replantMatchWaitTicks());
-		props.setProperty("replantMatchWaitTicks", "forever");
-		assertEquals(2400, AntCraftConfig.parse(props).replantMatchWaitTicks());
-		props.setProperty("replantMatchWaitTicks", "-5");
-		assertEquals(0, AntCraftConfig.parse(props).replantMatchWaitTicks());
 	}
 
 	@Test
@@ -49,30 +35,15 @@ class AntCraftConfigTest {
 		assertTrue(AntCraftConfig.parse(props).colonyActionsRequireOp());
 	}
 
+	/** A file written before the goal-driven colony went still loads: its options are ignored without a warning. */
 	@Test
-	void mineshaftLevelsTooCloseTogetherAreDroppedWithAWarning() {
+	void theRemovedColonyOptionsAreIgnored() {
 		Properties props = new Properties();
-		props.setProperty("mineshaftLevels", "16,15,-16,-58,-59");
+		props.setProperty("mineshaftLevels", "16,15");
+		props.setProperty("replantMatchWaitTicks", "forever");
 		List<String> warnings = new ArrayList<>();
-		assertEquals(List.of(16, -16, -58), AntCraftConfig.parse(props, warnings::add).mineshaftLevels());
-		assertEquals(1, warnings.size(), "warnings: " + warnings);
-		// The shallower of two levels too close together stays.
-		String warning = warnings.getFirst();
-		assertTrue(warning.contains("mineshaftLevels") && warning.contains("2 blocks apart") && warning.contains("15") && warning.contains("-59"),
-			warning);
-		props.setProperty("mineshaftLevels", "16,-16,-58");
-		warnings.clear();
-		AntCraftConfig.parse(props, warnings::add);
+		assertEquals(AntCraftConfig.parse(new Properties()), AntCraftConfig.parse(props, warnings::add));
 		assertEquals(List.of(), warnings);
-	}
-
-	@Test
-	void readsMineshaftLevels() {
-		Properties props = new Properties();
-		props.setProperty("mineshaftLevels", " 20, -10 ,-50");
-		assertEquals(List.of(20, -10, -50), AntCraftConfig.parse(props).mineshaftLevels());
-		props.setProperty("mineshaftLevels", "deep");
-		assertEquals(List.of(16, -16, -58), AntCraftConfig.parse(props).mineshaftLevels());
 	}
 
 	@Test

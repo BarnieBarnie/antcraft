@@ -155,7 +155,7 @@ class BuildPlanTest {
 
 	@Test
 	void stepsAnySolidBlockWillDoAreListedApart() {
-		BuildPlan plan = new BuildPlan(List.of(Terraform.fill(A), Terraform.fill(B), BuildPlan.Step.solid(C),
+		BuildPlan plan = new BuildPlan(List.of(BuildPlan.Step.fill(A), BuildPlan.Step.fill(B), BuildPlan.Step.solid(C),
 			new BuildPlan.Step(D, Blocks.COBBLESTONE.defaultBlockState())));
 		// One is filled already, with sand.
 		var world = at(world(A, Blocks.SAND.defaultBlockState()));
@@ -165,7 +165,7 @@ class BuildPlanTest {
 
 	@Test
 	void wantedFillBlocksAreThoseTheOpenStepsCanUse() {
-		BuildPlan fill = new BuildPlan(List.of(Terraform.fill(A), BuildPlan.Step.solid(B)));
+		BuildPlan fill = new BuildPlan(List.of(BuildPlan.Step.fill(A), BuildPlan.Step.solid(B)));
 		BuildPlan walls = new BuildPlan(List.of(BuildPlan.Step.solid(B)));
 		BlockState stone = Blocks.STONE.defaultBlockState();
 		assertEquals(BuildPlan.FILL_BLOCKS, fill.wantedFillBlocks(at(world())), "a terraform's fill takes sand and gravel too");
@@ -186,7 +186,7 @@ class BuildPlanTest {
 		assertEquals(holding, wall.fillBlocks(stone));
 		assertEquals(holding, wall.fillBlocks(Blocks.AIR.defaultBlockState()));
 		// A terraform's fill rests on the ground below it, so sand and gravel do there, but not over a gap.
-		BuildPlan.Step fill = Terraform.fill(A);
+		BuildPlan.Step fill = BuildPlan.Step.fill(A);
 		assertTrue(fill.mayFall());
 		assertEquals(BuildPlan.FILL_BLOCKS, fill.fillBlocks(stone));
 		assertTrue(fill.fillBlocks(stone).containsAll(falling));
@@ -656,7 +656,7 @@ class BuildPlanTest {
 	@Test
 	void placingStepsDeclareTheOneItemTheyNeedOnceNothingElseIsLeft() {
 		BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
-		BuildPlan walls = new BuildPlan(List.of(new BuildPlan.Step(B, cobble), new BuildPlan.Step(C, cobble), Terraform.fill(D)));
+		BuildPlan walls = new BuildPlan(List.of(new BuildPlan.Step(B, cobble), new BuildPlan.Step(C, cobble), BuildPlan.Step.fill(D)));
 		assertEquals(Optional.empty(), walls.needs(at(world())).item(), "a fill step takes any fill block, so it can go on without cobblestone");
 		assertEquals(Optional.of(Items.COBBLESTONE), walls.needs(at(world(D, Blocks.DIRT.defaultBlockState()))).item(), "only cobblestone is left to place");
 		assertEquals(Optional.empty(), walls.needs(at(world(B, cobble, C, cobble, D, Blocks.DIRT.defaultBlockState()))).item(), "nothing left to place");

@@ -6,7 +6,6 @@ import io.github.barniebarnie.antcraft.blueprint.ChosenBlueprint;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.function.Predicate;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -21,26 +20,15 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 
 /**
- * A Blueprint remembers one of the server's blueprints ({@link ModComponents#CHOSEN_BLUEPRINT}). Right-clicking the air
- * with it opens the picker on the client, which asks the server to set the chosen blueprint
- * ({@code ColonyNetworking.ChooseBlueprint}). Right-clicking a block with no blueprint chosen opens the picker too; with
- * one chosen the client asks the server to place it where its ghost stands ({@link #place}). Sneaking and right-clicking
- * the ghost of a placed build asks to cancel that build instead ({@link #setGhostClicker}).
+ * A Blueprint remembers one of the server's blueprints ({@link ModComponents#CHOSEN_BLUEPRINT}). Right-clicking with it
+ * opens the picker on the client, which asks the server to set the chosen blueprint ({@code BlueprintNetworking.ChooseBlueprint});
+ * the client previews the chosen one where the player looks. Placing it for a colony to build went with the goal-driven
+ * colony; building comes back as a script action (docs/scripting.md, milestone 7).
  */
 public class BlueprintItem extends Item {
 	/** Opens the picker for the item in a hand; the client sets it, a dedicated server has none. */
 	private static Consumer<InteractionHand> picker = hand -> {
 	};
-
-	/** Asks the server to place the chosen blueprint for a right-click on a block; the client sets it, a dedicated server has none. */
-	private static Consumer<UseOnContext> placer = context -> {
-	};
-
-	/**
-	 * Handles a sneaking right-click on a placed build's ghost, which asks to cancel it; answers whether the player looked
-	 * at one. The client sets it, a dedicated server has none.
-	 */
-	private static Predicate<Player> ghostClicker = player -> false;
 
 	public BlueprintItem(Properties properties) {
 		super(properties);
@@ -49,21 +37,6 @@ public class BlueprintItem extends Item {
 	/** Sets what opens the picker on the client. */
 	public static void setPicker(Consumer<InteractionHand> opener) {
 		picker = opener;
-	}
-
-	/** Sets what places the chosen blueprint on the client. */
-	public static void setPlacer(Consumer<UseOnContext> sender) {
-		placer = sender;
-	}
-
-	/** Sets what handles a sneaking right-click on a ghost on the client. */
-	public static void setGhostClicker(Predicate<Player> clicker) {
-		ghostClicker = clicker;
-	}
-
-	/** Whether a right-click by {@code player} went to a placed build's ghost on the client: only while sneaking. */
-	private static boolean clickedGhost(Level level, Player player) {
-		return level.isClientSide() && player != null && player.isShiftKeyDown() && ghostClicker.test(player);
 	}
 
 	/** The blueprint {@code stack} is set to, if any. */
@@ -94,37 +67,16 @@ public class BlueprintItem extends Item {
 
 	@Override
 	public InteractionResult use(Level level, Player player, InteractionHand hand) {
-		if (clickedGhost(level, player)) {
-			return InteractionResult.SUCCESS;
-		}
 		if (level.isClientSide()) {
 			picker.accept(hand);
 		}
 		return InteractionResult.SUCCESS;
 	}
 
+	/** On a block as in the air: falls through to {@link #use}, which opens the picker. */
 	@Override
 	public InteractionResult useOn(UseOnContext context) {
-		if (clickedGhost(context.getLevel(), context.getPlayer())) {
-			return InteractionResult.SUCCESS;
-		}
-		if (chosen(context.getItemInHand()).isEmpty()) {
-			// Falls through to use, which opens the picker.
-			return InteractionResult.PASS;
-		}
-		return this.place(context);
-	}
-
-	/**
-	 * Right-click on a block with a blueprint chosen: the client asks the server to place it where its ghost stands, turned
-	 * and mirrored as shown ({@code ColonyNetworking.PlaceBlueprint}). The server checks the request and answers on the
-	 * action bar; nothing happens to the block here on either side.
-	 */
-	protected InteractionResult place(UseOnContext context) {
-		if (context.getLevel().isClientSide()) {
-			placer.accept(context);
-		}
-		return InteractionResult.SUCCESS;
+		return InteractionResult.PASS;
 	}
 
 	@Override

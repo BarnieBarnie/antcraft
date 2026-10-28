@@ -7,15 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
-import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
-import io.github.barniebarnie.antcraft.colony.Colony;
-import io.github.barniebarnie.antcraft.colony.JobType;
-import io.github.barniebarnie.antcraft.colony.Project;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,10 +27,9 @@ import org.junit.jupiter.api.Test;
 class LangKeysTest {
 	private static final Path LANG = Path.of("src/main/resources/assets/antcraft/lang/en_us.json");
 	private static final List<Path> SOURCES = List.of(Path.of("src/main/java"), Path.of("src/client/java"));
-	private static final Path SCREEN = Path.of("src/client/java/io/github/barniebarnie/antcraft/client/ColonyStatusScreen.java");
 	/** A string literal such as {@code "commands.antcraft.status"}; one ending in a dot is the prefix of a key family. */
 	private static final Pattern KEY = Pattern.compile("\"((?:[a-z0-9_]+\\.)+antcraft(?:\\.[a-z0-9_]+)*\\.?)\"");
-	/** Key families built at runtime from a prefix and an enum value; set after bootstrap, since {@link Project} touches the item registry. */
+	/** Key families built at runtime from a prefix and an enum value; set after bootstrap. */
 	private static Map<String, List<String>> FAMILIES;
 
 	@BeforeAll
@@ -43,11 +37,7 @@ class LangKeysTest {
 		SharedConstants.tryDetectVersion();
 		Bootstrap.bootStrap();
 		FAMILIES = Map.of(
-			JobType.KEY_PREFIX, Stream.of(JobType.values()).map(JobType::getSerializedName).toList(),
-			Project.KEY_PREFIX, Project.STARTER,
-			BlueprintPlacement.Refusal.KEY_PREFIX, Stream.of(BlueprintPlacement.Refusal.values()).map(BlueprintPlacement.Refusal::id).toList(),
-			"screen.antcraft.blueprint_picker.role.", Stream.of(Blueprint.Role.values()).map(Blueprint.Role::getSerializedName).toList(),
-			"screen.antcraft.colony_status.purpose.", Stream.of(Colony.OrderPurpose.values()).map(Colony.OrderPurpose::getSerializedName).toList());
+			"screen.antcraft.blueprint_picker.role.", Stream.of(Blueprint.Role.values()).map(Blueprint.Role::getSerializedName).toList());
 	}
 
 	@Test
@@ -68,13 +58,6 @@ class LangKeysTest {
 	}
 
 	@Test
-	void everyJobTypeHasALangKey() throws IOException {
-		Set<String> lang = JsonParser.parseString(Files.readString(LANG)).getAsJsonObject().keySet();
-		List<String> missing = Stream.of(JobType.values()).map(JobType::translationKey).filter(key -> !lang.contains(key)).toList();
-		assertEquals(List.of(), missing);
-	}
-
-	@Test
 	void everyKeyFamilyIsUsed() {
 		Set<String> scanned = scannedKeys();
 		FAMILIES.keySet().forEach(prefix -> assertTrue(scanned.contains(prefix), "key family not used: " + prefix));
@@ -84,18 +67,6 @@ class LangKeysTest {
 	void langFileHasNoEmptyValues() throws IOException {
 		JsonObject lang = JsonParser.parseString(Files.readString(LANG)).getAsJsonObject();
 		lang.entrySet().forEach(entry -> assertFalse(entry.getValue().getAsString().isEmpty(), entry.getKey()));
-	}
-
-	/** Text the colony screen shows comes from lang keys, never from string literals in the code. */
-	@Test
-	void colonyScreenShowsNoStringLiterals() throws IOException {
-		String source = Files.readString(SCREEN);
-		Matcher literal = Pattern.compile("(?:literal|append|join)\\(\\s*\"[^\"]*\"|\"[^\"]*\"\\s*\\+|\\+\\s*\"[^\"]*\"").matcher(source);
-		List<String> found = new ArrayList<>();
-		while (literal.find()) {
-			found.add(literal.group());
-		}
-		assertEquals(List.of(), found);
 	}
 
 	private static Set<String> scannedKeys() {

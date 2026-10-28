@@ -2,11 +2,8 @@ package io.github.barniebarnie.antcraft.blueprint;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.github.barniebarnie.antcraft.colony.BlueprintPlacement;
-import io.github.barniebarnie.antcraft.colony.SiteRules;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import java.util.List;
-import java.util.Optional;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -108,34 +105,5 @@ class BlueprintGhostTest {
 		assertEquals(Rotation.NONE, BlueprintGhost.turn(Rotation.COUNTERCLOCKWISE_90, 1));
 		assertEquals(Mirror.LEFT_RIGHT, BlueprintGhost.flip(Mirror.NONE));
 		assertEquals(Mirror.NONE, BlueprintGhost.flip(Mirror.LEFT_RIGHT));
-	}
-
-	private static final int RADIUS = 16;
-
-	/** The rules of a colony with its core at 0, 64, 0 and nothing else. */
-	private static SiteRules rules() {
-		return new SiteRules(new BlockPos(0, 64, 0), RADIUS, Optional.empty(), Optional.empty(), List.of(), List.of());
-	}
-
-	@Test
-	void withNoColonyKnownTheGhostIsRefused() {
-		assertEquals(Optional.of(BlueprintPlacement.Refusal.NO_COLONY), new BlueprintGhost(summary(), AT, Rotation.NONE, Mirror.NONE).refusal(Optional.empty()));
-	}
-
-	@Test
-	void aGhostOfABlueprintWithoutAStructureIsRefused() {
-		BlueprintBlocks empty = new BlueprintBlocks(Identifier.fromNamespaceAndPath("antcraft", "gone"), Vec3i.ZERO, List.of());
-		assertEquals(Optional.of(BlueprintPlacement.Refusal.NO_STRUCTURE),
-			new BlueprintGhost(empty, AT, Rotation.NONE, Mirror.NONE).refusal(Optional.of(rules())));
-	}
-
-	@Test
-	void theGhostAsksTheColonysRules() {
-		Optional<SiteRules> rules = Optional.of(rules());
-		assertEquals(Optional.empty(), new BlueprintGhost(summary(), AT, Rotation.NONE, Mirror.NONE).refusal(rules));
-		assertEquals(Optional.of(BlueprintPlacement.Refusal.OVERLAPS_CORE),
-			new BlueprintGhost(summary(), new BlockPos(-1, 64, -1), Rotation.NONE, Mirror.NONE).refusal(rules));
-		assertEquals(Optional.of(BlueprintPlacement.Refusal.OUTSIDE),
-			new BlueprintGhost(summary(), new BlockPos(RADIUS, 64, 0), Rotation.NONE, Mirror.NONE).refusal(rules));
 	}
 }

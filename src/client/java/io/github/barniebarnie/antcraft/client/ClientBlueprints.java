@@ -3,15 +3,15 @@ package io.github.barniebarnie.antcraft.client;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocksCache;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
-import io.github.barniebarnie.antcraft.network.ColonyNetworking;
+import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import java.util.List;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.resources.Identifier;
 
 /**
- * The blueprints the server last sent ({@link ColonyNetworking.BlueprintList}, on joining and after each data reload), for
- * the picker, and the blocks of those previewed, asked for one blueprint at a time ({@link ColonyNetworking.BlueprintBlocksRequest}).
+ * The blueprints the server last sent ({@link BlueprintNetworking.BlueprintList}, on joining and after each data reload), for
+ * the picker, and the blocks of those previewed, asked for one blueprint at a time ({@link BlueprintNetworking.BlueprintBlocksRequest}).
  * Empty until the first list arrives; each new list drops the blocks, as a reload may have changed them, and leaving
  * clears both.
  */
@@ -35,10 +35,10 @@ public final class ClientBlueprints {
 	 */
 	public static Optional<BlueprintBlocks> blocks(Identifier id) {
 		return BLOCKS.get(id, ask -> {
-			if (!ClientPlayNetworking.canSend(ColonyNetworking.BlueprintBlocksRequest.TYPE)) {
+			if (!ClientPlayNetworking.canSend(BlueprintNetworking.BlueprintBlocksRequest.TYPE)) {
 				return false;
 			}
-			ClientPlayNetworking.send(new ColonyNetworking.BlueprintBlocksRequest(ask));
+			ClientPlayNetworking.send(new BlueprintNetworking.BlueprintBlocksRequest(ask));
 			return true;
 		});
 	}
@@ -48,7 +48,7 @@ public final class ClientBlueprints {
 		BLOCKS.clear();
 	}
 
-	static void receive(ColonyNetworking.BlueprintBlocksReply reply) {
+	static void receive(BlueprintNetworking.BlueprintBlocksReply reply) {
 		BLOCKS.receive(reply.blocks(), reply.part(), reply.parts());
 	}
 }

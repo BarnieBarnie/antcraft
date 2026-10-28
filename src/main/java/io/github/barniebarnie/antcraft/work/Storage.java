@@ -1,36 +1,24 @@
 package io.github.barniebarnie.antcraft.work;
 
-import io.github.barniebarnie.antcraft.colony.Colony;
-import io.github.barniebarnie.antcraft.colony.StockPlanner;
-import io.github.barniebarnie.antcraft.colony.StockTarget;
-import io.github.barniebarnie.antcraft.colony.Stockkeeping;
 import io.github.barniebarnie.antcraft.colony.TaskPlanner;
-import io.github.barniebarnie.antcraft.entity.AntBot;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
-/** Moving items between a bot's inventory and storage blocks. */
+/** Moving items between containers, such as a bot's inventory and a chest, and crafting from what a container holds. */
 public final class Storage {
-	/** How far from the core a furnace counts as the colony's furnace. */
-	public static final int FURNACE_RANGE = 2;
 	public static final int FURNACE_INPUT = 0;
 	public static final int FURNACE_FUEL = 1;
 	public static final int FURNACE_RESULT = 2;
@@ -97,152 +85,6 @@ public final class Storage {
 		return stock;
 	}
 
-	/** The colony's storage chests by position, the core not included. */
-	public static Map<BlockPos, Container> storageChests(ServerLevel level, Colony colony) {
-		Map<BlockPos, Container> chests = new LinkedHashMap<>();
-		colony.storage().ifPresent(storage -> storage.chestSpots().forEach(spot -> {
-			Container chest = containerAt(level, spot);
-			if (chest != null) {
-				chests.put(spot, chest);
-			}
-		}));
-		return chests;
-	}
-
-	/** Where a bot can take a stack {@code filter} accepts: the core, else a storage chest; null when neither holds one. */
-	public static @Nullable BlockPos holding(ServerLevel level, Colony colony, Predicate<ItemStack> filter) {
-		Map<BlockPos, Container> containers = new LinkedHashMap<>();
-		Container core = containerAt(level, colony.core());
-		if (core != null) {
-			containers.put(colony.core(), core);
-		}
-		containers.putAll(storageChests(level, colony));
-		for (Map.Entry<BlockPos, Container> entry : containers.entrySet()) {
-			if (entry.getValue().hasAnyMatching(filter)) {
-				return entry.getKey();
-			}
-		}
-		return null;
-	}
-
-	/** The chests at the mineshaft landings by position, those placed so far. */
-	public static Map<BlockPos, Container> landingChests(ServerLevel level, Colony colony) {
-		Map<BlockPos, Container> chests = new LinkedHashMap<>();
-		colony.mineshaft().ifPresent(shaft -> shaft.levels().forEach(y -> {
-			Container chest = containerAt(level, shaft.landingChest(y));
-			if (chest != null) {
-				chests.put(shaft.landingChest(y), chest);
-			}
-		}));
-		return chests;
-	}
-
-	/**
-	 * Everything the colony has: the core, its storage chests, the mineshaft landing chests,
-	 * whose haul a hauler brings up, and the output waiting in the colony furnace. Bots only take items
-	 * from the core. To decide what to order or gather, count {@link #held} instead, which adds what bots carry.
-	 */
-	public static Map<Item, Integer> colonyStock(ServerLevel level, Colony colony) {
-		List<Map<Item, Integer>> stocks = new ArrayList<>();
-		Container core = containerAt(level, colony.core());
-		if (core != null) {
-			stocks.add(stock(core));
-		}
-		storageChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
-		landingChests(level, colony).values().forEach(chest -> stocks.add(stock(chest)));
-		AbstractFurnaceBlockEntity furnace = colonyFurnace(level, colony.core());
-		ItemStack output = furnace == null ? ItemStack.EMPTY : furnace.getItem(FURNACE_RESULT);
-		if (!output.isEmpty()) {
-			stocks.add(Map.of(output.getItem(), output.getCount()));
-		}
-		return StockPlanner.total(stocks);
-	}
-
-	/**
-	 * What the colony holds: its {@linkplain #colonyStock stock} and what its bots carry, in hand or
-	 * inventory. Count stock with this, or with {@link #spare} for a tool one bot needs.
-	 */
-	public static Map<Item, Integer> held(ServerLevel level, Colony colony) {
-		List<Map<Item, Integer>> held = new ArrayList<>(List.of(colonyStock(level, colony)));
-		for (UUID id : colony.members()) {
-			if (level.getEntity(id) instanceof AntBot bot) {
-				held.add(stock(bot.getInventory()));
-				ItemStack hand = bot.getMainHandItem();
-				if (!hand.isEmpty()) {
-					held.add(Map.of(hand.getItem(), hand.getCount()));
-				}
-			}
-		}
-		return StockPlanner.total(held);
-	}
-
-	/**
-	 * What the colony {@linkplain #held holds} less the tool each member works with, {@code inUse}
-	 * (null for none): what a bot short of a tool could still get.
-	 */
-	public static Map<Item, Integer> spare(ServerLevel level, Colony colony, Function<AntBot, @Nullable Item> inUse) {
-		Map<Item, Integer> spare = new HashMap<>(held(level, colony));
-		for (UUID id : colony.members()) {
-			if (level.getEntity(id) instanceof AntBot bot) {
-				Item tool = inUse.apply(bot);
-				if (tool != null) {
-					spare.computeIfPresent(tool, (item, count) -> count > 1 ? count - 1 : null);
-				}
-			}
-		}
-		return spare;
-	}
-
-	/** The colony's furnace: the first furnace within {@link #FURNACE_RANGE} of the core, or null. */
-	public static @Nullable AbstractFurnaceBlockEntity colonyFurnace(ServerLevel level, BlockPos core) {
-		for (BlockPos pos : BlockPos.betweenClosed(core.offset(-FURNACE_RANGE, -1, -FURNACE_RANGE), core.offset(FURNACE_RANGE, 1, FURNACE_RANGE))) {
-			if (level.getBlockState(pos).is(Blocks.FURNACE) && level.getBlockEntity(pos) instanceof AbstractFurnaceBlockEntity furnace) {
-				return furnace;
-			}
-		}
-		return null;
-	}
-
-	/** What the core should hold for work under way: the ingredients open orders use up from {@code stock}, and build materials. */
-	public static Map<Item, Integer> neededInCore(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
-		List<Map<Item, Integer>> needs = new ArrayList<>();
-		needs.add(Stockkeeping.neededForOrders(colony.orders(), stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable));
-		colony.openBuilds().forEach(plan -> needs.add(plan.materials(level::getBlockState)));
-		return StockPlanner.total(needs);
-	}
-
-	/** What the colony's open orders want, planned against {@code stock}; see {@link Stockkeeping#wantedForOrders}. */
-	public static Set<Item> wantedForOrders(ServerLevel level, Colony colony, Map<Item, Integer> stock) {
-		return Stockkeeping.wantedForOrders(colony.orders(), stock, GameRecipeBook.of(level.getServer()), Gatherables::isGatherable);
-	}
-
-	/**
-	 * What the colony wants brought in: what its open orders want, their ingredients included, and
-	 * anything below a stock target, counted in what it {@linkplain #held holds}. Plans the orders once,
-	 * so make one per check.
-	 */
-	public static Predicate<Item> wanted(ServerLevel level, Colony colony) {
-		return wanted(level, colony, Map.of());
-	}
-
-	/** {@link #wanted(ServerLevel, Colony)}, leaving {@code haul} out of what the colony holds: the haul being decided on. */
-	public static Predicate<Item> wanted(ServerLevel level, Colony colony, Map<Item, Integer> haul) {
-		Map<Item, Integer> stock = heldLess(level, colony, haul);
-		return Stockkeeping.wanted(wantedForOrders(level, colony, stock), targets(colony), stock);
-	}
-
-	/** What the colony {@linkplain #held holds}, less {@code haul}: the haul being decided on. */
-	public static Map<Item, Integer> heldLess(ServerLevel level, Colony colony, Map<Item, Integer> haul) {
-		Map<Item, Integer> stock = new HashMap<>(held(level, colony));
-		haul.forEach((item, count) -> stock.merge(item, -count, Integer::sum));
-		return stock;
-	}
-
-	/** The colony's stock targets, for {@link Stockkeeping}. */
-	public static List<StockPlanner.Target<Item>> targets(Colony colony) {
-		return colony.stockTargets().stream().map(StockTarget::toPlannerTarget).toList();
-	}
-
 	/** Whether some of {@code stack} would fit in the container. */
 	public static boolean hasRoomFor(Container container, ItemStack stack) {
 		for (int i = 0; i < container.getContainerSize(); i++) {
@@ -252,31 +94,6 @@ public final class Storage {
 			}
 		}
 		return false;
-	}
-
-	/** The storage chest for {@code stack}: one of its category with room for it, else an empty one; null if none. */
-	public static @Nullable BlockPos chestFor(Map<BlockPos, Container> chests, ItemStack stack) {
-		StorageCategory category = StorageCategory.of(stack);
-		BlockPos empty = null;
-		for (Map.Entry<BlockPos, Container> chest : chests.entrySet()) {
-			Container container = chest.getValue();
-			if (container.isEmpty()) {
-				empty = empty == null ? chest.getKey() : empty;
-			} else if (category(container) == category && hasRoomFor(container, stack)) {
-				return chest.getKey();
-			}
-		}
-		return empty;
-	}
-
-	/** A storage chest holds the category of whatever is in it first. */
-	public static StorageCategory category(Container chest) {
-		for (int i = 0; i < chest.getContainerSize(); i++) {
-			if (!chest.getItem(i).isEmpty()) {
-				return StorageCategory.of(chest.getItem(i));
-			}
-		}
-		return StorageCategory.MISC;
 	}
 
 	/** Whether the container holds every ingredient for {@code times} crafts of the recipe. */

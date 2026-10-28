@@ -151,7 +151,7 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	public enum Kind implements StringRepresentable {
 		/** A structure to build, such as one copied from a region. */
 		BUILD,
-		/** An area to level to a height (see {@link Terraform}). */
+		/** An area to level to a height. */
 		TERRAFORM;
 
 		public static final Codec<Kind> CODEC = StringRepresentable.fromEnum(Kind::values);
@@ -431,6 +431,14 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		/** Keeps a solid block at {@code pos}, filling it with cobblestone if it is open, such as a cave or a pocket of water. */
 		public static Step solid(BlockPos pos) {
 			return new Step(pos, Blocks.COBBLESTONE.defaultBlockState(), true);
+		}
+
+		/**
+		 * A fill step: any block a bot can stand on will do, dirt if there is none (see {@link #anySolid}). Fills go in from
+		 * the bottom up, so sand and gravel rest on what is below and may stand in (see {@link #mayFall}).
+		 */
+		public static Step fill(BlockPos pos) {
+			return new Step(pos, Blocks.DIRT.defaultBlockState(), true, true);
 		}
 
 		public boolean isClear() {

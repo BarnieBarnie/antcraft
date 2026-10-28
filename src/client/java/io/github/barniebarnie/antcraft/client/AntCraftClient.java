@@ -5,7 +5,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.client.render.AntBotRenderer;
 import io.github.barniebarnie.antcraft.client.render.GhostRenderer;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
-import io.github.barniebarnie.antcraft.network.ColonyNetworking;
+import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
@@ -26,16 +26,6 @@ public class AntCraftClient implements ClientModInitializer {
 	public void onInitializeClient() {
 		EntityRenderers.register(ModEntities.ANT_BOT, AntBotRenderer::new);
 
-		KeyMapping colonyStatus = KeyMappingHelper.registerKeyMapping(
-			new KeyMapping("key.antcraft.colony_status", InputConstants.Type.KEYBOARD, InputConstants.KEY_K, CATEGORY));
-		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			while (colonyStatus.consumeClick()) {
-				if (client.gui.screen() == null && ClientPlayNetworking.canSend(ColonyNetworking.StatusRequest.TYPE)) {
-					client.gui.setScreen(new ColonyStatusScreen());
-					ColonyStatusScreen.request();
-				}
-			}
-		});
 		KeyMapping rotateBlueprint = KeyMappingHelper.registerKeyMapping(
 			new KeyMapping("key.antcraft.rotate_blueprint", InputConstants.Type.KEYBOARD, InputConstants.KEY_R, CATEGORY));
 		KeyMapping mirrorBlueprint = KeyMappingHelper.registerKeyMapping(
@@ -43,27 +33,15 @@ public class AntCraftClient implements ClientModInitializer {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> BlueprintPreview.tick(client, rotateBlueprint, mirrorBlueprint));
 		// With the frame's other submits, so the translucent ghost blocks are sorted with the rest of the world's.
 		LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
-			PlacedGhosts.draw(Minecraft.getInstance(), context);
 			BlueprintPreview.draw(Minecraft.getInstance(), context);
 			GhostRenderer.endFrame();
 		});
 		// Ghost colours worked out before a chunk's biomes arrived are worked out again with them.
 		ClientChunkEvents.CHUNK_LOAD.register((level, chunk) -> GhostRenderer.chunkLoaded(level, chunk.getPos()));
-		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BuildGhosts.TYPE, (ghosts, context) -> PlacedGhosts.set(ghosts.builds()));
-		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> PlacedGhosts.reset());
-		BlueprintItem.setGhostClicker(PlacedGhosts::click);
-		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.SiteRulesReply.TYPE, (reply, context) -> BlueprintPreview.setRules(reply.rules()));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> BlueprintPreview.reset());
-		BlueprintItem.setPlacer(BlueprintPreview::place);
 		BlueprintItem.setPicker(BlueprintPickerScreen::open);
-		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BlueprintList.TYPE, (list, context) -> ClientBlueprints.set(list.blueprints()));
-		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.BlueprintBlocksReply.TYPE, (reply, context) -> ClientBlueprints.receive(reply));
+		ClientPlayNetworking.registerGlobalReceiver(BlueprintNetworking.BlueprintList.TYPE, (list, context) -> ClientBlueprints.set(list.blueprints()));
+		ClientPlayNetworking.registerGlobalReceiver(BlueprintNetworking.BlueprintBlocksReply.TYPE, (reply, context) -> ClientBlueprints.receive(reply));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBlueprints.set(List.of()));
-		// Replies that arrive after the screen closed are dropped.
-		ClientPlayNetworking.registerGlobalReceiver(ColonyNetworking.StatusReply.TYPE, (reply, context) -> {
-			if (context.client().gui.screen() instanceof ColonyStatusScreen screen) {
-				screen.update(reply);
-			}
-		});
 	}
 }
