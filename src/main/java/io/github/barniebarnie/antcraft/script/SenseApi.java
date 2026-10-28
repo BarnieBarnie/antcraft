@@ -33,12 +33,16 @@ import org.jspecify.annotations.Nullable;
 public final class SenseApi {
 	/**
 	 * How many blocks all scripts together may read in block searches in one server tick, shared like
-	 * {@link PathBudget#SERVER}. A search of radius 16 reads about 17,000 blocks, one of radius 32 about 137,000.
+	 * {@link PathBudget#SERVER}. A search of radius 16 reads about 17,000 blocks, one of radius 32 about 137,000. Measured
+	 * with the bot benchmark (#322): all of it, used by 30 bots searching without end, costs about 2 ms a tick.
 	 */
-	// ponytail: first guess, about a millisecond of a tick; measure with the bot benchmark once scripts run there.
 	public static final int BLOCKS_PER_TICK = 32_768;
 	public static final PathBudget SCAN_BUDGET = new PathBudget(BLOCKS_PER_TICK);
-	/** A block search counts one script instruction per this many blocks read. */
+	/**
+	 * A block search counts one script instruction per this many blocks read. A block read costs some 6 instructions of
+	 * time (#322), but {@link #SCAN_BUDGET} bounds what searches cost the server, and a charge at cost would hold a script
+	 * up for seconds after each search of radius 32.
+	 */
 	public static final int BLOCKS_PER_INSTRUCTION = 8;
 	/** The largest radius {@code entities} and {@code items_near} look in. */
 	public static final int MAX_ENTITY_RADIUS = 64;

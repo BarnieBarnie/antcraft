@@ -26,7 +26,10 @@ public final class AntCraftConfig {
 	/** Options of the goal-driven colony, gone in milestone 4 of docs/scripting.md; dropped from the file when it is written again. */
 	private static final String[] REMOVED = {"mineshaftLevels", "replantMatchWaitTicks"};
 	public static final int DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK = 2000;
-	/** Every bot may use its whole budget every tick, so the cap bounds what scripts cost the server thread. */
+	/**
+	 * Every bot may use its whole budget every tick, so the cap bounds what scripts cost the server thread. Measured with
+	 * the bot benchmark (#322): 30 bots looping at the default average 1 ms a tick, at the cap 5 ms.
+	 */
 	public static final int MAX_SCRIPT_INSTRUCTIONS_PER_TICK = 20000;
 	public static final Output.Level DEFAULT_SCRIPT_CHAT_LEVEL = Output.Level.ERROR;
 

@@ -38,7 +38,11 @@ public final class MoveApi {
 	 * a little short of a player's 4.5.
 	 */
 	public static final double REACH = 4.0;
-	/** What a node of a {@code reachable} plan costs the script in instructions: a node takes far longer than one. */
+	/**
+	 * What a node of a {@code reachable} plan costs the script in instructions. A node takes far longer than one, some
+	 * 3 µs against 9 ns (#322), but {@link io.github.barniebarnie.antcraft.pathing.PathBudget#SERVER} bounds what plans
+	 * cost the server, and a charge at cost would hold a script up for seconds after each plan.
+	 */
 	public static final int INSTRUCTIONS_PER_NODE = 1;
 
 	/** What the move actions need of the bot. */

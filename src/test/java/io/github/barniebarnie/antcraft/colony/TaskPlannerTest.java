@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import org.junit.jupiter.api.BeforeAll;
@@ -492,6 +493,32 @@ class TaskPlannerTest {
 
 		assertEquals(1, plan.crafts().size(), "plan: " + plan);
 		assertEquals(Items.BED.red(), plan.crafts().getFirst().recipe().output());
+		assertTrue(plan.isReady(), "plan: " + plan);
+	}
+
+	/**
+	 * A plan from a very large stock, such as a full storage room: every vanilla item no recipe makes, 64 of each (some
+	 * 600 kinds), for 16 iron pickaxes, which tries the fuels and their recipes. The search copied the whole stock for
+	 * each recipe and fuel it tried and for each need it remembered: some 200 times here, 121,200 entries and about 7 ms
+	 * a plan (#322). It now copies only what the plan has changed, under 1,000 entries and about 2 ms.
+	 */
+	@Test
+	void aPlanFromAVeryLargeStockCopiesLittleOfIt() {
+		TaskPlanner.RecipeBook<Item> book = VanillaData.recipeBook();
+		Map<Item, Integer> stock = new HashMap<>();
+		for (Item item : BuiltInRegistries.ITEM) {
+			if (book.recipesFor(item).isEmpty()) {
+				stock.put(item, 64);
+			}
+		}
+		stock.remove(Items.COAL);
+		assertTrue(stock.size() > 500, "stock of " + stock.size());
+
+		long copied = TaskPlanner.stockEntriesCopied(Items.IRON_PICKAXE, 16, stock, book, VanillaData.gatherable());
+
+		assertTrue(copied <= 2L * stock.size(), copied + " stock entries copied for a stock of " + stock.size());
+		TaskPlanner.Plan<Item> plan = planVanilla(Items.IRON_PICKAXE, 16, stock);
+		assertEquals(Items.IRON_PICKAXE, plan.crafts().getLast().recipe().output(), "plan: " + plan);
 		assertTrue(plan.isReady(), "plan: " + plan);
 	}
 

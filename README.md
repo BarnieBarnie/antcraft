@@ -145,11 +145,11 @@ Requires JDK 25.
 
 Development is test-first. See [CLAUDE.md](CLAUDE.md) for the workflow.
 
-The bot benchmark (`BenchmarkGameTest`) runs 30 bots in a 48x48 area for 3600 ticks, each running the same script: fell the nearest tree and pick up its logs, then mine the coal and iron ore it finds, then walk home and wait. It logs the average and worst server tick and where the time went (as `/antcraft profile report` does), and fails if the average tick reaches 50 ms. The layout and ores are fixed and the world is deleted first, so runs compare, though the bots' races for the same trees and the machine's load still vary from run to run. It is left out of every other game test run:
+The bot benchmark (`BenchmarkGameTest`) runs 30 bots in a 48x48 area through a series of cases, each a script every bot runs for 1200 ticks: a loop that only computes (at the default instruction budget and at the cap), `find_nearest` and `scan` of radius 32, `reachable` all over the area, `goto` back and forth, `craft` and `drop` in a loop, a busy mix of them, and last, for 3600 ticks, work: fell the nearest tree and pick up its logs, then mine the coal and iron ore it finds, then walk home and wait. For each case it logs the average and worst server tick, where the time went (as `/antcraft profile report` does), the script instructions run a tick and what the bots were at, then a summary line per case; it fails if a case's average tick reaches 50 ms. The layout and ores are fixed and the world is deleted first, so runs compare, though the bots' races for the same trees and the machine's load still vary from run to run. It is left out of every other game test run:
 
 ```sh
 ./gradlew runGameTest -Pbenchmark          # or: scripts/check.sh runGameTest -Pbenchmark
-grep -A30 'Benchmark:' build/check.log      # the report, when run through scripts/check.sh
+grep -A10 'Benchmark: summary' build/check.log   # the summary, when run through scripts/check.sh (-A30 'Benchmark:' for each case)
 ```
 
 The game test server runs ticks back to back rather than 20 a second, so the 3600 ticks take well under a minute.

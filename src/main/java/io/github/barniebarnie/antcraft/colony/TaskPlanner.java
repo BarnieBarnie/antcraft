@@ -119,15 +119,112 @@ public final class TaskPlanner {
 		return plan;
 	}
 
+	/** How many stock entries a search for a plan copies, for checking that a large stock stays cheap. */
+	static <I> long stockEntriesCopied(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
+		long[] copied = {0};
+		search(item, count, stock, book, gatherable, copied);
+		return copied[0];
+	}
+
 	private static <I> Plan<I> search(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
-		State<I> state = new State<>(new HashMap<>(stock));
+		return search(item, count, stock, book, gatherable, new long[1]);
+	}
+
+	private static <I> Plan<I> search(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, long[] copied) {
+		State<I> state = new State<>(new Stock<>(stock, copied));
 		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0, 0}).need(state, item, count, new HashSet<>(), true);
 		// Map.copyOf would iterate in an order that differs between runs.
 		return new Plan<>(List.copyOf(state.crafts), Collections.unmodifiableMap(state.gather), Collections.unmodifiableMap(state.missing));
 	}
 
+	/**
+	 * The stock a plan has left: the stock it started from, read once and shared by every trial of one search, and what
+	 * the plan has taken from it or added to it. Trials copy and compare only those changes, so a very large stock, such
+	 * as a full storage room, costs no more to plan from than a small one (#322).
+	 */
+	private static final class Stock<I> {
+		/** The stock the search started from, items with none left out. */
+		private final Map<I, Integer> base;
+		private final long baseTotal;
+		/** The amounts that differ from {@link #base}. */
+		private final Map<I, Integer> changes;
+		/** Stock entries copied so far, for {@link #stockEntriesCopied}. */
+		private final long[] copied;
+
+		Stock(Map<I, Integer> stock, long[] copied) {
+			this.base = new HashMap<>();
+			stock.forEach((item, amount) -> {
+				if (amount > 0) {
+					this.base.put(item, amount);
+				}
+			});
+			this.baseTotal = this.base.values().stream().mapToLong(Integer::longValue).sum();
+			this.changes = new HashMap<>();
+			this.copied = copied;
+			copied[0] += stock.size();
+		}
+
+		private Stock(Stock<I> other) {
+			this.base = other.base;
+			this.baseTotal = other.baseTotal;
+			this.changes = new HashMap<>(other.changes);
+			this.copied = other.copied;
+			this.copied[0] += other.changes.size();
+		}
+
+		int get(I item) {
+			Integer changed = this.changes.get(item);
+			return changed != null ? changed : this.base.getOrDefault(item, 0);
+		}
+
+		void set(I item, int amount) {
+			if (amount == this.base.getOrDefault(item, 0)) {
+				this.changes.remove(item);
+			} else {
+				this.changes.put(item, amount);
+			}
+		}
+
+		void add(I item, int amount) {
+			this.set(item, this.get(item) + amount);
+		}
+
+		/** How many items there are in all. */
+		long total() {
+			long total = this.baseTotal;
+			for (Map.Entry<I, Integer> changed : this.changes.entrySet()) {
+				total += changed.getValue() - this.base.getOrDefault(changed.getKey(), 0);
+			}
+			return total;
+		}
+
+		Stock<I> copy() {
+			return new Stock<>(this);
+		}
+
+		/**
+		 * What tells this stock apart from others of the same search: two stocks of one search hold the same items
+		 * when their changes are equal.
+		 */
+		Map<I, Integer> changes() {
+			this.copied[0] += this.changes.size();
+			return Map.copyOf(this.changes);
+		}
+
+		/** Takes over the amounts of {@code changes}, from {@link #changes()} of a stock of the same search. */
+		void restore(Map<I, Integer> changes) {
+			this.copied[0] += changes.size();
+			this.changes.clear();
+			this.changes.putAll(changes);
+		}
+
+		void assign(Stock<I> other) {
+			this.restore(other.changes);
+		}
+	}
+
 	private static final class State<I> {
-		final Map<I, Integer> stock;
+		final Stock<I> stock;
 		final List<Craft<I>> crafts = new ArrayList<>();
 		final Map<I, Integer> gather = new LinkedHashMap<>();
 		final Map<I, Integer> missing = new LinkedHashMap<>();
@@ -144,12 +241,12 @@ public final class TaskPlanner {
 		/** Set when the plan reached its bound and was abandoned; it loses to any finished plan. */
 		boolean pruned;
 
-		State(Map<I, Integer> stock) {
+		State(Stock<I> stock) {
 			this.stock = stock;
 		}
 
 		State<I> copy() {
-			State<I> copy = new State<>(new HashMap<>(this.stock));
+			State<I> copy = new State<>(this.stock.copy());
 			copy.crafts.addAll(this.crafts);
 			copy.gather.putAll(this.gather);
 			copy.missing.putAll(this.missing);
@@ -160,8 +257,7 @@ public final class TaskPlanner {
 		}
 
 		void assign(State<I> other) {
-			this.stock.clear();
-			this.stock.putAll(other.stock);
+			this.stock.assign(other.stock);
 			this.crafts.clear();
 			this.crafts.addAll(other.crafts);
 			this.gather.clear();
@@ -199,15 +295,15 @@ public final class TaskPlanner {
 		/** Like {@link #score()}, but using up less stock beats crafting less: for choosing a fuel. */
 		long[] fuelScore() {
 			long[] score = this.score();
-			long stockLeft = this.stock.values().stream().mapToLong(Integer::longValue).sum();
+			long stockLeft = this.stock.total();
 			return new long[] {score[0], score[1], -stockLeft, score[2]};
 		}
 
 		int take(I item, int wanted) {
-			int available = this.stock.getOrDefault(item, 0);
+			int available = this.stock.get(item);
 			int taken = Math.min(available, wanted);
 			if (taken > 0) {
-				this.stock.put(item, available - taken);
+				this.stock.set(item, available - taken);
 			}
 			return taken;
 		}
@@ -224,26 +320,20 @@ public final class TaskPlanner {
 	};
 
 	/**
-	 * Everything {@link Search#need} decides depends on: the item, how many, the stock, whether
+	 * Everything {@link Search#need} decides depends on: the item, how many, the stock (as its {@linkplain Stock#changes changes}), whether
 	 * conversion recipes may make it, whether the plan is broken already and whether it is for making fuel (which
 	 * burns its own fuel rather than make it).
 	 */
 	private record NeedKey<I>(I item, int count, Map<I, Integer> stock, boolean conversions, boolean cycle, boolean makingFuel) {
 		static <I> NeedKey<I> of(State<I> state, I item, int count, boolean conversions, boolean makingFuel) {
-			Map<I, Integer> stock = new HashMap<>();
-			state.stock.forEach((stocked, amount) -> {
-				if (amount > 0) {
-					stock.put(stocked, amount);
-				}
-			});
-			return new NeedKey<>(item, count, stock, conversions, state.cycle, makingFuel);
+			return new NeedKey<>(item, count, state.stock.changes(), conversions, state.cycle, makingFuel);
 		}
 	}
 
 	/** What one {@link Search#need} call added to the plan, to replay it when the same need comes up again. */
 	private record NeedResult<I>(Map<I, Integer> stock, List<Craft<I>> crafts, Map<I, Integer> gather, Map<I, Integer> missing, boolean cycle) {
 		static <I> NeedResult<I> between(State<I> before, State<I> after) {
-			return new NeedResult<>(Map.copyOf(after.stock), List.copyOf(after.crafts.subList(before.crafts.size(), after.crafts.size())),
+			return new NeedResult<>(after.stock.changes(), List.copyOf(after.crafts.subList(before.crafts.size(), after.crafts.size())),
 				difference(before.gather, after.gather), difference(before.missing, after.missing), after.cycle);
 		}
 
@@ -259,8 +349,7 @@ public final class TaskPlanner {
 		}
 
 		void replay(State<I> state) {
-			state.stock.clear();
-			state.stock.putAll(this.stock);
+			state.stock.restore(this.stock);
 			state.crafts.addAll(this.crafts);
 			this.gather.forEach((item, amount) -> state.gather.merge(item, amount, Integer::sum));
 			this.missing.forEach((item, amount) -> state.missing.merge(item, amount, Integer::sum));
@@ -358,7 +447,7 @@ public final class TaskPlanner {
 		}
 
 		void craft(State<I> state, Recipe<I> recipe, int wanted, Set<I> path) {
-			if (!recipe.smelting() && this.isStorageRecipe(recipe) && recipe.ingredients().keySet().stream().flatMap(Set::stream).noneMatch(i -> state.stock.getOrDefault(i, 0) > 0)) {
+			if (!recipe.smelting() && this.isStorageRecipe(recipe) && recipe.ingredients().keySet().stream().flatMap(Set::stream).noneMatch(i -> state.stock.get(i) > 0)) {
 				// Packing ingots into a block or unpacking it only makes sense with some already at hand.
 				state.cycle = true;
 				return;
@@ -378,7 +467,7 @@ public final class TaskPlanner {
 			state.crafts.add(new Craft<>(recipe, times, fuel));
 			int leftover = times * recipe.count() - wanted;
 			if (leftover > 0) {
-				state.stock.merge(recipe.output(), leftover, Integer::sum);
+				state.stock.add(recipe.output(), leftover);
 			}
 		}
 
@@ -449,7 +538,7 @@ public final class TaskPlanner {
 		long burnStock(State<I> state, List<Fuel<I>> fuels, long ticks, Map<I, Integer> used) {
 			for (Fuel<I> fuel : fuels) {
 				List<I> byStock = new ArrayList<>(fuel.items());
-				byStock.sort(Comparator.comparingInt((I option) -> state.stock.getOrDefault(option, 0)).reversed());
+				byStock.sort(Comparator.comparingInt((I option) -> state.stock.get(option)).reversed());
 				for (I item : byStock) {
 					if (ticks <= 0) {
 						return ticks;
@@ -537,7 +626,7 @@ public final class TaskPlanner {
 			}
 			int remaining = count;
 			List<I> byStock = new ArrayList<>(options);
-			byStock.sort(Comparator.comparingInt((I option) -> state.stock.getOrDefault(option, 0)).reversed());
+			byStock.sort(Comparator.comparingInt((I option) -> state.stock.get(option)).reversed());
 			for (I option : byStock) {
 				remaining -= state.take(option, remaining);
 			}
