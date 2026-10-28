@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.script.lang;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A module of a running script: the main script or one it imported, by its name in the script library, with its own
@@ -12,6 +13,8 @@ public final class PyModule implements HostValue {
 	private final String name;
 	private final Map<String, Object> globals = new LinkedHashMap<>();
 	private boolean loaded;
+	/** Its compiled top level; null for a package without a file of its own. */
+	private @Nullable Code code;
 
 	public PyModule(String name) {
 		this.name = name;
@@ -34,6 +37,15 @@ public final class PyModule implements HostValue {
 
 	void setLoaded() {
 		loaded = true;
+	}
+
+	/** The compiled top level, or null for a package without a file of its own. */
+	@Nullable Code code() {
+		return code;
+	}
+
+	void setCode(@Nullable Code code) {
+		this.code = code;
 	}
 
 	@Override

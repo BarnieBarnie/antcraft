@@ -82,8 +82,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable UUID colonyId;
 	/** The player who placed the bot's Bot Core, or who last started a script on it; gets the script's chat. Saved. */
 	private @Nullable UUID owner;
-	/** The script the bot runs or ran last; not saved yet (docs/scripting.md, milestone 5). */
+	/** The script the bot runs or ran last; a running one is saved and resumed (docs/scripting.md, Save and resume). */
 	private @Nullable ScriptRun script;
+	/** The running script the bot was saved with, resumed on its first tick, once the script library is loaded. */
+	private ScriptRun.@Nullable Saved savedScript;
+	/** {@link #idling} as saved with {@link #savedScript}. */
+	private boolean savedIdling;
 	/**
 	 * Whether {@link #script} is the {@code idle.py} that {@link #idleIfDone} started: then the bot holds its chunks loaded
 	 * only while it walks (docs/scripting.md, Chunk loading).
@@ -174,6 +178,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			this.sayBubble.tick();
 			// A dead bot lies there for a second before it is gone; it does nothing meanwhile.
 			if (allowed && !this.isDeadOrDying()) {
+				this.resumeSavedScript();
 				this.idleIfDone();
 				if (this.script != null && this.script.running()) {
 					ScriptRun run = this.script;
@@ -282,6 +287,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.scriptCode = code;
 		this.scriptSource = null;
 		this.idling = false;
+		this.savedScript = null; // a script started now replaces one the bot was saved running
 	}
 
 	/**
@@ -296,6 +302,26 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				this.idling = true;
 			});
 		}
+	}
+
+	/** Resumes the script the bot was saved running, if any; one that is gone from the library is not, with a log line. */
+	private void resumeSavedScript() {
+		ScriptRun.Saved saved = this.savedScript;
+		if (saved == null) {
+			return;
+		}
+		this.savedScript = null;
+		Optional<ScriptLibrary.Script> found = saved.name().equals(DefaultScripts.IDLE) ? ServerScripts.idle()
+			: ServerScripts.library().get(saved.name()).filter(script -> script.code() != null);
+		if (found.isEmpty()) {
+			this.log.add(this.level().getGameTime(), Output.Level.WARN, saved.name() + " is gone or does not compile: not resumed");
+			return;
+		}
+		this.script = ScriptRun.resume(saved, found.get().code(), new ScriptHost(), this.log, this.memory, ServerScripts.library());
+		this.memory = this.script.memory();
+		this.scriptCode = found.get().code();
+		this.scriptSource = found.get().source();
+		this.idling = this.savedIdling;
 	}
 
 	/** Stops the script the bot runs, if any. */
@@ -385,6 +411,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 
 		@Override
+		public @Nullable Entity entity(UUID uuid) {
+			return AntBot.this.level() instanceof ServerLevel level ? level.getEntity(uuid) : null;
+		}
+
+		@Override
 		public Pos pos() {
 			BlockPos feet = AntBot.this.blockPosition();
 			return new Pos(feet.getX(), feet.getY(), feet.getZ());
@@ -436,6 +467,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		String line = "died at " + at.getX() + ", " + at.getY() + ", " + at.getZ() + ": " + how.getString();
 		this.log.add(level.getGameTime(), Output.Level.WARN, line);
 		this.tellOwner(Component.literal("[" + this.getName().getString() + "] " + line).withStyle(ChatFormatting.RED));
+		// A bot that dies before it resumed the script it was saved running comes back running that one, from the top.
+		this.resumeSavedScript();
 		// The script it ran itself, not the idle.py it fell back to, which it runs anyway once back.
 		ScriptRun last = this.idling ? null : this.script;
 		boolean library = this.scriptSource != null;
@@ -460,6 +493,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			return true;
 		}
 		bot.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), respawn.bot()));
+		// It starts its script again from the top below, never where a script saved with it was.
+		bot.savedScript = null;
 		BlockPos home = respawn.home();
 		bot.snapTo(Vec3.atBottomCenterOf(home), bot.getYRot(), bot.getXRot());
 		bot.setDeltaMovement(Vec3.ZERO);
@@ -551,6 +586,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 		Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
 		this.log.save(output);
+		ScriptRun.Saved running = this.isRunningScript() ? this.script.save() : this.savedScript;
+		if (running != null) {
+			running.store(output);
+			output.putBoolean("ScriptIdling", this.isRunningScript() ? this.idling : this.savedIdling);
+		}
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
 		}
@@ -570,6 +610,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.deaths = input.getIntOr("Deaths", 0);
 		this.memory = Memory.load(input);
 		this.log.load(input);
+		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
+		this.savedIdling = input.getBooleanOr("ScriptIdling", false);
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));

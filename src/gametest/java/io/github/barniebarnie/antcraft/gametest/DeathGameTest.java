@@ -4,8 +4,13 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ServerScripts;
 import io.github.barniebarnie.antcraft.script.lang.Output;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -16,10 +21,13 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 
 /** Bots dying and respawning at home (docs/scripting.md, Idle, home and death). */
 public class DeathGameTest implements CustomTestMethodInvoker {
@@ -83,6 +91,50 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(printed.contains("run 2 deaths 1"), "printed " + printed);
 			helper.assertTrue(owner.messages().stream().anyMatch(message -> message.text().contains("died")), "owner told " + owner.messages());
 			helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(1, 1, 1), 2.0);
+		});
+	}
+
+	/**
+	 * A bot loaded from a save in the middle of its script and killed before it ticks again respawns running its script
+	 * from the top (docs/scripting.md, Save and resume; Idle, home and death), not resuming the script it was saved with.
+	 */
+	@GameTest(maxTicks = 440)
+	public void aBotKilledBeforeItResumesItsSavedScriptRespawnsRunningItFromTheTop(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
+		bot.setHome(home);
+		String name = "death_resume_" + UUID.randomUUID().toString().substring(0, 8);
+		Path script = ServerScripts.worldFolder(helper.getLevel().getServer()).resolve(name + ".py");
+		GameTests.onEnd(helper, () -> {
+			try {
+				Files.deleteIfExists(script);
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		});
+		try {
+			Files.createDirectories(script.getParent());
+			Files.writeString(script, SCRIPT);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		BotScripts.command(helper, "antcraft script reload");
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		helper.runAfterDelay(5, () -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("run 1 deaths 0"), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+			bot.saveWithoutId(output);
+			bot.discard();
+			AntBot loaded = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+			loaded.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+			loaded.kill(helper.getLevel());
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again.getDeaths() == 1, "not respawned");
+			List<String> printed = BotScripts.log(Objects.requireNonNull(again), Output.Level.PRINT);
+			helper.assertTrue(printed.contains("run 2 deaths 1"), "printed " + printed + ", log " + BotScripts.log(again, Output.Level.DEBUG));
 		});
 	}
 

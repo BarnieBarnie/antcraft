@@ -110,7 +110,11 @@ A script pauses when it calls an action (until the action ends), calls `wait(tic
 
 ### Save and resume
 
-Because the VM's state is plain data (frames, operand stacks, globals, the call into the running action), a bot saves its running script with the world and resumes on load at the same instruction. The save holds a hash of each source file. If a file changed since, the script restarts from the top instead, keeping `memory`. Values that refer to the world (`Entity`) are saved by UUID and may come back as no longer valid.
+Because the VM's state is plain data (frames, operand stacks, globals, the call into the running action), a bot saves its running script with the world and resumes on load at the same instruction. What is saved: every frame (its code, by module and place in it, not as code), its locals and operand stack, every module the script imported with its globals, `memory`, loops in progress (iterators and dict views) and how far the running action got. Values are saved as a graph, so a list two variables share comes back as one list. `Pos`, `Stack`, `Block` and `Result` are saved as plain data; an `Entity` by its UUID, found again once the script uses it, and not `valid` while it is not loaded.
+
+The action a script was in starts again on load with the same arguments, as if the script had just called it: `goto` plans its path again from where the bot stands, `mine` walks back to its block, and so on. `wait` goes on with the ticks it had left. An action that is done at once when called again gives its result and the script goes on.
+
+The save holds a fingerprint of the compiled code of the script and of each module it imported (which changes with the source, line numbers included). If one of them changed since, is gone or no longer compiles, the script starts again from the top instead, with its arguments and keeping `memory`, and the bot's log says why (`miner.py changed since the save: miner starts again from the top`). So does a script that held a value that cannot be saved. A bot saved before scripts were saved with it runs `idle.py`. A script that is gone from the script folders when the bot loads is not resumed: the bot runs `idle.py`, with a warning in its log. A bot resumes its script on its first tick after loading, once the script folders are read. A bot that dies does not resume: it runs its script again from the top when it respawns (see Idle, home and death), also when it died before it resumed the script it was saved running.
 
 ## The bot API
 

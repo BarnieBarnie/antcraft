@@ -29,6 +29,9 @@ final class Builtins {
 			    return finish(items, [key(x) for x in items], extra)
 			""";
 
+	/** The compiled builtins written in the script language: a saved script refers to their code ({@link VmState}). */
+	static final Code PRELUDE_CODE = Compiler.compile(Parser.parse(Natives.BUILTINS_FILE, PRELUDE));
+
 	/** {@code keyed(items, key, finish, extra)}: calls {@code finish(items, keys, extra)} with the key of each item. */
 	static final PyFunction KEYED = prelude("keyed");
 
@@ -44,8 +47,7 @@ final class Builtins {
 			"range", v -> v instanceof PyRange);
 
 	private static PyFunction prelude(String name) {
-		Code module = Compiler.compile(Parser.parse(Natives.BUILTINS_FILE, PRELUDE));
-		for (Object constant : module.constants()) {
+		for (Object constant : PRELUDE_CODE.constants()) {
 			if (constant instanceof Code code && code.name().equals(name)) {
 				return new PyFunction(code, List.of(), null);
 			}

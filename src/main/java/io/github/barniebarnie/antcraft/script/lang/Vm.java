@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Runs compiled scripts a number of instructions at a time. A stack machine with explicit frames: a script calling a
@@ -93,16 +94,22 @@ public final class Vm {
 	private final int maxDepth;
 	private final ModuleLoader loader;
 	/** Every module of the run, by name, in the order their import started; the main module first. */
-	private final Map<String, PyModule> modules = new LinkedHashMap<>();
-	private final PyModule main;
+	final Map<String, PyModule> modules = new LinkedHashMap<>();
+	final PyModule main;
 	/** Values every module sees, such as {@code memory}; a module's own global of the same name hides one. */
-	private final Map<String, Object> builtins = new LinkedHashMap<>();
-	private final List<Frame> frames = new ArrayList<>();
-	private Status status = Status.RUNNING;
+	final Map<String, Object> builtins = new LinkedHashMap<>();
+	final List<Frame> frames = new ArrayList<>();
+	Status status = Status.RUNNING;
 	private ScriptError error;
-	private long executed;
+	long executed;
 	/** Instructions {@link #charge charged} but not yet taken from a budget. */
-	private long debt;
+	long debt;
+	/** The native call a suspended script waits on, so a loaded script can make it again ({@link #recall}). */
+	@Nullable PendingCall pending;
+
+	/** A call of a native: the function or method called, and its arguments as the script gave them. */
+	record PendingCall(Object callee, List<Object> args, Map<String, Object> kwargs) {
+	}
 
 	/** The name of the main module of a VM made without one. */
 	public static final String MAIN = "__main__";
@@ -126,8 +133,17 @@ public final class Vm {
 		this.maxDepth = maxDepth;
 		this.loader = loader;
 		this.main = new PyModule(name);
+		main.setCode(module);
 		modules.put(name, main);
 		frames.add(new Frame(module, new Object[module.locals().length], main, false));
+	}
+
+	/** A VM without frames whose main module is {@code main}, which {@link VmState} fills as it loads a saved one. */
+	Vm(PyModule main, Natives natives, ModuleLoader loader, int maxDepth) {
+		this.natives = natives;
+		this.maxDepth = maxDepth;
+		this.loader = loader;
+		this.main = main;
 	}
 
 	public Status status() {
@@ -157,6 +173,11 @@ public final class Vm {
 	/** Sets a value every module sees under {@code name}, as it sees the natives, such as {@code memory}. */
 	public void setBuiltin(String name, Object value) {
 		builtins.put(name, value);
+	}
+
+	/** The value {@link #setBuiltin} set under {@code name}, or null. */
+	public @Nullable Object builtin(String name) {
+		return builtins.get(name);
 	}
 
 	/** The modules of the run, by name, in the order their import started: the main module first; read-only. */
@@ -244,6 +265,29 @@ public final class Vm {
 		}
 		frames.getLast().push(value);
 		status = Status.RUNNING;
+		pending = null;
+	}
+
+	/**
+	 * Makes again the native call a {@link VmState loaded} script was suspended in when it was saved, with the same
+	 * arguments, as if the script had just reached it: the native starts its action again, suspending the script, or
+	 * returns its result at once. A native that fails fails the script at the call's line.
+	 */
+	public Status recall() {
+		if (status != Status.SUSPENDED || pending == null) {
+			throw new IllegalStateException("the script is " + status + ", not suspended in a native call");
+		}
+		PendingCall call = pending;
+		pending = null;
+		status = Status.RUNNING;
+		try {
+			call(call.callee(), call.args(), call.kwargs());
+		} catch (ScriptError e) {
+			Frame frame = frames.getLast();
+			error = e.file() == null ? place(e, frames.size() - 1, frame.pc - 1) : e;
+			status = Status.FAILED;
+		}
+		return status;
 	}
 
 	private void execute(Frame f, Op op, int arg) {
@@ -469,6 +513,7 @@ public final class Vm {
 					throw new ScriptError("maximum recursion depth exceeded");
 				}
 				module = new PyModule(prefix);
+				module.setCode(code);
 				modules.put(prefix, module);
 				if (code != null) {
 					frames.add(new Frame(code, new Object[code.locals().length], module, true));
@@ -558,7 +603,7 @@ public final class Vm {
 				if (function == null) {
 					throw new ScriptError("name '" + n.name() + "' is not defined");
 				}
-				callNative(function, n.name(), args, kwargs);
+				callNative(callee, function, n.name(), args, kwargs);
 			}
 			case PyMethod m -> {
 				NativeFunction function = natives.method(m.type(), m.name());
@@ -568,17 +613,24 @@ public final class Vm {
 				List<Object> withSelf = new ArrayList<>(args.size() + 1);
 				withSelf.add(m.self());
 				withSelf.addAll(args);
-				callNative(function, m.name(), withSelf, kwargs);
+				callNative(callee, function, m.name(), withSelf, kwargs, args);
 			}
 			default -> throw new ScriptError("'" + Values.typeName(callee) + "' object is not callable");
 		}
 	}
 
-	private void callNative(NativeFunction function, String name, List<Object> args, Map<String, Object> kwargs) {
+	private void callNative(Object callee, NativeFunction function, String name, List<Object> args, Map<String, Object> kwargs) {
+		callNative(callee, function, name, args, kwargs, args);
+	}
+
+	/** Calls {@code function} with {@code args}; {@code given} are the arguments the script gave {@code callee}. */
+	private void callNative(Object callee, NativeFunction function, String name, List<Object> args, Map<String, Object> kwargs,
+			List<Object> given) {
 		Object result = function.call(new NativeCall(name, Collections.unmodifiableList(args),
 				Collections.unmodifiableMap(kwargs)));
 		if (result == NativeCall.SUSPEND) {
 			status = Status.SUSPENDED;
+			pending = new PendingCall(callee, List.copyOf(given), Collections.unmodifiableMap(new LinkedHashMap<>(kwargs)));
 		} else if (result instanceof NativeCall.TailCall tail) {
 			call(tail.callee(), tail.args(), Map.of());
 		} else {

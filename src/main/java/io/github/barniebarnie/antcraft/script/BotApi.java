@@ -67,5 +67,15 @@ public final class BotApi {
 		public String describe() {
 			return "wait(" + ticks + ")";
 		}
+
+		@Override
+		public long progress() {
+			return ticks - left;
+		}
+
+		@Override
+		public void restore(long progress) {
+			left = ticks - progress;
+		}
 	}
 }

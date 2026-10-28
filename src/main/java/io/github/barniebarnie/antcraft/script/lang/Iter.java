@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * An iterator over a list, tuple, str, dict or range, as a {@code for} loop keeps it on the operand stack. Its state is
- * plain data (the value and a position), so a paused loop can be saved.
+ * plain data (the value and a position), so a paused loop can be saved ({@link VmState}).
  */
 public sealed interface Iter {
 	/** The next item, or null when there is none left. */
@@ -16,8 +16,8 @@ public sealed interface Iter {
 
 	/** Reads the list as it is now at each step, as Python does, so items added while looping are visited too. */
 	final class OfList implements Iter {
-		private final PyList list;
-		private int index;
+		final PyList list;
+		int index;
 
 		OfList(PyList list) {
 			this.list = list;
@@ -30,8 +30,8 @@ public sealed interface Iter {
 	}
 
 	final class OfTuple implements Iter {
-		private final PyTuple tuple;
-		private int index;
+		final PyTuple tuple;
+		int index;
 
 		OfTuple(PyTuple tuple) {
 			this.tuple = tuple;
@@ -45,8 +45,8 @@ public sealed interface Iter {
 
 	/** By code point, as Python counts characters. */
 	final class OfString implements Iter {
-		private final String string;
-		private int index;
+		final String string;
+		int index;
 
 		OfString(String string) {
 			this.string = string;
@@ -67,15 +67,20 @@ public sealed interface Iter {
 	 * Over the keys, values or (key, value) tuples; a dict that changes size meanwhile is an error, as in Python.
 	 */
 	final class OfDict implements Iter {
-		private final PyDict dict;
-		private final PyDictView.Kind kind;
-		private final List<Object> keys;
-		private int index;
+		final PyDict dict;
+		final PyDictView.Kind kind;
+		final List<Object> keys;
+		int index;
 
 		OfDict(PyDict dict, PyDictView.Kind kind) {
+			this(dict, kind, dict.keys());
+		}
+
+		/** Over {@code keys}, the dict's keys when the iteration started, as a saved one is loaded. */
+		OfDict(PyDict dict, PyDictView.Kind kind, List<Object> keys) {
 			this.dict = dict;
 			this.kind = kind;
-			this.keys = dict.keys();
+			this.keys = keys;
 		}
 
 		@Override
@@ -97,9 +102,9 @@ public sealed interface Iter {
 
 	/** Over a fixed list of items, such as what {@code reversed} gives. */
 	final class OfItems implements Iter {
-		private final String typeName;
-		private final List<Object> items;
-		private int index;
+		final String typeName;
+		final List<Object> items;
+		int index;
 
 		OfItems(String typeName, List<Object> items) {
 			this.typeName = typeName;
@@ -124,8 +129,8 @@ public sealed interface Iter {
 
 	/** {@code enumerate}: (count, item) tuples of another iterator. */
 	final class OfEnumerate implements Iter {
-		private final Iter items;
-		private long count;
+		final Iter items;
+		long count;
 
 		OfEnumerate(Iter items, long start) {
 			this.items = items;
@@ -151,7 +156,7 @@ public sealed interface Iter {
 
 	/** {@code zip}: tuples of the next item of each iterator, until the shortest is done. */
 	final class OfZip implements Iter {
-		private final List<Iter> iters;
+		final List<Iter> iters;
 
 		OfZip(List<Iter> iters) {
 			this.iters = iters;
@@ -184,8 +189,8 @@ public sealed interface Iter {
 	}
 
 	final class OfRange implements Iter {
-		private final PyRange range;
-		private long index;
+		final PyRange range;
+		long index;
 
 		OfRange(PyRange range) {
 			this.range = range;

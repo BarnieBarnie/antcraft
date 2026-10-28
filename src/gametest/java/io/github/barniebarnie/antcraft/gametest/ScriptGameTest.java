@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -263,6 +264,92 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Writes {@code source} as a script of the world script folder under a name of its own, reloads the library and starts
+	 * it on {@code bot}; gives the script's name. The file is deleted when the test ends.
+	 */
+	private static String runLibraryScript(GameTestHelper helper, AntBot bot, String prefix, String source) {
+		String name = prefix + UUID.randomUUID().toString().substring(0, 8);
+		Path script = ServerScripts.worldFolder(helper.getLevel().getServer()).resolve(name + ".py");
+		GameTests.onEnd(helper, () -> {
+			try {
+				Files.deleteIfExists(script);
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		});
+		write(script, source);
+		BotScripts.command(helper, "antcraft script reload");
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
+		return name;
+	}
+
+	/** Saves {@code bot} as a world save does, removes it and loads the save as a new bot, as loading the world does. */
+	private static AntBot saveAndLoad(GameTestHelper helper, AntBot bot) {
+		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+		bot.saveWithoutId(output);
+		bot.discard();
+		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+		return copy;
+	}
+
+	/** The log lines of {@code bot} at print level, with the tick of each. */
+	private static List<BotLog.Entry> prints(AntBot bot) {
+		return bot.getLog().last(BotLog.CAPACITY, Output.Level.PRINT).stream().filter(e -> e.level() == Output.Level.PRINT).toList();
+	}
+
+	/**
+	 * A bot saved in the middle of a {@code wait} and loaded again goes on with the ticks it had left (docs/scripting.md,
+	 * Save and resume): it prints once before and once after, 30 ticks apart, as without the save.
+	 */
+	@GameTest(maxTicks = 60)
+	public void aBotSavedInAWaitResumesItWithTheTicksItHadLeft(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		runLibraryScript(helper, bot, "save_wait_", "n = 2\nprint('before', n)\nwait(30)\nprint('after', n)\n");
+		AntBot[] loaded = new AntBot[1];
+		helper.runAfterDelay(10, () -> {
+			helper.assertTrue("wait(30)".equals(bot.getScript().action()), "action " + bot.getScript().action());
+			loaded[0] = saveAndLoad(helper, bot);
+		});
+		failOnError(helper, () -> loaded[0]);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(loaded[0] != null, "not saved yet");
+			List<BotLog.Entry> prints = prints(loaded[0]);
+			helper.assertTrue(prints.size() == 2 && prints.get(0).text().equals("before 2") && prints.get(1).text().equals("after 2"),
+				"log " + BotScripts.log(loaded[0], Output.Level.DEBUG));
+			helper.assertTrue(prints.get(1).tick() == prints.get(0).tick() + 30, "printed at " + prints.get(0).tick() + " and " + prints.get(1).tick());
+			helper.assertTrue(loaded[0].getScript() != null && loaded[0].getScript().state() == ScriptRun.State.FINISHED, "script not finished");
+		});
+	}
+
+	/**
+	 * A bot saved in the middle of a {@code goto} and loaded again walks on to the same target, and the script goes on
+	 * after the call with its result, without starting again.
+	 */
+	@GameTest(maxTicks = 120)
+	public void aBotSavedInAGotoResumesItAndArrives(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 6));
+		runLibraryScript(helper, bot, "save_goto_", "print('start')\nr = goto((" + target.getX() + ", " + target.getY() + ", " + target.getZ()
+			+ "))\nprint(r.ok, pos())\n");
+		AntBot[] loaded = new AntBot[1];
+		helper.runAfterDelay(8, () -> {
+			String action = bot.getScript().action();
+			helper.assertTrue(action != null && action.startsWith("goto("), "action " + action);
+			helper.assertFalse(bot.blockPosition().equals(target), "already there");
+			loaded[0] = saveAndLoad(helper, bot);
+		});
+		failOnError(helper, () -> loaded[0]);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(loaded[0] != null, "not saved yet");
+			String arrived = "True Pos(" + target.getX() + ", " + target.getY() + ", " + target.getZ() + ")";
+			List<String> prints = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
+			helper.assertTrue(prints.equals(List.of("start", arrived)), "log " + BotScripts.log(loaded[0], Output.Level.DEBUG));
+		});
+	}
+
 	private static void write(Path file, String source) {
 		try {
 			Files.createDirectories(file.getParent());
@@ -274,7 +361,16 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 
 	/** Fails at once when {@code bot}'s script fails, rather than waiting out the test. */
 	private static void failOnError(GameTestHelper helper, AntBot bot) {
+		failOnError(helper, () -> bot);
+	}
+
+	/** Fails at once when the script of the bot {@code bot} gives fails; it gives null while there is none yet. */
+	private static void failOnError(GameTestHelper helper, Supplier<@Nullable AntBot> bots) {
 		helper.onEachTick(() -> {
+			AntBot bot = bots.get();
+			if (bot == null) {
+				return;
+			}
 			List<String> errors = bot.getLog().last(BotLog.CAPACITY, Output.Level.ERROR).stream()
 				.filter(entry -> entry.level() == Output.Level.ERROR).map(BotLog.Entry::text).toList();
 			if (!errors.isEmpty()) {

@@ -12,12 +12,21 @@ import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
+import io.github.barniebarnie.antcraft.script.lang.VmState;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.StringTag;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -58,6 +67,11 @@ public final class ScriptRun {
 		default MoveApi.Body body() {
 			throw new UnsupportedOperationException("this bot cannot move");
 		}
+
+		/** The loaded entity {@code uuid} of the bot's world, or null; how a resumed script finds its saved entities. */
+		default @Nullable Entity entity(UUID uuid) {
+			return null;
+		}
 	}
 
 	/** Something a script waits on that takes ticks, such as {@code wait(ticks)}. */
@@ -78,6 +92,61 @@ public final class ScriptRun {
 
 		/** Ends the action early, because the script was stopped; it lets go of what it holds, such as the bot's path. */
 		default void cancel() {
+		}
+
+		/**
+		 * How far the action got, saved with the bot: a resumed script starts its action again with the same arguments and
+		 * hands it this ({@link #restore}). 0 for an action that starts over, such as {@code goto}, which plans its path again.
+		 */
+		default long progress() {
+			return 0;
+		}
+
+		/** Goes on from {@code progress}, what {@link #progress} gave when the bot was saved. */
+		default void restore(long progress) {
+		}
+	}
+
+	/**
+	 * A running script as saved with its bot (docs/scripting.md, Save and resume): its name and arguments, the state of
+	 * its VM ({@link VmState}) and how far its action got. Without a VM state (the script held a value that cannot be
+	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads.
+	 */
+	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, @Nullable String problem) {
+		private static final String KEY = "Script";
+
+		public Saved {
+			args = List.copyOf(args);
+		}
+
+		/** Stores it with the bot. */
+		public void store(ValueOutput output) {
+			CompoundTag tag = new CompoundTag();
+			tag.putString("name", name);
+			ListTag list = new ListTag();
+			args.forEach(arg -> list.add(StringTag.valueOf(arg)));
+			tag.put("args", list);
+			if (vm != null) {
+				tag.putByteArray("vm", vm);
+				tag.putLong("progress", progress);
+			}
+			if (problem != null) {
+				tag.putString("problem", problem);
+			}
+			output.store(KEY, CompoundTag.CODEC, tag);
+		}
+
+		/** The script saved with the bot, if it ran one. */
+		public static Optional<Saved> read(ValueInput input) {
+			return input.read(KEY, CompoundTag.CODEC).map(tag -> {
+				ListTag list = tag.getListOrEmpty("args");
+				List<String> args = new ArrayList<>();
+				for (int i = 0; i < list.size(); i++) {
+					args.add(list.getStringOr(i, ""));
+				}
+				return new Saved(tag.getStringOr("name", ""), args, tag.getByteArray("vm").orElse(null),
+						tag.getLongOr("progress", 0), tag.getString("problem").orElse(null));
+			});
 		}
 	}
 
@@ -102,6 +171,10 @@ public final class ScriptRun {
 	private boolean stopRequested;
 	private @Nullable String lastResult;
 	private State state = State.RUNNING;
+	/** Whether the run was resumed suspended in a native call, which it makes again on its first tick ({@link Vm#recall}). */
+	private boolean recall;
+	/** The progress of the action the run was resumed in, which it hands to the action it starts again. */
+	private long progress;
 
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log) {
 		this(name, code, args, host, log, Memory.create());
@@ -122,9 +195,67 @@ public final class ScriptRun {
 		this.args = List.copyOf(args);
 		this.host = host;
 		this.log = log;
+		this.vm = new Vm(name, code, this.natives(), this.loader(library));
+		this.vm.setGlobal("ARGS", new PyList(new ArrayList<>(args)));
+		this.vm.setBuiltin("memory", memory);
+	}
+
+	/** A run that goes on where {@code saved} was; its script is now compiled to {@code code}. */
+	private ScriptRun(Saved saved, byte[] state, Code code, Host host, BotLog log, ScriptLibrary library) throws VmState.Unloadable {
+		this.name = saved.name();
+		this.file = code.file();
+		this.args = saved.args();
+		this.host = host;
+		this.log = log;
+		this.vm = VmState.load(state, code, this.natives(), this.loader(library), Vm.DEFAULT_MAX_DEPTH, new SavedValues(host::entity),
+				Memory::create);
+		this.recall = this.vm.status() == Vm.Status.SUSPENDED;
+		this.progress = saved.progress();
+	}
+
+	/**
+	 * Resumes the run {@code saved} with the bot (docs/scripting.md, Save and resume), its script now compiled to
+	 * {@code code}: at the instruction it was at, starting the action it was in again with the same arguments. When the
+	 * script or a module it imported changed since, or its state was not saved, the script starts again from the top
+	 * with {@code memory}, with a line in the log that says why.
+	 */
+	public static ScriptRun resume(Saved saved, Code code, Host host, BotLog log, PyDict memory, ScriptLibrary library) {
+		String why = saved.problem();
+		if (saved.vm() != null) {
+			try {
+				return new ScriptRun(saved, saved.vm(), code, host, log, library);
+			} catch (VmState.Unloadable e) {
+				why = e.getMessage();
+			}
+		}
+		log.add(host.gameTime(), Level.INFO, (why == null ? "" : why + ": ") + saved.name() + " starts again from the top");
+		return new ScriptRun(saved.name(), code, saved.args(), host, log, memory, library);
+	}
+
+	/** Saves the run with the bot; see {@link #resume}. */
+	public Saved save() {
+		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
+		try {
+			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity)), saveProgress, null);
+		} catch (VmState.NotSaveable e) {
+			return new Saved(this.name, this.args, null, 0, e.getMessage());
+		}
+	}
+
+	/** The script's {@code memory}: the bot's, or the one a resumed run was saved with, with the run's own references into it. */
+	public PyDict memory() {
+		return (PyDict) Objects.requireNonNull(this.vm.builtin("memory"));
+	}
+
+	private Natives natives() {
 		Natives natives = Natives.standard(this::write);
 		BotApi.register(natives, this);
-		this.vm = new Vm(name, code, natives, new ModuleLoader() {
+		return natives;
+	}
+
+	/** The library's modules, recording the source of each one imported. */
+	private ModuleLoader loader(ScriptLibrary library) {
+		return new ModuleLoader() {
 			@Override
 			public @Nullable Code load(String module) {
 				library.get(module).ifPresent(script -> imported.put(module, script.source()));
@@ -135,9 +266,7 @@ public final class ScriptRun {
 			public boolean isPackage(String module) {
 				return library.isPackage(module);
 			}
-		});
-		this.vm.setGlobal("ARGS", new PyList(new ArrayList<>(args)));
-		this.vm.setBuiltin("memory", memory);
+		};
 	}
 
 	/** Counts {@code instructions} against the script's budget for work a native did, such as a block search. */
@@ -171,6 +300,12 @@ public final class ScriptRun {
 		reflexes();
 		Vm.Status status;
 		try {
+			if (recall) {
+				recall = false;
+				if (vm.recall() == Vm.Status.SUSPENDED && action != null) {
+					action.restore(progress);
+				}
+			}
 			if (action != null) {
 				if (!action.tick()) {
 					return;

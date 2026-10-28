@@ -50,6 +50,21 @@ public final class PyDict {
 		}
 	}
 
+	/** Stores without the {@link StoreCheck}, as a saved dict is loaded. */
+	void putUnchecked(Object key, Object value) {
+		Object[] entry = entries.get(Values.key(key));
+		if (entry == null) {
+			entries.put(Values.key(key), new Object[] {key, value});
+		} else {
+			entry[1] = value;
+		}
+	}
+
+	/** Whether the dict checks what is stored into it, as {@code memory} does. */
+	boolean checked() {
+		return check != null;
+	}
+
 	public boolean containsKey(Object key) {
 		return entries.containsKey(Values.key(key));
 	}
