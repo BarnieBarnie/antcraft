@@ -36,6 +36,16 @@ final class BotBody implements MoveApi.Body {
 		this.bot.setHome(new BlockPos(clamp(home.x()), clamp(home.y()), clamp(home.z())));
 	}
 
+	@Override
+	public String dimension() {
+		return this.bot.level().dimension().identifier().toString();
+	}
+
+	@Override
+	public String homeDimension() {
+		return this.bot.getHomeDimension().identifier().toString();
+	}
+
 	private static int clamp(long value) {
 		return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, value));
 	}

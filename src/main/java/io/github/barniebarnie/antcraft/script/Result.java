@@ -15,6 +15,7 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 
 	public static final String UNREACHABLE = "unreachable";
 	public static final String NOT_LOADED = "not_loaded";
+	public static final String WRONG_DIMENSION = "wrong_dimension";
 	public static final String INTERRUPTED = "interrupted";
 	public static final String STOPPED = "stopped";
 	public static final String TIMEOUT = "timeout";

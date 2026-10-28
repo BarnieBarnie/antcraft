@@ -188,7 +188,8 @@ final class Reflexes {
 		}
 		Vec3 home = Vec3.atBottomCenterOf(this.bot.getScriptHome());
 		Vec3 mob = hostile.position();
-		if (fleesHome(this.bot.position().distanceTo(mob), home.distanceTo(mob), this.bot.position().distanceTo(home))) {
+		// Home's coordinates in another dimension lead nowhere safe.
+		if (this.bot.level().dimension() == this.bot.getHomeDimension() && fleesHome(this.bot.position().distanceTo(mob), home.distanceTo(mob), this.bot.position().distanceTo(home))) {
 			return new Goal.Near(this.bot.getScriptHome(), 1);
 		}
 		return new Goal.Away(hostile.blockPosition(), FLEE_RANGE);

@@ -277,8 +277,13 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/** Sets the bot's home in the dimension the bot is in. */
 	public void setHome(@Nullable BlockPos home) {
+		this.setHome(home, this.level().dimension());
+	}
+
+	/** Sets the bot's home in {@code dimension}. */
+	public void setHome(@Nullable BlockPos home, ResourceKey<Level> dimension) {
 		this.home = home;
-		this.homeDimension = this.level().dimension();
+		this.homeDimension = dimension;
 	}
 
 	public @Nullable UUID getColonyId() {

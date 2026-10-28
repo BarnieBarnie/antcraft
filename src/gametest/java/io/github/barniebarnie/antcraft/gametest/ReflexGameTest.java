@@ -15,6 +15,7 @@ import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 
@@ -136,6 +137,25 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 15, 1, 15);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
 		bot.setHome(helper.absolutePos(new BlockPos(8, 1, 8)));
+		fleeFrom(helper, bot, husk);
+	}
+
+	/**
+	 * A bot low on health with its home in the Nether flees away from the husk, not to its home's coordinates here (#344).
+	 * Home lies further from the husk than the bot, so in its home's dimension the bot would run there, but within 8 of the
+	 * husk, off the way away from it. Wide like {@link #fleesAHostileMobAtLowHealth}.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 60)
+	public void fleesAwayNotHomeInAnotherDimension(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 15, 1, 15);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
+		BlockPos home = helper.absolutePos(new BlockPos(15, 1, 9));
+		bot.setHome(home, Level.NETHER);
+		helper.onEachTick(() -> {
+			if (bot.blockPosition().distManhattan(home) <= 1) {
+				helper.fail("bot fled to its home's coordinates in the Overworld");
+			}
+		});
 		fleeFrom(helper, bot, husk);
 	}
 

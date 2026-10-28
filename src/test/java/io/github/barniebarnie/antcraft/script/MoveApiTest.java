@@ -21,6 +21,8 @@ class MoveApiTest {
 		long time;
 		Pos pos = new Pos(0, 64, 0);
 		Pos home = new Pos(0, 64, 0);
+		String dimension = "minecraft:overworld";
+		String homeDimension = "minecraft:overworld";
 		/** The chunks up to this x are loaded; those east of it not. */
 		int loadedUpToX = Integer.MAX_VALUE;
 		/** How far from z = 0, in chunks, chunks are loaded. */
@@ -72,6 +74,17 @@ class MoveApiTest {
 		@Override
 		public void setHome(Pos home) {
 			this.home = home;
+			this.homeDimension = dimension;
+		}
+
+		@Override
+		public String dimension() {
+			return dimension;
+		}
+
+		@Override
+		public String homeDimension() {
+			return homeDimension;
 		}
 
 		@Override
@@ -308,6 +321,40 @@ class MoveApiTest {
 		tick(run);
 		assertEquals(List.of("Pos(1, 2, 3)", "None", "Pos(4, 5, 6)"), printed());
 		assertEquals(new Pos(4, 5, 6), bot.home);
+	}
+
+	@Test
+	void scriptsReadTheDimensionAndTheHomesDimension() {
+		bot.dimension = "minecraft:the_nether";
+		ScriptRun run = start("print(dimension(), home_dimension())\nset_home((4, 5, 6))\nprint(home_dimension())\n");
+		tick(run);
+		assertEquals(List.of("minecraft:the_nether minecraft:overworld", "minecraft:the_nether"), printed());
+	}
+
+	/** In another dimension than its home's, {@code goto(home())} fails rather than walk to the home's coordinates there (#344). */
+	@Test
+	void gotoHomeInAnotherDimensionFailsWithWrongDimension() {
+		bot.home = new Pos(5, 64, 5);
+		bot.dimension = "minecraft:the_nether";
+		ScriptRun run = start("r = goto(home())\nprint(r.ok, r.reason)\nprint(goto((6, 64, 5), near=1).reason)\n");
+		bot.pathStatus = MoveApi.PathStatus.FAILED;
+		for (int i = 0; i < 4; i++) {
+			tick(run);
+		}
+		assertEquals(List.of("False wrong_dimension", "unreachable"), printed());
+		assertEquals(List.of("Pos(6, 64, 5) near 1"), bot.paths);
+		assertTrue(log.last(100, Level.DEBUG).stream().anyMatch(e -> e.text().equals("goto(Pos(5, 64, 5)) -> wrong_dimension")),
+			"log " + log.last(100, Level.DEBUG));
+	}
+
+	/** {@code /antcraft bot status} shows a {@code wrong_dimension} goto as the last result. */
+	@Test
+	void gotoHomeInAnotherDimensionIsTheLastResult() {
+		bot.home = new Pos(5, 64, 5);
+		bot.dimension = "minecraft:the_nether";
+		ScriptRun run = start("goto(home())\nwait(10)\n");
+		tick(run);
+		assertEquals("goto(Pos(5, 64, 5)) -> wrong_dimension", run.lastResult());
 	}
 
 	@Test

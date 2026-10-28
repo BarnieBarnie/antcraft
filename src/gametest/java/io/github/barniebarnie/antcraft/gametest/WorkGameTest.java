@@ -234,6 +234,16 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		}
 
 		@Override
+		public String dimension() {
+			return this.body.dimension();
+		}
+
+		@Override
+		public String homeDimension() {
+			return this.body.homeDimension();
+		}
+
+		@Override
 		public boolean chunkLoaded(int x, int z) {
 			return this.chunksLoaded && this.body.chunkLoaded(x, z);
 		}

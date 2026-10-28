@@ -6,12 +6,15 @@
 
 
 def at_home():
-    """Whether the bot stands at its home."""
-    return pos() == home()
+    """Whether the bot stands at its home, in its home's dimension."""
+    return pos() == home() and dimension() == home_dimension()
 
 
 def go_home(tries=3):
-    """Walks home; gives True once there, False when no way home was found in a few tries."""
+    """Walks home; gives True once there, False when no way home was found in a few tries,
+    or at once in another dimension than the home's."""
+    if dimension() != home_dimension():
+        return False
     for _ in range(tries):
         if at_home():
             return True

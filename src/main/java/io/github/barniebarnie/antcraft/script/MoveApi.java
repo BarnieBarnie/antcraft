@@ -12,7 +12,8 @@ import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()} and {@code set_home(pos)},
+ * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
+ * and {@code home_dimension()},
  * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
  */
@@ -50,7 +51,14 @@ public final class MoveApi {
 		/** The bot's home: where it was first spawned, until {@link #setHome} changes it. */
 		Pos home();
 
+		/** Sets the home, in the dimension the bot is in. */
 		void setHome(Pos home);
+
+		/** The id of the dimension the bot is in, such as {@code minecraft:overworld}. */
+		String dimension();
+
+		/** The id of the dimension of the bot's home. */
+		String homeDimension();
 
 		/** Whether the chunk at chunk coordinates {@code x}, {@code z} is loaded. */
 		boolean chunkLoaded(int x, int z);
@@ -119,6 +127,14 @@ public final class MoveApi {
 			Args.bind("home", call, 0);
 			return run.host().body().home();
 		});
+		natives.register("home_dimension", call -> {
+			Args.bind("home_dimension", call, 0);
+			return run.host().body().homeDimension();
+		});
+		natives.register("dimension", call -> {
+			Args.bind("dimension", call, 0);
+			return run.host().body().dimension();
+		});
 		natives.register("set_home", call -> {
 			Pos home = Pos.of(Args.bind("set_home", call, 1, "pos")[0]);
 			run.host().body().setHome(home);
@@ -130,6 +146,11 @@ public final class MoveApi {
 			long near = Args.absent(args[1]) ? 0 : Args.integer(args[1]);
 			if (near < 0) {
 				throw new ScriptError("goto() near must be at least 0, not " + near);
+			}
+			Body body = run.host().body();
+			// ponytail: any goto to the home's coordinates counts as going home; a Pos carries no dimension to tell them apart.
+			if (target.equals(body.home()) && !body.dimension().equals(body.homeDimension())) {
+				return run.done("goto(" + target + (near == 0 ? "" : ", near=" + near) + ")", Result.fail(Result.WRONG_DIMENSION));
 			}
 			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call);
 		});
