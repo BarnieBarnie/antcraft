@@ -792,7 +792,18 @@ public final class Parser {
 		if (parser.peek().kind() != Kind.EOF) {
 			throw parser.unexpected(parser.peek());
 		}
-		return new Ast.FString.Value(expr, field.conversion(), field.spec());
+		List<Ast.FString.Part> spec = null;
+		if (field.spec() != null) {
+			spec = new ArrayList<>();
+			for (Token.FPiece piece : field.spec()) {
+				spec.add(switch (piece) {
+					case Token.Text text -> new Ast.FString.Text(text.text());
+					case Token.Field nested -> field(nested);
+				});
+			}
+			spec = List.copyOf(spec);
+		}
+		return new Ast.FString.Value(expr, field.conversion(), spec);
 	}
 
 	private Expr parenthesized() {

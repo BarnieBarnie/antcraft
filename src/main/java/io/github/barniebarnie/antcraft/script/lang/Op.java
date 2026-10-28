@@ -82,6 +82,11 @@ public enum Op {
 	 * {@code constants[arg]} says.
 	 */
 	FORMAT,
+	/**
+	 * Pops a format spec, then replaces TOS with its text in an f-string: converted by {@code arg} (a conversion
+	 * character, or 0 for none) and formatted with that spec.
+	 */
+	FORMAT_SPEC,
 	/** Pops {@code arg} strings and pushes them joined. */
 	BUILD_STRING,
 	/** Pops TOS and appends it to the list {@code arg} values below it (under a comprehension's iterators). */

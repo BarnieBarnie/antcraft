@@ -102,4 +102,22 @@ class FStringTest {
 	void stringPrecisionTruncates() {
 		assertEquals("a", eval("f'{\"ab\":.1}'"));
 	}
+
+	@Test
+	void specsMayHoldNestedFields() {
+		assertEquals("      3.14|****ab****|'ab'      |   3.14159|  x",
+				run("x = 3.14159\nw = 10\np = 2\nn = 'ab'\n"
+						+ "print(f'{x:{w}.{p}f}|{n:{\"*\"}^{w}}|{n!r:{w}}|{x:{w:{p}}}|{\"x\":>{p + 1}}')"));
+		assertEquals("  7", run("def f(w):\n    return f'{7:{w}}'\nprint(f(3))"));
+		assertEquals("t.py:2: name 'w' is not defined", fails("x = 1\nprint(f'{x:{w}}')"));
+		assertEquals("Invalid format specifier '1 0' for object of type 'int'", error("f'{5:{1} {0}}'"));
+	}
+
+	@Test
+	void anEqualsSignShowsTheExpression() {
+		assertEquals("x=3.14159|x = 3.14159|x=3.14|n=ab|x=   3.14159|1+2=3|n='ab'|x == 1=False",
+				run("x = 3.14159\nn = 'ab'\n"
+						+ "print(f'{x=}|{x = }|{x=:.2f}|{n=!s}|{x=!r:>10}|{1+2=}|{n=}|{x == 1=}')"));
+		assertEquals("True|a!=b=True", run("a = 1\nb = 2\nprint(f'{a != b}|{a!=b=}')"));
+	}
 }

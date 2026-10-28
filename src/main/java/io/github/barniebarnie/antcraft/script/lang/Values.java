@@ -452,6 +452,11 @@ public final class Values {
 					return new PyTuple(items);
 				}
 			}
+			case MOD -> {
+				if (a instanceof String s) {
+					return Format.percent(s, b);
+				}
+			}
 			case MUL -> {
 				if (isInt(b) && (a instanceof String || a instanceof PyList || a instanceof PyTuple)) {
 					return repeat(a, asLong(b), inPlace);

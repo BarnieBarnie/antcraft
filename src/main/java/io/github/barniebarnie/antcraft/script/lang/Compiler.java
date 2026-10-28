@@ -324,6 +324,32 @@ public final class Compiler {
 
 	// Expressions
 
+	/** Pushes the text of {@code parts}, an f-string's or a nested spec's, joined. */
+	private void fString(Ast.FString f, List<Ast.FString.Part> parts) {
+		for (Ast.FString.Part part : parts) {
+			switch (part) {
+				case Ast.FString.Text text -> {
+					at(f);
+					emit(Op.LOAD_CONST, constant(text.text()));
+				}
+				case Ast.FString.Value value -> {
+					expr(value.expr());
+					String spec = value.constantSpec();
+					if (spec != null) {
+						at(value.expr());
+						emit(Op.FORMAT, constant(new Code.FormatField(value.conversion(), spec)));
+					} else {
+						fString(f, value.spec());
+						at(value.expr());
+						emit(Op.FORMAT_SPEC, value.conversion());
+					}
+				}
+			}
+		}
+		at(f);
+		emit(Op.BUILD_STRING, parts.size());
+	}
+
 	private void expr(Expr e) {
 		switch (e) {
 			case Ast.Name n -> {
@@ -335,24 +361,7 @@ public final class Compiler {
 			case Ast.StrLit n -> constant(n, n.value());
 			case Ast.BoolLit n -> constant(n, n.value());
 			case Ast.NoneLit n -> constant(n, PyNone.NONE);
-			case Ast.FString f -> {
-				for (Ast.FString.Part part : f.parts()) {
-					switch (part) {
-						case Ast.FString.Text text -> {
-							at(f);
-							emit(Op.LOAD_CONST, constant(text.text()));
-						}
-						case Ast.FString.Value value -> {
-							expr(value.expr());
-							at(value.expr());
-							emit(Op.FORMAT, constant(new Code.FormatField(value.conversion(),
-									value.spec() == null ? "" : value.spec())));
-						}
-					}
-				}
-				at(f);
-				emit(Op.BUILD_STRING, f.parts().size());
-			}
+			case Ast.FString f -> fString(f, f.parts());
 			case Ast.ListLit l -> {
 				l.elements().forEach(this::expr);
 				at(l);

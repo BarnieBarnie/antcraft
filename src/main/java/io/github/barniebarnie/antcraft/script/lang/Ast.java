@@ -119,8 +119,25 @@ public final class Ast {
 		public record Text(String text) implements Part {
 		}
 
-		/** {@code {expr!conversion:spec}}: {@code conversion} is {@code '\0'} and {@code spec} null when absent. */
-		public record Value(Expr expr, char conversion, String spec) implements Part {
+		/**
+		 * {@code {expr!conversion:spec}}: {@code conversion} is {@code '\0'} and {@code spec} null when absent; a spec
+		 * is text and nested values ({@code {x:{width}}}).
+		 */
+		public record Value(Expr expr, char conversion, List<Part> spec) implements Part {
+			/** The spec's text when it holds no nested values, {@code ""} when there is none, else null. */
+			public String constantSpec() {
+				if (spec == null) {
+					return "";
+				}
+				StringBuilder out = new StringBuilder();
+				for (Part part : spec) {
+					if (!(part instanceof Text text)) {
+						return null;
+					}
+					out.append(text.text());
+				}
+				return out.toString();
+			}
 		}
 	}
 

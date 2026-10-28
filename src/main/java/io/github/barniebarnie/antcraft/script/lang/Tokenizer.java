@@ -392,11 +392,7 @@ public final class Tokenizer {
 			} else if (ch == '}') {
 				throw error(line, col, "f-string: single '}' is not allowed");
 			} else if (ch == '{') {
-				if (!text.isEmpty()) {
-					pieces.add(new Token.Text(text.toString()));
-					text.setLength(0);
-				}
-				pieces.add(field(q));
+				field(q, pieces, text);
 			} else {
 				text.append(ch);
 				advance();
@@ -408,8 +404,12 @@ public final class Tokenizer {
 		return pieces;
 	}
 
-	/** A replacement field; {@code pos} is at its '{'. */
-	private Token.Field field(Quote q) {
+	/**
+	 * Reads a replacement field, {@code pos} at its '{', and adds it to {@code pieces} after the pending {@code text}.
+	 * With a trailing {@code =} ({@code {x=}}), the expression's source up to the field's end is text before it, and
+	 * the value is shown as its repr unless the field has a conversion or a spec. A spec may hold fields itself.
+	 */
+	private void field(Quote q, List<Token.FPiece> pieces, StringBuilder text) {
 		int braceLine = line;
 		int braceCol = col;
 		advance();
@@ -418,7 +418,7 @@ public final class Tokenizer {
 		int sourceStart = pos;
 		int depth = 0;
 		char conversion = '\0';
-		String spec = null;
+		List<Token.FPiece> spec = null;
 		int sourceEnd;
 		while (true) {
 			char ch = stringChar(q);
@@ -447,6 +447,13 @@ public final class Tokenizer {
 		if (source.isBlank()) {
 			throw error(braceLine, braceCol, "f-string: empty expression not allowed");
 		}
+		String trimmed = source.stripTrailing();
+		boolean debug = trimmed.length() >= 2 && trimmed.endsWith("=")
+				&& "=!<>".indexOf(trimmed.charAt(trimmed.length() - 2)) < 0;
+		if (debug) {
+			text.append(source);
+			source = trimmed.substring(0, trimmed.length() - 1);
+		}
 		if (cur() == '!') {
 			advance();
 			char ch = stringChar(q);
@@ -462,6 +469,7 @@ public final class Tokenizer {
 		}
 		if (cur() == ':') {
 			advance();
+			spec = new ArrayList<>();
 			StringBuilder format = new StringBuilder();
 			while (true) {
 				char ch = stringChar(q);
@@ -469,7 +477,8 @@ public final class Tokenizer {
 					throw error(braceLine, braceCol, "f-string: expecting '}'");
 				}
 				if (ch == '{') {
-					throw error(line, col, "nested replacement fields in format specs are not supported");
+					field(q, spec, format);
+					continue;
 				}
 				if (ch == '}') {
 					break;
@@ -477,10 +486,20 @@ public final class Tokenizer {
 				format.append(ch);
 				advance();
 			}
-			spec = format.toString();
+			if (!format.isEmpty()) {
+				spec.add(new Token.Text(format.toString()));
+			}
+			spec = List.copyOf(spec);
 		}
 		advance();
-		return new Token.Field(source, sourceLine, sourceCol, conversion, spec);
+		if (debug && conversion == '\0' && spec == null) {
+			conversion = 'r';
+		}
+		if (!text.isEmpty()) {
+			pieces.add(new Token.Text(text.toString()));
+			text.setLength(0);
+		}
+		pieces.add(new Token.Field(source, sourceLine, sourceCol, conversion, spec));
 	}
 
 	/** Skips a string inside an f-string field; the field's tokenizer reads it later. */

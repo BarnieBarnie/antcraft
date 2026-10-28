@@ -9,8 +9,8 @@ import java.util.Map;
 
 /**
  * Python's text formatting: {@code format(value, spec)} with the format specification mini-language, f-string fields
- * with their conversions, and {@code str.format}. Numbers are rounded from their exact binary value, half to even, as
- * CPython does.
+ * with their conversions, {@code str.format} and {@code str % args}. Numbers are rounded from their exact binary
+ * value, half to even, as CPython does.
  */
 final class Format {
 	private Format() {
@@ -455,6 +455,244 @@ final class Format {
 			out.append(field(value, conversion, spec));
 		}
 		return out.toString();
+	}
+
+	/**
+	 * {@code template % args}, Python's printf-style formatting: {@code %[(key)][flags][width][.precision]type} with
+	 * the flags {@code - + space # 0}, {@code *} for a width or precision taken from the arguments, and the types
+	 * {@code d i u o x X e E f F g G c s r a %}. A tuple gives one value a field, a dict the values of named fields;
+	 * anything else is the one value.
+	 */
+	static String percent(String template, Object args) {
+		Percent state = new Percent(args);
+		StringBuilder out = new StringBuilder();
+		int n = template.length();
+		int i = 0;
+		while (i < n) {
+			char c = template.charAt(i++);
+			if (c != '%') {
+				out.append(c);
+				continue;
+			}
+			Object keyed = null;
+			if (i < n && template.charAt(i) == '(') {
+				if (!state.mapping) {
+					throw new ScriptError("format requires a mapping");
+				}
+				int depth = 1;
+				int start = ++i;
+				while (i < n && depth > 0) {
+					char k = template.charAt(i++);
+					depth += k == '(' ? 1 : k == ')' ? -1 : 0;
+				}
+				if (depth > 0) {
+					throw new ScriptError("incomplete format key");
+				}
+				keyed = state.key(template.substring(start, i - 1));
+			}
+			boolean minus = false;
+			boolean plus = false;
+			boolean space = false;
+			boolean alt = false;
+			boolean zero = false;
+			flags:
+			while (i < n) {
+				switch (template.charAt(i)) {
+					case '-' -> minus = true;
+					case '+' -> plus = true;
+					case ' ' -> space = true;
+					case '#' -> alt = true;
+					case '0' -> zero = true;
+					default -> {
+						break flags;
+					}
+				}
+				i++;
+			}
+			int width = -1;
+			if (i < n && template.charAt(i) == '*') {
+				i++;
+				width = state.star();
+				if (width < 0) {
+					minus = true;
+					width = -width;
+				}
+			} else {
+				int start = i;
+				while (i < n && Character.isDigit(template.charAt(i))) {
+					i++;
+				}
+				if (i > start) {
+					width = Spec.number(template.substring(start, i));
+				}
+			}
+			int precision = -1;
+			if (i < n && template.charAt(i) == '.') {
+				i++;
+				if (i < n && template.charAt(i) == '*') {
+					i++;
+					precision = Math.max(0, state.star());
+				} else {
+					int start = i;
+					while (i < n && Character.isDigit(template.charAt(i))) {
+						i++;
+					}
+					precision = i > start ? Spec.number(template.substring(start, i)) : 0;
+				}
+			}
+			while (i < n && (template.charAt(i) == 'h' || template.charAt(i) == 'l' || template.charAt(i) == 'L')) {
+				i++;
+			}
+			if (i >= n) {
+				throw new ScriptError("incomplete format");
+			}
+			char type = template.charAt(i++);
+			if (type == '%') {
+				out.append('%');
+				continue;
+			}
+			if ("diuoxXeEfFgGcsra".indexOf(type) < 0) {
+				throw new ScriptError("unsupported format character '" + (type < 0x80 ? type : '?') + "' (0x"
+						+ Integer.toHexString(type) + ") at index " + (i - 1));
+			}
+			Object value = keyed != null ? keyed : state.next();
+			char sign = plus ? '+' : space ? ' ' : 0;
+			out.append(switch (type) {
+				case 's', 'r', 'a' -> {
+					String text = type == 's' ? Values.str(value) : type == 'r' ? Values.repr(value)
+							: ascii(Values.repr(value));
+					if (precision >= 0 && text.codePointCount(0, text.length()) > precision) {
+						text = text.substring(0, text.offsetByCodePoints(0, precision));
+					}
+					yield pad("", text, ' ', minus ? '<' : '>', width);
+				}
+				case 'c' -> pad("", percentChar(value), ' ', minus ? '<' : '>', width);
+				case 'd', 'i', 'u', 'o', 'x', 'X' -> {
+					long number = percentInteger(value, type);
+					int radix = type == 'o' ? 8 : type == 'x' || type == 'X' ? 16 : 10;
+					String digits = BigInteger.valueOf(number).abs().toString(radix);
+					if (type == 'X') {
+						digits = digits.toUpperCase();
+					}
+					if (precision > digits.length()) {
+						digits = "0".repeat(precision - digits.length()) + digits;
+					}
+					String prefix = (number < 0 ? "-" : sign == 0 ? "" : String.valueOf(sign))
+							+ (!alt || radix == 10 ? "" : type == 'o' ? "0o" : type == 'x' ? "0x" : "0X");
+					yield pad(prefix, digits, zero && !minus ? '0' : ' ', minus ? '<' : zero ? '=' : '>', width);
+				}
+				default -> {
+					double number = switch (value) {
+						case Double d -> d;
+						case Long l -> (double) l;
+						case Boolean b -> b ? 1 : 0;
+						default -> throw new ScriptError("must be real number, not " + Values.typeName(value));
+					};
+					boolean zeros = zero && !minus;
+					yield floating(number, new Spec(zeros ? '0' : ' ', false, minus ? '<' : 0, sign, false, alt, zeros,
+							width, (char) 0, precision, type));
+				}
+			});
+		}
+		state.checkAllUsed();
+		return out.toString();
+	}
+
+	/** The arguments of {@code str % args} and how far the conversions have used them. */
+	private static final class Percent {
+		final Object args;
+		final List<Object> items;
+		/** A dict (or another value with items) whose named fields {@code %(key)s} read. */
+		final boolean mapping;
+		int next;
+		boolean keyed;
+
+		Percent(Object args) {
+			this.args = args;
+			items = args instanceof PyTuple tuple ? tuple.items() : List.of(args);
+			mapping = args instanceof PyDict || args instanceof PyList;
+		}
+
+		Object key(String key) {
+			if (next > 0) {
+				throw new ScriptError("not enough arguments for format string");
+			}
+			keyed = true;
+			if (args instanceof PyDict dict) {
+				Object value = dict.get(key);
+				if (value == null) {
+					throw new ScriptError("key " + Values.repr(key) + " is not in the dict");
+				}
+				return value;
+			}
+			throw new ScriptError(Values.typeName(args) + " indices must be integers or slices, not str");
+		}
+
+		Object next() {
+			if (next >= items.size() || keyed && !(args instanceof PyTuple)) {
+				throw new ScriptError("not enough arguments for format string");
+			}
+			return items.get(next++);
+		}
+
+		int star() {
+			Object value = next();
+			if (!Values.isInt(value)) {
+				throw new ScriptError("* wants int");
+			}
+			long width = value instanceof Boolean b ? (b ? 1 : 0) : (Long) value;
+			if (Math.abs(width) > Integer.MAX_VALUE) {
+				throw new ScriptError("width too big");
+			}
+			return (int) width;
+		}
+
+		void checkAllUsed() {
+			if (!mapping && next < items.size()) {
+				throw new ScriptError("not all arguments converted during string formatting");
+			}
+		}
+	}
+
+	private static String percentChar(Object value) {
+		if (value instanceof String s) {
+			if (s.codePointCount(0, s.length()) != 1) {
+				throw new ScriptError("%c requires an int or a unicode character, not a string of length "
+						+ s.codePointCount(0, s.length()));
+			}
+			return s;
+		}
+		if (!Values.isInt(value)) {
+			throw new ScriptError("%c requires an int or a unicode character, not " + Values.typeName(value));
+		}
+		long code = value instanceof Boolean b ? (b ? 1 : 0) : (Long) value;
+		if (code < 0 || code > 0x10FFFF) {
+			throw new ScriptError("%c arg not in range(0x110000)");
+		}
+		return Character.toString((int) code);
+	}
+
+	/** The integer {@code %d} and its kin show: {@code %d}, {@code %i} and {@code %u} truncate a float. */
+	private static long percentInteger(Object value, char type) {
+		boolean decimal = type == 'd' || type == 'i' || type == 'u';
+		return switch (value) {
+			case Long l -> l;
+			case Boolean b -> b ? 1 : 0;
+			case Double d when decimal -> {
+				if (Double.isNaN(d)) {
+					throw new ScriptError("cannot convert float NaN to integer");
+				}
+				if (Double.isInfinite(d)) {
+					throw new ScriptError("cannot convert float infinity to integer");
+				}
+				if (Math.abs(d) >= 0x1p63) {
+					throw new ScriptError(Values.OVERFLOW);
+				}
+				yield (long) (double) d;
+			}
+			default -> throw new ScriptError("%" + type + " format: " + (decimal ? "a real number" : "an integer")
+					+ " is required, not " + Values.typeName(value));
+		};
 	}
 
 	private static Object positional(List<Object> args, int index) {

@@ -142,6 +142,18 @@ final class SubsetCheck {
 			}
 		}
 
+		/** The values of an f-string's parts, and of their specs' nested values. */
+		private void parts(List<Ast.FString.Part> parts) {
+			for (Ast.FString.Part part : parts) {
+				if (part instanceof Ast.FString.Value value) {
+					expr(value.expr());
+					if (value.spec() != null) {
+						parts(value.spec());
+					}
+				}
+			}
+		}
+
 		void expr(Expr e) {
 			if (e == null) {
 				return;
@@ -158,11 +170,7 @@ final class SubsetCheck {
 				}
 				case Ast.NoneLit ignored -> {
 				}
-				case Ast.FString f -> f.parts().forEach(part -> {
-					if (part instanceof Ast.FString.Value value) {
-						expr(value.expr());
-					}
-				});
+				case Ast.FString f -> parts(f.parts());
 				case Ast.ListLit l -> l.elements().forEach(this::expr);
 				case Ast.TupleLit t -> t.elements().forEach(this::expr);
 				case Ast.DictLit d -> {

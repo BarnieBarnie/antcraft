@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.script.lang;
 
+import java.util.List;
+
 /**
  * One token of a script. {@code text} is the source text (for layout tokens, empty); {@code value} is the literal's
  * value: a {@link Long} for INT, a {@link Double} for FLOAT, the decoded {@link String} for STRING and a list of
@@ -28,8 +30,10 @@ public record Token(Kind kind, String text, Object value, int line, int col) {
 
 	/**
 	 * A replacement field {@code {source!conversion:spec}}. {@code line} and {@code col} are where {@code source}
-	 * starts; {@code conversion} is {@code '\0'} when there is none and {@code spec} is null when there is none.
+	 * starts; {@code conversion} is {@code '\0'} when there is none. {@code spec} is null when there is none, else its
+	 * text and nested fields ({@code {x:{width}}}).
 	 */
-	public record Field(String source, int line, int col, char conversion, String spec) implements FPiece {
+	public record Field(String source, int line, int col, char conversion, List<FPiece> spec)
+			implements FPiece {
 	}
 }

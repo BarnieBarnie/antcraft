@@ -129,7 +129,7 @@ class TokenizerTest {
 				new Token.Text("a"),
 				new Token.Field("x", 1, 5, '\0', null),
 				new Token.Text("b{c}"),
-				new Token.Field("y", 1, 14, 'r', ">5"),
+				new Token.Field("y", 1, 14, 'r', List.of(new Token.Text(">5"))),
 				new Token.Field("d[1:2]", 1, 22, '\0', null)), pieces);
 	}
 
@@ -139,6 +139,34 @@ class TokenizerTest {
 		@SuppressWarnings("unchecked")
 		List<Token.FPiece> pieces = (List<Token.FPiece>) token.value();
 		assertEquals(new Token.Field("d['}']", 1, 4, '\0', null), pieces.getFirst());
+	}
+
+	@Test
+	void fStringSpecsMayHoldFields() {
+		Token token = Tokenizer.tokenize("t.py", "f'{x:>{w}.{p:{q}}f}'").getFirst();
+		@SuppressWarnings("unchecked")
+		List<Token.FPiece> pieces = (List<Token.FPiece>) token.value();
+		assertEquals(List.of(new Token.Field("x", 1, 4, '\0', List.of(
+				new Token.Text(">"),
+				new Token.Field("w", 1, 8, '\0', null),
+				new Token.Text("."),
+				new Token.Field("p", 1, 12, '\0', List.of(new Token.Field("q", 1, 15, '\0', null))),
+				new Token.Text("f")))), pieces);
+	}
+
+	@Test
+	void anEqualsSignInAFieldBecomesTextAndRepr() {
+		Token token = Tokenizer.tokenize("t.py", "f'{x = }{y=:3}{z=!s}{a==b}'").getFirst();
+		@SuppressWarnings("unchecked")
+		List<Token.FPiece> pieces = (List<Token.FPiece>) token.value();
+		assertEquals(List.of(
+				new Token.Text("x = "),
+				new Token.Field("x ", 1, 4, 'r', null),
+				new Token.Text("y="),
+				new Token.Field("y", 1, 10, '\0', List.of(new Token.Text("3"))),
+				new Token.Text("z="),
+				new Token.Field("z", 1, 16, 's', null),
+				new Token.Field("a==b", 1, 22, '\0', null)), pieces);
 	}
 
 	@Test

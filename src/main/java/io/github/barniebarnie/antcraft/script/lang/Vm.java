@@ -364,6 +364,10 @@ public final class Vm {
 				Code.FormatField field = (Code.FormatField) code.constants()[arg];
 				f.push(Format.field(f.pop(), field.conversion(), field.spec()));
 			}
+			case FORMAT_SPEC -> {
+				String spec = (String) f.pop();
+				f.push(Format.field(f.pop(), (char) arg, spec));
+			}
 			case BUILD_STRING -> {
 				StringBuilder text = new StringBuilder();
 				f.pop(arg).forEach(part -> text.append((String) part));

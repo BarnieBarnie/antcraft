@@ -85,7 +85,9 @@ public final class AstDump {
 		return switch (part) {
 			case Ast.FString.Text t -> " " + quote(t.text());
 			case Ast.FString.Value v -> " (fmt " + dump(v.expr()) + (v.conversion() == '\0' ? "" : " " + v.conversion())
-					+ (v.spec() == null ? "" : " " + quote(v.spec())) + ")";
+					+ (v.spec() == null ? "" : v.constantSpec() != null ? " " + quote(v.constantSpec())
+							: " (spec" + v.spec().stream().map(AstDump::part).collect(Collectors.joining()) + ")")
+					+ ")";
 		};
 	}
 
