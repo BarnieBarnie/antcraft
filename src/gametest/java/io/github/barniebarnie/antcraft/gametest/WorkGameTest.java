@@ -3,12 +3,21 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.BotApi;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
+import io.github.barniebarnie.antcraft.script.Result;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -144,6 +153,68 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "h = home()\nprint(pos().dimension, block(h), container(h), mine(h).reason, put(h, 'dirt').reason)\n",
 			List.of("minecraft:overworld None None wrong_dimension wrong_dimension"),
 			() -> helper.assertBlockPresent(Blocks.CHEST, 2, 1, 2));
+	}
+
+	/**
+	 * Every bot native that takes a position, called with one from another dimension, and what it refuses it with
+	 * (#360). The test fails until a newly registered native is listed here or in {@link #TAKE_NO_POSITION}.
+	 */
+	private static final Map<String, String> REFUSE_ANOTHER_DIMENSION = Map.ofEntries(
+		Map.entry("goto", "goto(h).reason"),
+		Map.entry("travel", "travel(h).reason"),
+		Map.entry("reachable", "reachable(h)"),
+		Map.entry("mine", "mine(h).reason"),
+		Map.entry("place", "place(h, 'dirt').reason"),
+		Map.entry("use", "use(h).reason"),
+		Map.entry("put", "put(h, 'dirt').reason"),
+		Map.entry("take", "take(h, 'dirt').reason"),
+		Map.entry("craft", "craft('stick', table=h).reason"),
+		Map.entry("smelt", "smelt('dirt', furnace=h).reason"),
+		Map.entry("block", "block(h)"),
+		Map.entry("container", "container(h)"));
+
+	/**
+	 * The bot natives and {@code Pos} methods that take no position, or take one on purpose from any dimension:
+	 * {@code set_home} sets the home in the position's dimension, and the {@code Pos} methods work on coordinates.
+	 */
+	private static final Set<String> TAKE_NO_POSITION = Set.of("pos", "say", "wait", "stop", "home", "home_dimension",
+		"dimension", "set_home", "portals", "inventory", "count", "has", "held", "find_nearest", "scan", "entities",
+		"items_near", "deaths", "time", "is_day", "equip", "drop", "pick_up", "Pos.up", "Pos.down", "Pos.north",
+		"Pos.south", "Pos.east", "Pos.west", "Pos.distance");
+
+	/**
+	 * Every native that takes a position refuses one from another dimension (a home in the Nether over a chest in the
+	 * Overworld): an action with {@code wrong_dimension}, {@code reachable} with False and a sense with None (#360).
+	 */
+	@GameTest(maxTicks = 20)
+	public void everyNativeThatTakesAPositionRefusesOneFromAnotherDimension(GameTestHelper helper) {
+		helper.setBlock(2, 1, 2, Blocks.CHEST);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		bot.setHome(helper.absolutePos(new BlockPos(2, 1, 2)), Level.NETHER);
+		StringBuilder source = new StringBuilder("h = home()\n");
+		List<String> expected = new ArrayList<>();
+		new TreeMap<>(REFUSE_ANOTHER_DIMENSION).forEach((name, call) -> {
+			source.append("print('").append(name).append("', ").append(call).append(")\n");
+			expected.add(name + " " + switch (name) {
+				case "reachable" -> "False";
+				case "block", "container" -> "None";
+				default -> Result.WRONG_DIMENSION;
+			});
+		});
+		expect(helper, bot, source.toString(), expected, () -> helper.assertBlockPresent(Blocks.CHEST, 2, 1, 2));
+		ScriptRun run = Objects.requireNonNull(bot.getScript());
+		helper.onEachTick(() -> {
+			if (run.action() != null) {
+				helper.fail(run.action() + " started instead of refusing a position from another dimension");
+			}
+		});
+		Natives natives = new Natives();
+		BotApi.register(natives, run);
+		Set<String> unlisted = new TreeSet<>(natives.names());
+		unlisted.removeAll(REFUSE_ANOTHER_DIMENSION.keySet());
+		unlisted.removeAll(TAKE_NO_POSITION);
+		helper.assertTrue(unlisted.isEmpty(), "natives " + unlisted + " are in neither REFUSE_ANOTHER_DIMENSION nor TAKE_NO_POSITION");
 	}
 
 	@GameTest(maxTicks = 20)

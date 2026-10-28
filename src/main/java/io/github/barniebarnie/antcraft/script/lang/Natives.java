@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.script.lang;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The native functions a script can call, by name, and the native methods of each value type, by type name (as
@@ -64,6 +66,13 @@ public final class Natives {
 	/** The instructions a call of the function {@code name} counts besides the call itself; 0 for one without a cost. */
 	public long cost(String name) {
 		return costs.getOrDefault(name, 0L);
+	}
+
+	/** The names of the registered functions, and of the methods as {@code type.name}. */
+	public Set<String> names() {
+		Set<String> names = new HashSet<>(functions.keySet());
+		names.addAll(methods.keySet());
+		return names;
 	}
 
 	/** The method {@code name} of {@code type}, or null. */
