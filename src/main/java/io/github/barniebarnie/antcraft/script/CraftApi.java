@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.StreamSupport;
@@ -24,13 +25,14 @@ import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
-import net.minecraft.world.level.block.entity.FurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -297,9 +299,10 @@ public final class CraftApi {
 
 	/**
 	 * {@code smelt(item, n=1, furnace=None, fuel=None)}: loads up to {@code n} of a carried item {@code item} selects into
-	 * the furnace at {@code furnace}, walked to, or one within reach; burns the fuel {@code fuel} selects, or else the
-	 * best carried fuel (coal, charcoal, then logs), adding one at a time as the fire goes out; waits by it until the
-	 * input is smelted and takes the output. Its value is how many items it took out.
+	 * the furnace, blast furnace or smoker at {@code furnace}, walked to, or one within reach with a recipe for it; burns
+	 * the fuel {@code fuel} selects, or else the best carried fuel (coal, charcoal, then logs), adding one at a time as
+	 * the fire goes out; waits by it until the input is smelted and takes the output. Its value is how many items it took
+	 * out.
 	 */
 	private static Object smelt(ScriptRun run, AntBot bot, Selector selector, long n, @Nullable Pos furnace, @Nullable Selector fuelSelector,
 			NativeCall call) {
@@ -315,14 +318,16 @@ public final class CraftApi {
 				continue;
 			}
 			any = true;
-			ItemStack output = smelted(level, stack);
-			if (!output.isEmpty()) {
+			if (!smelted(level, stack).isEmpty()) {
 				Item input = stack.getItem();
-				Pos at = furnace != null ? furnace : inReach(run, bot, state -> state.is(Blocks.FURNACE));
+				Pos at = furnace != null ? furnace : inReach(run, bot, state -> {
+					RecipeType<? extends AbstractCookingRecipe> type = cooking(state);
+					return type != null && !cooked(level, type, new ItemStack(input)).isEmpty();
+				});
 				if (at == null) {
 					return run.done(describe, Result.fail(Result.NO_FURNACE));
 				}
-				return run.start(new Smelt(run, bot, at, input, output.getItem(), (int) Math.min(n, input.getDefaultMaxStackSize()),
+				return run.start(new Smelt(run, bot, at, input, (int) Math.min(n, input.getDefaultMaxStackSize()),
 					fuel.and(burnable -> burnable.has(DataComponents.COOKING_FUEL)), describe), call);
 			}
 		}
@@ -331,10 +336,33 @@ public final class CraftApi {
 		return run.done(describe, Result.fail(recipe && !any ? Result.MISSING_INGREDIENTS : Result.NO_RECIPE));
 	}
 
-	/** What a furnace makes of {@code stack}; empty if nothing. */
+	/** What the furnace, blast furnace or smoker {@code state} is cooks: its recipe type; null for any other block. */
+	private static @Nullable RecipeType<? extends AbstractCookingRecipe> cooking(BlockState state) {
+		if (state.is(Blocks.FURNACE)) {
+			return RecipeType.SMELTING;
+		}
+		if (state.is(Blocks.BLAST_FURNACE)) {
+			return RecipeType.BLASTING;
+		}
+		return state.is(Blocks.SMOKER) ? RecipeType.SMOKING : null;
+	}
+
+	/** What the furnace, blast furnace or smoker makes of {@code stack}; empty if none does. */
 	private static ItemStack smelted(ServerLevel level, ItemStack stack) {
+		// Not a constant: the unit tests load this class without the game's registries.
+		for (RecipeType<? extends AbstractCookingRecipe> type : List.of(RecipeType.SMELTING, RecipeType.BLASTING, RecipeType.SMOKING)) {
+			ItemStack output = cooked(level, type, stack);
+			if (!output.isEmpty()) {
+				return output;
+			}
+		}
+		return ItemStack.EMPTY;
+	}
+
+	/** What a furnace cooking recipes of {@code type} makes of {@code stack}; empty if nothing. */
+	private static ItemStack cooked(ServerLevel level, RecipeType<? extends AbstractCookingRecipe> type, ItemStack stack) {
 		SingleRecipeInput input = new SingleRecipeInput(stack);
-		return level.getServer().getRecipeManager().getRecipeFor(RecipeType.SMELTING, input, level)
+		return level.getServer().getRecipeManager().getRecipeFor(type, input, level)
 			.map(recipe -> recipe.value().assemble(input)).orElse(ItemStack.EMPTY);
 	}
 
@@ -357,7 +385,8 @@ public final class CraftApi {
 		private static final int RESULT = Storage.FURNACE_RESULT;
 
 		private final Item input;
-		private final Item output;
+		/** What this furnace makes of the input, known once the bot is at it. */
+		private Item output = Items.AIR;
 		private final int n;
 		private final Predicate<ItemStack> fuel;
 		private final String describe;
@@ -365,23 +394,30 @@ public final class CraftApi {
 		private int outputSeen;
 		private int idle;
 
-		Smelt(ScriptRun run, AntBot bot, Pos furnace, Item input, Item output, int n, Predicate<ItemStack> fuel, String describe) {
+		Smelt(ScriptRun run, AntBot bot, Pos furnace, Item input, int n, Predicate<ItemStack> fuel, String describe) {
 			super(run, bot, furnace);
 			this.input = input;
-			this.output = output;
 			this.n = n;
 			this.fuel = fuel;
 			this.describe = describe;
 		}
 
+		/** A furnace, blast furnace or smoker, which has a recipe for the input: a smoker smelts no ore. */
 		@Override
 		@Nullable Result check(BlockState state) {
-			return this.level.getBlockEntity(this.pos) instanceof FurnaceBlockEntity ? null : Result.fail(Result.NO_FURNACE);
+			RecipeType<? extends AbstractCookingRecipe> type = cooking(state);
+			if (type == null || !(this.level.getBlockEntity(this.pos) instanceof AbstractFurnaceBlockEntity)) {
+				return Result.fail(Result.NO_FURNACE);
+			}
+			return cooked(this.level, type, new ItemStack(this.input)).isEmpty() ? Result.fail(Result.NO_RECIPE) : null;
 		}
 
 		@Override
 		@Nullable Result work(BlockState state) {
 			AbstractFurnaceBlockEntity furnace = (AbstractFurnaceBlockEntity) this.level.getBlockEntity(this.pos);
+			if (!this.loaded) {
+				this.output = cooked(this.level, Objects.requireNonNull(cooking(state)), new ItemStack(this.input)).getItem();
+			}
 			return this.loaded ? this.watch(furnace) : this.load(furnace);
 		}
 

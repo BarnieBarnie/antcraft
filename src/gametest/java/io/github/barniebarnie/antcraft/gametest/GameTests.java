@@ -3,6 +3,8 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Field;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInfo;
@@ -66,6 +68,25 @@ public final class GameTests {
 			public void testAddedForRerun(GameTestInfo old, GameTestInfo next, GameTestRunner runner) {
 			}
 		});
+	}
+
+	/** The blocks, in absolute positions, that are under spawn protection (see SpawnProtectionMixin). */
+	private static final Set<BlockPos> SPAWN_PROTECTED = ConcurrentHashMap.newKeySet();
+
+	/**
+	 * Puts the block at {@code pos} of the test area under the server's spawn protection until the test ends, for every
+	 * player but an operator, as a dedicated server with {@code spawn-protection} does near spawn. The game test server
+	 * protects nothing by itself.
+	 */
+	public static void protect(GameTestHelper helper, BlockPos pos) {
+		BlockPos absolute = helper.absolutePos(pos);
+		SPAWN_PROTECTED.add(absolute);
+		onEnd(helper, () -> SPAWN_PROTECTED.remove(absolute));
+	}
+
+	/** Whether {@link #protect} put the block at the absolute {@code pos} under spawn protection. */
+	public static boolean isSpawnProtected(BlockPos pos) {
+		return SPAWN_PROTECTED.contains(pos);
 	}
 
 	// ponytail: GameTestHelper has no getter for its test; reflection beats a mixin for test-only code.

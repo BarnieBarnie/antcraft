@@ -83,7 +83,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private PyDict memory = Memory.create();
 	private final BotLog log = new BotLog();
 	/** What the script's move actions walk with; made when a script first moves. */
-	private @Nullable BotBody body;
+	private MoveApi.@Nullable Body body;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
 	private int holdAgainstCurrentUntil = -1;
 	/**
@@ -296,6 +296,19 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		new ScriptHost().chat(Output.Level.ERROR, message);
 	}
 
+	/** What the script's move actions walk with: the bot's path follower, chunks and home. */
+	public MoveApi.Body getBody() {
+		if (this.body == null) {
+			this.body = new BotBody(this);
+		}
+		return this.body;
+	}
+
+	/** Puts {@code body} in place of {@link #getBody()}, as game tests do to stand in for parts of it. */
+	public void setBody(MoveApi.Body body) {
+		this.body = body;
+	}
+
 	public BotLog getLog() {
 		return this.log;
 	}
@@ -314,10 +327,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final class ScriptHost implements ScriptRun.Host {
 		@Override
 		public MoveApi.Body body() {
-			if (AntBot.this.body == null) {
-				AntBot.this.body = new BotBody(AntBot.this);
-			}
-			return AntBot.this.body;
+			return AntBot.this.getBody();
 		}
 
 		@Override

@@ -74,6 +74,16 @@ public final class MoveApi {
 		 * {@code target}, as {@link #startPath} would plan it but over loaded blocks only, loading no chunks.
 		 */
 		Plan plan(Pos target, int near);
+
+		/** How long a walk waits for the chunks ahead to load before it gives up with {@code not_loaded}. */
+		default int loadWaitTicks() {
+			return LOAD_WAIT_TICKS;
+		}
+
+		/** How long a walk goes on without getting closer before it gives up with {@code timeout}. */
+		default int stallTicks() {
+			return STALL_TICKS;
+		}
 	}
 
 	/** A path being planned for {@code reachable}, a slice of nodes at a time. */
@@ -262,7 +272,7 @@ public final class MoveApi {
 				missing |= !loaded;
 			}
 			if (missing) {
-				if (!loads || ++waited > LOAD_WAIT_TICKS) {
+				if (!loads || ++waited > body.loadWaitTicks()) {
 					return finish(Result.fail(Result.NOT_LOADED));
 				}
 				return false;
@@ -290,7 +300,7 @@ public final class MoveApi {
 			if (distance < closest) {
 				closest = distance;
 				stalled = 0;
-			} else if (++stalled >= STALL_TICKS) {
+			} else if (++stalled >= body.stallTicks()) {
 				return finish(Result.fail(Result.TIMEOUT));
 			}
 			return false;

@@ -270,6 +270,31 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True 1 1 1 2"));
 	}
 
+	/** A blast furnace at {@code furnace} smelts ore, twice as fast as a furnace. */
+	@GameTest(maxTicks = 250)
+	public void smeltInABlastFurnaceSmeltsOre(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.BLAST_FURNACE);
+		Container furnace = container(helper, FURNACE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.IRON_ORE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, "r = smelt('iron_ore', furnace=" + furnaceAt(helper) + ")\nprint(r.ok, r.value, count('iron_ingot'), count('iron_ore'))\n",
+			List.of("True 1 1 0"), () -> helper.assertTrue(furnace.getItem(2).isEmpty(), "output left in the blast furnace"));
+	}
+
+	/** A smoker within reach cooks beef; it smelts no ore, which is no_recipe there. */
+	@GameTest(maxTicks = 250)
+	public void smeltInASmokerCooksFoodOnly(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, "s = smelt('raw_iron', furnace=" + furnaceAt(helper) + ")\nr = smelt('beef')\n"
+				+ "print(r.ok, r.value, count('cooked_beef'), s.reason, count('raw_iron'))\n",
+			List.of("True 1 1 no_recipe 1"));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void smeltWhatNoRecipeSmeltsIsNoRecipe(GameTestHelper helper) {
 		furnace(helper);

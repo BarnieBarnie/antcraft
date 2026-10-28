@@ -414,13 +414,16 @@ public final class WorkApi {
 			return false;
 		}
 
-		/** Done: no item left that fits and can be reached, of the matching ones {@code around}. */
+		/**
+		 * Done: no item left that fits and can be reached, of the matching ones {@code around}. Items it could not walk to
+		 * only fail the action when it took none.
+		 */
 		private boolean finish(List<ItemEntity> around) {
 			this.stopWalk();
-			if (around.stream().anyMatch(entity -> this.unreachable.contains(entity.getId()))) {
-				this.result = Result.fail(Result.OUT_OF_REACH, this.taken);
-			} else if (!around.isEmpty()) {
+			if (around.stream().anyMatch(entity -> !this.unreachable.contains(entity.getId()))) {
 				this.result = Result.fail(Result.NO_SPACE, this.taken);
+			} else if (!around.isEmpty() && this.taken == 0) {
+				this.result = Result.fail(Result.OUT_OF_REACH, this.taken);
 			} else {
 				this.result = this.taken == 0 ? Result.fail(Result.TARGET_GONE, this.taken) : Result.ok(this.taken);
 			}

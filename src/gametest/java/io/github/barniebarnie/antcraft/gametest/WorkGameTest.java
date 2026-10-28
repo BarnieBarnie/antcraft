@@ -3,6 +3,8 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.MoveApi;
+import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
@@ -12,6 +14,7 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -159,6 +162,134 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/** Every block action checks the server's spawn protection, as a player's hand does. */
+	@GameTest(maxTicks = 20)
+	public void blockActionsUnderSpawnProtectionAreProtected(GameTestHelper helper) {
+		helper.setBlock(2, 1, 2, Blocks.DIRT);
+		helper.setBlock(2, 0, 3, Blocks.DIRT);
+		GameTests.protect(helper, new BlockPos(2, 1, 2));
+		GameTests.protect(helper, new BlockPos(3, 1, 2));
+		GameTests.protect(helper, new BlockPos(2, 0, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SHOVEL));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		expect(helper, bot, "r = mine(" + at(helper, 2, 1, 2) + ")\ns = place(" + at(helper, 3, 1, 2) + ", 'dirt')\n"
+				+ "t = use(" + at(helper, 2, 0, 3) + ", 'wooden_hoe')\nprint(r.reason, s.reason, t.reason, count('dirt'))\n",
+			List.of("protected protected protected 1"), () -> {
+				helper.assertBlockPresent(Blocks.DIRT, 2, 1, 2);
+				helper.assertBlockPresent(Blocks.AIR, 3, 1, 2);
+				helper.assertBlockPresent(Blocks.DIRT, 2, 0, 3);
+			});
+	}
+
+	/** The walk into reach finds the chunks on its way never load: {@code not_loaded}, passed on as {@code goto} gives it. */
+	@GameTest(maxTicks = 50)
+	public void aBlockActionWhoseWalkFindsNoLoadedChunksIsNotLoaded(GameTestHelper helper) {
+		helper.setBlock(6, 1, 6, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		StandInBody body = new StandInBody(bot.getBody());
+		body.chunksLoaded = false;
+		bot.setBody(body);
+		expect(helper, bot, "r = mine(" + at(helper, 6, 1, 6) + ")\ns = place(" + at(helper, 6, 2, 6) + ", 'dirt')\n"
+				+ "print(r.ok, r.reason, s.reason)\n",
+			List.of("False not_loaded not_loaded"), () -> helper.assertBlockPresent(Blocks.DIRT, 6, 1, 6));
+	}
+
+	/** The walk into reach gets no closer: {@code timeout}, passed on as {@code goto} gives it. */
+	@GameTest(maxTicks = 40)
+	public void aBlockActionWhoseWalkGetsNoCloserTimesOut(GameTestHelper helper) {
+		helper.setBlock(6, 1, 6, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		StandInBody body = new StandInBody(bot.getBody());
+		body.standStill = true;
+		bot.setBody(body);
+		expect(helper, bot, "r = mine(" + at(helper, 6, 1, 6) + ")\nprint(r.ok, r.reason)\n", List.of("False timeout"),
+			() -> helper.assertBlockPresent(Blocks.DIRT, 6, 1, 6));
+	}
+
+	/**
+	 * The bot's body with parts stood in for: chunks that never load, or a walk that never moves the bot; and short waits
+	 * before {@code not_loaded} and {@code timeout}, so the tests need not wait out the real ones.
+	 */
+	static final class StandInBody implements MoveApi.Body {
+		private static final int WAIT_TICKS = 10;
+		private final MoveApi.Body body;
+		boolean chunksLoaded = true;
+		boolean standStill;
+
+		StandInBody(MoveApi.Body body) {
+			this.body = body;
+		}
+
+		@Override
+		public Pos home() {
+			return this.body.home();
+		}
+
+		@Override
+		public void setHome(Pos home) {
+			this.body.setHome(home);
+		}
+
+		@Override
+		public boolean chunkLoaded(int x, int z) {
+			return this.chunksLoaded && this.body.chunkLoaded(x, z);
+		}
+
+		@Override
+		public void loadChunk(int x, int z) {
+			if (this.chunksLoaded) {
+				this.body.loadChunk(x, z);
+			}
+		}
+
+		@Override
+		public void startPath(Pos target, int near) {
+			if (!this.standStill) {
+				this.body.startPath(target, near);
+			}
+		}
+
+		@Override
+		public void startReach(Pos target) {
+			if (!this.standStill) {
+				this.body.startReach(target);
+			}
+		}
+
+		@Override
+		public boolean inReach(Pos target) {
+			return this.body.inReach(target);
+		}
+
+		@Override
+		public MoveApi.PathStatus tickPath() {
+			return this.standStill ? MoveApi.PathStatus.RUNNING : this.body.tickPath();
+		}
+
+		@Override
+		public void stopPath() {
+			this.body.stopPath();
+		}
+
+		@Override
+		public MoveApi.Plan plan(Pos target, int near) {
+			return this.body.plan(target, near);
+		}
+
+		@Override
+		public int loadWaitTicks() {
+			return WAIT_TICKS;
+		}
+
+		@Override
+		public int stallTicks() {
+			return WAIT_TICKS;
+		}
+	}
+
 	// place
 
 	@GameTest(maxTicks = 60)
@@ -193,6 +324,16 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DIRT));
 		expect(helper, bot, "r = place(" + at(helper, 2, 1, 2) + ", 'dirt')\nprint(r.ok, r.reason, count('dirt'))\n",
 			List.of("False blocked 1"), () -> helper.assertBlockPresent(Blocks.GLASS, 2, 1, 2));
+	}
+
+	/** A pig stands where the block would go. */
+	@GameTest(maxTicks = 20)
+	public void placeWhereAnEntityStandsIsBlocked(GameTestHelper helper) {
+		helper.spawnWithNoFreeWill(EntityTypes.PIG, 3, 1, 3);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		expect(helper, bot, "r = place(" + at(helper, 3, 1, 3) + ", 'dirt')\nprint(r.ok, r.reason, count('dirt'))\n",
+			List.of("False blocked 1"), () -> helper.assertBlockPresent(Blocks.AIR, 3, 1, 3));
 	}
 
 	@GameTest(maxTicks = 20)
@@ -250,6 +391,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, "r = pick_up('nautilus_shell', radius=7)\nprint(r.ok, r.reason)\n", List.of("False out_of_reach"),
 			() -> helper.assertItemEntityPresent(Items.NAUTILUS_SHELL));
+	}
+
+	/** One shell lies in the open, another on a bedrock pillar: it takes the one and is done, ok. */
+	@GameTest(maxTicks = 80)
+	public void pickUpTakesWhatItCanReachAndSkipsTheRest(GameTestHelper helper) {
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.BEDROCK);
+		}
+		ItemEntity high = helper.spawnItem(Items.NAUTILUS_SHELL, new BlockPos(5, 5, 5));
+		high.setPos(high.getX() + 0.5, high.getY(), high.getZ() + 0.5);
+		helper.spawnItem(Items.NAUTILUS_SHELL, new BlockPos(3, 1, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "r = pick_up('nautilus_shell', radius=7)\nprint(r.ok, r.reason, r.value, count('nautilus_shell'))\n",
+			List.of("True None 1 1"), () -> helper.assertItemEntityPresent(Items.NAUTILUS_SHELL));
 	}
 
 	// equip
