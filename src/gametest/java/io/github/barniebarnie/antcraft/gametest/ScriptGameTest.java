@@ -27,9 +27,11 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /** Bots running scripts (docs/scripting.md, milestones 2 and 4): output, budget, errors, reloading, and idle.py for every bot without a script. */
@@ -74,9 +76,9 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** What {@code say} shows above the bot: the text display riding it, or null. */
+	/** What {@code say} shows above the bot: a text display around its head, or null. */
 	private static Display.@Nullable TextDisplay sayDisplay(AntBot bot) {
-		return bot.getPassengers().stream().filter(e -> e instanceof Display.TextDisplay).map(e -> (Display.TextDisplay) e).findFirst().orElse(null);
+		return bot.level().getEntitiesOfClass(Display.TextDisplay.class, bot.getBoundingBox().inflate(0.5)).stream().findFirst().orElse(null);
 	}
 
 	/** {@code say} shows its text above the bot for {@link SayBubble#TICKS} ticks; then it is gone from the world. */
@@ -102,6 +104,24 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			long ticks = helper.getLevel().getGameTime() - shown[0];
 			helper.assertTrue(ticks >= SayBubble.TICKS - 1, "gone after " + ticks + " ticks");
 			helper.assertTrue(display[0].isRemoved(), "text display left in the world");
+		});
+	}
+
+	/** A bot showing what it said can still be pushed: a pig standing in it moves it aside (bots do not push each other). */
+	@GameTest(maxTicks = 40)
+	public void aBotShowingWhatItSaidCanBePushed(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
+		failOnError(helper, bot);
+		Vec3 start = bot.position();
+		helper.spawnWithNoFreeWill(EntityTypes.PIG, new Vec3(3.6, 1, 3.5));
+		helper.succeedWhen(() -> {
+			double moved = bot.position().subtract(start).horizontalDistance();
+			helper.assertTrue(moved > 0.2, "pushed " + moved + " blocks");
+			Display.TextDisplay display = sayDisplay(bot);
+			helper.assertTrue(display != null, "nothing shown above the bot");
+			helper.assertTrue(display.position().distanceTo(bot.position().add(0, bot.getBbHeight(), 0)) < 0.01,
+				"text at " + display.position() + ", bot at " + bot.position());
 		});
 	}
 

@@ -295,6 +295,18 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True 1 1 no_recipe 1"));
 	}
 
+	/** Of two carried items the selector takes, only the second cooks in the smoker within reach: it smelts that one. */
+	@GameTest(maxTicks = 250)
+	public void smeltTriesEachItemForAStationWithinReach(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, "r = smelt(['raw_iron', 'beef'])\nprint(r.ok, r.reason, r.value, count('cooked_beef'), count('raw_iron'))\n",
+			List.of("True None 1 1 1"));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void smeltWhatNoRecipeSmeltsIsNoRecipe(GameTestHelper helper) {
 		furnace(helper);

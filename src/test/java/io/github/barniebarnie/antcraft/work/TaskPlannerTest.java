@@ -1,11 +1,10 @@
-package io.github.barniebarnie.antcraft.colony;
+package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import io.github.barniebarnie.antcraft.work.VanillaData;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;

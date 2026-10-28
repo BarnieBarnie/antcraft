@@ -1,6 +1,5 @@
 package io.github.barniebarnie.antcraft.work;
 
-import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import java.util.Collection;
 import java.util.Optional;
 import net.minecraft.world.item.Item;

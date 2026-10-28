@@ -1,6 +1,5 @@
 package io.github.barniebarnie.antcraft.work;
 
-import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

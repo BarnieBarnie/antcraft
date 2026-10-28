@@ -53,6 +53,18 @@ class MethodsTest {
 	}
 
 	@Test
+	void strFormatNestedSpecs() {
+		assertEquals("ab   |3.14|   7|   2.500|  'a'  ", run("""
+				print('{:{}}'.format('ab', 5), '{0:{1}}'.format(3.14159, '.2f'), '{:{}{}}'.format(7, '>', 4),
+				      '{0:>{w}.{p}f}'.format(2.5, w=8, p=3), '{!r:^{}}'.format('a', 7), sep='|')
+				"""));
+		assertEquals("Max string recursion exceeded", error("'{:{:{}}}'.format(1, 2, 3)"));
+		assertEquals("unmatched '{' in format spec", error("'{:{}'.format(1, 2)"));
+		assertEquals("cannot switch from manual field specification to automatic field numbering",
+				error("'{0:{}}'.format(1, 2)"));
+	}
+
+	@Test
 	void listAppendExtendInsert() {
 		assertEquals("[1, 2, 3]", run("xs = [1, 2]\nxs.append(3)\nprint(xs)"));
 		assertEquals("[1, 2, 3, 'a', 'b']", run("xs = [1]\nxs.extend((2, 3))\nxs.extend('ab')\nprint(xs)"));

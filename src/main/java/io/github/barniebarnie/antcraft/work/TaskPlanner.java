@@ -1,4 +1,4 @@
-package io.github.barniebarnie.antcraft.colony;
+package io.github.barniebarnie.antcraft.work;
 
 import java.util.ArrayList;
 import java.util.Collections;

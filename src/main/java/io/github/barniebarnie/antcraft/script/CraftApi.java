@@ -1,6 +1,5 @@
 package io.github.barniebarnie.antcraft.script;
 
-import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.script.lang.Args;
@@ -10,10 +9,13 @@ import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Storage;
+import io.github.barniebarnie.antcraft.work.TaskPlanner;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.BlockPos;
@@ -312,24 +314,31 @@ public final class CraftApi {
 		Predicate<ItemStack> fuel = fuelSelector == null ? bestFuel(level, bot) : fuelSelector.items();
 		Container carried = BotHands.carried(bot);
 		boolean any = false;
+		boolean smeltable = false;
+		Set<Item> tried = new HashSet<>();
 		for (int i = 0; i < carried.getContainerSize(); i++) {
 			ItemStack stack = carried.getItem(i);
 			if (stack.isEmpty() || !wanted.test(stack)) {
 				continue;
 			}
 			any = true;
-			if (!smelted(level, stack).isEmpty()) {
-				Item input = stack.getItem();
-				Pos at = furnace != null ? furnace : inReach(run, bot, state -> {
-					RecipeType<? extends AbstractCookingRecipe> type = cooking(state);
-					return type != null && !cooked(level, type, new ItemStack(input)).isEmpty();
-				});
-				if (at == null) {
-					return run.done(describe, Result.fail(Result.NO_FURNACE));
-				}
+			Item input = stack.getItem();
+			if (!tried.add(input) || smelted(level, stack).isEmpty()) {
+				continue;
+			}
+			smeltable = true;
+			// Without furnace, each item the selector takes gets its turn: the station in reach may cook only some.
+			Pos at = furnace != null ? furnace : inReach(run, bot, state -> {
+				RecipeType<? extends AbstractCookingRecipe> type = cooking(state);
+				return type != null && !cooked(level, type, new ItemStack(input)).isEmpty();
+			});
+			if (at != null) {
 				return run.start(new Smelt(run, bot, at, input, (int) Math.min(n, input.getDefaultMaxStackSize()),
 					fuel.and(burnable -> burnable.has(DataComponents.COOKING_FUEL)), describe), call);
 			}
+		}
+		if (smeltable) {
+			return run.done(describe, Result.fail(Result.NO_FURNACE));
 		}
 		boolean recipe = any || !selector.tags().isEmpty()
 			|| selector.ids().stream().anyMatch(id -> !smelted(level, new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.parse(id)))).isEmpty());

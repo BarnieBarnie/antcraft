@@ -2,7 +2,6 @@ package io.github.barniebarnie.antcraft.work;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.github.barniebarnie.antcraft.colony.TaskPlanner;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.SharedConstants;

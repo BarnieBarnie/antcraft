@@ -374,49 +374,85 @@ final class Format {
 		};
 	}
 
-	/** {@code template.format(*args, **kwargs)}: fields {@code {}}, {@code {0}} or {@code {name}}, each with an optional conversion and spec. */
+	/**
+	 * {@code template.format(*args, **kwargs)}: fields {@code {}}, {@code {0}} or {@code {name}}, each with an optional
+	 * conversion and spec. A spec may hold replacement fields of its own, one level deep, as in {@code '{:{}}'}.
+	 */
 	static String strFormat(String template, List<Object> args, Map<String, Object> kwargs) {
-		StringBuilder out = new StringBuilder();
-		int next = 0;
-		Boolean manual = null;
-		int n = template.length();
-		int i = 0;
-		while (i < n) {
-			char c = template.charAt(i);
-			if (c == '}') {
-				if (i + 1 < n && template.charAt(i + 1) == '}') {
-					out.append('}');
+		return new StrFormat(args, kwargs).render(template, 2);
+	}
+
+	/** One {@code str.format} call: its arguments and the automatic field numbering, which nested specs share. */
+	private static final class StrFormat {
+		private final List<Object> args;
+		private final Map<String, Object> kwargs;
+		private int next;
+		private Boolean manual;
+
+		StrFormat(List<Object> args, Map<String, Object> kwargs) {
+			this.args = args;
+			this.kwargs = kwargs;
+		}
+
+		/** Formats {@code template}; {@code depth} is how many levels of fields it may still nest, as in CPython. */
+		String render(String template, int depth) {
+			if (depth <= 0) {
+				throw new ScriptError("Max string recursion exceeded");
+			}
+			StringBuilder out = new StringBuilder();
+			int n = template.length();
+			int i = 0;
+			while (i < n) {
+				char c = template.charAt(i);
+				if (c == '}') {
+					if (i + 1 < n && template.charAt(i + 1) == '}') {
+						out.append('}');
+						i += 2;
+						continue;
+					}
+					throw new ScriptError("Single '}' encountered in format string");
+				}
+				if (c != '{') {
+					out.append(c);
+					i++;
+					continue;
+				}
+				if (i + 1 < n && template.charAt(i + 1) == '{') {
+					out.append('{');
 					i += 2;
 					continue;
 				}
-				throw new ScriptError("Single '}' encountered in format string");
-			}
-			if (c != '{') {
-				out.append(c);
-				i++;
-				continue;
-			}
-			if (i + 1 < n && template.charAt(i + 1) == '{') {
-				out.append('{');
-				i += 2;
-				continue;
-			}
-			int end = i + 1;
-			while (end < n && template.charAt(end) != '}') {
-				if (template.charAt(end) == '{') {
-					throw new ScriptError("nested replacement fields in format specs are not supported");
+				int end = i + 1;
+				int level = 1;
+				boolean inSpec = false;
+				while (end < n) {
+					char d = template.charAt(end);
+					if (d == '{') {
+						level++;
+					} else if (d == '}' && --level == 0) {
+						break;
+					} else if (d == ':') {
+						inSpec = true;
+					}
+					end++;
 				}
-				end++;
+				if (end >= n) {
+					throw new ScriptError(i + 1 == n ? "Single '{' encountered in format string"
+							: inSpec ? "unmatched '{' in format spec" : "expected '}' before end of string");
+				}
+				out.append(field(template.substring(i + 1, end), depth));
+				i = end + 1;
 			}
-			if (end >= n) {
-				throw new ScriptError(i + 1 == n ? "Single '{' encountered in format string"
-						: "expected '}' before end of string");
-			}
-			String field = template.substring(i + 1, end);
-			i = end + 1;
+			return out.toString();
+		}
+
+		private String field(String field, int depth) {
 			int colon = field.indexOf(':');
 			String spec = colon < 0 ? "" : field.substring(colon + 1);
 			String head = colon < 0 ? field : field.substring(0, colon);
+			if (head.indexOf('{') >= 0) {
+				throw new ScriptError("unexpected '{' in field name");
+			}
 			char conversion = 0;
 			int bang = head.indexOf('!');
 			if (bang >= 0) {
@@ -431,30 +467,38 @@ final class Format {
 				}
 				head = head.substring(0, bang);
 			}
-			Object value;
+			// The field's own value comes first, then those of its spec, so '{:{}}' takes argument 0 and width 1.
+			Object value = value(head);
+			if (spec.indexOf('{') >= 0) {
+				spec = render(spec, depth - 1);
+			}
+			return Format.field(value, conversion, spec);
+		}
+
+		private Object value(String head) {
 			if (head.isEmpty()) {
 				if (Boolean.TRUE.equals(manual)) {
 					throw new ScriptError("cannot switch from manual field specification to automatic field numbering");
 				}
 				manual = false;
-				value = positional(args, next++);
-			} else if (head.chars().allMatch(Character::isDigit)) {
+				return positional(args, next++);
+			}
+			if (head.chars().allMatch(Character::isDigit)) {
 				if (Boolean.FALSE.equals(manual)) {
 					throw new ScriptError("cannot switch from automatic field numbering to manual field specification");
 				}
 				manual = true;
-				value = positional(args, head.length() > 9 ? Integer.MAX_VALUE : Integer.parseInt(head));
-			} else if (Tokenizer.isIdentifier(head)) {
-				value = kwargs.get(head);
+				return positional(args, head.length() > 9 ? Integer.MAX_VALUE : Integer.parseInt(head));
+			}
+			if (Tokenizer.isIdentifier(head)) {
+				Object value = kwargs.get(head);
 				if (value == null) {
 					throw new ScriptError("key '" + head + "' is not in the keyword arguments");
 				}
-			} else {
-				throw new ScriptError("format field '" + head + "' is not supported (only {}, {0} and {name})");
+				return value;
 			}
-			out.append(field(value, conversion, spec));
+			throw new ScriptError("format field '" + head + "' is not supported (only {}, {0} and {name})");
 		}
-		return out.toString();
 	}
 
 	/**

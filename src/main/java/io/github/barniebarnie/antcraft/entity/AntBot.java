@@ -172,6 +172,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			PathFollower.closeBehind(this, level);
 		}
 		super.tick();
+		this.sayBubble.follow();
 		// After the move, so the ticket goes along with the bot into the next chunk before it stops ticking there.
 		// An idle bot holds its chunks only while it walks (home): waiting there, it lets them unload.
 		ScriptRun running = this.isRunningScript() ? this.script : null;
@@ -402,12 +403,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 	}
 
-	/** A bot that is gone for good takes what it said with it; one only unloaded keeps it as a saved passenger. */
+	/** A bot that is removed, for good or only unloaded, takes what it said with it: the text is never saved. */
 	@Override
 	public void remove(RemovalReason reason) {
-		if (reason.shouldDestroy()) {
-			this.sayBubble.remove();
-		}
+		this.sayBubble.remove();
 		super.remove(reason);
 	}
 
