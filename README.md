@@ -20,6 +20,7 @@ AntCraft must be installed on the server and on every player's client: it adds i
 1. Craft a Bot Core and use it on a block: a bot appears there, and you own it.
 2. Write a script, such as `config/antcraft/scripts/hello.py`, and run it on the bot with `/antcraft bot run hello`. [docs/scripting.md](docs/scripting.md) describes the language and every action and sense, with examples such as punching a tree into a wooden pickaxe.
 3. When the script ends, fails or is stopped (`/antcraft bot stop`), the bot runs `idle.py`: it walks home, where it was first spawned (or where a script moved it with `set_home`), and waits there.
+4. To hand out workers rather than commands, hold a Bot Core and set its script with `/antcraft core script hello [args]`: the bot it makes runs `hello` as soon as it appears.
 
 **Crafting a Bot Core** (shaped):
 
@@ -92,6 +93,7 @@ Ghosts are drawn as the blocks themselves, textured and see-through, fully lit s
 | `/antcraft bot [bots] stop` | Stops the bots' scripts (formerly `/antcraft stop`); they then run `idle.py`, walking home and waiting there |
 | `/antcraft bot [bots] status` | Each bot's script, whether it is running, finished, failed or stopped, the line it is at, its current action and how many instructions it ran |
 | `/antcraft bot [bots] log [n] [level]` | The last `n` (default 10) lines of each bot's log at or above `level` (`debug`, the default, `info`, `warn`, `error` or `print`), each with the game time it was written at |
+| `/antcraft core script <script> [args]` | Sets the script of the Bot Core in your main hand: the bot it makes starts that script with those args at once, owned by you, without `bot run`. The tooltip names it; cores with different scripts do not stack. A script that does not exist or does not compile is refused with its error. `/antcraft core script clear` takes it off, so the bot runs `idle.py` |
 | `/antcraft profile start\|stop\|report` | Measures where server tick time goes: `start` forgets what was measured and starts, `stop` stops, `report` lists the ticks measured with their average and worst time and which tick was the worst, then each part of the bots' work (a bot's tick `bot.tick`, its script `bot.script`, pathfinding for a walk `path.find` and for `reachable` `path.plan`) with its time per tick, worst tick and calls, the costliest first. Parts nest, such as pathfinding inside a bot's tick, so they do not add up to the tick |
 | `/antcraft colony info` | The nearest colony's core, members and radius, and its owner and trusted players |
 | `/antcraft colony trust <player> [colony]` | Lets a player change the colony as its owner can. The colony's owner may run this, `untrust` and `trust list` without operator rights; trusted players may change the colony but not whom it trusts. Acts on the nearest colony within 64 blocks that you may trust (your own, or any for operators), so another player's colony nearer does not get in the way, or on the colony whose core is at `[colony]` (within 64 blocks), to pick one of two colonies close together; a named colony you may not trust is refused |

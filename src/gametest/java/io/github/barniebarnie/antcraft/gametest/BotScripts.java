@@ -7,7 +7,12 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
+import io.github.barniebarnie.antcraft.script.ServerScripts;
 import io.netty.channel.embedded.EmbeddedChannel;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -23,7 +28,9 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.GameType;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Running scripts on bots in game tests: a script string on a test bot, an owner whose chat the test can read, and
@@ -40,6 +47,32 @@ public final class BotScripts {
 	public static ScriptRun run(AntBot bot, String source, String... args) {
 		bot.runScript("test", Compiler.compile(Parser.parse(FILE, source)), List.of(args));
 		return Objects.requireNonNull(bot.getScript());
+	}
+
+	/**
+	 * Writes {@code source} as a new script in the world's script folder, named {@code prefix} and a random suffix, and
+	 * reloads the script folders. The file is deleted when the test ends.
+	 *
+	 * @return the script's name
+	 */
+	public static String libraryScript(GameTestHelper helper, String prefix, String source) {
+		String name = prefix + UUID.randomUUID().toString().substring(0, 8);
+		Path script = ServerScripts.worldFolder(helper.getLevel().getServer()).resolve(name + ".py");
+		GameTests.onEnd(helper, () -> {
+			try {
+				Files.deleteIfExists(script);
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		});
+		try {
+			Files.createDirectories(script.getParent());
+			Files.writeString(script, source);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+		command(helper, "antcraft script reload");
+		return name;
 	}
 
 	/** The texts of {@code bot}'s log lines at or above {@code level}. */
@@ -99,6 +132,11 @@ public final class BotScripts {
 
 	/** Runs {@code command} (without the slash) as an operator in the test's level, and gives every line it answered with. */
 	public static List<String> command(GameTestHelper helper, String command) {
+		return command(helper, null, command);
+	}
+
+	/** As {@link #command(GameTestHelper, String)}, with {@code as} (if not null) as the entity running it, such as a player. */
+	public static List<String> command(GameTestHelper helper, @Nullable Entity as, String command) {
 		List<String> lines = new ArrayList<>();
 		CommandSource recorder = new CommandSource() {
 			@Override
@@ -123,6 +161,9 @@ public final class BotScripts {
 		};
 		MinecraftServer server = helper.getLevel().getServer();
 		CommandSourceStack source = server.createCommandSourceStack().withLevel(helper.getLevel()).withSource(recorder);
+		if (as != null) {
+			source = source.withEntity(as);
+		}
 		server.getCommands().performPrefixedCommand(source, command);
 		return lines;
 	}
@@ -131,7 +172,7 @@ public final class BotScripts {
 	 * {@code message} as text with the arguments of a translated message spelled out, whether or not the server has the
 	 * mod's lang file: {@code key[arg, arg]}.
 	 */
-	private static String text(Component message) {
+	static String text(Component message) {
 		if (message.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents translatable) {
 			List<String> args = new ArrayList<>();
 			for (Object arg : translatable.getArgs()) {

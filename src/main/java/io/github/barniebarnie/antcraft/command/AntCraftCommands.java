@@ -4,6 +4,7 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import io.github.barniebarnie.antcraft.colony.Colony;
@@ -11,8 +12,11 @@ import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.item.CoreScript;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
+import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.script.BotLog;
 import io.github.barniebarnie.antcraft.script.ScriptLibrary;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
@@ -25,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.ChatFormatting;
@@ -41,13 +46,16 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 /**
  * /antcraft status
  * /antcraft profile start|stop|report   (server tick time, per part of the bots' work)
  * /antcraft script list|reload
  * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]   (defaults to the nearest bot)
+ * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony trust|untrust &lt;player&gt; [colony]   (also the colony's owner, not only operators)
  * /antcraft colony trust list [colony]   (also the colony's owner)
@@ -87,6 +95,11 @@ public final class AntCraftCommands {
 			// The bots argument is optional: without it, the nearest bot. Literals win over the selector, so a bot cannot be named "run".
 			.then(botCommands(Commands.literal("bot").requires(OPERATOR), ctx -> nearestBot(ctx.getSource()))
 				.then(botCommands(Commands.argument("bots", EntityArgument.entities()), AntCraftCommands::bots)))
+			// Literals win over the script argument, so a script named "clear" cannot be set this way.
+			.then(Commands.literal("core").requires(OPERATOR)
+				.then(Commands.literal("script")
+					.then(Commands.literal("clear").executes(ctx -> setCoreScript(ctx.getSource(), null)))
+					.then(scriptArgument((ctx, name, args) -> setCoreScript(ctx.getSource(), new CoreScript(name, args))))))
 			.then(Commands.literal("colony").requires(AntCraftCommands::operatorOrPlayer)
 				.then(Commands.literal("info").requires(OPERATOR).executes(ctx -> colonyInfo(ctx.getSource())))
 				.then(Commands.literal("trust").requires(AntCraftCommands::operatorOrPlayer)
@@ -271,17 +284,61 @@ public final class AntCraftCommands {
 		List<AntBot> get(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException;
 	}
 
+	private interface ScriptCommand {
+		int run(CommandContext<CommandSourceStack> ctx, String name, List<String> args) throws CommandSyntaxException;
+	}
+
+	/** {@code <script> [args]}, suggesting the library's scripts, running {@code command} with the script's name and args. */
+	private static RequiredArgumentBuilder<CommandSourceStack, String> scriptArgument(ScriptCommand command) {
+		return Commands.argument("script", StringArgumentType.string())
+			.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+				ServerScripts.library().scripts().stream().map(ScriptLibrary.Script::name), builder))
+			.executes(ctx -> command.run(ctx, StringArgumentType.getString(ctx, "script"), List.of()))
+			.then(Commands.argument("args", StringArgumentType.greedyString())
+				.executes(ctx -> command.run(ctx, StringArgumentType.getString(ctx, "script"),
+					List.of(StringArgumentType.getString(ctx, "args").trim().split("\\s+")))));
+	}
+
+	/**
+	 * The library's script {@code name}, if it exists and compiles, as {@code bot run} and a Bot Core's script need it;
+	 * otherwise {@code failure} gets why not.
+	 */
+	public static Optional<ScriptLibrary.Script> runnable(String name, Consumer<Component> failure) {
+		Optional<ScriptLibrary.Script> found = ServerScripts.library().get(name);
+		if (found.isEmpty()) {
+			failure.accept(Component.translatable("commands.antcraft.script.unknown", name));
+		} else if (found.get().code() == null) {
+			failure.accept(Component.translatable("commands.antcraft.script.broken", name, found.get().error()));
+			return Optional.empty();
+		}
+		return found;
+	}
+
+	/** Sets the script of the Bot Core in the player's main hand, or takes it off with a null {@code script}. */
+	private static int setCoreScript(CommandSourceStack source, @Nullable CoreScript script) throws CommandSyntaxException {
+		ItemStack stack = source.getPlayerOrException().getMainHandItem();
+		if (!stack.is(ModItems.BOT_CORE)) {
+			source.sendFailure(Component.translatable("commands.antcraft.core.no_core"));
+			return 0;
+		}
+		if (script == null) {
+			stack.remove(ModComponents.CORE_SCRIPT);
+			source.sendSuccess(() -> Component.translatable("commands.antcraft.core.cleared"), false);
+			return 1;
+		}
+		if (runnable(script.name(), source::sendFailure).isEmpty()) {
+			return 0;
+		}
+		stack.set(ModComponents.CORE_SCRIPT, script);
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.core.script", script.toString()), false);
+		return 1;
+	}
+
 	/** {@code run <script> [args]|stop|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
 	private static <T extends ArgumentBuilder<CommandSourceStack, T>> T botCommands(T node, BotsArgument bots) {
 		return node
 			.then(Commands.literal("run")
-				.then(Commands.argument("script", StringArgumentType.string())
-					.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
-						ServerScripts.library().scripts().stream().map(ScriptLibrary.Script::name), builder))
-					.executes(ctx -> runScript(ctx.getSource(), bots.get(ctx), StringArgumentType.getString(ctx, "script"), List.of()))
-					.then(Commands.argument("args", StringArgumentType.greedyString())
-						.executes(ctx -> runScript(ctx.getSource(), bots.get(ctx), StringArgumentType.getString(ctx, "script"),
-							List.of(StringArgumentType.getString(ctx, "args").trim().split("\\s+")))))))
+				.then(scriptArgument((ctx, name, args) -> runScript(ctx.getSource(), bots.get(ctx), name, args))))
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("status").executes(ctx -> scriptStatus(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("log")
@@ -322,16 +379,11 @@ public final class AntCraftCommands {
 		if (!checkAllowed(source) || !checkAny(source, bots)) {
 			return 0;
 		}
-		Optional<ScriptLibrary.Script> found = ServerScripts.library().get(name);
+		Optional<ScriptLibrary.Script> found = runnable(name, source::sendFailure);
 		if (found.isEmpty()) {
-			source.sendFailure(Component.translatable("commands.antcraft.script.unknown", name));
 			return 0;
 		}
 		ScriptLibrary.Script script = found.get();
-		if (script.code() == null) {
-			source.sendFailure(Component.translatable("commands.antcraft.script.broken", name, script.error()));
-			return 0;
-		}
 		ServerPlayer player = source.getPlayer();
 		for (AntBot bot : bots) {
 			if (player != null) {

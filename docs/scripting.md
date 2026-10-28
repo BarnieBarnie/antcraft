@@ -295,11 +295,13 @@ Commands (single-player first; on a server they stay operator-only):
 /antcraft bot [bots] stop
 /antcraft bot [bots] status                 script, line, current action, last result
 /antcraft bot [bots] log [n] [level]        last n log lines at or above level (default debug)
+/antcraft core script <script> [args]       the Bot Core in your main hand makes bots that run this script
+/antcraft core script clear                 ...and back to idle.py
 ```
 
 `[bots]` is an entity selector; without it, the command acts on the nearest bot. A script is named by its path in its folder without `.py`, with dots for folders (`lib/trees.py` is `lib.trees`). A bot's owner, who gets its chat, is the player who placed its Bot Core, or who last started a script on it.
 
-A Bot Core item can carry a script name, so a new bot starts running it when placed. Writing scripts in a book and quill is out of scope for v1.
+A Bot Core can carry a script and its args (the item's `antcraft:script` component, named in its tooltip), so you hand out workers rather than commands: the bot it makes starts that script the moment it is activated, owned by the player who used the core, as `bot run` would start it. A core without one makes a bot that runs `idle.py`. `core script` refuses a script that does not exist or does not compile, with its error; one gone or broken since the core was set is refused the same way when the core is used, in the player's chat, and the bot runs `idle.py`. Cores with different scripts do not stack. Writing scripts in a book and quill is out of scope for v1.
 
 ## Example scripts
 

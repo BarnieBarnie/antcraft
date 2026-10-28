@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.colony;
 
+import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.item.CoreScript;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -31,16 +33,29 @@ public final class BotActivation {
 	 * Spawns a bot at {@code pos} for {@code player}, who used a Bot Core: it joins the nearest colony that
 	 * {@code player} may act on ({@link ColonyActions#mayAct}, counting from where the bot stands), or none. With no
 	 * player, such as a Bot Core used by a machine, it joins none. The player owns the bot (see {@link AntBot#getOwner}).
+	 * With a {@code script} (the core's {@link CoreScript}) the bot starts it at once, as {@code /antcraft bot run} would;
+	 * one that is gone or no longer compiles is refused as that command refuses it, in the player's chat, and the bot
+	 * runs {@code idle.py} as one from a core without a script does.
 	 */
-	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player) {
+	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player, @Nullable CoreScript script) {
 		AntBot bot = activate(level, pos, mayJoin(player, pos));
-		if (bot != null && player != null) {
+		if (bot == null) {
+			return null;
+		}
+		if (player != null) {
 			bot.setOwner(player.getUUID());
+		}
+		if (script != null) {
+			AntCraftCommands.runnable(script.name(), failure -> {
+				if (player != null) {
+					player.sendSystemMessage(failure);
+				}
+			}).ifPresent(found -> bot.runScript(found, script.args()));
 		}
 		return bot;
 	}
 
-	/** Which colonies a bot activated at {@code pos} by {@code player} may join; see {@link #activate(ServerLevel, BlockPos, Player)}. */
+	/** Which colonies a bot activated at {@code pos} by {@code player} may join; see {@link #activate(ServerLevel, BlockPos, Player, CoreScript)}. */
 	public static Predicate<Colony> mayJoin(@Nullable Player player, BlockPos pos) {
 		if (player == null) {
 			return colony -> false;
