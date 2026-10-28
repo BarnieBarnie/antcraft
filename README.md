@@ -139,7 +139,7 @@ The mod has turned from goal-driven colonies into **scripted bots**: the mod giv
 | 4 | The goal-driven colony removed; its engine parts kept behind the actions; every bot without a script runs `idle.py` (done) |
 | 5 | Reflexes, saving and resuming scripts, `import` and the default `lib/` folder, respawning at home, travel through nether portals (done) |
 | 6 | Mining library: `lib/shaft.py`, the mineshaft, dug and laddered, every time (not started) |
-| 7 | Colony again: shared colony memory (`colony()`, `colony_memory`), a script-level job board (`post_job`, `take_job`), Bot Cores that carry a script, `build` as an action, and the default colony scripts `colony.lumberjack`, `colony.hauler`, `colony.builder` and `colony.farmer` |
+| 7 | Colony again: shared colony memory (`colony()`, `colony_memory`), a script-level job board (`post_job`, `take_job`), Bot Cores that carry a script, `build` as an action, and the default colony scripts `colony.lumberjack`, `colony.hauler`, `colony.builder` and `colony.farmer` (done) |
 | 8 | Later: per-player limits, more of Python, an in-game script viewer, scripts in data packs, Litematica import |
 
 Done before the change of direction: the bot entity, pathfinding that digs, pillars and bridges, the colony core and job board, the lumberjack, miner, farmer, hauler, guard and crafter work, blueprints with roles, the placement and build ghosts, and the warehouse, farm and cobblestone generator. Milestone 4 removed the job board, the work goals, stock planning, projects and placing blueprints for a colony; what the actions need of them (pathfinding, block breaking, crafting, the mineshaft and ore vein plans, build plans) stays.
