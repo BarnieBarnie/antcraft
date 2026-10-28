@@ -74,6 +74,7 @@ class DefaultScriptsTest {
 		Map<String, String> bundled = DefaultScripts.bundled();
 		assertTrue(bundled.containsKey("lib/home.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("lib/shaft.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("lib/mine.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 

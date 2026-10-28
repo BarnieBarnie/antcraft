@@ -14,17 +14,21 @@ import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.Mineshaft;
+import io.github.barniebarnie.antcraft.work.OreVein;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The senses {@code mineshaft(levels, near=None)} and {@code mineshaft_at(top, levels)} (docs/scripting.md, Senses): where
- * a ladder shaft can go and what it looks like, from {@link Mineshaft}, as plain data for the mining library.
+ * The senses {@code mineshaft(levels, near=None)}, {@code mineshaft_at(top, levels, round=0, branches=4, length=16)} and
+ * {@code ore_vein(pos)} (docs/scripting.md, Senses): where a ladder shaft can go and what it looks like, from
+ * {@link Mineshaft}, and the ore veins its branches uncover, as plain data for the mining library.
  */
 public final class MineApi {
 	private MineApi() {
@@ -47,19 +51,63 @@ public final class MineApi {
 			// site search reads some 3,000 blocks for a site found at once, up to some 300,000 in one tick where every spot is
 			// blocked; share SenseApi.SCAN_BUDGET over ticks if that shows in the tick time.
 			Object result = Mineshaft.diggableNextTo(WorkApi.blockPos(near), levels, List.of(), world)
-				.<Object>map(shaft -> describe(shaft, run.host().pos().dimension())).orElse(PyNone.NONE);
+				.<Object>map(shaft -> describe(shaft, 0, run.host().pos().dimension())).orElse(PyNone.NONE);
 			run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
 			return result;
 		});
 		natives.register("mineshaft_at", 30, call -> {
-			Object[] args = Args.bind("mineshaft_at", call, 2, "top", "levels");
+			Object[] args = Args.bind("mineshaft_at", call, 2, "top", "levels", "round", "branches", "length");
 			Pos top = Pos.of(args[0]);
 			List<Integer> levels = levels(args[1]);
+			int round = count(args[2], 0, "round", 0);
+			int branches = count(args[3], Mineshaft.DEFAULT_BRANCHES_PER_SIDE, "branches", 1);
+			int length = count(args[4], Mineshaft.DEFAULT_BRANCH_LENGTH, "length", 1);
 			if (run.elsewhere(top)) {
 				return PyNone.NONE;
 			}
-			return describe(new Mineshaft(WorkApi.blockPos(top), levels), run.host().pos().dimension());
+			return describe(new Mineshaft(WorkApi.blockPos(top), levels, branches, length, Mineshaft.DEFAULT_TORCH_SPACING), round,
+				run.host().pos().dimension());
 		});
+		natives.register("ore_vein", call -> {
+			Object[] args = Args.bind("ore_vein", call, 1, "pos");
+			Pos pos = Pos.of(args[0]);
+			AntBot bot = WorkApi.bot(run, call);
+			if (run.elsewhere(pos)) {
+				return new PyList();
+			}
+			LoadedBlocks loaded = new LoadedBlocks(bot.level());
+			long[] reads = {0};
+			PyList vein = oreVein(WorkApi.blockPos(pos), at -> {
+				reads[0]++;
+				BlockState state = loaded.loaded(at);
+				return state == null ? Blocks.AIR.defaultBlockState() : state;
+			}, run.host().pos().dimension());
+			run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
+			return vein;
+		});
+	}
+
+	/** An optional whole-number argument {@code name}, {@code absent} when not given, at least {@code min}. */
+	private static int count(Object value, int absent, String name, int min) {
+		if (Args.absent(value)) {
+			return absent;
+		}
+		long n = Args.integer(value);
+		if (n < min || n > 1024) {
+			throw new ScriptError(name + " must be from " + min + " to 1024, not " + n);
+		}
+		return (int) n;
+	}
+
+	/**
+	 * {@code ore_vein(pos)}: the blocks of the ore vein at {@code pos} ({@link OreVein#of}, at most {@link OreVein#MAX_SIZE}), from
+	 * {@code pos} out, each after one it touches, or none where {@code pos} is no ore.
+	 */
+	static PyList oreVein(BlockPos pos, Function<BlockPos, BlockState> world, @Nullable String dimension) {
+		if (!OreVein.isOre(world.apply(pos))) {
+			return new PyList();
+		}
+		return positions(OreVein.of(pos, world, OreVein.MAX_SIZE), dimension);
 	}
 
 	private static List<Integer> levels(Object value) {
@@ -73,10 +121,11 @@ public final class MineApi {
 
 	/**
 	 * A ladder shaft as plain data: {@code top}, {@code hatch}, {@code levels} (heights, deepest last), {@code level} (per
-	 * height its {@code landing}, {@code chest}, {@code hall} and {@code branches}, each branch the cells of its first
-	 * round), {@code ladders} ({@code [pos, facing]}, top first) and {@code torches}, positions in {@code dimension}.
+	 * height its {@code landing}, {@code chest}, {@code hall}, {@code branches}, each branch the cells of its round
+	 * {@code round}, and {@code torches}, the torch spots of the hall and those branches), {@code ladders} ({@code [pos,
+	 * facing]}, top first) and {@code torches}, positions in {@code dimension}.
 	 */
-	static PyDict describe(Mineshaft shaft, @Nullable String dimension) {
+	static PyDict describe(Mineshaft shaft, int round, @Nullable String dimension) {
 		PyDict dict = new PyDict();
 		dict.put("top", pos(shaft.top(), dimension));
 		dict.put("hatch", pos(shaft.hatch(), dimension));
@@ -88,8 +137,12 @@ public final class MineApi {
 			level.put("chest", pos(shaft.landingChest(y), dimension));
 			level.put("hall", positions(shaft.hall(y), dimension));
 			PyList branches = new PyList();
-			shaft.branches(y).forEach(branch -> branches.items.add(positions(branch.cells(), dimension)));
+			List<Mineshaft.Branch> inRound = shaft.branches(y, round);
+			inRound.forEach(branch -> branches.items.add(positions(branch.cells(), dimension)));
 			level.put("branches", branches);
+			List<BlockPos> torches = new ArrayList<>(shaft.hallWork(y).map(Mineshaft.Branch::torches).orElse(List.of()));
+			inRound.forEach(branch -> torches.addAll(branch.torches()));
+			level.put("torches", positions(torches, dimension));
 			byLevel.put((long) y, level);
 		}
 		dict.put("level", byLevel);

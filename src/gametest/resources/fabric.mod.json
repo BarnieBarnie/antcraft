@@ -20,6 +20,7 @@
 			"io.github.barniebarnie.antcraft.gametest.ReflexGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ColonyGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ShaftGameTest",
+			"io.github.barniebarnie.antcraft.gametest.MineGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BenchmarkGameTest"
 		]
 	},
