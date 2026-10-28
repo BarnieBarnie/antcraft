@@ -27,6 +27,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
@@ -40,6 +41,7 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
@@ -134,13 +136,18 @@ public final class BuildApi {
 	 * resumed after a save, goes on where it stopped; its value, the blocks placed, is saved as its progress. Where no walk
 	 * reaches a block, it stands on blocks already built or pillars up with the scaffold blocks it takes down by hand
 	 * (dirt), never where the blueprint puts a block, and once the blueprint stands it takes that scaffold down again.
+	 * Another bot standing where a block goes is asked to make way ({@link AntBot#makeWay}); a player or mob gets a
+	 * moment to go before the build gives blocked.
 	 */
 	// ponytail: no scooping fluids out of the way and no stand-ins; the old BuilderGoal had them, add back when a blueprint needs them.
 	// ponytail: the scaffold to take down is not saved, and comes down only once the build is done: a build resumed after
 	// a save, or one that stops short, leaves its scaffold up. Save it with the progress if that shows.
 	private static final class Build implements ScriptRun.Action {
-		/** How long the bot steps back to the middle of its block when it stands over the edge of the spot it places in. */
-		private static final int NUDGE_TICKS = 10;
+		/**
+		 * How long, in ticks, the bot waits for what stands where it places to go: itself stepping back to the middle of its
+		 * block, other bots stepping aside when asked, players and mobs going on their own.
+		 */
+		private static final int WAIT_TICKS = 40;
 		private final ScriptRun run;
 		private final AntBot bot;
 		private final ServerLevel level;
@@ -154,7 +161,7 @@ public final class BuildApi {
 		private @Nullable BlockPos walked;
 		private @Nullable BlockPos breaking;
 		private boolean unloaded;
-		private int nudged;
+		private int waited;
 		/** Every spot the blueprint puts a block or air in, where no scaffold goes. */
 		private final Set<BlockPos> spots = new HashSet<>();
 		/** The bot's scaffold already up when the build started, not the build's to take down. */
@@ -248,14 +255,20 @@ public final class BuildApi {
 			}
 			BlockState state = step.isPlaced(current) ? current.setValue(BlockStateProperties.WATERLOGGED, step.isWaterlogged()) : step.dry();
 			if (!step.isPlaced(current) && !this.level.isUnobstructed(state, step.pos(), CollisionContext.empty())) {
-				// Only in its own way, standing off the middle of its block over the edge of the spot: it steps back first.
-				if (this.nudged++ < NUDGE_TICKS && this.level.isUnobstructed(this.bot, state.getCollisionShape(this.level, step.pos()).move(step.pos()))) {
-					this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
+				if (this.waited++ < WAIT_TICKS) {
+					AABB spot = state.getCollisionShape(this.level, step.pos()).move(step.pos()).bounds();
+					// Never in its own block (not in reach from there), but maybe off its middle, over the edge of the spot.
+					if (this.bot.getBoundingBox().intersects(spot)) {
+						this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
+					}
+					for (Entity other : this.level.getEntities(this.bot, spot, entity -> entity instanceof AntBot)) {
+						((AntBot) other).makeWay(this.spots);
+					}
 					return false;
 				}
 				return this.finish(Result.BLOCKED);
 			}
-			this.nudged = 0;
+			this.waited = 0;
 			step.otherHalf().ifPresent(other -> this.level.setBlockAndUpdate(other.pos(), other.state()));
 			this.level.setBlockAndUpdate(step.pos(), step.isPlaced(current) ? state : Block.updateFromNeighbourShapes(state, this.level, step.pos()));
 			this.bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);

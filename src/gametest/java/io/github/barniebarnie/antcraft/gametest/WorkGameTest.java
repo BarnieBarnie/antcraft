@@ -761,6 +761,38 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("False blocked 0 2"), () -> helper.assertBlockPresent(Blocks.AIR, 3, 7, 3));
 	}
 
+	/** A second bot idling where the step's second cobblestone goes is asked to step aside, and the build finishes. */
+	@GameTest(maxTicks = 80)
+	public void buildMovesABotIdlingOnTheSite(GameTestHelper helper) {
+		helper.spawn(ModEntities.ANT_BOT, 4, 1, 3);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
+			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/** The building bot standing where the step's second cobblestone goes, beside the first moves off it and finishes. */
+	@GameTest(maxTicks = 80)
+	public void buildMovesTheBuilderOffTheSite(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 3);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
+			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/** An armor stand where a block goes does not move: blocked after a short wait, and it still stands there. */
+	@GameTest(maxTicks = 100)
+	public void buildWithAnArmorStandOnTheSiteIsBlocked(GameTestHelper helper) {
+		helper.spawn(EntityTypes.ARMOR_STAND, 3, 1, 3);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n",
+			List.of("False blocked"), () -> {
+				helper.assertBlockPresent(Blocks.AIR, 3, 1, 3);
+				helper.assertEntityPresent(EntityTypes.ARMOR_STAND, 3, 1, 3);
+			});
+	}
+
 	/** An id no blueprint has gives no_blueprint, and blueprint() None for it. */
 	@GameTest(maxTicks = 20)
 	public void buildAnUnknownBlueprintIsNoBlueprint(GameTestHelper helper) {

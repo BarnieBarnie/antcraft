@@ -248,6 +248,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.reflexes.move();
 	}
 
+	/**
+	 * Asks the bot to step out of {@code spots}, where another bot builds: its reflexes (see {@link Reflexes}) take it
+	 * out of them for a second, ending its script's current action with {@code interrupted} if it stands in them.
+	 */
+	public void makeWay(Set<BlockPos> spots) {
+		this.reflexes.makeWay(spots);
+	}
+
 	/** How many flights from a hostile mob its reflexes planned (see {@link Reflexes}), for the game tests. */
 	public int getFlightPlans() {
 		return this.reflexes.flightPlans();

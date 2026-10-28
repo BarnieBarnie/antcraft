@@ -28,8 +28,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * A bot's reflexes (docs/scripting.md, Reflexes): each tick, before the script, they keep the bot out of fire and lava,
- * from under a falling block, from drowning and, at low health, away from hostile mobs, whatever its script does. While
- * one holds the bot, the script's current action ends with {@code interrupted} and the script waits (see
+ * from under a falling block, from drowning and, at low health, away from hostile mobs, whatever its script does, and
+ * out of another bot's build when it asks. While one holds the bot, the script's current action ends with
+ * {@code interrupted} and the script waits (see
  * {@link io.github.barniebarnie.antcraft.script.ScriptRun}). A reflex takes over only where it has a way out.
  */
 final class Reflexes {
@@ -42,7 +43,9 @@ final class Reflexes {
 		/** Under water and short of air: swim up to air. */
 		SURFACE,
 		/** Low on health with a hostile mob near: flee home, or away from the mob. */
-		FLEE
+		FLEE,
+		/** In the way of another bot's build, which asked it to make way: step out of the build's spots. */
+		MAKE_WAY
 	}
 
 	/** What the reflexes sense of the bot and around it. */
@@ -66,6 +69,8 @@ final class Reflexes {
 	static final int FLEE_RETRY_TICKS = 20;
 	/** How far, in blocks, the mob may move from where it stood when the flight was planned before the bot plans again. */
 	private static final double MOB_MOVED = 4;
+	/** How long, in ticks, a bot asked to make way keeps out of the build's spots after the last ask. */
+	private static final int MAKE_WAY_TICKS = 20;
 
 	private final AntBot bot;
 	private @Nullable Kind active;
@@ -84,6 +89,10 @@ final class Reflexes {
 	private int flightFailedAt = -FLEE_RETRY_TICKS;
 	/** How many flights the bot planned, for the game tests. */
 	private int flightPlans;
+	/** The spots of the build that last asked the bot to make way, or null. */
+	private @Nullable Set<BlockPos> wayFor;
+	/** The bot's tick count until which it makes way for {@link #wayFor}. */
+	private int wayUntil;
 
 	Reflexes(AntBot bot) {
 		this.bot = bot;
@@ -132,6 +141,9 @@ final class Reflexes {
 		Senses senses = new Senses(this.inHazard(level), !this.fallingAbove(level, this.bot.getBoundingBox()).isEmpty(), this.bot.isUnderWater(),
 			this.bot.getAirSupply(), this.bot.getHealth(), hostile != null);
 		Kind kind = choose(senses, fleeHealth, AntCraftConfig.botSurfaceAir());
+		if (kind == null && this.inTheWay()) {
+			kind = Kind.MAKE_WAY;
+		}
 		Kind was = this.active;
 		boolean holds = kind != null && this.plan(level, kind, kind == was, hostile);
 		this.active = holds ? kind : null;
@@ -143,6 +155,27 @@ final class Reflexes {
 			this.bot.setTarget(null);
 		}
 		return holds;
+	}
+
+	/** Asks the bot to step out of {@code spots}, another bot's build, for the next {@link #MAKE_WAY_TICKS} ticks. */
+	void makeWay(Set<BlockPos> spots) {
+		this.wayFor = spots;
+		this.wayUntil = this.bot.tickCount + MAKE_WAY_TICKS;
+	}
+
+	/** Whether the bot was asked to make way of late and still stands in one of the spots. */
+	private boolean inTheWay() {
+		if (this.wayFor == null || this.bot.tickCount > this.wayUntil) {
+			this.wayFor = null;
+			return false;
+		}
+		AABB box = this.bot.getBoundingBox().deflate(1.0E-4);
+		for (BlockPos pos : BlockPos.betweenClosed(Mth.floor(box.minX), Mth.floor(box.minY), Mth.floor(box.minZ), Mth.floor(box.maxX), Mth.floor(box.maxY), Mth.floor(box.maxZ))) {
+			if (this.wayFor.contains(pos)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** How many flights from a hostile mob the bot planned so far. */
@@ -197,6 +230,15 @@ final class Reflexes {
 				this.fledFrom = hostile.position();
 				PathFollower.Status status = this.flight.tick();
 				return status == PathFollower.Status.FAILED ? this.flightFailed() : (this.fleeing = status == PathFollower.Status.RUNNING);
+			}
+			case MAKE_WAY -> {
+				Set<BlockPos> spots = this.wayFor;
+				Predicate<BlockPos> avoid = pos -> spots.contains(pos) || spots.contains(pos.above());
+				if (!avoid.test(feet)) {
+					this.target = feet; // only over the edge of a spot: back to the middle of its block
+					return true;
+				}
+				return this.stepAside(world, feet, same, avoid);
 			}
 		}
 		return false;
