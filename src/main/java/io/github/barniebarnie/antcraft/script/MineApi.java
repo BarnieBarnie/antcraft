@@ -50,7 +50,7 @@ public final class MineApi {
 			// ponytail: charged per block read as the block searches are, estimated, not measured; benchmark it in #380. A
 			// site search reads some 3,000 blocks for a site found at once, up to some 300,000 in one tick where every spot is
 			// blocked; share SenseApi.SCAN_BUDGET over ticks if that shows in the tick time.
-			Object result = Mineshaft.diggableNextTo(WorkApi.blockPos(near), levels, List.of(), world)
+			Object result = Mineshaft.diggableOnGroundNextTo(WorkApi.blockPos(near), levels, List.of(), world)
 				.<Object>map(shaft -> describe(shaft, 0, run.host().pos().dimension())).orElse(PyNone.NONE);
 			run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
 			return result;

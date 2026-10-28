@@ -305,4 +305,18 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			+ "print(mineshaft_at(m['top'], m['levels']) == m)\n");
 		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 6, 1, 6) + " True minecraft:stone " + printed(helper, 7, -2, 6) + " True", "True"));
 	}
+	/**
+	 * mineshaft(levels, near) puts the top on the ground of its column, whatever height near is at: a block above the
+	 * ground and a block into it (a dip) give the same top as near on the ground.
+	 */
+	@GameTest(maxTicks = 10)
+	public void mineshaftPutsTheTopOnTheGround(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(5, -4, 5, 20, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = run(helper, bot, "y = pos().y - 3\n"
+			+ "print(mineshaft([y], pos().up())['top'], mineshaft([y], pos().down())['top'])\n");
+		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 6, 1, 6) + " " + printed(helper, 6, 1, 6)));
+	}
 }
