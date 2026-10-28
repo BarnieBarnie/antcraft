@@ -101,10 +101,12 @@ final class Reflexes {
 
 	/** Senses and decides, before the script runs this tick; whether a reflex holds the bot. */
 	boolean tick(ServerLevel level) {
-		@Nullable Mob hostile = this.nearestHostile(level);
+		int fleeHealth = AntCraftConfig.botFleeHealth();
+		// Only a bot low on health flees, so only it looks for hostile mobs, the costlier of the two entity searches (#336).
+		@Nullable Mob hostile = this.bot.getHealth() <= fleeHealth ? this.nearestHostile(level) : null;
 		Senses senses = new Senses(this.inHazard(level), !this.fallingAbove(level, this.bot.getBoundingBox()).isEmpty(), this.bot.isUnderWater(),
 			this.bot.getAirSupply(), this.bot.getHealth(), hostile != null);
-		Kind kind = choose(senses, AntCraftConfig.botFleeHealth(), AntCraftConfig.botSurfaceAir());
+		Kind kind = choose(senses, fleeHealth, AntCraftConfig.botSurfaceAir());
 		Kind was = this.active;
 		boolean holds = kind != null && this.plan(level, kind, kind == was, hostile);
 		this.active = holds ? kind : null;
