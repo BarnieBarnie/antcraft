@@ -28,6 +28,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
@@ -79,6 +80,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	private final SimpleContainer inventory = new SimpleContainer(INVENTORY_SIZE);
 	private @Nullable BlockPos home;
+	/** The dimension of {@link #home}: where the bot respawns. Saved; a bot saved without one has it in the dimension it loads in. */
+	private @Nullable ResourceKey<Level> homeDimension;
 	private @Nullable UUID colonyId;
 	/** The player who placed the bot's Bot Core, or who last started a script on it; gets the script's chat. Saved. */
 	private @Nullable UUID owner;
@@ -176,6 +179,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			}
 			if (this.home == null) {
 				this.home = this.blockPosition(); // where it was first spawned
+				this.homeDimension = level.dimension();
 			}
 			this.sayBubble.tick();
 			// A dead bot lies there for a second before it is gone; it does nothing meanwhile.
@@ -266,8 +270,15 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.home != null ? this.home : this.blockPosition();
 	}
 
+	/** The dimension of the bot's home: where it was set, or where the bot is before it has one. */
+	public ResourceKey<Level> getHomeDimension() {
+		return this.homeDimension != null ? this.homeDimension : this.level().dimension();
+	}
+
+	/** Sets the bot's home in the dimension the bot is in. */
 	public void setHome(@Nullable BlockPos home) {
 		this.home = home;
+		this.homeDimension = this.level().dimension();
 	}
 
 	public @Nullable UUID getColonyId() {
@@ -499,7 +510,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		BotRespawns.respawnTime(AntCraftConfig.values(), level.getGameTime()).ifPresent(time -> {
 			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
 			this.saveWithoutId(output);
-			BotRespawns.get(level).add(new BotRespawns.Pending(this.getUUID(), this.getScriptHome(), time, output.buildResult(),
+			// Waits in its home's dimension, which may not be the one it died in.
+			ServerLevel homeLevel = Objects.requireNonNullElse(level.getServer().getLevel(this.getHomeDimension()), level);
+			BotRespawns.get(homeLevel).add(new BotRespawns.Pending(this.getUUID(), this.getScriptHome(), time, output.buildResult(),
 				Optional.ofNullable(last).map(ScriptRun::name), last != null ? last.args() : List.of(), library, last != null ? code : null));
 		});
 	}
@@ -601,6 +614,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.addAdditionalSaveData(output);
 		this.writeInventoryToTag(output);
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
+		output.storeNullable("HomeDimension", Level.RESOURCE_KEY_CODEC, this.homeDimension);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.storeNullable("Owner", UUIDUtil.CODEC, this.owner);
 		if (this.deaths > 0) {
@@ -627,6 +641,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		super.readAdditionalSaveData(input);
 		this.readInventoryFromTag(input);
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
+		this.homeDimension = input.read("HomeDimension", Level.RESOURCE_KEY_CODEC).orElse(this.level().dimension());
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.deaths = input.getIntOr("Deaths", 0);

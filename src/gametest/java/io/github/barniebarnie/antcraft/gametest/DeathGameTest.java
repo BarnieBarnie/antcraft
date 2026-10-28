@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
@@ -13,7 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.locks.LockSupport;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -25,6 +28,9 @@ import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -43,7 +49,10 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		method.invoke(this, helper);
 	}
 
-	private static final String SCRIPT = """
+	/** The shortest tick {@link #aBotRespawnsAtAHomeWhoseChunkIsNotLoaded} lets the server run: 5 ms. */
+	private static final long PACED_TICK_NANOS = 5_000_000L;
+
+	private static final String SCRIPT ="""
 		memory['runs'] = memory.get('runs', 0) + 1
 		print('run', memory['runs'], 'deaths', deaths())
 		while True:
@@ -162,6 +171,77 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(again.blockPosition().distManhattan(home) <= 1, "respawned at " + again.blockPosition() + ", home " + home);
 			helper.assertTrue(again.getDeaths() == 1, "deaths " + again.getDeaths());
 			helper.assertTrue("yes".equals(again.getMemory().get("kept")), "memory " + again.getMemory());
+		});
+	}
+
+	/** A bot whose home is in the Overworld and that dies in the Nether respawns at its home in the Overworld. */
+	@GameTest(maxTicks = 440)
+	public void aBotKilledInAnotherDimensionRespawnsAtHomeInItsHomeDimension(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
+		bot.setHome(home);
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		BlockPos there = new BlockPos(home.getX(), 100, home.getZ());
+		// Once the Nether chunk ticks entities, the bot goes there as through a portal, and is killed there.
+		boolean[] killed = {false};
+		helper.onEachTick(() -> {
+			if (killed[0]) {
+				return;
+			}
+			BotChunks.keep(nether, ChunkPos.containing(there));
+			if (!nether.isPositionEntityTicking(there)) {
+				return;
+			}
+			if (!bot.isRemoved()) {
+				bot.teleportTo(nether, there.getX() + 0.5, there.getY(), there.getZ() + 0.5, Set.of(), 0, 0, false);
+			} else if (nether.getEntity(id) instanceof AntBot moved) {
+				moved.kill(nether);
+				killed[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again.getDeaths() == 1, "not respawned in the Overworld");
+			BlockPos at = Objects.requireNonNull(again).blockPosition();
+			helper.assertTrue(at.distManhattan(home) <= 1, "respawned at " + at + ", home " + home);
+		});
+	}
+
+	/**
+	 * A bot whose home chunk nothing keeps loaded loads it when its wait is over and respawns there, once the chunk ticks
+	 * entities. The chunk's entities load from disk in the background, which can take the IO worker a second or more while
+	 * other tests save their chunks; an idle test server runs thousands of ticks meanwhile, so this test paces the server to
+	 * at most one tick per {@link #PACED_TICK_NANOS}, as a busy one would be.
+	 */
+	@GameTest(maxTicks = 1000)
+	public void aBotRespawnsAtAHomeWhoseChunkIsNotLoaded(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		BlockPos home = helper.absolutePos(new BlockPos(1, 1, 1)).offset(2000, 0, 0);
+		ServerLevel level = helper.getLevel();
+		helper.assertFalse(level.hasChunkAt(home), "home chunk loaded");
+		bot.setHome(home);
+		GameTests.onEnd(helper, () -> {
+			BotRespawns.get(level).forget(home::equals);
+			if (level.getEntity(id) instanceof AntBot again) {
+				again.discard();
+			}
+		});
+		long[] lastTick = {System.nanoTime()};
+		helper.onEachTick(() -> {
+			long wait = lastTick[0] + PACED_TICK_NANOS - System.nanoTime();
+			if (wait > 0) {
+				LockSupport.parkNanos(wait);
+			}
+			lastTick[0] = System.nanoTime();
+		});
+		helper.runAfterDelay(5, () -> bot.kill(level));
+		helper.succeedWhen(() -> {
+			Entity entity = level.getEntity(id);
+			helper.assertTrue(entity instanceof AntBot again && again.isAlive() && again.getDeaths() == 1, "not respawned");
+			BlockPos at = Objects.requireNonNull(entity).blockPosition();
+			helper.assertTrue(at.getX() == home.getX() && at.getZ() == home.getZ(), "respawned at " + at + ", home " + home);
 		});
 	}
 }
