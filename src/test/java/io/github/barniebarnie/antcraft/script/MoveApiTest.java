@@ -192,6 +192,23 @@ class MoveApiTest {
 			d.scriptInstructionsPerTick(), d.scriptChatLevel(), on));
 	}
 
+	/**
+	 * The bundled idle.py needs no module of the script library (#352): with none, as when a player deleted or broke
+	 * lib/home.py, an idle bot away from home still walks home. A unit test, as the
+	 * game tests share one script library and breaking it there would break the idle bots of every test running alongside.
+	 */
+	@Test
+	void idleWalksHomeWithoutAScriptLibrary() {
+		String file = DefaultScripts.IDLE + ".py";
+		Code code = Compiler.compile(Parser.parse(file, DefaultScripts.bundled().get(file)));
+		bot.pos = new Pos(5, 64, 5);
+		ScriptRun run = new ScriptRun(DefaultScripts.IDLE, code, List.of(), bot, log);
+		tick(run);
+		tick(run);
+		assertEquals(List.of(), log.last(100, Level.ERROR).stream().map(BotLog.Entry::text).toList());
+		assertEquals("goto(Pos(0, 64, 0))", run.action());
+	}
+
 	@Test
 	void resultsPrintAndTestAsTheirOutcome() {
 		ScriptRun run = start("""
