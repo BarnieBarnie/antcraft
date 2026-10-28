@@ -2,7 +2,6 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
@@ -14,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.locks.LockSupport;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -26,14 +24,15 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import net.minecraft.world.phys.Vec3;
 
 /** Bots dying and respawning at home (docs/scripting.md, Idle, home and death). */
 public class DeathGameTest implements CustomTestMethodInvoker {
@@ -174,7 +173,14 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** A bot whose home is in the Overworld and that dies in the Nether respawns at its home in the Overworld. */
+	/**
+	 * A bot whose home is in the Overworld and that dies in the Nether respawns at its home in the Overworld. The bot is
+	 * made anew in the Nether from its save, as vanilla does when it takes it through a portal, but not added there: an
+	 * entity there counts only once its chunk's entities are loaded, in the background, and game tests run at a new random
+	 * spot each run, so the chunk is new. In the last batch of a full run, while the chunks of the batches before are
+	 * saved, that took seconds, which the server, idle but for this batch, spent on hundreds of short ticks (#355). Dying
+	 * needs only the bot's level.
+	 */
 	@GameTest(maxTicks = 440)
 	public void aBotKilledInAnotherDimensionRespawnsAtHomeInItsHomeDimension(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
@@ -182,24 +188,11 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
 		bot.setHome(home);
 		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
-		BlockPos there = new BlockPos(home.getX(), 100, home.getZ());
-		// Once the Nether chunk ticks entities, the bot goes there as through a portal, and is killed there.
-		boolean[] killed = {false};
-		helper.onEachTick(() -> {
-			if (killed[0]) {
-				return;
-			}
-			BotChunks.keep(nether, ChunkPos.containing(there));
-			if (!nether.isPositionEntityTicking(there)) {
-				return;
-			}
-			if (!bot.isRemoved()) {
-				bot.teleportTo(nether, there.getX() + 0.5, there.getY(), there.getZ() + 0.5, Set.of(), 0, 0, false);
-			} else if (nether.getEntity(id) instanceof AntBot moved) {
-				moved.kill(nether);
-				killed[0] = true;
-			}
-		});
+		AntBot moved = Objects.requireNonNull(ModEntities.ANT_BOT.create(nether, EntitySpawnReason.DIMENSION_TRAVEL));
+		moved.restoreFrom(bot);
+		moved.snapTo(Vec3.atBottomCenterOf(new BlockPos(home.getX(), 100, home.getZ())), 0, 0);
+		bot.remove(Entity.RemovalReason.CHANGED_DIMENSION);
+		moved.kill(nether);
 		helper.succeedWhen(() -> {
 			AntBot again = bot(helper, id);
 			helper.assertTrue(again != null && again.getDeaths() == 1, "not respawned in the Overworld");
