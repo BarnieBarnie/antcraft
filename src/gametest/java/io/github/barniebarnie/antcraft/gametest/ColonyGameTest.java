@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.jspecify.annotations.Nullable;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -569,6 +570,108 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(printed(bot).equals(List.of("None [] False False")), "printed " + printed(bot));
 			List<String> log = BotScripts.log(bot, Output.Level.ERROR);
 			helper.assertTrue(log.getLast().equals("test.py:2: post_job() needs the bot to be in a colony"), "log " + log);
+		});
+	}
+	// colony.miner (#373). The area is stone up to y 5 and the core stands on it at (0, 6, 0); mineshaft puts the shaft's top
+	// at (3, 6, 3), the first spot beside the core, its column down from the hatch at y 5 to its one level at y 1, with the
+	// landing at (4, 1, 3), the chest north of it, a hall east to (7, 1, 3) and from its end a branch of 2 north and south.
+
+	/** About twice the slowest pass measured (618 ticks). */
+	private static final int MINER_TICKS = 1300;
+	private static final List<BlockPos> MINER_IRON = List.of(new BlockPos(6, 1, 4), new BlockPos(5, 2, 2));
+
+	/**
+	 * Fills the area with stone up to y 5, plants {@link #MINER_IRON} in the walls of the hall, founds a colony at (0, 6, 0)
+	 * whose colony_memory["mineshaft"] asks for a small shaft (one level at y 1, a branch each side of 2), with a stone pickaxe
+	 * for each of {@code miners} positions, ladders, torches and a chest in the core, and runs colony.miner on a member at each.
+	 */
+	private static List<AntBot> miners(GameTestHelper helper, Colony colony, BlockPos... at) {
+		Container core = container(helper, 0, 6, 0);
+		core.setItem(0, new ItemStack(Items.LADDER, 8));
+		core.setItem(1, new ItemStack(Items.TORCH, 8));
+		core.setItem(2, new ItemStack(Items.CHEST));
+		for (int i = 0; i < at.length; i++) {
+			core.setItem(3 + i, new ItemStack(Items.STONE_PICKAXE));
+		}
+		List<AntBot> bots = new ArrayList<>();
+		for (BlockPos pos : at) {
+			bots.add(member(helper, colony, pos.getX(), pos.getY(), pos.getZ()));
+		}
+		bots.forEach(bot -> runDefault(helper, bot, "colony.miner"));
+		failOnWarning(helper, bots.toArray(AntBot[]::new));
+		return bots;
+	}
+
+	private static Colony mineColony(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 5, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		MINER_IRON.forEach(pos -> helper.setBlock(pos, Blocks.IRON_ORE));
+		Colony colony = colonyAt(helper, 0, 6, 0);
+		colony.setRadius(7);
+		PyDict shaft = new PyDict();
+		PyList levels = new PyList();
+		levels.items.add((long) helper.absolutePos(new BlockPos(0, 1, 0)).getY());
+		shaft.put("levels", levels);
+		shaft.put("branches", 1L);
+		shaft.put("length", 2L);
+		colony.memory().put("mineshaft", shaft);
+		return colony;
+	}
+
+	/** The top of the colony's shaft in colony_memory["mineshaft"], or null before one is picked. */
+	private static @Nullable String sharedTop(Colony colony) {
+		Object top = colony.memory().get("mineshaft") instanceof PyDict shaft ? shaft.get("top") : null;
+		return top == null ? null : Values.repr(top);
+	}
+
+	/** Succeeds once the shaft at (3, 6, 3) is dug to y 1 and laddered, its hall mined and the iron in the core. */
+	private static void succeedWhenMined(GameTestHelper helper, Colony colony, Runnable more) {
+		Container core = container(helper, 0, 6, 0);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(Values.repr(pos(helper, 3, 6, 3)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
+			for (int y = 1; y <= 5; y++) {
+				helper.assertBlockPresent(Blocks.LADDER, new BlockPos(3, y, 3));
+			}
+			for (int x = 5; x <= 7; x++) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(x, 2, 3)).isAir(), "hall not dug at x " + x);
+			}
+			helper.assertTrue(core.countItem(Items.RAW_IRON) == MINER_IRON.size(), "raw iron in the core: " + core.countItem(Items.RAW_IRON));
+			more.run();
+		});
+	}
+
+	/** A miner alone digs the colony's shaft with what the core holds, mines its hall and brings the iron to the core. */
+	@GameTest(maxTicks = MINER_TICKS)
+	public void aMinerDigsTheShaftMinesTheHallAndBringsTheIronToTheCore(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		miners(helper, colony, new BlockPos(1, 6, 1));
+		succeedWhenMined(helper, colony, () -> { });
+	}
+
+	/** Two miners share the colony's one shaft: neither picks a second site, and both work from the one picked first. */
+	@GameTest(maxTicks = MINER_TICKS)
+	public void twoMinersShareOneShaft(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		List<AntBot> bots = miners(helper, colony, new BlockPos(1, 6, 1), new BlockPos(1, 6, 6));
+		String[] first = new String[1];
+		helper.onEachTick(() -> {
+			String top = sharedTop(colony);
+			if (first[0] == null) {
+				first[0] = top;
+			} else if (!first[0].equals(top)) {
+				helper.fail("a second site was picked: " + first[0] + ", then " + top);
+			}
+			for (AntBot bot : bots) {
+				if (bot.getMemory().get("shaft") instanceof PyDict kept && !Values.repr(kept.get("top")).equals(first[0])) {
+					helper.fail("a miner keeps another shaft: " + Values.repr(kept));
+				}
+			}
+		});
+		succeedWhenMined(helper, colony, () -> {
+			for (AntBot bot : bots) {
+				helper.assertTrue(bot.getMemory().get("shaft") != null, "a miner never took the shared shaft");
+			}
 		});
 	}
 }

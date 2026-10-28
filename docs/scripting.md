@@ -281,11 +281,13 @@ The mod's default colony scripts do what the goal-driven colony did, with the AP
 | `colony.hauler` | Takes `haul` jobs and brings the items to the core. Without jobs it waits where it is; a build that needs its spot asks it to make way (see Reflexes) |
 | `colony.builder` | Takes `build` jobs: takes the blueprint's materials from the core and builds. While the core lacks some, it posts a `haul` job for each (one per item and build) and tries again every two seconds; alone, it waits for a player to fill the core. A building with a role is added to `colony_memory["buildings"]` (the job's data). Another reason than `missing_ingredients` (such as `blocked`) gives the job back to the board, with a warning in its log, and it tries again 10 seconds later |
 | `colony.farmer` | Farms the work spots (the soil blocks) of each building in `colony_memory["buildings"]` whose blueprint has the role `farm`: harvests ripe wheat, carrots, potatoes and beetroot, tills dirt and grass, replants each harvested spot with the same crop and other bare spots with the seeds it carries (wheat first), picks up what lies around and stores the harvest, the seeds the bare spots do not need and any poisonous potato in the core, keeping one carrot and one potato as seed, every 10 seconds. It takes a hoe and the seeds the bare spots need from the core |
+| `colony.miner` | Mines through the colony's one shaft, kept in `colony_memory["mineshaft"]`: the first miner picks a site beside the core (`mineshaft(levels, near=core)`), posts a `shaft` job and digs it with `lib/shaft.py`; once dug, a `mine` job goes on the board for each level. A miner takes a `shaft` job before a `mine` job, mines one round of the level's branches with `lib/mine.py`, takes the ore from the landing chest to the core and posts the level again with the next round, so miners take turns and the level mined least comes first; others wait. Ladders, torches, chests and a pickaxe come from the core; what the core lacks it logs as a warning and tries again 10 seconds later, posting no job for it. Set `colony_memory["mineshaft"]` before the first miner runs to choose the `levels` (default 16, -16 and -54), `branches` and `length` |
 
 Their jobs' data, dicts of plain data:
 
 | Kind | Data |
 |---|---|
+| `mine` | `level` (a height of the shaft) and `round` (optional, 0: the round of branches to mine). `shaft` jobs carry no data |
 | `build` | `blueprint` (an id), `at` (the lowest corner), `turn` and `mirror` (optional, as `build` takes them) |
 | `haul` | `item` (a selector: an item id, a tag such as `"#minecraft:logs"` or a list of these), `n` (optional; all found without it), `from` (optional: the container to take from; else every chest and barrel within the colony's radius that holds the item, nearest first) and `to` (optional: the container to bring to; else the core). The builder adds `for`, the id of its build job |
 
@@ -294,7 +296,7 @@ post_job("build", {"blueprint": "antcraft:farm", "at": colony()["core"] + (4, -1
 post_job("haul", {"item": "minecraft:oak_log", "n": 16})
 ```
 
-They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, `store(item)` (put all carried into the core) and `fetch(item, n)` (take from the core up to `n` carried; `item` may be a selector such as `"#minecraft:planks"`). A mining role comes with the mining library of milestone 6.
+They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, `store(item)` (put all carried into the core) and `fetch(item, n)` (take from the core up to `n` carried; `item` may be a selector such as `"#minecraft:planks"`).
 
 ## Reflexes
 
@@ -450,8 +452,8 @@ Each milestone becomes one or more issues.
 3. **Core actions and senses.** `mine`, `place`, `pick_up`, `equip`, `inventory`/`count`/`has`, `block`, `find_nearest`, `scan`, `put`/`take`, `craft`, `smelt`, the `Result` reasons, `memory`. Acceptance: punch a tree to a wooden pickaxe as a script.
 4. **Remove the goal-driven colony** (see What stays and what goes). Every bot without a script runs `idle.py`; the benchmark runs 30 bots on a script. (Done.)
 5. **Reflexes, save/resume, imports, death.** Bots survive a reload mid-script; `import` and the default `lib/` folder; respawning at home. Done.
-6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time. Started: the senses `mineshaft` and `mineshaft_at` (see Senses), and `lib/shaft.py` (see Modules), which digs a shaft to two levels and climbs out in eleven game tests, ten of them past seeded pockets of gravel, air and water beside the column, and goes on after a save half-way down or once given the ladders it lacked; the sense `ore_vein` and `lib/mine.py`, which mines a level's hall and branches and the ore veins they uncover into the landing chest, and seals water and lava it meets.
-7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done: `colony()` and `colony_memory` (a member in another dimension than its core stays a member), the job board (see Jobs), Bot Cores that carry a script, `build`, and the colony scripts (see Colony scripts). Done; a mining role waits for milestone 6.
+6. **Mining library.** `lib/shaft.py` and friends. Acceptance: the mineshaft, dug and laddered, every time. Started: the senses `mineshaft` and `mineshaft_at` (see Senses), and `lib/shaft.py` (see Modules), which digs a shaft to two levels and climbs out in eleven game tests, ten of them past seeded pockets of gravel, air and water beside the column, and goes on after a save half-way down or once given the ladders it lacked; the sense `ore_vein` and `lib/mine.py`, which mines a level's hall and branches and the ore veins they uncover into the landing chest, and seals water and lava it meets; and `colony.miner`, with which a colony mines through one shared shaft.
+7. **Colony again.** Shared colony memory and a script-level job board, so several bots split work by role; Bot Core items that carry a script; `build` as an action. Default colony scripts that do what the old colony did. Done: `colony()` and `colony_memory` (a member in another dimension than its core stays a member), the job board (see Jobs), Bot Cores that carry a script, `build`, and the colony scripts (see Colony scripts), `colony.miner` with milestone 6.
 8. **Later.** Multiplayer permissions and sandbox limits per player, `try`/`except` and classes if scripts need them, an in-game script viewer or editor, sharing scripts through data packs, Litematica import.
 
 ## Open questions

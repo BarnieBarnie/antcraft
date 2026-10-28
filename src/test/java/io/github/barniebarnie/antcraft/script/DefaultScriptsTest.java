@@ -81,7 +81,7 @@ class DefaultScriptsTest {
 	@Test
 	void theColonyScriptsAreBundled() {
 		Map<String, String> bundled = DefaultScripts.bundled();
-		for (String role : List.of("common", "lumberjack", "hauler", "builder", "farmer")) {
+		for (String role : List.of("common", "lumberjack", "hauler", "builder", "farmer", "miner")) {
 			assertTrue(bundled.containsKey("colony/" + role + ".py"), "bundled " + bundled.keySet());
 		}
 	}

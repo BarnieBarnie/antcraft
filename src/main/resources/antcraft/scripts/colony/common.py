@@ -1,5 +1,5 @@
 # What the colony scripts (colony.lumberjack, colony.hauler, colony.builder,
-# colony.farmer) share: `from colony.common import core, store`.
+# colony.farmer, colony.miner) share: `from colony.common import core, store`.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.

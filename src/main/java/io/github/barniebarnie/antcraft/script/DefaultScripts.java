@@ -29,7 +29,7 @@ public final class DefaultScripts {
 	 * colony's roles under {@code colony/}.
 	 */
 	private static final List<String> FILES = List.of(IDLE + ".py", "lib/home.py", "lib/shaft.py", "lib/mine.py", "colony/common.py", "colony/lumberjack.py",
-		"colony/hauler.py", "colony/builder.py", "colony/farmer.py");
+		"colony/hauler.py", "colony/builder.py", "colony/farmer.py", "colony/miner.py");
 	/** Holds, per script, the hash of the version last copied. */
 	static final String RECORD = ".antcraft-defaults";
 
