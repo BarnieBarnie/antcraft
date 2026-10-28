@@ -325,6 +325,11 @@ public final class MoveApi {
 		}
 
 		@Override
+		public boolean walks() {
+			return true;
+		}
+
+		@Override
 		public void cancel() {
 			finish(Result.fail(Result.STOPPED));
 		}

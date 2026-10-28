@@ -210,12 +210,14 @@ When a reflex takes over, the running action ends with `interrupted` and the scr
 ## Idle, home and death
 
 - **Home.** Every bot has a home: where it was first spawned, changed with `set_home(pos)`.
-- **Idle.** A bot without a script, or whose script ended, stopped or failed, runs `idle.py` from the default library: walk home, then wait there. This holds for every bot, a colony member as much as any other, and for a bot loaded from a world saved before milestone 4 with colony work under way: what it was doing is forgotten and it runs `idle.py`. Players can replace it with their own `idle.py` in a script folder, like any other default script. When `idle.py` itself ends or fails, it is not started again.
+- **Idle.** A bot without a script, or whose script ended, stopped or failed, runs `idle.py` from the default library: walk home, then wait there. This holds for every bot, a colony member as much as any other, and for a bot loaded from a world saved before milestone 4 with colony work under way: what it was doing is forgotten and it runs `idle.py`. Players can replace it with their own `idle.py` in a script folder, like any other default script. When `idle.py` itself ends or fails, it is not started again. An idle bot keeps its chunk loaded only while it walks (see Chunk loading).
 - **Death.** A bot that dies drops its items where it died, like a player, and respawns at its home after `botRespawnTicks` (config, default 200, 10 seconds). It keeps its name, skin, home and `memory`, and starts its last script again from the top. `botRespawn = false` (config) makes death final instead. A script can tell it respawned from `memory`, or from `deaths()`, how often the bot has died.
 
 ## Chunk loading
 
 A bot running a script keeps the chunk it stands in loaded, with a small chunk ticket that moves with it, so it keeps working when its owner walks away. The ticket makes the bot's chunk and the eight around it tick entities (a mob that steps into a chunk that does not tick entities stops for good), and loads the two rings past them. `goto` loads the chunks its path needs one stretch at a time, just before the bot enters them: the chunks within three of the straight way towards the target, 48 blocks ahead, and waits until they are loaded before it plans on (giving up with `not_loaded` after a minute). `botsLoadChunks = false` (config) turns both off: bots then stop when their chunk unloads, and `goto` fails with `not_loaded` at the edge of loaded terrain.
+
+A bot running the `idle.py` it fell back to (it has no script of its own, or that script ended, stopped or failed) holds its own ticket only while it walks: its `goto` home loads chunks as any other, but once it waits at home it lets its chunk go, so it stays loaded only while players keep it so. When the chunk unloads, the bot is saved with it and stops; when it loads again the bot carries on. Any other script, also one named `idle.py` run with `bot run`, keeps its chunk loaded all the time it runs.
 
 `goto` may load chunks that were never generated, which generates them, as a player walking there would.
 
@@ -227,7 +229,7 @@ A bot running a script keeps the chunk it stands in loaded, with a small chunk t
 | `scriptChatLevel` | `error` | Lowest log level shown in the owner's chat. `print` always shows. |
 | `botRespawn` | `true` | Respawn dead bots at home. |
 | `botRespawnTicks` | 200 | Delay before respawning. |
-| `botsLoadChunks` | `true` | Running bots keep their chunk loaded, and `goto` loads chunks on its path. |
+| `botsLoadChunks` | `true` | Running bots keep their chunk loaded, and `goto` loads chunks on its path; idle bots (running their fallback `idle.py`) only while they walk. |
 
 ## Files and commands
 

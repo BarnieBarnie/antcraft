@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.script;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -214,6 +215,23 @@ class MoveApiTest {
 		assertEquals(List.of("False not_loaded"), printed());
 		assertEquals(List.of(), bot.loadRequests);
 		assertEquals(List.of(), bot.paths);
+	}
+
+	/** A bot runs a walk while its goto goes on, and not while it waits (#327: an idle bot holds its chunks only then). */
+	@Test
+	void aScriptIsWalkingOnlyWhileItsGotoGoesOn() {
+		ScriptRun run = start("wait(2)\ngoto((3, 64, 4))\nwait(5)\n");
+		tick(run);
+		assertFalse(run.walking(), "walking while it waits");
+		tick(run);
+		tick(run);
+		tick(run);
+		assertEquals("goto(Pos(3, 64, 4))", run.action());
+		assertTrue(run.walking(), "not walking during goto");
+		bot.pathStatus = MoveApi.PathStatus.ARRIVED;
+		tick(run);
+		tick(run);
+		assertFalse(run.walking(), "walking after goto arrived");
 	}
 
 	@Test

@@ -77,6 +77,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable UUID owner;
 	/** The script the bot runs or ran last; not saved yet (docs/scripting.md, milestone 5). */
 	private @Nullable ScriptRun script;
+	/**
+	 * Whether {@link #script} is the {@code idle.py} that {@link #idleIfDone} started: then the bot holds its chunks loaded
+	 * only while it walks (docs/scripting.md, Chunk loading).
+	 */
+	private boolean idling;
 	/** The source of {@link #script} when it came from the script library, so a reload can tell whether it changed. */
 	private @Nullable String scriptSource;
 	/** The scripts' {@code memory}: outlives each script run, and is saved. */
@@ -168,7 +173,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 		super.tick();
 		// After the move, so the ticket goes along with the bot into the next chunk before it stops ticking there.
-		if (this.isRunningScript() && AntCraftConfig.botsLoadChunks()) {
+		// An idle bot holds its chunks only while it walks (home): waiting there, it lets them unload.
+		ScriptRun running = this.isRunningScript() ? this.script : null;
+		if (running != null && (!this.idling || running.walking()) && AntCraftConfig.botsLoadChunks()) {
 			BotChunks.keep(this);
 		}
 		BlockPos feet = this.blockPosition();
@@ -257,6 +264,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.log.add(this.level().getGameTime(), Output.Level.INFO, "run " + name + (args.isEmpty() ? "" : " " + String.join(" ", args)));
 		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log, this.memory);
 		this.scriptSource = null;
+		this.idling = false;
 	}
 
 	/**
@@ -266,7 +274,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	 */
 	private void idleIfDone() {
 		if (this.script == null || (!this.script.running() && !this.script.name().equals(DefaultScripts.IDLE))) {
-			ServerScripts.idle().ifPresent(idle -> this.runScript(idle, List.of()));
+			ServerScripts.idle().ifPresent(idle -> {
+				this.runScript(idle, List.of());
+				this.idling = true;
+			});
 		}
 	}
 
@@ -276,6 +287,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			this.script.stop();
 			this.log.add(this.level().getGameTime(), Output.Level.INFO, "stopped " + this.script.name());
 		}
+	}
+
+	/**
+	 * Whether the bot runs the {@code idle.py} it fell back to without a script of its own: it then keeps its chunks loaded
+	 * only while it walks.
+	 */
+	public boolean isIdling() {
+		return this.idling && this.isRunningScript();
 	}
 
 	/** Whether the bot runs a script. */

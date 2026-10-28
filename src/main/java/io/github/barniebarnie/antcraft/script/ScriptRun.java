@@ -66,6 +66,11 @@ public final class ScriptRun {
 		/** What the action is doing, for {@code /antcraft bot status}. */
 		String describe();
 
+		/** Whether the action walks the bot, such as {@code goto}: a bot holds its chunks loaded while it does (see BotChunks). */
+		default boolean walks() {
+			return false;
+		}
+
 		/** Ends the action early, because the script was stopped; it lets go of what it holds, such as the bot's path. */
 		default void cancel() {
 		}
@@ -242,6 +247,11 @@ public final class ScriptRun {
 	/** What the current action is doing, or null while the script runs no action. */
 	public @Nullable String action() {
 		return action == null ? null : action.describe();
+	}
+
+	/** Whether the script runs an action that walks the bot ({@link Action#walks}), such as {@code goto}. */
+	public boolean walking() {
+		return action != null && action.walks();
 	}
 
 	/** The last action the script finished and its result ({@link #describe}), or null before the first. */
