@@ -69,7 +69,7 @@ Running scripts are saved with the world: after a reload a bot resumes at the sa
 | `work_spots` | no | Spots a bot stands on or works at, such as farm plots or a generator's mining block, relative like `chests`. None by default |
 | `palette` | no | Which palette of a structure saved with several it builds. `0` (the first) by default. The ghost and the materials in the picker show this palette |
 
-Spots are mirrored and turned with the structure, so they stay on the same blocks however it is placed. A file with an unknown role, a missing field or a bad position is left out, with the reason in the server log. Bots building blueprints comes back as a script action, `build`, in milestone 7.
+Spots are mirrored and turned with the structure, so they stay on the same blocks however it is placed. A file with an unknown role, a missing field or a bad position is left out, with the reason in the server log. A bot builds a blueprint with the script action `build(blueprint, at, turn=0, mirror=False)`, from the blocks it carries, and `blueprint(id)` gives a script its size, role, materials and spots (see [docs/scripting.md](docs/scripting.md)).
 
 **The Blueprint item** (shapeless: paper and a copper ingot) picks blueprints in game. Right-click with it to open the picker, which lists every blueprint the server has (sent to each client on joining and after `/reload`) with its size, role and the materials it needs; choosing one sets the item to it, and its tooltip names the chosen blueprint.
 

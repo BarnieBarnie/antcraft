@@ -29,6 +29,7 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 	public static final String TARGET_GONE = "target_gone";
 	public static final String NO_RECIPE = "no_recipe";
 	public static final String MISSING_INGREDIENTS = "missing_ingredients";
+	public static final String NO_BLUEPRINT = "no_blueprint";
 	public static final String NO_TABLE = "no_table";
 	public static final String NO_FURNACE = "no_furnace";
 

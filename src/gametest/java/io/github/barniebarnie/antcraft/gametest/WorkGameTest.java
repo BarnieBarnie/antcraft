@@ -30,6 +30,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
 import net.minecraft.world.level.block.RotatedPillarBlock;
@@ -170,6 +171,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("take", "take(h, 'dirt').reason"),
 		Map.entry("craft", "craft('stick', table=h).reason"),
 		Map.entry("smelt", "smelt('dirt', furnace=h).reason"),
+		Map.entry("build", "build('antcraft:cobble_step', h).reason"),
 		Map.entry("block", "block(h)"),
 		Map.entry("container", "container(h)"));
 
@@ -180,7 +182,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	private static final Set<String> TAKE_NO_POSITION = Set.of("pos", "say", "wait", "stop", "home", "home_dimension",
 		"dimension", "set_home", "portals", "inventory", "count", "has", "held", "find_nearest", "scan", "entities",
 		"items_near", "deaths", "time", "is_day", "equip", "drop", "pick_up", "Pos.up", "Pos.down", "Pos.north",
-		"Pos.south", "Pos.east", "Pos.west", "Pos.distance");
+		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint");
 
 	/**
 	 * Every native that takes a position refuses one from another dimension (a home in the Nether over a chest in the
@@ -631,5 +633,69 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	public void dropWithoutTheItemIsNoItem(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		expect(helper, bot, "r = drop('nautilus_shell')\nprint(r.ok, r.reason)\n", List.of("False no_item"));
+	}
+
+	// build
+
+	/** The blocks of {@code antcraft:cobble_step} built at (3, 1, 3) turned {@code turn} quarters: two cobblestone, oak stairs on the first, air beside them. */
+	static void assertCobbleStep(GameTestHelper helper, int turn) {
+		BlockPos side = turn == 0 ? new BlockPos(1, 0, 0) : new BlockPos(0, 0, 1);
+		BlockPos origin = new BlockPos(3, 1, 3);
+		helper.assertValueEqual(helper.getBlockState(origin), Blocks.COBBLESTONE.defaultBlockState(), "block at the origin");
+		helper.assertValueEqual(helper.getBlockState(origin.offset(side)), Blocks.COBBLESTONE.defaultBlockState(), "block beside the origin");
+		helper.assertValueEqual(helper.getBlockState(origin.above()),
+			Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, turn == 0 ? Direction.EAST : Direction.SOUTH), "stairs");
+		helper.assertBlockPresent(Blocks.AIR, origin.above().offset(side));
+	}
+
+	static void carryCobbleStep(AntBot bot, int cobblestone) {
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, cobblestone));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_STAIRS));
+	}
+
+	/** A bot carrying the materials builds the cobble step block for block, clearing the dirt where air goes; value is the blocks placed. */
+	@GameTest(maxTicks = 60)
+	public void buildBuildsTheCobbleStepAtTurn0(GameTestHelper helper) {
+		helper.setBlock(4, 2, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
+			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/** Turned a quarter clockwise, the step runs south and its stairs face south. */
+	@GameTest(maxTicks = 60)
+	public void buildBuildsTheCobbleStepTurnedAQuarter(GameTestHelper helper) {
+		helper.setBlock(3, 2, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ", turn=1)\nprint(r.ok, r.reason, r.value)\n",
+			List.of("True None 3"), () -> assertCobbleStep(helper, 1));
+	}
+
+	/** Short of a cobblestone, the bot stops with missing_ingredients; given one, build again finishes the step. */
+	@GameTest(maxTicks = 40)
+	public void buildWithoutEnoughBlocksIsMissingIngredientsAndResumes(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 1);
+		String build = "build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")";
+		boolean[] given = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!given[0] && printed(bot).size() == 1) {
+				given[0] = true;
+				bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+			}
+		});
+		expect(helper, bot, "r = " + build + "\nprint(r.ok, r.reason, r.value)\nwhile count('cobblestone') == 0:\n    wait(1)\nr = " + build
+			+ "\nprint(r.ok, r.reason, r.value)\n", List.of("False missing_ingredients 1", "True None 2"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/** An id no blueprint has gives no_blueprint, and blueprint() None for it. */
+	@GameTest(maxTicks = 20)
+	public void buildAnUnknownBlueprintIsNoBlueprint(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "r = build('antcraft:castle', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, blueprint('antcraft:castle'))\n"
+			+ "print(blueprint('antcraft:cobble_step')['materials'])\n",
+			List.of("False no_blueprint None", "{'minecraft:cobblestone': 2, 'minecraft:oak_stairs': 1}"));
 	}
 }

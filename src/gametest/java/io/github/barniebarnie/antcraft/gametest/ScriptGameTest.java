@@ -350,6 +350,32 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot saved half-way through a {@code build} and loaded again builds the rest, the blocks already placed counting as
+	 * done and in its value.
+	 */
+	@GameTest(maxTicks = 60)
+	public void aBotSavedInABuildFinishesIt(GameTestHelper helper) {
+		helper.setBlock(4, 2, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		WorkGameTest.carryCobbleStep(bot, 2);
+		runLibraryScript(helper, bot, "save_build_", "r = build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value)\n");
+		AntBot[] loaded = new AntBot[1];
+		helper.onEachTick(() -> {
+			if (loaded[0] == null && helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.COBBLESTONE)) {
+				helper.assertTrue(bot.getScript().action().startsWith("build("), "action " + bot.getScript().action());
+				loaded[0] = saveAndLoad(helper, bot);
+			}
+		});
+		failOnError(helper, () -> loaded[0]);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(loaded[0] != null, "not saved yet");
+			List<String> prints = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
+			helper.assertValueEqual(prints, List.of("True None 3"), "printed");
+			WorkGameTest.assertCobbleStep(helper, 0);
+		});
+	}
+
+	/**
 	 * A bot saved in the middle of a {@code goto} and loaded again walks on to the same target, and the script goes on
 	 * after the call with its result, without starting again.
 	 */
