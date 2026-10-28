@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -32,11 +33,13 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.item.crafting.AbstractCookingRecipe;
 import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.item.crafting.SingleRecipeInput;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
@@ -75,7 +78,7 @@ public final class CraftApi {
 			Pos table = Args.absent(args[2]) ? null : Pos.of(args[2]);
 			return craft(run, WorkApi.bot(run, call), item, n, table, call);
 		});
-		natives.register("smelt", 1200, call -> {
+		natives.register("smelt", 60, call -> {
 			Object[] args = Args.bind("smelt", call, 1, "item", "n", "furnace", "fuel");
 			Selector item = Selector.parse(args[0]);
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
@@ -120,6 +123,9 @@ public final class CraftApi {
 		Vec3 eyes = bot.getEyePosition();
 		BlockPos center = BlockPos.containing(eyes);
 		int r = (int) Math.ceil(MoveApi.REACH);
+		if (!mayHave(bot.level(), center.offset(-r, -r, -r), center.offset(r, r, r), what)) {
+			return null;
+		}
 		List<BlockPos> found = StreamSupport.stream(BlockPos.betweenClosed(center.offset(-r, -r, -r), center.offset(r, r, r)).spliterator(), false)
 			.filter(pos -> what.test(bot.level().getBlockState(pos)))
 			.map(BlockPos::immutable)
@@ -132,6 +138,25 @@ public final class CraftApi {
 			}
 		}
 		return null;
+	}
+
+	/**
+	 * Whether a block {@code what} matches may be in the box from {@code min} to {@code max}: false if the palette of no
+	 * chunk section the box touches has such a block, which spares reading its blocks one by one (#347).
+	 */
+	private static boolean mayHave(Level level, BlockPos min, BlockPos max, Predicate<BlockState> what) {
+		for (int x = SectionPos.blockToSectionCoord(min.getX()); x <= SectionPos.blockToSectionCoord(max.getX()); x++) {
+			for (int z = SectionPos.blockToSectionCoord(min.getZ()); z <= SectionPos.blockToSectionCoord(max.getZ()); z++) {
+				ChunkAccess chunk = level.getChunk(x, z);
+				for (int y = SectionPos.blockToSectionCoord(min.getY()); y <= SectionPos.blockToSectionCoord(max.getY()); y++) {
+					int index = chunk.getSectionIndexFromSectionY(y);
+					if (index >= 0 && index < chunk.getSectionsCount() && chunk.getSection(index).maybeHas(what)) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
 	}
 
 	private static void swing(AntBot bot, BlockPos at) {
@@ -311,7 +336,7 @@ public final class CraftApi {
 		String describe = "smelt(" + selector + ", " + n + (furnace == null ? "" : ", furnace=" + furnace) + (fuelSelector == null ? "" : ", fuel=" + fuelSelector) + ")";
 		ServerLevel level = (ServerLevel) bot.level();
 		Predicate<ItemStack> wanted = selector.items();
-		Predicate<ItemStack> fuel = fuelSelector == null ? bestFuel(level, bot) : fuelSelector.items();
+		Predicate<ItemStack> given = fuelSelector == null ? null : fuelSelector.items(); // fails at once on an unknown item
 		Container carried = BotHands.carried(bot);
 		boolean any = false;
 		boolean smeltable = false;
@@ -339,6 +364,8 @@ public final class CraftApi {
 				return type != null && !cooked(level, type, new ItemStack(input)).isEmpty();
 			});
 			if (at != null) {
+				// Only now: bestFuel reads the inventory once for each fuel item (#347).
+				Predicate<ItemStack> fuel = given == null ? bestFuel(level, bot) : given;
 				return run.start(new Smelt(run, bot, at, input, (int) Math.min(n, input.getDefaultMaxStackSize()),
 					fuel.and(burnable -> burnable.has(DataComponents.COOKING_FUEL)), describe), call);
 			}
