@@ -4,8 +4,8 @@
 # adds what it builds there), carries a hoe from the core when it has none, and
 # grows wheat, carrots, potatoes and beetroot from the seeds the core holds.
 # What it harvests it replants with the same crop, and it keeps one of each
-# harvest that is its own seed. Run it on a colony member with
-# `/antcraft bot run colony.farmer`.
+# harvest that is its own seed; spare seeds and poisonous potatoes go into the
+# core. Run it on a colony member with `/antcraft bot run colony.farmer`.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -19,6 +19,7 @@ CROPS = [
     ("minecraft:potatoes", "minecraft:potato", "minecraft:potato", 7),
     ("minecraft:beetroots", "minecraft:beetroot_seeds", "minecraft:beetroot", 3),
 ]
+POISON = "minecraft:poisonous_potato"
 SOIL = ["minecraft:dirt", "minecraft:grass_block"]
 
 
@@ -64,11 +65,18 @@ while True:
             bare -= count(c[1])
     for soil in spots:
         tend(soil)
-    pick_up([i for c in CROPS for i in c[1:3]])
+    pick_up([i for c in CROPS for i in c[1:3]] + [POISON])
+    # Keeps the seeds the bare spots still need, wheat first, and one carrot and
+    # one potato; the rest goes into the core.
+    bare = len([s for s in spots if block(s.up()).is_air])
     for c in CROPS:
+        keep = min(count(c[1]), bare)
+        bare -= keep
         if c[2] == c[1]:
-            if count(c[2]) > 1:
-                put(core(), c[2], count(c[2]) - 1)
+            keep = max(keep, 1)
         else:
             store(c[2])
+        if count(c[1]) > keep:
+            put(core(), c[1], count(c[1]) - keep)
+    store(POISON)
     wait(200 if spots else 400)

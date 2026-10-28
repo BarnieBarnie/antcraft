@@ -32,6 +32,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.BeetrootBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -427,6 +428,45 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.POTATOES, ripe);
 				helper.assertTrue(helper.getBlockState(ripe).getValue(CropBlock.AGE) < 7, "not harvested at " + ripe);
 			}
+		});
+	}
+
+	/** A farmer with no seeds harvests ripe beetroot and replants it with the seeds from the harvest (#382). */
+	@GameTest(maxTicks = 180)
+	public void aFarmerReplantsHarvestedBeetroot(GameTestHelper helper) {
+		farm(helper, Blocks.BEETROOTS.defaultBlockState().setValue(BeetrootBlock.AGE, 3), 2);
+		Container core = container(helper, 7, 1, 7);
+		helper.succeedWhen(() -> {
+			for (BlockPos ripe : List.of(new BlockPos(1, 1, 1), new BlockPos(2, 1, 1))) {
+				helper.assertBlockPresent(Blocks.BEETROOTS, ripe);
+				helper.assertTrue(helper.getBlockState(ripe).getValue(BeetrootBlock.AGE) < 3, "not harvested at " + ripe);
+			}
+			helper.assertTrue(core.countItem(Items.BEETROOT) == 2, "beetroot in the core: " + core.countItem(Items.BEETROOT));
+		});
+	}
+
+	/**
+	 * After a harvest the farmer keeps no seeds the bare spots do not need and no poisonous potato: it stores them in the
+	 * core (#382). Poisonous potatoes drop at random, so the bot starts with one, and with beetroot seeds it never plants.
+	 */
+	@GameTest(maxTicks = 340)
+	public void aFarmerStoresSpareSeedsAndPoisonousPotatoes(GameTestHelper helper) {
+		List<BlockPos> spots = farm(helper, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
+				new ItemStack(Items.WHEAT_SEEDS, 24));
+		AntBot farmer = helper.findOneEntity(ModEntities.ANT_BOT);
+		farmer.getInventory().addItem(new ItemStack(Items.POISONOUS_POTATO));
+		farmer.getInventory().addItem(new ItemStack(Items.BEETROOT_SEEDS, 10));
+		Container core = container(helper, 7, 1, 7);
+		helper.succeedWhen(() -> {
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
+			}
+			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
+			for (var item : List.of(Items.WHEAT_SEEDS, Items.BEETROOT_SEEDS, Items.POISONOUS_POTATO)) {
+				helper.assertTrue(farmer.getInventory().countItem(item) == 0, item + " kept: " + farmer.getInventory().countItem(item));
+			}
+			helper.assertTrue(core.countItem(Items.POISONOUS_POTATO) == 1, "no poisonous potato in the core");
+			helper.assertTrue(core.countItem(Items.BEETROOT_SEEDS) == 10, "beetroot seeds in the core: " + core.countItem(Items.BEETROOT_SEEDS));
 		});
 	}
 
