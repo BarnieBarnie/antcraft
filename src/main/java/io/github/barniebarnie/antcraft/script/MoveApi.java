@@ -65,8 +65,8 @@ public final class MoveApi {
 		/** The bot's home: where it was first spawned, until {@link #setHome} changes it. */
 		Pos home();
 
-		/** Sets the home, in the dimension the bot is in. */
-		void setHome(Pos home);
+		/** Sets the home in the dimension with id {@code dimension}. */
+		void setHome(Pos home, String dimension);
 
 		/** The id of the dimension the bot is in, such as {@code minecraft:overworld}. */
 		String dimension();
@@ -171,7 +171,8 @@ public final class MoveApi {
 		});
 		natives.register("set_home", call -> {
 			Pos home = Pos.of(Args.bind("set_home", call, 1, "pos")[0]);
-			run.host().body().setHome(home);
+			Body body = run.host().body();
+			body.setHome(home, home.dimension() != null ? home.dimension() : body.dimension());
 			return PyNone.NONE;
 		});
 		natives.register("goto", call -> {
@@ -181,15 +182,11 @@ public final class MoveApi {
 			if (near < 0) {
 				throw new ScriptError("goto() near must be at least 0, not " + near);
 			}
-			Body body = run.host().body();
-			if (target.dimension() != null && !target.dimension().equals(body.dimension())) {
-				return run.done("goto(" + target + (near == 0 ? "" : ", near=" + near) + ")", Result.fail(Result.WRONG_DIMENSION));
-			}
-			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call);
+			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call, target);
 		});
 		natives.register("travel", call -> {
 			Pos portal = Pos.of(Args.bind("travel", call, 1, "portal")[0]);
-			return run.start(new Travel(run.host(), portal), call);
+			return run.start(new Travel(run.host(), portal), call, portal);
 		});
 		natives.register("portals", call -> {
 			Args.bind("portals", call, 0);
@@ -201,6 +198,9 @@ public final class MoveApi {
 			long near = Args.absent(args[1]) ? 0 : Args.integer(args[1]);
 			if (near < 0) {
 				throw new ScriptError("reachable() near must be at least 0, not " + near);
+			}
+			if (run.elsewhere(target)) {
+				return false;
 			}
 			Body body = run.host().body();
 			long chunkX = Math.floorDiv(target.x(), 16);

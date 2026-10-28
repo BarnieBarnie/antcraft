@@ -76,7 +76,7 @@ class MoveApiTest {
 		}
 
 		@Override
-		public void setHome(Pos home) {
+		public void setHome(Pos home, String dimension) {
 			this.home = home;
 			this.homeDimension = dimension;
 		}
@@ -470,6 +470,41 @@ class MoveApiTest {
 		tick(run);
 		tick(run);
 		assertEquals(List.of("unreachable"), printed());
+	}
+
+	/** {@code set_home} with a position from another dimension sets the home there, not in the bot's (#357). */
+	@Test
+	void setHomeWithAPositionFromAnotherDimensionSetsTheHomeThere() {
+		bot.home = new Pos(5, 64, 5);
+		bot.dimension = "minecraft:the_nether";
+		ScriptRun run = start("set_home(home().up())\nprint(home(), home_dimension())\n");
+		tick(run);
+		assertEquals(List.of("Pos(5, 65, 5) minecraft:overworld"), printed());
+	}
+
+	/** {@code reachable} with a position from another dimension is False at once, without planning a path there (#357). */
+	@Test
+	void reachableIsFalseForAPositionFromAnotherDimension() {
+		bot.home = new Pos(5, 64, 5);
+		bot.dimension = "minecraft:the_nether";
+		ScriptRun run = start("print(reachable(home()), reachable((5, 64, 5)))\n");
+		for (int i = 0; i < 4; i++) {
+			tick(run);
+		}
+		assertEquals(List.of("False True"), printed());
+		assertEquals(List.of("Pos(5, 64, 5) near 0"), bot.plans);
+	}
+
+	/** {@code travel} to a remembered portal in another dimension fails with {@code wrong_dimension} at once (#357). */
+	@Test
+	void travelToAPortalFromAnotherDimensionIsWrongDimension() {
+		bot.dimension = "minecraft:the_nether";
+		bot.portals = List.of(new Pos(3, 65, 4, "minecraft:overworld"));
+		ScriptRun run = start("print(travel(portals()[0]).reason)\n");
+		tick(run);
+		assertEquals(List.of("wrong_dimension"), printed());
+		assertEquals(List.of(), bot.paths);
+		assertEquals("travel(Pos(3, 65, 4)) -> wrong_dimension", run.lastResult());
 	}
 
 	/** {@code portals()} lists the portals the bot went through, newest first, each with its dimension (#354). */

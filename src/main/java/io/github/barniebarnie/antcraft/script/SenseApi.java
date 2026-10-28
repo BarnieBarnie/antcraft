@@ -75,6 +75,9 @@ public final class SenseApi {
 			Object[] args = Args.bind("block", call, 1, "pos");
 			Pos pos = Pos.of(args[0]);
 			AntBot bot = bot(run, call);
+			if (run.elsewhere(pos)) {
+				return PyNone.NONE;
+			}
 			BlockPos at = blockPos(pos);
 			BlockState state = new LoadedBlocks(bot.level()).loaded(at);
 			return state == null ? PyNone.NONE : block(state, pos);
@@ -104,8 +107,9 @@ public final class SenseApi {
 		natives.register("container", 30, call -> {
 			Object[] args = Args.bind("container", call, 1, "pos");
 			AntBot bot = bot(run, call);
-			BlockPos at = blockPos(Pos.of(args[0]));
-			if (new LoadedBlocks(bot.level()).loaded(at) == null) {
+			Pos pos = Pos.of(args[0]);
+			BlockPos at = blockPos(pos);
+			if (run.elsewhere(pos) || new LoadedBlocks(bot.level()).loaded(at) == null) {
 				return PyNone.NONE;
 			}
 			Container container = HopperBlockEntity.getContainerAt(bot.level(), at);

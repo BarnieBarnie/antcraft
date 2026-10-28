@@ -11,6 +11,9 @@ import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
 import java.util.List;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Blocks;
 
@@ -34,8 +37,9 @@ final class BotBody implements MoveApi.Body {
 	}
 
 	@Override
-	public void setHome(Pos home) {
-		this.bot.setHome(new BlockPos(clamp(home.x()), clamp(home.y()), clamp(home.z())));
+	public void setHome(Pos home, String dimension) {
+		this.bot.setHome(new BlockPos(clamp(home.x()), clamp(home.y()), clamp(home.z())),
+			ResourceKey.create(Registries.DIMENSION, Identifier.parse(dimension)));
 	}
 
 	@Override

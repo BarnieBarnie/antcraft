@@ -17,7 +17,8 @@ import org.jspecify.annotations.Nullable;
  * Immutable, so it is usable as a dict key.
  *
  * <p>{@code dimension} is the id of the dimension the position is in, such as {@code minecraft:overworld}, for a
- * position from {@code home()}, or null for one the script made, which means the dimension the bot is in. What is made
+ * position from {@code pos()}, {@code home()} or {@code portals()}, or null for one the script made, which means the
+ * dimension the bot is in; natives refuse one from another dimension than the bot's ({@link ScriptRun#elsewhere}). What is made
  * from a position keeps its dimension. It takes no part in equality or printing: positions compare by their coordinates.
  */
 public record Pos(long x, long y, long z, @Nullable String dimension) implements HostValue {

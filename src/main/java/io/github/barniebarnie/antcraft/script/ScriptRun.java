@@ -47,7 +47,7 @@ public final class ScriptRun {
 		/** The game time, which log lines carry. */
 		long gameTime();
 
-		/** The block the bot stands in. */
+		/** The block the bot stands in, in the bot's dimension. */
 		Pos pos();
 
 		/** The lowest level, below {@link Level#PRINT}, that goes to the owner's chat (config {@code scriptChatLevel}). */
@@ -390,6 +390,22 @@ public final class ScriptRun {
 	Object start(Action action, NativeCall call) {
 		this.action = action;
 		return call.suspend();
+	}
+
+	/**
+	 * Starts {@code action} on {@code target}, or fails it at once with {@code wrong_dimension} when {@code target} is
+	 * in another dimension than the bot's (#357).
+	 */
+	Object start(Action action, NativeCall call, @Nullable Pos target) {
+		return elsewhere(target) ? done(action.describe(), Result.fail(Result.WRONG_DIMENSION)) : start(action, call);
+	}
+
+	/**
+	 * Whether {@code pos} is in another dimension than the bot's: every native that takes a position refuses it, an
+	 * action with {@code wrong_dimension}, a sense with False or None (#357). A position without a dimension is the bot's.
+	 */
+	boolean elsewhere(@Nullable Pos pos) {
+		return pos != null && pos.dimension() != null && !pos.dimension().equals(host.body().dimension());
 	}
 
 	/**

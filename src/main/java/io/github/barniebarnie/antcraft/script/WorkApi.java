@@ -42,20 +42,20 @@ public final class WorkApi {
 	static void register(Natives natives, ScriptRun run) {
 		natives.register("mine", call -> {
 			Pos target = Pos.of(Args.bind("mine", call, 1, "pos")[0]);
-			return run.start(new Mine(run, bot(run, call), target), call);
+			return run.start(new Mine(run, bot(run, call), target), call, target);
 		});
 		natives.register("place", call -> {
 			Object[] args = Args.bind("place", call, 2, "pos", "item", "facing");
 			Pos target = Pos.of(args[0]);
 			Selector item = Selector.parse(args[1]);
 			Direction facing = Args.absent(args[2]) ? null : facing(args[2]);
-			return run.start(new Place(run, bot(run, call), target, item, facing), call);
+			return run.start(new Place(run, bot(run, call), target, item, facing), call, target);
 		});
 		natives.register("use", call -> {
 			Object[] args = Args.bind("use", call, 1, "pos", "item");
 			Pos target = Pos.of(args[0]);
 			Selector item = Args.absent(args[1]) ? null : Selector.parse(args[1]);
-			return run.start(new Use(run, bot(run, call), target, item), call);
+			return run.start(new Use(run, bot(run, call), target, item), call, target);
 		});
 		natives.register("equip", 15, call -> {
 			Selector item = Selector.parse(Args.bind("equip", call, 1, "item")[0]);

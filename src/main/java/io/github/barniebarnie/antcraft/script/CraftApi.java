@@ -60,13 +60,13 @@ public final class CraftApi {
 			Object[] args = Args.bind("put", call, 2, "container", "item", "n");
 			Pos target = Pos.of(args[0]);
 			Selector item = Selector.parse(args[1]);
-			return run.start(new Put(run, WorkApi.bot(run, call), target, item, count("put", args[2])), call);
+			return run.start(new Put(run, WorkApi.bot(run, call), target, item, count("put", args[2])), call, target);
 		});
 		natives.register("take", call -> {
 			Object[] args = Args.bind("take", call, 2, "container", "item", "n");
 			Pos target = Pos.of(args[0]);
 			Selector item = Selector.parse(args[1]);
-			return run.start(new Take(run, WorkApi.bot(run, call), target, item, count("take", args[2])), call);
+			return run.start(new Take(run, WorkApi.bot(run, call), target, item, count("take", args[2])), call, target);
 		});
 		natives.register("craft", 40, call -> {
 			Object[] args = Args.bind("craft", call, 1, "item", "n", "table");
@@ -256,6 +256,9 @@ public final class CraftApi {
 	 */
 	private static Object craft(ScriptRun run, AntBot bot, Item item, long n, @Nullable Pos table, NativeCall call) {
 		String describe = "craft(" + Values.repr(BuiltInRegistries.ITEM.getKey(item).toString()) + ", " + n + (table == null ? "" : ", table=" + table) + ")";
+		if (run.elsewhere(table)) {
+			return run.done(describe, Result.fail(Result.WRONG_DIMENSION));
+		}
 		List<TaskPlanner.Recipe<Item>> recipes = GameRecipeBook.of(((ServerLevel) bot.level()).getServer()).recipesFor(item).stream()
 			.filter(recipe -> !recipe.smelting()).toList();
 		if (recipes.isEmpty()) {
@@ -334,6 +337,9 @@ public final class CraftApi {
 	private static Object smelt(ScriptRun run, AntBot bot, Selector selector, long n, @Nullable Pos furnace, @Nullable Selector fuelSelector,
 			NativeCall call) {
 		String describe = "smelt(" + selector + ", " + n + (furnace == null ? "" : ", furnace=" + furnace) + (fuelSelector == null ? "" : ", fuel=" + fuelSelector) + ")";
+		if (run.elsewhere(furnace)) {
+			return run.done(describe, Result.fail(Result.WRONG_DIMENSION));
+		}
 		ServerLevel level = (ServerLevel) bot.level();
 		Predicate<ItemStack> wanted = selector.items();
 		Predicate<ItemStack> given = fuelSelector == null ? null : fuelSelector.items(); // fails at once on an unknown item

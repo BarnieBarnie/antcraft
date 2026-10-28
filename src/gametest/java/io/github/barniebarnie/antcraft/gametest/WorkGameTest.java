@@ -19,6 +19,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
@@ -130,6 +131,21 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.BEDROCK, 2, 1, 2));
 	}
 
+	/**
+	 * {@code pos()} carries the bot's dimension, and a position from another dimension (a home in the Nether) is
+	 * refused by senses and actions alike instead of being used at its coordinates in the Overworld (#357).
+	 */
+	@GameTest(maxTicks = 20)
+	public void positionsFromAnotherDimensionAreRefused(GameTestHelper helper) {
+		helper.setBlock(2, 1, 2, Blocks.CHEST);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		bot.setHome(helper.absolutePos(new BlockPos(2, 1, 2)), Level.NETHER);
+		expect(helper, bot, "h = home()\nprint(pos().dimension, block(h), container(h), mine(h).reason, put(h, 'dirt').reason)\n",
+			List.of("minecraft:overworld None None wrong_dimension wrong_dimension"),
+			() -> helper.assertBlockPresent(Blocks.CHEST, 2, 1, 2));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void mineStoneWithoutAPickaxeIsNoTool(GameTestHelper helper) {
 		helper.setBlock(2, 1, 2, Blocks.STONE);
@@ -229,8 +245,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		}
 
 		@Override
-		public void setHome(Pos home) {
-			this.body.setHome(home);
+		public void setHome(Pos home, String dimension) {
+			this.body.setHome(home, dimension);
 		}
 
 		@Override

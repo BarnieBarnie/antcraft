@@ -511,7 +511,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		@Override
 		public Pos pos() {
 			BlockPos feet = AntBot.this.blockPosition();
-			return new Pos(feet.getX(), feet.getY(), feet.getZ());
+			return new Pos(feet.getX(), feet.getY(), feet.getZ(), AntBot.this.level().dimension().identifier().toString());
 		}
 
 		@Override
