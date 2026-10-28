@@ -62,6 +62,10 @@ final class Reflexes {
 	 * path toward the goal if need be.
 	 */
 	private static final int FLEE_NODES = 1000;
+	/** How many ticks a bot that found no way to flee waits before it plans again, rather than plan every tick. */
+	static final int FLEE_RETRY_TICKS = 20;
+	/** How far, in blocks, the mob may move from where it stood when the flight was planned before the bot plans again. */
+	private static final double MOB_MOVED = 4;
 
 	private final AntBot bot;
 	private @Nullable Kind active;
@@ -74,6 +78,10 @@ final class Reflexes {
 	private final PathFollower flight;
 	/** Whether {@link #flight} has a goal and is on its way. */
 	private boolean fleeing;
+	/** Where the mob stood when {@link #flight} was planned. */
+	private @Nullable Vec3 fledFrom;
+	/** The bot's tick count when its last flight failed. */
+	private int flightFailedAt = -FLEE_RETRY_TICKS;
 
 	Reflexes(AntBot bot) {
 		this.bot = bot;
@@ -107,6 +115,11 @@ final class Reflexes {
 	 */
 	static boolean fleesHome(double botToMob, double homeToMob, double botToHome) {
 		return homeToMob > botToMob && botToHome > 1.5;
+	}
+
+	/** Whether a bot whose last flight failed {@code ticksSinceFailed} ago may plan a new one. */
+	static boolean mayPlanFlight(int ticksSinceFailed) {
+		return ticksSinceFailed >= FLEE_RETRY_TICKS;
 	}
 
 	/** Senses and decides, before the script runs this tick; whether a reflex holds the bot. */
@@ -157,19 +170,33 @@ final class Reflexes {
 				return this.target != null;
 			}
 			case FLEE -> {
-				if (same && this.fleeing && this.flight.tick() == PathFollower.Status.RUNNING) {
-					return true;
+				// On its way, unless the mob has moved since the bot planned: then plan again, away from where the mob is now.
+				if (same && this.fleeing && hostile != null && this.fledFrom != null && hostile.position().distanceTo(this.fledFrom) <= MOB_MOVED) {
+					PathFollower.Status status = this.flight.tick();
+					if (status == PathFollower.Status.RUNNING) {
+						return true;
+					}
+					if (status == PathFollower.Status.FAILED) {
+						return this.flightFailed();
+					}
 				}
-				// Arrived with the mob still near, or no way there: plan again from here.
+				// Arrived with the mob still near, or the mob moved: plan again from here, but not every tick while there is no way.
 				Goal goal = this.fleeGoal(hostile);
-				if (goal == null) {
+				if (goal == null || hostile == null || !mayPlanFlight(this.bot.tickCount - this.flightFailedAt)) {
 					return this.fleeing = false;
 				}
 				this.flight.start(goal);
-				return this.fleeing = this.flight.tick() == PathFollower.Status.RUNNING;
+				this.fledFrom = hostile.position();
+				PathFollower.Status status = this.flight.tick();
+				return status == PathFollower.Status.FAILED ? this.flightFailed() : (this.fleeing = status == PathFollower.Status.RUNNING);
 			}
 		}
 		return false;
+	}
+
+	private boolean flightFailed() {
+		this.flightFailedAt = this.bot.tickCount;
+		return this.fleeing = false;
 	}
 
 	/** Keeps the block it steps to while it is still safe, so the bot does not turn about half way. */

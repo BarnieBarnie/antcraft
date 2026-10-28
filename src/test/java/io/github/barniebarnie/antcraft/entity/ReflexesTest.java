@@ -51,6 +51,15 @@ class ReflexesTest {
 		assertEquals(false, Reflexes.fleesHome(3, 3.5, 0.5));
 	}
 
+	/** A bot that found no way to flee waits a while before it plans again, rather than plan every tick (#345). */
+	@Test
+	void noNewFlightPlanSoonAfterAFailedOne() {
+		assertEquals(false, Reflexes.mayPlanFlight(0));
+		assertEquals(false, Reflexes.mayPlanFlight(1));
+		assertEquals(false, Reflexes.mayPlanFlight(Reflexes.FLEE_RETRY_TICKS - 1));
+		assertEquals(true, Reflexes.mayPlanFlight(Reflexes.FLEE_RETRY_TICKS));
+	}
+
 	@Test
 	void aThresholdOfZeroTurnsItsReflexOff() {
 		assertNull(Reflexes.choose(new Senses(false, false, false, 300, 0.5f, true), 0, SURFACE_AIR));

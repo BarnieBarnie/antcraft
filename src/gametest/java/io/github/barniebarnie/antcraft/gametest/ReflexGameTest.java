@@ -18,6 +18,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * A bot's reflexes (docs/scripting.md, Reflexes): whatever its script does, it gets out of fire, swims up before it
@@ -178,6 +179,30 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 9, 1, 12);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 8));
 		bot.setHome(helper.absolutePos(new BlockPos(17, 1, 12)));
+		fleeFrom(helper, bot, husk);
+	}
+
+	/**
+	 * A bot low on health flees a husk, which follows it and cuts it off, three blocks ahead on its way: the bot notices,
+	 * turns and gets away from where the husk is now, rather than run on into it (#345). Wide like
+	 * {@link #fleesAHostileMobAtLowHealth}; its home is where it stands, so it flees away from the husk.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 90)
+	public void replansWhenTheMobFollows(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 15, 1, 15);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
+		bot.setHome(bot.blockPosition());
+		Vec3 start = bot.position();
+		boolean[] cutOff = {false};
+		helper.onEachTick(() -> {
+			if (!cutOff[0] && bot.position().distanceTo(start) >= 2) {
+				Vec3 ahead = bot.position().add(bot.position().subtract(start).normalize().scale(3));
+				husk.teleportTo(ahead.x, bot.getY(), ahead.z);
+				cutOff[0] = true;
+			} else if (cutOff[0] && bot.distanceTo(husk) < 2) {
+				helper.fail("bot ran into the husk at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
 		fleeFrom(helper, bot, husk);
 	}
 

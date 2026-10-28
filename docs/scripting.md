@@ -218,7 +218,7 @@ Reflexes run every tick in Java, before the script, and cannot be turned off by 
 - the pathfinder never plans through lava, fire, or a fall that hurts (as today);
 - in fire or lava, or next to flowing lava: step aside, to the nearest block within 4 where it can stand clear of fire and lava, through the fire if need be;
 - under water with less than `botSurfaceAir` air left (config, default 100 of 300 ticks): swim the shortest way, within 12 blocks, to where its head is out of the water, along under a ceiling if need be;
-- at or below `botFleeHealth` health (config, default 6 of 20) with a hostile mob within 8 blocks: flee home when the bot is in its home's dimension and home lies further from the mob than the bot, and away from the mob otherwise, with its own pathfinder as `goto` does, digging or pillaring out where it must; a fleeing bot does not fight back;
+- at or below `botFleeHealth` health (config, default 6 of 20) with a hostile mob within 8 blocks: flee home when the bot is in its home's dimension and home lies further from the mob than the bot, and away from the mob otherwise, with its own pathfinder as `goto` does, digging or pillaring out where it must, planning again when the mob moves more than 4 blocks and waiting a second after finding no way out; a fleeing bot does not fight back;
 - a falling block (sand, gravel) over it: step aside, out from under it.
 
 The nearer danger comes first, in the order of the list. A reflex takes over only where it has a way out: a bot walled in by fire, or under water with no air within reach, is left to its script.
