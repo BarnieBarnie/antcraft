@@ -32,16 +32,25 @@ public final class AntCraftConfig {
 	 */
 	public static final int MAX_SCRIPT_INSTRUCTIONS_PER_TICK = 20000;
 	public static final Output.Level DEFAULT_SCRIPT_CHAT_LEVEL = Output.Level.ERROR;
+	/** Ten seconds. */
+	public static final int DEFAULT_BOT_RESPAWN_TICKS = 200;
 
 	/**
 	 * {@code colonyActionsRequireOp} limits changing colonies to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
 	 * {@code scriptInstructionsPerTick} is how many instructions each bot's script may run a tick, at most
 	 * {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}. {@code scriptChatLevel} is the lowest log level of a script's output that goes to
 	 * its bot's owner's chat ({@code print} always does). {@code botsLoadChunks} is whether bots running a script keep their
-	 * chunk loaded and {@code goto} loads the chunks on its way.
+	 * chunk loaded and {@code goto} loads the chunks on its way. {@code botRespawn} is whether a bot that died comes back at
+	 * its home, {@code botRespawnTicks} after it died.
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
-		Output.Level scriptChatLevel, boolean botsLoadChunks) {
+		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+			Output.Level scriptChatLevel, boolean botsLoadChunks) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
+				true, DEFAULT_BOT_RESPAWN_TICKS);
+		}
+
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 			Output.Level scriptChatLevel) {
 			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, true);
@@ -80,6 +89,8 @@ public final class AntCraftConfig {
 		props.setProperty("scriptInstructionsPerTick", Integer.toString(values.scriptInstructionsPerTick()));
 		props.setProperty("scriptChatLevel", values.scriptChatLevel().name().toLowerCase(Locale.ROOT));
 		props.setProperty("botsLoadChunks", Boolean.toString(values.botsLoadChunks()));
+		props.setProperty("botRespawn", Boolean.toString(values.botRespawn()));
+		props.setProperty("botRespawnTicks", Integer.toString(values.botRespawnTicks()));
 		for (String removed : REMOVED) {
 			props.remove(removed);
 		}
@@ -98,7 +109,9 @@ public final class AntCraftConfig {
 			+ "30 bots at " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK + " are 600000 instructions a tick on the server thread, which can lag the game.\n"
 			+ "Raise it only for scripts that think a lot between actions, and measure with /antcraft profile.\n"
 			+ "scriptChatLevel (debug, info, warn or error) is the lowest level of script output shown in the bot owner's chat; print always shows.\n"
-			+ "botsLoadChunks: bots running a script keep their chunk loaded, and goto loads (and generates) the chunks on its way.";
+			+ "botsLoadChunks: bots running a script keep their chunk loaded, and goto loads (and generates) the chunks on its way.\n"
+			+ "botRespawn: a bot that dies drops its items and comes back at its home botRespawnTicks (default "
+			+ DEFAULT_BOT_RESPAWN_TICKS + ") ticks later; false makes death final.";
 	}
 
 	public static Values parse(Properties props) {
@@ -118,7 +131,10 @@ public final class AntCraftConfig {
 		}
 		Output.Level chatLevel = chatLevel(props.getProperty("scriptChatLevel", "error").trim(), warn);
 		boolean botsLoadChunks = Boolean.parseBoolean(props.getProperty("botsLoadChunks", "true").trim());
-		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks);
+		boolean botRespawn = Boolean.parseBoolean(props.getProperty("botRespawn", "true").trim());
+		int botRespawnTicks = nonNegativeInt(props, "botRespawnTicks", DEFAULT_BOT_RESPAWN_TICKS);
+		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks,
+			botRespawn, botRespawnTicks);
 	}
 
 	/** A log level below print by name, in any case; {@code error}, with a warning, for anything else. */
@@ -163,6 +179,19 @@ public final class AntCraftConfig {
 
 	public static boolean botsLoadChunks() {
 		return values.botsLoadChunks();
+	}
+
+	public static boolean botRespawn() {
+		return values.botRespawn();
+	}
+
+	public static int botRespawnTicks() {
+		return values.botRespawnTicks();
+	}
+
+	/** The settings in force. */
+	public static Values values() {
+		return values;
 	}
 
 	public static int maxBotsPerLevel() {

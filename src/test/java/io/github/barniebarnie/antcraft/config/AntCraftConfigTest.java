@@ -138,6 +138,35 @@ class AntCraftConfigTest {
 	}
 
 	@Test
+	void deadBotsRespawnAfterTenSecondsByDefault() {
+		AntCraftConfig.Values values = AntCraftConfig.parse(new Properties());
+		assertTrue(values.botRespawn());
+		assertEquals(200, values.botRespawnTicks());
+		assertTrue(new AntCraftConfig.Values(true, 64).botRespawn());
+		assertEquals(200, new AntCraftConfig.Values(true, 64).botRespawnTicks());
+	}
+
+	@Test
+	void readsTheRespawnSettings() {
+		Properties props = new Properties();
+		props.setProperty("botRespawn", " false ");
+		props.setProperty("botRespawnTicks", " 40 ");
+		AntCraftConfig.Values values = AntCraftConfig.parse(props);
+		assertFalse(values.botRespawn());
+		assertEquals(40, values.botRespawnTicks());
+		props.setProperty("botRespawnTicks", "soon");
+		assertEquals(200, AntCraftConfig.parse(props).botRespawnTicks());
+		props.setProperty("botRespawnTicks", "-5");
+		assertEquals(0, AntCraftConfig.parse(props).botRespawnTicks());
+	}
+
+	@Test
+	void theConfigCommentNamesTheRespawnSettings() {
+		String comment = AntCraftConfig.fileComment();
+		assertTrue(comment.contains("botRespawn") && comment.contains("botRespawnTicks"), comment);
+	}
+
+	@Test
 	void singleplayerAlwaysAllowed() {
 		assertTrue(AntCraftConfig.botsAllowed(false, false));
 		assertTrue(AntCraftConfig.botsAllowed(false, true));

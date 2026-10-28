@@ -121,6 +121,10 @@ public final class SenseApi {
 			}
 			return stacks;
 		});
+		natives.register("deaths", call -> {
+			Args.bind("deaths", call, 0);
+			return (long) bot(run, call).getDeaths();
+		});
 		natives.register("time", call -> {
 			Args.bind("time", call, 0);
 			return Math.floorMod(bot(run, call).level().getDefaultClockTime(), 24000L);

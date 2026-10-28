@@ -29,7 +29,7 @@ AntCraft must be installed on the server and on every player's client: it adds i
  . I .      R = block of copper
 ```
 
-Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory, which they drop when they die. They fight hostile mobs (except creepers, for now).
+Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory, which they drop when they die; a dead bot comes back at its home ten seconds later and runs its script again (config `botRespawn`, `botRespawnTicks`). They fight hostile mobs (except creepers, for now).
 
 Bots find their own way: they walk, jump, swim, drop up to 3 blocks, dig through blocks in the way, and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, or blocks next to lava or water, and walk round what players build with (glass, fences, walls, doors) rather than through it.
 

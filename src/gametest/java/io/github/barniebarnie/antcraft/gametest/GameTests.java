@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Field;
 import java.util.Set;
@@ -10,6 +11,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,6 +48,10 @@ public final class GameTests {
 			public void testAddedForRerun(GameTestInfo old, GameTestInfo next, GameTestRunner runner) {
 			}
 		});
+		// A bot that died in the test would otherwise come back at its home in the test's area after the test, into
+		// whatever test runs there next.
+		AABB bounds = helper.getBounds();
+		onEnd(helper, () -> BotRespawns.get(helper.getLevel()).forget(home -> bounds.contains(Vec3.atCenterOf(home))));
 	}
 
 	/** Runs {@code cleanup} once the test passed or failed, such as to remove a player or file it added. */

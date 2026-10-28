@@ -45,6 +45,11 @@ public final class BotChunks {
 		}
 	}
 
+	/** Keeps {@code chunk} ticking for a while, as a bot standing there does: where a dead bot is to respawn. */
+	public static void keep(ServerLevel level, ChunkPos chunk) {
+		level.getChunkSource().addTicketWithRadius(BOT, chunk, BOT_RADIUS);
+	}
+
 	/** Loads the chunk at chunk coordinates {@code x}, {@code z} over the next ticks, generating it if need be, and keeps it a while. */
 	public static void load(ServerLevel level, int x, int z) {
 		level.getChunkSource().addTicketWithRadius(PATH, new ChunkPos(x, z), 0);

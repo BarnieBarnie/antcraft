@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -32,6 +33,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.entity.EntitySpawnRequest;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -52,8 +55,12 @@ import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -84,6 +91,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private boolean idling;
 	/** The source of {@link #script} when it came from the script library, so a reload can tell whether it changed. */
 	private @Nullable String scriptSource;
+	/** The compiled code of {@link #script}, so it can start again from the top when the bot respawns. */
+	private @Nullable Code scriptCode;
+	/** How often the bot has died ({@code deaths()} in a script). Saved. */
+	private int deaths;
 	/** The scripts' {@code memory}: outlives each script run, and is saved. */
 	private PyDict memory = Memory.create();
 	private final BotLog log = new BotLog();
@@ -161,7 +172,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				this.home = this.blockPosition(); // where it was first spawned
 			}
 			this.sayBubble.tick();
-			if (allowed) {
+			// A dead bot lies there for a second before it is gone; it does nothing meanwhile.
+			if (allowed && !this.isDeadOrDying()) {
 				this.idleIfDone();
 				if (this.script != null && this.script.running()) {
 					ScriptRun run = this.script;
@@ -267,6 +279,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.stopScript();
 		this.log.add(this.level().getGameTime(), Output.Level.INFO, "run " + name + (args.isEmpty() ? "" : " " + String.join(" ", args)));
 		this.script = new ScriptRun(name, code, args, new ScriptHost(), this.log, this.memory, ServerScripts.library());
+		this.scriptCode = code;
 		this.scriptSource = null;
 		this.idling = false;
 	}
@@ -339,6 +352,16 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.log;
 	}
 
+	/** The scripts' {@code memory}. */
+	public PyDict getMemory() {
+		return this.memory;
+	}
+
+	/** How often the bot has died. */
+	public int getDeaths() {
+		return this.deaths;
+	}
+
 	/** Sends {@code message} to the bot's owner, if online. */
 	private void tellOwner(Component message) {
 		if (this.owner != null && this.level() instanceof ServerLevel level) {
@@ -395,12 +418,73 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 	}
 
+	/**
+	 * Drops what the bot carries, tells its log and owner where and how it died, and with {@code botRespawn} on lets it wait
+	 * to come back at its home ({@link BotRespawns}), running the script it ran again from the top.
+	 */
 	@Override
 	public void die(DamageSource source) {
+		boolean dying = !this.isRemoved() && !this.dead;
+		Component how = this.getCombatTracker().getDeathMessage();
 		super.die(source);
-		if (this.level() instanceof ServerLevel level) {
-			ColonyManager.get(level).leave(this);
+		if (!dying || !(this.level() instanceof ServerLevel level)) {
+			return;
 		}
+		ColonyManager.get(level).leave(this);
+		this.deaths++;
+		BlockPos at = this.blockPosition();
+		String line = "died at " + at.getX() + ", " + at.getY() + ", " + at.getZ() + ": " + how.getString();
+		this.log.add(level.getGameTime(), Output.Level.WARN, line);
+		this.tellOwner(Component.literal("[" + this.getName().getString() + "] " + line).withStyle(ChatFormatting.RED));
+		// The script it ran itself, not the idle.py it fell back to, which it runs anyway once back.
+		ScriptRun last = this.idling ? null : this.script;
+		boolean library = this.scriptSource != null;
+		Code code = this.scriptCode;
+		this.stopScript();
+		BotRespawns.respawnTime(AntCraftConfig.values(), level.getGameTime()).ifPresent(time -> {
+			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
+			this.saveWithoutId(output);
+			BotRespawns.get(level).add(new BotRespawns.Pending(this.getUUID(), this.getScriptHome(), time, output.buildResult(),
+				Optional.ofNullable(last).map(ScriptRun::name), last != null ? last.args() : List.of(), library, last != null ? code : null));
+		});
+	}
+
+	/**
+	 * Brings back the bot of {@code respawn} at its home, with full health, and starts the script it ran when it died again
+	 * from the top: from the script library when it came from there, as it is now. Whether the bot is back, or its wait is
+	 * over anyway because it cannot be made from what was saved.
+	 */
+	static boolean respawn(ServerLevel level, BotRespawns.Pending respawn) {
+		AntBot bot = ModEntities.ANT_BOT.create(level, new EntitySpawnRequest(EntitySpawnReason.LOAD, true));
+		if (bot == null) {
+			return true;
+		}
+		bot.load(TagValueInput.create(ProblemReporter.DISCARDING, level.registryAccess(), respawn.bot()));
+		BlockPos home = respawn.home();
+		bot.snapTo(Vec3.atBottomCenterOf(home), bot.getYRot(), bot.getXRot());
+		bot.setDeltaMovement(Vec3.ZERO);
+		bot.resetFallDistance();
+		bot.clearFire();
+		bot.removeAllEffects();
+		bot.setAirSupply(bot.getMaxAirSupply());
+		bot.deathTime = 0;
+		bot.setHealth(bot.getMaxHealth());
+		if (!level.addFreshEntity(bot)) {
+			return false;
+		}
+		bot.log.add(level.getGameTime(), Output.Level.INFO, "respawned at home " + home.getX() + ", " + home.getY() + ", " + home.getZ());
+		respawn.script().ifPresent(name -> {
+			Optional<ScriptLibrary.Script> fromLibrary = respawn.library()
+				? ServerScripts.library().get(name).filter(script -> script.code() != null) : Optional.empty();
+			if (fromLibrary.isPresent()) {
+				bot.runScript(fromLibrary.get(), respawn.args());
+			} else if (respawn.code() != null) {
+				bot.runScript(name, respawn.code(), respawn.args());
+			} else {
+				bot.log.add(level.getGameTime(), Output.Level.WARN, "cannot run " + name + " again: it is not in the script library");
+			}
+		});
+		return true;
 	}
 
 	/** A bot that is removed, for good or only unloaded, takes what it said with it: the text is never saved. */
@@ -429,9 +513,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		InventoryCarrier.pickUpItem(level, this, this, entity);
 	}
 
+	/** Drops everything the bot carries, like a player: its inventory and whatever it holds or wears. */
 	@Override
 	protected void dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean killedByPlayer) {
 		super.dropCustomDeathLoot(level, source, killedByPlayer);
+		for (EquipmentSlot slot : EquipmentSlot.VALUES) {
+			ItemStack stack = this.getItemBySlot(slot);
+			if (!stack.isEmpty()) {
+				this.spawnAtLocation(level, stack);
+				this.setItemSlot(slot, ItemStack.EMPTY);
+			}
+		}
 		for (ItemStack stack : this.inventory.removeAllItems()) {
 			this.spawnAtLocation(level, stack);
 		}
@@ -454,6 +546,9 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Home", BlockPos.CODEC, this.home);
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.storeNullable("Owner", UUIDUtil.CODEC, this.owner);
+		if (this.deaths > 0) {
+			output.putInt("Deaths", this.deaths);
+		}
 		Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
 		this.log.save(output);
 		if (!this.opened.isEmpty()) {
@@ -472,6 +567,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.home = input.read("Home", BlockPos.CODEC).orElse(null);
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
+		this.deaths = input.getIntOr("Deaths", 0);
 		this.memory = Memory.load(input);
 		this.log.load(input);
 		this.opened.clear();
