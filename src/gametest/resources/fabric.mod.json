@@ -17,6 +17,7 @@
 			"io.github.barniebarnie.antcraft.gametest.WorkGameTest",
 			"io.github.barniebarnie.antcraft.gametest.CraftGameTest",
 			"io.github.barniebarnie.antcraft.gametest.DeathGameTest",
+			"io.github.barniebarnie.antcraft.gametest.ReflexGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BenchmarkGameTest"
 		]
 	},

@@ -34,6 +34,10 @@ public final class AntCraftConfig {
 	public static final Output.Level DEFAULT_SCRIPT_CHAT_LEVEL = Output.Level.ERROR;
 	/** Ten seconds. */
 	public static final int DEFAULT_BOT_RESPAWN_TICKS = 200;
+	/** At or below this health (of 20) a bot flees a hostile mob near it (docs/scripting.md, Reflexes). */
+	public static final int DEFAULT_BOT_FLEE_HEALTH = 6;
+	/** Below this much air (of 300 ticks) a bot under water swims up to breathe. */
+	public static final int DEFAULT_BOT_SURFACE_AIR = 100;
 
 	/**
 	 * {@code colonyActionsRequireOp} limits changing colonies to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
@@ -41,10 +45,17 @@ public final class AntCraftConfig {
 	 * {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}. {@code scriptChatLevel} is the lowest log level of a script's output that goes to
 	 * its bot's owner's chat ({@code print} always does). {@code botsLoadChunks} is whether bots running a script keep their
 	 * chunk loaded and {@code goto} loads the chunks on its way. {@code botRespawn} is whether a bot that died comes back at
-	 * its home, {@code botRespawnTicks} after it died.
+	 * its home, {@code botRespawnTicks} after it died. {@code botFleeHealth} and {@code botSurfaceAir} are the thresholds of
+	 * the reflexes that flee hostile mobs and swim up to breathe; 0 turns each off.
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
-		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks) {
+		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
+				botRespawn, botRespawnTicks, DEFAULT_BOT_FLEE_HEALTH, DEFAULT_BOT_SURFACE_AIR);
+		}
+
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 			Output.Level scriptChatLevel, boolean botsLoadChunks) {
 			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
@@ -91,6 +102,8 @@ public final class AntCraftConfig {
 		props.setProperty("botsLoadChunks", Boolean.toString(values.botsLoadChunks()));
 		props.setProperty("botRespawn", Boolean.toString(values.botRespawn()));
 		props.setProperty("botRespawnTicks", Integer.toString(values.botRespawnTicks()));
+		props.setProperty("botFleeHealth", Integer.toString(values.botFleeHealth()));
+		props.setProperty("botSurfaceAir", Integer.toString(values.botSurfaceAir()));
 		for (String removed : REMOVED) {
 			props.remove(removed);
 		}
@@ -111,7 +124,9 @@ public final class AntCraftConfig {
 			+ "scriptChatLevel (debug, info, warn or error) is the lowest level of script output shown in the bot owner's chat; print always shows.\n"
 			+ "botsLoadChunks: bots running a script keep their chunk loaded, and goto loads (and generates) the chunks on its way.\n"
 			+ "botRespawn: a bot that dies drops its items and comes back at its home botRespawnTicks (default "
-			+ DEFAULT_BOT_RESPAWN_TICKS + ") ticks later; false makes death final.";
+			+ DEFAULT_BOT_RESPAWN_TICKS + ") ticks later; false makes death final.\n"
+			+ "botFleeHealth (default " + DEFAULT_BOT_FLEE_HEALTH + ", of 20): at or below this health a bot flees a hostile mob near it; 0 never.\n"
+			+ "botSurfaceAir (default " + DEFAULT_BOT_SURFACE_AIR + ", of 300 ticks): below this much air a bot under water swims up to breathe; 0 never.";
 	}
 
 	public static Values parse(Properties props) {
@@ -133,8 +148,10 @@ public final class AntCraftConfig {
 		boolean botsLoadChunks = Boolean.parseBoolean(props.getProperty("botsLoadChunks", "true").trim());
 		boolean botRespawn = Boolean.parseBoolean(props.getProperty("botRespawn", "true").trim());
 		int botRespawnTicks = nonNegativeInt(props, "botRespawnTicks", DEFAULT_BOT_RESPAWN_TICKS);
+		int fleeHealth = nonNegativeInt(props, "botFleeHealth", DEFAULT_BOT_FLEE_HEALTH);
+		int surfaceAir = nonNegativeInt(props, "botSurfaceAir", DEFAULT_BOT_SURFACE_AIR);
 		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks,
-			botRespawn, botRespawnTicks);
+			botRespawn, botRespawnTicks, fleeHealth, surfaceAir);
 	}
 
 	/** A log level below print by name, in any case; {@code error}, with a warning, for anything else. */
@@ -179,6 +196,14 @@ public final class AntCraftConfig {
 
 	public static boolean botsLoadChunks() {
 		return values.botsLoadChunks();
+	}
+
+	public static int botFleeHealth() {
+		return values.botFleeHealth();
+	}
+
+	public static int botSurfaceAir() {
+		return values.botSurfaceAir();
 	}
 
 	public static boolean botRespawn() {

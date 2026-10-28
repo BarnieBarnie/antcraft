@@ -122,6 +122,33 @@ class AntCraftConfigTest {
 	}
 
 	@Test
+	void reflexThresholdsDefaultAndRead() {
+		AntCraftConfig.Values defaults = AntCraftConfig.parse(new Properties());
+		assertEquals(6, defaults.botFleeHealth());
+		assertEquals(100, defaults.botSurfaceAir());
+		assertEquals(6, new AntCraftConfig.Values(true, 64).botFleeHealth());
+		assertEquals(100, new AntCraftConfig.Values(true, 64).botSurfaceAir());
+		Properties props = new Properties();
+		props.setProperty("botFleeHealth", " 10 ");
+		props.setProperty("botSurfaceAir", "200");
+		AntCraftConfig.Values values = AntCraftConfig.parse(props);
+		assertEquals(10, values.botFleeHealth());
+		assertEquals(200, values.botSurfaceAir());
+		// 0 turns a reflex off; below 0 is 0, and a number that is not one is the default.
+		props.setProperty("botFleeHealth", "-3");
+		props.setProperty("botSurfaceAir", "lots");
+		values = AntCraftConfig.parse(props);
+		assertEquals(0, values.botFleeHealth());
+		assertEquals(100, values.botSurfaceAir());
+	}
+
+	@Test
+	void theConfigCommentNamesTheReflexThresholds() {
+		String comment = AntCraftConfig.fileComment();
+		assertTrue(comment.contains("botFleeHealth") && comment.contains("botSurfaceAir"), comment);
+	}
+
+	@Test
 	void readsTheScriptChatLevel() {
 		Properties props = new Properties();
 		props.setProperty("scriptChatLevel", " Warn ");

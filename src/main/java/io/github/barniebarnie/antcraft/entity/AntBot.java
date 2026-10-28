@@ -104,6 +104,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final BotLog log = new BotLog();
 	/** What the bot said last, shown above it for a while. */
 	private final SayBubble sayBubble = new SayBubble(this);
+	/** What keeps the bot out of danger whatever its script does; see {@link Reflexes}. */
+	private final Reflexes reflexes = new Reflexes(this);
 	/** What the script's move actions walk with; made when a script first moves. */
 	private MoveApi.@Nullable Body body;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
@@ -179,6 +181,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			// A dead bot lies there for a second before it is gone; it does nothing meanwhile.
 			if (allowed && !this.isDeadOrDying()) {
 				this.resumeSavedScript();
+				// Before the script, which a reflex holds while it lasts.
+				TickProfiler.time("bot.reflexes", () -> {
+					this.reflexes.tick(level);
+				});
 				this.idleIfDone();
 				if (this.script != null && this.script.running()) {
 					ScriptRun run = this.script;
@@ -213,8 +219,19 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return super.isPushedByFluid() && this.tickCount > this.holdAgainstCurrentUntil;
 	}
 
+	/** After the goals and the navigation, so a reflex's move wins over theirs. */
+	@Override
+	protected void customServerAiStep(ServerLevel level) {
+		super.customServerAiStep(level);
+		this.reflexes.move();
+	}
+
+	/** A bot fleeing a hostile mob (see {@link Reflexes}) takes on no target. */
 	@Override
 	public void setTarget(@Nullable LivingEntity target) {
+		if (target != null && this.reflexes.fleeing()) {
+			return;
+		}
 		if (target != null && target != this.getTarget()) {
 			Tools.equipBestWeapon(this);
 		}
@@ -400,6 +417,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/** What a script sees of this bot. */
 	private final class ScriptHost implements ScriptRun.Host {
+		@Override
+		public boolean reflex() {
+			return AntBot.this.reflexes.active();
+		}
+
 		@Override
 		public MoveApi.Body body() {
 			return AntBot.this.getBody();

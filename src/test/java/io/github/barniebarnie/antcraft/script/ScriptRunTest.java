@@ -26,6 +26,13 @@ class ScriptRunTest {
 		Pos pos = new Pos(4, 64, -2);
 		Level chatLevel = Level.ERROR;
 		final List<String> chat = new ArrayList<>();
+		/** Whether a reflex holds the bot this tick. */
+		boolean reflex;
+
+		@Override
+		public boolean reflex() {
+			return reflex;
+		}
 
 		@Override
 		public long gameTime() {
@@ -90,6 +97,40 @@ class ScriptRunTest {
 		tick(run, 2000);
 		assertEquals("wait(20)", run.action());
 		assertEquals(2, run.line());
+	}
+
+	/**
+	 * A reflex that takes over ends the running action with {@code interrupted}; the script waits while the reflex holds
+	 * the bot, and goes on with that result once it lets go (docs/scripting.md, Reflexes).
+	 */
+	@Test
+	void aReflexInterruptsTheActionAndTheScriptGoesOnOnceItIsDone() {
+		ScriptRun run = start("r = wait(100)\nprint(r.ok, r.reason)\n");
+		tick(run, 2000);
+		assertEquals("wait(100)", run.action());
+		host.reflex = true;
+		tick(run, 2000);
+		assertNull(run.action());
+		assertEquals("wait(100) -> interrupted", run.lastResult());
+		tick(run, 2000);
+		assertEquals(List.of(), log.last(100, Level.PRINT));
+		assertEquals(ScriptRun.State.RUNNING, run.state());
+		host.reflex = false;
+		tick(run, 2000);
+		assertEquals(ScriptRun.State.FINISHED, run.state());
+		assertEquals(List.of("[1 debug] wait(100) -> interrupted", "[3 print] False interrupted"), logLines());
+	}
+
+	/** A script that runs no action when a reflex takes over is held until the reflex is done. */
+	@Test
+	void aReflexHoldsAScriptBetweenActions() {
+		ScriptRun run = start("print('a')\nprint('b')\n");
+		host.reflex = true;
+		tick(run, 2000);
+		assertEquals(List.of(), logLines());
+		host.reflex = false;
+		tick(run, 2000);
+		assertEquals(ScriptRun.State.FINISHED, run.state());
 	}
 
 	/** {@code /antcraft bot status} shows the last action's result: what it was, ok or its reason, and its value. */

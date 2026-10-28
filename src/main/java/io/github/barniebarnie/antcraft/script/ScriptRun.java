@@ -32,7 +32,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * A script running on a bot (docs/scripting.md, Runtime). The bot calls {@link #tick} once a server tick, which:
  * <ol>
- * <li>runs the reflexes ({@link #reflexes}; none yet);</li>
+ * <li>runs the reflexes ({@link #reflexes}): while one holds the bot, the current action ends with {@code interrupted}
+ * and the script waits;</li>
  * <li>advances the current action, if any, and resumes the script with the action's result once it is done;</li>
  * <li>runs the script until it starts an action, finishes, fails, stops or uses up the tick's instruction budget.</li>
  * </ol>
@@ -63,6 +64,14 @@ public final class ScriptRun {
 			return null;
 		}
 
+		/**
+		 * Whether one of the bot's reflexes holds it this tick (docs/scripting.md, Reflexes). The bot runs its reflexes
+		 * before the script, and they cannot be turned off by it.
+		 */
+		default boolean reflex() {
+			return false;
+		}
+
 		/** The bot's body, for the actions that move it ({@link MoveApi}). */
 		default MoveApi.Body body() {
 			throw new UnsupportedOperationException("this bot cannot move");
@@ -90,7 +99,7 @@ public final class ScriptRun {
 			return false;
 		}
 
-		/** Ends the action early, because the script was stopped; it lets go of what it holds, such as the bot's path. */
+		/** Ends the action early, because the script was stopped or a reflex took over; it lets go of what it holds, such as the bot's path. */
 		default void cancel() {
 		}
 
@@ -297,7 +306,6 @@ public final class ScriptRun {
 		if (state != State.RUNNING) {
 			return;
 		}
-		reflexes();
 		Vm.Status status;
 		try {
 			if (recall) {
@@ -305,6 +313,10 @@ public final class ScriptRun {
 				if (vm.recall() == Vm.Status.SUSPENDED && action != null) {
 					action.restore(progress);
 				}
+			}
+			// After a resumed run restored its action, so a reflex interrupts that as any other.
+			if (reflexes()) {
+				return;
 			}
 			if (action != null) {
 				if (!action.tick()) {
@@ -344,8 +356,23 @@ public final class ScriptRun {
 		}
 	}
 
-	/** Where reflexes (hazards, health, drowning) will run before the script each tick, and may end the action. None yet. */
-	private void reflexes() {
+	/**
+	 * Whether a reflex holds the bot this tick ({@link Host#reflex}): then the current action, if any, ends with
+	 * {@code interrupted}, which the script goes on with once the reflex lets go, and the script does not run.
+	 */
+	private boolean reflexes() {
+		if (!host.reflex()) {
+			return false;
+		}
+		if (action != null) {
+			Action interrupted = action;
+			action = null;
+			interrupted.cancel();
+			Result result = Result.fail(Result.INTERRUPTED);
+			done(interrupted.describe(), result);
+			vm.resume(result);
+		}
+		return true;
 	}
 
 	/** Starts {@code action} for the native call being made: the native returns what this gives, pausing the script. */

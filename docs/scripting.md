@@ -199,7 +199,7 @@ Later milestones add `build(blueprint, at, turn=0)` (the existing build-plan cod
 
 ### Reason codes
 
-`unreachable`, `no_path_budget` (only seen if a script asks again in the same tick), `out_of_reach`, `not_loaded`, `no_tool` (needs a better tool), `no_item`, `no_space` (inventory or container full), `no_recipe`, `missing_ingredients`, `no_table`, `no_furnace`, `blocked` (something is in the way), `protected` (the block may not be changed, for example by claim rules), `target_gone`, `interrupted` (a reflex took over), `stopped`, `timeout`.
+`unreachable`, `no_path_budget` (only seen if a script asks again in the same tick), `out_of_reach`, `not_loaded`, `no_tool` (needs a better tool), `no_item`, `no_space` (inventory or container full), `no_recipe`, `missing_ingredients`, `no_table`, `no_furnace`, `blocked` (something is in the way), `protected` (the block may not be changed, for example by claim rules), `target_gone`, `interrupted` (a reflex took over; any action that takes ticks, `wait` too, can end with it, see Reflexes), `stopped`, `timeout`.
 
 ### Memory
 
@@ -215,12 +215,14 @@ if "chest" not in memory:
 Reflexes run every tick in Java, before the script, and cannot be turned off by a script:
 
 - the pathfinder never plans through lava, fire, or a fall that hurts (as today);
-- stepping next to flowing lava or into fire: back away;
-- under water and short of air: swim up;
-- low health with a hostile mob near: flee towards the bot's home or away from the mob;
-- a block about to fall on the bot (sand, gravel): step aside.
+- in fire or lava, or next to flowing lava: step aside, to a block beside it (or one up or down) where it can stand, clear of fire and lava;
+- under water with less than `botSurfaceAir` air left (config, default 100 of 300 ticks): swim the shortest way, within 12 blocks, to where its head is out of the water, along under a ceiling if need be;
+- at or below `botFleeHealth` health (config, default 6 of 20) with a hostile mob within 8 blocks: flee home when home lies further from the mob than the bot, and away from the mob otherwise; a fleeing bot does not fight back;
+- a falling block (sand, gravel) over it: step aside, out from under it.
 
-When a reflex takes over, the running action ends with `interrupted` and the script decides what to do next. Thresholds (flee health, for example) are config options, not script options, in v1.
+The nearer danger comes first, in the order of the list. A reflex takes over only where it has a way out: a bot walled in by fire, or under water with no air within reach, is left to its script.
+
+When a reflex takes over, the running action ends with `interrupted`. While the reflex holds the bot the script does not run; once the danger is past, the script goes on with that result and decides what to do next. Thresholds are config options, not script options, in v1; 0 turns the drowning or the fleeing reflex off.
 
 ## Idle, home and death
 
@@ -244,6 +246,8 @@ A bot running the `idle.py` it fell back to (it has no script of its own, or tha
 | `scriptChatLevel` | `error` | Lowest log level shown in the owner's chat. `print` always shows. |
 | `botRespawn` | `true` | Respawn dead bots at home. |
 | `botRespawnTicks` | 200 | Delay before respawning. |
+| `botFleeHealth` | 6 | Health (of 20) at or below which a bot flees a hostile mob near it (Reflexes); 0 never. |
+| `botSurfaceAir` | 100 | Air (of 300 ticks) below which a bot under water swims up to breathe (Reflexes); 0 never. |
 | `botsLoadChunks` | `true` | Running bots keep their chunk loaded, and `goto` loads chunks on its path; idle bots (running their fallback `idle.py`) only while they walk. |
 
 ## Files and commands
