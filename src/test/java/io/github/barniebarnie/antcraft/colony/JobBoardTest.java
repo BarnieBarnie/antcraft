@@ -79,14 +79,38 @@ class JobBoardTest {
 		long second = board.post("haul", data(2L), POSTER);
 		board.take(null, A);
 		board.take(null, A);
-		assertTrue(board.finish(first));
-		assertFalse(board.finish(first), "already finished");
+		assertTrue(board.finish(first, A));
+		assertFalse(board.finish(first, A), "already finished");
 		assertEquals(List.of(second), ids(board.jobs(null)));
-		assertTrue(board.drop(second));
-		assertFalse(board.drop(second), "already open");
-		assertFalse(board.drop(99));
+		assertTrue(board.drop(second, A));
+		assertFalse(board.drop(second, A), "already open");
+		assertFalse(board.drop(99, A));
 		assertEquals(second, board.take(null, B).orElseThrow().id());
 		assertEquals(3, board.post("haul", data(3L), POSTER), "ids are not reused");
+	}
+
+	@Test
+	void onlyTheTakerFinishesOrDropsATakenJob() {
+		JobBoard board = new JobBoard();
+		long id = board.post("haul", data(1L), POSTER);
+		board.take(null, A);
+		assertFalse(board.finish(id, B), "another bot finishes it");
+		assertFalse(board.finish(id, POSTER), "the poster finishes a taken job");
+		assertFalse(board.drop(id, B), "another bot drops it");
+		assertEquals(Optional.of(A), board.jobs(null).getFirst().taker());
+		assertTrue(board.drop(id, A));
+		board.take(null, A);
+		assertTrue(board.finish(id, A));
+		assertEquals(List.of(), board.jobs(null));
+	}
+
+	@Test
+	void onlyThePosterCancelsAnOpenJob() {
+		JobBoard board = new JobBoard();
+		long id = board.post("haul", data(1L), POSTER);
+		assertFalse(board.finish(id, A), "a bot that is not the poster cancels it");
+		assertTrue(board.finish(id, POSTER));
+		assertEquals(List.of(), board.jobs(null));
 	}
 
 	@Test
@@ -122,7 +146,7 @@ class JobBoardTest {
 		colony.members().add(A);
 		colony.jobs().post("haul", data(new PyList(new ArrayList<>(List.of(new Pos(1, 2, 3, "minecraft:overworld"), 4L)))), POSTER);
 		colony.jobs().post("build", data("farm"), POSTER);
-		colony.jobs().finish(colony.jobs().post("gone", data(0L), POSTER));
+		colony.jobs().finish(colony.jobs().post("gone", data(0L), POSTER), POSTER);
 		colony.jobs().take("build", A);
 		Tag saved = ColonyManager.TYPE.codec().encodeStart(NbtOps.INSTANCE, colonies).getOrThrow();
 		Colony loaded = ColonyManager.TYPE.codec().parse(NbtOps.INSTANCE, saved).getOrThrow().byId(colony.id()).orElseThrow();

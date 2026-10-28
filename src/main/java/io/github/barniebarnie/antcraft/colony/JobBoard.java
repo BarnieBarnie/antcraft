@@ -79,16 +79,19 @@ public final class JobBoard {
 		return Optional.empty();
 	}
 
-	/** Removes job {@code id}; whether it was on the board. */
-	public boolean finish(long id) {
-		return this.jobs.removeIf(job -> job.id() == id);
+	/**
+	 * Removes job {@code id} for {@code by}: its taker, or its poster while it is open, to cancel it (#378); whether it was
+	 * removed.
+	 */
+	public boolean finish(long id, UUID by) {
+		return this.jobs.removeIf(job -> job.id() == id && job.taker().map(by::equals).orElse(job.poster().equals(by)));
 	}
 
-	/** Gives taken job {@code id} back to the board; whether it was taken. */
-	public boolean drop(long id) {
+	/** Gives job {@code id} back to the board, open again, if {@code by} took it (#378); whether it did. */
+	public boolean drop(long id, UUID by) {
 		for (int i = 0; i < this.jobs.size(); i++) {
 			Job job = this.jobs.get(i);
-			if (job.id() == id && job.taker().isPresent()) {
+			if (job.id() == id && job.taker().filter(by::equals).isPresent()) {
 				this.jobs.set(i, job.withTaker(Optional.empty()));
 				return true;
 			}

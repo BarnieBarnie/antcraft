@@ -130,6 +130,38 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A member that dies holding a job keeps it (#378): its script, run again from the top, sees itself as the job's taker.
+	 * It takes the job only on its first run, so a job given back on death would show as open.
+	 */
+	@GameTest(maxTicks = 440)
+	public void aBotThatDiesHoldingAJobKeepsIt(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		colony.jobs().post("haul", new CompoundTag(), id);
+		BotScripts.run(bot, """
+			if deaths() == 0:
+			    take_job('haul')
+			print('deaths', deaths(), 'taker', jobs('haul')[0]['taker'])
+			while True:
+			    wait(5)
+			""");
+		helper.runAfterDelay(5, () -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("deaths 0 taker " + id), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			bot.kill(helper.getLevel());
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again != bot, "not respawned");
+			List<String> printed = BotScripts.log(Objects.requireNonNull(again), Output.Level.PRINT);
+			helper.assertTrue(printed.contains("deaths 1 taker " + id), "printed " + printed);
+		});
+	}
+
+	/**
 	 * A dead member whose respawn is dropped (here by the cleanup at a test's end) leaves its colony and gives back the jobs
 	 * it took, as one that dies with {@code botRespawn} off does (#379).
 	 */

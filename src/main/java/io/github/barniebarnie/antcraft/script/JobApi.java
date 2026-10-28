@@ -47,11 +47,13 @@ public final class JobApi {
 		});
 		natives.register("finish_job", 10, call -> {
 			long id = Args.integer(Args.bind("finish_job", call, 1, "id")[0]);
-			return board(WorkApi.bot(run, call)).map(board -> board.finish(id)).orElse(false);
+			AntBot bot = WorkApi.bot(run, call);
+			return board(bot).map(board -> board.finish(id, bot.getUUID())).orElse(false);
 		});
 		natives.register("drop_job", 10, call -> {
 			long id = Args.integer(Args.bind("drop_job", call, 1, "id")[0]);
-			return board(WorkApi.bot(run, call)).map(board -> board.drop(id)).orElse(false);
+			AntBot bot = WorkApi.bot(run, call);
+			return board(bot).map(board -> board.drop(id, bot.getUUID())).orElse(false);
 		});
 	}
 

@@ -234,8 +234,8 @@ A colony has a job board, so its members split work by role: one posts "haul the
 | `post_job(kind, data=None)` | adds an open job: `kind` a string, `data` plain data (a copy is kept); returns its id, an int that counts up per colony. Outside a colony it fails the script at its line |
 | `jobs(kind=None)` | the open and taken jobs of `kind` (or of every kind), oldest first, as dicts: `id`, `kind`, `data`, `taker` (the bot's UUID string, or `None` while open) and `poster`. `[]` outside a colony |
 | `take_job(kind=None)` | claims the oldest open job of `kind` (or of any kind) for this bot and returns it as `jobs` lists it, or `None` when there is none, or outside a colony |
-| `finish_job(id)` | removes the job, whoever holds it; `True` if it was on the board |
-| `drop_job(id)` | gives a taken job back to the board, open again; `True` if it was taken |
+| `finish_job(id)` | removes the job this bot took, or an open job this bot posted (to cancel it); `True` if it did. Another bot's job stays: `False` |
+| `drop_job(id)` | gives a job this bot took back to the board, open again; `True` if it did, `False` for an open job or another bot's |
 
 A job does not stay claimed forever: it goes back to the board when its taker's script ends, fails or is stopped (also by `/antcraft bot stop`, or by starting another script on the bot), when the taker leaves the colony, and when the bot is removed. A bot that dies keeps its jobs: it respawns and runs its script again, and `jobs()` shows it what it held. The board is saved with the colony.
 
