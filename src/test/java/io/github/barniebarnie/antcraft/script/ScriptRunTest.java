@@ -85,6 +85,26 @@ class ScriptRunTest {
 		assertEquals(2, run.line());
 	}
 
+	/** {@code /antcraft bot status} shows the last action's result: what it was, ok or its reason, and its value. */
+	@Test
+	void keepsTheLastActionsResult() {
+		ScriptRun run = start("wait(2)\nx = 1\nwhile True:\n    pass\n");
+		assertNull(run.lastResult());
+		tick(run, 2000);
+		tick(run, 2000);
+		assertNull(run.lastResult());
+		tick(run, 2000);
+		assertEquals("wait(2) -> ok", run.lastResult());
+	}
+
+	@Test
+	void formatsAResult() {
+		assertEquals("goto(Pos(1, 2, 3)) -> unreachable", ScriptRun.describe("goto(Pos(1, 2, 3))", Result.fail(Result.UNREACHABLE)));
+		assertEquals("put(Pos(0, 0, 0), 'stone') -> no_space, 5", ScriptRun.describe("put(Pos(0, 0, 0), 'stone')", Result.fail(Result.NO_SPACE, 5L)));
+		assertEquals("craft('stick') -> ok, 4", ScriptRun.describe("craft('stick')", Result.ok(4L)));
+		assertEquals("wait(1) -> ok", ScriptRun.describe("wait(1)", Result.OK));
+	}
+
 	@Test
 	void anEndlessLoopUsesItsBudgetEachTickAndKeepsRunning() {
 		ScriptRun run = start("while True:\n    pass\n");

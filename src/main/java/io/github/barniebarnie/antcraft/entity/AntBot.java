@@ -82,6 +82,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** The scripts' {@code memory}: outlives each script run, and is saved. */
 	private PyDict memory = Memory.create();
 	private final BotLog log = new BotLog();
+	/** What the bot said last, shown above it for a while. */
+	private final SayBubble sayBubble = new SayBubble(this);
 	/** What the script's move actions walk with; made when a script first moves. */
 	private MoveApi.@Nullable Body body;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
@@ -153,6 +155,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			if (this.home == null) {
 				this.home = this.blockPosition(); // where it was first spawned
 			}
+			this.sayBubble.tick();
 			if (allowed) {
 				this.idleIfDone();
 				if (this.script != null && this.script.running()) {
@@ -360,6 +363,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		@Override
 		public void say(String text) {
 			AntBot.this.tellOwner(Component.literal("<" + AntBot.this.getName().getString() + "> " + text));
+			AntBot.this.sayBubble.show(text);
 		}
 
 		@Override
@@ -374,6 +378,15 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (this.level() instanceof ServerLevel level) {
 			ColonyManager.get(level).leave(this);
 		}
+	}
+
+	/** A bot that is gone for good takes what it said with it; one only unloaded keeps it as a saved passenger. */
+	@Override
+	public void remove(RemovalReason reason) {
+		if (reason.shouldDestroy()) {
+			this.sayBubble.remove();
+		}
+		super.remove(reason);
 	}
 
 	@Override
@@ -421,6 +434,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		output.storeNullable("Colony", UUIDUtil.CODEC, this.colonyId);
 		output.storeNullable("Owner", UUIDUtil.CODEC, this.owner);
 		Memory.save(this.memory, output, problem -> this.log.add(this.level().getGameTime(), Output.Level.WARN, problem));
+		this.log.save(output);
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
 		}
@@ -438,6 +452,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.memory = Memory.load(input);
+		this.log.load(input);
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));

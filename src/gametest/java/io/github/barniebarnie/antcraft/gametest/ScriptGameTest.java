@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.SayBubble;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotLog;
@@ -25,9 +26,11 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
+import org.jspecify.annotations.Nullable;
 
 /** Bots running scripts (docs/scripting.md, milestones 2 and 4): output, budget, errors, reloading, and idle.py for every bot without a script. */
 public class ScriptGameTest implements CustomTestMethodInvoker {
@@ -69,6 +72,68 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(chat.equals(List.of(new BotScripts.Message(start, "<" + name + "> hi"), new BotScripts.Message(start + 20, "[" + name + "] " + pos))),
 				"owner got " + chat);
 		});
+	}
+
+	/** What {@code say} shows above the bot: the text display riding it, or null. */
+	private static Display.@Nullable TextDisplay sayDisplay(AntBot bot) {
+		return bot.getPassengers().stream().filter(e -> e instanceof Display.TextDisplay).map(e -> (Display.TextDisplay) e).findFirst().orElse(null);
+	}
+
+	/** {@code say} shows its text above the bot for {@link SayBubble#TICKS} ticks; then it is gone from the world. */
+	@GameTest(maxTicks = SayBubble.TICKS + 40)
+	public void sayShowsTheTextAboveTheBotForAWhile(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
+		failOnError(helper, bot);
+		long[] shown = {-1};
+		Display.TextDisplay[] display = {null};
+		helper.onEachTick(() -> {
+			Display.TextDisplay current = sayDisplay(bot);
+			if (shown[0] < 0 && current != null) {
+				helper.assertTrue(current.getText().getString().equals("hello there"), "shows " + current.getText().getString());
+				shown[0] = helper.getLevel().getGameTime();
+				display[0] = current;
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(shown[0] >= 0, "nothing shown above the bot");
+			helper.assertTrue(sayDisplay(bot) == null, "still shown");
+			long ticks = helper.getLevel().getGameTime() - shown[0];
+			helper.assertTrue(ticks >= SayBubble.TICKS - 1, "gone after " + ticks + " ticks");
+			helper.assertTrue(display[0].isRemoved(), "text display left in the world");
+		});
+	}
+
+	/** {@code /antcraft bot status} shows the last action, with its reason when it failed. */
+	@GameTest(maxTicks = 80)
+	public void statusShowsTheLastActionsResult(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos target = helper.absolutePos(new BlockPos(4, 6, 4));
+		String xyz = target.getX() + ", " + target.getY() + ", " + target.getZ();
+		BotScripts.run(bot, "goto((" + xyz + "))\nwhile True:\n    wait(10)\n");
+		failOnError(helper, bot);
+
+		helper.succeedWhen(() -> {
+			List<String> status = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " status");
+			helper.assertTrue(status.size() == 1 && status.getFirst().contains(", goto(Pos(" + xyz + ")) -> unreachable, "), "status " + status);
+		});
+	}
+
+	/** The bot's log is saved with it, so {@code /antcraft bot log} still shows it after a reload. */
+	@GameTest(maxTicks = 20)
+	public void theLogSurvivesASaveAndLoad(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getLog().add(5, Output.Level.PRINT, "before the reload");
+		bot.getLog().add(6, Output.Level.ERROR, "test.py:1: oops");
+		TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, helper.getLevel().registryAccess());
+		bot.saveWithoutId(output);
+		bot.discard();
+		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), output.buildResult()));
+		List<String> log = copy.getLog().last(10, Output.Level.DEBUG).stream().map(BotLog.Entry::format).toList();
+		helper.assertTrue(log.contains("[5 print] before the reload") && log.contains("[6 error] test.py:1: oops"), "log " + log);
+		helper.succeed();
 	}
 
 	@GameTest(maxTicks = 60)

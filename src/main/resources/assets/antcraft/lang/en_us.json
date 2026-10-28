@@ -13,7 +13,7 @@
 	"commands.antcraft.script.unknown": "No script named %s (see /antcraft script list)",
 	"commands.antcraft.script.broken": "%s does not compile: %s",
 	"commands.antcraft.bot.run": "Started %s on %s bot(s)",
-	"commands.antcraft.bot.status": "%s: %s, %s at line %s, action %s, %s instructions",
+	"commands.antcraft.bot.status": "%s: %s, %s at line %s, action %s, last %s, %s instructions",
 	"commands.antcraft.bot.status.none": "%s: no script",
 	"commands.antcraft.bot.log": "%s: last %s line(s)",
 	"commands.antcraft.bot.log.level": "Unknown level %s: use debug, info, warn, error or print",

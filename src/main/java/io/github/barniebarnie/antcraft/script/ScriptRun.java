@@ -8,6 +8,8 @@ import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
+import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
 import java.util.ArrayList;
 import java.util.List;
@@ -86,6 +88,7 @@ public final class ScriptRun {
 	private final Vm vm;
 	private @Nullable Action action;
 	private boolean stopRequested;
+	private @Nullable String lastResult;
 	private State state = State.RUNNING;
 
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log) {
@@ -142,8 +145,8 @@ public final class ScriptRun {
 					return;
 				}
 				Object result = action.result();
-				if (result instanceof Result r && !r.ok()) {
-					write(Level.DEBUG, action.describe() + " -> " + r.reason());
+				if (result instanceof Result r) {
+					done(action.describe(), r);
 				}
 				action = null;
 				vm.resume(result);
@@ -190,6 +193,7 @@ public final class ScriptRun {
 	 * an action's is.
 	 */
 	Result done(String describe, Result result) {
+		lastResult = describe(describe, result);
 		if (!result.ok()) {
 			write(Level.DEBUG, describe + " -> " + result.reason());
 		}
@@ -238,6 +242,17 @@ public final class ScriptRun {
 	/** What the current action is doing, or null while the script runs no action. */
 	public @Nullable String action() {
 		return action == null ? null : action.describe();
+	}
+
+	/** The last action the script finished and its result ({@link #describe}), or null before the first. */
+	public @Nullable String lastResult() {
+		return lastResult;
+	}
+
+	/** An action and its result as {@code /antcraft bot status} shows them: {@code goto(...) -> unreachable}, {@code craft(...) -> ok, 4}. */
+	static String describe(String action, Result result) {
+		String line = action + " -> " + (result.ok() ? "ok" : result.reason());
+		return result.value() instanceof PyNone ? line : line + ", " + Values.repr(result.value());
 	}
 
 	/** How many instructions the script ran so far. */

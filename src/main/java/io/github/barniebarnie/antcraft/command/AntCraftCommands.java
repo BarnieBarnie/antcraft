@@ -353,15 +353,16 @@ public final class AntCraftCommands {
 		return bots.size();
 	}
 
-	/** A bot's script, whether it runs, the line it is at, its current action and how many instructions it ran. */
+	/** A bot's script, whether it runs, the line it is at, its current action, its last action's result and how many instructions it ran. */
 	static Component statusLine(AntBot bot) {
 		ScriptRun run = bot.getScript();
 		if (run == null) {
 			return Component.translatable("commands.antcraft.bot.status.none", bot.getName());
 		}
 		String action = run.action();
+		String last = run.lastResult();
 		return Component.translatable("commands.antcraft.bot.status", bot.getName(), run.name(), run.state().name().toLowerCase(Locale.ROOT),
-			run.line(), action == null ? "-" : action, run.executed());
+			run.line(), action == null ? "-" : action, last == null ? "-" : last, run.executed());
 	}
 
 	private static int showLog(CommandSourceStack source, List<AntBot> bots, int n, String levelName) {

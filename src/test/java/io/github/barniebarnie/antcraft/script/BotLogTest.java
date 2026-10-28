@@ -6,6 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import java.util.List;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.level.storage.TagValueOutput;
 import org.junit.jupiter.api.Test;
 
 class BotLogTest {
@@ -48,5 +53,48 @@ class BotLogTest {
 	void formatsALineWithItsTickAndLevel() {
 		assertEquals("[120 warn] low on logs", new BotLog.Entry(120, Level.WARN, "low on logs").format());
 		assertEquals("[7 print] hi", new BotLog.Entry(7, Level.PRINT, "hi").format());
+	}
+
+	private static CompoundTag save(BotLog log) {
+		TagValueOutput output = TagValueOutput.createWithoutContext(ProblemReporter.DISCARDING);
+		log.save(output);
+		return output.buildResult();
+	}
+
+	private static void load(BotLog log, CompoundTag saved) {
+		log.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, saved));
+	}
+
+	/** The log is saved with the bot, so {@code /antcraft bot log} still shows what happened before a reload. */
+	@Test
+	void survivesASaveAndLoad() {
+		BotLog log = new BotLog(10);
+		log.add(1, Level.DEBUG, "d");
+		log.add(2, Level.PRINT, "hi");
+		log.add(3, Level.ERROR, "test.py:2: oops");
+		BotLog loaded = new BotLog(10);
+		loaded.add(9, Level.INFO, "replaced");
+		load(loaded, save(log));
+		assertEquals(log.last(10, Level.DEBUG), loaded.last(10, Level.DEBUG));
+	}
+
+	@Test
+	void loadingKeepsTheLastLinesUpToItsCapacity() {
+		BotLog log = new BotLog(5);
+		for (int i = 1; i <= 5; i++) {
+			log.add(i, Level.INFO, "line " + i);
+		}
+		BotLog smaller = new BotLog(2);
+		load(smaller, save(log));
+		assertEquals(List.of("line 4", "line 5"), smaller.last(10, Level.DEBUG).stream().map(BotLog.Entry::text).toList());
+	}
+
+	@Test
+	void aBotSavedWithoutALogLoadsAnEmptyOne() {
+		BotLog log = new BotLog(5);
+		log.add(1, Level.INFO, "old");
+		load(log, new CompoundTag());
+		assertEquals(List.of(), log.last(10, Level.DEBUG));
+		assertFalse(save(new BotLog(5)).contains(BotLog.KEY), "an empty log is not saved");
 	}
 }
