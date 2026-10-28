@@ -65,7 +65,7 @@ public final class CraftApi {
 			Selector item = Selector.parse(args[1]);
 			return run.start(new Take(run, WorkApi.bot(run, call), target, item, count("take", args[2])), call);
 		});
-		natives.register("craft", 60, call -> {
+		natives.register("craft", 40, call -> {
 			Object[] args = Args.bind("craft", call, 1, "item", "n", "table");
 			Item item = oneItem("craft", args[0]);
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
@@ -75,7 +75,7 @@ public final class CraftApi {
 			Pos table = Args.absent(args[2]) ? null : Pos.of(args[2]);
 			return craft(run, WorkApi.bot(run, call), item, n, table, call);
 		});
-		natives.register("smelt", 400, call -> {
+		natives.register("smelt", 1200, call -> {
 			Object[] args = Args.bind("smelt", call, 1, "item", "n", "furnace", "fuel");
 			Selector item = Selector.parse(args[0]);
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);

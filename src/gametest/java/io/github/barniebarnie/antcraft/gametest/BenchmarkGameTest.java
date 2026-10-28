@@ -103,6 +103,35 @@ public class BenchmarkGameTest {
 		    count("oak_log")
 		    has("#minecraft:planks", 4)
 		""";
+	/** Holds a carried item and fails to hold one it lacks, over and over (#343). */
+	private static final String EQUIP = """
+		while True:
+		    equip("oak_log")
+		    equip("stick")
+		""";
+	/** Fails to drop items it lacks, by name and by tag, so no item entities pile up (#343). */
+	private static final String DROP = """
+		while True:
+		    drop("stick")
+		    drop("#minecraft:planks")
+		""";
+	/** Looks for items on the ground, of which there are none, near and far (#343). */
+	private static final String ITEMS_NEAR = """
+		while True:
+		    items_near("stick")
+		    items_near(radius=32)
+		""";
+	/** Lists the entities around, the other bots, by type and all of them (#343). */
+	private static final String ENTITIES = """
+		while True:
+		    entities("antcraft:ant_bot")
+		    entities()
+		""";
+	/** Fails to smelt carried raw iron with no furnace in reach, over and over (#343). */
+	private static final String SMELT = """
+		while True:
+		    smelt("raw_iron")
+		""";
 	/** What the issue asks of a busy script: a tight loop, a scan of radius 32, find_nearest, goto and craft, mixed. */
 	private static final String BUSY = """
 		n = 0
@@ -160,6 +189,12 @@ public class BenchmarkGameTest {
 		new Case("goto", GOTO, 1200),
 		new Case("craft", CRAFT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, FEW_LOGS),
 		new Case("count", COUNT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
+		new Case("equip", EQUIP, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, LOGS),
+		new Case("drop", DROP, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, LOGS),
+		new Case("items_near", ITEMS_NEAR, 600),
+		new Case("entities", ENTITIES, 600),
+		new Case("smelt", SMELT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600,
+			bot -> bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64))),
 		new Case("busy", BUSY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
 		WORK);
 

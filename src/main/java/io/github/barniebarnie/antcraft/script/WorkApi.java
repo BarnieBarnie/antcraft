@@ -57,12 +57,12 @@ public final class WorkApi {
 			Selector item = Args.absent(args[1]) ? null : Selector.parse(args[1]);
 			return run.start(new Use(run, bot(run, call), target, item), call);
 		});
-		natives.register("equip", 50, call -> {
+		natives.register("equip", 15, call -> {
 			Selector item = Selector.parse(Args.bind("equip", call, 1, "item")[0]);
 			boolean held = BotHands.equip(bot(run, call), item.items());
 			return run.done("equip(" + item + ")", held ? Result.OK : Result.fail(Result.NO_ITEM));
 		});
-		natives.register("drop", 40, call -> {
+		natives.register("drop", 20, call -> {
 			Object[] args = Args.bind("drop", call, 1, "item", "n");
 			Selector item = Selector.parse(args[0]);
 			long n = Args.absent(args[1]) ? Long.MAX_VALUE : Args.integer(args[1]);
