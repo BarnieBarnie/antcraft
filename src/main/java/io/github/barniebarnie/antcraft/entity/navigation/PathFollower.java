@@ -85,6 +85,7 @@ public class PathFollower {
 	private final BlockBreaker breaker;
 	private boolean mayPlace = true;
 	private boolean mayBreak = true;
+	private int maxNodes = MAX_NODES;
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 
 	public PathFollower(AntBot bot) {
@@ -100,6 +101,11 @@ public class PathFollower {
 	/** Whether paths may break blocks in the way; applies from the next path planned. */
 	public void setMayBreak(boolean mayBreak) {
 		this.mayBreak = mayBreak;
+	}
+
+	/** How many nodes a search for a path may expand, {@link #MAX_NODES} unless set; applies from the next path planned. */
+	public void setMaxNodes(int maxNodes) {
+		this.maxNodes = maxNodes;
 	}
 
 	/** Which blocks paths may place as scaffolding; {@link #SCAFFOLD_BLOCKS} unless set. */
@@ -241,7 +247,7 @@ public class PathFollower {
 	}
 
 	private PathFinder.Options options() {
-		return new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, MAX_NODES, MAX_DROP);
+		return new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, this.maxNodes, MAX_DROP);
 	}
 
 	/**

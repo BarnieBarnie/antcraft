@@ -11,6 +11,15 @@ class GoalTest {
 	private static final BlockPos LOG = new BlockPos(0, 4, 0);
 
 	@Test
+	void awayIsMetOnlyFurtherThanItsRangeFromThePosition() {
+		Goal away = new Goal.Away(BlockPos.ZERO, 10);
+		assertFalse(away.isReached(new BlockPos(6, 0, 8)));
+		assertTrue(away.isReached(new BlockPos(7, 0, 8)));
+		assertTrue(away.heuristic(new BlockPos(3, 0, 0)) > away.heuristic(new BlockPos(6, 0, 0)));
+		assertTrue(away.heuristic(new BlockPos(11, 0, 0)) == 0);
+	}
+
+	@Test
 	void reachIsMetWhenEyesAreCloseEnough() {
 		// Feet at y=1 next to the trunk: eyes at about y=2.6, block centre at y=4.5.
 		assertTrue(new Goal.Reach(LOG, 4.5).isReached(new BlockPos(1, 1, 0)));

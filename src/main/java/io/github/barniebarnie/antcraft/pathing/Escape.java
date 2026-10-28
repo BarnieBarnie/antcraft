@@ -12,10 +12,12 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 /**
- * Where a bot's reflexes take it (docs/scripting.md, Reflexes): a step aside, out of fire or from under a falling block,
+ * Where a bot's reflexes take it (docs/scripting.md, Reflexes): a step aside, out of fire wider than a block or from under a falling block,
  * and the way up to air for a bot running out of it under water. Positions are those of the bot's feet.
  */
 public final class Escape {
+	/** How far {@link #stepAside} looks, in blocks from the bot each way. */
+	static final int STEP_RANGE = 4;
 	/** How far {@link #wayToAir} looks, in blocks from the bot each way. */
 	static final int AIR_RANGE = 12;
 	/** The eight blocks around, the four sides first. */
@@ -27,30 +29,63 @@ public final class Escape {
 	}
 
 	/**
-	 * The first block beside {@code feet} the bot can step to and stand in, safe from hazards and not one {@code avoid}
-	 * tests true for: the eight around at the same height first (a diagonal only past an open side), then a block up,
-	 * then a block down. Empty when there is none.
+	 * The first step toward the nearest block the bot can stand in, safe from hazards and not one {@code avoid} tests
+	 * true for, walking through fire and the like on its way, within {@link #STEP_RANGE}: a step to one of the eight
+	 * around at the same height (a diagonal only past a side it fits through), a block up or a block down, the four
+	 * sides first. Empty when there is none.
 	 */
 	public static Optional<BlockPos> stepAside(WorldView world, BlockPos feet, Predicate<BlockPos> avoid) {
+		Map<BlockPos, BlockPos> from = new HashMap<>();
+		ArrayDeque<BlockPos> open = new ArrayDeque<>();
+		from.put(feet, feet);
+		open.add(feet);
+		while (!open.isEmpty()) {
+			BlockPos at = open.poll();
+			if (!at.equals(feet) && standable(world, at) && !avoid.test(at)) {
+				BlockPos step = at;
+				while (!from.get(step).equals(feet)) {
+					step = from.get(step);
+				}
+				return Optional.of(step);
+			}
+			for (BlockPos next : steps(world, at)) {
+				if (!from.containsKey(next) && Math.max(Math.max(Math.abs(next.getX() - feet.getX()), Math.abs(next.getY() - feet.getY())),
+						Math.abs(next.getZ() - feet.getZ())) <= STEP_RANGE) {
+					from.put(next, at);
+					open.add(next);
+				}
+			}
+		}
+		return Optional.empty();
+	}
+
+	/** The blocks a bot at {@code feet} can step to and stand in, safe or not, in the order {@link #stepAside} tries them. */
+	private static List<BlockPos> steps(WorldView world, BlockPos feet) {
+		List<BlockPos> steps = new ArrayList<>();
 		for (int dy : new int[] {0, 1, -1}) {
 			if (dy == 1 && !world.isPassable(feet.above(2))) {
 				continue; // no room to jump
 			}
 			for (int[] d : AROUND) {
 				boolean diagonal = d[0] != 0 && d[1] != 0;
-				if (diagonal && (dy != 0 || !(open(world, feet.offset(d[0], 0, 0)) || open(world, feet.offset(0, 0, d[1]))))) {
+				if (diagonal && (dy != 0 || !(fits(world, feet.offset(d[0], 0, 0)) || fits(world, feet.offset(0, 0, d[1]))))) {
 					continue;
 				}
 				BlockPos to = feet.offset(d[0], dy, d[1]);
-				if (dy == -1 && !open(world, to.above())) {
+				if (dy == -1 && !fits(world, to.above())) {
 					continue;
 				}
-				if (standable(world, to) && !avoid.test(to)) {
-					return Optional.of(to);
+				if (fits(world, to) && world.canStandOn(to.below())) {
+					steps.add(to);
 				}
 			}
 		}
-		return Optional.empty();
+		return steps;
+	}
+
+	/** Whether a bot fits in the two blocks from {@code feet} up, hazards or not. */
+	private static boolean fits(WorldView world, BlockPos feet) {
+		return world.isPassable(feet) && world.isPassable(feet.above());
 	}
 
 	/** Whether a bot fits in the two blocks from {@code feet} up, with no hazard in them. */

@@ -57,6 +57,26 @@ class EscapeTest {
 		assertEquals(Optional.of(new BlockPos(1, 1, 1)), Escape.stepAside(world, FEET, pos -> pos.getZ() == 0));
 	}
 
+	/** In the middle of a 5x5 patch of fire: it walks out through the fire, a block at a time, to the nearest safe block. */
+	@Test
+	void walksOutOfAWidePatchOfFire() {
+		GridWorld world = GridWorld.flat(8).fill(-2, 1, -2, 2, 1, 2, 'F');
+		BlockPos at = FEET;
+		for (int steps = 0; steps < 3; steps++) {
+			Optional<BlockPos> step = Escape.stepAside(world, at, pos -> false);
+			assertTrue(step.isPresent(), "no step from " + at);
+			assertTrue(at.distManhattan(step.get()) <= 2, "step " + step.get() + " from " + at);
+			at = step.get();
+		}
+		assertEquals(new BlockPos(0, 1, -3), at);
+	}
+
+	@Test
+	void noStepAsideWhenTheFireReachesFurtherThanItLooks() {
+		GridWorld world = GridWorld.flat(16).fill(-10, 1, -10, 10, 1, 10, 'F');
+		assertEquals(Optional.empty(), Escape.stepAside(world, FEET, pos -> false));
+	}
+
 	/** Under a stone ceiling in water two deep, with air above the water three blocks east. */
 	@Test
 	void swimsUnderTheCeilingToTheNearestAir() {

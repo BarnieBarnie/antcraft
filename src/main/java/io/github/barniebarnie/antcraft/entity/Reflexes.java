@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Escape;
+import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.WorldView;
 import java.util.Comparator;
@@ -16,7 +18,6 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.item.FallingBlockEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.level.block.state.BlockState;
@@ -54,21 +55,30 @@ final class Reflexes {
 	private static final int FALL_RANGE = 16;
 	/** How fast the bot steps aside, as the path follower walks. */
 	private static final double STEP_SPEED = 1.0;
-	/** How fast the bot flees. */
-	private static final double FLEE_SPEED = 1.2;
-	/** How far away from a mob the bot looks for a place to flee to, and how far up or down. */
-	private static final int FLEE_RANGE = 16;
-	private static final int FLEE_HEIGHT = 7;
+	/** How far from a mob a bot that does not flee home runs: a little beyond {@link #HOSTILE_RANGE}. */
+	private static final double FLEE_RANGE = HOSTILE_RANGE + 2;
+	/**
+	 * How many nodes a flight's path may take to plan: a short search, so the bot starts running soon, along a partial
+	 * path toward the goal if need be.
+	 */
+	private static final int FLEE_NODES = 1000;
 
 	private final AntBot bot;
 	private @Nullable Kind active;
 	/** Where the bot steps or swims to, for every reflex but fleeing. */
 	private @Nullable BlockPos target;
-	/** Where the bot flees to, while it does. */
-	private @Nullable Vec3 fleeTo;
+	/**
+	 * Carries the bot away from a mob with its own pathfinder, as a script's {@code goto} does: digging, pillaring and
+	 * bridging where it must. Not the script's, which the reflex interrupts.
+	 */
+	private final PathFollower flight;
+	/** Whether {@link #flight} has a goal and is on its way. */
+	private boolean fleeing;
 
 	Reflexes(AntBot bot) {
 		this.bot = bot;
+		this.flight = new PathFollower(bot);
+		this.flight.setMaxNodes(FLEE_NODES);
 	}
 
 	/**
@@ -111,8 +121,8 @@ final class Reflexes {
 		boolean holds = kind != null && this.plan(level, kind, kind == was, hostile);
 		this.active = holds ? kind : null;
 		if (was == Kind.FLEE && this.active != Kind.FLEE) {
-			this.fleeTo = null;
-			this.bot.getNavigation().stop();
+			this.fleeing = false;
+			this.flight.stop();
 		}
 		if (this.active == Kind.FLEE && was != Kind.FLEE) {
 			this.bot.setTarget(null);
@@ -147,13 +157,16 @@ final class Reflexes {
 				return this.target != null;
 			}
 			case FLEE -> {
-				if (!same || this.fleeTo == null || this.bot.getNavigation().isDone()) {
-					this.fleeTo = this.fleeTarget(hostile);
-					if (this.fleeTo != null) {
-						this.bot.getNavigation().moveTo(this.fleeTo.x, this.fleeTo.y, this.fleeTo.z, FLEE_SPEED);
-					}
+				if (same && this.fleeing && this.flight.tick() == PathFollower.Status.RUNNING) {
+					return true;
 				}
-				return this.fleeTo != null;
+				// Arrived with the mob still near, or no way there: plan again from here.
+				Goal goal = this.fleeGoal(hostile);
+				if (goal == null) {
+					return this.fleeing = false;
+				}
+				this.flight.start(goal);
+				return this.fleeing = this.flight.tick() == PathFollower.Status.RUNNING;
 			}
 		}
 		return false;
@@ -169,21 +182,21 @@ final class Reflexes {
 		return this.target != null;
 	}
 
-	private @Nullable Vec3 fleeTarget(@Nullable Mob hostile) {
+	private @Nullable Goal fleeGoal(@Nullable Mob hostile) {
 		if (hostile == null) {
 			return null;
 		}
 		Vec3 home = Vec3.atBottomCenterOf(this.bot.getScriptHome());
 		Vec3 mob = hostile.position();
 		if (fleesHome(this.bot.position().distanceTo(mob), home.distanceTo(mob), this.bot.position().distanceTo(home))) {
-			return home;
+			return new Goal.Near(this.bot.getScriptHome(), 1);
 		}
-		return DefaultRandomPos.getPosAway(this.bot, FLEE_RANGE, FLEE_HEIGHT, mob);
+		return new Goal.Away(hostile.blockPosition(), FLEE_RANGE);
 	}
 
 	/**
 	 * Moves the bot where its reflex takes it. Called after the goals and the navigation have set where the bot goes
-	 * this tick, which this overrides; a fleeing bot runs with its navigation, which {@link #tick} set.
+	 * this tick, which this overrides; a fleeing bot runs with its path follower, which {@link #tick} ticked.
 	 */
 	void move() {
 		if (this.active == null || this.active == Kind.FLEE || this.target == null) {

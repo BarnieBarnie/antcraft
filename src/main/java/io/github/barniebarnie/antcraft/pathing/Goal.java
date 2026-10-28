@@ -125,6 +125,19 @@ public interface Goal {
 		}
 	}
 
+	/** Stand further than {@code range} blocks (straight line) from this position, such as away from a mob a bot flees. */
+	record Away(BlockPos pos, double range) implements Goal {
+		@Override
+		public boolean isReached(BlockPos feet) {
+			return feet.distSqr(this.pos) > this.range * this.range;
+		}
+
+		@Override
+		public double heuristic(BlockPos feet) {
+			return Math.max(0, this.range - Math.sqrt(feet.distSqr(this.pos))) * PathFinder.WALK_COST;
+		}
+	}
+
 	/**
 	 * Whether a bot standing at {@code feet} can see {@code target}: a clear line from its eyes to some part of it,
 	 * where the blocks {@code broken} tests true for count as air.

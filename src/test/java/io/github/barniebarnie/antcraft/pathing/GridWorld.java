@@ -12,7 +12,8 @@ import net.minecraft.core.Direction;
  * '#' = stone (30 ticks to break), 'D' = dirt (10 ticks), 'B' = bedrock (unbreakable), 'L' = lava,
  * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces),
  * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis),
- * 'H' = a ladder (climbed, unbreakable), 'T' = a trapdoor over a ladder (stood on shut, climbed through open).
+ * 'H' = a ladder (climbed, unbreakable), 'T' = a trapdoor over a ladder (stood on shut, climbed through open),
+ * 'F' = fire (walked through, but a hazard).
  */
 final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
@@ -79,7 +80,8 @@ final class GridWorld implements WorldView {
 
 	@Override
 	public boolean isPassable(BlockPos pos) {
-		return this.at(pos) == ' ';
+		char c = this.at(pos);
+		return c == ' ' || c == 'F';
 	}
 
 	@Override
@@ -97,7 +99,7 @@ final class GridWorld implements WorldView {
 	@Override
 	public boolean isHazard(BlockPos pos) {
 		char c = this.at(pos);
-		return c == 'L' || c == 'W';
+		return c == 'L' || c == 'W' || c == 'F';
 	}
 
 	@Override
