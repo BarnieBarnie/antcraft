@@ -238,6 +238,37 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * On a granite level, a bot with 3 slots free, the rest granite (junk), keeps a stock of it when it empties itself
+	 * into the chest, and seals the water in the first block of the hall with it (#392).
+	 */
+	@GameTest(maxTicks = 40)
+	public void aBotOnAGraniteLevelKeepsBlocksToSealAWaterPocket(GameTestHelper helper) {
+		AABB bounds = helper.getBounds();
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, (int) bounds.getXsize() - 1, 4, (int) bounds.getZsize() - 1)) {
+			helper.setBlock(pos, Blocks.GRANITE);
+		}
+		helper.setBlock(HALL.getFirst(), Blocks.WATER);
+		AntBot bot = mine(helper, "True None 1");
+		give(bot, Items.GRANITE, 24);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 1")), "not done");
+			helper.assertTrue(helper.getBlockState(HALL.getFirst()).is(Blocks.GRANITE), "not sealed: " + describe(helper, bot));
+			helper.assertTrue(inChest(helper, Items.GRANITE) == 24 * 64 - 16, "granite in the chest: " + inChest(helper, Items.GRANITE));
+		});
+	}
+
+	/** A bot with 3 slots free, the rest bread, which is neither ore nor junk, stops with no_space before it digs (#392). */
+	@GameTest(maxTicks = 20)
+	public void aBotFullOfFoodGivesNoSpace(GameTestHelper helper) {
+		AntBot bot = mine(helper, "False no_space 0");
+		give(bot, Items.BREAD, 24);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("False no_space 0")), "not done");
+			helper.assertTrue(helper.getBlockState(HALL.getFirst()).is(Blocks.STONE), "dug with no room");
+		});
+	}
+
 	/** A bot saved once it dug into the south branch resumes in the middle of the branch, and finishes the level. */
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aBotSavedMidBranchResumesAndFinishesTheLevel(GameTestHelper helper) {

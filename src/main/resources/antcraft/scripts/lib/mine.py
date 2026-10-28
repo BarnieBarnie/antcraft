@@ -20,6 +20,8 @@ JUNK = ["minecraft:gravel", "minecraft:flint", "minecraft:dirt", "minecraft:gran
         "minecraft:tuff", "minecraft:calcite", "minecraft:sand", "minecraft:red_sand", "minecraft:clay_ball"]
 # How much of the rest of what it digs it keeps to wall fluid off with; the rest goes into the chest too.
 KEEP = 64
+# How many blocks to wall fluid off with it keeps at least, of the junk if it has nothing else.
+STOCK = 16
 # It empties itself with this many slots free, as one block of a vein may drop more than one kind.
 FREE = 3
 
@@ -46,10 +48,20 @@ def dug(p):
 
 
 def unload(chest):
-    """Puts the ore and junk it carries and what it dug beyond KEEP into the chest; None once done, else a result."""
+    """Puts the ore and junk it carries and what it dug beyond KEEP into the chest, but for STOCK blocks to wall fluid
+    off with, of the junk that is FILL where it has too few others (a level of granite); None once done, else a result."""
+    stock = STOCK
+    for item in FILL:
+        if "minecraft:" + item not in JUNK:
+            stock -= count(item)
     for item in ORES + JUNK:
-        if has(item):
-            r = put(chest, item)
+        n = count(item)
+        if item[10:] in FILL and stock > 0:
+            kept = min(stock, n)
+            stock -= kept
+            n -= kept
+        if n > 0:
+            r = put(chest, item, n)
             if not r:
                 return result(r.reason, chest)
     spare = -KEEP
@@ -66,10 +78,14 @@ def unload(chest):
 
 
 def room(chest):
-    """Empties the bot into the chest when its inventory is nearly full."""
-    if free_slots() <= FREE:
-        return unload(chest)
-    return None
+    """Empties the bot into the chest when its inventory is nearly full; no_space where that frees too little, as it
+    carries what it does not put away (food, mob drops)."""
+    if free_slots() > FREE:
+        return None
+    failure = unload(chest)
+    if failure is None and free_slots() <= FREE:
+        return result("no_space", chest)
+    return failure
 
 
 def fluids(cells):

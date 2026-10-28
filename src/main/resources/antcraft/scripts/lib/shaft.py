@@ -12,7 +12,8 @@
 # delete it and the default comes back when the server starts.
 
 LADDER = "minecraft:ladder"
-# What shuts the hatch, so mobs and players do not fall in: bots open it to climb through.
+# What shuts the hatch, so mobs and players do not fall in: bots open it to climb through. It sits in the top half
+# of the hatch, flush with the ground.
 HATCH = ("#minecraft:wooden_trapdoors",)
 TORCHES = ("minecraft:torch", "minecraft:wall_torch")
 CHEST = "minecraft:chest"
@@ -28,6 +29,12 @@ TRIES = 8
 def result(reason=None, at=None, missing=None):
     """What dig_shaft gives: ok, the reason it stopped (as actions give), where, and the items it lacks."""
     return {"ok": reason is None, "reason": reason, "at": at, "missing": missing or {}}
+
+
+def gave_up(r, p):
+    """What a step at p gives once its tries are out, r the last action's result: blocked where something kept standing
+    in the way, such as a mob, else timeout."""
+    return result("blocked" if r is not None and not r and r.reason == "blocked" else "timeout", p)
 
 
 def shaft(levels=None):
@@ -85,6 +92,7 @@ def missing(m):
 def seal(p, stand):
     """Makes p a solid block, standing at stand: places a FILL block in air or a fluid, and digs a falling block out
     first."""
+    r = None
     for _ in range(TRIES):
         b = block(p)
         if b is None:
@@ -104,7 +112,7 @@ def seal(p, stand):
             return None
         if not r and r.reason not in AGAIN:
             return result(r.reason, p)
-    return result("timeout", p)
+    return gave_up(r, p)
 
 
 def dig(p, opened, stand, fall=False):
@@ -151,17 +159,18 @@ def dig(p, opened, stand, fall=False):
     return result("timeout", p)
 
 
-def put_block(p, item, ids, facing=None):
-    """Places item at p until a block of ids stands there."""
+def put_block(p, item, ids, facing=None, half=None):
+    """Places item at p, facing and in half as place() does, until a block of ids stands there."""
+    r = None
     for _ in range(TRIES):
         if is_block(p, ids):
             return None
-        r = place(p, item, facing) if facing is not None else place(p, item)
+        r = place(p, item, facing, half)
         if not r and r.reason not in AGAIN:
             return result(r.reason, p)
         if not r:
             wait(4)
-    return result("timeout", p)
+    return gave_up(r, p)
 
 
 def ladders(m, lowest):
@@ -177,8 +186,9 @@ def ladders(m, lowest):
                 if is_block(p, (LADDER,)):
                     r = mine(p)  # put in to climb in by from the rim
                     failure = None if r else result(r.reason, p)
-                # Facing north like the ladders, which a bot climbs it through by.
-                failure = failure or put_block(p, HATCH[0], HATCH, "north")
+                # Facing north like the ladders, which a bot climbs it through by; in the top half, so no mob steps
+                # into a dip in the ground.
+                failure = failure or put_block(p, HATCH[0], HATCH, "north", "top")
             if failure:
                 return failure
     return None
@@ -188,6 +198,7 @@ def put_chest(p, stand):
     """Digs p out and puts the landing chest there, facing the landing south of it. What flows or falls into p is shut
     in by the chest, so the blocks round it are left as they are. A fluid source in p is filled first: a chest in it
     would hold the water and let it flow out."""
+    r = None
     for _ in range(TRIES):
         b = block(p)
         if b is None:
@@ -208,7 +219,7 @@ def put_chest(p, stand):
         if not r and r.reason not in AGAIN:
             return result(r.reason, p)
         wait(4)  # what was on it falls in
-    return result("timeout", p)
+    return gave_up(r, p)
 
 
 def dig_landing(level, cell, opened):
@@ -234,8 +245,8 @@ def dig_shaft(levels):
     """Digs the ladder shaft down to the heights levels (see mineshaft), top down: each block of the column, a ladder in
     each, a trapdoor in the hatch, and at each level its chamber with a torch and a chest. Walls water, lava and air off
     and digs out what falls in. Ends in the chamber of the deepest level. Gives result(): ok, or the reason it stopped (no_site where no shaft
-    can be dug, missing_ingredients with missing, the items it lacks, before it digs at all, or an action's reason with
-    at, where)."""
+    can be dug, missing_ingredients with missing, the items it lacks, before it digs at all, blocked where something such
+    as a mob kept standing where a block goes, or an action's reason with at, where)."""
     m = shaft(levels)
     if m is None:
         return result("no_site")

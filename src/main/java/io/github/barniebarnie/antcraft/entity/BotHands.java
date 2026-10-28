@@ -26,6 +26,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -159,10 +160,11 @@ public final class BotHands {
 
 	/**
 	 * Places the held block item at {@code pos}, which must be air or another block that may be replaced, turned to
-	 * {@code facing} if given and the block can face that way. False when it cannot be placed there, such as where an
+	 * {@code facing} if given and the block can face that way, and to {@code half} if given and it has one (a trapdoor or
+	 * stairs). False when it cannot be placed there, such as where an
 	 * entity stands or where the block cannot stay.
 	 */
-	public static boolean place(AntBot bot, BlockPos pos, @Nullable Direction facing) {
+	public static boolean place(AntBot bot, BlockPos pos, @Nullable Direction facing, @Nullable Half half) {
 		if (!(bot.getMainHandItem().getItem() instanceof BlockItem item)) {
 			return false;
 		}
@@ -173,24 +175,28 @@ public final class BotHands {
 			if (!context.getClickedPos().equals(pos) || !item.place(context).consumesAction()) {
 				return false;
 			}
-			if (facing != null) {
-				turn(level, pos, facing);
-			}
+			turn(level, pos, facing, half);
 			return true;
 		});
 	}
 
-	/** Turns the block at {@code pos} to {@code facing}, if it has a facing or axis that can take it and stays where it is. */
-	private static void turn(ServerLevel level, BlockPos pos, Direction facing) {
+	/**
+	 * Turns the block at {@code pos} to {@code facing}, if it has a facing or axis that can take it, and to {@code half}, if
+	 * it has a half, where it stays so.
+	 */
+	private static void turn(ServerLevel level, BlockPos pos, @Nullable Direction facing, @Nullable Half half) {
 		BlockState placed = level.getBlockState(pos);
 		BlockState state = placed;
+		if (half != null && state.hasProperty(BlockStateProperties.HALF)) {
+			state = state.setValue(BlockStateProperties.HALF, half);
+		}
 		for (EnumProperty<Direction> property : FACINGS) {
-			if (state.hasProperty(property) && property.getPossibleValues().contains(facing)) {
+			if (facing != null && state.hasProperty(property) && property.getPossibleValues().contains(facing)) {
 				state = state.setValue(property, facing);
 			}
 		}
 		for (EnumProperty<Direction.Axis> property : List.of(BlockStateProperties.AXIS, BlockStateProperties.HORIZONTAL_AXIS)) {
-			if (state.hasProperty(property) && property.getPossibleValues().contains(facing.getAxis())) {
+			if (facing != null && state.hasProperty(property) && property.getPossibleValues().contains(facing.getAxis())) {
 				state = state.setValue(property, facing.getAxis());
 			}
 		}

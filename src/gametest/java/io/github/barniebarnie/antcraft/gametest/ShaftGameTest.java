@@ -20,6 +20,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -27,6 +28,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
 
 /**
  * Milestone 6's acceptance (#371): {@code lib/shaft.py} digs a ladder shaft down to two levels and the bot climbs back,
@@ -122,6 +124,9 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		BlockState hatch = helper.getBlockState(COLUMN.getFirst());
 		if (!hatch.is(BlockTags.WOODEN_TRAPDOORS) || hatch.getValue(TrapDoorBlock.OPEN) || hatch.getValue(TrapDoorBlock.FACING) != Direction.NORTH) {
 			return "no shut hatch";
+		}
+		if (hatch.getValue(TrapDoorBlock.HALF) != Half.TOP) {
+			return "the hatch is not flush with the ground";
 		}
 		for (BlockPos cell : COLUMN.subList(1, COLUMN.size())) {
 			BlockState state = helper.getBlockState(cell);
@@ -349,6 +354,29 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(hits[0] > 0, "the husk never hit the bot");
 			return bot;
 		}, List.of("dug True"));
+	}
+
+	/**
+	 * A cow standing for good where the deepest chest goes, in a cave beside the landing, stops the dig with a clear
+	 * {@code blocked}, not a timeout; once it is gone the dig goes on and finishes (#392). Bots fight hostile mobs they see
+	 * (their melee goal), so what stays in the way is a mob they leave alone.
+	 */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aMobStandingInTheLandingIsReportedAndTheDigGoesOnOnceItLeaves(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.AIR);
+		helper.setBlock(3, 2, 3, Blocks.AIR);
+		Cow cow = helper.spawn(EntityTypes.COW, 3, 1, 3);
+		cow.setNoAi(true);
+		AntBot bot = miner(helper, COLUMN.size() - 1);
+		dig(helper, bot);
+		failOnError(helper, () -> bot);
+		String blocked = "blocked {}";
+		helper.onEachTick(() -> {
+			if (cow.isAlive() && BotScripts.log(bot, Output.Level.PRINT).contains(blocked)) {
+				cow.discard();
+			}
+		});
+		succeedWhenDug(helper, () -> bot, List.of(blocked, "dug True"));
 	}
 
 	/** The bot climbs out through the shut hatch, back down to the deepest landing and out again; the hatch is shut after (#387). */

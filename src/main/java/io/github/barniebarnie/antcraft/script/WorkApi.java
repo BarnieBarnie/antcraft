@@ -23,6 +23,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
@@ -45,11 +46,12 @@ public final class WorkApi {
 			return run.start(new Mine(run, bot(run, call), target), call, target);
 		});
 		natives.register("place", call -> {
-			Object[] args = Args.bind("place", call, 2, "pos", "item", "facing");
+			Object[] args = Args.bind("place", call, 2, "pos", "item", "facing", "half");
 			Pos target = Pos.of(args[0]);
 			Selector item = Selector.parse(args[1]);
 			Direction facing = Args.absent(args[2]) ? null : facing(args[2]);
-			return run.start(new Place(run, bot(run, call), target, item, facing), call, target);
+			Half half = Args.absent(args[3]) ? null : half(args[3]);
+			return run.start(new Place(run, bot(run, call), target, item, facing, half), call, target);
 		});
 		natives.register("use", call -> {
 			Object[] args = Args.bind("use", call, 1, "pos", "item");
@@ -100,6 +102,17 @@ public final class WorkApi {
 	}
 
 	/** A facing argument: {@code "north"}, {@code "south"}, {@code "east"}, {@code "west"}, {@code "up"} or {@code "down"}. */
+	/** A block's half, top or bottom, for {@code place}. */
+	static Half half(Object value) {
+		if ("top".equals(value)) {
+			return Half.TOP;
+		}
+		if ("bottom".equals(value)) {
+			return Half.BOTTOM;
+		}
+		throw new ScriptError("half must be top or bottom, not " + Values.repr(value));
+	}
+
 	static Direction facing(Object value) {
 		if (!(value instanceof String name)) {
 			throw new ScriptError("facing must be a str, not '" + Values.typeName(value) + "'");
@@ -261,18 +274,20 @@ public final class WorkApi {
 		}
 	}
 
-	/** {@code place(pos, item, facing=None)}: holds a block item {@code item} selects and places it. */
+	/** {@code place(pos, item, facing=None, half=None)}: holds a block item {@code item} selects and places it. */
 	private static final class Place extends OnBlock {
 		private final Selector selector;
 		private final Predicate<ItemStack> item;
 		private final @Nullable Direction facing;
+		private final @Nullable Half half;
 
-		Place(ScriptRun run, AntBot bot, Pos target, Selector selector, @Nullable Direction facing) {
+		Place(ScriptRun run, AntBot bot, Pos target, Selector selector, @Nullable Direction facing, @Nullable Half half) {
 			super(run, bot, target);
 			this.selector = selector;
 			Predicate<ItemStack> selected = selector.items();
 			this.item = stack -> selected.test(stack) && stack.getItem() instanceof BlockItem;
 			this.facing = facing;
+			this.half = half;
 		}
 
 		@Override
@@ -288,12 +303,13 @@ public final class WorkApi {
 		@Override
 		Result work(BlockState state) {
 			BotHands.equip(this.bot, this.item);
-			return BotHands.place(this.bot, this.pos, this.facing) ? Result.OK : Result.fail(Result.BLOCKED);
+			return BotHands.place(this.bot, this.pos, this.facing, this.half) ? Result.OK : Result.fail(Result.BLOCKED);
 		}
 
 		@Override
 		public String describe() {
-			return "place(" + this.target + ", " + this.selector + (this.facing == null ? "" : ", facing='" + this.facing.getSerializedName() + "'") + ")";
+			return "place(" + this.target + ", " + this.selector + (this.facing == null ? "" : ", facing='" + this.facing.getSerializedName() + "'")
+				+ (this.half == null ? "" : ", half='" + this.half.getSerializedName() + "'") + ")";
 		}
 	}
 
