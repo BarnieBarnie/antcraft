@@ -31,6 +31,8 @@ import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -372,6 +374,34 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			List<String> prints = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
 			helper.assertValueEqual(prints, List.of("True None 3"), "printed");
 			WorkGameTest.assertCobbleStep(helper, 0);
+		});
+	}
+
+	/**
+	 * A bot saved once it pillared up with dirt and placed the high block, before the pillar is down, takes the whole
+	 * pillar down when loaded again: the scaffold it placed is saved with the build's progress.
+	 */
+	@GameTest(maxTicks = 110)
+	public void aBotSavedInABuildTakesItsScaffoldDown(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		runLibraryScript(helper, bot, "save_scaffold_", "r = build('antcraft-gametest:two_palettes', " + WorkGameTest.at(helper, 3, 7, 3)
+			+ ")\nprint(r.ok, r.reason, r.value, count('dirt'))\n");
+		AntBot[] loaded = new AntBot[1];
+		helper.onEachTick(() -> {
+			if (loaded[0] == null && helper.getBlockState(new BlockPos(3, 7, 3)).is(Blocks.COBBLESTONE)) {
+				loaded[0] = saveAndLoad(helper, bot);
+			}
+		});
+		failOnError(helper, () -> loaded[0]);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(loaded[0] != null, "not saved yet");
+			List<String> prints = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
+			helper.assertValueEqual(prints, List.of("True None 1 16"), "printed");
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 6, 7)) {
+				helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
+			}
 		});
 	}
 

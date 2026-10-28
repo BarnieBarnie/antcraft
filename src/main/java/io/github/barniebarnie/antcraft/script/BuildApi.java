@@ -135,13 +135,15 @@ public final class BuildApi {
 	 * in its way and places its block from what the bot carries. The world holds the progress, so a build called again, or
 	 * resumed after a save, goes on where it stopped; its value, the blocks placed, is saved as its progress. Where no walk
 	 * reaches a block, it stands on blocks already built or pillars up with the scaffold blocks it takes down by hand
-	 * (dirt), never where the blueprint puts a block, and once the blueprint stands it takes that scaffold down again.
+	 * (dirt), never where the blueprint puts a block, and once the blueprint stands, or the build stops short of it, it
+	 * takes that scaffold down again; the scaffold is saved with the progress, so a resumed build takes it down too.
 	 * Another bot standing where a block goes is asked to make way ({@link AntBot#makeWay}); a player or mob gets a
 	 * moment to go before the build gives blocked.
 	 */
 	// ponytail: no scooping fluids out of the way and no stand-ins; the old BuilderGoal had them, add back when a blueprint needs them.
-	// ponytail: the scaffold to take down is not saved, and comes down only once the build is done: a build resumed after
-	// a save, or one that stops short, leaves its scaffold up. Save it with the progress if that shows.
+	// ponytail: a build interrupted by a reflex or stopped leaves its scaffold up; its next call starts with none.
+	// ponytail: walks may still break blocks the build placed; it places them again, as the world holds its progress.
+	// Keep them from paths (as LevelWorldView keeps others' scaffold) if a build shows going round in circles.
 	private static final class Build implements ScriptRun.Action {
 		/**
 		 * How long, in ticks, the bot waits for what stands where it places to go: itself stepping back to the middle of its
@@ -168,8 +170,10 @@ public final class BuildApi {
 		private final Set<BlockPos> before;
 		/** The scaffold blocks the build's walks placed. */
 		private final Set<BlockPos> scaffold = new HashSet<>();
-		/** Whether the blueprint stands and the build is taking its scaffold down. */
+		/** Whether the blueprint stands, or the build stopped short, and it is taking its scaffold down. */
 		private boolean takingDown;
+		/** Why the build stopped short, which it gives once its scaffold is down; null for a blueprint that stands. */
+		private @Nullable String stopping;
 		private long placed;
 		private @Nullable Result result;
 
@@ -225,6 +229,9 @@ public final class BuildApi {
 					return false;
 				}
 				this.breaking = null;
+			}
+			if (this.takingDown) {
+				return this.takeDown();
 			}
 			this.unloaded = false;
 			Optional<BuildPlan.Step> next = this.plan.nextStep(this::state, step -> step.isPlaceable() && !this.plan.waitsForWalls(this::state, step), this.progress);
@@ -283,13 +290,16 @@ public final class BuildApi {
 			return false;
 		}
 
-		/** Takes the scaffold down, the highest block first, so a pillar comes down under the bot; then the build is done. */
+		/**
+		 * Takes the scaffold down, the highest block first, so a pillar comes down under the bot; then the build is done,
+		 * or gives why it stopped short.
+		 */
 		private boolean takeDown() {
 			this.takingDown = true;
 			this.scaffold.removeIf(pos -> !this.state(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.FAST_SCAFFOLD_BLOCKS));
 			Optional<BlockPos> top = this.scaffold.stream().max(Comparator.comparingInt(BlockPos::getY));
 			if (top.isEmpty()) {
-				return this.finish(null);
+				return this.finish(this.stopping);
 			}
 			if (!this.inReach(top.get())) {
 				if (top.get().equals(this.walked)) {
@@ -331,7 +341,12 @@ public final class BuildApi {
 			return false;
 		}
 
+		/** Ends the build, ok or failing with {@code reason}; one that stops short takes its scaffold down first. */
 		private boolean finish(@Nullable String reason) {
+			if (reason != null && !this.takingDown && !this.scaffold.isEmpty()) {
+				this.stopping = reason;
+				return this.takeDown();
+			}
 			this.run.host().body().setBuildScaffold(null);
 			this.result = reason == null ? Result.ok(this.placed) : Result.fail(reason, this.placed);
 			return true;
@@ -362,9 +377,18 @@ public final class BuildApi {
 			return this.placed;
 		}
 
+		/** The scaffold to take down, saved with the progress. */
 		@Override
-		public void restore(long progress) {
+		public long[] progressData() {
+			return this.scaffold.stream().mapToLong(BlockPos::asLong).toArray();
+		}
+
+		@Override
+		public void restore(long progress, long[] data) {
 			this.placed = progress;
+			for (long pos : data) {
+				this.scaffold.add(BlockPos.of(pos));
+			}
 		}
 
 		@Override

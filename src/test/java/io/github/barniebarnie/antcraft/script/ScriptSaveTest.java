@@ -196,7 +196,7 @@ class ScriptSaveTest {
 		ScriptLibrary library = library("w.py", "print(ARGS)\nwait(10)\n");
 		FakeHost host = new FakeHost();
 		BotLog log = new BotLog(100);
-		ScriptRun.Saved old = new ScriptRun.Saved("w", List.of("a", "b"), null, 0, null, null);
+		ScriptRun.Saved old = new ScriptRun.Saved("w", List.of("a", "b"), null, 0, new long[0], null, null);
 		ScriptRun run = ScriptRun.resume(roundTrip(old), library.load("w"), host, log, Memory.create(), library);
 		runFor(run, host, 1, 2000);
 		assertEquals(List.of("[0 info] w starts again from the top", "[0 print] ['a', 'b']"), lines(log));

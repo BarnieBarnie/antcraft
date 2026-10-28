@@ -119,15 +119,26 @@ public final class ScriptRun {
 		/** Goes on from {@code progress}, what {@link #progress} gave when the bot was saved. */
 		default void restore(long progress) {
 		}
+
+		/** More the action saves beside {@link #progress}, such as the scaffold a build placed; none unless it says. */
+		default long[] progressData() {
+			return new long[0];
+		}
+
+		/** Goes on from {@code progress} and {@code data}, what {@link #progress} and {@link #progressData} gave when the bot was saved. */
+		default void restore(long progress, long[] data) {
+			this.restore(progress);
+		}
 	}
 
 	/**
 	 * A running script as saved with its bot (docs/scripting.md, Save and resume): its name and arguments, the state of
 	 * its VM ({@link VmState}) and how far its action got. Without a VM state (the script held a value that cannot be
 	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads. {@code lastResult} is
-	 * its last action's result, which {@code /antcraft bot status} shows.
+	 * its last action's result, which {@code /antcraft bot status} shows. {@code progressData} is what the action saves
+	 * beside its progress ({@link Action#progressData}), empty in saves from before it.
 	 */
-	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, @Nullable String problem,
+	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, long[] progressData, @Nullable String problem,
 			@Nullable String lastResult) {
 		private static final String KEY = "Script";
 
@@ -145,6 +156,9 @@ public final class ScriptRun {
 			if (vm != null) {
 				tag.putByteArray("vm", vm);
 				tag.putLong("progress", progress);
+				if (progressData.length > 0) {
+					tag.putLongArray("progressData", progressData);
+				}
 			}
 			if (problem != null) {
 				tag.putString("problem", problem);
@@ -164,7 +178,7 @@ public final class ScriptRun {
 					args.add(list.getStringOr(i, ""));
 				}
 				return new Saved(tag.getStringOr("name", ""), args, tag.getByteArray("vm").orElse(null),
-						tag.getLongOr("progress", 0), tag.getString("problem").orElse(null),
+						tag.getLongOr("progress", 0), tag.getLongArray("progressData").orElse(new long[0]), tag.getString("problem").orElse(null),
 						tag.getString("lastResult").orElse(null));
 			});
 		}
@@ -195,6 +209,7 @@ public final class ScriptRun {
 	private boolean recall;
 	/** The progress of the action the run was resumed in, which it hands to the action it starts again. */
 	private long progress;
+	private long[] progressData = new long[0];
 
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log) {
 		this(name, code, args, host, log, Memory.create());
@@ -231,6 +246,7 @@ public final class ScriptRun {
 				Memory::create);
 		this.recall = this.vm.status() == Vm.Status.SUSPENDED;
 		this.progress = saved.progress();
+		this.progressData = saved.progressData();
 	}
 
 	/**
@@ -260,10 +276,12 @@ public final class ScriptRun {
 	/** Saves the run with the bot; see {@link #resume}. */
 	public Saved save() {
 		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
+		long[] saveData = this.recall ? this.progressData : this.action == null ? new long[0] : this.action.progressData();
 		try {
-			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, null, this.lastResult);
+			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, saveData,
+					null, this.lastResult);
 		} catch (VmState.NotSaveable e) {
-			return new Saved(this.name, this.args, null, 0, e.getMessage(), this.lastResult);
+			return new Saved(this.name, this.args, null, 0, new long[0], e.getMessage(), this.lastResult);
 		}
 	}
 
@@ -329,7 +347,7 @@ public final class ScriptRun {
 			if (recall) {
 				recall = false;
 				if (vm.recall() == Vm.Status.SUSPENDED && action != null) {
-					action.restore(progress);
+					action.restore(progress, progressData);
 				}
 			}
 			// After a resumed run restored its action, so a reflex interrupts that as any other.

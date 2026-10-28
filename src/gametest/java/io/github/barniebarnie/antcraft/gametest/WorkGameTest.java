@@ -752,6 +752,24 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * The cobble step too high to reach, with dirt to pillar but one cobblestone of two: the bot pillars up, places it,
+	 * and takes its pillar down before it gives missing_ingredients, getting its dirt back. (Its stairs would stand
+	 * above the test area, which a build finds protected.)
+	 */
+	@GameTest(maxTicks = 110)
+	public void buildThatStopsShortTakesItsScaffoldDown(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 7, 3) + ")\nprint(r.ok, r.reason, r.value, count('dirt'))\n",
+			List.of("False missing_ingredients 1 16"), () -> {
+				for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 6, 7)) {
+					helper.assertFalse(helper.getBlockState(pos).is(Blocks.DIRT), "dirt left at " + pos);
+				}
+			});
+	}
+
 	/** A step too high to reach and nothing to pillar with but what the blueprint needs: blocked, and nothing placed up there. */
 	@GameTest(maxTicks = 40)
 	public void buildOutOfReachWithoutScaffoldIsBlocked(GameTestHelper helper) {
