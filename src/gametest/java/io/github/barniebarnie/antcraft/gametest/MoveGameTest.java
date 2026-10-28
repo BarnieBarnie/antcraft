@@ -118,9 +118,11 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Far from every other test, on a bridge high in the air: the bot's own chunk ticket keeps the three chunks around it
 	 * loaded, and the target lies in the fourth chunk on, which nothing loads until {@code goto} does. The bot crosses the
-	 * last three blocks on cobblestone of its own.
+	 * last three blocks on cobblestone of its own. The bot's entities load in the background once it is put on the far spot,
+	 * and the target's chunk is new, so it generates in the background once {@code goto} asks for it: both waits have a
+	 * budget in wall-clock time ({@link #waitForChunks}).
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 600)
 	public void gotoIntoAnUnloadedChunkLoadsItAndArrives(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		int chunkX = 1875;
@@ -151,6 +153,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		// As the bot does each tick while it runs a script, from the first tick on its new spot.
 		BotChunks.keep(bot);
 		failOnError(helper, bot);
+		waitForChunks(helper, bot, targetChunk, chunkZ);
 		helper.onEachTick(() -> {
 			if (printed(bot).stream().anyMatch(line -> line.startsWith("False"))) {
 				helper.fail("goto failed: " + printed(bot) + ", bot at " + bot.blockPosition().toShortString());
@@ -201,9 +204,10 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * An idle bot loads chunks on its way home as any script's {@code goto} does (#327): far from every other test, on a
-	 * bridge high in the air, its home lies in the fourth chunk on, which nothing loads until its walk does.
+	 * bridge high in the air, its home lies in the fourth chunk on, which nothing loads until its walk does. Waiting for its
+	 * chunks as {@link #gotoIntoAnUnloadedChunkLoadsItAndArrives} does.
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 600)
 	public void anIdleBotWalksHomeIntoAnUnloadedChunk(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		int chunkX = 1875;
@@ -229,12 +233,26 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		bot.setHome(home);
 		BotChunks.keep(bot);
 		failOnError(helper, bot);
+		waitForChunks(helper, bot, homeChunk, chunkZ);
 
 		helper.succeedWhen(() -> {
 			ScriptRun run = bot.getScript();
 			helper.assertTrue(run != null && run.name().equals(DefaultScripts.IDLE), "bot runs " + (run == null ? "nothing" : run.name()));
 			helper.assertValueEqual(bot.blockPosition(), home, "bot");
 		});
+	}
+
+	/**
+	 * Gives the waits on new chunks a budget in wall-clock time ({@link GameTests#waitAtMost}): until the bot, just put on a
+	 * far spot, ticks there (its entities load in the background), and until the chunk at chunk coordinates {@code x},
+	 * {@code z} it walks into is loaded (it generates in the background); again while the bot stands in a chunk that does not
+	 * tick entities yet.
+	 */
+	private static void waitForChunks(GameTestHelper helper, AntBot bot, int x, int z) {
+		ServerLevel level = helper.getLevel();
+		GameTests.waitAtMost(helper, () -> !level.isPositionEntityTicking(bot.blockPosition()) || level.getChunkSource().getChunkNow(x, z) == null,
+			() -> "bot ticking " + level.isPositionEntityTicking(bot.blockPosition()) + " at " + bot.blockPosition().toShortString()
+				+ ", chunk " + x + ", " + z + " loaded " + (level.getChunkSource().getChunkNow(x, z) != null));
 	}
 
 	/** Whether a bot's own chunk ticket ({@link BotChunks#BOT}) sits on {@code chunk}. */
@@ -492,9 +510,11 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A bot that went into the Nether through a portal and is then more than 32 blocks from it, at the end of a tunnel,
 	 * goes home through the portal it remembers: its {@code idle.py} finds no portal near and travels to the remembered
-	 * one (#354). Far from the test area and the other portal tests, so their portals are not the nearest.
+	 * one (#354). Far from the test area and the other portal tests, so their portals are not the nearest. It goes on once
+	 * its chunks in both dimensions tick entities: they are new, and their entities load in the background (see
+	 * {@link GameTests#waitAtMost}).
 	 */
-	@GameTest(maxTicks = 700)
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 700)
 	public void anIdleBotFarFromThePortalItCameThroughGoesHomeThroughIt(GameTestHelper helper) {
 		ServerLevel level = helper.getLevel();
 		ChunkPos spot = new ChunkPos(1875, -1875 - 16 * FAR_SPOTS.getAndIncrement());
@@ -526,6 +546,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		// 0: waiting for the chunks; 1: the bot travels; 2: the bot, through and remembering the portal, was put at the far
 		// end of the tunnel and idles.
 		int[] phase = {0};
+		GameTests.waitAtMost(helper, () -> phase[0] == 0, () -> "chunks not ticking entities");
 		helper.onEachTick(() -> {
 			BotChunks.keep(level, spot);
 			boolean ticking = level.isPositionEntityTicking(home);

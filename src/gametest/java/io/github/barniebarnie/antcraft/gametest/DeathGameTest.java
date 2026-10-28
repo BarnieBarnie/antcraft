@@ -27,6 +27,7 @@ import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -199,10 +200,13 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A bot whose home chunk nothing keeps loaded loads it when its wait is over and respawns there, once the chunk ticks
-	 * entities. The chunk's entities load from disk in the background, which can take the IO worker seconds while other
-	 * tests save their chunks, and an idle test server runs thousands of ticks meanwhile. So the chunk wait has a budget in
-	 * wall-clock time ({@link GameTests#waitAtMost}) instead of in ticks, and the test fails as soon as it is spent;
-	 * {@code maxTicks} is the respawn time plus that budget in paced ticks and some to spare, never reached first.
+	 * entities. That takes the chunk and the 24 around it at full status. Fresh, they generate in the background, which took
+	 * up to a second alone and several in full builds (#362: nearly all the wait was generation, the entities loaded within
+	 * a tick of the chunks). So the home's chunks are generated up front, here, and unload again by the second tick, as
+	 * nothing keeps them: the respawn loads them back from disk, within 20 ticks (about 0.2 s) alone and 7 ticks with two
+	 * full builds running. The chunk wait keeps a budget in wall-clock time ({@link GameTests#waitAtMost}), 15 s, far more
+	 * than three times that; {@code maxTicks} is the respawn time plus that budget in paced ticks and some to spare, never
+	 * reached first.
 	 */
 	@GameTest(maxTicks = 3400)
 	public void aBotRespawnsAtAHomeWhoseChunkIsNotLoaded(GameTestHelper helper) {
@@ -211,6 +215,12 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		BlockPos home = helper.absolutePos(new BlockPos(1, 1, 1)).offset(2000, 0, 0);
 		ServerLevel level = helper.getLevel();
 		helper.assertFalse(level.hasChunkAt(home), "home chunk loaded");
+		ChunkPos homeChunk = ChunkPos.containing(home);
+		for (int cx = homeChunk.x() - 2; cx <= homeChunk.x() + 2; cx++) {
+			for (int cz = homeChunk.z() - 2; cz <= homeChunk.z() + 2; cz++) {
+				level.getChunk(cx, cz);
+			}
+		}
 		bot.setHome(home);
 		GameTests.onEnd(helper, () -> {
 			BotRespawns.get(level).forget(home::equals);
@@ -222,7 +232,10 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			BotRespawns.Pending respawn = BotRespawns.get(level).pending(id);
 			return respawn != null && respawn.at() <= level.getGameTime();
 		}, () -> "due but not respawned");
-		helper.runAfterDelay(5, () -> bot.kill(level));
+		helper.runAfterDelay(5, () -> {
+			helper.assertFalse(level.hasChunkAt(home), "home chunk still loaded");
+			bot.kill(level);
+		});
 		helper.succeedWhen(() -> {
 			Entity entity = level.getEntity(id);
 			helper.assertTrue(entity instanceof AntBot again && again.isAlive() && again.getDeaths() == 1, "not respawned");
