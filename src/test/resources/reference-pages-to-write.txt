@@ -22,27 +22,6 @@ matches
 build
 blueprint
 
-# #407 mining, colony, jobs, bot info, output
-mineshaft
-mineshaft_at
-ore_vein
-colony
-post_job
-take_job
-jobs
-finish_job
-drop_job
-deaths
-last_death
-say
-print
-debug
-info
-warn
-error
-wait
-stop
-
 # #408 Python builtins
 abs
 all

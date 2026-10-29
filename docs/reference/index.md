@@ -83,35 +83,35 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `mineshaft` | `mineshaft(levels, near=None, branches=4, length=16)` | where a ladder shaft can go, and its plan (may pause) |
-| `mineshaft_at` | `mineshaft_at(top, levels, round=0, branches=4, length=16)` | the plan of a shaft already started at `top` |
-| `ore_vein` | `ore_vein(pos)` | the blocks of the ore vein at `pos` |
+| [`mineshaft`](mining/mineshaft.md) | `mineshaft(levels, near=None, branches=4, length=16)` | where a ladder shaft can go, and its plan (may pause) |
+| [`mineshaft_at`](mining/mineshaft_at.md) | `mineshaft_at(top, levels, round=0, branches=4, length=16)` | the plan of a shaft already started at `top` |
+| [`ore_vein`](mining/ore_vein.md) | `ore_vein(pos)` | the blocks of the ore vein at `pos` |
 
 ## Colony and jobs
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `colony` | `colony()` | the bot's colony as a dict, or `None` |
-| `post_job` | `post_job(kind, data=None)` | post a job on the colony's job board |
-| `take_job` | `take_job(kind=None)` | take a job off the job board |
-| `jobs` | `jobs(kind=None)` | the jobs on the job board |
-| `finish_job` | `finish_job(id)` | mark a taken job done |
-| `drop_job` | `drop_job(id)` | put a taken job back on the board |
+| [`colony`](colony/colony.md) | `colony()` | the bot's colony as a dict, or `None` |
+| [`post_job`](colony/post_job.md) | `post_job(kind, data=None)` | post a job on the colony's job board |
+| [`take_job`](colony/take_job.md) | `take_job(kind=None)` | take a job off the job board |
+| [`jobs`](colony/jobs.md) | `jobs(kind=None)` | the jobs on the job board |
+| [`finish_job`](colony/finish_job.md) | `finish_job(id)` | mark a taken job done |
+| [`drop_job`](colony/drop_job.md) | `drop_job(id)` | put a taken job back on the board |
 
 ## The bot and its output
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `deaths` | `deaths()` | how often the bot has died |
-| `last_death` | `last_death()` | where the bot last died, or `None` |
-| `say` | `say(text)` | show text above the bot and in its owner's chat |
-| `print` | `print(*values)` | write a line to the bot's log, always shown |
-| `debug` | `debug(*values)` | write a line to the bot's log at debug level |
-| `info` | `info(*values)` | write a line to the bot's log at info level |
-| `warn` | `warn(*values)` | write a line to the bot's log at warn level |
-| `error` | `error(*values)` | write a line to the bot's log at error level |
-| `wait` | `wait(ticks)` | action: do nothing for `ticks` ticks |
-| `stop` | `stop()` | end the script |
+| [`deaths`](bot/deaths.md) | `deaths()` | how often the bot has died |
+| [`last_death`](bot/last_death.md) | `last_death()` | where the bot last died, or `None` |
+| [`say`](bot/say.md) | `say(text)` | show text above the bot and in its owner's chat |
+| [`print`](bot/print.md) | `print(*values, sep=" ")` | write a line to the bot's log, always shown |
+| [`debug`](bot/debug.md) | `debug(*values, sep=" ")` | write a line to the bot's log at debug level |
+| [`info`](bot/info.md) | `info(*values, sep=" ")` | write a line to the bot's log at info level |
+| [`warn`](bot/warn.md) | `warn(*values, sep=" ")` | write a line to the bot's log at warn level |
+| [`error`](bot/error.md) | `error(*values, sep=" ")` | write a line to the bot's log at error level |
+| [`wait`](bot/wait.md) | `wait(ticks)` | action: do nothing for `ticks` ticks |
+| [`stop`](bot/stop.md) | `stop()` | end the script |
 
 ## Python builtins
 
