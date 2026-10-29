@@ -93,6 +93,23 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 	}
 
+	/**
+	 * Has {@code bot}, in the column of a shaft whose top is at (4, 6, 4), climb out with {@code to_surface()} until it is
+	 * out, then print "out". The shaft is given by its place in the area, not by {@code pos()}: a bot that flees up the
+	 * column runs its script mid-flight, and a top read from where it is then lies above the ground, where it cannot get
+	 * within a block once the hatch is open (#424).
+	 */
+	private static void climbOut(GameTestHelper helper, AntBot bot) {
+		BlockPos top = helper.absolutePos(new BlockPos(4, 6, 4));
+		run(helper, bot, """
+			import lib.shaft
+			memory["shaft"] = {"top": Pos(%d, %d, %d), "levels": [%d, %d]}
+			while not lib.shaft.to_surface():
+			    wait(5)
+			print("out")
+			""".formatted(top.getX(), top.getY(), top.getZ(), top.getY() - 3, top.getY() - 5));
+	}
+
 	/** Fails at once when the script of the bot {@code bot} gives fails. */
 	private static void failOnError(GameTestHelper helper, Supplier<AntBot> bot) {
 		helper.onEachTick(() -> {
@@ -396,9 +413,9 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	 * A bot low on health climbing out of the shaft with a husk right below it in the column strikes back as it flees,
 	 * rather than take the husk's blows all the way up (#395). The husk climbs after the bot (kept just below it, up to
 	 * under the hatch) and strikes every second while the bot is in its reach, from the first tick: two blows kill the
-	 * bot before it can climb out. The husk is nearly dead, so one blow of the bot's kills it: the first comes on the bot's
-	 * first tick, before the pickaxe set at spawn adds to its damage, so it does a bare hand's 1 (#422), 0.94 through the
-	 * husk's armour.
+	 * bot before it can climb out. The husk is at 0.5 health, so the bot's first blow, on its first tick and with the stone
+	 * pickaxe set at spawn (#425), kills it: this test checks the strike-back, not the flight up the column, which
+	 * {@link #aBotThatFledThroughTheHatchClimbsOut} covers.
 	 */
 	@GameTest(maxTicks = 120)
 	public void aBotFleeingUpTheShaftStrikesTheMobBelowIt(GameTestHelper helper) {
@@ -413,13 +430,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
 		husk.setNoAi(true);
 		husk.setHealth(0.5F);
-		run(helper, bot, """
-			import lib.shaft
-			memory["shaft"] = {"top": pos() + (0, 4, 0), "levels": [pos().y + 1, pos().y - 1]}
-			while not lib.shaft.to_surface():
-			    wait(5)
-			print("out")
-			""");
+		climbOut(helper, bot);
 		failOnError(helper, () -> bot);
 		BlockPos bottom = helper.absolutePos(COLUMN.getLast());
 		helper.onEachTick(() -> {
@@ -445,6 +456,54 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As {@link #aBotFleeingUpTheShaftStrikesTheMobBelowIt}, with a husk that survives the bot's first blow: the bot
+	 * flees up the column and opens the hatch on the way, and once the flight ends {@code to_surface()} still climbs out
+	 * through the open hatch onto the ground beside it (#424). Red with the shaft's top read from {@code pos()} once the
+	 * script ran: the bot had climbed a block by then, so the top lay a block above the ground and {@code to_surface()}
+	 * gave {@code unreachable} again and again under the open hatch.
+	 */
+	@GameTest(maxTicks = 120)
+	public void aBotThatFledThroughTheHatchClimbsOut(GameTestHelper helper) {
+		helper.setBlock(COLUMN.getFirst(), Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, Direction.NORTH)
+			.setValue(TrapDoorBlock.HALF, Half.TOP));
+		for (BlockPos cell : COLUMN.subList(1, COLUMN.size())) {
+			helper.setBlock(cell, Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 2, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+		bot.setHealth(AntCraftConfig.botFleeHealth());
+		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
+		husk.setNoAi(true);
+		husk.setHealth(5);
+		climbOut(helper, bot);
+		failOnError(helper, () -> bot);
+		BlockPos bottom = helper.absolutePos(COLUMN.getLast());
+		boolean[] opened = {false};
+		helper.onEachTick(() -> {
+			opened[0] |= helper.getBlockState(COLUMN.getFirst()).getValue(TrapDoorBlock.OPEN);
+			if (!bot.isAlive()) {
+				helper.fail("the bot died: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+			if (!husk.isAlive()) {
+				return;
+			}
+			// Climbs after the bot, up to the cell under the hatch, which it cannot open.
+			double y = Math.max(bottom.getY(), Math.min(bottom.getY() + 3, bot.getY() - 1));
+			husk.teleportTo(bottom.getX() + 0.5, y, bottom.getZ() + 0.5);
+			if (helper.getTick() % 20 == 1 && husk.isWithinMeleeAttackRange(bot) && husk.hasLineOfSight(bot)) {
+				husk.doHurtTarget(helper.getLevel(), bot);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getFlightPlans() > 0, "the bot did not flee");
+			helper.assertTrue(opened[0], "the hatch was never opened");
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of("out")), "printed " + log);
+			helper.assertTrue(TestPositions.relative(helper, bot.blockPosition()).getY() == 6, "not on the ground");
+		});
+	}
+
+	/**
 	 * As {@link #aBotFleeingUpTheShaftStrikesTheMobBelowIt}, with a husk at full health and its own AI, right below the
 	 * bot on the ladders (#400): the bot keeps fleeing, striking it once as it goes, and gets away unhurt. A bot at the
 	 * flee health stopping on the ladders to fight a husk on its heels would lose: the husk strikes once a second and kills
@@ -462,12 +521,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
 		bot.setHealth(AntCraftConfig.botFleeHealth());
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
-		run(helper, bot, """
-			import lib.shaft
-			memory["shaft"] = {"top": pos() + (0, 4, 0), "levels": [pos().y + 1, pos().y - 1]}
-			while not lib.shaft.to_surface():
-			    wait(5)
-			""");
+		climbOut(helper, bot);
 		failOnError(helper, () -> bot);
 		helper.onEachTick(() -> {
 			if (bot.isDeadOrDying()) { // not isAlive: the test's end removes the bot on the tick it succeeds
