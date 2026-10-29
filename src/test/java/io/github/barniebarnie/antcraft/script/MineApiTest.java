@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.github.barniebarnie.antcraft.pathing.GridWorld;
 import io.github.barniebarnie.antcraft.pathing.LoadedWorldView;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.Values;
@@ -131,6 +132,34 @@ class MineApiTest {
 		Mineshaft.SiteSearch starved = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
 		assertFalse(starved.step(world, () -> false));
 		assertTrue(starved.found().isEmpty());
+	}
+
+	/**
+	 * The dict of a found site counts against the scan budget as {@link MineApi#DESCRIBE_READS} blocks (#399): a search that
+	 * finds its site with too little budget left for that waits for the next tick.
+	 */
+	@Test
+	void aFoundSitesDictCountsAgainstTheScanBudget() {
+		GridWorld grid = new GridWorld().fill(-24, 0, -24, 24, NEAR.getY() - 1, 24, '#');
+		long[] reads = {0};
+		LoadedWorldView world = new LoadedWorldView(grid, pos -> ++reads[0] > 0);
+		int plenty = 1_000_000;
+		PathBudget budget = new PathBudget(plenty);
+		Mineshaft.SiteSearch search = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
+		assertTrue(MineApi.step(search, world, reads, budget, 0));
+		long searched = reads[0] - MineApi.DESCRIBE_READS;
+		assertEquals(plenty - searched - MineApi.DESCRIBE_READS, budget.available(0));
+
+		reads[0] = 0;
+		budget.spend(1, (int) (plenty - searched - MineApi.DESCRIBE_READS + 1));
+		Mineshaft.SiteSearch short_ = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
+		assertFalse(MineApi.step(short_, world, reads, budget, 1), "found with too little budget left for its dict");
+		assertTrue(short_.found().isPresent());
+		assertEquals(searched, reads[0]);
+		reads[0] = 0;
+		assertTrue(MineApi.step(short_, world, reads, budget, 2));
+		assertEquals(MineApi.DESCRIBE_READS, reads[0]);
+		assertEquals(plenty - MineApi.DESCRIBE_READS, budget.available(2));
 	}
 
 	@Test

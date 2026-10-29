@@ -34,9 +34,9 @@ import org.slf4j.LoggerFactory;
 
 /**
  * The bot benchmark: {@link #BOTS} bots in a 48x48 area with trees and seeded ores, for each {@link Case} in turn: every bot
- * runs the case's script for its measured ticks, then the bots go and the next case starts. Each case logs the average and
- * worst server tick, where the time went (see {@link TickProfiler}), the script instructions run per tick and what the
- * bots were at; the run fails if a case's average tick reaches {@link #TICK_BUDGET_MS}. A script that stops is logged with
+ * runs the case's script for its measured ticks, then the bots go and the next case starts. Each case logs the average,
+ * 99th percentile and worst server tick (judge costs on the p99: the single worst tick varies some 2 ms between runs,
+ * #399), where the time went (see {@link TickProfiler}), the script instructions run per tick and what the bots were at; the run fails if a case's average tick reaches {@link #TICK_BUDGET_MS}. A script that stops is logged with
  * its error and counted as {@code stopped}. The cases that only sense, walk or craft come first and leave the world as it
  * is; {@link #WORK}, which fells the trees and mines, comes last but for the build case, which may dig. Bots that die count
  * as {@code dead}. Manual-only: {@code ./gradlew runGameTest -Pbenchmark} runs it.
@@ -380,8 +380,8 @@ public class BenchmarkGameTest {
 			double instructions = (double) (this.executed() - this.executedAtStart) / report.ticks();
 			LOGGER.info("Benchmark: {}, {} bots, {} instructions a tick each at most, {} ticks: {} instructions run a tick\n  {}\n  bots at (samples every 100 ticks) {}",
 				c.name(), BOTS, c.instructions(), c.ticks(), Math.round(instructions), String.join("\n  ", report.lines()), this.doing);
-			this.summary.add(String.format(Locale.ROOT, "%-18s average %6.2f ms, worst %6.2f ms, %8d instructions a tick", c.name(), report.averageTickMs(),
-				report.worstTickMs(), Math.round(instructions)));
+			this.summary.add(String.format(Locale.ROOT, "%-18s average %6.2f ms, p99 %6.2f ms, worst %6.2f ms, %8d instructions a tick", c.name(),
+				report.averageTickMs(), report.p99TickMs(), report.worstTickMs(), Math.round(instructions)));
 			this.helper.assertTrue(report.averageTickMs() < TICK_BUDGET_MS, c.name() + ": average tick " + report.averageTickMs() + " ms");
 			for (AntBot bot : this.bots) {
 				ColonyManager.get(this.helper.getLevel()).leave(bot);

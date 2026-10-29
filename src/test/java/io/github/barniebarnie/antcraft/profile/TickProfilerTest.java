@@ -102,6 +102,33 @@ class TickProfilerTest {
 		assertTrue(profiler.report().parts().isEmpty());
 	}
 
+	/**
+	 * The 99th percentile tick (nearest rank), steadier between runs than the single worst tick (#399): of 99 ticks of 1 ms
+	 * and one of 50 ms, the p99 is 1 ms and the worst 50 ms.
+	 */
+	@Test
+	void reportsThe99thPercentileTick() {
+		Clock clock = new Clock();
+		TickProfiler profiler = new TickProfiler(() -> clock.now);
+		profiler.start();
+		for (int i = 0; i < 100; i++) {
+			profiler.startTick();
+			clock.now += i == 40 ? 50 * MS : MS;
+			profiler.endTick();
+		}
+		TickProfiler.Report report = profiler.report();
+		assertEquals(1.0, report.p99TickMs(), 1e-9);
+		assertEquals(50.0, report.worstTickMs(), 1e-9);
+		// Two slow ticks of the hundred reach the p99.
+		profiler.startTick();
+		clock.now += 30 * MS;
+		profiler.endTick();
+		assertEquals(30.0, profiler.report().p99TickMs(), 1e-9);
+		// Starting again forgets the ticks.
+		profiler.start();
+		assertEquals(0.0, profiler.report().p99TickMs(), 1e-9);
+	}
+
 	@Test
 	void theReportReadsAsLines() {
 		Clock clock = new Clock();
@@ -113,7 +140,7 @@ class TickProfilerTest {
 		profiler.end("path", a);
 		profiler.endTick();
 		List<String> lines = profiler.report().lines();
-		assertEquals("1 ticks: average 2.00 ms, worst 2.00 ms (tick 1)", lines.getFirst());
+		assertEquals("1 ticks: average 2.00 ms, p99 2.00 ms, worst 2.00 ms (tick 1)", lines.getFirst());
 		assertEquals("path: 2.00 ms/tick, worst 2.00 ms, 1 calls", lines.get(1));
 	}
 }

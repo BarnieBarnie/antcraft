@@ -4,6 +4,8 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.LoadedWorldView;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
+import io.github.barniebarnie.antcraft.pathing.WorldView;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
@@ -31,6 +33,14 @@ import org.jspecify.annotations.Nullable;
  * {@link Mineshaft}, and the ore veins its branches uncover, as plain data for the mining library.
  */
 public final class MineApi {
+	/**
+	 * What turning a found site into its dict ({@link #describe}, mainly {@link Mineshaft#plan}, some 33 us) counts against
+	 * {@link SenseApi#SCAN_BUDGET} in {@code mineshaft}, in blocks of that time (#399): uncounted, the 30 bots of the benchmark
+	 * described some 36 sites a tick past the budget.
+	 */
+	// ponytail: measured with the bot benchmark (BenchmarkGameTest, mineshaft against mineshaft none), retune with it.
+	static final int DESCRIBE_READS = 700;
+
 	private MineApi() {
 	}
 
@@ -100,14 +110,12 @@ public final class MineApi {
 
 		@Override
 		public boolean tick() {
-			long time = this.bot.level().getGameTime();
 			// Made anew each tick: it remembers chunks, which may unload between ticks.
 			LoadedBlocks loaded = new LoadedBlocks(this.bot.level());
 			long[] reads = {0};
 			LoadedWorldView world = new LoadedWorldView(new LevelWorldView(this.bot.level(), this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()),
 				pos -> ++reads[0] > 0 && loaded.loaded(pos) != null);
-			boolean done = this.search.step(world, () -> reads[0] < SenseApi.SCAN_BUDGET.available(time));
-			SenseApi.SCAN_BUDGET.spend(time, (int) Math.min(reads[0], Integer.MAX_VALUE));
+			boolean done = step(this.search, world, reads, SenseApi.SCAN_BUDGET, this.bot.level().getGameTime());
 			this.run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
 			this.reads += reads[0];
 			return done;
@@ -122,6 +130,24 @@ public final class MineApi {
 		public String describe() {
 			return "mineshaft (" + this.reads + " blocks read)";
 		}
+	}
+
+	/**
+	 * Goes on with {@code search} in {@code world}, which counts its reads in {@code reads}, while {@code budget} has blocks
+	 * left in {@code tick}, and spends them; true once done. A found site also counts {@link #DESCRIBE_READS} for its dict,
+	 * and waits for a tick with that left.
+	 */
+	static boolean step(Mineshaft.SiteSearch search, WorldView world, long[] reads, PathBudget budget, long tick) {
+		boolean done = search.step(world, () -> reads[0] < budget.available(tick));
+		if (done && search.found().isPresent()) {
+			if (reads[0] + DESCRIBE_READS > budget.available(tick)) {
+				done = false;
+			} else {
+				reads[0] += DESCRIBE_READS;
+			}
+		}
+		budget.spend(tick, (int) Math.min(reads[0], Integer.MAX_VALUE));
+		return done;
 	}
 
 	/** An optional whole-number argument {@code name}, {@code absent} when not given, at least {@code min}. */
