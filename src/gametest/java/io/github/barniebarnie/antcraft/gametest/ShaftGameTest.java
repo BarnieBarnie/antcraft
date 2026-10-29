@@ -396,7 +396,9 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	 * A bot low on health climbing out of the shaft with a husk right below it in the column strikes back as it flees,
 	 * rather than take the husk's blows all the way up (#395). The husk climbs after the bot (kept just below it, up to
 	 * under the hatch) and strikes every second while the bot is in its reach, from the first tick: two blows kill the
-	 * bot before it can climb out. The husk is nearly dead, so one blow of the bot's kills it.
+	 * bot before it can climb out. The husk is nearly dead, so one blow of the bot's kills it: the first comes on the bot's
+	 * first tick, before the pickaxe set at spawn adds to its damage, so it does a bare hand's 1 (#422), 0.94 through the
+	 * husk's armour.
 	 */
 	@GameTest(maxTicks = 120)
 	public void aBotFleeingUpTheShaftStrikesTheMobBelowIt(GameTestHelper helper) {
@@ -410,7 +412,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		bot.setHealth(AntCraftConfig.botFleeHealth());
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
 		husk.setNoAi(true);
-		husk.setHealth(2);
+		husk.setHealth(0.5F);
 		run(helper, bot, """
 			import lib.shaft
 			memory["shaft"] = {"top": pos() + (0, 4, 0), "levels": [pos().y + 1, pos().y - 1]}

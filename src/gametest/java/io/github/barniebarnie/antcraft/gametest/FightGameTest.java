@@ -103,7 +103,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * A bot with bare hands walks to a cow and kills it: the bot's own goals target only monsters, so only {@code attack}
 	 * can kill it.
 	 */
-	@GameTest(maxTicks = 130)
+	// Measured: passes at tick 113, ten 1-damage blows (#422) spaced by the cow's invulnerability after each.
+	@GameTest(maxTicks = 230)
 	public void attackKillsACow(GameTestHelper helper) {
 		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 3);
 		cow.setNoAi(true);
@@ -147,6 +148,36 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		helper.runAtTickTime(80, () -> {
 			helper.assertTrue(blows[1] > 0 && blows[0] > blows[1], "sword " + blows[0] + " blows, axe " + blows[1]);
 			helper.succeed();
+		});
+	}
+
+	/**
+	 * A blow does a player's damage with the same item (#422): 1 bare-handed, 7 with a diamond sword. Each bot beats a
+	 * still, 200-health cow of its own; the first drop in its health is the first blow.
+	 */
+	@GameTest(maxTicks = 30)
+	public void aBlowDoesAPlayersDamage(GameTestHelper helper) {
+		Cow[] cows = {helper.spawn(EntityTypes.COW, 1, 1, 4), helper.spawn(EntityTypes.COW, 6, 1, 4)};
+		ItemStack[] weapons = {ItemStack.EMPTY, new ItemStack(Items.DIAMOND_SWORD)};
+		for (int i = 0; i < 2; i++) {
+			cows[i].setNoAi(true);
+			cows[i].getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+			cows[i].getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+			cows[i].setHealth(200);
+			AntBot bot = helper.spawn(ModEntities.ANT_BOT, i == 0 ? 1 : 6, 1, 1);
+			bot.setItemSlot(EquipmentSlot.MAINHAND, weapons[i]);
+			run(helper, bot, "attack(entities('cow', 4)[0])\n");
+		}
+		float[] firstBlow = {0, 0};
+		helper.onEachTick(() -> {
+			for (int i = 0; i < 2; i++) {
+				if (firstBlow[i] == 0 && cows[i].getHealth() < 200) {
+					firstBlow[i] = 200 - cows[i].getHealth();
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(firstBlow[0] == 1 && firstBlow[1] == 7, "bare hand took " + firstBlow[0] + ", diamond sword " + firstBlow[1]);
 		});
 	}
 

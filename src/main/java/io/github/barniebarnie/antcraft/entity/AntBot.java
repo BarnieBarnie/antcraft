@@ -159,7 +159,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return Mob.createMobAttributes()
 			.add(Attributes.MAX_HEALTH, 20.0)
 			.add(Attributes.MOVEMENT_SPEED, 0.3)
-			.add(Attributes.ATTACK_DAMAGE, 4.0)
+			.add(Attributes.ATTACK_DAMAGE, 1.0)
 			.add(Attributes.FOLLOW_RANGE, 32.0);
 	}
 
