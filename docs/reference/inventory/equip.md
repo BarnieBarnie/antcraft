@@ -45,4 +45,4 @@ if not equip("#minecraft:swords"):
 
 ## See also
 
-[`held`](../index.md#inventory), [`inventory`](../index.md#inventory), [`has`](../index.md#inventory).
+[`held`](held.md), [`inventory`](inventory.md), [`has`](has.md).

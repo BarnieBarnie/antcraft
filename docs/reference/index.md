@@ -44,40 +44,40 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `inventory` | `inventory()` | the carried [`Stack`](types/stack.md) values, the held one first |
-| `held` | `held()` | the `Stack` in the bot's hand, or `None` |
-| `count` | `count(item)` | how many matching items the bot carries |
-| `has` | `has(item, n=1)` | whether the bot carries at least `n` matching items |
-| `free_slots` | `free_slots()` | how many inventory slots are empty |
-| `matches` | `matches(item, selector)` | whether an item id or a `Stack` is one the [selector](types/selectors.md) selects |
+| [`inventory`](inventory/inventory.md) | `inventory()` | the carried [`Stack`](types/stack.md) values, the held one first |
+| [`held`](inventory/held.md) | `held()` | the `Stack` in the bot's hand, or `None` |
+| [`count`](inventory/count.md) | `count(item)` | how many matching items the bot carries |
+| [`has`](inventory/has.md) | `has(item, n=1)` | whether the bot carries at least `n` matching items |
+| [`free_slots`](inventory/free_slots.md) | `free_slots()` | how many inventory slots are empty |
+| [`matches`](inventory/matches.md) | `matches(item, selector)` | whether an item id or a `Stack` is one the [selector](types/selectors.md) selects |
 | [`equip`](inventory/equip.md) | `equip(item)` | hold a carried item |
-| `drop` | `drop(item, n=None)` | toss up to `n` matching items |
-| `pick_up` | `pick_up(what=None, radius=8)` | action: walk to dropped items and take them |
+| [`drop`](inventory/drop.md) | `drop(item, n=None)` | toss up to `n` matching items |
+| [`pick_up`](inventory/pick_up.md) | `pick_up(what=None, radius=8)` | action: walk to dropped items and take them |
 
 ## Working blocks
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `mine` | `mine(pos)` | action: break the block with the best tool carried |
-| `place` | `place(pos, item, facing=None, half=None)` | action: place a block |
-| `use` | `use(pos, item=None)` | action: use the held item, or the block itself, on a block as a right click does |
+| [`mine`](blocks/mine.md) | `mine(pos)` | action: break the block with the best tool carried |
+| [`place`](blocks/place.md) | `place(pos, item, facing=None, half=None)` | action: place a block |
+| [`use`](blocks/use.md) | `use(pos, item=None)` | action: use the held item, or the block itself, on a block as a right click does |
 
 ## Containers and crafting
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `container` | `container(pos)` | the `Stack` values in a chest, barrel or furnace, or `None` |
-| `put` | `put(container, item, n=None)` | action: put items into a container |
-| `take` | `take(container, item, n=None)` | action: take items out of a container |
-| `craft` | `craft(item, n=1, table=None)` | action: craft from carried items |
-| `smelt` | `smelt(item, n=1, furnace=None, fuel=None)` | action: smelt carried items in a furnace, blast furnace or smoker |
+| [`container`](crafting/container.md) | `container(pos)` | the `Stack` values in a chest, barrel or furnace, or `None` |
+| [`put`](crafting/put.md) | `put(container, item, n=None)` | action: put items into a container |
+| [`take`](crafting/take.md) | `take(container, item, n=None)` | action: take items out of a container |
+| [`craft`](crafting/craft.md) | `craft(item, n=1, table=None)` | action: craft from carried items |
+| [`smelt`](crafting/smelt.md) | `smelt(item, n=1, furnace=None, fuel=None)` | action: smelt carried items in a furnace, blast furnace or smoker |
 
 ## Building
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `build` | `build(blueprint, at, turn=0, mirror=False, job=None)` | action: build a blueprint from carried blocks |
-| `blueprint` | `blueprint(id, at=None, turn=0, mirror=False)` | a blueprint's size, role, materials and spots as plain data |
+| [`build`](building/build.md) | `build(blueprint, at, turn=0, mirror=False, job=None)` | action: build a blueprint from carried blocks |
+| [`blueprint`](building/blueprint.md) | `blueprint(id, at=None, turn=0, mirror=False)` | a blueprint's size, role, materials and spots as plain data |
 
 ## Mining
 

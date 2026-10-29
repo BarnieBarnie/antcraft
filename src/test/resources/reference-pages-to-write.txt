@@ -2,26 +2,6 @@
 # One name a line, grouped by the issue that writes them; each issue takes out its own block. ReferenceDocsTest
 # fails for a native that is neither here nor has a page, and for a name here that has a page.
 
-# #406 inventory, crafting, containers, building
-inventory
-held
-count
-has
-drop
-pick_up
-mine
-place
-use
-craft
-smelt
-put
-take
-container
-free_slots
-matches
-build
-blueprint
-
 # #408 Python builtins
 abs
 all
