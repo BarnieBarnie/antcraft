@@ -178,6 +178,8 @@ stock.setdefault("gold", 5)
 print(list(stock.keys()), list(stock.values()))   # ['coal', 'gold'] [2, 5]
 for name, n in stock.items():
     print(name, n)                # coal 2, then gold 5
+stock.clear()
+print(stock)                      # {}
 ```
 
 `keys()`, `values()` and `items()` are live views, as in Python: they see changes to the dict made after they were taken. A dict cannot change size while a loop goes over it; loop over `list(d.keys())` to remove keys as you go.

@@ -209,6 +209,11 @@ final class Methods {
 			}
 			return l.items.remove((int) at);
 		});
+		method(natives, "list", "clear", PyList.class, (l, args, kwargs, call) -> {
+			Args.bind("clear", args, kwargs, 0);
+			l.items.clear();
+			return PyNone.NONE;
+		});
 		method(natives, "list", "insert", PyList.class, (l, args, kwargs, call) -> {
 			Object[] a = Args.bind("insert", args, kwargs, 2, "index", "object");
 			long size = l.items.size();
@@ -293,6 +298,11 @@ final class Methods {
 				throw new ScriptError("key " + Values.repr(a[0]) + " is not in the dict");
 			}
 			return a[1];
+		});
+		method(natives, "dict", "clear", PyDict.class, (d, args, kwargs, call) -> {
+			Args.bind("clear", args, kwargs, 0);
+			d.clear();
+			return PyNone.NONE;
 		});
 		method(natives, "dict", "setdefault", PyDict.class, (d, args, kwargs, call) -> {
 			Object[] a = Args.bind("setdefault", args, kwargs, 1, "key", "default");

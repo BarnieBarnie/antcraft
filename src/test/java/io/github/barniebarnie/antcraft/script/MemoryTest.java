@@ -106,6 +106,13 @@ class MemoryTest {
 	}
 
 	@Test
+	void clearEmptiesMemory() {
+		PyDict memory = Memory.create();
+		assertEquals("None {}", run(memory, "memory['x'] = 1\nprint(memory.clear(), memory)\n"));
+		assertEquals("{}", Values.repr(roundTrip(memory, new ArrayList<>())));
+	}
+
+	@Test
 	void anEmptyMemoryLoadsEmpty() {
 		assertEquals("{}", Values.repr(roundTrip(Memory.create(), new ArrayList<>())));
 		assertEquals("{}", Values.repr(Memory.load(TagValueInput.create(ProblemReporter.DISCARDING, RegistryAccess.EMPTY, new CompoundTag()), null)));

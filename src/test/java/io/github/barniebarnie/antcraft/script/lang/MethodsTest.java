@@ -109,6 +109,14 @@ class MethodsTest {
 	}
 
 	@Test
+	void clearEmptiesADictOrList() {
+		assertEquals("None {} 0", run("d = {'a': 1, 'b': 2}\nprint(d.clear(), d, len(d))"));
+		assertEquals("{'c': 3}", run("d = {'a': 1}\nd.clear()\nd['c'] = 3\nprint(d)"));
+		assertEquals("None []", run("xs = [1, 2]\nprint(xs.clear(), xs)"));
+		assertEquals("clear() takes exactly 0 arguments (1 given)", error("{}.clear(1)"));
+	}
+
+	@Test
 	void dictKeysValuesAndItemsAreLiveViews() {
 		assertEquals("dict_keys(['a', 'b']) dict_values([1, 2]) dict_items([('a', 1), ('b', 2)])",
 				run("d = {'a': 1, 'b': 2}\nprint(d.keys(), d.values(), d.items())"));

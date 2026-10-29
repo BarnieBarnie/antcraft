@@ -75,6 +75,10 @@ public final class PyDict {
 		return entry == null ? null : entry[1];
 	}
 
+	public void clear() {
+		entries.clear();
+	}
+
 	public int size() {
 		return entries.size();
 	}
