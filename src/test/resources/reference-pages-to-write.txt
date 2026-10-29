@@ -2,23 +2,6 @@
 # One name a line, grouped by the issue that writes them; each issue takes out its own block. ReferenceDocsTest
 # fails for a native that is neither here nor has a page, and for a name here that has a page.
 
-# #405 movement and world senses
-goto
-travel
-reachable
-pos
-home
-set_home
-home_dimension
-dimension
-portals
-block
-find_nearest
-scan
-entities
-items_near
-is_day
-
 # #406 inventory, crafting, containers, building
 inventory
 held

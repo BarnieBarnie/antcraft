@@ -20,7 +20,7 @@ One instruction, the call itself.
 
 ## Description
 
-The time of day of the world the bot is in, as the game's clock gives it. Whether it is light enough outside to count as day is [`is_day()`](../index.md#the-world-around).
+The time of day of the world the bot is in, as the game's clock gives it. Whether it is light enough outside to count as day is [`is_day()`](is_day.md).
 
 ## Examples
 
@@ -33,4 +33,4 @@ while time() > 1000:
 
 ## See also
 
-[`is_day`](../index.md#the-world-around), [`wait`](../index.md#the-bot-and-its-output).
+[`is_day`](is_day.md), [`wait`](../index.md#the-bot-and-its-output).

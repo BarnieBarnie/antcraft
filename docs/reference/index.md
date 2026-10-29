@@ -18,27 +18,27 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `goto` | `goto(pos, near=0)` | action: walk to within `near` blocks, digging, pillaring and bridging as needed |
-| `travel` | `travel(portal)` | action: go through the nether portal at `portal` to the other dimension |
-| `reachable` | `reachable(pos, near=0)` | whether the bot could walk to within `near` blocks of `pos`; plans without moving (may pause) |
-| `pos` | `pos()` | the bot's position, with its dimension |
-| `home` | `home()` | the bot's home, with its dimension |
-| `set_home` | `set_home(pos)` | sets the bot's home |
-| `home_dimension` | `home_dimension()` | the id of the dimension of the bot's home |
-| `dimension` | `dimension()` | the id of the dimension the bot is in, such as `"minecraft:overworld"` |
-| `portals` | `portals()` | both ends of the nether portals the bot went through, newest first |
+| [`goto`](movement/goto.md) | `goto(pos, near=0)` | action: walk to within `near` blocks, digging, pillaring and bridging as needed |
+| [`travel`](movement/travel.md) | `travel(portal)` | action: go through the nether portal at `portal` to the other dimension |
+| [`reachable`](movement/reachable.md) | `reachable(pos, near=0)` | whether the bot could walk to within `near` blocks of `pos`; plans without moving (may pause) |
+| [`pos`](movement/pos.md) | `pos()` | the bot's position, with its dimension |
+| [`home`](movement/home.md) | `home()` | the bot's home, with its dimension |
+| [`set_home`](movement/set_home.md) | `set_home(pos)` | sets the bot's home |
+| [`home_dimension`](movement/home_dimension.md) | `home_dimension()` | the id of the dimension of the bot's home |
+| [`dimension`](movement/dimension.md) | `dimension()` | the id of the dimension the bot is in, such as `"minecraft:overworld"` |
+| [`portals`](movement/portals.md) | `portals()` | both ends of the nether portals the bot went through, newest first |
 
 ## The world around
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `block` | `block(pos)` | the [`Block`](types/block.md) at `pos`, or `None` where it is not loaded |
-| `find_nearest` | `find_nearest(what, radius=32)` | the nearest matching block's position, or `None` (may pause) |
-| `scan` | `scan(what, radius=16, limit=64)` | the positions of matching blocks, nearest first (may pause) |
-| `entities` | `entities(what=None, radius=16)` | the [`Entity`](types/entity.md) values around, nearest first |
-| `items_near` | `items_near(item=None, radius=16)` | the dropped items around, nearest first |
+| [`block`](world/block.md) | `block(pos)` | the [`Block`](types/block.md) at `pos`, or `None` where it is not loaded |
+| [`find_nearest`](world/find_nearest.md) | `find_nearest(what, radius=32)` | the nearest matching block's position, or `None` (may pause) |
+| [`scan`](world/scan.md) | `scan(what, radius=16, limit=64)` | the positions of matching blocks, nearest first (may pause) |
+| [`entities`](world/entities.md) | `entities(what=None, radius=16)` | the [`Entity`](types/entity.md) values around, nearest first |
+| [`items_near`](world/items_near.md) | `items_near(item=None, radius=16)` | the dropped items around, nearest first |
 | [`time`](world/time.md) | `time()` | the time of day, 0 to 23999 |
-| `is_day` | `is_day()` | whether it is day |
+| [`is_day`](world/is_day.md) | `is_day()` | whether it is day |
 
 ## Inventory
 
