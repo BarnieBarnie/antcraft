@@ -800,8 +800,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	@Override
 	protected void pickUpItem(ServerLevel level, ItemEntity entity) {
-		// What it dropped on purpose (a script's drop) it leaves lying; pick_up still takes it (see BotHands.collect).
-		if (entity.getOwner() == this) {
+		// What a bot dropped on purpose (a script's drop) every bot leaves lying; pick_up still takes it (see BotHands.collect).
+		if (entity.getOwner() instanceof AntBot) {
 			return;
 		}
 		InventoryCarrier.pickUpItem(level, this, this, entity);

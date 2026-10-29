@@ -27,7 +27,7 @@ No, it is done at once.
 
 ## Description
 
-It takes from the held stack first, then from the inventory slots in order, until `n` are tossed or no matching item is left. The items fly ahead as a player tosses them and can be picked up 2 seconds later. The bot does not pick up again by itself what it dropped, but [`pick_up`](pick_up.md) takes it.
+It takes from the held stack first, then from the inventory slots in order, until `n` are tossed or no matching item is left. The items fly ahead as a player tosses them and can be picked up 2 seconds later. No bot picks up by itself what a bot dropped, but [`pick_up`](pick_up.md) takes it.
 
 An `n` below 1, a malformed selector, or a name or tag the game does not know stops the script with an error.
 

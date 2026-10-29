@@ -35,7 +35,9 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -663,6 +665,43 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "r = drop('nautilus_shell', 2)\nprint(r.ok, r.reason, r.value, count('nautilus_shell'))\n"
 				+ "wait(60)\nprint(count('nautilus_shell'), len(items_near('nautilus_shell', 4)))\n",
 			List.of("True None 2 3", "3 1"));
+	}
+
+	/** A nautilus shell lying at {@code (x, 1, z)} that {@code thrower} dropped, which anyone may pick up at once. */
+	static ItemEntity droppedBy(GameTestHelper helper, Entity thrower, int x, int z) {
+		ItemEntity item = helper.spawnItem(Items.NAUTILUS_SHELL, new BlockPos(x, 1, z));
+		item.setThrower(thrower);
+		item.setNoPickUpDelay();
+		return item;
+	}
+
+	/** What one bot dropped on purpose, another bot standing on it leaves lying too (#420). */
+	@GameTest(maxTicks = 60)
+	public void aBotLeavesWhatAnotherBotDropped(GameTestHelper helper) {
+		AntBot dropper = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		droppedBy(helper, dropper, 5, 5);
+		expect(helper, bot, "wait(20)\nprint(count('nautilus_shell'))\n", List.of("0"),
+			() -> helper.assertItemEntityPresent(Items.NAUTILUS_SHELL));
+	}
+
+	@GameTest(maxTicks = 60)
+	public void pickUpTakesWhatAnotherBotDropped(GameTestHelper helper) {
+		AntBot dropper = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		droppedBy(helper, dropper, 5, 5);
+		expect(helper, bot, "r = pick_up('nautilus_shell')\nprint(r.ok, count('nautilus_shell'))\n", List.of("True 1"));
+	}
+
+	/** What a player or a mob dropped the bot picks up by itself as it passes. */
+	@GameTest(maxTicks = 60)
+	public void aBotPicksUpWhatAPlayerOrAMobDropped(GameTestHelper helper) {
+		Cow cow = helper.spawnWithNoFreeWill(EntityTypes.COW, 1, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		Entity player = BotScripts.owner(helper, bot);
+		droppedBy(helper, cow, 5, 5);
+		droppedBy(helper, player, 5, 5);
+		expect(helper, bot, "wait(20)\nprint(count('nautilus_shell'))\n", List.of("2"));
 	}
 
 	@GameTest(maxTicks = 20)
