@@ -112,7 +112,7 @@ public final class WorkApi {
 			if (entity.level() != bot.level()) {
 				return run.done(attack.describe(), Result.fail(Result.WRONG_DIMENSION));
 			}
-			if (entity == bot || !mayAttack(target(entity), AntCraftConfig.values())) {
+			if (entity == bot || !mayAttack(entity)) {
 				return run.done(attack.describe(), Result.fail(Result.PROTECTED));
 			}
 			return run.start(attack, call);
@@ -143,6 +143,11 @@ public final class WorkApi {
 				? Target.TAMED : Target.ANIMAL;
 			default -> Target.OTHER;
 		};
+	}
+
+	/** Whether a bot may hit {@code entity} under the server's config; also what a sword's sweep spares (BotHands.strike). */
+	public static boolean mayAttack(Entity entity) {
+		return mayAttack(target(entity), AntCraftConfig.values());
 	}
 
 	/**

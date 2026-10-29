@@ -17,6 +17,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.entity.monster.zombie.Zombie;
@@ -24,6 +25,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * The bot's health and fighting (#415): {@code health()}, {@code max_health()} and {@code attack(entity)}, each run as a
@@ -178,6 +180,81 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(firstBlow[0] == 1 && firstBlow[1] == 7, "bare hand took " + firstBlow[0] + ", diamond sword " + firstBlow[1]);
+		});
+	}
+
+	/** A still cow of 200 health, not knocked back, at {@code at} in the test area. */
+	private static Cow stillCow(GameTestHelper helper, Vec3 at) {
+		Cow cow = helper.spawn(EntityTypes.COW, at);
+		cow.setNoAi(true);
+		cow.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		cow.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+		cow.setHealth(200);
+		return cow;
+	}
+
+	/**
+	 * A sword's blow sweeps (#423), as a player's: a bot with a sword attacking one cow also hurts the cow beside it. Which
+	 * of the two it attacks does not matter.
+	 */
+	// Measured: passes at tick 12, the first blow.
+	@GameTest(maxTicks = 25)
+	public void aSwordAlsoHurtsTheMobBesideTheTarget(GameTestHelper helper) {
+		List<Cow> cows = List.of(stillCow(helper, new Vec3(3, 1, 4.5)), stillCow(helper, new Vec3(4.2, 1, 4.5)));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		run(helper, bot, "attack(entities('cow', 5)[0])\n");
+		helper.succeedWhen(() -> {
+			for (Cow cow : cows) {
+				helper.assertTrue(cow.getHealth() < 200, "a cow is unhurt");
+			}
+		});
+	}
+
+	/** An axe does not sweep (#423): a bot with one hurts only the cow it attacks, not the one beside it. */
+	@GameTest(maxTicks = 45)
+	public void anAxeHurtsOnlyTheTarget(GameTestHelper helper) {
+		List<Cow> cows = List.of(stillCow(helper, new Vec3(3, 1, 4.5)), stillCow(helper, new Vec3(4.2, 1, 4.5)));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_AXE));
+		run(helper, bot, "attack(entities('cow', 5)[0])\n");
+		// The first blow lands at about tick 12, the second 20 ticks later.
+		helper.runAtTickTime(35, () -> {
+			long hurt = cows.stream().filter(cow -> cow.getHealth() < 200).count();
+			helper.assertTrue(hurt == 1, hurt + " cows hurt");
+			helper.succeed();
+		});
+	}
+
+	/**
+	 * A sweep never hurts what {@code attack} may not (#423): a bot with a sword attacking a pig hurts the cow behind it,
+	 * but not the named cow and the other bot beside it.
+	 */
+	@GameTest(maxTicks = 40)
+	public void aSweepSparesProtectedEntities(GameTestHelper helper) {
+		Pig pig = helper.spawn(EntityTypes.PIG, new Vec3(3.5, 1, 4.5));
+		pig.setNoAi(true);
+		pig.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		pig.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+		pig.setHealth(200);
+		Cow cow = stillCow(helper, new Vec3(3.5, 1, 5.6));
+		Cow named = stillCow(helper, new Vec3(2.4, 1, 4.5));
+		named.setCustomName(Component.literal("Daisy"));
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 4.5));
+		other.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		run(helper, bot, "attack(entities('pig', 8)[0])\n");
+		helper.onEachTick(() -> {
+			if (named.getHealth() < 200 || other.getHealth() < other.getMaxHealth()) {
+				helper.fail("the sweep hurt the named cow (" + named.getHealth() + ") or the other bot (" + other.getHealth() + ")");
+			}
+		});
+		// By then the bot struck the pig twice, at about tick 12 and 13 ticks later. Red without the mayAttack check in the
+		// sweep: the named cow and the other bot are hurt on tick 13.
+		helper.runAtTickTime(30, () -> {
+			helper.assertTrue(cow.getHealth() < 200, "the sweep never hurt the cow behind the pig");
+			helper.succeed();
 		});
 	}
 

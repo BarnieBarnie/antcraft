@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import io.github.barniebarnie.antcraft.script.WorkApi;
 import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -7,8 +8,14 @@ import net.fabricmc.fabric.api.entity.FakePlayer;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
@@ -85,10 +92,49 @@ public final class BotHands {
 		return bot.isWithinMeleeAttackRange(target) && bot.getSensing().hasLineOfSight(target);
 	}
 
-	/** Swings the held item at {@code target}, as a mob strikes: its damage is the bot's attack damage with what it holds. */
+	/**
+	 * Swings the held item at {@code target}, as a mob strikes: its damage is the bot's attack damage with what it holds. A
+	 * blow that lands with a sword also sweeps ({@link #sweep}); a player's critical hit and sprint knockback a bot never
+	 * has (docs/reference/combat/attack.md).
+	 */
 	public static void strike(AntBot bot, ServerLevel level, LivingEntity target) {
 		bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
-		bot.doHurtTarget(level, target);
+		if (bot.doHurtTarget(level, target) && bot.getMainHandItem().is(ItemTags.SWORDS)) {
+			sweep(bot, level, target);
+		}
+	}
+
+	/**
+	 * A fully charged player's sword sweep (Player.doSweepAttack): each living entity within a block of {@code target} and 3
+	 * of the bot takes 1 damage plus the sword's sweeping edge share of the bot's attack damage, enchanted, and is knocked
+	 * back. It spares what {@code attack} may not hit ({@link WorkApi#mayAttack}), such as players, bots and named animals.
+	 */
+	private static void sweep(AntBot bot, ServerLevel level, LivingEntity target) {
+		ItemStack sword = bot.getMainHandItem();
+		AttributeInstance ratio = new AttributeInstance(Attributes.SWEEPING_DAMAGE_RATIO, instance -> {
+		});
+		EnchantmentHelper.forEachModifier(sword, EquipmentSlot.MAINHAND, (attribute, modifier) -> {
+			if (attribute.equals(Attributes.SWEEPING_DAMAGE_RATIO)) {
+				ratio.addTransientModifier(modifier);
+			}
+		});
+		float damage = 1 + (float) (ratio.getValue() * bot.getAttributeValue(Attributes.ATTACK_DAMAGE));
+		DamageSource source = bot.damageSources().mobAttack(bot);
+		float yaw = bot.getYRot() * Mth.DEG_TO_RAD;
+		for (LivingEntity near : level.getEntitiesOfClass(LivingEntity.class, target.getBoundingBox().inflate(1, 0.25, 1))) {
+			if (near == bot || near == target || bot.isAlliedTo(near) || near instanceof ArmorStand stand && stand.isMarker()
+				|| bot.distanceToSqr(near) >= 9 || !WorkApi.mayAttack(near)) {
+				continue;
+			}
+			float dealt = EnchantmentHelper.modifyDamage(level, sword, near, source, damage);
+			if (near.hurtServer(level, source, dealt)) {
+				near.knockback(0.4, Mth.sin(yaw), -Mth.cos(yaw), source, dealt);
+				EnchantmentHelper.doPostAttackEffects(level, near, source);
+			}
+		}
+		level.playSound(null, bot.getX(), bot.getY(), bot.getZ(), SoundEvents.PLAYER_ATTACK_SWEEP, bot.getSoundSource(), 1, 1);
+		level.sendParticles(ParticleTypes.SWEEP_ATTACK, bot.getX() - Mth.sin(yaw), bot.getY(0.5), bot.getZ() + Mth.cos(yaw), 0,
+			-Mth.sin(yaw), 0, Mth.cos(yaw), 0);
 	}
 
 	/** The first stack {@code item} matches that the bot carries, its held one first; null if it carries none. */
