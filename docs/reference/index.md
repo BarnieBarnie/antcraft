@@ -2,7 +2,7 @@
 
 Every builtin a script can call, grouped by what it is for. The API is available as builtins in every script (no import needed); names are `snake_case`. Positions are [`Pos`](types/pos.md) values; anything that takes a position also takes a tuple `(x, y, z)`.
 
-Senses are done at once and return a value. Actions take ticks, pause the script until they are done and return a [`Result`](types/result.md). Builtins whose name is not a link have no page of their own yet.
+Senses are done at once and return a value. Actions take ticks, pause the script until they are done and return a [`Result`](types/result.md).
 
 ## Types
 

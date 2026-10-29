@@ -1,6 +1,6 @@
 # Design
 
-Status: draft, 2026-10-27. This replaces the goal-driven colony as the direction of the mod; the roadmap below follows the milestones.
+Written 2026-10-27. This replaces the goal-driven colony as the direction of the mod; the roadmap below follows the milestones.
 
 ## Why
 
