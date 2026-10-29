@@ -89,6 +89,12 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`mineshaft_at`](mining/mineshaft_at.md) | `mineshaft_at(top, levels, round=0, branches=4, length=16)` | the plan of a shaft already started at `top` |
 | [`ore_vein`](mining/ore_vein.md) | `ore_vein(pos)` | the blocks of the ore vein at `pos` |
 
+## Fighting
+
+| Builtin | Signature | Does |
+|---|---|---|
+| [`attack`](combat/attack.md) | `attack(entity)` | action: walk to a hostile mob or animal and strike it until it dies |
+
 ## Colony and jobs
 
 | Builtin | Signature | Does |
@@ -106,6 +112,8 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 |---|---|---|
 | [`deaths`](bot/deaths.md) | `deaths()` | how often the bot has died |
 | [`last_death`](bot/last_death.md) | `last_death()` | where the bot last died, or `None` |
+| [`health`](bot/health.md) | `health()` | the bot's health now, `0.0` to `20.0` |
+| [`max_health`](bot/max_health.md) | `max_health()` | the most health the bot can have, `20.0` |
 | [`say`](bot/say.md) | `say(text)` | show text above the bot and in its owner's chat |
 | [`print`](bot/print.md) | `print(*values, sep=" ")` | write a line to the bot's log, always shown |
 | [`debug`](bot/debug.md) | `debug(*values, sep=" ")` | write a line to the bot's log at debug level |

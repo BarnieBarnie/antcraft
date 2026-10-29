@@ -202,7 +202,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "held", "find_nearest", "scan", "entities",
 		"items_near", "deaths", "last_death", "colony", "time", "is_day", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
-		"drop_job");
+		"drop_job", "health", "max_health", "attack");
 
 	/**
 	 * Every native that takes a position refuses one from another dimension (a home in the Nether over a chest in the

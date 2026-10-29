@@ -14,6 +14,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
@@ -46,6 +47,20 @@ public final class BotHands {
 		BlockStateProperties.VERTICAL_DIRECTION);
 
 	private BotHands() {
+	}
+
+	/** How many ticks a bot waits between blows, as a mob's {@code MeleeAttackGoal} does. */
+	public static final int STRIKE_TICKS = 20;
+
+	/** Whether {@code target} is in the bot's melee reach and in its sight, so a blow would land. */
+	public static boolean inStrikingReach(AntBot bot, LivingEntity target) {
+		return bot.isWithinMeleeAttackRange(target) && bot.getSensing().hasLineOfSight(target);
+	}
+
+	/** Swings the held item at {@code target}, as a mob strikes: its damage is the bot's attack damage with what it holds. */
+	public static void strike(AntBot bot, ServerLevel level, LivingEntity target) {
+		bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
+		bot.doHurtTarget(level, target);
 	}
 
 	/** The first stack {@code item} matches that the bot carries, its held one first; null if it carries none. */

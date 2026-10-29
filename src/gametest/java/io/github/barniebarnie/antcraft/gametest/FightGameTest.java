@@ -1,0 +1,197 @@
+package io.github.barniebarnie.antcraft.gametest;
+
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
+import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.lang.Output;
+import java.lang.reflect.Method;
+import java.util.List;
+import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
+import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.monster.zombie.Husk;
+import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
+
+/**
+ * The bot's health and fighting (#415): {@code health()}, {@code max_health()} and {@code attack(entity)}, each run as a
+ * short script on a bot in the test area. Only the default targets: which ones the config allows is a unit test
+ * ({@code AttackTargetTest}), as tests in a batch share the config.
+ */
+public class FightGameTest implements CustomTestMethodInvoker {
+	@Override
+	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
+		GameTests.start(helper);
+		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		// The whole floor: the flee test runs in a wider area.
+		AABB bounds = helper.getBounds();
+		for (int x = 0; x < (int) bounds.getXsize(); x++) {
+			for (int z = 0; z < (int) bounds.getZsize(); z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+			}
+		}
+		method.invoke(this, helper);
+	}
+
+	/** Runs {@code source} on {@code bot}, failing the test as soon as the script fails. */
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
+		ScriptRun run = BotScripts.run(bot, source);
+		helper.onEachTick(() -> {
+			if (run.state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		return run;
+	}
+
+	/** Succeeds once the script finished having printed exactly {@code expected}. */
+	private static void succeedWhenPrinted(GameTestHelper helper, AntBot bot, ScriptRun run, List<String> expected) {
+		helper.succeedWhen(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state() + ", printed " + printed);
+			helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
+		});
+	}
+
+	/** Attacks the one entity of type {@code type} within 8 blocks and prints the result. */
+	private static String attackThe(String type) {
+		return "r = attack(entities('" + type + "', 8)[0])\nprint(r.ok, r.reason)\n";
+	}
+
+	@GameTest(maxTicks = 15)
+	public void healthAndMaxHealthReadTheBotsHealth(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = run(helper, bot, "print(health(), max_health())\nwait(5)\nprint(health(), max_health())\n");
+		helper.runAfterDelay(3, () -> bot.hurtServer(helper.getLevel(), helper.getLevel().damageSources().generic(), 5));
+		succeedWhenPrinted(helper, bot, run, List.of("20.0 20.0", "15.0 20.0"));
+	}
+
+	/**
+	 * A bot with a diamond sword walks to a zombie and kills it. The zombie wears a helmet, so the sun does not kill it
+	 * instead, and fails the test if it burns all the same.
+	 * The bot's own goals fight monsters too, so {@link #attackKillsACow} is the test that only {@code attack} can pass.
+	 */
+	@GameTest(maxTicks = 130)
+	public void attackKillsAZombie(GameTestHelper helper) {
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 6, 1, 3);
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		zombie.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		ScriptRun run = run(helper, bot, attackThe("zombie"));
+		helper.onEachTick(() -> {
+			if (zombie.isOnFire()) {
+				helper.fail("the zombie burns");
+			}
+		});
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
+	/**
+	 * A bot with bare hands walks to a cow and kills it: the bot's own goals target only monsters, so only {@code attack}
+	 * can kill it.
+	 */
+	@GameTest(maxTicks = 130)
+	public void attackKillsACow(GameTestHelper helper) {
+		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 3);
+		cow.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		ScriptRun run = run(helper, bot, attackThe("cow"));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(cow.isDeadOrDying(), "cow alive with " + cow.getHealth() + " health");
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED && printed.equals(List.of("True None")), "script " + run.state() + ", printed " + printed);
+		});
+	}
+
+	/** A husk that is gone (here: discarded) while the bot walks to it ends the attack with {@code target_gone}. */
+	@GameTest(maxTicks = 15)
+	public void attackOnATargetThatDisappearsEndsWithTargetGone(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 6);
+		husk.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ScriptRun run = run(helper, bot, attackThe("husk"));
+		helper.runAfterDelay(4, () -> husk.discard());
+		succeedWhenPrinted(helper, bot, run, List.of("False target_gone"));
+	}
+
+	/** A husk shut in bedrock, which the bot cannot dig through, is {@code unreachable}. */
+	@GameTest(maxTicks = 70)
+	public void attackOnAShutInTargetEndsWithUnreachable(GameTestHelper helper) {
+		for (int x = 4; x <= 6; x++) {
+			for (int z = 4; z <= 6; z++) {
+				for (int y = 0; y <= 3; y++) {
+					if (x != 5 || z != 5 || y == 0 || y == 3) {
+						helper.setBlock(x, y, z, Blocks.BEDROCK);
+					}
+				}
+			}
+		}
+		Husk husk = helper.spawn(EntityTypes.HUSK, 5, 1, 5);
+		husk.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ScriptRun run = run(helper, bot, attackThe("husk"));
+		succeedWhenPrinted(helper, bot, run, List.of("False unreachable"));
+	}
+
+	/**
+	 * A bot brought to flee health while it fights a husk flees home: the flee reflex ends the attack with
+	 * {@code interrupted}. In a wide area, as the flee tests of {@code ReflexGameTest}, so the bot has room to flee.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void theFleeReflexInterruptsAnAttack(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 15, 1, 15);
+		husk.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
+		bot.setHome(helper.absolutePos(new BlockPos(8, 1, 8)));
+		ScriptRun run = run(helper, bot, attackThe("husk"));
+		// Once the bot attacks.
+		helper.runAfterDelay(3, () -> bot.setHealth(4));
+		succeedWhenPrinted(helper, bot, run, List.of("False interrupted"));
+	}
+
+	/** By default the bot refuses to attack a player, another bot, a named animal or a tamed one, and leaves them unhurt. */
+	@GameTest(maxTicks = 10)
+	public void attackRefusesPlayersBotsAndNamedOrTamedAnimals(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, bot);
+		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
+		player.teleportTo(at.getX() + 0.5, at.getY(), at.getZ() + 0.5);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 3);
+		Cow cow = helper.spawn(EntityTypes.COW, 3, 1, 5);
+		cow.setCustomName(Component.literal("Daisy"));
+		Wolf wolf = helper.spawn(EntityTypes.WOLF, 3, 1, 1);
+		wolf.setOwner(player);
+		List<LivingEntity> targets = List.of(player, other, cow, wolf);
+		cow.setNoAi(true);
+		wolf.setNoAi(true);
+		other.setNoAi(true);
+		ScriptRun run = run(helper, bot, """
+			lines = []
+			for e in entities(radius=3):
+			    lines.append(e.type + ' ' + attack(e).reason)
+			for line in sorted(lines):
+			    print(line)
+			""");
+		helper.onEachTick(() -> {
+			for (LivingEntity target : targets) {
+				if (target.getHealth() < target.getMaxHealth()) {
+					helper.fail(target + " hurt");
+				}
+			}
+		});
+		succeedWhenPrinted(helper, bot, run, List.of("antcraft:ant_bot protected", "minecraft:cow protected", "minecraft:player protected",
+			"minecraft:wolf protected"));
+	}
+}

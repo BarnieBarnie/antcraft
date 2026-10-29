@@ -143,6 +143,25 @@ class AntCraftConfigTest {
 	}
 
 	@Test
+	void botsAttackNoPlayersBotsOrTamedAnimalsUnlessAllowed() {
+		for (AntCraftConfig.Values values : List.of(AntCraftConfig.parse(new Properties()), new AntCraftConfig.Values(true, 64))) {
+			assertFalse(values.botsAttackPlayers());
+			assertFalse(values.botsAttackBots());
+			assertFalse(values.botsAttackTamed());
+		}
+		Properties props = new Properties();
+		props.setProperty("botsAttackPlayers", " true ");
+		props.setProperty("botsAttackBots", "true");
+		props.setProperty("botsAttackTamed", "TRUE");
+		AntCraftConfig.Values values = AntCraftConfig.parse(props);
+		assertTrue(values.botsAttackPlayers());
+		assertTrue(values.botsAttackBots());
+		assertTrue(values.botsAttackTamed());
+		String comment = AntCraftConfig.fileComment();
+		assertTrue(comment.contains("botsAttackPlayers") && comment.contains("botsAttackBots") && comment.contains("botsAttackTamed"), comment);
+	}
+
+	@Test
 	void theConfigCommentNamesTheReflexThresholds() {
 		String comment = AntCraftConfig.fileComment();
 		assertTrue(comment.contains("botFleeHealth") && comment.contains("botSurfaceAir"), comment);

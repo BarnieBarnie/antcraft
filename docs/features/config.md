@@ -13,6 +13,9 @@
 | `botRespawnTicks` | `200` | Ticks a dead bot waits before it comes back |
 | `botFleeHealth` | `6` | Health (of 20) at or below which a bot flees a hostile mob within 8 blocks instead of fighting (Reflexes); `0` never |
 | `botSurfaceAir` | `100` | Air (of 300 ticks) below which a bot under water swims up to breathe (Reflexes); `0` never |
+| `botsAttackPlayers` | `false` | Whether a script's [`attack`](../reference/combat/attack.md) may hit players; when `false` it fails with `protected` |
+| `botsAttackBots` | `false` | Whether `attack` may hit other bots |
+| `botsAttackTamed` | `false` | Whether `attack` may hit tamed or named animals; hostile mobs and untamed, unnamed animals it may always hit |
 | `botsLoadChunks` | `true` | A bot running a script keeps the chunks around it loaded, so it works on when its owner walks away, and `goto` loads (and generates, if need be) the chunks on its way. When `false`, `goto` stops with `not_loaded` at the edge of loaded terrain. Idle bots (running their fallback `idle.py`) keep chunks loaded only while they walk |
 
 The goal-driven colony's options, `mineshaftLevels` and `replantMatchWaitTicks`, are gone: a config file that still has them loads, and they are dropped when the file is written again.

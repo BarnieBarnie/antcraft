@@ -35,7 +35,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code held},
  * {@code block}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
- * {@code time}, {@code is_day} and {@code colony}. They read the world around the script's bot and return at once; only a block search
+ * {@code time}, {@code is_day}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
  */
 public final class SenseApi {
@@ -166,6 +166,14 @@ public final class SenseApi {
 			GlobalPos at = bot(run, call).getLastDeath();
 			return at == null ? PyNone.NONE
 				: new Pos(at.pos().getX(), at.pos().getY(), at.pos().getZ()).in(at.dimension().identifier().toString());
+		});
+		natives.register("health", call -> {
+			Args.bind("health", call, 0);
+			return (double) bot(run, call).getHealth();
+		});
+		natives.register("max_health", call -> {
+			Args.bind("max_health", call, 0);
+			return (double) bot(run, call).getMaxHealth();
 		});
 		natives.register("time", call -> {
 			Args.bind("time", call, 0);

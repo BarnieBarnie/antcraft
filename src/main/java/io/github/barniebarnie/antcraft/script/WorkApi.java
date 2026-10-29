@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.script;
 
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.entity.Tools;
@@ -19,7 +20,13 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.OwnableEntity;
+import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
@@ -30,7 +37,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The actions of the bot API that change the world (docs/reference/index.md, Working blocks): {@code mine}, {@code place},
- * {@code pick_up}, {@code equip}, {@code use} and {@code drop}. Those that work on a block first walk into reach of it, as
+ * {@code pick_up}, {@code equip}, {@code use}, {@code drop} and {@code attack}. Those that work on a block first walk into reach of it, as
  * {@code goto} walks ({@link MoveApi#reach}); each returns a {@link Result}.
  */
 public final class WorkApi {
@@ -91,6 +98,65 @@ public final class WorkApi {
 			}
 			return run.start(new PickUp(run, bot(run, call), item, (int) radius, given.toString()), call);
 		});
+		natives.register("attack", call -> {
+			Object arg = Args.bind("attack", call, 1, "entity")[0];
+			if (!(arg instanceof EntityInfo info)) {
+				throw new ScriptError("attack() takes an Entity, not '" + Values.typeName(arg) + "'");
+			}
+			AntBot bot = bot(run, call);
+			Attack attack = new Attack(run, bot, info);
+			@Nullable Entity entity = info.entity();
+			if (entity == null || !entity.isAlive()) {
+				return run.done(attack.describe(), Result.fail(Result.TARGET_GONE));
+			}
+			if (entity.level() != bot.level()) {
+				return run.done(attack.describe(), Result.fail(Result.WRONG_DIMENSION));
+			}
+			if (entity == bot || !mayAttack(target(entity), AntCraftConfig.values())) {
+				return run.done(attack.describe(), Result.fail(Result.PROTECTED));
+			}
+			return run.start(attack, call);
+		});
+	}
+
+	/** What {@code attack} sees in a target, to tell whether it may hit it ({@link #mayAttack}). */
+	enum Target {
+		/** A hostile mob, such as a zombie. */
+		HOSTILE,
+		/** An animal neither tamed nor named. */
+		ANIMAL,
+		/** An animal that is tamed or has a name. */
+		TAMED,
+		/** Another bot. */
+		BOT,
+		PLAYER,
+		/** Anything else: a villager, an iron golem, a dropped item. */
+		OTHER
+	}
+
+	static Target target(Entity entity) {
+		return switch (entity) {
+			case Player player -> Target.PLAYER;
+			case AntBot bot -> Target.BOT;
+			case Enemy enemy -> Target.HOSTILE;
+			case Animal animal -> animal.hasCustomName() || animal instanceof OwnableEntity owned && owned.getOwnerReference() != null
+				? Target.TAMED : Target.ANIMAL;
+			default -> Target.OTHER;
+		};
+	}
+
+	/**
+	 * Whether {@code attack} may hit {@code target}: hostile mobs and untamed, unnamed animals always; players, other bots and
+	 * tamed or named animals only where the config allows them (docs/features/config.md); anything else never.
+	 */
+	static boolean mayAttack(Target target, AntCraftConfig.Values config) {
+		return switch (target) {
+			case HOSTILE, ANIMAL -> true;
+			case PLAYER -> config.botsAttackPlayers();
+			case BOT -> config.botsAttackBots();
+			case TAMED -> config.botsAttackTamed();
+			case OTHER -> false;
+		};
 	}
 
 	static AntBot bot(ScriptRun run, NativeCall call) {
@@ -340,6 +406,112 @@ public final class WorkApi {
 		@Override
 		public String describe() {
 			return "use(" + this.target + (this.selector == null ? "" : ", " + this.selector) + ")";
+		}
+	}
+
+	/**
+	 * {@code attack(entity)}: walks into melee reach of the target, following it as it moves, and strikes it with what the
+	 * bot holds every {@link BotHands#STRIKE_TICKS} ticks until it dies (ok). It fails with {@code target_gone} once the
+	 * target is gone otherwise or more than {@link SenseApi#MAX_ENTITY_RADIUS} blocks away, and with the walk's reason,
+	 * such as {@code unreachable}, when the bot cannot get to it.
+	 */
+	private static final class Attack implements ScriptRun.Action {
+		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
+		private static final double MOVED = 2;
+		/** How often the bot may get to the target without it being in reach before it gives up with {@code unreachable}. */
+		private static final int ARRIVALS = 3;
+
+		private final ScriptRun run;
+		private final AntBot bot;
+		private final EntityInfo info;
+		private ScriptRun.@Nullable Action walk;
+		private @Nullable Vec3 walkedTo;
+		private int arrivals;
+		private int struckAt = Integer.MIN_VALUE / 2;
+		private @Nullable Result result;
+
+		Attack(ScriptRun run, AntBot bot, EntityInfo info) {
+			this.run = run;
+			this.bot = bot;
+			this.info = info;
+		}
+
+		@Override
+		public boolean tick() {
+			if (this.result != null) {
+				return true;
+			}
+			@Nullable Entity entity = this.info.entity();
+			if (entity instanceof LivingEntity living && living.isDeadOrDying()) {
+				return this.finish(Result.OK);
+			}
+			if (!(entity instanceof LivingEntity target) || entity.isRemoved() || entity.level() != this.bot.level()
+				|| entity.distanceTo(this.bot) > SenseApi.MAX_ENTITY_RADIUS) {
+				return this.finish(Result.fail(Result.TARGET_GONE));
+			}
+			if (BotHands.inStrikingReach(this.bot, target)) {
+				this.stopWalk();
+				this.arrivals = 0;
+				this.bot.getLookControl().setLookAt(target);
+				if (this.bot.tickCount - this.struckAt >= BotHands.STRIKE_TICKS) {
+					BotHands.strike(this.bot, (ServerLevel) this.bot.level(), target);
+					this.struckAt = this.bot.tickCount;
+				}
+				return false;
+			}
+			if (this.walk != null && this.walkedTo != null && target.position().distanceTo(this.walkedTo) > MOVED) {
+				this.stopWalk();
+			}
+			if (this.walk == null) {
+				if (this.arrivals >= ARRIVALS) {
+					return this.finish(Result.fail(Result.UNREACHABLE));
+				}
+				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(target.blockPosition()), 1);
+				this.walkedTo = target.position();
+			}
+			if (!this.walk.tick()) {
+				return false;
+			}
+			Result walked = (Result) this.walk.result();
+			this.walk = null;
+			if (!walked.ok()) {
+				return this.finish(walked);
+			}
+			this.arrivals++;
+			return false;
+		}
+
+		private boolean finish(Result result) {
+			this.stopWalk();
+			this.result = result;
+			return true;
+		}
+
+		private void stopWalk() {
+			if (this.walk != null) {
+				this.walk.cancel();
+				this.walk = null;
+			}
+		}
+
+		@Override
+		public Object result() {
+			return this.result == null ? Result.fail(Result.STOPPED) : this.result;
+		}
+
+		@Override
+		public boolean walks() {
+			return true;
+		}
+
+		@Override
+		public void cancel() {
+			this.stopWalk();
+		}
+
+		@Override
+		public String describe() {
+			return "attack(" + this.info + ")";
 		}
 	}
 

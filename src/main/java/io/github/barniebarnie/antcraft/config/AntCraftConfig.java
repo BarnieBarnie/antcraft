@@ -46,10 +46,19 @@ public final class AntCraftConfig {
 	 * its bot's owner's chat ({@code print} always does). {@code botsLoadChunks} is whether bots running a script keep their
 	 * chunk loaded and {@code goto} loads the chunks on its way. {@code botRespawn} is whether a bot that died comes back at
 	 * its home, {@code botRespawnTicks} after it died. {@code botFleeHealth} and {@code botSurfaceAir} are the thresholds of
-	 * the reflexes that flee hostile mobs and swim up to breathe; 0 turns each off.
+	 * the reflexes that flee hostile mobs and swim up to breathe; 0 turns each off. {@code botsAttackPlayers},
+	 * {@code botsAttackBots} and {@code botsAttackTamed} let a script's {@code attack} hit players, other bots, and tamed
+	 * or named animals; by default it hits only hostile mobs and untamed, unnamed animals (#415).
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
-		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir) {
+		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir,
+		boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
+				botRespawn, botRespawnTicks, botFleeHealth, botSurfaceAir, false, false, false);
+		}
+
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks) {
 			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
@@ -104,6 +113,9 @@ public final class AntCraftConfig {
 		props.setProperty("botRespawnTicks", Integer.toString(values.botRespawnTicks()));
 		props.setProperty("botFleeHealth", Integer.toString(values.botFleeHealth()));
 		props.setProperty("botSurfaceAir", Integer.toString(values.botSurfaceAir()));
+		props.setProperty("botsAttackPlayers", Boolean.toString(values.botsAttackPlayers()));
+		props.setProperty("botsAttackBots", Boolean.toString(values.botsAttackBots()));
+		props.setProperty("botsAttackTamed", Boolean.toString(values.botsAttackTamed()));
 		for (String removed : REMOVED) {
 			props.remove(removed);
 		}
@@ -126,7 +138,9 @@ public final class AntCraftConfig {
 			+ "botRespawn: a bot that dies drops its items and comes back at its home botRespawnTicks (default "
 			+ DEFAULT_BOT_RESPAWN_TICKS + ") ticks later; false makes death final.\n"
 			+ "botFleeHealth (default " + DEFAULT_BOT_FLEE_HEALTH + ", of 20): at or below this health a bot flees a hostile mob near it; 0 never.\n"
-			+ "botSurfaceAir (default " + DEFAULT_BOT_SURFACE_AIR + ", of 300 ticks): below this much air a bot under water swims up to breathe; 0 never.";
+			+ "botSurfaceAir (default " + DEFAULT_BOT_SURFACE_AIR + ", of 300 ticks): below this much air a bot under water swims up to breathe; 0 never.\n"
+			+ "botsAttackPlayers, botsAttackBots, botsAttackTamed (default false): whether a script's attack may hit players, other bots,\n"
+			+ "and tamed or named animals; it always may hit hostile mobs and untamed, unnamed animals.";
 	}
 
 	public static Values parse(Properties props) {
@@ -151,7 +165,13 @@ public final class AntCraftConfig {
 		int fleeHealth = nonNegativeInt(props, "botFleeHealth", DEFAULT_BOT_FLEE_HEALTH);
 		int surfaceAir = nonNegativeInt(props, "botSurfaceAir", DEFAULT_BOT_SURFACE_AIR);
 		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks,
-			botRespawn, botRespawnTicks, fleeHealth, surfaceAir);
+			botRespawn, botRespawnTicks, fleeHealth, surfaceAir, flag(props, "botsAttackPlayers"), flag(props, "botsAttackBots"),
+			flag(props, "botsAttackTamed"));
+	}
+
+	/** The boolean under {@code key}, false when it is missing. */
+	private static boolean flag(Properties props, String key) {
+		return Boolean.parseBoolean(props.getProperty(key, "false").trim());
 	}
 
 	/** A log level below print by name, in any case; {@code error}, with a warning, for anything else. */
