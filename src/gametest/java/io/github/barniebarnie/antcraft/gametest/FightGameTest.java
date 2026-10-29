@@ -161,6 +161,43 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("False target_gone"));
 	}
 
+	/**
+	 * A cow teleported 70 blocks straight up once the bot struck it ends the attack with {@code target_gone} (#418): it is
+	 * out of {@code SenseApi.MAX_ENTITY_RADIUS}, though alive and in its own, loaded chunk, so the range check is what ends
+	 * it. Up, not sideways, so it does not land in another test's area; without gravity, so it stays there. Once the script
+	 * ends the test notes how the cow was and discards it.
+	 */
+	@GameTest(maxTicks = 40)
+	public void attackOnATargetBeyondRangeEndsWithTargetGone(GameTestHelper helper) {
+		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 3);
+		cow.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		ScriptRun run = run(helper, bot, attackThe("cow"));
+		BlockPos far = helper.absolutePos(new BlockPos(6, 71, 3));
+		helper.assertTrue(helper.getLevel().isInWorldBounds(far) && helper.getLevel().isLoaded(far), "far " + far + " not in the world");
+		boolean[] teleported = {false};
+		String[] cowAtEnd = {null};
+		helper.onEachTick(() -> {
+			if (!teleported[0] && cow.getHealth() < cow.getMaxHealth()) {
+				cow.setNoGravity(true);
+				cow.teleportTo(far.getX() + 0.5, far.getY(), far.getZ() + 0.5);
+				teleported[0] = true;
+			}
+			if (cowAtEnd[0] == null && (run.state() == ScriptRun.State.FINISHED || helper.getTick() >= 39)) {
+				cowAtEnd[0] = "alive " + cow.isAlive() + ", removed " + cow.isRemoved() + ", " + (cow.distanceTo(bot) > 64 ? "over" : "within")
+					+ " 64 blocks";
+				cow.discard();
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(teleported[0], "the bot never struck the cow");
+			helper.assertTrue("alive true, removed false, over 64 blocks".equals(cowAtEnd[0]), "cow " + cowAtEnd[0]);
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED && printed.equals(List.of("False target_gone")),
+				"script " + run.state() + ", printed " + printed);
+		});
+	}
+
 	/** A husk shut in bedrock, which the bot cannot dig through, is {@code unreachable}. */
 	@GameTest(maxTicks = 70)
 	public void attackOnAShutInTargetEndsWithUnreachable(GameTestHelper helper) {
