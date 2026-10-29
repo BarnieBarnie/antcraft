@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -240,6 +241,33 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 			lastPlan[0] = now;
 		});
 		helper.succeedWhen(() -> helper.assertTrue(plans[0] >= 3, "flights planned " + plans[0]));
+	}
+
+	/**
+	 * A fleeing bot with a diamond sword only in its inventory takes it out and strikes the husk beside it with it: the
+	 * first blow does the sword's 7, not a bare hand's 1 (#425). The husk has no armour, stands still and is not knocked
+	 * back, so the first blow is all it takes. Wide like {@link #fleesAHostileMobAtLowHealth}.
+	 */
+	// Measured: passes at tick 3, the first blow.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 10)
+	public void aFleeingBotsFirstBlowDoesTheSwordsDamage(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 14, 1, 13);
+		husk.setNoAi(true);
+		husk.getAttribute(Attributes.ARMOR).setBaseValue(0);
+		husk.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		husk.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+		husk.setHealth(200);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+		helper.runAfterDelay(2, () -> bot.setHealth(4));
+		BotScripts.run(bot, WAIT);
+		helper.onEachTick(() -> {
+			float blow = 200 - husk.getHealth();
+			if (blow > 0 && blow != 7) {
+				helper.fail("first blow took " + blow);
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(husk.getHealth() == 193, "husk health " + husk.getHealth()));
 	}
 
 	/** Brings the bot to low health once its script waits, and passes once it is out of the husk's reach. */

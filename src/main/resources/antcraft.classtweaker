@@ -1,3 +1,5 @@
 classTweaker	v1	official
 # RegionPlan.load builds one palette of a multi-palette structure; the template keeps them private.
 accessible	field	net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplate	palettes	Ljava/util/List;
+# BotHands.strike brings a weapon equipped on the tick of a blow into the bot's attributes before it lands (#425).
+accessible	method	net/minecraft/world/entity/LivingEntity	detectEquipmentUpdates	()V
