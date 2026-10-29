@@ -440,4 +440,41 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(TestPositions.relative(helper, bot.blockPosition()).getY() == 6, "not on the ground");
 		});
 	}
+
+	/**
+	 * As {@link #aBotFleeingUpTheShaftStrikesTheMobBelowIt}, with a husk at full health and its own AI, right below the
+	 * bot on the ladders (#400): the bot keeps fleeing, striking it once as it goes, and gets away unhurt. A bot at the
+	 * flee health stopping on the ladders to fight a husk on its heels would lose: both strike once a second, the husk
+	 * kills it in two blows, it needs three with a diamond sword. So it does not stop: fleeing already strikes back.
+	 */
+	// Measured: the bot is unhurt and the husk struck once (16 of 20 left) at tick 100.
+	@GameTest(maxTicks = 120)
+	public void aBotFleeingUpTheShaftGetsAwayFromAHuskAtFullHealth(GameTestHelper helper) {
+		helper.setBlock(COLUMN.getFirst(), Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, Direction.NORTH)
+			.setValue(TrapDoorBlock.HALF, Half.TOP));
+		for (BlockPos cell : COLUMN.subList(1, COLUMN.size())) {
+			helper.setBlock(cell, Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 2, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+		bot.setHealth(AntCraftConfig.botFleeHealth());
+		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
+		run(helper, bot, """
+			import lib.shaft
+			memory["shaft"] = {"top": pos() + (0, 4, 0), "levels": [pos().y + 1, pos().y - 1]}
+			while not lib.shaft.to_surface():
+			    wait(5)
+			""");
+		failOnError(helper, () -> bot);
+		helper.onEachTick(() -> {
+			if (bot.isDeadOrDying()) { // not isAlive: the test's end removes the bot on the tick it succeeds
+				helper.fail("the bot died: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.runAtTickTime(100, () -> {
+			helper.assertTrue(bot.getFlightPlans() > 0, "the bot did not flee");
+			helper.assertTrue(husk.getHealth() < husk.getMaxHealth(), "the bot did not strike the husk");
+			helper.succeed();
+		});
+	}
 }

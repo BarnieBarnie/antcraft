@@ -102,6 +102,8 @@ final class Reflexes {
 	private int wayUntil;
 	/** Whether the build that asked is still on: an idle bot keeps off its spots until then. */
 	private BooleanSupplier building = () -> false;
+	/** Whether {@link #building} held when the build last asked: then its spots go as soon as it ends (#400). */
+	private boolean held;
 	/** How many times the bot made way for a build, for the game tests. */
 	private int waysMade;
 
@@ -193,12 +195,13 @@ final class Reflexes {
 	/**
 	 * Asks the bot to step out of {@code spots}, another bot's build, for the next {@link #MAKE_WAY_TICKS} ticks; an idle
 	 * bot keeps off them, standing where it stepped to, while {@code building} holds, so it does not walk back home onto
-	 * the site.
+	 * the site. If {@code building} holds now, the spots go as soon as it ends, without waiting out those ticks.
 	 */
 	void makeWay(Set<BlockPos> spots, BooleanSupplier building) {
 		this.wayFor = spots;
 		this.wayUntil = this.bot.tickCount + MAKE_WAY_TICKS;
 		this.building = building;
+		this.held = building.getAsBoolean();
 	}
 
 	/** Whether the bot was asked to make way of late and still stands in one of the spots, or is idle and the build is still on. */
@@ -206,10 +209,11 @@ final class Reflexes {
 		if (this.wayFor == null) {
 			return false;
 		}
-		if (this.bot.isIdling() && this.building.getAsBoolean()) {
+		boolean building = this.building.getAsBoolean();
+		if (this.bot.isIdling() && building) {
 			return true;
 		}
-		if (this.bot.tickCount > this.wayUntil) {
+		if (this.bot.tickCount > this.wayUntil || this.held && !building) {
 			this.wayFor = null;
 			return false;
 		}

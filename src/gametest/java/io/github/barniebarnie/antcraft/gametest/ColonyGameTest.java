@@ -397,11 +397,11 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * As {@link #anIdleBotKeepsOffWhileTheBuilderHoldsItsBuildJob}, with a builder holding two build jobs that gives up the
-	 * first after missing_ingredients (two seconds later, once the build no longer asks) and holds on to the second: the
-	 * hold follows the job passed to {@code build}, so the idle bot goes back home once that job is done, though the
-	 * builder still holds a build job (#396).
+	 * first right after missing_ingredients and holds on to the second: the hold follows the job passed to {@code build},
+	 * so the idle bot goes back home once that job is done, though the builder still holds a build job (#396), and makes
+	 * way only once: the build's spots go with the hold, not a second after the last ask (#400).
 	 */
-	// Measured: passes at tick 51; with any build job holding, it never goes back while the second one is held.
+	// Measured: passes at tick 11 (with the spots kept a second after the hold, the idle bot made way twice); with any build job holding, it never goes back while the second one is held.
 	@GameTest(maxTicks = 100)
 	public void anIdleBotGoesBackOnceTheBuildsOwnJobIsDone(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
@@ -414,7 +414,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
 		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
 		BotScripts.run(builder, "a = take_job('build')\nb = take_job('build')\nprint(build('antcraft:cobble_step', "
-			+ WorkGameTest.at(helper, 3, 1, 3) + ", job=a['id']).reason)\nwait(40)\nfinish_job(a['id'])\nwait(300)\nprint('end')\n");
+			+ WorkGameTest.at(helper, 3, 1, 3) + ", job=a['id']).reason)\nfinish_job(a['id'])\nwait(300)\nprint('end')\n");
 		failOnError(helper, builder);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(printed(builder), List.of("missing_ingredients"), "printed");
