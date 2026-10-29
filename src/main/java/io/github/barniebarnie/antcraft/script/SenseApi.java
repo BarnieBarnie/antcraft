@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -159,6 +160,12 @@ public final class SenseApi {
 		natives.register("deaths", call -> {
 			Args.bind("deaths", call, 0);
 			return (long) bot(run, call).getDeaths();
+		});
+		natives.register("last_death", call -> {
+			Args.bind("last_death", call, 0);
+			GlobalPos at = bot(run, call).getLastDeath();
+			return at == null ? PyNone.NONE
+				: new Pos(at.pos().getX(), at.pos().getY(), at.pos().getZ()).in(at.dimension().identifier().toString());
 		});
 		natives.register("time", call -> {
 			Args.bind("time", call, 0);

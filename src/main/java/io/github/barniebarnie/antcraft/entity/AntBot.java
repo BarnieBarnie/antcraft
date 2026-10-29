@@ -113,6 +113,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable Code scriptCode;
 	/** How often the bot has died ({@code deaths()} in a script). Saved. */
 	private int deaths;
+	/** Where the bot last died ({@code last_death()} in a script), or null if it never died. Saved. */
+	private @Nullable GlobalPos lastDeath;
 	/** The scripts' {@code memory}: outlives each script run, and is saved. */
 	private PyDict memory = Memory.create();
 	private final BotLog log = new BotLog();
@@ -619,6 +621,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.deaths;
 	}
 
+	/** Where the bot last died, or null if it never died. */
+	public @Nullable GlobalPos getLastDeath() {
+		return this.lastDeath;
+	}
+
 	/** Sends {@code message} to the bot's owner, if online. */
 	private void tellOwner(Component message) {
 		if (this.owner != null && this.level() instanceof ServerLevel level) {
@@ -709,6 +716,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		}
 		this.deaths++;
 		BlockPos at = this.blockPosition();
+		this.lastDeath = GlobalPos.of(level.dimension(), at);
 		String line = "died at " + at.getX() + ", " + at.getY() + ", " + at.getZ() + ": " + how.getString();
 		this.log.add(level.getGameTime(), Output.Level.WARN, line);
 		this.tellOwner(Component.literal("[" + this.getName().getString() + "] " + line).withStyle(ChatFormatting.RED));
@@ -836,6 +844,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (this.deaths > 0) {
 			output.putInt("Deaths", this.deaths);
 		}
+		output.storeNullable("LastDeath", GlobalPos.CODEC, this.lastDeath);
 		ScriptRun.Saved running = this.isRunningScript() ? this.script.save() : this.savedScript;
 		// The script's saved state holds memory too, so it is saved on its own only when that does not (#341).
 		if (running == null || running.vm() == null || !Memory.isPlain(this.memory)) {
@@ -876,6 +885,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.colonyId = input.read("Colony", UUIDUtil.CODEC).orElse(null);
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.deaths = input.getIntOr("Deaths", 0);
+		this.lastDeath = input.read("LastDeath", GlobalPos.CODEC).orElse(null);
 		this.log.load(input);
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
 		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());

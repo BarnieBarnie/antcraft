@@ -20,6 +20,7 @@ import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.GlobalPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
@@ -77,10 +78,12 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		bot.setHome(home);
 		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 5));
-		BotScripts.run(bot, SCRIPT);
+		BotScripts.run(bot, "d = last_death()\nprint('last', d, d is not None and d.dimension)\n" + SCRIPT);
+		BlockPos spot = helper.absolutePos(new BlockPos(1, 1, 1));
 		long[] died = {-1};
 		helper.runAfterDelay(5, () -> {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("run 1 deaths 0"), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("last None False"), "log " + BotScripts.log(bot, Output.Level.DEBUG));
 			bot.kill(helper.getLevel());
 			died[0] = helper.getLevel().getGameTime();
 		});
@@ -98,6 +101,8 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(owner.getUUID().equals(again.getOwner()), "owner " + again.getOwner());
 			List<String> printed = BotScripts.log(again, Output.Level.PRINT);
 			helper.assertTrue(printed.contains("run 2 deaths 1"), "printed " + printed);
+			String last = "last Pos(" + spot.getX() + ", " + spot.getY() + ", " + spot.getZ() + ") minecraft:overworld";
+			helper.assertTrue(printed.contains(last), "printed " + printed + ", expected " + last);
 			helper.assertTrue(owner.messages().stream().anyMatch(message -> message.text().contains("died")), "owner told " + owner.messages());
 			helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(1, 1, 1), 2.0);
 		});
@@ -252,6 +257,8 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(again.blockPosition().distManhattan(home) <= 1, "respawned at " + again.blockPosition() + ", home " + home);
 			helper.assertTrue(again.getDeaths() == 1, "deaths " + again.getDeaths());
 			helper.assertTrue("yes".equals(again.getMemory().get("kept")), "memory " + again.getMemory());
+			GlobalPos spot = GlobalPos.of(Level.OVERWORLD, helper.absolutePos(new BlockPos(1, 1, 1)));
+			helper.assertTrue(spot.equals(again.getLastDeath()), "last death " + again.getLastDeath() + ", expected " + spot);
 		});
 	}
 
@@ -280,6 +287,8 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(again != null && again.getDeaths() == 1, "not respawned in the Overworld");
 			BlockPos at = Objects.requireNonNull(again).blockPosition();
 			helper.assertTrue(at.distManhattan(home) <= 1, "respawned at " + at + ", home " + home);
+			GlobalPos spot = GlobalPos.of(Level.NETHER, new BlockPos(home.getX(), 100, home.getZ()));
+			helper.assertTrue(spot.equals(again.getLastDeath()), "last death " + again.getLastDeath() + ", expected " + spot);
 		});
 	}
 
