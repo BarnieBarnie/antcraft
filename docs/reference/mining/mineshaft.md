@@ -30,7 +30,7 @@ The positions carry the bot's dimension. It is the same dict [`mineshaft_at`](mi
 
 ## Pauses
 
-Only when the search cannot finish this tick: then it goes on over the next ticks and the script waits. A reflex that takes over while it waits ends the call with a failed [`Result`](../types/result.md), `interrupted`, instead of the dict, so test the return with `if m:` rather than `if m is not None:`.
+Only when the search cannot finish this tick: then it goes on over the next ticks and the script waits. A [reflex](../../features/bots.md#reflexes) that takes over while it waits pauses the search, which goes on once the reflex lets go: unlike an action, `mineshaft` never ends with `interrupted`, and always gives the dict or `None`.
 
 ## Cost
 
@@ -48,7 +48,7 @@ A `levels` that is no list of ints, or `branches` or `length` out of range, stop
 
 ```python
 m = mineshaft([16, -54])
-if m:
+if m is not None:
     memory["shaft"] = {"top": m["top"], "levels": m["levels"]}
     say("shaft at " + str(m["top"]))
 else:

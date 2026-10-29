@@ -130,6 +130,12 @@ public final class MineApi {
 		public String describe() {
 			return "mineshaft (" + this.reads + " blocks read)";
 		}
+
+		/** It reads blocks and does not move the bot, so a reflex only pauses it: callers get a site or None (#410). */
+		@Override
+		public boolean outlastsReflexes() {
+			return true;
+		}
 	}
 
 	/**

@@ -104,6 +104,14 @@ public final class ScriptRun {
 			return false;
 		}
 
+		/**
+		 * Whether the action waits out a reflex rather than end with {@code interrupted}: a search that does not move the bot,
+		 * such as {@code mineshaft}'s, pauses while a reflex holds the bot and goes on once it lets go (#410).
+		 */
+		default boolean outlastsReflexes() {
+			return false;
+		}
+
 		/** Ends the action early, because the script was stopped or a reflex took over; it lets go of what it holds, such as the bot's path. */
 		default void cancel() {
 		}
@@ -394,13 +402,14 @@ public final class ScriptRun {
 
 	/**
 	 * Whether a reflex holds the bot this tick ({@link Host#reflex}): then the current action, if any, ends with
-	 * {@code interrupted}, which the script goes on with once the reflex lets go, and the script does not run.
+	 * {@code interrupted}, which the script goes on with once the reflex lets go, and the script does not run. An action
+	 * that {@link Action#outlastsReflexes outlasts reflexes} only pauses.
 	 */
 	private boolean reflexes() {
 		if (!host.reflex()) {
 			return false;
 		}
-		if (action != null) {
+		if (action != null && !action.outlastsReflexes()) {
 			Action interrupted = action;
 			action = null;
 			interrupted.cancel();

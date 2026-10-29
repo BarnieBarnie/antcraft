@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.SenseApi;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -475,6 +476,48 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getFlightPlans() > 0, "the bot did not flee");
 			helper.assertTrue(husk.getHealth() < husk.getMaxHealth(), "the bot did not strike the husk");
 			helper.succeed();
+		});
+	}
+
+	/**
+	 * A reflex that takes over while {@code mineshaft} searches, over several ticks, does not end the search (#410):
+	 * {@code shaft()} gets its site once the reflex lets go, rather than stopping with an error on {@code interrupted}. The
+	 * test spends the tick's block search budget until the search runs, so it cannot finish at once, then lights fire on
+	 * netherrack under the bot. Stone runs east of the area along the hall at level 3, so terrain there cannot move the site.
+	 */
+	// Measured: passes at tick 7 alone, 11 in a full run.
+	@GameTest(maxTicks = 25)
+	public void aReflexDuringTheSearchDoesNotStopShaft(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(8, 1, 3, 24, 5, 5)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(1, 5, 1, Blocks.NETHERRACK);
+		AntBot bot = miner(helper, 0);
+		run(helper, bot, """
+			import lib.shaft
+			m = lib.shaft.shaft([pos().y - 3])
+			print(m is not None and m["top"] == memory["shaft"]["top"])
+			""");
+		failOnError(helper, () -> bot);
+		boolean[] fire = {false};
+		helper.onEachTick(() -> {
+			if (fire[0]) {
+				return;
+			}
+			ScriptRun run = bot.getScript();
+			String action = run == null ? null : run.action();
+			if (action != null && action.startsWith("mineshaft")) {
+				fire[0] = true;
+				helper.setBlock(1, 6, 1, Blocks.FIRE);
+			}
+			// The bot's next tick finds no blocks left to search, whether its search started yet or not.
+			SenseApi.SCAN_BUDGET.spend(helper.getLevel().getGameTime() + 1, SenseApi.BLOCKS_PER_TICK);
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(fire[0], "the search never ran over several ticks");
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of("True")), "printed " + log);
+			helper.assertFalse(helper.getLevel().getBlockState(bot.blockPosition()).is(BlockTags.FIRE), "bot still in fire");
 		});
 	}
 }

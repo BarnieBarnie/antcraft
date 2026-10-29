@@ -19,4 +19,4 @@ Reflexes run every tick in Java, before the script, and cannot be turned off by 
 
 The nearer danger comes first, in the order of the list. A reflex takes over only where it has a way out: a bot walled in by fire, or under water with no air within reach, is left to its script.
 
-When a reflex takes over, the running action ends with `interrupted`. While the reflex holds the bot the script does not run; once the danger is past, the script goes on with that result and decides what to do next. Thresholds are config options, not script options, in v1; 0 turns the drowning or the fleeing reflex off.
+When a reflex takes over, the running action ends with `interrupted`; a [`mineshaft`](../reference/mining/mineshaft.md) search, which does not move the bot, only pauses and goes on once the reflex lets go. While the reflex holds the bot the script does not run; once the danger is past, the script goes on with that result and decides what to do next. Thresholds are config options, not script options, in v1; 0 turns the drowning or the fleeing reflex off.

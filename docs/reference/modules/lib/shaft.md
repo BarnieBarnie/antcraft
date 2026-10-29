@@ -30,7 +30,7 @@ Climbs out of the shaft in memory onto the ground beside its top. Gives `goto`'s
 
 ## `shaft(levels=None)`
 
-The shaft as [`mineshaft`](../../mining/mineshaft.md) gives it: the one in `memory["shaft"]`, else a new site for `levels`, which is kept there; `None` without either. Forget the kept one with `memory.pop("shaft")` to dig another. It may pause while it searches.
+The shaft as [`mineshaft`](../../mining/mineshaft.md) gives it: the one in `memory["shaft"]`, else a new site for `levels`, which is kept there; `None` without either. Forget the kept one with `memory.pop("shaft")` to dig another. It may pause while it searches; a reflex that takes over meanwhile only pauses the search, so `shaft` still gives the site once the reflex lets go.
 
 ## Example
 
