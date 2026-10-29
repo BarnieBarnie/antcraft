@@ -1,6 +1,6 @@
 # Mining
 
-The mod's library modules `lib/shaft.py` and `lib/mine.py` dig a ladder mineshaft and mine its levels, built on the senses `mineshaft`, `mineshaft_at` and `ore_vein` (see the [API reference](../reference/index.md#senses-instant-do-not-pause)). `colony.miner` mines with them for a colony (see [Default colony scripts](colony-scripts.md)).
+The mod's library modules `lib/shaft.py` and `lib/mine.py` dig a ladder mineshaft and mine its levels, built on the senses `mineshaft`, `mineshaft_at` and `ore_vein` (see the [API reference](../reference/index.md#mining)). `colony.miner` mines with them for a colony (see [Default colony scripts](colony-scripts.md)).
 
 ## lib/shaft.py
 

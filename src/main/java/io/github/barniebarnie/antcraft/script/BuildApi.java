@@ -49,8 +49,8 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
 /**
- * {@code build(blueprint, at, turn=0, mirror=False, job=None)} and the sense {@code blueprint(id)} (docs/reference/index.md, Actions and
- * Senses): a blueprint built from what the bot carries, step by step as {@link BuildPlan} orders it.
+ * {@code build(blueprint, at, turn=0, mirror=False, job=None)} and the sense {@code blueprint(id)} (docs/reference/index.md,
+ * Building): a blueprint built from what the bot carries, step by step as {@link BuildPlan} orders it.
  */
 public final class BuildApi {
 	private BuildApi() {

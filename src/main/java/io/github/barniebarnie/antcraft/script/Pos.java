@@ -11,7 +11,7 @@ import io.github.barniebarnie.antcraft.script.lang.Values;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A block position in a script (docs/reference/index.md, Types): {@code x}, {@code y} and {@code z}; {@code +} and {@code -}
+ * A block position in a script (docs/reference/types/pos.md): {@code x}, {@code y} and {@code z}; {@code +} and {@code -}
  * with another {@code Pos} or a tuple of three ints; {@code up(n=1)}, {@code down}, {@code north}, {@code south},
  * {@code east} and {@code west} as in the game (north is towards -z, east towards +x); {@code distance(other)}.
  * Immutable, so it is usable as a dict key.

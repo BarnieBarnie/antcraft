@@ -29,7 +29,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The actions of the bot API that change the world (docs/reference/index.md, Actions): {@code mine}, {@code place},
+ * The actions of the bot API that change the world (docs/reference/index.md, Working blocks): {@code mine}, {@code place},
  * {@code pick_up}, {@code equip}, {@code use} and {@code drop}. Those that work on a block first walk into reach of it, as
  * {@code goto} walks ({@link MoveApi#reach}); each returns a {@link Result}.
  */

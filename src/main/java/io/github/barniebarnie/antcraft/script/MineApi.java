@@ -29,7 +29,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The senses {@code mineshaft(levels, near=None, branches=4, length=16)}, {@code mineshaft_at(top, levels, round=0, branches=4, length=16)} and
- * {@code ore_vein(pos)} (docs/reference/index.md, Senses): where a ladder shaft can go and what it looks like, from
+ * {@code ore_vein(pos)} (docs/reference/index.md, Mining): where a ladder shaft can go and what it looks like, from
  * {@link Mineshaft}, and the ore veins its branches uncover, as plain data for the mining library.
  */
 public final class MineApi {

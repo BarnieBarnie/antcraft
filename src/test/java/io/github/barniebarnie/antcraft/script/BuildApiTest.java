@@ -18,7 +18,7 @@ import java.util.Optional;
 import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 
-/** The sense {@code blueprint(id)} (docs/reference/index.md, Senses): a blueprint as plain data for planning. */
+/** The sense {@code blueprint(id)} (docs/reference/index.md, Building): a blueprint as plain data for planning. */
 class BuildApiTest {
 	private static PyDict described(String name) throws IOException {
 		Blueprint blueprint = Blueprint.parse(JsonParser.parseString(Files.readString(Path.of("src/main/resources/data/antcraft/blueprint/" + name + ".json"))))

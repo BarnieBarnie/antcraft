@@ -42,7 +42,7 @@ public class Colony {
 	/** Players the owner lets change the colony, besides the owner. */
 	private final Set<UUID> trusted = new LinkedHashSet<>();
 	private int radius;
-	/** The scripts' {@code colony_memory}, shared by every member (docs/reference/index.md, Memory). */
+	/** The scripts' {@code colony_memory}, shared by every member (docs/reference/types/memory.md). */
 	private final PyDict memory;
 	/** The scripts' job board (#368). */
 	private final JobBoard jobs;

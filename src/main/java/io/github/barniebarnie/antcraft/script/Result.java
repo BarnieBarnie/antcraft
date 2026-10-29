@@ -6,7 +6,7 @@ import io.github.barniebarnie.antcraft.script.lang.Values;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What an action returns (docs/reference/index.md, Types): {@code ok}, the {@code reason} it failed (a code such as
+ * What an action returns (docs/reference/types/result.md): {@code ok}, the {@code reason} it failed (a code such as
  * {@code unreachable}, None on success) and the {@code value} it produced, if any. False in a test when the action failed.
  */
 public record Result(boolean ok, @Nullable String reason, Object value) implements HostValue {

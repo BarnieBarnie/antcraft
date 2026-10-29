@@ -12,7 +12,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import org.jspecify.annotations.Nullable;
 
 /**
- * An entity in a script, the {@code Entity} type (docs/reference/index.md, Types): {@code id} (its UUID as a string),
+ * An entity in a script, the {@code Entity} type (docs/reference/types/entity.md): {@code id} (its UUID as a string),
  * {@code type} such as {@code minecraft:cow}, {@code pos} (the block it stands in), {@code health} ({@code None} for an
  * entity without health, such as a dropped item), {@code valid} (false once it is gone: dead, picked up, or unloaded)
  * and, for a dropped item, {@code item}, the {@code Stack} it holds ({@code None} for other entities). Live: its

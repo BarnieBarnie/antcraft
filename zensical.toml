@@ -33,7 +33,20 @@ nav = [
     { "Budget & pausing" = "language/budget.md" },
     { "What's not supported" = "language/not-supported.md" },
   ] },
-  { "API reference" = ["reference/index.md"] },
+  # Builtin pages (reference/<category>/<name>.md) stay out of the nav: the index lists them (see reference/template.md).
+  { "API reference" = [
+    "reference/index.md",
+    { "Types" = [
+      "reference/types/pos.md",
+      "reference/types/block.md",
+      "reference/types/stack.md",
+      "reference/types/entity.md",
+      "reference/types/result.md",
+      "reference/types/selectors.md",
+      "reference/types/memory.md",
+    ] },
+    { "Writing a page" = "reference/template.md" },
+  ] },
   { "Cookbook" = ["cookbook/index.md"] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md"] },

@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** The {@code Pos} type of the bot API (docs/reference/index.md, Types). */
+/** The {@code Pos} type of the bot API (docs/reference/types/pos.md). */
 class PosTest {
 	/** Runs {@code source} with a global {@code p} = {@code Pos(1, 2, 3)} and gives what it printed. */
 	private static String run(String source) {

@@ -44,7 +44,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The actions of the bot API that use containers and stations (docs/reference/index.md, Actions): {@code put}, {@code take},
+ * The actions of the bot API that use containers and stations (docs/reference/index.md, Containers and crafting): {@code put}, {@code take},
  * {@code craft} and {@code smelt}. Those that work at a block walk into reach of it first, as the block actions of
  * {@link WorkApi} do; each returns a {@link Result}.
  */

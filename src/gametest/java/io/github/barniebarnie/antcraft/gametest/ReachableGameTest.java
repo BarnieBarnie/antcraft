@@ -17,7 +17,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 
 /**
- * The sense {@code reachable(pos, near=0)} (docs/reference/index.md, Senses): it plans a walk without taking it. Each test has a
+ * The sense {@code reachable(pos, near=0)} (docs/reference/index.md, Movement): it plans a walk without taking it. Each test has a
  * pocket two high at (5, 1, 5) walled in by bedrock: its floor, the eight columns around it and a lid.
  */
 public class ReachableGameTest implements CustomTestMethodInvoker {
