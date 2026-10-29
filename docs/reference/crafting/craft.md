@@ -20,7 +20,7 @@ A [`Result`](../types/result.md); its `value` is how many items it made. That ca
 
 ## Pauses
 
-A 2x2 recipe is crafted at once, without pausing. A 3x3 recipe pauses: at a `table` the bot does not see within 4 blocks of its eyes it walks there first, as [`goto`](../index.md#movement) does, then crafts in the tick it gets there.
+A 2x2 recipe is crafted at once, without pausing. A 3x3 recipe pauses: at a `table` the bot does not see within 4 blocks of its eyes it walks there first, as [`goto`](../movement/goto.md) does, then crafts in the tick it gets there.
 
 ## Cost
 
@@ -56,4 +56,4 @@ if not r:
 
 ## See also
 
-[`smelt`](smelt.md), [`has`](../inventory/has.md), [`find_nearest`](../index.md#the-world-around).
+[`smelt`](smelt.md), [`has`](../inventory/has.md), [`find_nearest`](../world/find_nearest.md).

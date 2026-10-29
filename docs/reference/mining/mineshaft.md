@@ -34,7 +34,7 @@ Only when the search cannot finish this tick: then it goes on over the next tick
 
 ## Cost
 
-One instruction per 8 blocks read. The search shares the server-wide block budget with [`scan` and `find_nearest`](../index.md#the-world-around), and a site found counts 700 blocks of that budget for its dict. A spot where every level fits reads some 3,000 blocks with the default levels; a search where no spot fits reads up to some 300,000.
+One instruction per 8 blocks read. The search shares the server-wide block budget with [`scan`](../world/scan.md) and [`find_nearest`](../world/find_nearest.md), and a site found counts 700 blocks of that budget for its dict. A spot where every level fits reads some 3,000 blocks with the default levels; a search where no spot fits reads up to some 300,000.
 
 ## Description
 

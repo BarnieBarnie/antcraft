@@ -26,7 +26,7 @@ Yes, until the blueprint stands and the bot's scaffold is taken down, or the bui
 
 ## Cost
 
-One instruction, the call itself. Its walks plan paths as [`goto`](../index.md#movement) does.
+One instruction, the call itself. Its walks plan paths as [`goto`](../movement/goto.md) does.
 
 ## Description
 

@@ -39,4 +39,4 @@ if stock is not None:
 
 ## See also
 
-[`take`](take.md), [`put`](put.md), [`matches`](../inventory/matches.md), [`colony`](../index.md#colony-and-jobs).
+[`take`](take.md), [`put`](put.md), [`matches`](../inventory/matches.md), [`colony`](../colony/colony.md).

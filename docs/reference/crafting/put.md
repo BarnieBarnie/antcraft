@@ -20,7 +20,7 @@ A [`Result`](../types/result.md); its `value` is how many items went in.
 
 ## Pauses
 
-Yes: it walks, as [`goto`](../index.md#movement) does, to where the bot sees the container within 4 blocks of its eyes, and moves the items in the tick it gets there.
+Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the container within 4 blocks of its eyes, and moves the items in the tick it gets there.
 
 ## Cost
 

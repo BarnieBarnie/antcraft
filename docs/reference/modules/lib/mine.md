@@ -1,6 +1,6 @@
 # `lib/mine`
 
-Mining the levels of the shaft [`lib/shaft`](shaft.md) dug. A module of the mod's default library: `import lib.mine`, then `lib.mine.mine_level(20)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/mine.py`, written with `mineshaft_at` and `ore_vein` (see [Mining](../../index.md#mining)). How it digs, what it keeps and what goes into the chest is on [Mining](../../../features/mining.md#libminepy); this page lists the functions.
+Mining the levels of the shaft [`lib/shaft`](shaft.md) dug. A module of the mod's default library: `import lib.mine`, then `lib.mine.mine_level(20)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/mine.py`, written with [`mineshaft_at`](../../mining/mineshaft_at.md) and [`ore_vein`](../../mining/ore_vein.md). How it digs, what it keeps and what goes into the chest is on [Mining](../../../features/mining.md#libminepy); this page lists the functions.
 
 It works on the shaft in `memory["shaft"]`. How many rounds of a level are done is kept in `memory["mine"]` (level to rounds); how far a round is dug is read from the world, so a call again goes on where it stopped.
 
@@ -41,4 +41,4 @@ lib.shaft.to_surface()
 
 ## See also
 
-[`lib/shaft`](shaft.md), [Mining](../../../features/mining.md), [`ore_vein`](../../index.md#mining), [`memory`](../../types/memory.md), [Default colony scripts](../../../features/colony-scripts.md) (`colony.miner`).
+[`lib/shaft`](shaft.md), [Mining](../../../features/mining.md), [`ore_vein`](../../mining/ore_vein.md), [`memory`](../../types/memory.md), [Default colony scripts](../../../features/colony-scripts.md) (`colony.miner`).

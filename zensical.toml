@@ -56,7 +56,14 @@ nav = [
     ] },
     { "Writing a page" = "reference/template.md" },
   ] },
-  { "Cookbook" = ["cookbook/index.md"] },
+  { "Cookbook" = [
+    "cookbook/index.md",
+    "cookbook/recover-items.md",
+    "cookbook/farm.md",
+    "cookbook/mining-loop.md",
+    "cookbook/stock-chest.md",
+    "cookbook/memory.md",
+  ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md"] },
 ]

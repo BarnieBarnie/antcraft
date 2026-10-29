@@ -1,6 +1,6 @@
 # `lib/shaft`
 
-Digging a ladder mineshaft and climbing it. A module of the mod's default library: `import lib.shaft`, then `lib.shaft.dig_shaft([40, 20])` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/shaft.py`, written with [`mineshaft`](../../index.md#mining) and `mineshaft_at`. What the shaft looks like and how digging it goes is on [Mining](../../../features/mining.md#libshaftpy); this page lists the functions.
+Digging a ladder mineshaft and climbing it. A module of the mod's default library: `import lib.shaft`, then `lib.shaft.dig_shaft([40, 20])` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/shaft.py`, written with [`mineshaft`](../../mining/mineshaft.md) and `mineshaft_at`. What the shaft looks like and how digging it goes is on [Mining](../../../features/mining.md#libshaftpy); this page lists the functions.
 
 The shaft is kept in `memory["shaft"]` (its `top` and `levels`); how far it is dug is read from the world, so a call after a restart, a reload or a failure goes on where it stopped.
 
@@ -15,7 +15,7 @@ It checks what it carries before it digs at all: ladders, a trapdoor, torches an
 
 | Reason | When |
 |---|---|
-| `no_site` | [`mineshaft`](../../index.md#mining) finds no place for the shaft beside the bot |
+| `no_site` | [`mineshaft`](../../mining/mineshaft.md) finds no place for the shaft beside the bot |
 | `missing_ingredients` | the bot lacks what `missing` lists, or has nothing left to wall off with |
 | `blocked` | something, such as a mob, kept standing where a block goes |
 | another reason | an action's (see [`Result`](../../types/result.md)), with `at` |
@@ -30,7 +30,7 @@ Climbs out of the shaft in memory onto the ground beside its top. Gives `goto`'s
 
 ## `shaft(levels=None)`
 
-The shaft as [`mineshaft`](../../index.md#mining) gives it: the one in `memory["shaft"]`, else a new site for `levels`, which is kept there; `None` without either. Forget the kept one with `memory.pop("shaft")` to dig another. It may pause while it searches.
+The shaft as [`mineshaft`](../../mining/mineshaft.md) gives it: the one in `memory["shaft"]`, else a new site for `levels`, which is kept there; `None` without either. Forget the kept one with `memory.pop("shaft")` to dig another. It may pause while it searches.
 
 ## Example
 
@@ -50,4 +50,4 @@ else:
 
 ## See also
 
-[`lib/mine`](mine.md), [Mining](../../../features/mining.md), [`mineshaft`, `mineshaft_at`](../../index.md#mining), [`memory`](../../types/memory.md), [Default colony scripts](../../../features/colony-scripts.md) (`colony.miner`).
+[`lib/mine`](mine.md), [Mining](../../../features/mining.md), [`mineshaft`](../../mining/mineshaft.md), [`mineshaft_at`](../../mining/mineshaft_at.md), [`memory`](../../types/memory.md), [Default colony scripts](../../../features/colony-scripts.md) (`colony.miner`).

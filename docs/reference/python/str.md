@@ -40,4 +40,4 @@ memory["last"] = "deaths: " + str(deaths())
 
 ## See also
 
-[`str` methods](../types/str.md), [`int`](int.md), [`float`](float.md), [`print`](../index.md#the-bot-and-its-output), [Text](../../language/values.md#text).
+[`str` methods](../types/str.md), [`int`](int.md), [`float`](float.md), [`print`](../bot/print.md), [Text](../../language/values.md#text).

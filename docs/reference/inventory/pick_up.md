@@ -23,7 +23,7 @@ Yes, until no matching item that the bot can walk to and has room for is left wi
 
 ## Cost
 
-One instruction, the call itself. Its walks plan paths as [`goto`](../index.md#movement) does.
+One instruction, the call itself. Its walks plan paths as [`goto`](../movement/goto.md) does.
 
 ## Description
 
@@ -49,4 +49,4 @@ pick_up("#minecraft:saplings", radius=6)
 
 ## See also
 
-[`items_near`](../index.md#the-world-around), [`drop`](drop.md), [`free_slots`](free_slots.md).
+[`items_near`](../world/items_near.md), [`drop`](drop.md), [`free_slots`](free_slots.md).

@@ -40,4 +40,4 @@ for p in ore_vein((10, -40, 5)):
 
 ## See also
 
-[`mineshaft`](mineshaft.md), [`mine`](../index.md#working-blocks), [`find_nearest`](../index.md#the-world-around), [Mining](../../features/mining.md).
+[`mineshaft`](mineshaft.md), [`mine`](../blocks/mine.md), [`find_nearest`](../world/find_nearest.md), [Mining](../../features/mining.md).

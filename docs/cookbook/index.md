@@ -1,7 +1,14 @@
 # Cookbook
 
-!!! note
-    More recipes come later (#409).
+Recipes: complete scripts that combine builtins into useful bots, each with how it works and links to the reference pages it uses.
+
+- [Recover items after death](recover-items.md): `deaths`, `last_death` and `memory` bring a lumberjack back for what it dropped.
+- [Auto-farm](farm.md): harvest, till and replant a wheat field, and store the wheat.
+- [Mining loop](mining-loop.md): a shaft dug with `lib/shaft`, its levels mined in turns with `lib/mine`, the ore brought up.
+- [Keep a chest stocked](stock-chest.md): a hauler that tops a chest up from a barrel.
+- [Survive reloads and respawns](memory.md): a tunnel digger that keeps its progress in `memory`.
+
+Two short examples:
 
 Punch a tree, then make a wooden pickaxe:
 

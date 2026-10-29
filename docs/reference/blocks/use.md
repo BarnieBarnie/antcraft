@@ -19,7 +19,7 @@ A [`Result`](../types/result.md), ok when the use did something.
 
 ## Pauses
 
-Yes: it walks, as [`goto`](../index.md#movement) does, to where the bot sees the block within 4 blocks of its eyes, and uses it in the tick it gets there.
+Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the block within 4 blocks of its eyes, and uses it in the tick it gets there.
 
 ## Cost
 

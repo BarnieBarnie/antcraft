@@ -21,7 +21,7 @@ A [`Result`](../types/result.md); its `value` is how many items it took out of t
 
 ## Pauses
 
-Yes: it walks to `furnace` first, as [`goto`](../index.md#movement) does, if it is not within 4 blocks of the bot's eyes, then waits by the furnace until the input is smelted: about 10 seconds an item, 5 in a blast furnace or smoker.
+Yes: it walks to `furnace` first, as [`goto`](../movement/goto.md) does, if it is not within 4 blocks of the bot's eyes, then waits by the furnace until the input is smelted: about 10 seconds an item, 5 in a blast furnace or smoker.
 
 ## Cost
 

@@ -1,12 +1,12 @@
 # `colony/common`
 
-What the default colony scripts share: finding the Colony Core and storing in and fetching from it. A module of the mod's default library: `from colony.common import core, store` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/colony/common.py`, written with [`colony`](../../index.md#colony-and-jobs), `put`, `take` and `container`.
+What the default colony scripts share: finding the Colony Core and storing in and fetching from it. A module of the mod's default library: `from colony.common import core, store` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/colony/common.py`, written with [`colony`](../../colony/colony.md), `put`, `take` and `container`.
 
 The colony scripts themselves (`colony.lumberjack`, `colony.hauler`, `colony.builder`, `colony.farmer`, `colony.miner`) are scripts a bot runs, not modules to import; what each does and the data of their jobs is on [Default colony scripts](../../../features/colony-scripts.md).
 
 ## `core()`
 
-The position of the colony's Colony Core, where members store what they bring in. A bot in no colony says so and the script stops ([`stop`](../../index.md#the-bot-and-its-output)). Done at once.
+The position of the colony's Colony Core, where members store what they bring in. A bot in no colony says so and the script stops ([`stop`](../../bot/stop.md)). Done at once.
 
 ## `in_colony(p)`
 

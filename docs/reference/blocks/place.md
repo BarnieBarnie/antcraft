@@ -21,7 +21,7 @@ A [`Result`](../types/result.md), ok once the block is placed.
 
 ## Pauses
 
-Yes: it walks, as [`goto`](../index.md#movement) does, to where the bot sees the spot within 4 blocks of its eyes, and places the block in the tick it gets there.
+Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the spot within 4 blocks of its eyes, and places the block in the tick it gets there.
 
 ## Cost
 
@@ -59,4 +59,4 @@ place((10, 64, -3), "oak_stairs", facing="east", half="bottom")
 
 ## See also
 
-[`mine`](mine.md), [`use`](use.md), [`build`](../building/build.md), [`block`](../index.md#the-world-around).
+[`mine`](mine.md), [`use`](use.md), [`build`](../building/build.md), [`block`](../world/block.md).

@@ -25,9 +25,9 @@ No, it is done at once.
 
 ## Description
 
-A member in another dimension than its core (it went through a portal, or respawned at a home elsewhere) stays a member: `colony()` works the same there, and `core.dimension` tells the script to [`travel`](../index.md#movement) first, as `put` and `take` at the core fail with `wrong_dimension` until it does.
+A member in another dimension than its core (it went through a portal, or respawned at a home elsewhere) stays a member: `colony()` works the same there, and `core.dimension` tells the script to [`travel`](../movement/travel.md) first, as `put` and `take` at the core fail with `wrong_dimension` until it does.
 
-The Colony Core stores items like a chest, so [`container`, `put` and `take`](../index.md#containers-and-crafting) work on `colony()["core"]`. What the members share goes in [`colony_memory`](../types/memory.md); the work they split goes on the job board ([`post_job`](post_job.md), [`take_job`](take_job.md)).
+The Colony Core stores items like a chest, so [`container`](../crafting/container.md), [`put`](../crafting/put.md) and [`take`](../crafting/take.md) work on `colony()["core"]`. What the members share goes in [`colony_memory`](../types/memory.md); the work they split goes on the job board ([`post_job`](post_job.md), [`take_job`](take_job.md)).
 
 ## Examples
 

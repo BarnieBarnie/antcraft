@@ -20,7 +20,7 @@ One instruction, the call itself.
 
 ## Description
 
-A dead bot drops what it carried where it died and respawns at its home, in its home's dimension. To fetch its items, a script walks back to `last_death()`; when the bot died in another dimension, [`goto`](../index.md#movement) fails with `wrong_dimension` until it has travelled there. Compare `last_death().dimension` with [`dimension()`](../index.md#movement) first.
+A dead bot drops what it carried where it died and respawns at its home, in its home's dimension. To fetch its items, a script walks back to `last_death()`; when the bot died in another dimension, [`goto`](../movement/goto.md) fails with `wrong_dimension` until it has travelled there. Compare `last_death().dimension` with [`dimension()`](../movement/dimension.md) first.
 
 ## Examples
 
@@ -33,4 +33,4 @@ if p is not None and p.dimension == dimension():
 
 ## See also
 
-[`deaths`](deaths.md), [`pick_up`](../index.md#inventory), [Death and respawn](../../features/death.md).
+[`deaths`](deaths.md), [`pick_up`](../inventory/pick_up.md), [Death and respawn](../../features/death.md).

@@ -41,4 +41,4 @@ for soil in scan("farmland", radius=8):
 
 ## See also
 
-[`Block`](../types/block.md), [`find_nearest`](find_nearest.md), [`scan`](scan.md), [`container`](../index.md#containers-and-crafting).
+[`Block`](../types/block.md), [`find_nearest`](find_nearest.md), [`scan`](scan.md), [`container`](../crafting/container.md).

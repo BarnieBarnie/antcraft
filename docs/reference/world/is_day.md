@@ -35,4 +35,4 @@ if not is_day() and dimension() == home_dimension():
 
 ## See also
 
-[`time`](time.md), [`wait`](../index.md#the-bot-and-its-output).
+[`time`](time.md), [`wait`](../bot/wait.md).

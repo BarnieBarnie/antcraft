@@ -43,4 +43,4 @@ logs = sum([s.count for s in inventory() if matches(s, "#minecraft:logs")])
 
 ## See also
 
-[`count`](../index.md#inventory), [`len`](len.md), [`max`](max.md), [`str.join`](../types/str.md).
+[`count`](../inventory/count.md), [`len`](len.md), [`max`](max.md), [`str.join`](../types/str.md).

@@ -23,6 +23,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -423,6 +424,50 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(WorkGameTest.printed(bot).equals(List.of("pickaxe!")), "printed " + WorkGameTest.printed(bot));
 			helper.assertTrue(bot.getInventory().countItem(Items.WOODEN_PICKAXE) + (bot.getMainHandItem().is(Items.WOODEN_PICKAXE) ? 1 : 0) == 1,
 				"no wooden pickaxe");
+		});
+	}
+
+	/** How many {@code item} the container holds. */
+	private static int countIn(Container container, Item item) {
+		int n = 0;
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			n += container.getItem(i).is(item) ? container.getItem(i).getCount() : 0;
+		}
+		return n;
+	}
+
+	/**
+	 * The "keep a chest stocked" recipe of docs/cookbook/stock-chest.md, run as it is (DocExampleTest keeps the copy the
+	 * same): it tops a chest holding 10 torches up to 64 torches and 16 bread from a barrel, and puts nothing more in.
+	 */
+	@GameTest(maxTicks = 40)
+	public void theStockChestRecipeTopsTheChestUpFromTheBarrel(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.TORCH, 10));
+		BlockPos barrelAt = new BlockPos(1, 1, 1);
+		helper.setBlock(barrelAt, Blocks.BARREL);
+		Container barrel = container(helper, barrelAt);
+		barrel.setItem(0, new ItemStack(Items.TORCH, 64));
+		barrel.setItem(1, new ItemStack(Items.TORCH, 6));
+		barrel.setItem(2, new ItemStack(Items.BREAD, 20));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		String source;
+		try (InputStream in = CraftGameTest.class.getResourceAsStream("/antcraft-gametest/scripts/stock_chest.py")) {
+			source = new String(Objects.requireNonNull(in, "stock_chest.py").readAllBytes(), StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			throw new IllegalStateException(e);
+		}
+		bot.runScript("stock_chest", Compiler.compile(Parser.parse("stock_chest.py", source)), List.of());
+		ScriptRun run = Objects.requireNonNull(bot.getScript());
+		helper.onEachTick(() -> {
+			if (run.state() == ScriptRun.State.FAILED || run.state() == ScriptRun.State.FINISHED) {
+				helper.fail("script " + run.state() + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(countIn(chest, Items.TORCH) == 64 && countIn(chest, Items.BREAD) == 16,
+				"chest holds " + countIn(chest, Items.TORCH) + " torches and " + countIn(chest, Items.BREAD) + " bread");
+			helper.assertTrue(countIn(barrel, Items.TORCH) == 16 && countIn(barrel, Items.BREAD) == 4,
+				"barrel holds " + countIn(barrel, Items.TORCH) + " torches and " + countIn(barrel, Items.BREAD) + " bread");
 		});
 	}
 }

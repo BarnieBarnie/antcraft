@@ -27,7 +27,7 @@ No, it is done at once.
 
 ## Description
 
-The distance is measured in a straight line from the bot. To walk to dropped items and take them is [`pick_up`](../index.md#inventory).
+The distance is measured in a straight line from the bot. To walk to dropped items and take them is [`pick_up`](../inventory/pick_up.md).
 
 A malformed selector, or a name or tag the game does not know, stops the script with an error.
 
@@ -40,4 +40,4 @@ for drop in items_near("#minecraft:saplings", radius=8):
 
 ## See also
 
-[`entities`](entities.md), [`pick_up`](../index.md#inventory), [`Entity`](../types/entity.md), [`Stack`](../types/stack.md).
+[`entities`](entities.md), [`pick_up`](../inventory/pick_up.md), [`Entity`](../types/entity.md), [`Stack`](../types/stack.md).

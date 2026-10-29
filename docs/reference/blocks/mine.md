@@ -18,7 +18,7 @@ A [`Result`](../types/result.md), ok once the block is broken.
 
 ## Pauses
 
-Yes: it walks, as [`goto`](../index.md#movement) does, to where the bot sees the block within 4 blocks of its eyes, then digs as long as the block takes to break with the tool.
+Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the block within 4 blocks of its eyes, then digs as long as the block takes to break with the tool.
 
 ## Cost
 
@@ -55,4 +55,4 @@ if log is not None:
 
 ## See also
 
-[`place`](place.md), [`use`](use.md), [`find_nearest`](../index.md#the-world-around), [`pick_up`](../inventory/pick_up.md).
+[`place`](place.md), [`use`](use.md), [`find_nearest`](../world/find_nearest.md), [`pick_up`](../inventory/pick_up.md).

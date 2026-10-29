@@ -43,4 +43,4 @@ say(f"{len(logs)} logs around")
 
 ## See also
 
-[`range`](range.md), [`list`](list.md), [`free_slots`](../index.md#inventory), [Values & types](../../language/values.md).
+[`range`](range.md), [`list`](list.md), [`free_slots`](../inventory/free_slots.md), [Values & types](../../language/values.md).
