@@ -8,7 +8,7 @@ import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
-/** Where a bot's reflexes take it (docs/scripting.md, Reflexes): a step aside, and the way up to air. */
+/** Where a bot's reflexes take it (docs/features/bots.md, Reflexes): a step aside, and the way up to air. */
 class EscapeTest {
 	private static final BlockPos FEET = new BlockPos(0, 1, 0);
 

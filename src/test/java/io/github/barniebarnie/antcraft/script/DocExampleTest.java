@@ -11,11 +11,11 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 /**
- * The "punch a tree, then make a wooden pickaxe" example of docs/scripting.md is the script the acceptance game test
+ * The "punch a tree, then make a wooden pickaxe" example of docs/cookbook/index.md is the script the acceptance game test
  * runs (CraftGameTest), kept as a copy in the game test resources; this keeps the two the same.
  */
 class DocExampleTest {
-	private static final Path DOC = Path.of("docs/scripting.md");
+	private static final Path DOC = Path.of("docs/cookbook/index.md");
 	private static final Path COPY = Path.of("src/gametest/resources/antcraft-gametest/scripts/tree_to_pickaxe.py");
 	private static final String HEADING = "Punch a tree, then make a wooden pickaxe:";
 

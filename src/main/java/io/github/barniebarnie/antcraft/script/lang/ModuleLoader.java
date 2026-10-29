@@ -3,7 +3,7 @@ package io.github.barniebarnie.antcraft.script.lang;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Finds the modules a script imports (docs/scripting.md, Modules): the scripts of the script library, by name, with dots
+ * Finds the modules a script imports (docs/language/index.md, Modules): the scripts of the script library, by name, with dots
  * for folders ({@code lib.trees} is {@code lib/trees.py}).
  */
 public interface ModuleLoader {

@@ -101,7 +101,7 @@ class ScriptRunTest {
 
 	/**
 	 * A reflex that takes over ends the running action with {@code interrupted}; the script waits while the reflex holds
-	 * the bot, and goes on with that result once it lets go (docs/scripting.md, Reflexes).
+	 * the bot, and goes on with that result once it lets go (docs/features/bots.md, Reflexes).
 	 */
 	@Test
 	void aReflexInterruptsTheActionAndTheScriptGoesOnOnceItIsDone() {

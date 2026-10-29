@@ -12,7 +12,7 @@ import net.minecraft.nbt.CompoundTag;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A colony's job board (docs/scripting.md, Jobs, #368): members post jobs, take the oldest open one, and finish or drop
+ * A colony's job board (docs/features/colonies.md, Jobs, #368): members post jobs, take the oldest open one, and finish or drop
  * it. Natives do the claiming, so two scripts never take the same job, as they could on {@code colony_memory}. Each job
  * keeps its data as a tag ({@code Memory.encode}), a snapshot of the plain data the poster gave.
  */

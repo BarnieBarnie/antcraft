@@ -14,7 +14,7 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The colony's job board (docs/scripting.md, Jobs, #368): {@code post_job}, {@code jobs}, {@code take_job},
+ * The colony's job board (docs/features/colonies.md, Jobs, #368): {@code post_job}, {@code jobs}, {@code take_job},
  * {@code finish_job} and {@code drop_job}, on the {@link JobBoard} of the bot's colony. Each is done at once, so a job
  * is claimed in one step however the script's instruction budget falls.
  */

@@ -15,7 +15,7 @@ import net.minecraft.world.entity.Entity;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The bot API's values in a saved script (docs/scripting.md, Save and resume): {@code Pos}, {@code Stack}, {@code Block}
+ * The bot API's values in a saved script (docs/features/scripts.md, Save and resume): {@code Pos}, {@code Stack}, {@code Block}
  * and {@code Result} as plain data, and an {@code Entity} by its UUID, which may come back as no longer valid. Each is
  * saved as a tuple that starts with its type name.
  */

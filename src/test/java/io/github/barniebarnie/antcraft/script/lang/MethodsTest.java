@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-/** The str, list and dict methods of docs/scripting.md, each checked against what CPython 3.14 gives. */
+/** The str, list and dict methods of docs/language/index.md, each checked against what CPython 3.14 gives. */
 class MethodsTest {
 	@Test
 	void strSplit() {

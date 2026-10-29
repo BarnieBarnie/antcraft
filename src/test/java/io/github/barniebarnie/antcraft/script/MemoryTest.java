@@ -22,7 +22,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import org.junit.jupiter.api.Test;
 
-/** A bot's {@code memory} (docs/scripting.md, Memory): plain data only, saved with the bot. */
+/** A bot's {@code memory} (docs/reference/index.md, Memory): plain data only, saved with the bot. */
 class MemoryTest {
 	/** Runs {@code source} with {@code memory} as the global {@code memory}; gives what it printed, or its error. */
 	private static String run(PyDict memory, String source) {

@@ -14,7 +14,7 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 /**
- * A bot's log (docs/scripting.md, Output and logging): its last lines, each with the game time it was written at and its
+ * A bot's log (docs/features/scripts.md, Output and logging): its last lines, each with the game time it was written at and its
  * level. Bounded, so a chatty script cannot fill the server's memory. Saved with the bot ({@link #save}).
  */
 public final class BotLog {

@@ -21,7 +21,7 @@ import java.util.function.Supplier;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Saves a running {@link Vm} as bytes and loads it again (docs/scripting.md, Save and resume): its frames with their
+ * Saves a running {@link Vm} as bytes and loads it again (docs/features/scripts.md, Save and resume): its frames with their
  * code position, locals and operand stack, every module with its globals, the builtin values (such as {@code memory}),
  * how many instructions it ran, and the native call it is suspended in, which a loaded VM makes again ({@link Vm#recall}).
  *

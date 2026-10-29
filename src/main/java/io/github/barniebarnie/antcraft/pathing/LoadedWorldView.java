@@ -6,7 +6,7 @@ import net.minecraft.core.Direction;
 
 /**
  * A view of only the loaded blocks of {@code world}: an unloaded block is a wall that cannot be broken, built on, opened
- * or entered, and is never read, so a plan over this view loads no chunks (see {@code reachable} in docs/scripting.md).
+ * or entered, and is never read, so a plan over this view loads no chunks (see {@code reachable} in docs/reference/index.md).
  */
 public final class LoadedWorldView implements WorldView {
 	private final WorldView world;

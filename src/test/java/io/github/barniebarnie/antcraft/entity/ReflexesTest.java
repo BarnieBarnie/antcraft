@@ -7,7 +7,7 @@ import io.github.barniebarnie.antcraft.entity.Reflexes.Kind;
 import io.github.barniebarnie.antcraft.entity.Reflexes.Senses;
 import org.junit.jupiter.api.Test;
 
-/** Which reflex takes over, from what the bot senses and the config's thresholds (docs/scripting.md, Reflexes). */
+/** Which reflex takes over, from what the bot senses and the config's thresholds (docs/features/bots.md, Reflexes). */
 class ReflexesTest {
 	private static final int FLEE_HEALTH = 6;
 	private static final int SURFACE_AIR = 100;

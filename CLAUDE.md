@@ -1,6 +1,6 @@
 # AntCraft
 
-Fabric mod for Minecraft 26.3 (Java 25, Mojang names). See README.md for the design and roadmap.
+Fabric mod for Minecraft 26.3 (Java 25, Mojang names). The documentation is a Zensical site in `docs/` (https://barniebarnie.github.io/antcraft/): the design and roadmap are in `docs/design/index.md`, the bot API in `docs/reference/index.md`, the codebase tour in `docs/development/index.md`. Code comments name the page and section they follow, such as (docs/features/bots.md, Reflexes). Build the site with `zensical build --strict` (see `zensical.toml`); keep every user-facing doc there, not in .md files elsewhere.
 
 ## Test-driven development
 

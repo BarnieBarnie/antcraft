@@ -18,7 +18,7 @@ import net.minecraft.server.Bootstrap;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-/** Parsing selectors, the strings that pick items, blocks and entities (docs/scripting.md, Selectors). */
+/** Parsing selectors, the strings that pick items, blocks and entities (docs/reference/index.md, Selectors). */
 class SelectorTest {
 	@BeforeAll
 	static void bootstrap() {

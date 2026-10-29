@@ -22,7 +22,7 @@ public final class Natives {
 	private final Map<String, Long> costs = new HashMap<>();
 
 	/**
-	 * The builtins and methods every script has (docs/scripting.md): {@code print}, {@code debug}, {@code info},
+	 * The builtins and methods every script has (docs/language/index.md): {@code print}, {@code debug}, {@code info},
 	 * {@code warn} and {@code error} write to {@code output} at their level.
 	 */
 	public static Natives standard(Output output) {

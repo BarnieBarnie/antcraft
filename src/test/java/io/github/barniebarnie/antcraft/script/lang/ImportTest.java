@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** {@code import} and {@code from ... import} of modules of the script library (docs/scripting.md, Modules). */
+/** {@code import} and {@code from ... import} of modules of the script library (docs/language/index.md, Modules). */
 class ImportTest {
 	/** Modules by name, compiled from source on import; a name's file is its path, {@code lib.trees} in {@code lib/trees.py}. */
 	private record Library(Map<String, String> sources) implements ModuleLoader {

@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
-/** Each construct outside the subset (docs/scripting.md, "Not supported (v1)") is a compile error that names it and where it is. */
+/** Each construct outside the subset (docs/language/index.md, "Not supported (v1)") is a compile error that names it and where it is. */
 class SubsetTest {
 	private static void rejects(String source, String message) {
 		CompileError error = assertThrows(CompileError.class, () -> Parser.parse("bot.py", source));

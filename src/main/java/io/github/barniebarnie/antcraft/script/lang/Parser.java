@@ -13,7 +13,7 @@ import java.util.Set;
 
 /**
  * Parses a script into an {@link Ast.Module}, by recursive descent over Python 3's grammar, and checks it against the
- * supported subset (docs/scripting.md): anything outside it is a {@link CompileError} naming the construct.
+ * supported subset (docs/language/index.md): anything outside it is a {@link CompileError} naming the construct.
  *
  * <p>Statements and atoms sit at their first token; operators, calls ({@code (}), subscripts ({@code [}), attributes
  * ({@code .}) and conditional expressions ({@code if}) at their operator, so a runtime error can point at it.

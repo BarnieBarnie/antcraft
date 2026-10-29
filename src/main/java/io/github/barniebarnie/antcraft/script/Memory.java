@@ -22,7 +22,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A bot's {@code memory} (docs/scripting.md, Memory): a dict that belongs to the bot, outlives its scripts and is saved
+ * A bot's {@code memory} (docs/reference/index.md, Memory): a dict that belongs to the bot, outlives its scripts and is saved
  * with it. It holds plain data only: numbers, strings, booleans, {@code None}, {@code Pos}, and lists, tuples and dicts
  * of these.
  *

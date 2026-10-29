@@ -12,7 +12,7 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
 /**
- * The builtin functions of docs/scripting.md, with Python's behaviour and CPython's error messages. Integers are 64-bit,
+ * The builtin functions of docs/language/index.md, with Python's behaviour and CPython's error messages. Integers are 64-bit,
  * so where Python would make a bigger int, the script fails with the overflow error of {@link Values}.
  *
  * <p>Builtins that call a script function ({@code sorted}, {@code min} and {@code max} with a {@code key}) hand the

@@ -23,7 +23,7 @@ import net.minecraft.world.level.Level;
  * A Blueprint remembers one of the server's blueprints ({@link ModComponents#CHOSEN_BLUEPRINT}). Right-clicking with it
  * opens the picker on the client, which asks the server to set the chosen blueprint ({@code BlueprintNetworking.ChooseBlueprint});
  * the client previews the chosen one where the player looks. Placing it for a colony to build went with the goal-driven
- * colony; building comes back as a script action (docs/scripting.md, milestone 7).
+ * colony; building comes back as a script action (docs/design/index.md, milestone 7).
  */
 public class BlueprintItem extends Item {
 	/** Opens the picker for the item in a hand; the client sets it, a dedicated server has none. */

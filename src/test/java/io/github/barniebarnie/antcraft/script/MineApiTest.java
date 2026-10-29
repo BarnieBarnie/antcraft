@@ -27,7 +27,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-/** The senses {@code mineshaft(levels, near)}, {@code mineshaft_at(top, levels)} and {@code ore_vein(pos)} (docs/scripting.md, Senses). */
+/** The senses {@code mineshaft(levels, near)}, {@code mineshaft_at(top, levels)} and {@code ore_vein(pos)} (docs/reference/index.md, Senses). */
 class MineApiTest {
 	private static final BlockPos NEAR = new BlockPos(0, 64, 0);
 	private static final List<Integer> LEVELS = List.of(40, 20);

@@ -17,7 +17,7 @@ import java.util.Properties;
 import java.util.TreeMap;
 
 /**
- * The mod's default scripts (docs/scripting.md, Files and commands), bundled under {@code /antcraft/scripts/} and copied
+ * The mod's default scripts (docs/features/scripts.md, Files and commands), bundled under {@code /antcraft/scripts/} and copied
  * into the config script folder when the server starts. A file the player changed is never overwritten: the folder keeps
  * a record ({@link #RECORD}) of what was last copied, and a file that no longer matches it is the player's.
  */

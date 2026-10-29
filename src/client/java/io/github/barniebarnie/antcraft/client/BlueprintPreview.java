@@ -20,7 +20,7 @@ import net.minecraft.world.phys.HitResult;
 /**
  * The ghost of the blueprint a held Blueprint is set to, where the player looks: turned with a key or by scrolling while
  * sneaking, and mirrored with another key. Placing it for a colony to build is gone with the goal-driven colony; building
- * comes back as a script action in milestone 7 of docs/scripting.md.
+ * comes back as a script action in milestone 7 of docs/design/index.md.
  */
 public final class BlueprintPreview {
 	private static Rotation rotation = Rotation.NONE;

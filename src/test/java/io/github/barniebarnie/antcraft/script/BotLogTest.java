@@ -38,7 +38,7 @@ class BotLogTest {
 		assertEquals(List.of("p", "e2"), log.last(2, Level.ERROR).stream().map(BotLog.Entry::text).toList());
 	}
 
-	/** docs/scripting.md, Output and logging: print always shows in chat, other lines at or above the chat level. */
+	/** docs/features/scripts.md, Output and logging: print always shows in chat, other lines at or above the chat level. */
 	@Test
 	void chatShowsPrintAlwaysAndOtherLinesFromTheChatLevelUp() {
 		assertTrue(BotLog.showsInChat(Level.PRINT, Level.ERROR));

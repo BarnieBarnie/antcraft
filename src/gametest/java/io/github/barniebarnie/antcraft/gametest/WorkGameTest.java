@@ -53,7 +53,7 @@ import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.material.Fluids;
 
 /**
- * The block actions of the bot API (docs/scripting.md, Actions): {@code mine}, {@code place}, {@code pick_up},
+ * The block actions of the bot API (docs/reference/index.md, Actions): {@code mine}, {@code place}, {@code pick_up},
  * {@code equip}, {@code use} and {@code drop}, each run as a short script on a bot in the test area: one test where the
  * action succeeds, and one per reason it can fail with.
  */

@@ -17,7 +17,7 @@ import net.minecraft.nbt.CompoundTag;
 
 /**
  * A colony: its core block (storage), member bots, radius and the players who may change it. What a colony does with its
- * members comes back as scripts in milestone 7 of docs/scripting.md; the goal-driven colony's jobs, stock, projects and
+ * members comes back as scripts in milestone 7 of docs/design/index.md; the goal-driven colony's jobs, stock, projects and
  * builds are gone. A colony saved with them loads without them: their fields are ignored, and not written again.
  */
 public class Colony {
@@ -42,7 +42,7 @@ public class Colony {
 	/** Players the owner lets change the colony, besides the owner. */
 	private final Set<UUID> trusted = new LinkedHashSet<>();
 	private int radius;
-	/** The scripts' {@code colony_memory}, shared by every member (docs/scripting.md, Memory). */
+	/** The scripts' {@code colony_memory}, shared by every member (docs/reference/index.md, Memory). */
 	private final PyDict memory;
 	/** The scripts' job board (#368). */
 	private final JobBoard jobs;

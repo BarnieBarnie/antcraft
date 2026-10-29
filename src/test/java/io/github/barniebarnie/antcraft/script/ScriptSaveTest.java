@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * A bot's running script saved with the bot and resumed when it loads (docs/scripting.md, Save and resume): it goes on
+ * A bot's running script saved with the bot and resumed when it loads (docs/features/scripts.md, Save and resume): it goes on
  * at the same instruction, inside the same action, unless its code changed, when it starts again from the top.
  */
 class ScriptSaveTest {

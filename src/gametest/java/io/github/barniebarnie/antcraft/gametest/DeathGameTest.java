@@ -39,7 +39,7 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.Vec3;
 
-/** Bots dying and respawning at home (docs/scripting.md, Idle, home and death). */
+/** Bots dying and respawning at home (docs/features/death.md, Idle, home and death). */
 public class DeathGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -191,7 +191,7 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A bot loaded from a save in the middle of its script and killed before it ticks again respawns running its script
-	 * from the top (docs/scripting.md, Save and resume; Idle, home and death), not resuming the script it was saved with.
+	 * from the top (docs/features/scripts.md, Save and resume; Idle, home and death), not resuming the script it was saved with.
 	 */
 	@GameTest(maxTicks = 440)
 	public void aBotKilledBeforeItResumesItsSavedScriptRespawnsRunningItFromTheTop(GameTestHelper helper) {

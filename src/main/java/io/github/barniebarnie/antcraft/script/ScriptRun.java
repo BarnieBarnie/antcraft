@@ -30,7 +30,7 @@ import net.minecraft.world.level.storage.ValueOutput;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A script running on a bot (docs/scripting.md, Runtime). The bot calls {@link #tick} once a server tick, which:
+ * A script running on a bot (docs/features/scripts.md, Runtime). The bot calls {@link #tick} once a server tick, which:
  * <ol>
  * <li>runs the reflexes ({@link #reflexes}): while one holds the bot, the current action ends with {@code interrupted}
  * and the script waits;</li>
@@ -65,7 +65,7 @@ public final class ScriptRun {
 		}
 
 		/**
-		 * Whether one of the bot's reflexes holds it this tick (docs/scripting.md, Reflexes). The bot runs its reflexes
+		 * Whether one of the bot's reflexes holds it this tick (docs/features/bots.md, Reflexes). The bot runs its reflexes
 		 * before the script, and they cannot be turned off by it.
 		 */
 		default boolean reflex() {
@@ -132,7 +132,7 @@ public final class ScriptRun {
 	}
 
 	/**
-	 * A running script as saved with its bot (docs/scripting.md, Save and resume): its name and arguments, the state of
+	 * A running script as saved with its bot (docs/features/scripts.md, Save and resume): its name and arguments, the state of
 	 * its VM ({@link VmState}) and how far its action got. Without a VM state (the script held a value that cannot be
 	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads. {@code lastResult} is
 	 * its last action's result, which {@code /antcraft bot status} shows. {@code progressData} is what the action saves
@@ -221,7 +221,7 @@ public final class ScriptRun {
 	}
 
 	/**
-	 * A run of the script {@code name} that imports its modules from {@code library} (docs/scripting.md, Modules). Every
+	 * A run of the script {@code name} that imports its modules from {@code library} (docs/language/index.md, Modules). Every
 	 * module sees the bot API and {@code memory}; {@code ARGS} is a global of the script itself.
 	 */
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log, PyDict memory, ScriptLibrary library) {
@@ -250,7 +250,7 @@ public final class ScriptRun {
 	}
 
 	/**
-	 * Resumes the run {@code saved} with the bot (docs/scripting.md, Save and resume), its script now compiled to
+	 * Resumes the run {@code saved} with the bot (docs/features/scripts.md, Save and resume), its script now compiled to
 	 * {@code code}: at the instruction it was at, starting the action it was in again with the same arguments. When the
 	 * script or a module it imported changed since, or its state was not saved, the script starts again from the top
 	 * with {@code memory}, with a line in the log that says why.

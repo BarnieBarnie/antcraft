@@ -21,7 +21,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * A bot's reflexes (docs/scripting.md, Reflexes): whatever its script does, it gets out of fire, swims up before it
+ * A bot's reflexes (docs/features/bots.md, Reflexes): whatever its script does, it gets out of fire, swims up before it
  * drowns, flees a hostile mob at low health and steps from under falling sand. Each bot runs a script that waits, and the
  * wait ends with {@code interrupted} once a reflex takes over.
  */

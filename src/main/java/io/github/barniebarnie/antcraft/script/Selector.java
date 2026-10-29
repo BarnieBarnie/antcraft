@@ -26,7 +26,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * What a script asks for by name (docs/scripting.md, Selectors): {@code "oak_log"} (namespace {@code minecraft:}
+ * What a script asks for by name (docs/reference/index.md, Selectors): {@code "oak_log"} (namespace {@code minecraft:}
  * assumed), {@code "minecraft:oak_log"}, a tag {@code "#minecraft:logs"}, or a list or tuple of these. Parsing is pure;
  * {@link #blocks}, {@link #items} and {@link #entities} look the names up in the game's registries.
  * <p>

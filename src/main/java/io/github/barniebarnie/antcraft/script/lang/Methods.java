@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * The {@code str}, {@code list} and {@code dict} methods of docs/scripting.md, with Python's behaviour and CPython's
+ * The {@code str}, {@code list} and {@code dict} methods of docs/language/index.md, with Python's behaviour and CPython's
  * error messages.
  */
 final class Methods {

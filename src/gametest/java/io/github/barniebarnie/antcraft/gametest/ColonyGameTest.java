@@ -43,7 +43,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Colony scripts (docs/scripting.md, milestone 7, #365): the sense {@code colony()}, the shared {@code colony_memory},
+ * Colony scripts (docs/design/index.md, milestone 7, #365): the sense {@code colony()}, the shared {@code colony_memory},
  * and the Colony Core's storage through {@code put} and {@code take}.
  */
 public class ColonyGameTest implements CustomTestMethodInvoker {

@@ -40,7 +40,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
-/** Bots running scripts (docs/scripting.md, milestones 2 and 4): output, budget, errors, reloading, and idle.py for every bot without a script. */
+/** Bots running scripts (docs/design/index.md, milestones 2 and 4): output, budget, errors, reloading, and idle.py for every bot without a script. */
 public class ScriptGameTest implements CustomTestMethodInvoker {
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -329,7 +329,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot saved in the middle of a {@code wait} and loaded again goes on with the ticks it had left (docs/scripting.md,
+	 * A bot saved in the middle of a {@code wait} and loaded again goes on with the ticks it had left (docs/features/scripts.md,
 	 * Save and resume): it prints once before and once after, 30 ticks apart, as without the save.
 	 */
 	@GameTest(maxTicks = 60)

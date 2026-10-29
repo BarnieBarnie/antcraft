@@ -15,7 +15,7 @@ import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Moving the bot (docs/scripting.md, The bot API): {@code goto(pos, near=0)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
+ * Moving the bot (docs/reference/index.md, The bot API): {@code goto(pos, near=0)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
  * and {@code home_dimension()}, {@code travel(portal)}, {@code portals()},
  * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
@@ -38,7 +38,7 @@ public final class MoveApi {
 	 */
 	static final int STALL_TICKS = 2400;
 	/**
-	 * How far, in blocks from the bot's eyes to the block's centre, the block actions reach (docs/scripting.md, Actions);
+	 * How far, in blocks from the bot's eyes to the block's centre, the block actions reach (docs/reference/index.md, Actions);
 	 * a little short of a player's 4.5.
 	 */
 	public static final double REACH = 4.0;

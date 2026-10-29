@@ -25,7 +25,7 @@ import net.minecraft.world.level.saveddata.SavedDataType;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Bots of one dimension that died and wait to come back at their home (docs/scripting.md, Idle, home and death), saved
+ * Bots of one dimension that died and wait to come back at their home (docs/features/death.md, Idle, home and death), saved
  * with the world so the wait survives a reload. Each waiting bot is kept as it was saved when it died, with what it carried
  * already dropped.
  */

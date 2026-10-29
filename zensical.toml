@@ -1,0 +1,68 @@
+# The documentation site (https://barniebarnie.github.io/antcraft/), built with Zensical from docs/.
+# Build it with `zensical build --strict` (`pip install zensical==0.0.73`, the version the docs workflow pins); CI does so on every pull request.
+[project]
+site_name = "AntCraft"
+site_description = "A Fabric mod for Minecraft that adds bots you program in a small subset of Python."
+site_url = "https://barniebarnie.github.io/antcraft/"
+repo_url = "https://github.com/BarnieBarnie/antcraft"
+repo_name = "BarnieBarnie/antcraft"
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = "getting-started.md" },
+  { "Features" = [
+    { "Bots" = "features/bots.md" },
+    { "Death & respawn" = "features/death.md" },
+    { "Scripts in the game" = "features/scripts.md" },
+    { "Nether travel" = "features/nether.md" },
+    { "Colonies" = "features/colonies.md" },
+    { "Default colony scripts" = "features/colony-scripts.md" },
+    { "Mining" = "features/mining.md" },
+    { "Blueprints" = "features/blueprints.md" },
+    { "Commands" = "features/commands.md" },
+    { "Config" = "features/config.md" },
+    { "Server admins" = "features/server-admins.md" },
+  ] },
+  { "Language guide" = ["language/index.md"] },
+  { "API reference" = ["reference/index.md"] },
+  { "Cookbook" = ["cookbook/index.md"] },
+  { "Development" = ["development/index.md"] },
+  { "Design" = ["design/index.md"] },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "content.code.copy",
+  "navigation.indexes",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme)"
+toggle.icon = "lucide/sun-moon"
+toggle.name = "Switch to light mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to system preference"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+md_in_html = {}
+tables = {}
+toc.permalink = true
+pymdownx.highlight.anchor_linenums = true
+pymdownx.inlinehilite = {}
+pymdownx.superfences = {}

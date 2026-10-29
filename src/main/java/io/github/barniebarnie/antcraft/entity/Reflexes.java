@@ -30,7 +30,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A bot's reflexes (docs/scripting.md, Reflexes): each tick, before the script, they keep the bot out of fire and lava,
+ * A bot's reflexes (docs/features/bots.md, Reflexes): each tick, before the script, they keep the bot out of fire and lava,
  * from under a falling block, from drowning and, at low health, away from hostile mobs, whatever its script does, and
  * out of another bot's build when it asks. While one holds the bot, the script's current action ends with
  * {@code interrupted} and the script waits (see

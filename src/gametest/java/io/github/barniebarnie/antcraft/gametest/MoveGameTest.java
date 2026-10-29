@@ -35,7 +35,7 @@ import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 
-/** Scripted bots moving (docs/scripting.md, milestone 2): {@code goto}, chunk loading, {@code home}, {@code set_home} and {@code idle.py}. */
+/** Scripted bots moving (docs/design/index.md, milestone 2): {@code goto}, chunk loading, {@code home}, {@code set_home} and {@code idle.py}. */
 public class MoveGameTest implements CustomTestMethodInvoker {
 	/** Each far-away test gets its own spot, so one run after another in a server finds its chunks unloaded. */
 	private static final AtomicInteger FAR_SPOTS = new AtomicInteger();

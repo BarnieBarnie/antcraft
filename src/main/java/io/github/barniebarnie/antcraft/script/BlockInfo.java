@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.Fallable;
 import org.jspecify.annotations.Nullable;
 
 /**
- * A block in a script, the {@code Block} type (docs/scripting.md, Types): {@code id} such as
+ * A block in a script, the {@code Block} type (docs/reference/index.md, Types): {@code id} such as
  * {@code minecraft:oak_log}, {@code pos}, {@code is_air}, {@code is_fluid} (water or lava, flowing or not, and
  * waterlogged blocks), {@code falls} (a block that falls when nothing holds it up: gravel, sand, concrete powder, an
  * anvil), {@code tags}, the block's tags as selectors such as {@code #minecraft:logs}, and {@code state}, its

@@ -19,7 +19,7 @@ import java.util.stream.Stream;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The scripts found in the script folders, compiled (docs/scripting.md, Files and commands). A script is named by its
+ * The scripts found in the script folders, compiled (docs/features/scripts.md, Files and commands). A script is named by its
  * path in its folder without {@code .py}, with dots for folders, as a module is imported: {@code lib/trees.py} is
  * {@code lib.trees}. A script that does not compile is kept with its error, so {@code /antcraft script list} can show it.
  * Its scripts are the modules scripts import, and its folders their packages.

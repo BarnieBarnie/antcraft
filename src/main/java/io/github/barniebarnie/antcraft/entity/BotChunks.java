@@ -8,7 +8,7 @@ import net.minecraft.server.level.TicketType;
 import net.minecraft.world.level.ChunkPos;
 
 /**
- * Chunk tickets of bots running scripts (docs/scripting.md, Chunk loading), with config {@code botsLoadChunks} on. A bot
+ * Chunk tickets of bots running scripts (docs/features/scripts.md, Chunk loading), with config {@code botsLoadChunks} on. A bot
  * keeps the chunk it stands in ticking, as a thrown ender pearl does, and {@code goto} loads the chunks of the next stretch
  * of its way. Both tickets time out, so they need renewing while they are wanted: the bot renews its own every tick, after it
  * moved, which carries the ticket along with it. A bot running the {@code idle.py} it fell back to holds its

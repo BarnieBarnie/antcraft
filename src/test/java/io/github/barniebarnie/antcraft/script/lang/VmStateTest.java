@@ -19,7 +19,7 @@ import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 
 /**
- * Saving a running VM and loading it again (docs/scripting.md, Save and resume): a script saved and loaded part way, at
+ * Saving a running VM and loading it again (docs/features/scripts.md, Save and resume): a script saved and loaded part way, at
  * any instruction, goes on to the same end as one that ran without a break.
  */
 class VmStateTest {

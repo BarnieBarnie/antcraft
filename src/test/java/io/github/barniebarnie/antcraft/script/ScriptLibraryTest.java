@@ -16,7 +16,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Loading scripts from the config and world script folders (docs/scripting.md, Files and commands). */
+/** Loading scripts from the config and world script folders (docs/features/scripts.md, Files and commands). */
 class ScriptLibraryTest {
 	@TempDir
 	Path temp;

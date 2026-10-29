@@ -23,7 +23,7 @@ import net.minecraft.server.MinecraftServer;
 public final class AntCraftConfig {
 	private static final String FILE_NAME = "antcraft.properties";
 	private static final int DEFAULT_MAX_BOTS = 64;
-	/** Options of the goal-driven colony, gone in milestone 4 of docs/scripting.md; dropped from the file when it is written again. */
+	/** Options of the goal-driven colony, gone in milestone 4 of docs/design/index.md; dropped from the file when it is written again. */
 	private static final String[] REMOVED = {"mineshaftLevels", "replantMatchWaitTicks"};
 	public static final int DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK = 2000;
 	/**
@@ -34,7 +34,7 @@ public final class AntCraftConfig {
 	public static final Output.Level DEFAULT_SCRIPT_CHAT_LEVEL = Output.Level.ERROR;
 	/** Ten seconds. */
 	public static final int DEFAULT_BOT_RESPAWN_TICKS = 200;
-	/** At or below this health (of 20) a bot flees a hostile mob near it (docs/scripting.md, Reflexes). */
+	/** At or below this health (of 20) a bot flees a hostile mob near it (docs/features/bots.md, Reflexes). */
 	public static final int DEFAULT_BOT_FLEE_HEALTH = 6;
 	/** Below this much air (of 300 ticks) a bot under water swims up to breathe. */
 	public static final int DEFAULT_BOT_SURFACE_AIR = 100;

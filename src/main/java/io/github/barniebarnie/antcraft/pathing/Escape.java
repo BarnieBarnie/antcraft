@@ -12,7 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
 /**
- * Where a bot's reflexes take it (docs/scripting.md, Reflexes): a step aside, out of fire wider than a block or from under a falling block,
+ * Where a bot's reflexes take it (docs/features/bots.md, Reflexes): a step aside, out of fire wider than a block or from under a falling block,
  * and the way up to air for a bot running out of it under water. Positions are those of the bot's feet.
  */
 public final class Escape {

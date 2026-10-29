@@ -7,7 +7,7 @@ import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 
 /**
- * The bot API a script has besides the language's builtins (docs/scripting.md, The bot API): the natives of one
+ * The bot API a script has besides the language's builtins (docs/reference/index.md, The bot API): the natives of one
  * {@link ScriptRun}. Senses return at once; actions start a {@link ScriptRun.Action} and pause the script until it is done.
  * New senses and actions are registered here.
  *

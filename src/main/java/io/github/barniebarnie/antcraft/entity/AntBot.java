@@ -96,7 +96,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private @Nullable UUID colonyId;
 	/** The player who placed the bot's Bot Core, or who last started a script on it; gets the script's chat. Saved. */
 	private @Nullable UUID owner;
-	/** The script the bot runs or ran last; a running one is saved and resumed (docs/scripting.md, Save and resume). */
+	/** The script the bot runs or ran last; a running one is saved and resumed (docs/features/scripts.md, Save and resume). */
 	private @Nullable ScriptRun script;
 	/** The running script the bot was saved with, resumed on its first tick, once the script library is loaded. */
 	private ScriptRun.@Nullable Saved savedScript;
@@ -104,7 +104,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private boolean savedIdling;
 	/**
 	 * Whether {@link #script} is the {@code idle.py} that {@link #idleIfDone} started: then the bot holds its chunks loaded
-	 * only while it walks (docs/scripting.md, Chunk loading).
+	 * only while it walks (docs/features/scripts.md, Chunk loading).
 	 */
 	private boolean idling;
 	/** The source of {@link #script} when it came from the script library, so a reload can tell whether it changed. */
@@ -459,7 +459,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/**
 	 * Starts {@code idle.py} when the bot runs no script: it never ran one, or the one it ran ended, stopped or failed
-	 * (docs/scripting.md, Idle, home and death). Not after {@code idle.py} itself ended, so a broken one is not started
+	 * (docs/features/death.md, Idle, home and death). Not after {@code idle.py} itself ended, so a broken one is not started
 	 * over and over.
 	 */
 	private void idleIfDone() {

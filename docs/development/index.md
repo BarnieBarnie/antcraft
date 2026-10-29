@@ -1,10 +1,10 @@
-# AntCraft onboarding
+# Development
 
-A quick tour of the codebase for new contributors. For the gameplay design and roadmap, read [README.md](README.md); for the development rules, read [CLAUDE.md](CLAUDE.md).
+A quick tour of the codebase for new contributors, and how to build and test the mod. For the development rules, read [CLAUDE.md](https://github.com/barniebarnie/antcraft/blob/main/CLAUDE.md).
 
 ## What it is
 
-AntCraft is a Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot entities (`AntBot`) that run scripts written in a small subset of Python: the script decides what a bot does, through actions such as `goto`, `mine` and `craft` and senses such as `find_nearest`. A bot without a script runs `idle.py` (walk home, wait). The design and milestones are in [docs/scripting.md](docs/scripting.md); the goal-driven colony it replaced was removed in milestone 4.
+AntCraft is a Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot entities (`AntBot`) that run scripts written in a small subset of Python: the script decides what a bot does, through actions such as `goto`, `mine` and `craft` and senses such as `find_nearest`. A bot without a script runs `idle.py` (walk home, wait). The design and milestones are in [Design](../design/index.md); the goal-driven colony it replaced was removed in milestone 4.
 
 ## Source sets
 
@@ -46,11 +46,11 @@ All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
 2. On its first tick the bot has no script, so it runs `idle.py`: it walks home, where it spawned, and waits.
 3. `/antcraft bot run <script>` starts a script instead. Each tick `ScriptRun` resumes the current action (a walk, a dig) and, once it is done, runs the script on within its instruction budget until the next action pauses it.
 4. When the script ends, fails or is stopped, the bot runs `idle.py` again.
-5. Everything persists through Codecs in `Colony` and `AntBot` (`ValueInput` and `ValueOutput`); scripts themselves are not saved yet (milestone 5).
+5. Everything persists through Codecs in `Colony` and `AntBot` (`ValueInput` and `ValueOutput`); a running script is saved with its bot and resumed on load (see [Save and resume](../features/scripts.md#save-and-resume)).
 
 ## Workflow rules
 
-These come from [CLAUDE.md](CLAUDE.md).
+These come from [CLAUDE.md](https://github.com/BarnieBarnie/antcraft/blob/main/CLAUDE.md).
 
 - **Strict test-driven development**: write a failing test first (a compile error counts as red), make it green, then refactor. Never weaken a test to make it pass.
 - **Choosing the test type**
@@ -89,3 +89,47 @@ Game test ids are `antcraft-gametest:<class_in_snake_case>_<method_in_snake_case
 - **Add a script action or sense**: follow `WorkApi` or `SenseApi`, with a game test per reason code it returns (see `WorkGameTest`).
 - **The language**: a builtin or method scripts are missing, in `script/lang`, covered by unit tests, for fast feedback.
 - **Small, isolated logic** in `work/` or `pathing/`, covered by unit tests.
+
+## Building and testing
+
+Requires JDK 25.
+
+```sh
+./gradlew runClient   # launch Minecraft with the mod
+./gradlew test        # unit tests
+./gradlew runGameTest # bot behaviour tests on a headless server
+./gradlew build       # runs both test suites; jar in build/libs/
+```
+
+Development is test-first. See [CLAUDE.md](https://github.com/BarnieBarnie/antcraft/blob/main/CLAUDE.md) for the workflow.
+
+The bot benchmark (`BenchmarkGameTest`) runs 30 bots in a 48x48 area through a series of cases, each a script every bot runs for 1200 ticks: a loop that only computes (at the default instruction budget and at the cap), `find_nearest` and `scan` of radius 32, `reachable` all over the area, `goto` back and forth, `craft` and `drop` in a loop, a busy mix of them, and last, for 3600 ticks, work: fell the nearest tree and pick up its logs, then mine the coal and iron ore it finds, then walk home and wait. For each case it logs the average and worst server tick, where the time went (as `/antcraft profile report` does), the script instructions run a tick and what the bots were at, then a summary line per case; it fails if a case's average tick reaches 50 ms. The layout and ores are fixed and the world is deleted first, so runs compare, though the bots' races for the same trees and the machine's load still vary from run to run. It is left out of every other game test run:
+
+```sh
+./gradlew runGameTest -Pbenchmark          # or: scripts/check.sh runGameTest -Pbenchmark
+grep -A10 'Benchmark: summary' build/check.log   # the summary, when run through scripts/check.sh (-A30 'Benchmark:' for each case)
+```
+
+The game test server runs ticks back to back rather than 20 a second, so the 3600 ticks take well under a minute.
+
+The work skins under `textures/entity/bot/` (one per kind of work the goal-driven colony had; bots wear a vanilla skin for now, see `BotSkins`) are drawn by `tools/skins.py` (needs Pillow). To add or tweak a skin, edit its entry in `SKINS` and regenerate them all:
+
+```sh
+python3 tools/skins.py src/main/resources/assets/antcraft/textures/entity/bot
+```
+
+Structures for blueprints go in `src/main/resources/data/antcraft/structure/` as `.nbt` files, saved with a structure block. In 26.3 a palette entry is `{id, properties}`; a file written in the old `{Name, Properties}` form loads as air.
+
+Targets Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API.
+
+## Architecture
+
+- **Bot entity**: custom `PathfinderMob` rendered with a player model and skin. Cheap enough for many bots, and does not appear in the tab list.
+- **Scripts**: each bot runs one script at a time on a pausable VM with a per-tick instruction budget (`script/lang`); actions such as `goto`, `mine` and `craft` take ticks and pause the script until they are done (`script/*Api`). The VM's state is plain data, saved with the bot and resumed on load. See [Scripts in the game](../features/scripts.md) and [Design](../design/index.md).
+- **Reflexes**: Java, always on, before the script each tick (`entity/Reflexes`).
+- **Navigation**: custom A* over block costs (walk, dig, place, climb, swim), followed by `PathFollower`, with a shared node budget (`PathBudget`); it goes round nether portals unless the bot travels.
+- **Colony**: core, member list, radius, who may change it, the scripts' `colony_memory` and job board, persisted as world saved data.
+- **Blueprints**: designed outside the game and imported as files, with roles and chest and work spots; the client previews them as ghosts. No network or API calls from inside Minecraft.
+- **Bot creation**: bots are crafted, not spawned from nothing.
+- **Combat**: bots defend themselves against hostile mobs, and flee at low health.
+- **Gating**: `AntCraftConfig` checks whether the server is dedicated and has opted in before allowing any bot to spawn.

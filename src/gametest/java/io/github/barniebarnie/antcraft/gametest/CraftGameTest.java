@@ -29,7 +29,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 
 /**
- * The container and crafting actions of the bot API (docs/scripting.md, Actions): {@code put}, {@code take},
+ * The container and crafting actions of the bot API (docs/reference/index.md, Actions): {@code put}, {@code take},
  * {@code craft} and {@code smelt}, each run as a short script on a bot in the test area, one test where the action
  * succeeds and one per reason it can fail with; and the acceptance test of milestone 3, the "punch a tree, then make a
  * wooden pickaxe" example of the doc run as it is.
@@ -389,7 +389,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * Milestone 3's acceptance: "punch a tree, then make a wooden pickaxe" of docs/scripting.md, run as it is on a short
+	 * Milestone 3's acceptance: "punch a tree, then make a wooden pickaxe" of docs/cookbook/index.md, run as it is on a short
 	 * oak (four logs under a crown of leaves) by a bot that carries nothing.
 	 */
 	@GameTest(maxTicks = 440)

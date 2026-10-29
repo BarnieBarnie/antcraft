@@ -29,7 +29,7 @@ Ask only for what you cannot work out yourself. For a bug with no reproduction s
 Before drafting, look at the relevant code so the issue names real classes, files and milestones:
 
 - Find where the behaviour lives (`src/main/java`), and which tests cover it (`src/test/java`, `src/gametest/java`).
-- Check the README roadmap (M0 to M6) to see which milestone it belongs to.
+- Check the roadmap in docs/design/index.md (milestones 1 to 8) to see which milestone it belongs to.
 - Check for duplicates: `gh issue list --state all --search "<keywords>"`. If one exists, show it and ask whether to comment on it instead.
 
 Keep this short. The issue is not the place for a full design; point at the code that will change.

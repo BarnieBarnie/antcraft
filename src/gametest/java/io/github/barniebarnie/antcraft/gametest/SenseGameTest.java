@@ -26,7 +26,7 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 
 /**
- * The senses of the bot API (docs/scripting.md, Senses) and {@code memory}, each run as a short script on a bot in
+ * The senses of the bot API (docs/reference/index.md, Senses) and {@code memory}, each run as a short script on a bot in
  * the test area. Searches keep their radius inside the area and look for blocks the area has nothing else of, as tests
  * run side by side a few blocks apart.
  */
