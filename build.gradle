@@ -36,6 +36,8 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+	// DocExampleTest and ReferenceDocsTest read the docs, so a change there runs the tests again.
+	inputs.dir('docs').withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 // The unit tests again, each class in a fresh JVM. A class that touches Items or Blocks

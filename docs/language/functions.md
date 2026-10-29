@@ -80,7 +80,7 @@ store()
 say(f"{trips} trips so far")
 ```
 
-A variable that should outlive the script, or a restart, belongs in `memory` instead (see [Memory](../reference/index.md#memory)).
+A variable that should outlive the script, or a restart, belongs in `memory` instead (see [Memory](../reference/types/memory.md)).
 
 A function can call itself (recursion), up to a limit of depth; most bot work is clearer as a loop.
 

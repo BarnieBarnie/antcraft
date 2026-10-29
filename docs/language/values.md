@@ -191,7 +191,7 @@ for chest in scan("chest", radius=16):
     contents[chest] = sum([s.count for s in stacks])
 ```
 
-`memory`, the dict a bot keeps across restarts, is a dict like any other (see [Memory](../reference/index.md#memory)).
+`memory`, the dict a bot keeps across restarts, is a dict like any other (see [Memory](../reference/types/memory.md)).
 
 ## The bot's own types
 

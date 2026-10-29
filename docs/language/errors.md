@@ -22,7 +22,7 @@ Fix the script and run it again (or `/antcraft script reload` to restart the bot
 Walking, mining, crafting and every other **action** of the bot can fail for reasons that are not a mistake: the path is blocked, the chest is full, a creeper took the block. An action never stops the script. It gives back a **`Result`**:
 
 - `r.ok`: `True` if it worked;
-- `r.reason`: why not, a short code such as `"unreachable"`, `"no_space"` or `"missing_ingredients"` (`None` when it worked); the [reason codes](../reference/index.md#reason-codes) list them all;
+- `r.reason`: why not, a short code such as `"unreachable"`, `"no_space"` or `"missing_ingredients"` (`None` when it worked); the [reason codes](../reference/types/result.md#reason-codes) list them all;
 - `r.value`: what it produced, such as how many items `craft` made.
 
 A `Result` is true when the action worked and false when it failed, so it goes straight into an `if`:
