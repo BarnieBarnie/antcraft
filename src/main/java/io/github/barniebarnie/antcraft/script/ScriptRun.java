@@ -221,7 +221,7 @@ public final class ScriptRun {
 	}
 
 	/**
-	 * A run of the script {@code name} that imports its modules from {@code library} (docs/language/index.md, Modules). Every
+	 * A run of the script {@code name} that imports its modules from {@code library} (docs/language/modules.md). Every
 	 * module sees the bot API and {@code memory}; {@code ARGS} is a global of the script itself.
 	 */
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log, PyDict memory, ScriptLibrary library) {
