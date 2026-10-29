@@ -200,7 +200,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 */
 	private static final Set<String> TAKE_NO_POSITION = Set.of("pos", "say", "wait", "stop", "home", "home_dimension",
 		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "held", "find_nearest", "scan", "entities",
-		"items_near", "deaths", "last_death", "colony", "time", "is_day", "equip", "drop", "pick_up", "Pos.up", "Pos.down", "Pos.north",
+		"items_near", "deaths", "last_death", "colony", "time", "is_day", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
 		"drop_job");
 

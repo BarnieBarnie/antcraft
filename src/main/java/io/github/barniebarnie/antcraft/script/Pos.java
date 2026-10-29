@@ -34,8 +34,17 @@ public record Pos(long x, long y, long z, @Nullable String dimension) implements
 		return new Pos(x, y, z, dimension);
 	}
 
-	/** Registers the methods of {@code Pos}. */
+	/** Registers the constructor {@code Pos(x, y, z, dimension=None)} and the methods of {@code Pos}. */
 	public static void register(Natives natives) {
+		natives.register(TYPE, call -> {
+			Object[] args = Args.bind(TYPE, call, 1, "x", "y", "z", "dimension");
+			if (!Args.absent(args[3]) && !(args[3] instanceof String)) {
+				throw new ScriptError("Pos() takes a dimension id such as 'minecraft:overworld' or None, not '"
+					+ Values.typeName(args[3]) + "'");
+			}
+			Pos pos = args[1] == null && args[2] == null ? of(args[0]) : new Pos(coordinate(args[0]), coordinate(args[1]), coordinate(args[2]));
+			return Args.absent(args[3]) ? pos : pos.in((String) args[3]);
+		});
 		step(natives, "up", 0, 1, 0);
 		step(natives, "down", 0, -1, 0);
 		step(natives, "north", 0, 0, -1);
@@ -51,6 +60,14 @@ public record Pos(long x, long y, long z, @Nullable String dimension) implements
 			double dz = self.z - other.z;
 			return Math.sqrt(dx * dx + dy * dy + dz * dz);
 		});
+	}
+
+	private static long coordinate(@Nullable Object value) {
+		Object given = value == null ? PyNone.NONE : value;
+		if (!(given instanceof Long || given instanceof Boolean)) {
+			throw new ScriptError("Pos() takes ints x, y and z, not '" + Values.typeName(given) + "'");
+		}
+		return Args.integer(given);
 	}
 
 	private static void step(Natives natives, String name, int dx, int dy, int dz) {

@@ -8,6 +8,25 @@ A block position. Anything that takes a position also takes a tuple `(x, y, z)`.
 - `distance(other)`: the distance to another position.
 - Usable as a dict key.
 
+## Making one
+
+`Pos(x, y, z, dimension=None)` makes a position from three ints. With a tuple `(x, y, z)` or another `Pos` as the only argument, it converts it, so a tuple gets the fields and methods above.
+
+| Parameter | Type | Default | Meaning |
+|---|---|---|---|
+| `x`, `y`, `z` | `int` | (required) | the coordinates; or `x` alone is a tuple of three ints or a `Pos` |
+| `dimension` | `str` or `None` | `None` | the dimension id, such as `"minecraft:the_nether"`; `None` means the bot's dimension (a `Pos` given as `x` keeps its own) |
+
+```python
+chest = Pos(10, 64, -3)
+print(chest.up().y)                # 65
+corner = Pos((0, 64, 0))           # a tuple as a Pos
+print(corner == Pos(0, 64, 0))     # True
+print(isinstance(chest, Pos))      # True
+```
+
+A coordinate that is not an int (a float, a str, `None`) stops the script with an error, as does a `dimension` that is not a str or `None`. A tuple does not equal a `Pos` with `==`, even with the same coordinates: convert it first, `Pos(t) == p`.
+
 ## Dimension
 
 `dimension` is the id of the dimension a position from `pos()`, `home()` or `portals()` is in, such as `"minecraft:overworld"`, and `None` for a position the script made, which means the dimension the bot is in (a tuple has none either).

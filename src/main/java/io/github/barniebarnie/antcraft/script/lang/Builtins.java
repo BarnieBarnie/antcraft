@@ -10,6 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 
 /**
  * The builtin functions of docs/language/index.md, with Python's behaviour and CPython's error messages. Integers are 64-bit,
@@ -518,12 +519,17 @@ final class Builtins {
 		return dict;
 	}
 
+	/** A native named after a host value's type, such as {@code Pos}, is that type's constructor; null for any other. */
+	private static @Nullable Predicate<Object> hostType(String name) {
+		return Character.isUpperCase(name.charAt(0)) ? v -> v instanceof HostValue h && h.typeName().equals(name) : null;
+	}
+
 	private static Object isinstance(NativeCall call) {
 		Object[] a = Args.bind("isinstance", call, 2, "obj", "class_or_tuple");
 		List<Object> types = a[1] instanceof PyTuple t ? t.items() : List.of(a[1]);
 		boolean matches = false;
 		for (Object type : types) {
-			Predicate<Object> test = type instanceof PyNative n ? TYPES.get(n.name()) : null;
+			Predicate<Object> test = type instanceof PyNative n ? TYPES.getOrDefault(n.name(), hostType(n.name())) : null;
 			if (test == null) {
 				throw new ScriptError("isinstance() arg 2 must be a type, a tuple of types, or a union");
 			}

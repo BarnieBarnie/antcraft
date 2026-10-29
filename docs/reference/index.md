@@ -6,7 +6,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 
 ## Types
 
-- [`Pos`](types/pos.md): a block position, with its dimension.
+- [`Pos`](types/pos.md): a block position, with its dimension; `Pos(x, y, z)` makes one.
 - [`Block`](types/block.md): a block as `block(pos)` reads it.
 - [`Stack`](types/stack.md): an item and how many.
 - [`Entity`](types/entity.md): a mob, player or dropped item.
@@ -23,6 +23,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`travel`](movement/travel.md) | `travel(portal)` | action: go through the nether portal at `portal` to the other dimension |
 | [`reachable`](movement/reachable.md) | `reachable(pos, near=0)` | whether the bot could walk to within `near` blocks of `pos`; plans without moving (may pause) |
 | [`pos`](movement/pos.md) | `pos()` | the bot's position, with its dimension |
+| [`Pos`](types/pos.md) | `Pos(x, y, z, dimension=None)`, `Pos(position)` | a position made from ints, a tuple or another `Pos` |
 | [`home`](movement/home.md) | `home()` | the bot's home, with its dimension |
 | [`set_home`](movement/set_home.md) | `set_home(pos)` | sets the bot's home |
 | [`home_dimension`](movement/home_dimension.md) | `home_dimension()` | the id of the dimension of the bot's home |

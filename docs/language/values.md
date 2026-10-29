@@ -153,7 +153,7 @@ A comprehension's variable is its own, as in Python 3: `p` above is not a variab
 
 ## Tuples
 
-A `tuple` is a list that cannot change, between `()`; a tuple of one value needs a comma, `(x,)`. Use it for a fixed group of values, such as a position: every function that takes a position also takes `(x, y, z)`.
+A `tuple` is a list that cannot change, between `()`; a tuple of one value needs a comma, `(x,)`. Use it for a fixed group of values, such as a position: every function that takes a position also takes `(x, y, z)`, and `Pos(t)` turns a tuple `t` into a [`Pos`](../reference/types/pos.md#making-one).
 
 ```python
 goto((100, 64, -20))
@@ -197,7 +197,7 @@ for chest in scan("chest", radius=16):
 
 The API gives values of its own types. Each has attributes, read with a dot. In short (the [API reference](../reference/index.md#types) has them in full):
 
-- **`Pos`**: a position, with `x`, `y`, `z`. `+` and `-` with another `Pos` or a tuple, `up(n)`, `down`, `north`, `south`, `east`, `west`, and `distance(other)`.
+- **`Pos`**: a position, with `x`, `y`, `z`. `+` and `-` with another `Pos` or a tuple, `up(n)`, `down`, `north`, `south`, `east`, `west`, and `distance(other)`. `Pos(x, y, z)` makes one, and `Pos((x, y, z))` turns a tuple into one.
 - **`Block`**: what `block(pos)` reads: `id`, `pos`, `is_air`, `is_fluid`, `falls`, `tags`, `state`.
 - **`Stack`**: an item stack: `item` and `count`.
 - **`Entity`**: a mob, player, bot or dropped item: `id`, `type`, `pos`, `health`, `valid`, `item`.

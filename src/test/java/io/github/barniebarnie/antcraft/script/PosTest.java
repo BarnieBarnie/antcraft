@@ -81,6 +81,35 @@ class PosTest {
 		assertEquals("None None", run("print(p.dimension, (p + p).dimension)"));
 	}
 
+	/** {@code Pos(x, y, z, dimension=None)} makes a position; a tuple or a Pos as the only argument converts it (#416). */
+	@Test
+	void theConstructorMakesAPositionOrConvertsATupleOrAPos() {
+		assertEquals("Pos(1, 3, 3) 1 None", run("q = Pos(1, 2, 3).up()\nprint(q, q.x, q.dimension)"));
+		assertEquals("True True False Pos(1, 2, 3)", run("print(Pos((1, 2, 3)) == p, Pos(p) == p, Pos((1, 2, 3)) == (1, 2, 3), Pos((1, 2, 3)))"));
+		assertEquals("minecraft:the_nether minecraft:the_nether None",
+			run("print(Pos(1, 2, 3, 'minecraft:the_nether').dimension, Pos((1, 2, 3), dimension='minecraft:the_nether').dimension,"
+				+ " Pos(x=1, y=2, z=3).dimension)"));
+		assertEquals("minecraft:the_nether minecraft:the_end", run("print(Pos(p).dimension, Pos(p, dimension='minecraft:the_end').dimension)",
+			new Pos(1, 2, 3, "minecraft:the_nether")));
+	}
+
+	@Test
+	void theConstructorStopsTheScriptOnAnythingButInts() {
+		assertEquals("error: t.py:1: Pos() takes ints x, y and z, not 'str'", run("q = Pos(1, 'a', 3)"));
+		assertEquals("error: t.py:1: Pos() takes ints x, y and z, not 'float'", run("q = Pos(1.5, 2, 3)"));
+		assertEquals("error: t.py:1: Pos() takes ints x, y and z, not 'NoneType'", run("q = Pos(1, 2)"));
+		assertEquals("error: t.py:1: a position is a Pos or a tuple of three ints, not 'str'", run("q = Pos('home')"));
+		assertEquals("error: t.py:1: a position is a Pos or a tuple of three ints, not 'tuple'", run("q = Pos((1, 2))"));
+		assertEquals("error: t.py:1: Pos() takes a dimension id such as 'minecraft:overworld' or None, not 'int'",
+			run("q = Pos(1, 2, 3, 0)"));
+		assertEquals("error: t.py:1: Pos() takes at least one argument (0 given)", run("q = Pos()"));
+	}
+
+	@Test
+	void isinstanceKnowsPos() {
+		assertEquals("True False True False", run("print(isinstance(p, Pos), isinstance((1, 2, 3), Pos), isinstance(p, (int, Pos)), isinstance(p, tuple))"));
+	}
+
 	@Test
 	void wrongOperandsAreScriptErrors() {
 		assertEquals("error: t.py:1: unsupported operand type(s) for +: 'Pos' and 'int'", run("x = p + 1"));

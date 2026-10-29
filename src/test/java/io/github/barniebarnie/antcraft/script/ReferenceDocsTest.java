@@ -84,6 +84,14 @@ class ReferenceDocsTest {
 			}
 		}
 
+		// A type's constructor, such as Pos(x, y, z), is on its type's page, docs/reference/types/pos.md.
+		for (String name : natives) {
+			Path typePage = REFERENCE.resolve(TYPES).resolve(name.toLowerCase(Locale.ROOT) + ".md");
+			if (Character.isUpperCase(name.charAt(0)) && Files.exists(typePage) && Files.readString(typePage).startsWith("# `" + name + "`")) {
+				pages.put(name, REFERENCE.relativize(typePage).toString().replace('\\', '/'));
+			}
+		}
+
 		Set<String> listed = new TreeSet<>();
 		for (String name : toWrite) {
 			if (!natives.contains(name)) {
