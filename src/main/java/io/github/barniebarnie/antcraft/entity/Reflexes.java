@@ -89,7 +89,7 @@ final class Reflexes {
 	/** The bot's tick count when its last flight failed. */
 	private int flightFailedAt = -FLEE_RETRY_TICKS;
 	/** The bot's tick count when it last struck the mob it flees. */
-	private int struckAt = -BotHands.STRIKE_TICKS;
+	private int struckAt = Integer.MIN_VALUE / 2;
 	/** How many flights the bot planned, for the game tests. */
 	private int flightPlans;
 	/** The spots of the build that last asked the bot to make way, or null. */
@@ -173,12 +173,12 @@ final class Reflexes {
 	}
 
 	/**
-	 * Strikes {@code hostile} when it is in the bot's reach and the bot's last blow is a second ago: a fleeing bot does not
-	 * chase a mob, but one that keeps up with it, such as one climbing a ladder right under it, it fights off as it runs
+	 * Strikes {@code hostile} when it is in the bot's reach and its weapon is ready again ({@link BotHands#strikeTicks}): a
+	 * fleeing bot does not chase a mob, but one that keeps up with it, such as one climbing a ladder right under it, it fights off as it runs
 	 * (#395), rather than take its blows all the way.
 	 */
 	private void strike(ServerLevel level, @Nullable Mob hostile) {
-		if (hostile == null || this.bot.tickCount - this.struckAt < BotHands.STRIKE_TICKS || !BotHands.inStrikingReach(this.bot, hostile)) {
+		if (hostile == null || this.bot.tickCount - this.struckAt < BotHands.strikeTicks(this.bot) || !BotHands.inStrikingReach(this.bot, hostile)) {
 			return;
 		}
 		Tools.equipBestWeapon(this.bot);

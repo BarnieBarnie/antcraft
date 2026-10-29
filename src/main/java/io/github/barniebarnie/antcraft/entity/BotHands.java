@@ -8,6 +8,7 @@ import net.minecraft.commands.arguments.EntityAnchorArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
@@ -15,6 +16,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
@@ -49,8 +52,33 @@ public final class BotHands {
 	private BotHands() {
 	}
 
-	/** How many ticks a bot waits between blows, as a mob's {@code MeleeAttackGoal} does. */
-	public static final int STRIKE_TICKS = 20;
+	/**
+	 * How many ticks a bot waits between blows with what it holds: a player's attack cooldown, so 5 bare-handed, 13 with a
+	 * sword and 20 to 25 with an axe.
+	 */
+	public static int strikeTicks(AntBot bot) {
+		return strikeTicks(attackSpeed(bot.getMainHandItem()));
+	}
+
+	/** How many ticks pass between blows at {@code attackSpeed} blows a second, a part tick waited out in full. */
+	static int strikeTicks(double attackSpeed) {
+		return Mth.ceil(20 / attackSpeed);
+	}
+
+	/**
+	 * The attack speed of {@code held}, in blows a second, as a player holding it has: the attribute's default (a bare
+	 * hand's 4) with the item's modifiers. The bot itself has no such attribute, as mobs do not.
+	 */
+	static double attackSpeed(ItemStack held) {
+		AttributeInstance speed = new AttributeInstance(Attributes.ATTACK_SPEED, instance -> {
+		});
+		held.forEachModifier(EquipmentSlot.MAINHAND, (attribute, modifier) -> {
+			if (attribute.equals(Attributes.ATTACK_SPEED)) {
+				speed.addTransientModifier(modifier);
+			}
+		});
+		return speed.getValue();
+	}
 
 	/** Whether {@code target} is in the bot's melee reach and in its sight, so a blow would land. */
 	public static boolean inStrikingReach(AntBot bot, LivingEntity target) {
@@ -288,7 +316,7 @@ public final class BotHands {
 
 	/**
 	 * Drops up to {@code n} of the items {@code item} matches, the held ones first, tossed ahead as a player tosses them;
-	 * the bot does not pick them up again by itself (see {@link AntBot}). Returns how many it dropped.
+	 * no bot picks them up by itself (see {@link AntBot}). Returns how many it dropped.
 	 */
 	public static long drop(AntBot bot, Predicate<ItemStack> item, long n) {
 		long left = n;

@@ -445,8 +445,8 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	/**
 	 * As {@link #aBotFleeingUpTheShaftStrikesTheMobBelowIt}, with a husk at full health and its own AI, right below the
 	 * bot on the ladders (#400): the bot keeps fleeing, striking it once as it goes, and gets away unhurt. A bot at the
-	 * flee health stopping on the ladders to fight a husk on its heels would lose: both strike once a second, the husk
-	 * kills it in two blows, it needs three with a diamond sword. So it does not stop: fleeing already strikes back.
+	 * flee health stopping on the ladders to fight a husk on its heels would lose: the husk strikes once a second and kills
+	 * it in two blows, the bot strikes every 13 ticks with a diamond sword and needs three. So it does not stop: fleeing already strikes back.
 	 */
 	// Measured: the bot is unhurt and the husk struck once (16 of 20 left) at tick 100.
 	@GameTest(maxTicks = 120)

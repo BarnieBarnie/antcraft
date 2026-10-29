@@ -411,7 +411,7 @@ public final class WorkApi {
 
 	/**
 	 * {@code attack(entity)}: walks into melee reach of the target, following it as it moves, and strikes it with what the
-	 * bot holds every {@link BotHands#STRIKE_TICKS} ticks until it dies (ok). It fails with {@code target_gone} once the
+	 * bot holds as often as a player would with it ({@link BotHands#strikeTicks}) until it dies (ok). It fails with {@code target_gone} once the
 	 * target is gone otherwise or more than {@link SenseApi#MAX_ENTITY_RADIUS} blocks away, and with the walk's reason,
 	 * such as {@code unreachable}, when the bot cannot get to it.
 	 */
@@ -453,7 +453,7 @@ public final class WorkApi {
 				this.stopWalk();
 				this.arrivals = 0;
 				this.bot.getLookControl().setLookAt(target);
-				if (this.bot.tickCount - this.struckAt >= BotHands.STRIKE_TICKS) {
+				if (this.bot.tickCount - this.struckAt >= BotHands.strikeTicks(this.bot)) {
 					BotHands.strike(this.bot, (ServerLevel) this.bot.level(), target);
 					this.struckAt = this.bot.tickCount;
 				}

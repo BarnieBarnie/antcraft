@@ -15,6 +15,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.world.entity.monster.zombie.Husk;
@@ -112,6 +113,40 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(cow.isDeadOrDying(), "cow alive with " + cow.getHealth() + " health");
 			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
 			helper.assertTrue(run.state() == ScriptRun.State.FINISHED && printed.equals(List.of("True None")), "script " + run.state() + ", printed " + printed);
+		});
+	}
+
+	/**
+	 * A bot with a wooden sword strikes more often than one with a wooden axe (#417): every 13 ticks against every 25, as a
+	 * player's attack cooldown. Each beats a cow of its own, given the health to outlast the span and made to stand still,
+	 * not knocked back; a blow is a drop in its health.
+	 */
+	@GameTest(maxTicks = 90)
+	public void aSwordStrikesMoreOftenThanAnAxe(GameTestHelper helper) {
+		Cow[] cows = {helper.spawn(EntityTypes.COW, 1, 1, 4), helper.spawn(EntityTypes.COW, 6, 1, 4)};
+		ItemStack[] weapons = {new ItemStack(Items.WOODEN_SWORD), new ItemStack(Items.WOODEN_AXE)};
+		for (int i = 0; i < 2; i++) {
+			cows[i].setNoAi(true);
+			cows[i].getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+			cows[i].getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+			cows[i].setHealth(200);
+			AntBot bot = helper.spawn(ModEntities.ANT_BOT, i == 0 ? 1 : 6, 1, 1);
+			bot.setItemSlot(EquipmentSlot.MAINHAND, weapons[i]);
+			run(helper, bot, "attack(entities('cow', 4)[0])\n");
+		}
+		int[] blows = new int[2];
+		float[] health = {cows[0].getHealth(), cows[1].getHealth()};
+		helper.onEachTick(() -> {
+			for (int i = 0; i < 2; i++) {
+				if (cows[i].getHealth() < health[i]) {
+					blows[i]++;
+				}
+				health[i] = cows[i].getHealth();
+			}
+		});
+		helper.runAtTickTime(80, () -> {
+			helper.assertTrue(blows[1] > 0 && blows[0] > blows[1], "sword " + blows[0] + " blows, axe " + blows[1]);
+			helper.succeed();
 		});
 	}
 
