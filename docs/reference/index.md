@@ -13,6 +13,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 - [`Result` and reason codes](types/result.md): what an action returns, and why it failed.
 - [Selectors](types/selectors.md): the strings that pick items and blocks.
 - [`memory` and `colony_memory`](types/memory.md): the dicts a bot and its colony keep.
+- [`str`](types/str.md), [`list`](types/list.md) and [`dict`](types/dict.md) methods: `split`, `join`, `append`, `pop`, `get`, `items`, ...
 
 ## Movement
 
@@ -117,27 +118,36 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 
 | Builtin | Signature | Does |
 |---|---|---|
-| `abs` | `abs(x)` | the absolute value |
-| `all` | `all(iterable)` | whether every element is truthy |
-| `any` | `any(iterable)` | whether any element is truthy |
-| `bool` | `bool(x=False)` | `x` as a bool |
-| `dict` | `dict(mapping_or_pairs=None, **kwargs)` | a new dict |
-| `enumerate` | `enumerate(iterable, start=0)` | pairs of index and element |
-| `float` | `float(x=0.0)` | `x` as a float |
-| `int` | `int(x=0, base=10)` | `x` as an int |
-| `isinstance` | `isinstance(obj, class_or_tuple)` | whether `obj` is of the type, or one of the types |
-| `len` | `len(obj)` | the number of elements |
-| `list` | `list(iterable=())` | a new list |
-| `max` | `max(...)` | the largest element |
-| `min` | `min(...)` | the smallest element |
-| `range` | `range(stop)`, `range(start, stop, step=1)` | a range of ints |
-| `reversed` | `reversed(sequence)` | the elements back to front |
-| `round` | `round(number, ndigits=None)` | `number` rounded |
-| `sorted` | `sorted(iterable, *, key=None, reverse=False)` | a sorted list |
-| `str` | `str(object="")` | `object` as a string |
-| `sum` | `sum(iterable, start=0)` | the sum |
-| `tuple` | `tuple(iterable=())` | a new tuple |
-| `zip` | `zip(*iterables)` | tuples of the elements side by side |
+| [`abs`](python/abs.md) | `abs(x)` | the absolute value |
+| [`all`](python/all.md) | `all(iterable)` | whether every element is truthy |
+| [`any`](python/any.md) | `any(iterable)` | whether any element is truthy |
+| [`bool`](python/bool.md) | `bool(x=False)` | `x` as a bool |
+| [`dict`](python/dict.md) | `dict(**names)`, `dict(source, **names)` | a new dict |
+| [`enumerate`](python/enumerate.md) | `enumerate(iterable, start=0)` | pairs of index and element |
+| [`float`](python/float.md) | `float(x=0.0)` | `x` as a float |
+| [`int`](python/int.md) | `int(x=0)`, `int(x, base)` | `x` as an int |
+| [`isinstance`](python/isinstance.md) | `isinstance(obj, class_or_tuple)` | whether `obj` is of the type, or one of the types |
+| [`len`](python/len.md) | `len(obj)` | the number of elements |
+| [`list`](python/list.md) | `list(iterable=())` | a new list |
+| [`max`](python/max.md) | `max(iterable, key=None, default=None)`, `max(a, b, *more, key=None)` | the largest element |
+| [`min`](python/min.md) | `min(iterable, key=None, default=None)`, `min(a, b, *more, key=None)` | the smallest element |
+| [`range`](python/range.md) | `range(stop)`, `range(start, stop, step=1)` | a range of ints |
+| [`reversed`](python/reversed.md) | `reversed(sequence)` | the elements back to front |
+| [`round`](python/round.md) | `round(number, ndigits=None)` | `number` rounded |
+| [`sorted`](python/sorted.md) | `sorted(iterable, key=None, reverse=False)` | a sorted list |
+| [`str`](python/str.md) | `str(object="")` | `object` as a string |
+| [`sum`](python/sum.md) | `sum(iterable, start=0)` | the sum |
+| [`tuple`](python/tuple.md) | `tuple(iterable=())` | a new tuple |
+| [`zip`](python/zip.md) | `zip(*iterables)` | tuples of the elements side by side |
+
+## Library modules
+
+The mod's default library, scripts that any script can import (see [Modules & import](../language/modules.md)):
+
+- [`lib/home`](modules/lib/home.md): `go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`.
+- [`lib/shaft`](modules/lib/shaft.md): `dig_shaft(levels)`, `to_level(level)`, `to_surface()`, `shaft(levels=None)`.
+- [`lib/mine`](modules/lib/mine.md): `mine_level(level, rounds=1)`, `site(r=0)`.
+- [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ## Notes on actions
 

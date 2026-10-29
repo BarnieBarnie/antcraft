@@ -1,26 +1,3 @@
 # Builtins whose page in docs/reference/<category>/<name>.md is still to be written (see docs/reference/template.md).
 # One name a line, grouped by the issue that writes them; each issue takes out its own block. ReferenceDocsTest
 # fails for a native that is neither here nor has a page, and for a name here that has a page.
-
-# #408 Python builtins
-abs
-all
-any
-bool
-dict
-enumerate
-float
-int
-isinstance
-len
-list
-max
-min
-range
-reversed
-round
-sorted
-str
-sum
-tuple
-zip

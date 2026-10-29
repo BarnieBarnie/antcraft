@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -32,14 +33,19 @@ class ReferenceDocsTest {
 	/** An index row: its first cell is a native's name, linked to its page or not. */
 	private static final Pattern ROW = Pattern.compile("(?m)^\\| (?:\\[`(\\w+)`\\]\\(([^)]+)\\)|`(\\w+)`) \\|");
 
-	/** The functions every script on a bot can call: the language's builtins and the bot API. */
-	private static Set<String> natives() {
+	/** The names of the functions and methods ({@code type.name}) every script on a bot can call. */
+	private static Set<String> registered() {
 		Natives natives = Natives.standard(Output.lines(line -> {
 		}));
 		BotApi.register(natives, null);
+		return new TreeSet<>(natives.names());
+	}
+
+	/** The functions every script on a bot can call: the language's builtins and the bot API. */
+	private static Set<String> natives() {
 		Set<String> names = new TreeSet<>();
 		// Methods are named type.name; $-names are the compiler's helpers, which no script names.
-		natives.names().stream().filter(name -> !name.contains(".") && !name.startsWith("$")).forEach(names::add);
+		registered().stream().filter(name -> !name.contains(".") && !name.startsWith("$")).forEach(names::add);
 		return names;
 	}
 
@@ -108,6 +114,23 @@ class ReferenceDocsTest {
 			}
 			if (rows.getOrDefault(name, 0) != 1) {
 				failures.add(name + " has " + rows.getOrDefault(name, 0) + " rows in the index, not 1");
+			}
+		}
+		assertEquals(List.of(), failures);
+	}
+
+	/** Each method of a type, such as {@code str.split}, is on the type's page, docs/reference/types/str.md. */
+	@Test
+	void everyMethodIsOnItsTypesPage() throws IOException {
+		List<String> failures = new ArrayList<>();
+		for (String method : registered().stream().filter(name -> name.contains(".")).toList()) {
+			String type = method.substring(0, method.indexOf('.')).toLowerCase(Locale.ROOT);
+			String name = method.substring(method.indexOf('.') + 1);
+			Path page = REFERENCE.resolve(TYPES).resolve(type + ".md");
+			if (!Files.exists(page)) {
+				failures.add(method + " has no page " + page);
+			} else if (!Files.readString(page).contains("`" + name)) {
+				failures.add(method + " is not on " + page + " (as `" + name + "...)");
 			}
 		}
 		assertEquals(List.of(), failures);

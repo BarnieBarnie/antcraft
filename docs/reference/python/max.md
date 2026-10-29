@@ -1,0 +1,55 @@
+# `max`
+
+```text
+max(iterable, key=None, default=None)
+max(a, b, *more, key=None)
+```
+
+The largest element of `iterable`, or the largest of several arguments.
+
+## Parameters
+
+| Name | Type | Default | Meaning |
+|---|---|---|---|
+| `iterable` | list, tuple, str, dict, range or iterator | | the elements, when it is the one positional argument; a dict gives its keys |
+| `a`, `b`, `*more` | any | | the values, when there are two or more positional arguments |
+| `key` | function | `None` | a function of one argument; the elements are compared by what it gives for each. By keyword only |
+| `default` | any | `None` | what to give when `iterable` is empty; only with one positional argument. By keyword only |
+
+## Returns
+
+The element that is largest, or whose key is; the first of equal ones. `default` when `iterable` is empty.
+
+## Pauses
+
+Without `key`, no: it is done at once. With `key`, the key function runs as script code, so it can use up the tick's budget and the script goes on the next tick (see [Budget & pausing](../../language/budget.md)).
+
+## Cost
+
+One instruction, the call itself; with `key`, also the instructions of each call of `key` and a few per element to collect them.
+
+## Description
+
+Elements are compared with `>` as in Python: numbers with numbers, strings with strings, lists and tuples element by element. Values that cannot be compared, such as a string and an int, stop the script with an error, as does an empty `iterable` without `default`, or `default` with several positional arguments. The key function is one written with `def` or a builtin such as `len`; there is no `lambda` (see [Functions as values](../../language/functions.md#functions-as-values)).
+
+## Examples
+
+```python
+print(max(4, 2, 8), max([4, 2, 8]), max([], default=0))   # 8 8 0
+print(max(["oak", "spruce", "fir"], key=len))           # spruce
+```
+
+The stack the bot carries most of:
+
+```python
+def amount(s):
+    return s.count
+
+most = max(inventory(), key=amount, default=None)
+if most is not None:
+    say(f"mostly {most.item}")
+```
+
+## See also
+
+[`min`](min.md), [`sorted`](sorted.md), [`sum`](sum.md), [`Stack`](../types/stack.md).
