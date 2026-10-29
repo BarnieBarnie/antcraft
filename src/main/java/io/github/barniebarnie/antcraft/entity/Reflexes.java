@@ -178,10 +178,14 @@ final class Reflexes {
 	 * (#395), rather than take its blows all the way.
 	 */
 	private void strike(ServerLevel level, @Nullable Mob hostile) {
-		if (hostile == null || this.bot.tickCount - this.struckAt < BotHands.strikeTicks(this.bot) || !BotHands.inStrikingReach(this.bot, hostile)) {
+		if (hostile == null || !BotHands.inStrikingReach(this.bot, hostile)) {
 			return;
 		}
+		// Takes the weapon out before it asks whether it is ready, so the wait follows the weapon, not what was in hand (#426).
 		Tools.equipBestWeapon(this.bot);
+		if (this.bot.tickCount - this.struckAt < BotHands.strikeTicks(this.bot)) {
+			return;
+		}
 		BotHands.strike(this.bot, level, hostile);
 		this.struckAt = this.bot.tickCount;
 	}

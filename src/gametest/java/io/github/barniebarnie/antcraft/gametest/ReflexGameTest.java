@@ -12,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
@@ -268,6 +269,49 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.succeedWhen(() -> helper.assertTrue(husk.getHealth() == 193, "husk health " + husk.getHealth()));
+	}
+
+	/**
+	 * A fleeing bot whose stone pickaxe is put back in its hand after its first blow strikes again after the sword's 13
+	 * ticks, not the pickaxe's 17 (#426): it waits by the weapon it strikes with. The husk keeps a block beside the bot as it
+	 * flees, so it stays in reach; like {@link #aFleeingBotsFirstBlowDoesTheSwordsDamage} it has no armour and is not
+	 * knocked back, so every blow does 7.
+	 */
+	// Measured: passes at tick 16, the second blow.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 35)
+	public void aFleeingBotWaitsBetweenBlowsByItsWeapon(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 14, 1, 13);
+		husk.setNoAi(true);
+		husk.getAttribute(Attributes.ARMOR).setBaseValue(0);
+		husk.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		husk.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+		husk.setHealth(200);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+		helper.runAfterDelay(2, () -> bot.setHealth(4));
+		BotScripts.run(bot, WAIT);
+		long[] firstBlow = {-1};
+		helper.onEachTick(() -> {
+			husk.teleportTo(bot.getX() + 1, bot.getY(), bot.getZ());
+			long now = helper.getTick();
+			if (firstBlow[0] < 0 && husk.getHealth() == 193) {
+				firstBlow[0] = now;
+				// The sword went to the hand, the pickaxe to the inventory: put the pickaxe back in hand.
+				for (int i = 0; i < bot.getInventory().getContainerSize(); i++) {
+					if (bot.getInventory().getItem(i).is(Items.STONE_PICKAXE)) {
+						ItemStack sword = bot.getMainHandItem();
+						bot.setItemSlot(EquipmentSlot.MAINHAND, bot.getInventory().getItem(i));
+						bot.getInventory().setItem(i, sword);
+					}
+				}
+				helper.assertTrue(bot.getMainHandItem().is(Items.STONE_PICKAXE), "pickaxe not back in hand");
+			}
+			if (firstBlow[0] >= 0 && husk.getHealth() > 186 && now - firstBlow[0] > 13) {
+				helper.fail("no second blow " + (now - firstBlow[0]) + " ticks after the first");
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(husk.getHealth() == 186, "husk health " + husk.getHealth()));
 	}
 
 	/** Brings the bot to low health once its script waits, and passes once it is out of the husk's reach. */
