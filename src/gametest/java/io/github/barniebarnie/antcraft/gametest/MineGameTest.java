@@ -125,6 +125,14 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		return n;
 	}
 
+	/** Fills every slot of the landing chest with a full stack of {@code item}. */
+	private static void fillChest(GameTestHelper helper, Item item) {
+		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		for (int i = 0; i < chest.getContainerSize(); i++) {
+			chest.setItem(i, new ItemStack(item, item.getDefaultMaxStackSize()));
+		}
+	}
+
 	/** {@code stacks} full stacks of {@code item} into the bot's inventory. */
 	private static void give(AntBot bot, Item item, int stacks) {
 		for (int i = 0; i < stacks; i++) {
@@ -203,12 +211,14 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot with 3 slots free, the rest junk (gravel, flint, granite) and cobblestone, puts the junk and the cobblestone
-	 * beyond 64 into the landing chest before it digs, and goes on to mine the level.
+	 * A bot with 3 slots free, the rest junk (gravel, flint, granite) and cobblestone, at a landing chest full of what
+	 * earlier rounds left there, drops the junk and the cobblestone beyond 64 rather than put it in the chest, and goes
+	 * on to mine the level (#411: before, it stopped with no_space once junk filled the chest).
 	 */
 	@GameTest(maxTicks = MAX_TICKS)
-	public void aNearlyFullBotEmptiesItsJunkIntoTheChestAndGoesOn(GameTestHelper helper) {
+	public void aNearlyFullBotDropsItsJunkAndGoesOnPastAFullChest(GameTestHelper helper) {
 		AntBot bot = mine(helper, "True None 0");
+		fillChest(helper, Items.STONE);
 		give(bot, Items.GRAVEL, 8);
 		give(bot, Items.FLINT, 8);
 		give(bot, Items.GRANITE, 4);
@@ -216,22 +226,19 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0")), "not done");
 			assertLevelDug(helper);
-			helper.assertTrue(inChest(helper, Items.GRAVEL) == 512 && inChest(helper, Items.FLINT) == 512 && inChest(helper, Items.GRANITE) == 256,
-				"junk in the chest: " + inChest(helper, Items.GRAVEL) + " gravel, " + inChest(helper, Items.FLINT) + " flint, "
-					+ inChest(helper, Items.GRANITE) + " granite");
+			int carried = bot.getInventory().countItem(Items.GRAVEL) + bot.getInventory().countItem(Items.FLINT)
+				+ bot.getInventory().countItem(Items.GRANITE);
+			helper.assertTrue(carried == 0, "still carries " + carried + " junk");
 			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 64, "kept " + bot.getInventory().countItem(Items.COBBLESTONE));
 		});
 	}
 
-	/** A bot with 3 slots free, the rest gravel, whose landing chest is full stops with no_space before it digs. */
+	/** A bot with 3 slots free, the rest raw iron, whose landing chest is full stops with no_space before it digs. */
 	@GameTest(maxTicks = 20)
-	public void aNearlyFullBotWithAFullChestGivesNoSpace(GameTestHelper helper) {
+	public void aBotFullOfOreWithAFullChestGivesNoSpace(GameTestHelper helper) {
 		AntBot bot = mine(helper, "False no_space 0");
-		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
-		for (int i = 0; i < chest.getContainerSize(); i++) {
-			chest.setItem(i, new ItemStack(Items.STONE, 64));
-		}
-		give(bot, Items.GRAVEL, 24);
+		fillChest(helper, Items.STONE);
+		give(bot, Items.RAW_IRON, 24);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("False no_space 0")), "not done");
 			helper.assertTrue(helper.getBlockState(HALL.getFirst()).is(Blocks.STONE), "dug with no room");
@@ -239,8 +246,8 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * On a granite level, a bot with 3 slots free, the rest granite (junk), keeps a stock of it when it empties itself
-	 * into the chest, and seals the water in the first block of the hall with it (#392).
+	 * On a granite level, a bot with 3 slots free, the rest granite (junk), keeps a stock of it when it drops its junk,
+	 * and seals the water in the first block of the hall with it (#392).
 	 */
 	@GameTest(maxTicks = 40)
 	public void aBotOnAGraniteLevelKeepsBlocksToSealAWaterPocket(GameTestHelper helper) {
@@ -254,7 +261,7 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 1")), "not done");
 			helper.assertTrue(helper.getBlockState(HALL.getFirst()).is(Blocks.GRANITE), "not sealed: " + describe(helper, bot));
-			helper.assertTrue(inChest(helper, Items.GRANITE) == 24 * 64 - 16, "granite in the chest: " + inChest(helper, Items.GRANITE));
+			helper.assertTrue(inChest(helper, Items.GRANITE) == 0, "granite in the chest: " + inChest(helper, Items.GRANITE));
 		});
 	}
 

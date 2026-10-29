@@ -59,11 +59,11 @@ while True:
 
 - [`lib.shaft.dig_shaft`](../reference/modules/lib/shaft.md#dig_shaftlevels) picks a site beside the bot with [`mineshaft`](../reference/mining/mineshaft.md), keeps it in `memory["shaft"]` and digs it. Before it digs it checks what it carries, and when something is short it gives `missing_ingredients` with `missing`, a dict of item (or tag) to how many more it needs; `fetch` takes those from the store and the loop calls it again. How far the shaft is dug is read from the world, so each call goes on where the last stopped, also after a restart.
 - `mineshaft` may keep fewer heights than asked for, so the mining loop goes through `lib.mine.site()["levels"]`, the levels the shaft really has, rather than `LEVELS`.
-- [`lib.mine.mine_level`](../reference/modules/lib/mine.md#mine_levellevel-rounds1) mines one round of branches of a level, puts the ore and the stone it does not keep into the landing chest of the level, and counts the rounds done in `memory["mine"]`, so the next call digs the next round.
+- [`lib.mine.mine_level`](../reference/modules/lib/mine.md#mine_levellevel-rounds1) mines one round of branches of a level, puts the ore into the landing chest of the level (the stone it does not keep it drops), and counts the rounds done in `memory["mine"]`, so the next call digs the next round.
 - [`take`](../reference/crafting/take.md) with `lib.mine.ORES` (a list of item ids, a [selector](../reference/types/selectors.md)) empties the ore out of the landing chest; [`lib.shaft.to_surface`](../reference/modules/lib/shaft.md#to_surface) climbs out and [`put`](../reference/crafting/put.md) stores it.
-- A failed level is logged with [`warn`](../reference/bot/warn.md) and tried again on the next turn: no pickaxe left (`missing_ingredients`), a full landing chest (`no_space`), or an action that failed on the way.
+- A failed level is logged with [`warn`](../reference/bot/warn.md) and tried again on the next turn: no pickaxe left (`missing_ingredients`), a landing chest full of ore (`no_space`), or an action that failed on the way.
 
-The landing chests also fill with the stone the bot does not keep, which this script leaves there; empty them now and then, or take `lib.mine.JUNK` out too. To dig a new shaft elsewhere, forget the old one with `memory.pop("shaft")`. The default `colony.miner` script ([Default colony scripts](../features/colony-scripts.md)) shares one shaft between several miners through the job board.
+The landing chests hold only ore, which this script empties each turn, so they do not fill up. To dig a new shaft elsewhere, forget the old one with `memory.pop("shaft")`. The default `colony.miner` script ([Default colony scripts](../features/colony-scripts.md)) shares one shaft between several miners through the job board.
 
 ## Used here
 

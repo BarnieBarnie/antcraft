@@ -15,10 +15,10 @@ from lib.shaft import dig, seal, put_block, result, FILL, TORCHES
 # What mining ore gives, which goes into the landing chest.
 ORES = ["minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecraft:raw_gold", "minecraft:redstone",
         "minecraft:lapis_lazuli", "minecraft:diamond", "minecraft:emerald", "minecraft:quartz", "minecraft:ancient_debris"]
-# What digging gives that it has no use for, which goes into the chest whole.
+# What digging gives that it has no use for, which it drops whole: kept in the chest it would fill it.
 JUNK = ["minecraft:gravel", "minecraft:flint", "minecraft:dirt", "minecraft:granite", "minecraft:diorite", "minecraft:andesite",
         "minecraft:tuff", "minecraft:calcite", "minecraft:sand", "minecraft:red_sand", "minecraft:clay_ball"]
-# How much of the rest of what it digs it keeps to wall fluid off with; the rest goes into the chest too.
+# How much of the rest of what it digs it keeps to wall fluid off with; it drops the rest too.
 KEEP = 64
 # How many blocks to wall fluid off with it keeps at least, of the junk if it has nothing else.
 STOCK = 16
@@ -48,8 +48,10 @@ def dug(p):
 
 
 def unload(chest):
-    """Puts the ore and junk it carries and what it dug beyond KEEP into the chest, but for STOCK blocks to wall fluid
-    off with, of the junk that is FILL where it has too few others (a level of granite); None once done, else a result."""
+    """Puts the ore it carries into the chest and drops its junk and what it dug beyond KEEP, but for STOCK blocks to
+    wall fluid off with, of the junk that is FILL where it has too few others (a level of granite); None once done, else
+    a result. The junk is dropped rather than put away so it never fills the chest; dropped items vanish after 5
+    minutes as a player's do."""
     stock = STOCK
     for item in FILL:
         if "minecraft:" + item not in JUNK:
@@ -60,7 +62,9 @@ def unload(chest):
             kept = min(stock, n)
             stock -= kept
             n -= kept
-        if n > 0:
+        if n > 0 and item not in ORES:
+            drop(item, n)
+        elif n > 0:
             r = put(chest, item, n)
             if not r:
                 return result(r.reason, chest)
@@ -70,15 +74,13 @@ def unload(chest):
     for item in FILL:
         n = min(spare, count(item))
         if n > 0:
-            r = put(chest, item, n)
-            if not r:
-                return result(r.reason, chest)
+            drop(item, n)
             spare -= n
     return None
 
 
 def room(chest):
-    """Empties the bot into the chest when its inventory is nearly full; no_space where that frees too little, as it
+    """Empties the bot (unload) when its inventory is nearly full; no_space where that frees too little, as it
     carries what it does not put away (food, mob drops)."""
     if free_slots() > FREE:
         return None
@@ -156,10 +158,10 @@ def tunnel(cells, stand, opened, level, sealed):
 
 def mine_level(level, rounds=1):
     """Digs the hall of level of the shaft in memory (dug by lib.shaft) and the next rounds of branches off it,
-    mines every ore vein it uncovers, puts torches at the torch spots and the ore into the landing chest, also when
-    its inventory fills. Where a fluid is in or beside the next block of a hall or branch, it seals it and goes on with
-    the next branch. Gives report(): ok, or the reason it stopped (missing_ingredients without a pickaxe or
-    something to seal with, no_space when the chest is full, or an action's reason) with at, and sealed."""
+    mines every ore vein it uncovers, puts torches at the torch spots and the ore into the landing chest (dropping
+    the junk), also when its inventory fills. Where a fluid is in or beside the next block of a hall or branch, it
+    seals it and goes on with the next branch. Gives report(): ok, or the reason it stopped (missing_ingredients without a pickaxe or
+    something to seal with, no_space when the chest is full of ore, or an action's reason) with at, and sealed."""
     m = site()
     assert m is not None and level in m["level"], f"no shaft with a level at {level}: dig_shaft first"
     if not has("#minecraft:pickaxes"):
