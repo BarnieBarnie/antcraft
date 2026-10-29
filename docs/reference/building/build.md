@@ -14,7 +14,7 @@ Builds a blueprint from the blocks the bot carries.
 | `at` | [`Pos`](../types/pos.md) or tuple | | where the blueprint's lowest corner goes |
 | `turn` | int | `0` | quarters to turn it clockwise; any int, taken modulo 4 |
 | `mirror` | bool | `False` | whether to mirror it left to right, before turning |
-| `job` | int | `None` | the id of the job taken off the job board that the build is for (see Description) |
+| `job` | int | `None` | the id of the job taken off the job board that the build is for (see [Description](#description)) |
 
 ## Returns
 

@@ -1,6 +1,6 @@
 # Bots
 
-Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory. They fight hostile mobs (except creepers, for now), but flee at low health instead (see Reflexes).
+Use a Bot Core on a block to activate a bot there. Bots pick up items into a 27-slot inventory. They fight hostile mobs (except creepers, for now), but flee at low health instead (see [Reflexes](#reflexes)).
 
 Bots find their own way: they walk, jump, swim, drop up to 3 blocks, dig through blocks in the way (keeping what they dig), and bridge or pillar with scaffold blocks (dirt, cobblestone and similar, see the `antcraft:scaffold_blocks` item tag) from their inventory. They never break chests or other block entities, or blocks next to lava or water, never plan through lava, fire or a fall that hurts, and walk round what players build with (glass, fences, walls, doors) rather than through it. They walk round nether portals too, and never dig at a portal's frame: only `travel` takes a bot through one.
 

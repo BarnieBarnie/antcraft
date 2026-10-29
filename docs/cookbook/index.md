@@ -31,7 +31,7 @@ r = craft("wooden_pickaxe", table=table_spot)
 say("pickaxe!" if r else f"no pickaxe: {r.reason}")
 ```
 
-A miner with a library function (`lib.shaft`, see Modules):
+A miner with a library function (`lib.shaft`, see [Library modules](../reference/index.md#library-modules)):
 
 ```python
 import lib.shaft

@@ -4,7 +4,7 @@ The mod's library modules `lib/shaft.py` and `lib/mine.py` dig a ladder mineshaf
 
 ## lib/shaft.py
 
-`lib/shaft.py` digs the ladder shaft `mineshaft` describes (see Senses) and takes the bot up and down it:
+`lib/shaft.py` digs the ladder shaft `mineshaft` describes (see [`mineshaft`](../reference/mining/mineshaft.md)) and takes the bot up and down it:
 
 | Function | |
 |---|---|
@@ -12,7 +12,7 @@ The mod's library modules `lib/shaft.py` and `lib/mine.py` dig a ladder mineshaf
 | `to_level(level)`, `to_surface()` | climb to the chamber of a level, or out onto the ground beside the top; give `goto`'s result |
 | `shaft(levels=None)` | the shaft as `mineshaft` gives it: the one kept in `memory["shaft"]` (its `top` and `levels`), else a new site for `levels`, which is kept there. Forget it with `memory.pop("shaft")` to dig another |
 
-How far the shaft is dug is read from the world, not kept, so `dig_shaft` called again after a restart, a reload or a failure goes on where it stopped; a bot saved in the middle of it resumes in place (see Save and resume).
+How far the shaft is dug is read from the world, not kept, so `dig_shaft` called again after a restart, a reload or a failure goes on where it stopped; a bot saved in the middle of it resumes in place (see [Save and resume](scripts.md#save-and-resume)).
 
 ## lib/mine.py
 
