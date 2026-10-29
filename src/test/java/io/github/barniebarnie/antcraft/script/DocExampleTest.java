@@ -20,7 +20,8 @@ import org.junit.jupiter.api.Test;
  * The examples of the docs: every {@code ```python} block under docs/ compiles (an example that is wrong on purpose uses
  * another fence, such as {@code ```text}), and the "punch a tree, then make a wooden pickaxe" example of
  * docs/cookbook/index.md is the script the acceptance game test runs (CraftGameTest), kept as a copy in the game test
- * resources; this keeps the two the same. So is the recipe of docs/cookbook/stock-chest.md, which CraftGameTest runs too.
+ * resources; this keeps the two the same. So is the recipe of docs/cookbook/stock-chest.md, which CraftGameTest runs too,
+ * and those of farm.md, recover-items.md and memory.md, which CookbookGameTest runs.
  */
 class DocExampleTest {
 	private static final Path DOC = Path.of("docs/cookbook/index.md");
@@ -45,6 +46,14 @@ class DocExampleTest {
 	void theStockChestScriptIsTheRecipe() throws IOException {
 		assertEquals(example(Files.readString(Path.of("docs/cookbook/stock-chest.md")), "Keep a chest stocked from a barrel:"),
 			Files.readString(Path.of("src/gametest/resources/antcraft-gametest/scripts/stock_chest.py")));
+	}
+
+	@Test
+	void theCookbookGameTestScriptsAreTheRecipes() throws IOException {
+		for (String recipe : List.of("farm", "recover-items", "memory")) {
+			assertEquals(example(Files.readString(Path.of("docs/cookbook/" + recipe + ".md")), "```python"),
+				Files.readString(Path.of("src/gametest/resources/antcraft-gametest/scripts/" + recipe.replace('-', '_') + ".py")), recipe);
+		}
 	}
 
 	/** A python block: its fence's indent (inside an admonition), then its lines up to a closing fence at that indent. */

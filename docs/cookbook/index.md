@@ -8,6 +8,8 @@ Recipes: complete scripts that combine builtins into useful bots, each with how 
 - [Keep a chest stocked](stock-chest.md): a hauler that tops a chest up from a barrel.
 - [Survive reloads and respawns](memory.md): a tunnel digger that keeps its progress in `memory`.
 
+Each recipe's script also runs as it is in a game test (`CraftGameTest` for the chest, `CookbookGameTest` for the farm, the item recovery and the tunnel), so a change of the API that breaks one shows. The mining loop only compiles: its shaft and levels go far deeper than a test area of 8 by 8 by 8 blocks, and `ShaftGameTest` and `MineGameTest` test `lib/shaft` and `lib/mine` that it runs on.
+
 Two short examples:
 
 Punch a tree, then make a wooden pickaxe:
