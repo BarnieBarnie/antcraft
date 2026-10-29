@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.Memory;
 import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.SenseApi;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
@@ -789,6 +790,44 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(Values.repr(pos(helper, 3, 6, 3)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
 			helper.assertTrue(colony.jobs().jobs("shaft_site").isEmpty(), "claims left " + colony.jobs().jobs("shaft_site"));
 			helper.assertTrue(colony.jobs().jobs("shaft").size() == 1, "shaft jobs " + colony.jobs().jobs("shaft"));
+		});
+	}
+
+	/**
+	 * A reflex that takes over while the miner's {@code mineshaft} search runs over several ticks pauses it (#410, #419):
+	 * the miner still gets its site and digs the shaft, rather than stopping on an {@code interrupted} result. As
+	 * ShaftGameTest.aReflexDuringTheSearchDoesNotStopShaft, the test spends the tick's block search budget until the
+	 * search runs, then lights fire on netherrack under the bot; the budget is the server's, so it runs {@code alone}.
+	 */
+	// Measured: passes at tick 242 alone.
+	@GameTest(environment = "antcraft-gametest:alone", maxTicks = 500)
+	public void aReflexDuringTheMinersSiteSearchDoesNotStopTheShaft(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		helper.setBlock(1, 5, 1, Blocks.NETHERRACK);
+		AntBot bot = miners(helper, colony, new BlockPos(1, 6, 1)).getFirst();
+		failOnError(helper, bot);
+		boolean[] fire = {false};
+		helper.onEachTick(() -> {
+			if (fire[0]) {
+				return;
+			}
+			ScriptRun run = bot.getScript();
+			String action = run == null ? null : run.action();
+			if (action != null && action.startsWith("mineshaft")) {
+				fire[0] = true;
+				helper.setBlock(1, 6, 1, Blocks.FIRE);
+			}
+			// The bot's next tick finds no blocks left to search, whether its search started yet or not.
+			SenseApi.SCAN_BUDGET.spend(helper.getLevel().getGameTime() + 1, SenseApi.BLOCKS_PER_TICK);
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(fire[0], "the search never ran over several ticks");
+			helper.assertTrue(Values.repr(pos(helper, 3, 6, 3)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockPresent(Blocks.LADDER, new BlockPos(3, y, 3));
+			}
+			helper.assertBlockPresent(Blocks.OAK_TRAPDOOR, new BlockPos(3, 5, 3));
+			helper.assertTrue(colony.jobs().jobs("shaft").isEmpty(), "shaft jobs " + colony.jobs().jobs("shaft"));
 		});
 	}
 }
