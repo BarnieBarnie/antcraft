@@ -1,10 +1,14 @@
 package io.github.barniebarnie.antcraft.script;
 
+import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
+import io.github.barniebarnie.antcraft.script.lang.PyDict;
+import io.github.barniebarnie.antcraft.script.lang.PyList;
+import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.work.GameRecipeBook;
@@ -12,18 +16,24 @@ import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.TaskPlanner;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.StreamSupport;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.Item;
@@ -45,12 +55,22 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The actions of the bot API that use containers and stations (docs/reference/index.md, Containers and crafting): {@code put}, {@code take},
- * {@code craft} and {@code smelt}. Those that work at a block walk into reach of it first, as the block actions of
+ * {@code craft} and {@code smelt}, and the sense {@code needs}. Those that work at a block walk into reach of it first, as the block actions of
  * {@link WorkApi} do; each returns a {@link Result}.
  */
 public final class CraftApi {
 	/** How many ticks {@code smelt} waits without the furnace's output growing before it gives up with {@code timeout}. */
 	static final int SMELT_TIMEOUT = 1200;
+	/** The most {@code needs} plans for, so the planner's counts stay far from overflowing. */
+	static final long MAX_NEEDS = 1_000_000;
+	/**
+	 * What {@code needs} gathers rather than makes: the item tag {@code antcraft:gatherable}. One object for every call, as
+	 * {@link TaskPlanner#plan} keeps plans by its identity.
+	 */
+	private static final TagKey<Item> GATHERABLE_TAG = TagKey.create(Registries.ITEM, AntCraft.id("gatherable"));
+	private static final Predicate<Item> GATHERABLE = item -> item.builtInRegistryHolder().is(GATHERABLE_TAG);
+	/** Instructions a {@code needs} call costs besides the call, from its time in the benchmark (#441). */
+	static final long NEEDS_COST = 3000;
 
 	private CraftApi() {
 	}
@@ -78,6 +98,13 @@ public final class CraftApi {
 			Pos table = Args.absent(args[2]) ? null : Pos.of(args[2]);
 			return craft(run, WorkApi.bot(run, call), item, n, table, call);
 		});
+		natives.register("needs", NEEDS_COST, call -> {
+			Object[] args = Args.bind("needs", call, 1, "item", "n");
+			Item item = oneItem("needs", args[0]);
+			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
+			AntBot bot = WorkApi.bot(run, call);
+			return needs(item, n, Storage.stock(BotHands.carried(bot)), GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
+		});
 		natives.register("smelt", 60, call -> {
 			Object[] args = Args.bind("smelt", call, 1, "item", "n", "furnace", "fuel");
 			Selector item = Selector.parse(args[0]);
@@ -89,6 +116,38 @@ public final class CraftApi {
 			Selector fuel = Args.absent(args[3]) ? null : Selector.parse(args[3]);
 			return smelt(run, WorkApi.bot(run, call), item, n, furnace, fuel, call);
 		});
+	}
+
+	/**
+	 * {@code needs(item, n)} (docs/reference/crafting/needs.md): what to gather and craft to make {@code n} of {@code item}
+	 * from {@code stock}.
+	 */
+	static PyDict needs(Item item, long n, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+		if (n < 1 || n > MAX_NEEDS) {
+			throw new ScriptError("needs() n must be at least 1" + (n < 1 ? "" : " and at most " + MAX_NEEDS) + ", not " + n);
+		}
+		return needs(TaskPlanner.plan(item, (int) n, stock, book, gatherable), i -> BuiltInRegistries.ITEM.getKey(i).toString());
+	}
+
+	/**
+	 * A plan as {@code needs} returns it: {@code gather}, what the plan gathers or misses, by id, and {@code crafts}, its
+	 * steps as {@code (item, n, how)} tuples.
+	 */
+	static <I> PyDict needs(TaskPlanner.Plan<I> plan, Function<I, String> id) {
+		Map<String, Long> gather = new LinkedHashMap<>();
+		plan.toGather().forEach((item, count) -> gather.merge(id.apply(item), (long) count, Long::sum));
+		plan.missing().forEach((item, count) -> gather.merge(id.apply(item), (long) count, Long::sum));
+		PyDict gatherDict = new PyDict();
+		gather.forEach(gatherDict::put);
+		List<Object> crafts = new ArrayList<>();
+		for (TaskPlanner.Craft<I> craft : plan.crafts()) {
+			TaskPlanner.Recipe<I> recipe = craft.recipe();
+			crafts.add(PyTuple.of(id.apply(recipe.output()), (long) craft.times() * recipe.count(), recipe.smelting() ? "smelt" : "craft"));
+		}
+		PyDict needs = new PyDict();
+		needs.put("gather", gatherDict);
+		needs.put("crafts", new PyList(crafts));
+		return needs;
 	}
 
 	/** The {@code n} of {@code put} and {@code take}: every matching item when absent, else at least 1. */

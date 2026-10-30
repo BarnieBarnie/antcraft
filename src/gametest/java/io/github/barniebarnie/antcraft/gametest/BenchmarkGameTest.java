@@ -135,6 +135,16 @@ public class BenchmarkGameTest {
 		while True:
 		    smelt("raw_iron")
 		""";
+	/**
+	 * Asks what a stone pickaxe needs, for a count that changes each call (#441). Each bot carries its own number of logs, so
+	 * no bot asks what another asked from the same stock, and none of its plans is kept: every call plans anew.
+	 */
+	private static final String NEEDS = """
+		n = 0
+		while True:
+		    n += 1
+		    needs("stone_pickaxe", n % 1000 + 1)
+		""";
 	/** What the issue asks of a busy script: a tight loop, a scan of radius 32, find_nearest, goto and craft, mixed. */
 	private static final String BUSY = """
 		n = 0
@@ -266,6 +276,8 @@ public class BenchmarkGameTest {
 		new Case("entities", ENTITIES, 600),
 		new Case("smelt", SMELT, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600,
 			bot -> bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 64))),
+		new Case("needs", NEEDS, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600,
+			bot -> bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1 + bot.getId() % 64))),
 		new Case("busy", BUSY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, LOGS),
 		new Case("colony", COLONY, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, MEMBER),
 		new Case("jobs", JOBS, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 600, MEMBER),

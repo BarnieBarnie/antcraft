@@ -244,6 +244,36 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "r = craft('stick')\nprint(r.ok, r.reason, r.value, count('oak_planks'))\n", List.of("False no_space 0 64"));
 	}
 
+	// needs
+
+	/** Carrying the cobblestone (in hand) and planks, the bot is told to make sticks and the pickaxe, and does. */
+	@GameTest(maxTicks = 20)
+	public void needsListsTheCraftsLeftAndTheBotCraftsThem(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.COBBLESTONE, 3));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 2));
+		expect(helper, bot, """
+				r = needs('stone_pickaxe')
+				print(r['gather'], r['crafts'])
+				for item, n, how in r['crafts']:
+				    craft(item, n)
+				print(count('stone_pickaxe'), count('stick'), count('oak_planks'), count('cobblestone'))
+				""",
+			List.of("{} [('minecraft:stick', 4, 'craft'), ('minecraft:stone_pickaxe', 1, 'craft')]", "1 2 0 0"));
+	}
+
+	@GameTest(maxTicks = 20)
+	public void needsOfAnUnknownItemStopsTheScript(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		ScriptRun run = BotScripts.run(bot, "needs('stik')\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FAILED, "script " + run.state());
+			List<String> log = BotScripts.log(bot, Output.Level.ERROR);
+			helper.assertTrue(log.size() == 1 && log.getFirst().contains("unknown item 'minecraft:stik'"), "log " + log);
+		});
+	}
+
 	// smelt
 
 	/** It burns the best fuel it carries, coal before logs, and takes the ingot out. */
