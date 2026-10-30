@@ -249,8 +249,8 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	 * first blow does the sword's 7, not a bare hand's 1 (#425). The husk has no armour, stands still and is not knocked
 	 * back, so the first blow is all it takes. Wide like {@link #fleesAHostileMobAtLowHealth}.
 	 */
-	// Measured: passes at tick 3, the first blow.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 10)
+	// Measured: passes at tick 1, the first blow.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 5)
 	public void aFleeingBotsFirstBlowDoesTheSwordsDamage(GameTestHelper helper) {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 14, 1, 13);
 		husk.setNoAi(true);
@@ -260,7 +260,8 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		husk.setHealth(200);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
 		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
-		helper.runAfterDelay(2, () -> bot.setHealth(4));
+		// Low from the start, so the reflex has it before its own fight would strike the husk beside it (#427).
+		bot.setHealth(4);
 		BotScripts.run(bot, WAIT);
 		helper.onEachTick(() -> {
 			float blow = 200 - husk.getHealth();
@@ -277,8 +278,8 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	 * flees, so it stays in reach; like {@link #aFleeingBotsFirstBlowDoesTheSwordsDamage} it has no armour and is not
 	 * knocked back, so every blow does 7.
 	 */
-	// Measured: passes at tick 16, the second blow.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 35)
+	// Measured: passes at tick 14, the second blow.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 30)
 	public void aFleeingBotWaitsBetweenBlowsByItsWeapon(GameTestHelper helper) {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 14, 1, 13);
 		husk.setNoAi(true);
@@ -289,7 +290,8 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
 		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
-		helper.runAfterDelay(2, () -> bot.setHealth(4));
+		// As in aFleeingBotsFirstBlowDoesTheSwordsDamage.
+		bot.setHealth(4);
 		BotScripts.run(bot, WAIT);
 		long[] firstBlow = {-1};
 		helper.onEachTick(() -> {

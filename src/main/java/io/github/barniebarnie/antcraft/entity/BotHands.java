@@ -95,11 +95,9 @@ public final class BotHands {
 	/**
 	 * Swings the held item at {@code target}, as a mob strikes: its damage is the bot's attack damage with what it holds. A
 	 * blow that lands with a sword also sweeps ({@link #sweep}); a player's critical hit and sprint knockback a bot never
-	 * has (docs/reference/combat/attack.md). A weapon put in the hand this tick counts, as for a player: the game only
-	 * applies a held item's attribute modifiers on the bot's next tick, so the blow brings them up to date first (#425).
+	 * has (docs/reference/combat/attack.md). A weapon put in the hand this tick counts ({@link AntBot#doHurtTarget}).
 	 */
 	public static void strike(AntBot bot, ServerLevel level, LivingEntity target) {
-		bot.detectEquipmentUpdates();
 		bot.swing(InteractionHand.MAIN_HAND, SwingAnimation.DEFAULT);
 		if (bot.doHurtTarget(level, target) && bot.getMainHandItem().is(ItemTags.SWORDS)) {
 			sweep(bot, level, target);

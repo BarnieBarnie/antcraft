@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -180,6 +181,41 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertTrue(firstBlow[0] == 1 && firstBlow[1] == 7, "bare hand took " + firstBlow[0] + ", diamond sword " + firstBlow[1]);
+		});
+	}
+
+	/**
+	 * A bot that takes out its sword as it picks a hostile mob to fight (AntBot.setTarget) strikes with it at once (#427):
+	 * its own melee goal can strike on the tick it takes the target, and that blow does the sword's 7, not a bare hand's 1.
+	 * Six bots, each beside a still, armourless, 200-health husk of its own, so that some bot likely strikes on that tick;
+	 * every blow does 7, so a husk's lost health is always a multiple of 7. Passes at tick 30 if any bot struck: a bot
+	 * that does not strike on the tick it takes its target strikes 20 ticks later.
+	 */
+	@GameTest(maxTicks = 40)
+	public void aBotsOwnFightStrikesWithTheSwordItJustTookOut(GameTestHelper helper) {
+		List<Husk> husks = new ArrayList<>();
+		for (int x : new int[] {1, 5}) {
+			for (int z : new int[] {1, 4, 7}) {
+				Husk husk = helper.spawn(EntityTypes.HUSK, x + 1, 1, z);
+				husk.setNoAi(true);
+				husk.getAttribute(Attributes.ARMOR).setBaseValue(0);
+				husk.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+				husk.getAttribute(Attributes.KNOCKBACK_RESISTANCE).setBaseValue(1);
+				husk.setHealth(200);
+				husks.add(husk);
+				AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+				bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+			}
+		}
+		helper.onEachTick(() -> {
+			for (Husk husk : husks) {
+				float lost = 200 - husk.getHealth();
+				helper.assertTrue(lost % 7 == 0, "a husk lost " + lost + " health");
+			}
+		});
+		helper.runAtTickTime(30, () -> {
+			helper.assertTrue(husks.stream().anyMatch(husk -> husk.getHealth() < 200), "no bot struck its husk");
+			helper.succeed();
 		});
 	}
 

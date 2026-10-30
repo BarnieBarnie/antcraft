@@ -288,6 +288,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.reflexes.flightPlans();
 	}
 
+	/**
+	 * A weapon put in the hand this tick counts, as for a player: the game only applies a held item's attribute modifiers
+	 * on the bot's next tick, so every blow brings them up to date first: {@link BotHands#strike} (#425) and the melee
+	 * goal's, which strikes on the tick {@link #setTarget} takes the weapon out (#427).
+	 */
+	@Override
+	public boolean doHurtTarget(ServerLevel level, Entity target) {
+		this.detectEquipmentUpdates();
+		return super.doHurtTarget(level, target);
+	}
+
 	/** A bot fleeing a hostile mob (see {@link Reflexes}) takes on no target. */
 	@Override
 	public void setTarget(@Nullable LivingEntity target) {
