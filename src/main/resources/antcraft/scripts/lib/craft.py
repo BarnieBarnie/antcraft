@@ -14,6 +14,12 @@ from lib.shaft import result
 # smelt loads at most a stack a call.
 STACK = 64
 
+# Tool tiers from best to worst. ponytail: ranked by the tier in the id, golden after stone; a modded tool of no listed
+# tier is held only when the bot carries none of these.
+TIERS = ["netherite", "diamond", "iron", "stone", "golden", "wooden"]
+# The tiers ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
+MADE = ["diamond", "iron", "stone", "wooden"]
+
 # The block craft_here or smelt_here could not put down, by the reason it gives.
 STATIONS = {"no_table": "crafting_table", "no_furnace": "furnace"}
 
@@ -60,6 +66,23 @@ def obtain(item, n=1, chests=None):
     station = STATIONS.get(r["reason"])
     if station and count(station) == 0 and obtain(station, 1, chests)["ok"]:
         r = craft_here(item, n)
+    return r
+
+
+def ensure_tool(kind, chests=None):
+    """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword"): the best it carries, else the
+    best of MADE that obtain(f"{tier}_{kind}", 1, chests) makes. Gives result(): ok, or obtain's result for the wooden
+    tool where no tier could be made."""
+    for tier in TIERS:
+        if equip(f"{tier}_{kind}"):
+            return result()
+    if equip(f"#minecraft:{kind}s"):
+        return result()
+    for tier in MADE:
+        r = obtain(f"{tier}_{kind}", 1, chests)
+        if r["ok"]:
+            equip(f"{tier}_{kind}")
+            return r
     return r
 
 

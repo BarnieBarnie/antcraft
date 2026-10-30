@@ -526,6 +526,53 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("False missing_ingredients {'minecraft:cobblestone': 3} 0 0 1"));
 	}
 
+	// lib.craft.ensure_tool
+
+	/** Prints what {@code lib.craft.ensure_tool(args)} gives, the item held and then {@code counts}, the {@code count} of each item. */
+	private static String ensureTool(String args, String... counts) {
+		return craftAll(args, counts).replace("craft_all(", "ensure_tool(").replace("r['missing']", "r['missing'], held() and held().item");
+	}
+
+	/** Two pickaxes carried: the stone one is held, nothing is crafted. */
+	@GameTest(maxTicks = 20)
+	public void ensureToolHoldsTheBestCarried(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		expect(helper, bot, ensureTool("'pickaxe'", "wooden_pickaxe", "stone_pickaxe", "oak_log"),
+			List.of("True None {} minecraft:stone_pickaxe 1 1 3"));
+	}
+
+	/** No pickaxe, logs and cobblestone: the diamond and iron tiers fail before crafting, and a stone pickaxe is made and held. */
+	@GameTest(maxTicks = 180)
+	public void ensureToolMakesAStonePickaxe(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		expect(helper, bot, ensureTool("'pickaxe'", "stone_pickaxe", "wooden_pickaxe", "cobblestone"),
+			List.of("True None {} minecraft:stone_pickaxe 1 0 0"), tablesInTheArea(helper, 0));
+	}
+
+	/** Only logs: the stone tier lacks cobblestone, so a wooden pickaxe is made and held. */
+	@GameTest(maxTicks = 180)
+	public void ensureToolWithOnlyLogsMakesAWoodenPickaxe(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		expect(helper, bot, ensureTool("'pickaxe'", "wooden_pickaxe", "stone_pickaxe"),
+			List.of("True None {} minecraft:wooden_pickaxe 1 0"), tablesInTheArea(helper, 0));
+	}
+
+	/** One plank and two sticks, too little for any tier: it fails and every tier leaves them as they were. */
+	@GameTest(maxTicks = 20)
+	public void ensureToolWithNothingToMakeOneFromChangesNothing(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 1));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		expect(helper, bot, ensureTool("'pickaxe'", "oak_planks", "stick", "wooden_pickaxe"),
+			List.of("False missing_ingredients {'minecraft:oak_log': 1} None 1 2 0"));
+	}
+
 	// smelt
 
 	/** It burns the best fuel it carries, coal before logs, and takes the ingot out. */

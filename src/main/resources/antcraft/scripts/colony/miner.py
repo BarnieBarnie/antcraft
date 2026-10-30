@@ -17,6 +17,7 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
+import lib.craft
 import lib.mine
 import lib.shaft
 from colony.common import core, fetch, store
@@ -99,6 +100,7 @@ def mine(job):
         finish_job(job["id"])
         return
     fetch("#minecraft:pickaxes", 1)
+    lib.craft.ensure_tool("pickaxe")  # the best carried, else one made from what the core holds
     fetch("minecraft:torch", len(m["level"][y]["torches"]))
     memory["mine"] = {y: r0}
     lib.shaft.to_level(y)
