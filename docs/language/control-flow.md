@@ -84,4 +84,4 @@ Without a message, the error says only "assertion failed" and the line.
 
 ## Not in the subset
 
-`else` on a loop (`for ... else`, `while ... else`) is not supported: set a flag instead (see [What's not supported](not-supported.md#else-on-a-loop)). Nor are `try` and `with`.
+`else` on a loop (`for ... else`, `while ... else`) is not supported: set a flag instead (see [What's not supported](not-supported.md#else-on-a-loop)). Nor is `with`. `try`, `except`, `finally` and `raise` are in [Errors & Result](errors.md#catching-errors).

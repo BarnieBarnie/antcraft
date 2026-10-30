@@ -101,5 +101,17 @@ public enum Op {
 	 * Pushes the attribute {@code names[arg]} of the module at TOS, keeping the module: its global of that name, else its
 	 * submodule of that name, imported as {@link #IMPORT} does.
 	 */
-	IMPORT_FROM
+	IMPORT_FROM,
+	/**
+	 * Starts a {@code try} block: an error raised until the matching {@link #POP_BLOCK}, in this frame or a function it
+	 * calls, cuts the operand stack back to its height here, pushes the error's {@link PyException} and jumps to
+	 * {@code arg}.
+	 */
+	SETUP_TRY,
+	/** Ends the innermost {@code try} block of the frame. */
+	POP_BLOCK,
+	/** Pops an exception, or an exception type to make one of, and raises it. */
+	RAISE,
+	/** Pops an exception type, or a tuple of them, and the exception, and pushes whether the exception is of that type. */
+	EXC_MATCH
 }

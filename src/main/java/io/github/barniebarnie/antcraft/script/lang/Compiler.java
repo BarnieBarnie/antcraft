@@ -39,9 +39,19 @@ public final class Compiler {
 	/** The variables of the comprehensions being compiled, innermost first, by name. */
 	private final Deque<Map<String, Integer>> comprehensions = new ArrayDeque<>();
 	private int line;
+	/**
+	 * The {@code try} blocks the code being compiled is in, innermost last, each the body of its {@code finally} or null
+	 * for none: what a {@code return}, {@code break} or {@code continue} leaving them pops and runs on its way out.
+	 */
+	private final List<List<Stmt>> blocks = new ArrayList<>();
+	/** The hidden local slots of the exceptions the {@code except} clauses being compiled handle, innermost first. */
+	private final Deque<Integer> handling = new ArrayDeque<>();
 
-	/** A loop being compiled: where {@code continue} jumps to, and the {@code break} jumps to patch at its end. */
-	private record Loop(boolean isFor, int top, List<Integer> breaks) {
+	/**
+	 * A loop being compiled: where {@code continue} jumps to, the {@code break} jumps to patch at its end, and how many
+	 * {@code try} blocks are around it.
+	 */
+	private record Loop(boolean isFor, int top, List<Integer> breaks, int blocks) {
 	}
 
 	private Compiler(String file, String name, Map<String, Integer> locals, int line) {
@@ -160,7 +170,7 @@ public final class Compiler {
 				int top = here();
 				expr(s.test());
 				int toEnd = emit(Op.JUMP_IF_FALSE, 0);
-				loop(new Loop(false, top, new ArrayList<>()), s.body(), toEnd);
+				loop(new Loop(false, top, new ArrayList<>(), blocks.size()), s.body(), toEnd);
 			}
 			case Ast.For s -> {
 				expr(s.iter());
@@ -169,16 +179,22 @@ public final class Compiler {
 				int top = here();
 				int toEnd = emit(Op.FOR_ITER, 0);
 				store(s.target());
-				loop(new Loop(true, top, new ArrayList<>()), s.body(), toEnd);
+				loop(new Loop(true, top, new ArrayList<>(), blocks.size()), s.body(), toEnd);
 			}
 			case Ast.Break s -> {
 				Loop loop = loops.peek();
+				leaveBlocks(loop.blocks());
+				at(s);
 				if (loop.isFor()) {
 					emit(Op.POP, 0);
 				}
 				loop.breaks().add(emit(Op.JUMP, 0));
 			}
-			case Ast.Continue s -> emit(Op.JUMP, loops.peek().top());
+			case Ast.Continue s -> {
+				leaveBlocks(loops.peek().blocks());
+				at(s);
+				emit(Op.JUMP, loops.peek().top());
+			}
 			case Ast.Pass s -> {
 			}
 			case Ast.Def s -> {
@@ -198,7 +214,26 @@ public final class Compiler {
 					expr(s.value());
 				}
 				at(s);
+				if (!blocks.isEmpty()) { // kept aside while the finally blocks run, which may break out of a loop
+					int result = hidden("$return");
+					emit(Op.STORE_LOCAL, result);
+					leaveBlocks(0);
+					at(s);
+					emit(Op.LOAD_LOCAL, result);
+				}
 				emit(Op.RETURN, 0);
+			}
+			case Ast.Try s -> tryStatement(s);
+			case Ast.Raise s -> {
+				if (s.exception() != null) {
+					expr(s.exception());
+				} else if (handling.isEmpty()) {
+					throw new CompileError(file, s.line(), s.col(), "a bare 'raise' is only supported inside an 'except' block");
+				} else {
+					emit(Op.LOAD_LOCAL, handling.peek());
+				}
+				at(s);
+				emit(Op.RAISE, 0);
 			}
 			case Ast.Assert s -> {
 				expr(s.test());
@@ -231,6 +266,101 @@ public final class Compiler {
 					storeName(imported);
 				}
 				emit(Op.POP, 0);
+			}
+		}
+	}
+
+	/** A hidden local slot, which no name of the script reaches. */
+	private int hidden(String name) {
+		localNames.add(name);
+		return localNames.size() - 1;
+	}
+
+	/**
+	 * {@code try}: a block whose errors jump to the {@code except} clauses, inside a block whose errors jump to the
+	 * {@code finally} body, which then raises the error again. The finally body is also compiled where the try ends
+	 * normally, and where a {@code return}, {@code break} or {@code continue} leaves it ({@link #leaveBlocks}). The
+	 * exception being handled is kept in a hidden local, so the operand stack stays as it is around the try.
+	 */
+	private void tryStatement(Ast.Try s) {
+		boolean hasFinally = !s.finalBody().isEmpty();
+		int toFinally = 0;
+		if (hasFinally) {
+			toFinally = emit(Op.SETUP_TRY, 0);
+			blocks.add(s.finalBody());
+		}
+		if (s.handlers().isEmpty()) {
+			body(s.body());
+		} else {
+			int toHandlers = emit(Op.SETUP_TRY, 0);
+			blocks.add(null);
+			body(s.body());
+			blocks.removeLast();
+			at(s);
+			emit(Op.POP_BLOCK, 0);
+			body(s.orElse());
+			List<Integer> toEnd = new ArrayList<>();
+			toEnd.add(emit(Op.JUMP, 0));
+			patch(toHandlers, here());
+			int exception = hidden("$exception");
+			emit(Op.STORE_LOCAL, exception);
+			handling.push(exception);
+			for (Ast.ExceptHandler handler : s.handlers()) {
+				at(handler);
+				int toNext = -1;
+				if (handler.type() != null) {
+					emit(Op.LOAD_LOCAL, exception);
+					expr(handler.type());
+					at(handler);
+					emit(Op.EXC_MATCH, 0);
+					toNext = emit(Op.JUMP_IF_FALSE, 0);
+				}
+				if (handler.name() != null) {
+					emit(Op.LOAD_LOCAL, exception);
+					storeName(handler.name());
+				}
+				body(handler.body());
+				toEnd.add(emit(Op.JUMP, 0));
+				if (toNext >= 0) {
+					patch(toNext, here());
+				}
+			}
+			handling.pop();
+			if (s.handlers().getLast().type() != null) { // none matched
+				emit(Op.LOAD_LOCAL, exception);
+				emit(Op.RAISE, 0);
+			}
+			toEnd.forEach(at -> patch(at, here()));
+		}
+		if (hasFinally) {
+			blocks.removeLast();
+			at(s);
+			emit(Op.POP_BLOCK, 0);
+			body(s.finalBody());
+			int toEnd = emit(Op.JUMP, 0);
+			patch(toFinally, here());
+			int exception = hidden("$exception");
+			emit(Op.STORE_LOCAL, exception);
+			body(s.finalBody());
+			emit(Op.LOAD_LOCAL, exception);
+			emit(Op.RAISE, 0);
+			patch(toEnd, here());
+		}
+	}
+
+	/**
+	 * Leaves the {@code try} blocks above the first {@code downTo}, innermost first, as a {@code return}, {@code break}
+	 * or {@code continue} does: pops each and runs its {@code finally} body, if it has one, inside the blocks around it.
+	 */
+	private void leaveBlocks(int downTo) {
+		for (int i = blocks.size() - 1; i >= downTo; i--) {
+			List<Stmt> finalBody = blocks.get(i);
+			emit(Op.POP_BLOCK, 0);
+			if (finalBody != null) {
+				List<List<Stmt>> inner = new ArrayList<>(blocks.subList(i, blocks.size()));
+				blocks.subList(i, blocks.size()).clear();
+				body(finalBody);
+				blocks.addAll(inner);
 			}
 		}
 	}

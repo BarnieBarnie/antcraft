@@ -35,6 +35,12 @@ final class SubsetCheck {
 				}
 				case Ast.While s -> functionsIn(file, s.body(), enclosing);
 				case Ast.For s -> functionsIn(file, s.body(), enclosing);
+				case Ast.Try s -> {
+					functionsIn(file, s.body(), enclosing);
+					s.handlers().forEach(h -> functionsIn(file, h.body(), enclosing));
+					functionsIn(file, s.orElse(), enclosing);
+					functionsIn(file, s.finalBody(), enclosing);
+				}
 				default -> {
 				}
 			}
@@ -125,6 +131,19 @@ final class SubsetCheck {
 				}
 				case Ast.Pass s -> {
 				}
+				case Ast.Try s -> {
+					body(s.body());
+					for (Ast.ExceptHandler handler : s.handlers()) {
+						expr(handler.type());
+						if (handler.name() != null) {
+							stores.add(handler.name());
+						}
+						body(handler.body());
+					}
+					body(s.orElse());
+					body(s.finalBody());
+				}
+				case Ast.Raise s -> expr(s.exception());
 			}
 		}
 

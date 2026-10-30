@@ -36,6 +36,11 @@ public final class AstDump {
 			case Ast.Global s -> "(global " + String.join(" ", s.names()) + ")";
 			case Ast.Import s -> "(import " + String.join(" ", s.modules()) + ")";
 			case Ast.FromImport s -> "(from " + s.module() + " " + String.join(" ", s.names()) + ")";
+			case Ast.Try s -> "(try " + block(s.body()) + s.handlers().stream()
+					.map(h -> " (except " + dump(h.type()) + (h.name() == null ? "" : " " + h.name()) + " " + block(h.body()) + ")")
+					.collect(Collectors.joining()) + (s.orElse().isEmpty() ? "" : " (else " + block(s.orElse()) + ")")
+					+ (s.finalBody().isEmpty() ? "" : " (finally " + block(s.finalBody()) + ")") + ")";
+			case Ast.Raise s -> s.exception() == null ? "raise" : "(raise " + dump(s.exception()) + ")";
 		};
 	}
 

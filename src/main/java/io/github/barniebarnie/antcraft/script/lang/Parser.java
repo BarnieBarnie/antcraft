@@ -24,8 +24,8 @@ public final class Parser {
 			"import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with",
 			"yield");
 	/** Keywords of constructs outside the subset. */
-	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("class", "try", "except", "finally", "raise", "lambda",
-			"with", "yield", "async", "await", "nonlocal", "del");
+	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("class", "lambda", "with", "yield", "async", "await",
+			"nonlocal", "del");
 	/** Operators outside the subset. */
 	private static final Set<String> UNSUPPORTED_OPERATORS = Set.of("&", "|", "^", "~", "<<", ">>", "@", ":=", "&=", "|=",
 			"^=", "<<=", ">>=", "@=", "...");
@@ -82,11 +82,53 @@ public final class Parser {
 				case "def" -> {
 					return List.of(def());
 				}
+				case "try" -> {
+					return List.of(tryStatement());
+				}
 				default -> {
 				}
 			}
 		}
 		return simpleStatements();
+	}
+
+	private Ast.Try tryStatement() {
+		Token t = next();
+		expectOp(":", "expected ':' after 'try'");
+		List<Stmt> body = block("'try' statement on line " + t.line());
+		List<Ast.ExceptHandler> handlers = new ArrayList<>();
+		while (peek().isName("except")) {
+			Token e = next();
+			if (!handlers.isEmpty() && handlers.getLast().type() == null) {
+				throw error(handlers.getLast(), "default 'except:' must be last");
+			}
+			Expr type = null;
+			String name = null;
+			if (!peek().isOp(":")) {
+				type = test();
+				if (peek().isName("as")) {
+					next();
+					name = name("expected a name after 'as'");
+				}
+			}
+			expectOp(":", "expected ':' after 'except' clause");
+			handlers.add(new Ast.ExceptHandler(type, name, block("'except' statement on line " + e.line()), e.line(), e.col()));
+		}
+		List<Stmt> orElse = List.of();
+		if (!handlers.isEmpty() && peek().isName("else")) {
+			Token e = next();
+			expectOp(":", "expected ':' after 'else'");
+			orElse = block("'else' statement on line " + e.line());
+		}
+		List<Stmt> finalBody = List.of();
+		if (peek().isName("finally")) {
+			Token f = next();
+			expectOp(":", "expected ':' after 'finally'");
+			finalBody = block("'finally' statement on line " + f.line());
+		} else if (handlers.isEmpty()) {
+			throw error(peek(), "expected 'except' or 'finally' block");
+		}
+		return new Ast.Try(body, List.copyOf(handlers), orElse, finalBody, t.line(), t.col());
 	}
 
 	/** Small statements separated by {@code ;}, up to and with the end of the line. */
@@ -150,6 +192,14 @@ public final class Parser {
 						names.add(name("expected a name after ','"));
 					}
 					return new Ast.Global(List.copyOf(names), t.line(), t.col());
+				}
+				case "raise" -> {
+					next();
+					Expr exception = startsExpression(peek()) ? test() : null;
+					if (peek().isName("from")) {
+						throw unsupported(peek(), "`raise ... from`");
+					}
+					return new Ast.Raise(exception, t.line(), t.col());
 				}
 				case "import" -> {
 					return importStatement();

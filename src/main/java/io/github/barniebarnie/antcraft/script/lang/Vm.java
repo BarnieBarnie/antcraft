@@ -56,6 +56,9 @@ public final class Vm {
 		final Object[] locals;
 		Object[] stack = new Object[8];
 		int sp;
+		/** The {@code try} blocks the frame is in, innermost last: for each its handler's pc, then the stack height. */
+		int[] blocks = new int[0];
+		int blockCount;
 
 		Frame(Code code, Object[] locals, PyModule module, boolean imports) {
 			this.code = code;
@@ -79,6 +82,15 @@ public final class Vm {
 
 		Object peek() {
 			return stack[sp - 1];
+		}
+
+		void pushBlock(int handler) {
+			if (2 * blockCount == blocks.length) {
+				blocks = Arrays.copyOf(blocks, Math.max(4, 2 * blocks.length));
+			}
+			blocks[2 * blockCount] = handler;
+			blocks[2 * blockCount + 1] = sp;
+			blockCount++;
 		}
 
 		/** Pops the top {@code n} values, in the order they were pushed. */
@@ -219,8 +231,7 @@ public final class Vm {
 			try {
 				execute(frame, code.ops()[pc], code.args()[pc]);
 			} catch (ScriptError e) {
-				error = e.file() == null ? place(e, depth, pc) : e;
-				status = Status.FAILED;
+				fail(e.file() == null ? place(e, depth, pc) : e);
 			}
 			left -= payDebt(left);
 		}
@@ -284,10 +295,37 @@ public final class Vm {
 			call(call.callee(), call.args(), call.kwargs());
 		} catch (ScriptError e) {
 			Frame frame = frames.getLast();
-			error = e.file() == null ? place(e, frames.size() - 1, frame.pc - 1) : e;
-			status = Status.FAILED;
+			fail(e.file() == null ? place(e, frames.size() - 1, frame.pc - 1) : e);
 		}
 		return status;
+	}
+
+	/**
+	 * Hands a placed error to the innermost {@code try} block it was raised in (docs/language/errors.md, Catching
+	 * errors): drops the frames above that block's, cuts the operand stack back, pushes the exception and jumps to the
+	 * handler. Without one the script fails with it.
+	 */
+	private void fail(ScriptError e) {
+		for (int i = frames.size() - 1; i >= 0; i--) {
+			Frame frame = frames.get(i);
+			if (frame.blockCount > 0) {
+				while (frames.size() > i + 1) {
+					Frame dropped = frames.removeLast();
+					if (dropped.imports) { // its import failed, so a later one starts again
+						modules.remove(dropped.module.name());
+					}
+				}
+				frame.blockCount--;
+				int sp = frame.blocks[2 * frame.blockCount + 1];
+				Arrays.fill(frame.stack, sp, frame.sp, null);
+				frame.sp = sp;
+				frame.push(e.exception());
+				frame.pc = frame.blocks[2 * frame.blockCount];
+				return;
+			}
+		}
+		error = e;
+		status = Status.FAILED;
 	}
 
 	private void execute(Frame f, Op op, int arg) {
@@ -473,6 +511,25 @@ public final class Vm {
 					f.push(module);
 				}
 			}
+			case SETUP_TRY -> f.pushBlock(arg);
+			case POP_BLOCK -> f.blockCount--;
+			case RAISE -> throw new ScriptError(switch (f.pop()) {
+				case PyException e -> e;
+				case PyNative n when PyException.isType(n.name()) -> PyException.of(n.name(), "");
+				default -> throw ScriptError.of("TypeError", "exceptions must derive from BaseException");
+			});
+			case EXC_MATCH -> {
+				Object type = f.pop();
+				PyException e = (PyException) f.pop();
+				boolean matches = false;
+				for (Object t : type instanceof PyTuple tuple ? tuple.items() : List.of(type)) {
+					if (!(t instanceof PyNative n && PyException.isType(n.name()))) {
+						throw ScriptError.of("TypeError", "catching classes that do not inherit from BaseException is not allowed");
+					}
+					matches |= e.isA(n.name());
+				}
+				f.push(matches);
+			}
 			case IMPORT_FROM -> {
 				PyModule module = (PyModule) f.peek();
 				String name = code.names()[arg];
@@ -534,7 +591,7 @@ public final class Vm {
 		try {
 			return loader.load(name);
 		} catch (CompileError e) {
-			throw new ScriptError(e.file(), e.line(), e.detail());
+			throw new ScriptError(new PyException("SyntaxError", e.detail(), e.detail(), e.file(), e.line()));
 		}
 	}
 
@@ -566,7 +623,7 @@ public final class Vm {
 		if (value != null) {
 			return value;
 		}
-		if (natives.function(name) != null) {
+		if (natives.function(name) != null || PyException.isType(name)) {
 			return new PyNative(name);
 		}
 		throw new ScriptError("name '" + name + "' is not defined");
@@ -600,6 +657,10 @@ public final class Vm {
 			}
 			case PyNative n -> {
 				NativeFunction function = natives.function(n.name());
+				if (function == null && PyException.isType(n.name())) {
+					frames.getLast().push(PyException.call(n.name(), args, kwargs));
+					return;
+				}
 				if (function == null) {
 					throw new ScriptError("name '" + n.name() + "' is not defined");
 				}

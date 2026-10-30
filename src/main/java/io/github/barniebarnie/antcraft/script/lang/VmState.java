@@ -25,6 +25,9 @@ import org.jspecify.annotations.Nullable;
  * code position, locals and operand stack, every module with its globals, the builtin values (such as {@code memory}),
  * how many instructions it ran, and the native call it is suspended in, which a loaded VM makes again ({@link Vm#recall}).
  *
+ * <p>Each frame's {@code try} blocks are saved with it, so a script saved inside a {@code try}, {@code except} or
+ * {@code finally} goes on there.
+ *
  * <p>Values are saved as a graph, so a list two variables share, or one that contains itself, comes back as one list.
  * Code is saved by reference, not as code: by the module it was compiled from and its place among that module's nested
  * constants, with a fingerprint of each module's compiled code. A load compiles the modules again and refuses to go on
@@ -34,7 +37,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class VmState {
 	private static final int MAGIC = 0x41435653; // ACVS
-	private static final int VERSION = 1;
+	private static final int VERSION = 2;
 
 	// Values
 	private static final byte NULL = 0;
@@ -59,6 +62,7 @@ public final class VmState {
 	private static final byte VIEW = 10;
 	private static final byte SLICE = 11;
 	private static final byte HOST = 12;
+	private static final byte EXCEPTION = 13;
 	private static final byte ITER_LIST = 20;
 	private static final byte ITER_TUPLE = 21;
 	private static final byte ITER_STRING = 22;
@@ -203,6 +207,10 @@ public final class VmState {
 				fields.addAll(Arrays.asList(frame.locals));
 				fields.add((long) frame.sp);
 				fields.addAll(Arrays.asList(frame.stack).subList(0, frame.sp));
+				fields.add((long) frame.blockCount);
+				for (int i = 0; i < 2 * frame.blockCount; i++) {
+					fields.add((long) frame.blocks[i]);
+				}
 			}
 			Vm.PendingCall pending = vm.status == Vm.Status.SUSPENDED ? vm.pending : null;
 			fields.add(pending != null);
@@ -280,7 +288,7 @@ public final class VmState {
 				if (!(value instanceof PyList || value instanceof PyTuple || value instanceof PyDict || value instanceof PyModule
 						|| value instanceof PyFunction || value instanceof Code || value instanceof PyNative
 						|| value instanceof PyMethod || value instanceof PyRange || value instanceof PyDictView
-						|| value instanceof Values.Slice || value instanceof Iter)) {
+						|| value instanceof Values.Slice || value instanceof Iter || value instanceof PyException)) {
 					Object saved = value instanceof HostValue ? host.save(value) : null;
 					if (saved == null) {
 						throw new NotSaveable("a '" + Values.typeName(value) + "' value cannot be saved");
@@ -363,6 +371,10 @@ public final class VmState {
 				case Values.Slice s -> {
 					fields.addAll(Arrays.asList(s.lower(), s.upper(), s.step()));
 					yield SLICE;
+				}
+				case PyException e -> {
+					fields.addAll(Arrays.asList(e.type(), e.message(), e.detail(), e.file(), (long) e.line()));
+					yield EXCEPTION;
 				}
 				case Iter.OfList i -> {
 					fields.addAll(List.of(i.list, (long) i.index));
@@ -676,6 +688,11 @@ public final class VmState {
 					frame.stack[j] = value(next());
 				}
 				frame.sp = sp;
+				frame.blocks = new int[2 * nextInt()];
+				frame.blockCount = frame.blocks.length / 2;
+				for (int j = 0; j < frame.blocks.length; j++) {
+					frame.blocks[j] = nextInt();
+				}
 				vm.frames.add(frame);
 			}
 			if ((Boolean) next()) {
@@ -775,6 +792,8 @@ public final class VmState {
 					case VIEW -> new PyDictView((PyDict) value(f[0]), PyDictView.Kind.valueOf((String) f[1]));
 					case SLICE -> new Values.Slice(value(f[0]), value(f[1]), value(f[2]));
 					case HOST -> host.load(value(f[0]));
+					case EXCEPTION -> new PyException((String) f[0], (String) f[1], (String) f[2], (String) f[3],
+							Math.toIntExact((Long) f[4]));
 					case ITER_LIST -> {
 						Iter.OfList iter = new Iter.OfList((PyList) value(f[0]));
 						iter.index = Math.toIntExact((Long) f[1]);

@@ -222,4 +222,25 @@ class ParserTest {
 		assertEquals("(def f (a) [(def g (b) [(return (+ b c))]) (return (call g a))])",
 				parse("c = 1\ndef f(a):\n    def g(b):\n        return b + c\n    return g(a)").lines().toList().get(1));
 	}
+
+	@Test
+	void tryStatements() {
+		assertEquals("(try [(call f)] (except _ [pass]))", parse("try:\n    f()\nexcept:\n    pass"));
+		assertEquals("(try [(call f)] (except ValueError [pass]) (except (tuple A B) e [(call g e)]) (else [x]) (finally [y]))",
+				parse("try:\n    f()\nexcept ValueError:\n    pass\nexcept (A, B) as e:\n    g(e)\nelse:\n    x\nfinally:\n    y"));
+		assertEquals("(try [x] (finally [y]))", parse("try: x\nfinally: y"));
+		assertEquals("raise\n(raise (call ValueError 'x'))", parse("raise\nraise ValueError('x')"));
+	}
+
+	@Test
+	void malformedTryStatements() {
+		assertEquals("t.py:3:1: expected 'except' or 'finally' block", syntaxError("try:\n    x\ny = 1"));
+		assertEquals("t.py:3:1: default 'except:' must be last", syntaxError("try:\n    x\nexcept:\n    pass\nexcept ValueError:\n    pass"));
+		assertEquals("t.py:3:1: expected 'except' or 'finally' block", syntaxError("try:\n    x\nelse:\n    pass"));
+		assertEquals("t.py:1:9: `raise ... from` is not supported", syntaxError("raise X from Y"));
+	}
+
+	private static String syntaxError(String source) {
+		return org.junit.jupiter.api.Assertions.assertThrows(CompileError.class, () -> Parser.parse("t.py", source)).getMessage();
+	}
 }

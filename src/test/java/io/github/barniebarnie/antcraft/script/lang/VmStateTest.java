@@ -239,6 +239,30 @@ class VmStateTest {
 						for i in range(3):
 						    memory['n'] += i
 						    print(xs[i:7:2], x.n, x, memory['n'])
+						""", Map.of()),
+				new Case("try, except and finally", """
+						def f(i):
+						    try:
+						        if i == 1:
+						            return [][i]
+						        if i == 2:
+						            raise ValueError('two')
+						        return i
+						    finally:
+						        print('finally', i)
+						for i in range(4):
+						    try:
+						        try:
+						            print('got', f(i))
+						        except ValueError as e:
+						            print('value', e)
+						            raise
+						    except Exception as e:
+						        print('outer', f'{e!r}')
+						    else:
+						        print('else', i)
+						    finally:
+						        print('done', i)
 						""", Map.of()));
 	}
 
@@ -399,5 +423,38 @@ class VmStateTest {
 		Vm vm = vm("d = {'a': [1, 2]}\nfor k in d:\n    while True:\n        pass\n", Map.of(), new ArrayList<>());
 		vm.run(30);
 		assertArrayEquals(VmState.save(vm, THINGS), VmState.save(vm, THINGS));
+	}
+
+	@Test
+	void aScriptSuspendedInAnExceptOrFinallyGoesOnAsIfNotSaved() throws Exception {
+		String source = """
+				try:
+				    try:
+				        [][0]
+				    except IndexError as e:
+				        print('except', pause(1), e)
+				        raise
+				    finally:
+				        print('finally', pause(2))
+				except Exception as e:
+				    print('outer', pause(3), e)
+				""";
+		List<String> expected = new ArrayList<>();
+		Natives plain = natives(expected);
+		plain.register("pause", call -> call.args().getFirst());
+		assertEquals(Vm.Status.FINISHED, new Vm("t", compile(source), plain, ModuleLoader.NONE).run(1000));
+		List<String> printed = new ArrayList<>();
+		Natives natives = natives(printed);
+		natives.register("pause", NativeCall::suspend);
+		Vm vm = new Vm("t", compile(source), natives, ModuleLoader.NONE);
+		while (vm.run(1000) == Vm.Status.SUSPENDED) {
+			Object waitedFor = vm.pending.args().getFirst();
+			vm = VmState.load(VmState.save(vm, THINGS), compile(source), natives, ModuleLoader.NONE, Vm.DEFAULT_MAX_DEPTH, THINGS,
+					VmStateTest::checkedDict);
+			vm.resume(waitedFor);
+		}
+		assertEquals(Vm.Status.FINISHED, vm.status());
+		assertEquals(List.of("except 1 list index out of range", "finally 2", "outer 3 list index out of range"), expected);
+		assertEquals(expected, printed);
 	}
 }

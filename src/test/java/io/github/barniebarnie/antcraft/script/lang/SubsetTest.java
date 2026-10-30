@@ -18,21 +18,6 @@ class SubsetTest {
 	}
 
 	@Test
-	void tryIsNotSupported() {
-		rejects("if x:\n    try:\n        y()\n    except:\n        pass", "bot.py:2:5: `try` is not supported");
-	}
-
-	@Test
-	void exceptIsNotSupported() {
-		rejects("except ValueError:\n    pass", "bot.py:1:1: `except` is not supported");
-	}
-
-	@Test
-	void raiseIsNotSupported() {
-		rejects("raise ValueError('x')", "bot.py:1:1: `raise` is not supported");
-	}
-
-	@Test
 	void lambdaIsNotSupported() {
 		rejects("f = lambda x: x", "bot.py:1:5: `lambda` is not supported");
 		rejects("sorted(xs, key=lambda x: x)", "bot.py:1:16: `lambda` is not supported");

@@ -25,10 +25,6 @@ while not attempt(job) and job["tries"] < 3:
 
 A dict of plain values can also go into `memory` and survive a restart, which an object could not.
 
-## try, except and raise
-
-Actions give back a `Result` instead of raising, and a runtime error is a bug to fix rather than to catch. Check values before you use them, and return a failure from your own functions. [Errors & Result](errors.md) explains why and shows the patterns.
-
 ## lambda
 
 Write a small function with `def` and pass its name:

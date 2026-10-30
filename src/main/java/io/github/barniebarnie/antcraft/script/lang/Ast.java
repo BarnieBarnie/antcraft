@@ -88,6 +88,19 @@ public final class Ast {
 	public record FromImport(String module, List<String> names, int line, int col) implements Stmt {
 	}
 
+	/** {@code try} with its {@code except} clauses, {@code else} and {@code finally}; at least a handler or a finally. */
+	public record Try(List<Stmt> body, List<ExceptHandler> handlers, List<Stmt> orElse, List<Stmt> finalBody, int line,
+			int col) implements Stmt {
+	}
+
+	/** {@code except type as name:}; {@code type} is null for a bare {@code except}, {@code name} null without {@code as}. */
+	public record ExceptHandler(Expr type, String name, List<Stmt> body, int line, int col) implements Node {
+	}
+
+	/** {@code raise exception}; {@code exception} is null for a bare {@code raise}. */
+	public record Raise(Expr exception, int line, int col) implements Stmt {
+	}
+
 	// Expressions
 
 	public sealed interface Expr extends Node {

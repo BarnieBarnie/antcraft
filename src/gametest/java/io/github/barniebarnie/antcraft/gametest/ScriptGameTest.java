@@ -276,6 +276,19 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A script catches a native's error with {@code try}/{@code except} and goes on (docs/language/errors.md, Catching errors). */
+	@GameTest(maxTicks = 10)
+	public void aScriptCatchesARuntimeErrorAndGoesOn(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = BotScripts.run(bot, "try:\n    wait('soon')\nexcept TypeError as e:\n    print('caught', e)\nwait(1)\nprint('after')\n");
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state() + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("caught wait() takes a number of ticks (int), not 'str'", "after")), "log " + printed);
+		});
+	}
+
 	/**
 	 * {@code /antcraft script reload} after a script file changed starts the new version on the bot running it. The test
 	 * writes its own script into the world script folder, under a name of its own.

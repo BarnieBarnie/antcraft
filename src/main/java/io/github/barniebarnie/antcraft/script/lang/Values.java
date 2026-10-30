@@ -40,6 +40,7 @@ public final class Values {
 			case PyMethod m -> "builtin_function_or_method";
 			case Iter i -> i.typeName();
 			case HostValue h -> h.typeName();
+			case PyException e -> e.type();
 			default -> value.getClass().getSimpleName();
 		};
 	}
@@ -65,7 +66,7 @@ public final class Values {
 
 	/** {@code str(value)}. */
 	public static String str(Object value) {
-		return value instanceof String s ? s : repr(value);
+		return value instanceof String s ? s : value instanceof PyException e ? e.message() : repr(value);
 	}
 
 	/** {@code repr(value)}. */
@@ -122,6 +123,7 @@ public final class Values {
 				repr(new PyList(elements(v)), out, open);
 				out.append(')');
 			}
+			case PyException e -> out.append(e.repr());
 			default -> out.append(value);
 		}
 	}

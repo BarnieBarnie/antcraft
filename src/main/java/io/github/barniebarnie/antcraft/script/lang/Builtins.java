@@ -529,7 +529,9 @@ final class Builtins {
 		List<Object> types = a[1] instanceof PyTuple t ? t.items() : List.of(a[1]);
 		boolean matches = false;
 		for (Object type : types) {
-			Predicate<Object> test = type instanceof PyNative n ? TYPES.getOrDefault(n.name(), hostType(n.name())) : null;
+			Predicate<Object> test = !(type instanceof PyNative n) ? null
+					: PyException.isType(n.name()) ? v -> v instanceof PyException e && e.isA(n.name())
+							: TYPES.getOrDefault(n.name(), hostType(n.name()));
 			if (test == null) {
 				throw new ScriptError("isinstance() arg 2 must be a type, a tuple of types, or a union");
 			}

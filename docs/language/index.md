@@ -23,7 +23,7 @@ else:
 - [Functions](functions.md): `def`, default and keyword arguments, `return`, `global`, and functions as `key=`.
 - [Modules & import](modules.md): splitting scripts into files and using the mod's library.
 - [Output & logging](output.md): `print`, `say`, and the log levels.
-- [Errors & Result](errors.md): why there is no `try`/`except`, and what to do instead.
+- [Errors & Result](errors.md): runtime errors, `Result`, and catching errors with `try`/`except`.
 - [Budget & pausing](budget.md): how a script shares the server's time, and when it waits.
 - [What's not supported](not-supported.md): what the subset leaves out, and how to do without it.
 
@@ -39,4 +39,4 @@ else:
 
 ## Not supported (v1)
 
-`class`, `try`/`except`/`raise`, `lambda`, `with`, generators and `yield`, decorators, `async`, set literals and `set`, `*args`/`**kwargs`, nested functions that capture variables (closures), `nonlocal`, the Python standard library. Several may come later. Most of them are needed less than in normal Python, because actions return results instead of raising. [What's not supported](not-supported.md) has a workaround for each, and for the smaller things the subset leaves out.
+`class`, `lambda`, `with`, generators and `yield`, decorators, `async`, set literals and `set`, `*args`/`**kwargs`, nested functions that capture variables (closures), `nonlocal`, the Python standard library. Several may come later. Most of them are needed less than in normal Python, because actions return results instead of raising. [What's not supported](not-supported.md) has a workaround for each, and for the smaller things the subset leaves out.
