@@ -151,4 +151,75 @@ class CodeTextTest {
 		text.insert("d");
 		assertFalse(text.redo());
 	}
+
+	/** A text with the selection from {@code [} to the caret at {@code |}. */
+	private static CodeText selected(String marked) {
+		CodeText text = at(marked.replace("[", ""));
+		int anchor = marked.indexOf('[');
+		int caret = text.caret();
+		text.moveTo(anchor < caret ? anchor : anchor - 1, false);
+		text.moveTo(caret, true);
+		return text;
+	}
+
+	@Test
+	void tabIndentsToTheNextMultipleOfFour() {
+		CodeText text = at("|x");
+		text.indent();
+		assertEquals("    |x", marked(text));
+		text = at("ab|x");
+		text.indent();
+		assertEquals("ab  |x", marked(text));
+	}
+
+	@Test
+	void tabAndShiftTabIndentAndDedentEverySelectedLine() {
+		CodeText text = selected("i[f x:\n    pa|ss\ny");
+		text.indent();
+		assertEquals("    if x:\n        pass\ny", text.text());
+		assertEquals("    if x:\n        pass", text.selected());
+		text.dedent();
+		text.dedent();
+		text.dedent();
+		assertEquals("if x:\npass\ny", text.text());
+	}
+
+	@Test
+	void shiftTabOnOneLineRemovesUpToFourSpaces() {
+		CodeText text = at("      x|");
+		text.dedent();
+		assertEquals("  x|", marked(text));
+		text.dedent();
+		assertEquals("x|", marked(text));
+		text.dedent();
+		assertEquals("x|", marked(text));
+	}
+
+	@Test
+	void enterKeepsTheIndentationAndAddsALevelAfterAColon() {
+		CodeText text = at("if x:|");
+		text.newline();
+		assertEquals("if x:\n    |", marked(text));
+		text.insert("pass");
+		text.newline();
+		assertEquals("if x:\n    pass\n    |", marked(text));
+		text = at("    while True:  |");
+		text.newline();
+		assertEquals("    while True:  \n        |", marked(text));
+		text = at("x = 1|");
+		text.newline();
+		assertEquals("x = 1\n|", marked(text));
+	}
+
+	@Test
+	void backspaceInTheIndentationRemovesBackToTheLastMultipleOfFour() {
+		CodeText text = at("x\n      |y");
+		text.deleteBack(false);
+		assertEquals("x\n    |y", marked(text));
+		text.deleteBack(false);
+		assertEquals("x\n|y", marked(text));
+		text = at("  a |b");
+		text.deleteBack(false);
+		assertEquals("  a|b", marked(text));
+	}
 }

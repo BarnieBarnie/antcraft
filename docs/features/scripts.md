@@ -22,7 +22,16 @@ The mod copies its default scripts (`idle.py`, the library modules `lib/home.py`
 
 Save sends the script to the server, which checks it whatever the client sent: the player must be an operator, the script at most 64 KiB (UTF-8), its name dotted words of letters, digits, `_` and `-` (so it maps to a file inside the world script folder, never `..`, a separator or an absolute path), and it must compile. A refused save shows why above the buttons, a compile error with its file and line, and nothing is written. A saved script goes to `<world>/antcraft/scripts/`, with folders for the dots (`lib.trees` is `lib/trees.py`), and the server reloads the scripts as `/antcraft script reload` does, so the bots running it start the new version. Saving a script of the config folder or a data pack writes a copy to the world folder, which wins on the name clash; the original stays as it was. A line number gutter, as wide as the number of lines needs, sits left of the text; when a save is refused for a compile error, the server's answer carries its line, and the editor moves the caret to the start of that line and marks it red until the next edit.
 
-The editor colours the script as the language reads it: keywords, strings, numbers, comments, and the names of the builtins and the bot API each have their own colour. It runs the script tokenizer over the text after each edit, so a string you are still typing colours the rest of its line as a string and the lines after it are coloured as usual. Lines do not wrap: a long line scrolls sideways as the caret moves along it (or with a sideways scroll of a trackpad or wheel). Besides typing, the editor takes the arrows (with Ctrl a word at a time, with Shift to select), Home and End (with Ctrl the start and end of the script), Page Up and Page Down, Backspace and Delete (with Ctrl a word), Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V, Ctrl+Z to undo and Ctrl+Y or Ctrl+Shift+Z to redo; a click places the caret, a drag or a Shift+click selects, and a double click selects a word. Tab still moves to the buttons.
+The editor colours the script as the language reads it: keywords, strings, numbers, comments, and the names of the builtins and the bot API each have their own colour. It runs the script tokenizer over the text after each edit, so a string you are still typing colours the rest of its line as a string and the lines after it are coloured as usual. Lines do not wrap: a long line scrolls sideways as the caret moves along it (or with a sideways scroll of a trackpad or wheel). Besides typing, the editor takes the arrows (with Ctrl a word at a time, with Shift to select), Home and End (with Ctrl the start and end of the script), Page Up and Page Down, Backspace and Delete (with Ctrl a word), Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V, Ctrl+Z to undo and Ctrl+Y or Ctrl+Shift+Z to redo; a click places the caret, a drag or a Shift+click selects, and a double click selects a word. Since Python goes by indentation, the editor indents for you, four spaces a level:
+
+| Key | Does |
+|---|---|
+| Tab | spaces up to the next multiple of four; with lines selected, indents each of them |
+| Shift+Tab | removes up to four leading spaces from the caret's line, or from each selected line |
+| Enter | a new line with the indentation of the one before, one level more after a line ending in `:` |
+| Backspace | in a line's leading spaces, removes back to the last multiple of four |
+
+Tab stays in the text; click a button, or press Escape to close the editor.
 
 ## Bot Cores that carry a script
 

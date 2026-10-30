@@ -10,6 +10,8 @@ import java.util.Deque;
  */
 public final class CodeText {
 	private static final int UNDO_LIMIT = 100;
+	/** Spaces in one level of indentation. */
+	public static final int INDENT = 4;
 
 	private final int maxLength;
 	private String text = "";
@@ -83,13 +85,95 @@ public final class CodeText {
 		replace(selectionStart(), selectionEnd(), clean, oneChar);
 	}
 
-	/** Removes the selection, or the character (with {@code word}, the word) before the caret. */
+	/**
+	 * Removes the selection, or the character (with {@code word}, the word) before the caret; in a line's leading
+	 * spaces, back to the last multiple of {@link #INDENT}.
+	 */
 	public void deleteBack(boolean word) {
 		if (hasSelection()) {
 			replace(selectionStart(), selectionEnd(), "", false);
 		} else if (caret > 0) {
-			replace(word ? wordLeft(caret) : caret - 1, caret, "", false);
+			int column = caret - lineStart(lineOf(caret));
+			if (!word && column > 0 && text.substring(caret - column, caret).isBlank()) {
+				replace(caret - ((column - 1) % INDENT + 1), caret, "", false);
+			} else {
+				replace(word ? wordLeft(caret) : caret - 1, caret, "", false);
+			}
 		}
+	}
+
+	// Indentation (docs/features/scripts.md, Editing in game)
+
+	/**
+	 * Tab: with a selection over several lines, indents each of them by {@link #INDENT} spaces; else puts spaces up to
+	 * the next multiple of it in place of the selection.
+	 */
+	public void indent() {
+		if (selected().indexOf('\n') >= 0) {
+			changeIndentation(true);
+		} else {
+			int column = selectionStart() - lineStart(lineOf(selectionStart()));
+			insert(" ".repeat(INDENT - column % INDENT));
+		}
+	}
+
+	/** Shift+Tab: removes up to {@link #INDENT} leading spaces from the caret's line, or from each selected line. */
+	public void dedent() {
+		changeIndentation(false);
+	}
+
+	private void changeIndentation(boolean indent) {
+		int first = lineOf(selectionStart());
+		int last = lineOf(selectionEnd());
+		boolean selection = hasSelection();
+		int fromEnd = text.length() - caret;
+		int start = lineStart(first);
+		int end = lineEnd(last);
+		StringBuilder lines = new StringBuilder();
+		for (int line = first; line <= last; line++) {
+			String content = line(line);
+			if (indent) {
+				lines.append(" ".repeat(INDENT)).append(content);
+			} else {
+				int spaces = 0;
+				while (spaces < INDENT && spaces < content.length() && content.charAt(spaces) == ' ') {
+					spaces++;
+				}
+				lines.append(content, spaces, content.length());
+			}
+			if (line < last) {
+				lines.append('\n');
+			}
+		}
+		if (lines.toString().equals(text.substring(start, end))) {
+			return;
+		}
+		int lineEndFromEnd = text.length() - end;
+		replace(start, end, lines.toString(), false);
+		if (selection) {
+			moveTo(start, false);
+			moveTo(text.length() - lineEndFromEnd, true);
+		} else {
+			// The caret keeps its place in the line's text, or goes to its start if it was in the removed spaces.
+			moveTo(Math.max(start, text.length() - fromEnd), false);
+		}
+	}
+
+	/**
+	 * Enter: a new line with the indentation of the caret's line, one level more after a line ending in {@code :}.
+	 */
+	public void newline() {
+		int start = lineStart(lineOf(selectionStart()));
+		String before = text.substring(start, selectionStart());
+		int spaces = 0;
+		while (spaces < before.length() && before.charAt(spaces) == ' ') {
+			spaces++;
+		}
+		// ponytail: a colon before a trailing comment is not seen; tokenize the line if that matters.
+		if (before.stripTrailing().endsWith(":")) {
+			spaces += INDENT;
+		}
+		insert("\n" + " ".repeat(spaces));
 	}
 
 	/** Removes the selection, or the character (with {@code word}, the word) after the caret. */

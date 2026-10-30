@@ -262,7 +262,7 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 		return true;
 	}
 
-	/** Applies a key to the text; false for a key the editor leaves to the screen, such as Escape and Tab. */
+	/** Applies a key to the text; false for a key the editor leaves to the screen, such as Escape. */
 	private boolean edit(KeyEvent event) {
 		boolean shift = event.hasShiftDown();
 		boolean ctrl = event.hasControlDownWithQuirk();
@@ -299,7 +299,15 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 				case InputConstants.KEY_END -> this.text.end(shift, ctrl);
 				case InputConstants.KEY_BACKSPACE -> this.text.deleteBack(ctrl);
 				case InputConstants.KEY_DELETE -> this.text.deleteForward(ctrl);
-				case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> this.text.insert("\n");
+				case InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> this.text.newline();
+				// Tab indents rather than moving the focus to the buttons.
+				case InputConstants.KEY_TAB -> {
+					if (shift) {
+						this.text.dedent();
+					} else {
+						this.text.indent();
+					}
+				}
 				default -> {
 					return false;
 				}
