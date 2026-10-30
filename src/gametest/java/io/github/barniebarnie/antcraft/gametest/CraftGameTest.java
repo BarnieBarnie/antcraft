@@ -26,6 +26,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 
@@ -337,14 +338,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 
 	/** Checks the test area holds {@code n} crafting tables. */
 	private static Runnable tablesInTheArea(GameTestHelper helper, int n) {
+		return inTheArea(helper, Blocks.CRAFTING_TABLE, n);
+	}
+
+	/** Checks the test area holds {@code n} of {@code block}. */
+	private static Runnable inTheArea(GameTestHelper helper, Block block, int n) {
 		return () -> {
-			int tables = 0;
+			int found = 0;
 			for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 7, 7)) {
-				if (helper.getBlockState(pos).is(Blocks.CRAFTING_TABLE)) {
-					tables++;
+				if (helper.getBlockState(pos).is(block)) {
+					found++;
 				}
 			}
-			helper.assertTrue(tables == n, tables + " tables in the area, expected " + n);
+			helper.assertTrue(found == n, found + " " + block + " in the area, expected " + n);
 		};
 	}
 
@@ -388,6 +394,74 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
 		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table", "oak_planks"),
 			List.of("False missing_ingredients {'minecraft:oak_log': 1} 0 1 0"), tablesInTheArea(helper, 0));
+	}
+
+	/** Raw iron, sticks and coal, a furnace and a table carried: the ingots are smelted in the furnace put down, then the pickaxe made. */
+	@GameTest(maxTicks = 1500)
+	public void craftHereSmeltsInAPlacedFurnace(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 3));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, craftHere("'iron_pickaxe'", "iron_pickaxe", "furnace", "crafting_table", "raw_iron"), List.of("True None {} 1 1 1 0"),
+			() -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
+	// lib.craft.smelt_here
+
+	/** Prints what {@code lib.craft.smelt_here(args)} gives and then {@code counts}, the {@code count} of each item. */
+	private static String smeltHere(String args, String... counts) {
+		StringBuilder printed = new StringBuilder("r.ok, r.reason");
+		for (String item : counts) {
+			printed.append(", count('").append(item).append("')");
+		}
+		return "import lib.craft\nr = lib.craft.smelt_here(" + args + ")\nprint(" + printed + ")\n";
+	}
+
+	/** Eight cobblestone and a table, no furnace: it crafts one, puts it down, smelts and takes the furnace back. */
+	@GameTest(maxTicks = 680)
+	public void smeltHereCraftsAndPlacesAFurnaceAndTakesItBack(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "crafting_table", "raw_iron", "cobblestone"),
+			List.of("True None 1 1 1 0 0"), () -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
+	/** A furnace carried: that one is put down, and the cobblestone stays. */
+	@GameTest(maxTicks = 520)
+	public void smeltHereUsesACarriedFurnace(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "cobblestone"), List.of("True None 1 1 8"),
+			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	/** No fuel: the smelt fails in the furnace put down, which is still taken back, the raw iron with it. */
+	@GameTest(maxTicks = 120)
+	public void smeltHereTakesTheFurnaceBackWhenTheSmeltFails(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "raw_iron"), List.of("False missing_ingredients 0 1 1"),
+			inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
 	// smelt

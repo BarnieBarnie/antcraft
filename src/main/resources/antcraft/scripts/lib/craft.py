@@ -1,4 +1,4 @@
-# Crafting an item through its whole recipe tree, for any script: `import lib.craft`, then
+# Crafting and smelting an item through its whole recipe tree, for any script: `import lib.craft`, then
 # lib.craft.craft_all("stone_pickaxe").
 # A module of the mod's default library (lib/).
 #
@@ -15,7 +15,7 @@ STACK = 64
 
 def craft_all(item, n=1, table=None, furnace=None):
     """Makes n of item from what the bot carries: each step needs(item, n) lists, crafted at table or smelted in furnace
-    (None: one within reach). Gives result(): ok, missing_ingredients with missing, the raw items it lacks, before it
+    (None: one within reach, else one put down with smelt_here). Gives result(): ok, missing_ingredients with missing, the raw items it lacks, before it
     crafts anything, or the reason of the first step that failed."""
     plan = needs(item, n)
     if plan["gather"]:
@@ -27,7 +27,11 @@ def craft_all(item, n=1, table=None, furnace=None):
                 return result(r.reason)
         else:
             while k > 0:
-                r = smelt(plan["inputs"][step], min(k, STACK), furnace=furnace)
+                # ponytail: smelt_here puts a furnace down and takes it back for each stack, fine for tools and armour.
+                if furnace is None:
+                    r = smelt_here(plan["inputs"][step], min(k, STACK))
+                else:
+                    r = smelt(plan["inputs"][step], min(k, STACK), furnace=furnace)
                 if not r:
                     return result(r.reason)
                 k -= min(k, STACK)
@@ -50,6 +54,27 @@ def craft_here(item, n=1):
         return craft_all(item, n, table=spot)
     finally:
         take_back(spot, "crafting_table")
+
+
+def smelt_here(item, n=1, fuel=None):
+    """smelt(item, n, fuel=fuel), and where no furnace is within reach, one placed beside the bot for it: the carried
+    one, else one crafted from 8 cobblestone with craft_here. The placed furnace is mined back after, with anything left
+    in it, also when the smelt fails; that takes a pickaxe. Gives smelt's Result, or its no_furnace where no furnace
+    could be crafted or placed."""
+    r = smelt(item, n, fuel=fuel)
+    if r or r.reason != "no_furnace":
+        return r
+    if count("furnace") == 0 and not craft_here("furnace")["ok"]:
+        return r
+    spot = place_beside("furnace")
+    if spot is None:
+        return r
+    try:
+        return smelt(item, n, furnace=spot, fuel=fuel)
+    finally:
+        take_back(spot, "furnace")
+        # What a failed smelt left in the furnace spills when it is mined.
+        pick_up(radius=3)
 
 
 def place_beside(block):

@@ -1,10 +1,10 @@
 # `lib/craft`
 
-Crafting an item through its whole recipe tree, with a crafting table put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md).
+Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md).
 
 ## `craft_all(item, n=1, table=None, furnace=None)`
 
-Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the steps and runs each in order, `craft` at `table` or `smelt` in `furnace` (`None`: one within reach, as those actions take it). A smelting step of more than a stack takes several `smelt` calls. It gathers nothing: fetch the raw items first, with [`take`](../../crafting/take.md) from a chest or by mining.
+Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the steps and runs each in order, `craft` at `table` or `smelt` in `furnace` (`None`: one within reach, as those actions take it; for a smelting step without `furnace`, `smelt_here` (below), which puts one down where none is in reach). A smelting step of more than a stack takes several `smelt` calls. It gathers nothing: fetch the raw items first, with [`take`](../../crafting/take.md) from a chest or by mining.
 
 - **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives: `ok`, `reason`, `at` (always `None`) and `missing`.
 - **Pauses** yes, while it walks to the table or furnace and waits for the smelting.
@@ -25,7 +25,16 @@ The steps made before the `no_table` stay made, and a table it crafts takes its 
 - **Returns** what `craft_all` gives for the item, or `no_table` (the steps before it made) where the bot could not craft a table or no spot beside it took one.
 - **Pauses** yes, as `craft_all` does, and while it mines the table back.
 
-The two halves it uses are in the module too: `place_beside(block)` places a carried block on such a spot and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
+## `smelt_here(item, n=1, fuel=None)`
+
+[`smelt`](../../crafting/smelt.md)`(item, n, fuel=fuel)` for a bot away from any furnace: `item` is the input, such as `"raw_iron"`. Where no furnace is within reach (`no_furnace`), it puts one down beside the bot as `craft_here` does a table: the furnace it carries, else one it first crafts from 8 carried cobblestone with `craft_here`. It smelts in it, then mines the furnace and picks it up again, with anything a failed smelt left in it, also when the smelt fails. With a furnace within reach it is `smelt` as is.
+
+Mining the furnace back takes a pickaxe: without one it stays where it was put down.
+
+- **Returns** `smelt`'s [`Result`](../../types/result.md), or its `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
+- **Pauses** yes, as `smelt` does, and while it crafts, places and mines the furnace.
+
+The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block)` places a carried block on such a spot and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
 
 ## Example
 
@@ -48,6 +57,14 @@ Away from base, with logs and cobblestone carried and no table:
 import lib.craft
 
 r = lib.craft.craft_here("stone_pickaxe")
+```
+
+With raw iron, sticks, coal, 8 cobblestone and a pickaxe carried, `craft_here` also puts down a furnace for the ingots:
+
+```python
+import lib.craft
+
+r = lib.craft.craft_here("iron_pickaxe")
 ```
 
 ## See also
