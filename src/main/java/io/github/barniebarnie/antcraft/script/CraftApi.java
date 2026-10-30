@@ -140,13 +140,21 @@ public final class CraftApi {
 		PyDict gatherDict = new PyDict();
 		gather.forEach(gatherDict::put);
 		List<Object> crafts = new ArrayList<>();
+		PyDict inputs = new PyDict();
 		for (TaskPlanner.Craft<I> craft : plan.crafts()) {
 			TaskPlanner.Recipe<I> recipe = craft.recipe();
 			crafts.add(PyTuple.of(id.apply(recipe.output()), (long) craft.times() * recipe.count(), recipe.smelting() ? "smelt" : "craft"));
+			if (recipe.smelting()) {
+				// What smelt() takes: the input, any of the recipe's one ingredient.
+				List<Object> options = new ArrayList<>();
+				recipe.ingredients().keySet().forEach(set -> set.forEach(item -> options.add(id.apply(item))));
+				inputs.put(id.apply(recipe.output()), new PyList(options));
+			}
 		}
 		PyDict needs = new PyDict();
 		needs.put("gather", gatherDict);
 		needs.put("crafts", new PyList(crafts));
+		needs.put("inputs", inputs);
 		return needs;
 	}
 

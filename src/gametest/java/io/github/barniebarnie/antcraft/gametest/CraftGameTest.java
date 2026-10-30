@@ -274,6 +274,60 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	// lib.craft.craft_all
+
+	/** Prints what {@code lib.craft.craft_all(args)} gives and then {@code counts}, the {@code count} of each item. */
+	private static String craftAll(String args, String... counts) {
+		StringBuilder printed = new StringBuilder("r['ok'], r['reason'], r['missing']");
+		for (String item : counts) {
+			printed.append(", count('").append(item).append("')");
+		}
+		return "import lib.craft\nr = lib.craft.craft_all(" + args + ")\nprint(" + printed + ")\n";
+	}
+
+	/** One log and three cobblestone: planks, sticks, then the pickaxe at the table within reach. */
+	@GameTest(maxTicks = 20)
+	public void craftAllMakesAStonePickaxeFromALogAndCobblestone(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		expect(helper, bot, craftAll("'stone_pickaxe'", "stone_pickaxe", "stick", "oak_planks", "oak_log", "cobblestone"),
+			List.of("True None {} 1 2 2 0 0"));
+	}
+
+	/** No cobblestone: it says so and crafts nothing, not even the planks it could. */
+	@GameTest(maxTicks = 20)
+	public void craftAllWithRawItemsMissingCraftsNothing(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		expect(helper, bot, craftAll("'stone_pickaxe'", "oak_log", "oak_planks"),
+			List.of("False missing_ingredients {'minecraft:cobblestone': 3} 1 0"));
+	}
+
+	/** No table within reach: the planks and sticks are made, the pickaxe step fails with no_table. */
+	@GameTest(maxTicks = 20)
+	public void craftAllStopsAtTheFirstFailingStep(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		expect(helper, bot, craftAll("'stone_pickaxe'", "stone_pickaxe", "stick", "cobblestone"), List.of("False no_table {} 0 4 3"));
+	}
+
+	/** An iron pickaxe from raw iron: the ingots are smelted in the furnace given, then the pickaxe crafted at the table given. */
+	@GameTest(maxTicks = 1200)
+	public void craftAllSmeltsWhatASmeltStepMakes(GameTestHelper helper) {
+		furnace(helper);
+		helper.setBlock(5, 1, 2, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 3));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, craftAll("'iron_pickaxe', table=" + at(helper, 5, 1, 2) + ", furnace=" + furnaceAt(helper), "iron_pickaxe", "iron_ingot",
+			"raw_iron", "stick"), List.of("True None {} 1 0 0 0"));
+	}
+
 	// smelt
 
 	/** It burns the best fuel it carries, coal before logs, and takes the ingot out. */

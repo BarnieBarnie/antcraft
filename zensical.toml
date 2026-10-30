@@ -53,6 +53,7 @@ nav = [
       "reference/modules/lib/home.md",
       "reference/modules/lib/shaft.md",
       "reference/modules/lib/mine.md",
+      "reference/modules/lib/craft.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

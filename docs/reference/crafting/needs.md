@@ -15,16 +15,20 @@ What the bot still has to gather, and what to craft and smelt from it, to make `
 
 ## Returns
 
-A dict with two keys:
+A dict with three keys:
 
 - `"gather"`: a dict of raw item id to count, what the bot must gather before it can make `item`, given what it carries, its hand included. `{}` when it carries all it needs.
 - `"crafts"`: a list of steps in order, ingredients before what they make, each a tuple `(item, n, how)`: the item id, how many the step makes (a whole number of recipe outputs, so four planks from one log) and `"craft"` or `"smelt"`, so a script can run each one with [`craft`](craft.md) or [`smelt`](smelt.md). `[]` when the bot carries `n` of `item` already.
+- `"inputs"`: for each `"smelt"` step, what it smelts, as `smelt` takes it: the step's item id to the list of item ids any of which smelts into it. `smelt` takes the input, not what it makes.
 
 ```text
 needs("stone_pickaxe")
 {"gather": {"minecraft:cobblestone": 3, "minecraft:oak_log": 1},
- "crafts": [("minecraft:oak_planks", 4, "craft"), ("minecraft:stick", 4, "craft"), ("minecraft:stone_pickaxe", 1, "craft")]}
+ "crafts": [("minecraft:oak_planks", 4, "craft"), ("minecraft:stick", 4, "craft"), ("minecraft:stone_pickaxe", 1, "craft")],
+ "inputs": {}}
 ```
+
+[`lib/craft`](../modules/lib/craft.md)'s `craft_all` runs these steps for a script.
 
 ## Pauses
 
@@ -54,7 +58,7 @@ else:
         if how == "craft":
             craft(item, n, table=table)
         else:
-            smelt(item, n)
+            smelt(r["inputs"][item], n)
 ```
 
 ## See also
