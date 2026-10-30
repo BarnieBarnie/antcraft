@@ -2,15 +2,20 @@
 # lib.craft.craft_all("stone_pickaxe").
 # A module of the mod's default library (lib/).
 #
-# It gathers nothing: fetch the raw items first, with take from a chest or by mining.
+# craft_all and craft_here gather nothing: fetch the raw items first, with take from a chest or by mining, or let
+# obtain take them from chests.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+from lib.inv import take_all
 from lib.shaft import result
 
 # smelt loads at most a stack a call.
 STACK = 64
+
+# The block craft_here or smelt_here could not put down, by the reason it gives.
+STATIONS = {"no_table": "crafting_table", "no_furnace": "furnace"}
 
 
 def craft_all(item, n=1, table=None, furnace=None):
@@ -36,6 +41,39 @@ def craft_all(item, n=1, table=None, furnace=None):
                     return result(r.reason)
                 k -= min(k, STACK)
     return result()
+
+
+def obtain(item, n=1, chests=None):
+    """Makes the bot carry n of item: the raw items needs(item, n) lists, taken from chests (a list of positions; None:
+    the colony's core, none outside a colony) one after the other, then craft_here(item, n). Where the bot cannot put a
+    crafting table or furnace down, it obtains one the same way and tries again. Gives result(): ok,
+    missing_ingredients with missing, what the chests lack, before it crafts anything, or craft_here's result."""
+    if count(item) >= n:
+        return result()
+    if chests is None:
+        c = colony()
+        chests = [c["core"]] if c else []
+    short = fetch(needs(item, n)["gather"], chests)
+    if short:
+        return result("missing_ingredients", None, short)
+    r = craft_here(item, n)
+    station = STATIONS.get(r["reason"])
+    if station and count(station) == 0 and obtain(station, 1, chests)["ok"]:
+        r = craft_here(item, n)
+    return r
+
+
+def fetch(more, chests):
+    """Takes more (item to how many more than the bot carries) from each chest in turn; gives what is still short."""
+    need = {}
+    for item, k in more.items():
+        need[item] = count(item) + k
+    short = more
+    for chest in chests:
+        short = take_all(chest, need)
+        if not short:
+            break
+    return short
 
 
 def craft_here(item, n=1):

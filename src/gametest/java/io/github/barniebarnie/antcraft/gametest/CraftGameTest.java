@@ -4,8 +4,10 @@ import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.at;
 import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.expect;
 import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.fillInventory;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;
@@ -462,6 +464,66 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
 		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "raw_iron"), List.of("False missing_ingredients 0 1 1"),
 			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	// lib.craft.obtain
+
+	/** Prints what {@code lib.craft.obtain(args)} gives and then {@code counts}, the {@code count} of each item. */
+	private static String obtain(String args, String... counts) {
+		return craftAll(args, counts).replace("craft_all(", "obtain(");
+	}
+
+	/**
+	 * An empty bot, a chest of logs and cobblestone, no table: it takes the log the pickaxe needs, then the one the table
+	 * it crafts takes the planks of, and ends with the pickaxe and the table carried.
+	 */
+	@GameTest(maxTicks = 180)
+	public void obtainTakesFromAChestAndCrafts(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5), new ItemStack(Items.COBBLESTONE, 10));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "crafting_table"),
+			List.of("True None {} 1 1"), () -> {
+				tablesInTheArea(helper, 0).run();
+				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
+				helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 7, "cobblestone left " + chest.countItem(Items.COBBLESTONE));
+			});
+	}
+
+	/** The log in one chest, the cobblestone in another, a table in the area: both chests are emptied for the pickaxe. */
+	@GameTest(maxTicks = 20)
+	public void obtainUsesEveryChest(GameTestHelper helper) {
+		Container logs = chest(helper, new ItemStack(Items.OAK_LOG, 1));
+		helper.setBlock(5, 1, 1, Blocks.CHEST);
+		Container stone = container(helper, new BlockPos(5, 1, 1));
+		stone.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
+		helper.setBlock(1, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + ", " + at(helper, 5, 1, 1) + "]", "stone_pickaxe"),
+			List.of("True None {} 1"), () -> helper.assertTrue(logs.isEmpty() && stone.isEmpty(), "a chest is not empty"));
+	}
+
+	/** No chests given, the bot in a colony: it takes from the Colony Core. */
+	@GameTest(maxTicks = 20)
+	public void obtainTakesFromTheColonyCore(GameTestHelper helper) {
+		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
+		Container core = container(helper, CHEST);
+		core.setItem(0, new ItemStack(Items.OAK_LOG, 1));
+		core.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
+		helper.setBlock(1, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		ColonyManager manager = ColonyManager.get(helper.getLevel());
+		manager.join(bot, manager.byCore(helper.absolutePos(CHEST)).orElseThrow());
+		expect(helper, bot, obtain("'stone_pickaxe'", "stone_pickaxe"), List.of("True None {} 1"),
+			() -> helper.assertTrue(core.isEmpty(), "the core is not empty"));
+	}
+
+	/** No cobblestone anywhere: it crafts nothing and gives what it still lacks. */
+	@GameTest(maxTicks = 20)
+	public void obtainWithTooLittleCraftsNothing(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.OAK_LOG, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "oak_planks", "oak_log"),
+			List.of("False missing_ingredients {'minecraft:cobblestone': 3} 0 0 1"));
 	}
 
 	// smelt

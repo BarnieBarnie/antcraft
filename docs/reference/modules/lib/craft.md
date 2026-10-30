@@ -1,6 +1,6 @@
 # `lib/craft`
 
-Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md).
+Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md); `obtain` also takes the raw items from chests with [`lib/inv`](inv.md)'s `take_all`.
 
 ## `craft_all(item, n=1, table=None, furnace=None)`
 
@@ -34,6 +34,15 @@ Mining the furnace back takes a pickaxe: without one it stays where it was put d
 - **Returns** `smelt`'s [`Result`](../../types/result.md), or its `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
 - **Pauses** yes, as `smelt` does, and while it crafts, places and mines the furnace.
 
+## `obtain(item, n=1, chests=None)`
+
+Makes the bot carry `n` of `item`, raw items fetched from storage: where it carries `n` already it is done. Otherwise it asks [`needs`](../../crafting/needs.md)`(item, n)` what to gather and takes that from each chest of `chests` in turn (a list of [`Pos`](../../types/pos.md); `None`: the [`colony`](../../colony/colony.md)'s Colony Core, no chest for a bot in no colony), with [`lib/inv`](inv.md)'s `take_all`, so raw items spread over several chests are all used. Then it runs `craft_here(item, n)`, which puts a crafting table and furnace down as need be.
+
+Where `craft_here` gives `no_table` or `no_furnace` and the bot carries none, it obtains the table or furnace the same way, from the same chests, and runs `craft_here` once more: a table crafted from the planks the item's sticks were made from takes another log from the chest. That table or furnace stays carried.
+
+- **Returns** a dict as `craft_all` gives: `ok`, or `missing_ingredients` with `missing`, item id to how many the chests lack, before it crafts anything (what it could take stays taken), or what `craft_here` gives.
+- **Pauses** yes, while it walks to each chest and as `craft_here` does.
+
 The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block)` places a carried block on such a spot and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
 
 ## Example
@@ -65,6 +74,16 @@ With raw iron, sticks, coal, 8 cobblestone and a pickaxe carried, `craft_here` a
 import lib.craft
 
 r = lib.craft.craft_here("iron_pickaxe")
+```
+
+An empty-handed bot beside a chest of logs and cobblestone:
+
+```python
+import lib.craft
+
+r = lib.craft.obtain("stone_pickaxe", chests=[memory["chest"]])
+if not r["ok"]:
+    warn(f"no pickaxe: {r['reason']} {r['missing']}")
 ```
 
 ## See also
