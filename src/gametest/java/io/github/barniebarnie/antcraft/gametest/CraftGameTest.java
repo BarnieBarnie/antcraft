@@ -431,7 +431,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 
 	/** Prints what {@code lib.craft.smelt_here(args)} gives and then {@code counts}, the {@code count} of each item. */
 	private static String smeltHere(String args, String... counts) {
-		StringBuilder printed = new StringBuilder("r.ok, r.reason");
+		StringBuilder printed = new StringBuilder("r['ok'], r['reason']");
 		for (String item : counts) {
 			printed.append(", count('").append(item).append("')");
 		}
@@ -476,6 +476,45 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
 		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "raw_iron"), List.of("False missing_ingredients 0 1 1"),
 			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	/** A furnace, raw iron and coal but no pickaxe to mine a furnace back: it places none and smelts nothing. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereWithoutAPickaxePlacesNoFurnace(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "raw_iron", "coal"), List.of("False no_tool 0 1 1 1"),
+			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	/** Eight cobblestone and no pickaxe: it crafts no furnace either. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereWithoutAPickaxeCraftsNoFurnace(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "furnace", "cobblestone", "crafting_table"), List.of("False no_tool 0 8 1"),
+			() -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
+	/** No pickaxe: craft_here refuses an iron pickaxe before it crafts the sticks, since its furnace could not be taken back. */
+	@GameTest(maxTicks = 20)
+	public void craftHereWithoutAPickaxeForTheFurnaceCraftsNothing(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 3));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		expect(helper, bot, craftHere("'iron_pickaxe'", "iron_ingot", "stick", "oak_planks", "raw_iron", "furnace"),
+			List.of("False no_tool {} 0 0 2 3 1"), inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
 	// lib.craft.obtain

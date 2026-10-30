@@ -43,9 +43,9 @@ def craft_all(item, n=1, table=None, furnace=None):
                 if furnace is None:
                     r = smelt_here(plan["inputs"][step], min(k, STACK))
                 else:
-                    r = smelt(plan["inputs"][step], min(k, STACK), furnace=furnace)
-                if not r:
-                    return result(r.reason)
+                    r = result(smelt(plan["inputs"][step], min(k, STACK), furnace=furnace).reason)
+                if not r["ok"]:
+                    return r
                 k -= min(k, STACK)
     return result()
 
@@ -112,11 +112,13 @@ def craft_here(item, n=1):
     """craft_all(item, n), and where a step finds no crafting table within reach, one placed beside the bot for it: the
     carried one, else one crafted from carried planks or logs. The placed table is mined back after, also when a step
     fails. Gives craft_all's result, missing_ingredients with missing where plan(item, n) lacks raw items, before it
-    crafts anything, so a table or furnace is not made from what the item needs, or no_table where no table could be
-    placed."""
-    short = plan(item, n)["gather"]
-    if short:
-        return result("missing_ingredients", None, short)
+    crafts anything, so a table or furnace is not made from what the item needs, no_tool, also before it crafts
+    anything, where a step smelts in a furnace it could not mine back, or no_table where no table could be placed."""
+    p = plan(item, n)
+    if p["gather"]:
+        return result("missing_ingredients", None, p["gather"])
+    if "smelt" in [step[2] for step in p["crafts"]] and not can_take_back_furnace():
+        return result("no_tool")
     r = craft_all(item, n)
     if r["reason"] != "no_table":
         return r
@@ -134,22 +136,30 @@ def craft_here(item, n=1):
 def smelt_here(item, n=1, fuel=None):
     """smelt(item, n, fuel=fuel), and where no furnace is within reach, one placed beside the bot for it: the carried
     one, else one crafted from 8 cobblestone with craft_here. The placed furnace is mined back after, with anything left
-    in it, also when the smelt fails; that takes a pickaxe. Gives smelt's Result, or its no_furnace where no furnace
-    could be crafted or placed."""
+    in it, also when the smelt fails. Gives result(): ok, smelt's reason, no_tool where the bot carries no pickaxe to
+    mine a furnace back (it places and crafts none), or no_furnace where no furnace could be crafted or placed."""
     r = smelt(item, n, fuel=fuel)
     if r or r.reason != "no_furnace":
-        return r
+        return result(r.reason)
+    if not can_take_back_furnace():
+        return result("no_tool")
     if count("furnace") == 0 and not craft_here("furnace")["ok"]:
-        return r
+        return result(r.reason)
     spot = place_beside("furnace")
     if spot is None:
-        return r
+        return result(r.reason)
     try:
-        return smelt(item, n, furnace=spot, fuel=fuel)
+        return result(smelt(item, n, furnace=spot, fuel=fuel).reason)
     finally:
         take_back(spot, "furnace")
         # What a failed smelt left in the furnace spills when it is mined.
         pick_up(radius=3)
+
+
+def can_take_back_furnace():
+    """Whether a furnace smelt_here puts down comes back: one is within REACH, so none is put down, or the bot carries a
+    pickaxe to mine it."""
+    return find_nearest("furnace", radius=REACH) is not None or count("#minecraft:pickaxes") > 0
 
 
 def place_beside(block):

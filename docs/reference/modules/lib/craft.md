@@ -20,18 +20,18 @@ An item the game does not know, or an `n` outside 1 to 1000000, stops the script
 
 `craft_all(item, n)` for a bot away from any crafting table. Where a step finds no table within reach (`no_table`), it puts one down beside the bot, as a player does: the table it carries, else one it first crafts from carried planks or logs. It places it on the first free spot north, south, east or west of the bot's feet, runs `craft_all(item, n, table=spot)`, then mines the table and picks it up again, also when a step fails. With a table within reach, or only 2x2 recipes, it is `craft_all` as is and places nothing.
 
-Before it crafts anything it asks `plan(item, n)` (below) what to gather, the table and furnace it must craft included: with planks for the item or a table but not both, it crafts nothing and gives `missing_ingredients` with the logs both lack.
+Before it crafts anything it asks `plan(item, n)` (below) what to gather, the table and furnace it must craft included: with planks for the item or a table but not both, it crafts nothing and gives `missing_ingredients` with the logs both lack. Where a step smelts, no furnace is within `REACH` and the bot carries no pickaxe, it crafts nothing and gives `no_tool`, as `smelt_here` would for the furnace it could not mine back.
 
-- **Returns** what `craft_all` gives for the item, `missing_ingredients` with `plan`'s `gather` before it crafts anything, or `no_table` (the steps before it made) where no spot beside the bot took a table.
+- **Returns** what `craft_all` gives for the item, `missing_ingredients` with `plan`'s `gather` or `no_tool` before it crafts anything, or `no_table` (the steps before it made) where no spot beside the bot took a table.
 - **Pauses** yes, as `craft_all` does, and while it mines the table back.
 
 ## `smelt_here(item, n=1, fuel=None)`
 
 [`smelt`](../../crafting/smelt.md)`(item, n, fuel=fuel)` for a bot away from any furnace: `item` is the input, such as `"raw_iron"`. Where no furnace is within reach (`no_furnace`), it puts one down beside the bot as `craft_here` does a table: the furnace it carries, else one it first crafts from 8 carried cobblestone with `craft_here`. It smelts in it, then mines the furnace and picks it up again, with anything a failed smelt left in it, also when the smelt fails. With a furnace within reach it is `smelt` as is.
 
-Mining the furnace back takes a pickaxe: without one it stays where it was put down.
+Mining the furnace back takes a pickaxe: where it would put one down and the bot carries no `#minecraft:pickaxes`, it places and crafts none and gives `no_tool`, with the inventory as it was.
 
-- **Returns** `smelt`'s [`Result`](../../types/result.md), or its `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
+- **Returns** a dict as `craft_all` gives: `ok`, or `smelt`'s reason (see [`Result`](../../types/result.md)), `no_tool` where the bot carries no pickaxe to mine the furnace back, or `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
 - **Pauses** yes, as `smelt` does, and while it crafts, places and mines the furnace.
 
 ## `obtain(item, n=1, chests=None)`
@@ -45,7 +45,7 @@ Makes the bot carry `n` of `item`, raw items fetched from storage: where it carr
 
 Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`. Where it carries one, it [`equip`](../../inventory/equip.md)s the best: netherite, diamond, iron, stone, golden, then wooden, by the tier in the item id; a tool of another tier (from a mod) only where it carries none of these. Otherwise it runs `obtain(f"{tier}_{kind}", 1, chests)` for each tier from diamond, iron and stone down to wooden, stops at the first that works and holds that tool.
 
-A tier the bot lacks raw items for fails before anything is crafted, so trying the better tiers first uses up nothing; what `obtain` could take from the chests for it stays taken. It does not take a finished tool from the chests: [`take`](../../crafting/take.md) one first for that.
+A tier the bot lacks raw items for fails before anything is crafted, so trying the better tiers first uses up nothing, and so does the iron tier for a bot with no pickaxe and no furnace within reach (`no_tool`); what `obtain` could take from the chests for it stays taken. It does not take a finished tool from the chests: [`take`](../../crafting/take.md) one first for that.
 
 - **Returns** a dict as `craft_all` gives: `ok`, or what `obtain` gave for the wooden tool where no tier could be made, such as `missing_ingredients`.
 - **Pauses** yes, as `obtain` does; not where the bot carries a tool of `kind`.
