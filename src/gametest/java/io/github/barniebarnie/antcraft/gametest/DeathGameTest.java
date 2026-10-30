@@ -425,4 +425,51 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		helper.assertFalse(colony.members().contains(id), "still a member: " + colony.members());
 		helper.succeed();
 	}
+
+	/**
+	 * A dead bot whose body is gone, waiting to respawn, is removed by its UUID (#464): its owner's {@code bot <uuid> remove}
+	 * drops the respawn, here waiting in the Nether, and takes it out of its colony.
+	 */
+	@GameTest(maxTicks = 20)
+	public void removeByUuidReachesABotWaitingToRespawn(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)), Level.NETHER);
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		bot.kill(helper.getLevel());
+		bot.remove(Entity.RemovalReason.KILLED); // the body is gone
+		helper.assertTrue(helper.getLevel().getEntity(id) == null, "the body is still there");
+		helper.assertTrue(BotRespawns.get(nether).pending(id) != null, "no respawn waits");
+
+		List<String> answer = BotScripts.commandAsPlayer(helper, owner, "antcraft bot " + id + " remove");
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.remove[1]")), "answer " + answer);
+		helper.assertTrue(BotRespawns.get(nether).pending(id) == null, "a respawn still waits");
+		helper.assertFalse(colony.members().contains(id), "still a member: " + colony.members());
+		helper.succeed();
+	}
+
+	/** A player cannot remove another player's bot waiting to respawn (#464); an operator can. */
+	@GameTest(maxTicks = 20)
+	public void onlyItsOwnerOrAnOperatorRemovesABotWaitingToRespawn(GameTestHelper helper) {
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		UUID id = other.getUUID();
+		other.setOwner(UUID.randomUUID());
+		other.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		other.kill(helper.getLevel());
+		other.remove(Entity.RemovalReason.KILLED);
+
+		List<String> refused = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + id + " remove");
+		helper.assertTrue(refused.size() == 1 && refused.getFirst().endsWith(" is not your bot"), "answer " + refused);
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) != null, "removed another player's waiting bot");
+		List<String> removed = BotScripts.command(helper, "antcraft bot " + id + " remove");
+		helper.assertTrue(removed.equals(List.of("commands.antcraft.bot.remove[1]")), "answer " + removed);
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) == null, "the operator did not remove it");
+		helper.succeed();
+	}
 }

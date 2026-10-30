@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyActions;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.item.CoreScript;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
@@ -45,7 +46,9 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
@@ -295,14 +298,56 @@ public final class AntCraftCommands {
 		return bots.size();
 	}
 
-	/** Removes {@code bots} for good ({@link AntBot#removeForGood}). */
-	private static int remove(CommandSourceStack source, List<AntBot> bots) {
+	/**
+	 * Removes {@code bots} for good ({@link AntBot#removeForGood}), or, where a bot given by its UUID is dead with its body
+	 * gone, drops the respawn it waits for in every level, which takes it out of its colony (#464).
+	 */
+	private static int remove(CommandContext<CommandSourceStack> ctx, BotsArgument argument) throws CommandSyntaxException {
+		CommandSourceStack source = ctx.getSource();
+		List<AntBot> bots;
+		try {
+			bots = argument.get(ctx);
+		} catch (CommandSyntaxException noEntity) {
+			Optional<UUID> id = ctx.getNodes().stream().filter(node -> node.getNode().getName().equals("bots")).findFirst()
+				.flatMap(node -> parseUuid(node.getRange().get(ctx.getInput())));
+			if (id.isEmpty()) {
+				throw noEntity;
+			}
+			return removeWaiting(source, id.get(), noEntity);
+		}
 		if (!checkAny(source, bots)) {
 			return 0;
 		}
 		bots.forEach(bot -> bot.removeForGood((ServerLevel) bot.level()));
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.remove", bots.size()), false);
 		return bots.size();
+	}
+
+	/** Drops the respawn the dead bot {@code id} waits for, if the source may control it; {@code noEntity} where none waits. */
+	private static int removeWaiting(CommandSourceStack source, UUID id, CommandSyntaxException noEntity) throws CommandSyntaxException {
+		MinecraftServer server = source.getServer();
+		BotRespawns.Pending waiting = null;
+		for (ServerLevel level : server.getAllLevels()) {
+			waiting = waiting != null ? waiting : BotRespawns.get(level).pending(id);
+		}
+		if (waiting == null) {
+			throw noEntity;
+		}
+		if (!mayControl(source, waiting.bot().read("Owner", UUIDUtil.CODEC).orElse(null))) {
+			source.sendFailure(Component.translatable("commands.antcraft.bot.not_yours", id.toString()));
+			return 0;
+		}
+		server.getAllLevels().forEach(level -> BotRespawns.get(level).forget(server, id));
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.remove", 1), false);
+		return 1;
+	}
+
+	private static Optional<UUID> parseUuid(String text) {
+		try {
+			return Optional.of(UUID.fromString(text));
+		} catch (IllegalArgumentException notUuid) {
+			return Optional.empty();
+		}
 	}
 
 	/**
@@ -449,7 +494,7 @@ public final class AntCraftCommands {
 			.then(Commands.literal("run")
 				.then(scriptArgument((ctx, name, args) -> runScript(ctx.getSource(), bots.get(ctx), name, args))))
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
-			.then(Commands.literal("remove").executes(ctx -> remove(ctx.getSource(), bots.get(ctx))))
+			.then(Commands.literal("remove").executes(ctx -> remove(ctx, bots)))
 			.then(Commands.literal("join").then(Commands.argument("core", BlockPosArgument.blockPos())
 				.executes(ctx -> join(ctx.getSource(), bots.get(ctx), BlockPosArgument.getBlockPos(ctx, "core")))))
 			.then(Commands.literal("leave").executes(ctx -> leave(ctx.getSource(), bots.get(ctx))))
@@ -581,8 +626,13 @@ public final class AntCraftCommands {
 
 	/** Whether the source may use the {@code bot} commands on {@code bot}: the console and command blocks run as operators. */
 	private static boolean mayControl(CommandSourceStack source, AntBot bot) {
+		return mayControl(source, bot.getOwner());
+	}
+
+	/** Whether the source may use the {@code bot} commands on a bot owned by {@code owner}. */
+	private static boolean mayControl(CommandSourceStack source, @Nullable UUID owner) {
 		ServerPlayer player = source.getPlayer();
-		return player == null || PlayerLimits.mayControl(bot.getOwner(), player.getUUID(), OPERATOR.test(source));
+		return player == null || PlayerLimits.mayControl(owner, player.getUUID(), OPERATOR.test(source));
 	}
 
 	/** The nearest bot the source may control within {@link #NEAREST_RANGE}, so another player's bot nearer does not get in the way. */
