@@ -42,6 +42,7 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.DimensionArgument;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
@@ -63,7 +64,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft script list   (also any player)
  * /antcraft script edit &lt;script&gt;   (also any player; opens the script editor, which only operators may save from)
  * /antcraft script reload
- * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt;|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt; [dimension]|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
@@ -351,14 +352,15 @@ public final class AntCraftCommands {
 	}
 
 	/**
-	 * Makes {@code bots} members of the colony whose core is at {@code core} in the source's level, leaving the colony they
-	 * were in ({@link ColonyManager#join}), if the source may change it ({@link ColonyActions#mayAct}, as a Bot Core checks).
+	 * Makes {@code bots} members of the colony whose core is at {@code core} in {@code level} (the source's unless the
+	 * command names a dimension, #465), leaving the colony they were in ({@link ColonyManager#join}), if the source may
+	 * change it ({@link ColonyActions#mayAct}, as a Bot Core checks).
 	 */
-	private static int join(CommandSourceStack source, List<AntBot> bots, BlockPos core) {
+	private static int join(CommandSourceStack source, List<AntBot> bots, BlockPos core, ServerLevel level) {
 		if (!checkAny(source, bots)) {
 			return 0;
 		}
-		ColonyManager colonies = ColonyManager.get(source.getLevel());
+		ColonyManager colonies = ColonyManager.get(level);
 		Optional<Colony> colony = colonies.byCore(core);
 		if (colony.isEmpty()) {
 			source.sendFailure(Component.translatable("commands.antcraft.bot.join.no_colony", core.toShortString()));
@@ -488,7 +490,7 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
-	/** {@code run <script> [args]|stop|remove|join <core pos>|leave|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
+	/** {@code run <script> [args]|stop|remove|join <core pos> [dimension]|leave|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
 	private static <T extends ArgumentBuilder<CommandSourceStack, T>> T botCommands(T node, BotsArgument bots) {
 		return node
 			.then(Commands.literal("run")
@@ -496,7 +498,10 @@ public final class AntCraftCommands {
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("remove").executes(ctx -> remove(ctx, bots)))
 			.then(Commands.literal("join").then(Commands.argument("core", BlockPosArgument.blockPos())
-				.executes(ctx -> join(ctx.getSource(), bots.get(ctx), BlockPosArgument.getBlockPos(ctx, "core")))))
+				.executes(ctx -> join(ctx.getSource(), bots.get(ctx), BlockPosArgument.getBlockPos(ctx, "core"), ctx.getSource().getLevel()))
+				.then(Commands.argument("dimension", DimensionArgument.dimension())
+					.executes(ctx -> join(ctx.getSource(), bots.get(ctx), BlockPosArgument.getBlockPos(ctx, "core"),
+						DimensionArgument.getDimension(ctx, "dimension"))))))
 			.then(Commands.literal("leave").executes(ctx -> leave(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("edit").executes(ctx -> editBotScript(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("status").executes(ctx -> scriptStatus(ctx.getSource(), bots.get(ctx))))

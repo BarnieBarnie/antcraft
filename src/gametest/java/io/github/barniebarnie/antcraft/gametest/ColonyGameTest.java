@@ -902,6 +902,30 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/**
+	 * A bot in the Nether joins a colony whose core is in the Overworld by naming the dimension after the core's position
+	 * (#465); without it, {@code join} looks in the Nether, the command's level, and finds no core. The bot is moved as a
+	 * portal moves it but not added to the Nether, so it runs the command as {@code @s}.
+	 */
+	@GameTest(maxTicks = 20)
+	public void aBotInTheNetherJoinsAColonyInTheOverworldByNamingTheDimension(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 1, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		AntBot moved = Objects.requireNonNull(ModEntities.ANT_BOT.create(nether, EntitySpawnReason.DIMENSION_TRAVEL));
+		moved.restoreFrom(bot);
+		bot.remove(Entity.RemovalReason.CHANGED_DIMENSION);
+
+		List<String> here = BotScripts.command(helper, moved, "execute in minecraft:the_nether run antcraft bot @s join " + at(helper, 1, 1, 1));
+		helper.assertTrue(moved.getColonyId() == null, "joined without the dimension");
+		helper.assertTrue(here.equals(List.of("No Colony Core at " + colony.core().toShortString())), "answer " + here);
+		List<String> answer = BotScripts.command(helper, moved,
+			"execute in minecraft:the_nether run antcraft bot @s join " + at(helper, 1, 1, 1) + " minecraft:overworld");
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.join[1, " + colony.core().toShortString() + "]")), "answer " + answer);
+		helper.assertTrue(colony.id().equals(moved.getColonyId()) && colony.members().contains(moved.getUUID()), "not a member: " + colony.members());
+		helper.succeed();
+	}
+
 	/** {@code /antcraft bot leave} (#459) takes a bot out of its colony. */
 	@GameTest(maxTicks = 20)
 	public void leaveTakesABotOutOfItsColony(GameTestHelper helper) {
