@@ -11,6 +11,8 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.retry
+
 LADDER = "minecraft:ladder"
 # What shuts the hatch, so mobs and players do not fall in: bots open it to climb through. It sits in the top half
 # of the hatch, flush with the ground.
@@ -161,16 +163,12 @@ def dig(p, opened, stand, fall=False):
 
 def put_block(p, item, ids, facing=None, half=None):
     """Places item at p, facing and in half as place() does, until a block of ids stands there."""
-    r = None
-    for _ in range(TRIES):
-        if is_block(p, ids):
-            return None
-        r = place(p, item, facing, half)
-        if not r and r.reason not in AGAIN:
-            return result(r.reason, p)
-        if not r:
-            wait(4)
-    return gave_up(r, p)
+    if is_block(p, ids):
+        return None
+    r = lib.retry.retry(place, (p, item, facing, half), TRIES, AGAIN)
+    if r or is_block(p, ids):
+        return None
+    return gave_up(r, p) if r.reason in AGAIN else result(r.reason, p)
 
 
 def ladders(m, lowest):

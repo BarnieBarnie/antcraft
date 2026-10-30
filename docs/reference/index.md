@@ -158,6 +158,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/shaft`](modules/lib/shaft.md): `dig_shaft(levels)`, `to_level(level)`, `to_surface()`, `shaft(levels=None)`.
 - [`lib/mine`](modules/lib/mine.md): `mine_level(level, rounds=1)`, `site(r=0)`.
 - [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`.
+- [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4)`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ## Notes on actions

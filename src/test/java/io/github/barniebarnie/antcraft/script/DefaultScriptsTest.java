@@ -76,6 +76,7 @@ class DefaultScriptsTest {
 		assertTrue(bundled.containsKey("lib/shaft.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("lib/mine.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("lib/craft.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("lib/retry.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 

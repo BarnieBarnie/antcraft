@@ -37,6 +37,7 @@ import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.item.ItemStack;
@@ -240,6 +241,35 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		List<String> status = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + own.getStringUUID() + " status");
 		helper.assertTrue(status.size() == 1 && status.getFirst().startsWith("commands.antcraft.bot.status["), "status " + status);
 		helper.succeed();
+	}
+
+	/**
+	 * {@code lib.retry.retry} (#449) with {@code equip}, which is done at once: a success returns without waiting, a hard
+	 * reason at once, and a passing one is tried {@code tries} times with {@code delay} ticks between tries.
+	 */
+	@GameTest(maxTicks = 40)
+	public void retryTriesAgainOnlyOnPassingReasons(GameTestHelper helper) {
+		String name = BotScripts.libraryScript(helper, "retry_", """
+			import lib.retry
+			calls = []
+			def act(item):
+			    calls.append(item)
+			    return equip(item)
+			print(lib.retry.retry(act, ("stone",), delay=20).ok, len(calls))
+			print(lib.retry.retry(act, ("diamond",), delay=20).reason, len(calls))
+			print(lib.retry.retry(act, ("diamond",), tries=3, again=("no_item",), delay=5).reason, len(calls))
+			""");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			List<BotLog.Entry> lines = bot.getLog().last(10, Output.Level.PRINT);
+			helper.assertTrue(lines.size() == 3, "log " + lines);
+			helper.assertTrue(lines.stream().map(BotLog.Entry::text).toList().equals(List.of("True 1", "no_item 2", "no_item 5")), "log " + lines);
+			long start = lines.get(0).tick();
+			helper.assertTrue(lines.get(1).tick() == start && lines.get(2).tick() == start + 10, "log " + lines);
+		});
 	}
 
 	@GameTest(maxTicks = 60)
