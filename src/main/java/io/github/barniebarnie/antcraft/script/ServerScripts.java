@@ -8,28 +8,47 @@ import io.github.barniebarnie.antcraft.script.lang.Parser;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.resource.v1.ResourceLoader;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.resources.FileToIdConverter;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.packs.PackType;
+import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.server.packs.resources.SimplePreparableReloadListener;
+import net.minecraft.util.profiling.ProfilerFiller;
 import net.minecraft.world.level.storage.LevelResource;
 
 /**
- * The server's script library, loaded from {@code config/antcraft/scripts/} and {@code <world>/antcraft/scripts/} (the
- * world folder wins on a name clash) when the server starts, and again on {@code /antcraft script reload}.
+ * The server's script library, loaded from data packs ({@code data/<namespace>/script/**.py}),
+ * {@code config/antcraft/scripts/} and {@code <world>/antcraft/scripts/} (the world folder wins on a name clash, and both
+ * folders over a data pack) when the server starts, and again on {@code /antcraft script reload} and {@code /reload}.
  */
 public final class ServerScripts {
+	public static final Identifier RELOADER = AntCraft.id("scripts");
+
 	private static ScriptLibrary library = ScriptLibrary.load(List.of());
+	private static volatile Map<Identifier, String> packScripts = Map.of();
 
 	private ServerScripts() {
 	}
 
 	public static void register() {
+		ResourceLoader.get(PackType.SERVER_DATA).registerReloadListener(RELOADER, new Loader());
 		ServerLifecycleEvents.SERVER_STARTED.register(ServerScripts::reload);
-		// Cached selectors know which tags exist; a reload or another world's data packs may change that.
-		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> Selector.clearCache());
+		ServerLifecycleEvents.END_DATA_PACK_RELOAD.register((server, resources, success) -> {
+			// Cached selectors know which tags exist; a reload or another world's data packs may change that.
+			Selector.clearCache();
+			if (success) {
+				reload(server);
+			}
+		});
 		ServerLifecycleEvents.SERVER_STOPPED.register(server -> Selector.clearCache());
 	}
 
@@ -45,12 +64,27 @@ public final class ServerScripts {
 		return library;
 	}
 
+	/** The data pack scripts the last data reload found, sources by id. */
+	public static Map<Identifier, String> packScripts() {
+		return packScripts;
+	}
+
+	/** Replaces the data pack scripts; the library takes them on its next {@link #reload}. */
+	public static void setPackScripts(Map<Identifier, String> scripts) {
+		packScripts = Map.copyOf(scripts);
+	}
+
+	/** Where {@code script} came from, for {@code script list}: "config", "world" or "data pack". */
+	public static String origin(MinecraftServer server, ScriptLibrary.Script script) {
+		return script.path().startsWith(configFolder()) ? "config" : script.path().startsWith(worldFolder(server)) ? "world" : "data pack";
+	}
+
 	/** What a reload found, and how many running bots it restarted because their script changed. */
 	public record Reload(ScriptLibrary library, int restarted) {
 	}
 
 	/**
-	 * Loads the script folders again, creating them if missing. Bots running a library script whose file, or the file of a
+	 * Loads the script folders again, creating them if missing, with the data pack scripts of the last data reload. Bots running a library script whose file, or the file of a
 	 * module it imported, changed start it again from the top; one whose script no longer compiles is stopped, with the
 	 * error in its log and its owner's chat.
 	 */
@@ -68,7 +102,7 @@ public final class ServerScripts {
 		} catch (IOException e) {
 			AntCraft.LOGGER.warn("Cannot copy the default scripts into {}", configFolder(), e);
 		}
-		library = ScriptLibrary.load(folders);
+		library = ScriptLibrary.load(packScripts, folders);
 		library.errors().forEach(script -> AntCraft.LOGGER.warn("Script {}: {}", script.name(), script.error()));
 		int restarted = 0;
 		for (ServerLevel level : server.getAllLevels()) {
@@ -116,5 +150,29 @@ public final class ServerScripts {
 		}
 		bot.runScript(script, run.args());
 		return true;
+	}
+
+	/** Reads the data pack scripts with the server's data; the server's end-of-reload event then reloads the library. */
+	private static final class Loader extends SimplePreparableReloadListener<Map<Identifier, String>> {
+		private static final FileToIdConverter FILES = new FileToIdConverter("script", ".py");
+
+		@Override
+		protected Map<Identifier, String> prepare(ResourceManager manager, ProfilerFiller profiler) {
+			Map<Identifier, String> scripts = new HashMap<>();
+			FILES.listMatchingResources(manager).forEach((file, resource) -> {
+				try {
+					scripts.put(FILES.fileToId(file), resource.readAllAsString());
+				} catch (IOException e) {
+					AntCraft.LOGGER.warn("Cannot read the script {}", file, e);
+				}
+			});
+			return scripts;
+		}
+
+		@Override
+		protected void apply(Map<Identifier, String> scripts, ResourceManager manager, ProfilerFiller profiler) {
+			setPackScripts(scripts);
+			AntCraft.LOGGER.info("Loaded {} data pack scripts", scripts.size());
+		}
 	}
 }

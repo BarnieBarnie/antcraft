@@ -13,10 +13,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import net.minecraft.resources.Identifier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Loading scripts from the config and world script folders (docs/features/scripts.md, Files and commands). */
+/** Loading scripts from the config and world script folders and data packs (docs/features/scripts.md, Files and commands). */
 class ScriptLibraryTest {
 	@TempDir
 	Path temp;
@@ -98,5 +100,41 @@ class ScriptLibraryTest {
 	@Test
 	void unknownNamesAreEmpty() {
 		assertTrue(ScriptLibrary.load(List.of()).get("miner").isEmpty());
+	}
+
+	@Test
+	void dataPackScriptsAreNamedByNamespaceAndPathWithDots() {
+		ScriptLibrary library = ScriptLibrary.load(Map.of(
+			Identifier.fromNamespaceAndPath("mypack", "lib/trees"), "x = 1\n",
+			Identifier.fromNamespaceAndPath("mypack", "miner"), "from mypack.lib.trees import x\nprint(x)\n"), List.of());
+		assertEquals(List.of("mypack.lib.trees", "mypack.miner"), library.scripts().stream().map(ScriptLibrary.Script::name).toList());
+		assertEquals("mypack:lib/trees.py", library.load("mypack.lib.trees").file());
+		assertNotNull(library.get("mypack.miner").orElseThrow().code());
+		assertTrue(library.isPackage("mypack"));
+		assertTrue(library.isPackage("mypack.lib"));
+		assertEquals(Path.of("data", "mypack", "script", "lib", "trees.py"), library.get("mypack.lib.trees").orElseThrow().path());
+		// The id names the same script.
+		assertEquals("x = 1\n", library.get("mypack:lib/trees").orElseThrow().source());
+	}
+
+	@Test
+	void theFoldersWinOverDataPacksOnANameClash() throws IOException {
+		Path config = temp.resolve("config");
+		Path world = temp.resolve("world");
+		write(config.resolve("mypack/miner.py"), "print('config')\n");
+		write(world.resolve("mypack/farmer.py"), "print('world')\n");
+		ScriptLibrary library = ScriptLibrary.load(Map.of(
+			Identifier.fromNamespaceAndPath("mypack", "miner"), "print('pack miner')\n",
+			Identifier.fromNamespaceAndPath("mypack", "farmer"), "print('pack farmer')\n",
+			Identifier.fromNamespaceAndPath("mypack", "fisher"), "print('pack fisher')\n"), List.of(config, world));
+		assertEquals("print('config')\n", library.get("mypack.miner").orElseThrow().source());
+		assertEquals("print('world')\n", library.get("mypack:farmer").orElseThrow().source());
+		assertEquals("print('pack fisher')\n", library.get("mypack.fisher").orElseThrow().source());
+	}
+
+	@Test
+	void aDataPackScriptThatDoesNotCompileKeepsItsError() {
+		ScriptLibrary library = ScriptLibrary.load(Map.of(Identifier.fromNamespaceAndPath("mypack", "bad"), "if True\n    pass\n"), List.of());
+		assertEquals("mypack:bad.py:1:8: expected ':' after 'if' condition", library.get("mypack.bad").orElseThrow().error());
 	}
 }

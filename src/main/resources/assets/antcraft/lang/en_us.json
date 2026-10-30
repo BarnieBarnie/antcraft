@@ -9,7 +9,7 @@
 	"message.antcraft.limit": "This world already has the maximum of %s bots.",
 	"commands.antcraft.status": "AntCraft is %s. Bots in this dimension: %s / %s",
 	"commands.antcraft.stop": "Stopped %s bot(s)",
-	"commands.antcraft.script.list": "%s script(s) in %s and %s:",
+	"commands.antcraft.script.list": "%s script(s) in %s, %s and data packs:",
 	"commands.antcraft.script.reload": "Loaded %s script(s), %s with errors; restarted %s bot(s)",
 	"commands.antcraft.script.unknown": "No script named %s (see /antcraft script list)",
 	"commands.antcraft.script.broken": "%s does not compile: %s",

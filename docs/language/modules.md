@@ -68,4 +68,10 @@ if not go_home():
     say("cannot find my way home")
 ```
 
+## Scripts from data packs
+
+A data pack's scripts, `data/<namespace>/script/**/*.py`, are modules too, named by their id with dots for the colon and the slashes: `data/mypack/script/lib/trees.py` has the id `mypack:lib/trees` and is imported with `import mypack.lib.trees` or `from mypack.lib.trees import x`. A namespace or path with a `-` cannot be imported, since a module name is made of Python names, but such a script can still be run. A script in a script folder of the same name, such as `config/antcraft/scripts/mypack/lib/trees.py`, wins (see [Script folders](../features/scripts.md#script-folders)).
+
+## Reloading
+
 A bot imports modules from the library as it was when its script started; `/antcraft script reload` restarts a bot whose script, or a module it imported, changed. The [standard library](not-supported.md#the-python-standard-library) of Python (`math`, `random`, ...) is not there.

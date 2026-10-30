@@ -17,7 +17,9 @@ import java.io.UncheckedIOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -288,6 +291,60 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one", "two")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
 		});
+	}
+
+	/**
+	 * A bot runs a data pack script ({@code data/packtest/script/greet.py} of the game test mod), which imports a module of
+	 * the same pack by id, and {@code script list} shows where it came from.
+	 */
+	@GameTest(maxTicks = 10)
+	public void runsADataPackScriptThatImportsAPackModule(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		List<String> listed = BotScripts.command(helper, "antcraft script list");
+		helper.assertTrue(listed.contains("packtest.greet (data pack)") && listed.contains("packtest.lib.words (data pack)"), "list answered " + listed);
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run packtest.greet");
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[packtest.greet, 1]")), "run answered " + started);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("from the pack")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
+		});
+	}
+
+	/**
+	 * A reload after a data pack script changed starts the new version on the bot running it. The test stands in for
+	 * {@code /reload} by giving the library a data pack script of its own, under an id of its own, and changing it.
+	 */
+	@GameTest(maxTicks = 15)
+	public void aChangedDataPackScriptRestartsTheBot(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		Identifier id = Identifier.fromNamespaceAndPath("packtest", "reload_" + UUID.randomUUID().toString().substring(0, 8));
+		String name = "packtest." + id.getPath();
+		GameTests.onEnd(helper, () -> setPackScript(id, null));
+		setPackScript(id, "print('one')\nwhile True:\n    wait(1)\n");
+		ServerScripts.reload(helper.getLevel().getServer());
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
+
+		helper.runAfterDelay(5, () -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			setPackScript(id, "print('two')\nwhile True:\n    wait(1)\n");
+			helper.assertTrue(ServerScripts.reload(helper.getLevel().getServer()).restarted() >= 1, "no bot restarted");
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one", "two")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
+		});
+	}
+
+	/** Adds, changes or with a null {@code source} removes the data pack script {@code id}, keeping the others. */
+	private static void setPackScript(Identifier id, @Nullable String source) {
+		Map<Identifier, String> scripts = new HashMap<>(ServerScripts.packScripts());
+		if (source == null) {
+			scripts.remove(id);
+		} else {
+			scripts.put(id, source);
+		}
+		ServerScripts.setPackScripts(scripts);
 	}
 
 	/**

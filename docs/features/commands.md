@@ -5,8 +5,8 @@
 | Command | Effect |
 |---------|--------|
 | `/antcraft status` | Shows whether bots are enabled, and the bot count |
-| `/antcraft script list` | Lists the scripts found in `config/antcraft/scripts/` and `<world>/antcraft/scripts/`, with the error of each that does not compile. A script is named by its path without `.py`, with dots for folders (`lib/trees.py` is `lib.trees`); the world folder wins on a name clash |
-| `/antcraft script reload` | Loads the script folders again; a bot running a script whose file changed starts the new version from the top (one that no longer compiles stops, with the error in its log and its owner's chat) |
+| `/antcraft script list` | Lists the scripts found in `config/antcraft/scripts/`, `<world>/antcraft/scripts/` and data packs, each with where it came from (`config`, `world` or `data pack`) and the error of each that does not compile. A script is named by its path without `.py`, with dots for folders (`lib/trees.py` is `lib.trees`), and a data pack script by its id with dots (`mypack:lib/trees` is `mypack.lib.trees`); the world folder wins on a name clash, and either folder over a data pack (see [Script folders](scripts.md#script-folders)) |
+| `/antcraft script reload` | Loads the script folders again, with the data pack scripts of the last `/reload`; a bot running a script whose file changed starts the new version from the top (one that no longer compiles stops, with the error in its log and its owner's chat) |
 | `/antcraft bot [bots] run <script> [args]` | Starts a script on bots (without `[bots]`, the nearest bot within 64 blocks), replacing what they ran; `[args]` are given to it as the list `ARGS`. A player who runs it becomes the bots' owner |
 | `/antcraft bot [bots] stop` | Stops the bots' scripts (formerly `/antcraft stop`); they then run `idle.py`, walking home and waiting there |
 | `/antcraft bot [bots] status` | Each bot's script, whether it is running, finished, failed or stopped, the line it is at, its current action and how many instructions it ran |

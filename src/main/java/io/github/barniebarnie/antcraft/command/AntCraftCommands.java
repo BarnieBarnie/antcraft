@@ -357,8 +357,9 @@ public final class AntCraftCommands {
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.script.list", library.scripts().size(),
 			ServerScripts.configFolder().toString(), ServerScripts.worldFolder(source.getServer()).toString()), false);
 		for (ScriptLibrary.Script script : library.scripts()) {
-			Component line = script.error() == null ? Component.literal(script.name())
-				: Component.literal(script.name() + ": " + script.error()).withStyle(ChatFormatting.RED);
+			String named = script.name() + " (" + ServerScripts.origin(source.getServer(), script) + ")";
+			Component line = script.error() == null ? Component.literal(named)
+				: Component.literal(named + ": " + script.error()).withStyle(ChatFormatting.RED);
 			source.sendSuccess(() -> line, false);
 		}
 		return library.scripts().size();

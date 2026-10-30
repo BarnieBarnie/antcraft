@@ -16,13 +16,16 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Stream;
+import net.minecraft.resources.Identifier;
 import org.jspecify.annotations.Nullable;
 
 /**
  * The scripts found in the script folders, compiled (docs/features/scripts.md, Files and commands). A script is named by its
  * path in its folder without {@code .py}, with dots for folders, as a module is imported: {@code lib/trees.py} is
  * {@code lib.trees}. A script that does not compile is kept with its error, so {@code /antcraft script list} can show it.
- * Its scripts are the modules scripts import, and its folders their packages.
+ * Its scripts are the modules scripts import, and its folders their packages. A data pack script
+ * {@code data/<namespace>/script/<path>.py} has the id {@code <namespace>:<path>} and is named as a module is, with dots
+ * for the colon and slashes: {@code mypack:lib/trees} is {@code mypack.lib.trees}.
  */
 public final class ScriptLibrary implements ModuleLoader {
 	/** One script file: compiled to {@code code}, or with the {@code compileError} that kept it from compiling. */
@@ -41,7 +44,20 @@ public final class ScriptLibrary implements ModuleLoader {
 
 	/** Loads the {@code .py} files of {@code folders}; on a name clash, the later folder wins. Missing folders are skipped. */
 	public static ScriptLibrary load(List<Path> folders) {
+		return load(Map.of(), folders);
+	}
+
+	/**
+	 * Loads the data pack scripts {@code packScripts}, sources by id, and the {@code .py} files of {@code folders}; on a name
+	 * clash, the later folder wins, and any folder wins over a data pack.
+	 */
+	public static ScriptLibrary load(Map<Identifier, String> packScripts, List<Path> folders) {
 		Map<String, Script> scripts = new TreeMap<>();
+		packScripts.forEach((id, source) -> {
+			Path path = Path.of("data", id.getNamespace(), "script", id.getPath() + ".py");
+			Script script = compile(name(id.toString()), path, id + ".py", source);
+			scripts.put(script.name(), script);
+		});
 		for (Path folder : folders) {
 			if (!Files.isDirectory(folder)) {
 				continue;
@@ -67,11 +83,20 @@ public final class ScriptLibrary implements ModuleLoader {
 		} catch (IOException e) {
 			return new Script(name, file, "", null, new CompileError(relative, 1, 1, "cannot be read: " + e.getMessage()));
 		}
+		return compile(name, file, relative, source);
+	}
+
+	private static Script compile(String name, Path path, String file, String source) {
 		try {
-			return new Script(name, file, source, Compiler.compile(Parser.parse(relative, source)), null);
+			return new Script(name, path, source, Compiler.compile(Parser.parse(file, source)), null);
 		} catch (CompileError e) {
-			return new Script(name, file, source, null, e);
+			return new Script(name, path, source, null, e);
 		}
+	}
+
+	/** The library name of a script or data pack id: {@code mypack:lib/trees} is {@code mypack.lib.trees}; a name stays as it is. */
+	public static String name(String nameOrId) {
+		return nameOrId.replace(':', '.').replace('/', '.');
 	}
 
 	/** No scripts. */
@@ -104,8 +129,9 @@ public final class ScriptLibrary implements ModuleLoader {
 		return scripts.values();
 	}
 
+	/** The script named {@code name}, or with the data pack id {@code name}. */
 	public Optional<Script> get(String name) {
-		return Optional.ofNullable(scripts.get(name));
+		return Optional.ofNullable(scripts.get(name(name)));
 	}
 
 	/** The scripts that do not compile, by name. */

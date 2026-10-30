@@ -8,10 +8,11 @@ Running scripts are saved with the world: after a reload a bot resumes at the sa
 
 ## Script folders
 
-Scripts are loaded from two folders; the world folder wins on a name clash:
+Scripts are loaded from two folders and from data packs; on a name clash the world folder wins, and either folder wins over a data pack:
 
 - `config/antcraft/scripts/` for every world (share scripts by copying files here);
-- `<world>/antcraft/scripts/` for one world.
+- `<world>/antcraft/scripts/` for one world;
+- `data/<namespace>/script/**/*.py` in a data pack, shared the way blueprints are. A data pack script has the id `<namespace>:<path>` and is named, run and imported with dots for the colon and the slashes: `data/mypack/script/lib/trees.py` is `mypack:lib/trees`, run as `/antcraft bot run mypack.lib.trees` and imported with `import mypack.lib.trees` (see [Modules & import](../language/modules.md#scripts-from-data-packs)). So `config/antcraft/scripts/mypack/lib/trees.py` replaces it. `/reload` reloads data packs and the script folders, and restarts the bots whose script changed, as `/antcraft script reload` does.
 
 The mod copies its default scripts (`idle.py`, the library modules `lib/home.py`, `lib/shaft.py` and `lib/mine.py` and the colony scripts under `colony/`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
 
