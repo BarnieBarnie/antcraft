@@ -18,7 +18,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
-/** {@code lib/inv.py} (#443): {@code take_all} takes what the bot lacks from a chest at (2, 1, 2), the bot starting at (5, 1, 5). */
+/**
+ * {@code lib/inv.py}: {@code take_all} (#443) takes what the bot lacks from a chest at (2, 1, 2), {@code store_all} (#444) puts
+ * all but tools, food and what it keeps into it; the bot starts at (5, 1, 5).
+ */
 public class InvGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(2, 1, 2);
 
@@ -34,7 +37,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	public void takeAllFillsWhatIsLacking(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.COBBLESTONE, 10), new ItemStack(Items.TORCH, 5));
 		AntBot bot = run(helper, List.of(new ItemStack(Items.TORCH, 3)), """
-			{"minecraft:cobblestone": 4, "minecraft:torch": 3}""", """
+			take_all(chest, {"minecraft:cobblestone": 4, "minecraft:torch": 3})""", """
 			print(r == {}, count("minecraft:cobblestone"), count("minecraft:torch"))""");
 		succeedWhenPrinted(helper, bot, "True 4 3", () -> {
 			helper.assertTrue(count(chest, Items.COBBLESTONE) == 6, "cobblestone left " + count(chest, Items.COBBLESTONE));
@@ -47,9 +50,46 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	public void takeAllGivesWhatIsShort(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.COBBLESTONE, 2));
 		AntBot bot = run(helper, List.of(new ItemStack(Items.COBBLESTONE, 1)), """
-			{"minecraft:cobblestone": 4, "#minecraft:planks": 5}""", """
+			take_all(chest, {"minecraft:cobblestone": 4, "#minecraft:planks": 5})""", """
 			print(len(r), r["minecraft:cobblestone"], r["#minecraft:planks"], count("minecraft:cobblestone"))""");
 		succeedWhenPrinted(helper, bot, "2 1 5 3", () -> helper.assertTrue(chest.isEmpty(), "chest not empty"));
+	}
+
+	/** Logs and dirt go into the chest; the pickaxe (a tool) and the bread (food) stay with the bot. */
+	@GameTest(maxTicks = 40)
+	public void storeAllKeepsToolsAndFood(GameTestHelper helper) {
+		Container chest = chest(helper);
+		AntBot bot = run(helper, List.of(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.IRON_PICKAXE),
+			new ItemStack(Items.BREAD, 3), new ItemStack(Items.DIRT, 5)), "store_all(chest)", """
+			print(r["ok"], count("oak_log"), count("iron_pickaxe"), count("bread"), count("dirt"))""");
+		succeedWhenPrinted(helper, bot, "True 0 1 3 0", () -> {
+			helper.assertTrue(count(chest, Items.OAK_LOG) == 10, "logs stored " + count(chest, Items.OAK_LOG));
+			helper.assertTrue(count(chest, Items.DIRT) == 5, "dirt stored " + count(chest, Items.DIRT));
+		});
+	}
+
+	/** keep selects the logs: only the dirt goes in. */
+	@GameTest(maxTicks = 40)
+	public void storeAllKeepsWhatKeepSelects(GameTestHelper helper) {
+		Container chest = chest(helper);
+		AntBot bot = run(helper, List.of(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.DIRT, 5)),
+			"store_all(chest, keep=[\"#minecraft:logs\"])", """
+			print(r["ok"], count("oak_log"), count("dirt"))""");
+		succeedWhenPrinted(helper, bot, "True 10 0", () -> helper.assertTrue(count(chest, Items.DIRT) == 5,
+			"dirt stored " + count(chest, Items.DIRT)));
+	}
+
+	/** A full chest takes nothing: no_space, with what is left in the bot as missing. */
+	@GameTest(maxTicks = 40)
+	public void storeAllIntoAFullChestGivesNoSpace(GameTestHelper helper) {
+		ItemStack[] stone = new ItemStack[27];
+		for (int i = 0; i < stone.length; i++) {
+			stone[i] = new ItemStack(Items.STONE, 64);
+		}
+		chest(helper, stone);
+		AntBot bot = run(helper, List.of(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.DIRT, 5)), "store_all(chest)", """
+			print(r["reason"], len(r["missing"]), r["missing"]["minecraft:oak_log"], r["missing"]["minecraft:dirt"], count("oak_log"))""");
+		succeedWhenPrinted(helper, bot, "no_space 2 10 5 10", () -> { });
 	}
 
 	private static Container chest(GameTestHelper helper, ItemStack... stacks) {
@@ -61,16 +101,17 @@ public class InvGameTest implements CustomTestMethodInvoker {
 		return chest;
 	}
 
-	/** Starts a bot carrying {@code carried} on {@code r = take_all(chest, need)} and then {@code then}. */
-	private static AntBot run(GameTestHelper helper, List<ItemStack> carried, String need, String then) {
+	/** Starts a bot carrying {@code carried} on {@code r = call} ({@code chest} is the chest's position) and then {@code then}. */
+	private static AntBot run(GameTestHelper helper, List<ItemStack> carried, String call, String then) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
 		carried.forEach(bot.getInventory()::addItem);
 		BlockPos c = helper.absolutePos(CHEST);
 		String name = BotScripts.libraryScript(helper, "inv_", """
-			from lib.inv import take_all
-			r = take_all(Pos(%d, %d, %d), %s)
+			from lib.inv import take_all, store_all
+			chest = Pos(%d, %d, %d)
+			r = %s
 			%s
-			""".formatted(c.getX(), c.getY(), c.getZ(), need, then));
+			""".formatted(c.getX(), c.getY(), c.getZ(), call, then));
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 		return bot;
