@@ -45,6 +45,7 @@ def haul(job):
     finish_job(job["id"])
 
 
+core()  # a bot in no colony says so and stops
 while True:
     job = take_job("haul")
     if job is None:

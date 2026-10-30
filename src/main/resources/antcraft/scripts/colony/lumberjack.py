@@ -6,10 +6,11 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from lib.craft import ensure_tool
-from colony.common import in_colony, store
+from colony.common import core, in_colony, store
 from lib.trees import LOGS, is_log, next_tree, fell
 
 
+core()  # a bot in no colony says so and stops
 while True:
     tree = next_tree(where=in_colony)
     if tree is None:

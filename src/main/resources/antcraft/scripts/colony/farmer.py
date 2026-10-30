@@ -52,6 +52,7 @@ def tend(soil):
                 break
 
 
+core()  # a bot in no colony says so and stops
 while True:
     spots = farm_spots()
     if not has("#minecraft:hoes"):

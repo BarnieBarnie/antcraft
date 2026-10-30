@@ -463,6 +463,28 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True 3 0")), "printed " + printed(bot)));
 	}
 
+	/**
+	 * Each default colony script on a bot in no colony says so at once and stops (#452): no error, such as the miner's
+	 * {@code colony_memory.setdefault} on None, and no endless wait for a job, as the hauler and builder did.
+	 */
+	@GameTest(maxTicks = 20)
+	public void eachColonyScriptOnABotInNoColonySaysSoAndStops(GameTestHelper helper) {
+		String[] scripts = {"colony.miner", "colony.hauler", "colony.builder", "colony.farmer", "colony.lumberjack"};
+		AntBot[] bots = new AntBot[scripts.length];
+		for (int i = 0; i < scripts.length; i++) {
+			bots[i] = helper.spawn(ModEntities.ANT_BOT, 1 + i, 1, 1);
+			runDefault(helper, bots[i], scripts[i]);
+		}
+		failOnError(helper, bots);
+		helper.succeedWhen(() -> {
+			for (int i = 0; i < scripts.length; i++) {
+				helper.assertTrue(printed(bots[i]).equals(List.of("I am in no colony: place a Colony Core and let me join it")),
+					scripts[i] + " printed " + printed(bots[i]));
+				helper.assertTrue(!bots[i].getScript().running(), scripts[i] + " still runs");
+			}
+		});
+	}
+
 	/** A lumberjack alone fells the colony's tree, plants its sapling where it stood and puts the logs into the core. */
 	@GameTest(maxTicks = 600)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {

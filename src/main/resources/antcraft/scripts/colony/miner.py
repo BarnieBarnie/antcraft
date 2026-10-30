@@ -115,6 +115,7 @@ def mine(job):
         wait(200)
 
 
+core()  # a bot in no colony says so and stops
 while True:
     if site() is None:
         warn("there is no spot near the core to dig a shaft")
