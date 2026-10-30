@@ -69,13 +69,21 @@ public final class ScriptNetworking {
 		}
 	}
 
-	/** The answer to a save: whether the script was {@code saved}, and a message that says so or why not. */
-	public record ScriptSaved(boolean saved, Component message) implements CustomPacketPayload {
+	/**
+	 * The answer to a save: whether the script was {@code saved}, a message that says so or why not, and the
+	 * {@code line} (from 1) of the compile error it was refused for, else 0.
+	 */
+	public record ScriptSaved(boolean saved, Component message, int line) implements CustomPacketPayload {
 		public static final Type<ScriptSaved> TYPE = new Type<>(AntCraft.id("script_saved"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, ScriptSaved> STREAM_CODEC = StreamCodec.composite(
 			ByteBufCodecs.BOOL, ScriptSaved::saved,
 			ComponentSerialization.STREAM_CODEC, ScriptSaved::message,
+			ByteBufCodecs.VAR_INT, ScriptSaved::line,
 			ScriptSaved::new);
+
+		public ScriptSaved(boolean saved, Component message) {
+			this(saved, message, 0);
+		}
 
 		@Override
 		public Type<ScriptSaved> type() {
@@ -105,7 +113,7 @@ public final class ScriptNetworking {
 		try {
 			file = ScriptEdits.check(ServerScripts.worldFolder(server), request.name(), request.source());
 		} catch (IllegalArgumentException e) {
-			return new ScriptSaved(false, Component.literal(e.getMessage()));
+			return new ScriptSaved(false, Component.literal(e.getMessage()), ScriptEdits.errorLine(e));
 		}
 		// ponytail: a symbolic link an admin put in the world folder is followed; check toRealPath if that matters.
 		try {

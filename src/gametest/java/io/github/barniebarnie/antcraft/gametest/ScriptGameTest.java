@@ -459,6 +459,9 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(read(file).equals(before), "the file changed on a refused save");
 			// The game test server makes operators at level 0; saving needs gamemaster, as the operator commands do.
 			helper.getLevel().getServer().getPlayerList().op(profile, Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.of(false));
+			ScriptNetworking.ScriptSaved broken = ScriptNetworking.save(player, new ScriptNetworking.SaveScript(name, "x = 1\nif x\n    pass\n"));
+			helper.assertTrue(!broken.saved() && broken.line() == 2, "a save that does not compile answered " + broken);
+			helper.assertTrue(read(file).equals(before), "the file changed on a save that does not compile");
 			ScriptNetworking.ScriptSaved saved = ScriptNetworking.save(player, new ScriptNetworking.SaveScript(name, edited));
 			helper.assertTrue(saved.saved(), "save answered " + saved);
 			helper.assertTrue(read(file).equals(edited), "file " + read(file));

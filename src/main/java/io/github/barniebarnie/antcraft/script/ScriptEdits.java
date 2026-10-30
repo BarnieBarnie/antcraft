@@ -50,4 +50,9 @@ public final class ScriptEdits {
 		}
 		return file;
 	}
+
+	/** The line (from 1) of the compile error {@link #check} refused a source for, or 0 for any other refusal. */
+	public static int errorLine(IllegalArgumentException refusal) {
+		return refusal.getCause() instanceof CompileError error ? error.line() : 0;
+	}
 }

@@ -22,14 +22,18 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
 /**
- * The script editor's text box (docs/features/scripts.md, Editing in game): lines do not wrap but scroll sideways, and
- * text is coloured by {@link Highlighter}. The editing itself is {@link CodeText}; this class draws it and maps keys
+ * The script editor's text box (docs/features/scripts.md, Editing in game): lines do not wrap but scroll sideways, a
+ * gutter left of them numbers them, and text is coloured by {@link Highlighter}. The editing itself is {@link CodeText}; this class draws it and maps keys
  * and the mouse to it.
  */
 public class CodeEditBox extends AbstractTextAreaWidget {
 	private static final int LINE_HEIGHT = 9;
 	private static final int CARET_COLOR = 0xFFD0D0D0;
 	private static final int SELECTION_COLOR = 0x803060C0;
+	private static final int GUTTER_COLOR = 0xFF202020;
+	private static final int LINE_NUMBER_COLOR = 0xFF707070;
+	private static final int ERROR_LINE_COLOR = 0x60FF3030;
+	private static final int GUTTER_GAP = 4;
 
 	private final Font font;
 	private final CodeText text;
@@ -40,6 +44,9 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 	private int[] lineStarts = {0};
 	private int scrollX;
 	private long focusedTime = Util.getMillis();
+	/** The line (from 0) {@link #markLine} marked, shown until the text {@link #markedText} changes. */
+	private int markedLine = -1;
+	private String markedText;
 
 	public CodeEditBox(Font font, int x, int y, int width, int height, Component title, int maxLength, Set<String> natives) {
 		super(x, y, width, height, title, AbstractScrollArea.defaultSettings(LINE_HEIGHT / 2), true, true);
@@ -82,9 +89,28 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 		return found >= 0 ? found : -found - 2;
 	}
 
-	/** Width of the text area left of the scroll bar. */
+	/** Moves the caret to the start of {@code line} (from 1), scrolls to it and marks it until the next edit. */
+	public void markLine(int line) {
+		this.refresh();
+		this.markedLine = Math.clamp(line - 1, 0, this.lineStarts.length - 1);
+		this.markedText = this.coloured;
+		this.text.moveTo(this.lineStarts[this.markedLine], false);
+		this.showCaret();
+	}
+
+	/** Width of the line number gutter: it grows with the number of lines. */
+	private int gutterWidth() {
+		return this.font.width(Integer.toString(this.lineStarts.length)) + GUTTER_GAP;
+	}
+
+	/** Where the text starts on screen, right of the gutter, before scrolling sideways. */
+	private int textLeft() {
+		return this.getInnerLeft() + this.gutterWidth();
+	}
+
+	/** Width of the text area between the gutter and the scroll bar. */
 	private int textWidth() {
-		return this.width - this.totalInnerPadding() - SCROLLBAR_WIDTH;
+		return this.width - this.totalInnerPadding() - SCROLLBAR_WIDTH - this.gutterWidth();
 	}
 
 	@Override
@@ -97,7 +123,7 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 	protected void extractContents(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
 		this.refresh();
 		String value = this.coloured;
-		int left = this.getInnerLeft() - this.scrollX;
+		int left = this.textLeft() - this.scrollX;
 		int top = this.getInnerTop();
 		int first = Math.max(0, (int) ((this.scrollAmount() - this.innerPadding()) / LINE_HEIGHT));
 		int last = Math.min(this.lineStarts.length - 1, (int) ((this.scrollAmount() + this.height) / LINE_HEIGHT));
@@ -108,6 +134,9 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 			int start = this.lineStarts[line];
 			int end = this.lineEnd(line);
 			int y = top + line * LINE_HEIGHT;
+			if (line == this.markedLine && value == this.markedText) {
+				graphics.fill(this.textLeft(), y, this.getX() + this.width, y + LINE_HEIGHT, ERROR_LINE_COLOR);
+			}
 			if (selStart < selEnd && selStart <= end && selEnd > start) {
 				int x1 = left + this.font.width(value.substring(start, Math.max(start, selStart)));
 				int x2 = left + this.font.width(value.substring(start, Math.min(end, selEnd))) + (selEnd > end ? 3 : 0);
@@ -140,6 +169,15 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 			int x = left + this.font.width(value.substring(this.lineStarts[line], this.text.caret()));
 			int y = top + line * LINE_HEIGHT;
 			graphics.fill(x, y - 1, x + 1, y + LINE_HEIGHT, CARET_COLOR);
+		}
+		// The gutter goes over text scrolled left of it.
+		int gutterRight = this.textLeft() - GUTTER_GAP / 2;
+		graphics.fill(this.getX() + 1, top + first * LINE_HEIGHT - this.innerPadding(), gutterRight,
+			top + (last + 1) * LINE_HEIGHT + this.innerPadding(), GUTTER_COLOR);
+		for (int line = first; line <= last; line++) {
+			String number = Integer.toString(line + 1);
+			graphics.text(this.font, number, gutterRight - GUTTER_GAP / 2 - this.font.width(number), top + line * LINE_HEIGHT,
+				line == this.markedLine && value == this.markedText ? 0xFFFF5555 : LINE_NUMBER_COLOR, false);
 		}
 		if (this.isHovered()) {
 			graphics.requestCursor(CursorTypes.IBEAM);
@@ -186,7 +224,7 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 		int line = Math.clamp((int) Math.floor((mouseY - this.getInnerTop() + this.scrollAmount()) / LINE_HEIGHT), 0,
 			this.lineStarts.length - 1);
 		String lineText = this.coloured.substring(this.lineStarts[line], this.lineEnd(line));
-		int x = (int) (mouseX - this.getInnerLeft() + this.scrollX);
+		int x = (int) (mouseX - this.textLeft() + this.scrollX);
 		return this.lineStarts[line] + (x <= 0 ? 0 : this.font.plainSubstrByWidth(lineText, x).length());
 	}
 

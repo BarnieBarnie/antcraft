@@ -51,6 +51,10 @@ public class ScriptEditorScreen extends Screen {
 		if (client.gui.screen() instanceof ScriptEditorScreen screen) {
 			screen.message = reply.message();
 			screen.messageColor = reply.saved() ? GREEN : RED;
+			if (reply.line() > 0) {
+				screen.editor.markLine(reply.line());
+				screen.setFocused(screen.editor);
+			}
 		} else if (client.player != null) {
 			client.player.sendSystemMessage(reply.message());
 		}

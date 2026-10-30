@@ -50,5 +50,12 @@ class ScriptEditsTest {
 		IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
 			() -> ScriptEdits.check(world, "lib.broken", "x = 1\nif x\n    pass\n"));
 		assertTrue(error.getMessage().startsWith("lib/broken.py:2"), error.getMessage());
+		assertEquals(2, ScriptEdits.errorLine(error));
+	}
+
+	@Test
+	void aRefusalForAnythingButACompileErrorHasNoLine() {
+		IllegalArgumentException error = assertThrows(IllegalArgumentException.class, () -> ScriptEdits.check(world, "..", "x = 1\n"));
+		assertEquals(0, ScriptEdits.errorLine(error));
 	}
 }
