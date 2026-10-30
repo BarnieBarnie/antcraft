@@ -53,7 +53,7 @@ final class SubsetCheck {
 		Names names = new Names();
 		names.body(def.body());
 		Set<String> locals = new HashSet<>(names.stores);
-		def.params().forEach(p -> locals.add(p.name()));
+		locals.addAll(def.paramNames());
 		locals.removeAll(names.globals);
 		for (Ast.Name load : names.loads) {
 			if (locals.contains(load.id()) || names.globals.contains(load.id())) {

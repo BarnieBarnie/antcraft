@@ -82,14 +82,8 @@ class SubsetTest {
 	}
 
 	@Test
-	void starArgsAreNotSupported() {
-		rejects("def f(*args):\n    pass", "bot.py:1:7: `*args` is not supported");
-	}
-
-	@Test
-	void doubleStarKwargsAreNotSupported() {
-		rejects("def f(**kwargs):\n    pass", "bot.py:1:7: `**kwargs` is not supported");
-		rejects("f(**d)", "bot.py:1:3: `**kwargs` is not supported");
+	void keywordOnlyParametersAreNotSupported() {
+		rejects("def f(*args, b):\n    pass", "bot.py:1:14: keyword-only parameters are not supported");
 	}
 
 	@Test

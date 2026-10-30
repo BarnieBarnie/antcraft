@@ -39,6 +39,19 @@ class VmErrorTest {
 	}
 
 	@Test
+	void doubleStarArgumentErrors() {
+		String f = "def f(a=1):\n    pass\n";
+		assertEquals("t.py:3: f() argument after ** must be a mapping, not int", fails(f + "f(**1)"));
+		assertEquals("t.py:3: keywords must be strings", fails(f + "f(**{1: 2})"));
+		assertEquals("t.py:3: f() got multiple values for keyword argument 'a'", fails(f + "f(a=1, **{'a': 2})"));
+		assertEquals("t.py:3: f() got multiple values for keyword argument 'a'", fails(f + "f(**{'a': 1}, **{'a': 2})"));
+		assertEquals("t.py:3: f() got an unexpected keyword argument 'z'", fails(f + "f(**{'z': 1})"));
+		assertEquals("t.py:3: g() got an unexpected keyword argument 'a'", fails("def g(*args):\n    pass\ng(a=1)"));
+		assertEquals("t.py:3: g() got multiple values for argument 'a'", fails("def g(a, **kw):\n    pass\ng(1, a=2)"));
+		assertEquals("t.py:3: g() missing 1 required positional argument: 'a'", fails("def g(a, *args):\n    pass\ng()"));
+	}
+
+	@Test
 	void unknownName() {
 		assertEquals("t.py:3: name 'find_nearst' is not defined", fails("x = 1\n\ny = find_nearst('chest')"));
 	}

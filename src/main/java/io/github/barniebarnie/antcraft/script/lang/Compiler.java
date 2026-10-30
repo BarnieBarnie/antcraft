@@ -74,7 +74,7 @@ public final class Compiler {
 		compiler.body(module.body());
 		compiler.emit(Op.LOAD_CONST, compiler.constant(PyNone.NONE));
 		compiler.emit(Op.RETURN, 0);
-		return compiler.code(0, 0);
+		return compiler.code(0, 0, false, false);
 	}
 
 	/**
@@ -85,7 +85,7 @@ public final class Compiler {
 		SubsetCheck.Names bound = new SubsetCheck.Names();
 		bound.body(def.body());
 		Map<String, Integer> scope = new LinkedHashMap<>();
-		def.params().forEach(p -> scope.put(p.name(), scope.size()));
+		def.paramNames().forEach(p -> scope.put(p, scope.size()));
 		if (method) {
 			scope.putIfAbsent(CLASS_SLOT, scope.size());
 		}
@@ -100,16 +100,16 @@ public final class Compiler {
 		compiler.emit(Op.LOAD_CONST, compiler.constant(PyNone.NONE));
 		compiler.emit(Op.RETURN, 0);
 		int defaults = (int) def.params().stream().filter(p -> p.defaultValue() != null).count();
-		return compiler.code(def.params().size(), defaults);
+		return compiler.code(def.params().size(), defaults, def.varArgs() != null, def.varKeywords() != null);
 	}
 
-	private Code code(int paramCount, int defaultCount) {
+	private Code code(int paramCount, int defaultCount, boolean varArgs, boolean varKeywords) {
 		String[] nameTable = new String[names.size()];
 		names.forEach((n, i) -> nameTable[i] = n);
 		String[] localTable = localNames.toArray(String[]::new);
 		return new Code(name, file, ops.toArray(Op[]::new), args.stream().mapToInt(Integer::intValue).toArray(),
 				lines.stream().mapToInt(Integer::intValue).toArray(), constants.toArray(), nameTable, localTable,
-				paramCount, defaultCount);
+				paramCount, defaultCount, varArgs, varKeywords);
 	}
 
 	// Emitting
@@ -752,8 +752,9 @@ public final class Compiler {
 		if (c.keywords().isEmpty() && starred.isEmpty()) {
 			emit(Op.CALL, c.args().size());
 		} else {
-			List<String> keywords = c.keywords().stream().map(Ast.Keyword::name).toList();
-			if (Set.copyOf(keywords).size() < keywords.size()) {
+			List<String> keywords = c.keywords().stream().map(Ast.Keyword::name).toList(); // null for a **value
+			List<String> named = keywords.stream().filter(java.util.Objects::nonNull).toList();
+			if (Set.copyOf(named).size() < named.size()) {
 				throw new CompileError(file, c.line(), c.col(), "keyword argument repeated");
 			}
 			emit(Op.CALL_KW, constant(new Code.CallShape(c.args().size(), keywords, List.copyOf(starred))));

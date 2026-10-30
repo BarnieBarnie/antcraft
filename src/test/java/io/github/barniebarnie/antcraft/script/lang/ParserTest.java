@@ -79,6 +79,7 @@ class ParserTest {
 		assertEquals("(call f)", expr("f()"));
 		assertEquals("(call f 1 (kw near 2))", expr("f(1, near=2)"));
 		assertEquals("(call f 1 (* xs) 2 (kw near 2))", expr("f(1, *xs, 2, near=2)"));
+		assertEquals("(call f 1 (* xs) (kw k 2) (** d) (kw j 3) (** e))", expr("f(1, *xs, k=2, **d, j=3, **e)"));
 		assertEquals("(call (. (. lib shaft) dig_down) (kw to_y 16))", expr("lib.shaft.dig_down(to_y=16)"));
 		assertEquals("(index a 0)", expr("a[0]"));
 		assertEquals("(index (index a 0) (neg 1))", expr("a[0][-1]"));
@@ -165,6 +166,19 @@ class ParserTest {
 		assertEquals("(def dig (to_y (ladders True)) [(return (+ to_y 1))])",
 				parse("def dig(to_y, ladders=True):\n    return to_y + 1"));
 		assertEquals("(def f (a) [(return (tuple a 1))])", parse("def f(a,):\n    return a, 1"));
+		assertEquals("(def f (a (b 1) (* args) (** kwargs)) [pass])", parse("def f(a, b=1, *args, **kwargs):\n    pass"));
+		assertEquals("(def f ((** kw)) [pass])", parse("def f(**kw,):\n    pass"));
+	}
+
+	@Test
+	void argumentUnpackingFollowsPythonsRules() {
+		assertEquals("t.py:1:8: positional argument follows keyword argument unpacking", syntaxError("f(**d, 1)"));
+		assertEquals("t.py:1:8: iterable argument unpacking follows keyword argument unpacking", syntaxError("f(**d, *xs)"));
+		assertEquals("t.py:1:11: * argument may appear only once", syntaxError("def f(*a, *b):\n    pass"));
+		assertEquals("t.py:1:12: arguments cannot follow var-keyword argument", syntaxError("def f(**k, a):\n    pass"));
+		assertEquals("t.py:1:11: duplicate parameter 'a'", syntaxError("def f(a, *a):\n    pass"));
+		assertEquals("t.py:1:11: keyword-only parameters are not supported", syntaxError("def f(*a, b):\n    pass"));
+		assertEquals("t.py:1:7: keyword-only parameters are not supported", syntaxError("def f(*, b):\n    pass"));
 	}
 
 	@Test

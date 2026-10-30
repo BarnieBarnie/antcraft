@@ -260,6 +260,31 @@ class VmTest {
 	}
 
 	@Test
+	void doubleStarArgumentsSpreadADict() {
+		String f = "def f(a, b=2, c=3):\n    return [a, b, c]\n";
+		assertEquals("[1, 2, 9]", run(f + "print(f(**{'a': 1, 'c': 9}))"));
+		assertEquals("[1, 2, 9]", run(f + "print(f(1, **{'c': 9}))"));
+		assertEquals("[1, 5, 9]", run(f + "print(f(*[1], b=5, **{'c': 9}))"));
+		assertEquals("[1, 4, 3]", run(f + "print(f(**{'a': 1}, **{'b': 4}))"));
+		assertEquals("[0, 2, 7]", run(f + "print(f(**{'c': 7}, a=0))"));
+		assertEquals("[1, 2, 3]", run(f + "print(f(1, **{}))"));
+		assertEquals("1-2", run("print(1, 2, **{'sep': '-'})"));
+	}
+
+	@Test
+	void starParametersCollectTheRestOfTheArguments() {
+		String f = "def f(*args, **kwargs):\n    return args, kwargs\n";
+		assertEquals("((1, 2), {'a': 3})", run(f + "print(f(1, 2, a=3))"));
+		assertEquals("((), {})", run(f + "print(f())"));
+		assertEquals("1 (2, 3)", run("def g(a, *rest):\n    print(a, rest)\ng(1, 2, 3)"));
+		assertEquals("1 5 {'c': 3}\n1 5 {}", run("def h(a, b=2, **kw):\n    print(a, b, kw)\nh(1, 5, c=3)\nh(b=5, a=1)"));
+		assertEquals("[1, 2, 9]", run("def f(a, b=2, c=3):\n    return [a, b, c]\n"
+				+ "def wrap(*args, **kwargs):\n    return f(*args, **kwargs)\nprint(wrap(1, c=9))"));
+		assertEquals("{'c': 1}", run("d = {'c': 1}\ndef k(**kw):\n    kw['c'] = 2\nk(**d)\nprint(d)"));
+		assertEquals("(1, 2)", run("class A:\n    def m(self, *args):\n        return args\nprint(A().m(1, 2))"));
+	}
+
+	@Test
 	void defaultsAreEvaluatedOnceWhenTheFunctionIsDefined() {
 		assertEquals("[1]\n[1, 1]", run("def f(xs=[]):\n    xs += [1]\n    return xs\nprint(f())\nprint(f())"));
 		assertEquals("1", run("n = 1\ndef f(x=n):\n    return x\nn = 2\nprint(f())"));

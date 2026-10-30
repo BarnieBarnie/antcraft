@@ -43,20 +43,32 @@ gather("wheat", radius=8)
 
 ## Spreading a list into arguments
 
-`*` before an argument passes the items of a list, tuple or other sequence as arguments by place, as in Python. It mixes with other arguments, also with more than one `*`, and works for the bot API too. That is how a function can call another with arguments it was handed:
+`*` before an argument passes the items of a list, tuple or other sequence as arguments by place, as in Python. `**` before a dict passes its items as keyword arguments. Both mix with other arguments, also with more than one `*` or `**`, and work for the bot API too:
 
 ```python
-def twice(action, args):
-    action(*args)
-    action(*args)
-
-
-twice(place, (pos().north(), "torch"))
 p = (10, 64, -3)
 print(*p)                                       # 10 64 -3
+opts = {"radius": 8}
+gather("wheat", **opts)                         # gather("wheat", radius=8)
 ```
 
-A value that is not a sequence stops the script: `f() argument after * must be an iterable, not int`.
+A value that is not a sequence after `*`, or not a dict after `**`, stops the script (`f() argument after * must be an iterable, not int`, `f() argument after ** must be a mapping, not list`), and so does a keyword given twice (`f() got multiple values for keyword argument 'radius'`). As in Python, no positional argument or `*` may come after a `**`.
+
+## Taking any number of arguments
+
+A parameter `*args` takes the positional arguments left over after the others, as a tuple; `**kwargs` takes the keyword arguments no other parameter names, as a dict. They come last, `**kwargs` after `*args`. That is how a function can pass on whatever it is called with:
+
+```python
+def twice(action, *args, **kwargs):
+    action(*args, **kwargs)
+    action(*args, **kwargs)
+
+
+twice(place, pos().north(), "torch")
+twice(gather, "wheat", radius=8)
+```
+
+Parameters after `*args` (keyword-only parameters) and a bare `*` are not supported.
 
 ## Several values back
 
@@ -120,4 +132,4 @@ There is no `lambda`: write a small `def` instead.
 
 ## Not in the subset
 
-`def f(*args)`, `**kwargs` (in a `def` and in a call), `lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.
+Keyword-only parameters, `lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.

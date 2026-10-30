@@ -53,20 +53,15 @@ for log in scan("#minecraft:logs", radius=16):
 
 To drop duplicates from a list: `unique = []` and then `if x not in unique: unique.append(x)` for each value.
 
-## *args and **kwargs
+## Keyword-only parameters
 
-A function takes a fixed list of parameters. Pass several values as one list or dict:
+`def f(*args, **kwargs)` and `f(*xs, **d)` work as in Python (see [Functions](functions.md#taking-any-number-of-arguments)), but a parameter after `*args`, or after a bare `*`, is not supported (`keyword-only parameters are not supported`), and neither is `/` among the parameters. Put such a parameter before `*args` with a default, or read it from `**kwargs`:
 
 ```python
-def store_all(chest, items):
+def store_all(chest, *items, **opts):
     for item in items:
-        put(chest, item)
-
-
-store_all(find_nearest("chest"), ["cobblestone", "#minecraft:logs", "coal"])
+        put(chest, item, opts.get("n"))
 ```
-
-A call can spread a list into arguments by place with `f(*xs)` (see [Functions](functions.md#spreading-a-list-into-arguments)), but not a dict into keyword arguments (`f(**d)`): pass them by name.
 
 ## Closures and nonlocal
 

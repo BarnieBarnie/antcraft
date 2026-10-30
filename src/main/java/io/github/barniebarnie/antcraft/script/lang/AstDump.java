@@ -28,8 +28,10 @@ public final class AstDump {
 			case Ast.Break s -> "break";
 			case Ast.Continue s -> "continue";
 			case Ast.Pass s -> "pass";
-			case Ast.Def s -> "(def " + s.name() + " (" + s.params().stream()
-					.map(p -> p.defaultValue() == null ? p.name() : "(" + p.name() + " " + dump(p.defaultValue()) + ")")
+			case Ast.Def s -> "(def " + s.name() + " (" + java.util.stream.Stream.concat(s.params().stream()
+					.map(p -> p.defaultValue() == null ? p.name() : "(" + p.name() + " " + dump(p.defaultValue()) + ")"),
+					java.util.stream.Stream.of(s.varArgs() == null ? null : "(* " + s.varArgs() + ")",
+							s.varKeywords() == null ? null : "(** " + s.varKeywords() + ")").filter(java.util.Objects::nonNull))
 					.collect(Collectors.joining(" ")) + ") " + block(s.body()) + ")";
 			case Ast.ClassDef s -> "(class " + s.name() + " " + dump(s.base()) + " " + block(s.body()) + ")";
 			case Ast.Return s ->s.value() == null ? "return" : "(return " + dump(s.value()) + ")";
@@ -80,7 +82,7 @@ public final class AstDump {
 			case Ast.Starred s -> "(* " + dump(s.value()) + ")";
 			case Ast.Slice s -> "(slice " + dump(s.lower()) + " " + dump(s.upper()) + " " + dump(s.step()) + ")";
 			case Ast.Call c -> "(call " + dump(c.func()) + prefixed(c.args()) + c.keywords().stream()
-					.map(k -> " (kw " + k.name() + " " + dump(k.value()) + ")").collect(Collectors.joining()) + ")";
+					.map(k -> k.name() == null ? " (** " + dump(k.value()) + ")" : " (kw " + k.name() + " " + dump(k.value()) + ")").collect(Collectors.joining()) + ")";
 			case Ast.ListComp c -> "(listcomp " + dump(c.elt()) + c.generators().stream()
 					.map(g -> " (for " + dump(g.target()) + " " + dump(g.iter())
 							+ g.ifs().stream().map(i -> " (if " + dump(i) + ")").collect(Collectors.joining()) + ")")

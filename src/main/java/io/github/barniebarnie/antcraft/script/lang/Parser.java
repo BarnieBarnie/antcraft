@@ -363,33 +363,55 @@ public final class Parser {
 		List<Ast.Param> params = new ArrayList<>();
 		Set<String> names = new HashSet<>();
 		boolean defaults = false;
+		String varArgs = null;
+		String varKeywords = null;
 		while (!peek().isOp(")")) {
 			Token p = peek();
-			if (p.isOp("*")) {
-				throw unsupported(p, "`*args`");
-			}
-			if (p.isOp("**")) {
-				throw unsupported(p, "`**kwargs`");
+			if (varKeywords != null) {
+				throw error(p, "arguments cannot follow var-keyword argument");
 			}
 			if (p.isOp("/")) {
 				throw unsupported(p, "`/` in parameters");
 			}
-			String param = name("expected a parameter name");
-			if (peek().isOp(":")) {
-				throw error(peek(), "annotations are not supported");
-			}
-			Expr defaultValue = null;
-			if (peek().isOp("=")) {
+			if (p.isOp("*") || p.isOp("**")) {
+				if (p.isOp("*") && varArgs != null) {
+					throw error(p, "* argument may appear only once");
+				}
 				next();
-				defaultValue = test();
-				defaults = true;
-			} else if (defaults) {
-				throw error(p, "parameter without a default follows parameter with a default");
+				if (peek().kind() != Kind.NAME || KEYWORDS.contains(peek().text())) {
+					throw error(p, "keyword-only parameters are not supported");
+				}
+				Token n = peek();
+				String param = name("expected a parameter name");
+				if (!names.add(param)) {
+					throw error(n, "duplicate parameter '" + param + "'");
+				}
+				if (p.isOp("*")) {
+					varArgs = param;
+				} else {
+					varKeywords = param;
+				}
+			} else {
+				if (varArgs != null) {
+					throw error(p, "keyword-only parameters are not supported");
+				}
+				String param = name("expected a parameter name");
+				if (peek().isOp(":")) {
+					throw error(peek(), "annotations are not supported");
+				}
+				Expr defaultValue = null;
+				if (peek().isOp("=")) {
+					next();
+					defaultValue = test();
+					defaults = true;
+				} else if (defaults) {
+					throw error(p, "parameter without a default follows parameter with a default");
+				}
+				if (!names.add(param)) {
+					throw error(p, "duplicate parameter '" + param + "'");
+				}
+				params.add(new Ast.Param(param, defaultValue, p.line(), p.col()));
 			}
-			if (!names.add(param)) {
-				throw error(p, "duplicate parameter '" + param + "'");
-			}
-			params.add(new Ast.Param(param, defaultValue, p.line(), p.col()));
 			if (peek().isOp(",")) {
 				next();
 			} else if (!peek().isOp(")")) {
@@ -407,7 +429,7 @@ public final class Parser {
 		List<Stmt> body = block("function definition on line " + t.line());
 		functionDepth--;
 		loopDepth = loops;
-		return new Ast.Def(name, List.copyOf(params), body, t.line(), t.col());
+		return new Ast.Def(name, List.copyOf(params), varArgs, varKeywords, body, t.line(), t.col());
 	}
 
 	/** {@code class Name:} or {@code class Name(Base):}, with one base at most and no keywords (docs/language/classes.md). */
@@ -764,11 +786,16 @@ public final class Parser {
 		Set<String> names = new HashSet<>();
 		while (!peek().isOp(")")) {
 			Token a = peek();
+			boolean unpacked = keywords.stream().anyMatch(k -> k.name() == null);
 			if (a.isOp("*")) {
+				if (unpacked) {
+					throw error(a, "iterable argument unpacking follows keyword argument unpacking");
+				}
 				next();
 				args.add(new Ast.Starred(test(), a.line(), a.col()));
 			} else if (a.isOp("**")) {
-				throw unsupported(a, "`**kwargs`");
+				next();
+				keywords.add(new Ast.Keyword(null, test(), a.line(), a.col()));
 			} else if (a.kind() == Kind.NAME && !KEYWORDS.contains(a.text()) && peek(1).isOp("=")) {
 				next();
 				next();
@@ -782,7 +809,7 @@ public final class Parser {
 					throw error(peek(), "generator expressions are not supported");
 				}
 				if (!keywords.isEmpty()) {
-					throw error(a, "positional argument follows keyword argument");
+					throw error(a, "positional argument follows keyword argument" + (unpacked ? " unpacking" : ""));
 				}
 				args.add(value);
 			}

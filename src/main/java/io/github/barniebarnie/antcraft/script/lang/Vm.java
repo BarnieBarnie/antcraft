@@ -477,13 +477,9 @@ public final class Vm {
 			case CALL_KW -> {
 				Code.CallShape shape = (Code.CallShape) code.constants()[arg];
 				List<Object> values = f.pop(shape.keywords().size());
-				Map<String, Object> kwargs = new LinkedHashMap<>();
-				for (int i = 0; i < values.size(); i++) {
-					kwargs.put(shape.keywords().get(i), values.get(i));
-				}
 				List<Object> args = f.pop(shape.positional());
 				Object callee = f.pop();
-				call(callee, spread(callee, args, shape.starred()), kwargs);
+				call(callee, spread(callee, args, shape.starred()), keywords(callee, shape.keywords(), values));
 			}
 			case RETURN -> {
 				Object result = f.pop();
@@ -791,6 +787,38 @@ public final class Vm {
 		return out;
 	}
 
+	/**
+	 * The keyword arguments named {@code names} with {@code values}, with the items of each value whose name is null (a
+	 * {@code **value}) in its place (docs/language/functions.md).
+	 */
+	private static Map<String, Object> keywords(Object callee, List<String> names, List<Object> values) {
+		Map<String, Object> kwargs = new LinkedHashMap<>();
+		for (int i = 0; i < values.size(); i++) {
+			Object value = values.get(i);
+			if (names.get(i) != null) {
+				keyword(callee, kwargs, names.get(i), value);
+				continue;
+			}
+			if (!(value instanceof PyDict dict)) {
+				throw new ScriptError(calleeName(callee) + "() argument after ** must be a mapping, not "
+						+ Values.typeName(value));
+			}
+			for (Map.Entry<Object, Object> item : dict.items()) {
+				if (!(item.getKey() instanceof String key)) {
+					throw new ScriptError("keywords must be strings");
+				}
+				keyword(callee, kwargs, key, item.getValue());
+			}
+		}
+		return kwargs;
+	}
+
+	private static void keyword(Object callee, Map<String, Object> kwargs, String name, Object value) {
+		if (kwargs.putIfAbsent(name, value) != null) {
+			throw new ScriptError(calleeName(callee) + "() got multiple values for keyword argument '" + name + "'");
+		}
+	}
+
 	private static String calleeName(Object callee) {
 		return switch (callee) {
 			case PyFunction f -> f.code().name();
@@ -875,17 +903,28 @@ public final class Vm {
 		int params = code.paramCount();
 		int defaults = function.defaults().size();
 		Object[] locals = new Object[code.locals().length];
-		if (args.size() > params) {
+		int slot = params; // the next hidden local: *args, **kwargs, then the method's class
+		if (code.varArgs()) {
+			locals[slot++] = new PyTuple(args.size() > params ? new ArrayList<>(args.subList(params, args.size())) : List.of());
+		} else if (args.size() > params) {
 			String takes = defaults == 0 ? params + " positional argument" + (params == 1 ? "" : "s")
 					: "from " + (params - defaults) + " to " + params + " positional arguments";
 			throw new ScriptError(name + "() takes " + takes + " but " + args.size()
 					+ (args.size() == 1 ? " was" : " were") + " given");
 		}
-		for (int i = 0; i < args.size(); i++) {
+		for (int i = 0; i < Math.min(args.size(), params); i++) {
 			locals[i] = args.get(i);
+		}
+		PyDict rest = code.varKeywords() ? new PyDict() : null;
+		if (rest != null) {
+			locals[slot++] = rest;
 		}
 		for (Map.Entry<String, Object> kwarg : kwargs.entrySet()) {
 			int index = Arrays.asList(code.locals()).subList(0, params).indexOf(kwarg.getKey());
+			if (index < 0 && rest != null) {
+				rest.put(kwarg.getKey(), kwarg.getValue());
+				continue;
+			}
 			if (index < 0) {
 				throw new ScriptError(name + "() got an unexpected keyword argument '" + kwarg.getKey() + "'");
 			}
@@ -911,8 +950,8 @@ public final class Vm {
 			throw new ScriptError(name + "() missing " + missing.size() + " required positional argument"
 					+ (missing.size() == 1 ? "" : "s") + ": " + list);
 		}
-		if (function.owner() != null && params < locals.length && code.locals()[params].equals(Compiler.CLASS_SLOT)) {
-			locals[params] = function.owner(); // for the method's super()
+		if (function.owner() != null && slot < locals.length && code.locals()[slot].equals(Compiler.CLASS_SLOT)) {
+			locals[slot] = function.owner(); // for the method's super()
 		}
 		return locals;
 	}

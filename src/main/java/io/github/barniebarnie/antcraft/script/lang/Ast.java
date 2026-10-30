@@ -61,8 +61,23 @@ public final class Ast {
 	public record Pass(int line, int col) implements Stmt {
 	}
 
-	/** {@code def name(params): body}. */
-	public record Def(String name, List<Param> params, List<Stmt> body, int line, int col) implements Stmt {
+	/**
+	 * {@code def name(params, *varArgs, **varKeywords): body}; {@code varArgs} and {@code varKeywords} are null when it
+	 * has none.
+	 */
+	public record Def(String name, List<Param> params, String varArgs, String varKeywords, List<Stmt> body, int line,
+			int col) implements Stmt {
+		/** The names of its parameters, {@code *varArgs} and {@code **varKeywords} included, in order. */
+		public List<String> paramNames() {
+			List<String> names = new java.util.ArrayList<>(params.stream().map(Param::name).toList());
+			if (varArgs != null) {
+				names.add(varArgs);
+			}
+			if (varKeywords != null) {
+				names.add(varKeywords);
+			}
+			return names;
+		}
 	}
 
 	/**
@@ -239,7 +254,7 @@ public final class Ast {
 	public record Starred(Expr value, int line, int col) implements Expr {
 	}
 
-	/** A keyword argument {@code name=value}. */
+	/** A keyword argument {@code name=value}, or {@code **value} when {@code name} is null. */
 	public record Keyword(String name, Expr value, int line, int col) implements Node {
 	}
 
