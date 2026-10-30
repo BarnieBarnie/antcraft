@@ -18,6 +18,7 @@ import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.script.BotLog;
+import io.github.barniebarnie.antcraft.script.PlayerLimits;
 import io.github.barniebarnie.antcraft.script.ScriptLibrary;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
@@ -53,8 +54,10 @@ import org.jspecify.annotations.Nullable;
 /**
  * /antcraft status
  * /antcraft profile start|stop|report   (server tick time, per part of the bots' work)
- * /antcraft script list|reload
- * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]   (defaults to the nearest bot)
+ * /antcraft script list   (also any player)
+ * /antcraft script reload
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]   (defaults to the nearest bot; also a bot's
+ *     owner, on their own bots, within the limits of {@link PlayerLimits})
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony trust|untrust &lt;player&gt; [colony]   (also the colony's owner, not only operators)
@@ -81,7 +84,8 @@ public final class AntCraftCommands {
 	}
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-		// Every subcommand is for operators but trust (with trust list) and untrust, which a colony's owner may use too (checked when run).
+		// Every subcommand is for operators but trust (with trust list) and untrust, which a colony's owner may use too, and
+		// script list and bot, which a bot's owner may use on their own bots (checked when run).
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(AntCraftCommands::operatorOrPlayer)
 			.then(Commands.literal("status").requires(OPERATOR).executes(AntCraftCommands::status))
@@ -89,11 +93,11 @@ public final class AntCraftCommands {
 				.then(Commands.literal("start").executes(ctx -> profile(ctx.getSource(), true)))
 				.then(Commands.literal("stop").executes(ctx -> profile(ctx.getSource(), false)))
 				.then(Commands.literal("report").executes(ctx -> profileReport(ctx.getSource()))))
-			.then(Commands.literal("script").requires(OPERATOR)
+			.then(Commands.literal("script").requires(AntCraftCommands::operatorOrPlayer)
 				.then(Commands.literal("list").executes(ctx -> listScripts(ctx.getSource())))
-				.then(Commands.literal("reload").executes(ctx -> reloadScripts(ctx.getSource()))))
+				.then(Commands.literal("reload").requires(OPERATOR).executes(ctx -> reloadScripts(ctx.getSource()))))
 			// The bots argument is optional: without it, the nearest bot. Literals win over the selector, so a bot cannot be named "run".
-			.then(botCommands(Commands.literal("bot").requires(OPERATOR), ctx -> nearestBot(ctx.getSource()))
+			.then(botCommands(Commands.literal("bot").requires(AntCraftCommands::operatorOrPlayer), ctx -> nearestBot(ctx.getSource()))
 				.then(botCommands(Commands.argument("bots", EntityArgument.entities()), AntCraftCommands::bots)))
 			// Literals win over the script argument, so a script named "clear" cannot be set this way.
 			.then(Commands.literal("core").requires(OPERATOR)
@@ -386,6 +390,11 @@ public final class AntCraftCommands {
 		}
 		ScriptLibrary.Script script = found.get();
 		ServerPlayer player = source.getPlayer();
+		if (player != null && !PlayerLimits.mayStart(PlayerLimits.running(source.getServer(), player.getUUID(), bots), bots.size(),
+			AntCraftConfig.maxScriptsPerPlayer(), OPERATOR.test(source) || PlayerLimits.exempt(source.getServer(), player.getUUID()))) {
+			source.sendFailure(Component.translatable("commands.antcraft.bot.too_many", AntCraftConfig.maxScriptsPerPlayer()));
+			return 0;
+		}
 		for (AntBot bot : bots) {
 			if (player != null) {
 				bot.setOwner(player.getUUID());
@@ -445,18 +454,33 @@ public final class AntCraftCommands {
 		return false;
 	}
 
+	/** Whether there are {@code bots}, all of which the source may control ({@link PlayerLimits#mayControl}); if not, says why. */
 	private static boolean checkAny(CommandSourceStack source, List<AntBot> bots) {
-		if (!bots.isEmpty()) {
-			return true;
+		if (bots.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.no_bots"));
+			return false;
 		}
-		source.sendFailure(Component.translatable("commands.antcraft.no_bots"));
-		return false;
+		for (AntBot bot : bots) {
+			if (!mayControl(source, bot)) {
+				source.sendFailure(Component.translatable("commands.antcraft.bot.not_yours", bot.getName()));
+				return false;
+			}
+		}
+		return true;
 	}
 
+	/** Whether the source may use the {@code bot} commands on {@code bot}: the console and command blocks run as operators. */
+	private static boolean mayControl(CommandSourceStack source, AntBot bot) {
+		ServerPlayer player = source.getPlayer();
+		return player == null || PlayerLimits.mayControl(bot.getOwner(), player.getUUID(), OPERATOR.test(source));
+	}
+
+	/** The nearest bot the source may control within {@link #NEAREST_RANGE}, so another player's bot nearer does not get in the way. */
 	private static List<AntBot> nearestBot(CommandSourceStack source) {
 		ServerLevel level = source.getLevel();
 		Vec3 origin = source.getPosition();
-		return level.getEntities(ModEntities.ANT_BOT, bot -> bot.isAlive() && bot.distanceToSqr(origin) <= NEAREST_RANGE * NEAREST_RANGE)
+		return level.getEntities(ModEntities.ANT_BOT, bot -> bot.isAlive() && bot.distanceToSqr(origin) <= NEAREST_RANGE * NEAREST_RANGE
+				&& mayControl(source, bot))
 			.stream()
 			.min(Comparator.comparingDouble(bot -> bot.distanceToSqr(origin)))
 			.map(bot -> List.<AntBot>of(bot))

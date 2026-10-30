@@ -107,6 +107,38 @@ class AntCraftConfigTest {
 	}
 
 	@Test
+	void playerLimitsDefaultAndRead() {
+		AntCraftConfig.Values defaults = AntCraftConfig.parse(new Properties());
+		assertEquals(10000, defaults.playerInstructionsPerTick());
+		assertEquals(8, defaults.maxScriptsPerPlayer());
+		assertEquals(defaults.playerInstructionsPerTick(), new AntCraftConfig.Values(true, 64).playerInstructionsPerTick());
+		assertEquals(defaults.maxScriptsPerPlayer(), new AntCraftConfig.Values(true, 64).maxScriptsPerPlayer());
+		Properties props = new Properties();
+		props.setProperty("playerInstructionsPerTick", " 4000 ");
+		props.setProperty("maxScriptsPerPlayer", " 3 ");
+		assertEquals(4000, AntCraftConfig.parse(props).playerInstructionsPerTick());
+		assertEquals(3, AntCraftConfig.parse(props).maxScriptsPerPlayer());
+	}
+
+	@Test
+	void badPlayerLimitsAreClamped() {
+		Properties props = new Properties();
+		props.setProperty("playerInstructionsPerTick", "0");
+		props.setProperty("maxScriptsPerPlayer", "-3");
+		assertEquals(1, AntCraftConfig.parse(props).playerInstructionsPerTick(), "a player's bots must run at least one instruction");
+		assertEquals(0, AntCraftConfig.parse(props).maxScriptsPerPlayer());
+		props.setProperty("playerInstructionsPerTick", "lots");
+		props.setProperty("maxScriptsPerPlayer", "many");
+		assertEquals(10000, AntCraftConfig.parse(props).playerInstructionsPerTick());
+		assertEquals(8, AntCraftConfig.parse(props).maxScriptsPerPlayer());
+		props.setProperty("playerInstructionsPerTick", "50000");
+		List<String> warnings = new ArrayList<>();
+		assertEquals(20000, AntCraftConfig.parse(props, warnings::add).playerInstructionsPerTick());
+		assertEquals(1, warnings.size(), "warnings: " + warnings);
+		assertTrue(warnings.getFirst().contains("playerInstructionsPerTick") && warnings.getFirst().contains("50000"), warnings.getFirst());
+	}
+
+	@Test
 	void theConfigCommentWarnsOfTheLagRiskOfALargeScriptBudget() {
 		String comment = AntCraftConfig.fileComment();
 		assertTrue(comment.contains("scriptInstructionsPerTick") && comment.contains("20000") && comment.contains("lag"), comment);

@@ -6,7 +6,7 @@ AntCraft must be installed on the server and on every player's client: it adds i
 
 - **Singleplayer / LAN:** enabled by default.
 - **Dedicated servers:** disabled by default. The server owner must explicitly set `enableOnDedicatedServer = true` in the config.
-- The `/antcraft` commands are restricted to operators. Server owners can cap the bot count per dimension (`maxBotsPerLevel`).
+- The `/antcraft` commands are restricted to operators, but players may run scripts from the server's script folders on their own bots, within a shared instruction budget (`playerInstructionsPerTick`) and a cap on their running scripts (`maxScriptsPerPlayer`; `0` turns players' scripts off); see [Players' scripts](scripts.md#players-scripts). Server owners can cap the bot count per dimension (`maxBotsPerLevel`).
 - Each colony belongs to the player who placed its core. Only that player, the players they trust with the colony (`/antcraft colony trust`) and operators may change it, and a Bot Core's bot joins only a colony its player may change.
 
 ## Server load

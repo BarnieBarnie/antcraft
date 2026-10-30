@@ -38,6 +38,9 @@ public final class AntCraftConfig {
 	public static final int DEFAULT_BOT_FLEE_HEALTH = 6;
 	/** Below this much air (of 300 ticks) a bot under water swims up to breathe. */
 	public static final int DEFAULT_BOT_SURFACE_AIR = 100;
+	/** What all of a non-operator's bots may run a tick together: five bots at the default per-bot budget. */
+	public static final int DEFAULT_PLAYER_INSTRUCTIONS_PER_TICK = 10000;
+	public static final int DEFAULT_MAX_SCRIPTS_PER_PLAYER = 8;
 
 	/**
 	 * {@code colonyActionsRequireOp} limits changing colonies to operators; otherwise its owner, trusted players and operators may (see {@code ColonyActions.mayAct}).
@@ -49,10 +52,22 @@ public final class AntCraftConfig {
 	 * the reflexes that flee hostile mobs and swim up to breathe; 0 turns each off. {@code botsAttackPlayers},
 	 * {@code botsAttackBots} and {@code botsAttackTamed} let a script's {@code attack} hit players, other bots, and tamed
 	 * or named animals; by default it hits only hostile mobs and untamed, unnamed animals (#415).
+	 * {@code playerInstructionsPerTick} is what all the bots of a player who is not an operator may run a tick together, split
+	 * evenly between those running a script, at most {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}; {@code maxScriptsPerPlayer} is
+	 * how many scripts such a player may run with {@code /antcraft bot run} at once, 0 for none (docs/features/scripts.md,
+	 * Players' scripts).
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir,
-		boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed) {
+		boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed, int playerInstructionsPerTick, int maxScriptsPerPlayer) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir,
+			boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
+				botRespawn, botRespawnTicks, botFleeHealth, botSurfaceAir, botsAttackPlayers, botsAttackBots, botsAttackTamed,
+				DEFAULT_PLAYER_INSTRUCTIONS_PER_TICK, DEFAULT_MAX_SCRIPTS_PER_PLAYER);
+		}
+
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir) {
 			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
@@ -116,6 +131,8 @@ public final class AntCraftConfig {
 		props.setProperty("botsAttackPlayers", Boolean.toString(values.botsAttackPlayers()));
 		props.setProperty("botsAttackBots", Boolean.toString(values.botsAttackBots()));
 		props.setProperty("botsAttackTamed", Boolean.toString(values.botsAttackTamed()));
+		props.setProperty("playerInstructionsPerTick", Integer.toString(values.playerInstructionsPerTick()));
+		props.setProperty("maxScriptsPerPlayer", Integer.toString(values.maxScriptsPerPlayer()));
 		for (String removed : REMOVED) {
 			props.remove(removed);
 		}
@@ -140,7 +157,10 @@ public final class AntCraftConfig {
 			+ "botFleeHealth (default " + DEFAULT_BOT_FLEE_HEALTH + ", of 20): at or below this health a bot flees a hostile mob near it; 0 never.\n"
 			+ "botSurfaceAir (default " + DEFAULT_BOT_SURFACE_AIR + ", of 300 ticks): below this much air a bot under water swims up to breathe; 0 never.\n"
 			+ "botsAttackPlayers, botsAttackBots, botsAttackTamed (default false): whether a script's attack may hit players, other bots,\n"
-			+ "and tamed or named animals; it always may hit hostile mobs and untamed, unnamed animals.";
+			+ "and tamed or named animals; it always may hit hostile mobs and untamed, unnamed animals.\n"
+			+ "playerInstructionsPerTick (default " + DEFAULT_PLAYER_INSTRUCTIONS_PER_TICK + ", at most " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK
+			+ ") is shared by all the bots of a player who is not an operator,\n"
+			+ "and maxScriptsPerPlayer (default " + DEFAULT_MAX_SCRIPTS_PER_PLAYER + ", 0 for none) is how many scripts such a player may run at once.";
 	}
 
 	public static Values parse(Properties props) {
@@ -162,11 +182,18 @@ public final class AntCraftConfig {
 		boolean botsLoadChunks = Boolean.parseBoolean(props.getProperty("botsLoadChunks", "true").trim());
 		boolean botRespawn = Boolean.parseBoolean(props.getProperty("botRespawn", "true").trim());
 		int botRespawnTicks = nonNegativeInt(props, "botRespawnTicks", DEFAULT_BOT_RESPAWN_TICKS);
+		int playerInstructions = Math.max(1, nonNegativeInt(props, "playerInstructionsPerTick", DEFAULT_PLAYER_INSTRUCTIONS_PER_TICK));
+		if (playerInstructions > MAX_SCRIPT_INSTRUCTIONS_PER_TICK) {
+			warn.accept("playerInstructionsPerTick " + playerInstructions + " is above the cap of " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK
+				+ "; using " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK);
+			playerInstructions = MAX_SCRIPT_INSTRUCTIONS_PER_TICK;
+		}
+		int maxScriptsPerPlayer = nonNegativeInt(props, "maxScriptsPerPlayer", DEFAULT_MAX_SCRIPTS_PER_PLAYER);
 		int fleeHealth = nonNegativeInt(props, "botFleeHealth", DEFAULT_BOT_FLEE_HEALTH);
 		int surfaceAir = nonNegativeInt(props, "botSurfaceAir", DEFAULT_BOT_SURFACE_AIR);
 		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks,
 			botRespawn, botRespawnTicks, fleeHealth, surfaceAir, flag(props, "botsAttackPlayers"), flag(props, "botsAttackBots"),
-			flag(props, "botsAttackTamed"));
+			flag(props, "botsAttackTamed"), playerInstructions, maxScriptsPerPlayer);
 	}
 
 	/** The boolean under {@code key}, false when it is missing. */
@@ -208,6 +235,14 @@ public final class AntCraftConfig {
 
 	public static int scriptInstructionsPerTick() {
 		return values.scriptInstructionsPerTick();
+	}
+
+	public static int playerInstructionsPerTick() {
+		return values.playerInstructionsPerTick();
+	}
+
+	public static int maxScriptsPerPlayer() {
+		return values.maxScriptsPerPlayer();
 	}
 
 	public static Output.Level scriptChatLevel() {

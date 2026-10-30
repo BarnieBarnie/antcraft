@@ -14,6 +14,8 @@
 	"commands.antcraft.script.unknown": "No script named %s (see /antcraft script list)",
 	"commands.antcraft.script.broken": "%s does not compile: %s",
 	"commands.antcraft.bot.run": "Started %s on %s bot(s)",
+	"commands.antcraft.bot.not_yours": "%s is not your bot",
+	"commands.antcraft.bot.too_many": "You may run at most %s scripts at once",
 	"commands.antcraft.core.script": "This Bot Core's bot will run %s",
 	"commands.antcraft.core.cleared": "This Bot Core's bot will run idle.py",
 	"commands.antcraft.core.no_core": "Hold a Bot Core in your main hand",

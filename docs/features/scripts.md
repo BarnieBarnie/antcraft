@@ -42,6 +42,17 @@ The log keeps a bot's last 200 lines and is saved with the bot, so `/antcraft bo
 
 Each bot gets `scriptInstructionsPerTick` (config, default 2000) VM instructions a tick. A script that uses them up simply continues on the next tick, so `while True: pass` costs a busy bot, not a frozen server. See [Config](config.md) for its limit. A call of a bot API function that is done at once and touches the world costs more than one instruction, about as many as the time it takes: `craft` 40, `drop` 20, `equip` 15, `inventory`, `block` and `container` 30, `count` and `has` 20, `entities` 120, `items_near` 10, `smelt` 60, `colony` 35, `free_slots` 20, `matches` 15, `blueprint` 100, `mineshaft_at` 1500, `take_job` 30, `drop_job` and `finish_job` 20, `post_job` 35, and `jobs` 10 and 8 a job it lists (measured in the benchmark, where a plain instruction takes about 20 ns of the tick, the bot's own tick included). So a script that loops on them uses up its budget in about the time a plain loop would. Functions that cost about an instruction (`pos`, `time`, `held`) and actions that pause the script cost one. Senses that scan the world (`scan`, `find_nearest`, `mineshaft`, and `ore_vein`, whose vein is at most 32 blocks) count extra instructions in proportion to the blocks they read, and all but `ore_vein` share a server-wide budget the way pathfinding shares `PathBudget`; a site `mineshaft` finds also counts 700 blocks of that budget for its dict (about its time, #399). The bot benchmark logs each case's average, 99th percentile (p99) and worst tick; judge costs on the average and the p99, as the single worst tick varies some 2 ms between runs of the same code (#399).
 
+## Players' scripts
+
+On a server, players who are not operators may script their own bots: `/antcraft bot run`, `stop`, `status` and `log` work on the bots they own (a bot belongs to the player who activated its Bot Core, or who last started a script on it), and `/antcraft script list` shows what they can run. Another player's bot, or one nobody owns, is refused (`Ant Bot is not your bot`), and `bot` without a target picks the nearest bot of their own. They may run any script in the script folders: those are the server's, curated by its admins. Without operator rights a player cannot use entity selectors such as `@e`, so they name a bot by its UUID or let the command pick the nearest. `script reload` and `core script` stay operator-only.
+
+Their scripts have two limits (config):
+
+- `playerInstructionsPerTick` (default 10000) is shared by all the bots of one player running a script, `idle.py` included: each gets an even share, at most `scriptInstructionsPerTick` and at least 1 instruction a tick. So ten bots of one player at the defaults run 1000 instructions a tick each, while another player's one bot runs its full 2000.
+- `maxScriptsPerPlayer` (default 8) is how many scripts of their own (`idle.py` not counted) a player's bots may run at once; `bot run` that would go over it is refused. `0` lets no player who is not an operator run scripts.
+
+Operators are exempt from both, and so is everyone in single-player and LAN worlds (the limits apply on a dedicated server only). A Bot Core's script is not counted against `maxScriptsPerPlayer` when the core is used, but its bot shares its owner's instruction budget like any other.
+
 ## Pausing
 
 A script pauses when it calls an action (until the action ends), calls `wait(ticks)`, or runs out of budget. The action's `Result` is the call's return value when the script continues.

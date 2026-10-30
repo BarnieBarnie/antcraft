@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
 import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptLibrary;
+import io.github.barniebarnie.antcraft.script.PlayerLimits;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Code;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -228,7 +229,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				this.idleIfDone();
 				if (this.script != null && this.script.running()) {
 					ScriptRun run = this.script;
-					TickProfiler.time("bot.script", () -> run.tick(AntCraftConfig.scriptInstructionsPerTick()));
+					TickProfiler.time("bot.script", () -> run.tick(PlayerLimits.budget(this.owner)));
 					if (!run.running() && !this.isDeadOrDying()) {
 						this.releaseJobs(); // it ended, failed or stopped itself
 					}

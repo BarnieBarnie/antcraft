@@ -28,6 +28,8 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.permissions.PermissionSet;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.GameType;
 import org.jspecify.annotations.Nullable;
@@ -135,8 +137,17 @@ public final class BotScripts {
 		return command(helper, null, command);
 	}
 
+	/** As {@link #command(GameTestHelper, String)}, run by {@code player} as a player who is not an operator. */
+	public static List<String> commandAsPlayer(GameTestHelper helper, ServerPlayer player, String command) {
+		return command(helper, player, LevelBasedPermissionSet.ALL, command);
+	}
+
 	/** As {@link #command(GameTestHelper, String)}, with {@code as} (if not null) as the entity running it, such as a player. */
 	public static List<String> command(GameTestHelper helper, @Nullable Entity as, String command) {
+		return command(helper, as, null, command);
+	}
+
+	private static List<String> command(GameTestHelper helper, @Nullable Entity as, @Nullable PermissionSet permissions, String command) {
 		List<String> lines = new ArrayList<>();
 		CommandSource recorder = new CommandSource() {
 			@Override
@@ -163,6 +174,9 @@ public final class BotScripts {
 		CommandSourceStack source = server.createCommandSourceStack().withLevel(helper.getLevel()).withSource(recorder);
 		if (as != null) {
 			source = source.withEntity(as);
+		}
+		if (permissions != null) {
+			source = source.withPermission(permissions);
 		}
 		server.getCommands().performPrefixedCommand(source, command);
 		return lines;

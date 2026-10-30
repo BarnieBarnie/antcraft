@@ -186,6 +186,58 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		helper.succeed();
 	}
 
+	/**
+	 * A player who is not an operator shares playerInstructionsPerTick between all their bots (docs/features/scripts.md,
+	 * Players' scripts): ten looping bots of one player each run a tenth of it, the one bot of another its whole budget.
+	 */
+	@GameTest(maxTicks = 60)
+	public void aPlayersBotsShareTheirOwnersBudget(GameTestHelper helper) {
+		AntBot alone = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BotScripts.owner(helper, alone);
+		ScriptRun aloneRun = BotScripts.run(alone, "n = 0\nwhile True:\n    n += 1\n");
+		AntBot first = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		BotScripts.RecordingPlayer many = BotScripts.owner(helper, first);
+		List<ScriptRun> manyRuns = new java.util.ArrayList<>();
+		for (int i = 0; i < 10; i++) {
+			AntBot bot = i == 0 ? first : helper.spawn(ModEntities.ANT_BOT, 2 + i % 5, 1, 4 + i / 5);
+			bot.setOwner(many.getUUID());
+			manyRuns.add(BotScripts.run(bot, "n = 0\nwhile True:\n    n += 1\n"));
+		}
+
+		helper.runAfterDelay(20, () -> {
+			long perBot = AntCraftConfig.scriptInstructionsPerTick();
+			long share = Math.min(perBot, AntCraftConfig.playerInstructionsPerTick() / 10);
+			helper.assertTrue(share < perBot, "the test needs a player budget below ten bots' budgets: " + share + " of " + perBot);
+			helper.assertTrue(aloneRun.executed() >= 18 * perBot && aloneRun.executed() <= 21 * perBot,
+				aloneRun.executed() + " instructions in 20 ticks for the lone bot at " + perBot + " a tick");
+			for (ScriptRun run : manyRuns) {
+				helper.assertTrue(run.executed() >= 18 * share && run.executed() <= 21 * share,
+					run.executed() + " instructions in 20 ticks for one of ten bots at " + share + " a tick");
+			}
+			helper.succeed();
+		});
+	}
+
+	/** A player who is not an operator may run a script on their own bot, not on another player's. */
+	@GameTest(maxTicks = 20)
+	public void aPlayerRunsScriptsOnlyOnTheirOwnBots(GameTestHelper helper) {
+		String name = BotScripts.libraryScript(helper, "own_", "while True:\n    wait(20)\n");
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		other.setOwner(UUID.randomUUID());
+
+		List<String> refused = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + other.getStringUUID() + " run " + name);
+		helper.assertFalse(other.isRunningScript() && !other.isIdling(), "ran on another player's bot: " + refused);
+		// A failure comes styled, so its text is translated.
+		helper.assertTrue(refused.size() == 1 && refused.getFirst().endsWith(" is not your bot"), "answer " + refused);
+		List<String> ran = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + own.getStringUUID() + " run " + name);
+		helper.assertTrue(own.getScript() != null && own.getScript().name().equals(name), "own bot runs " + ran);
+		List<String> status = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + own.getStringUUID() + " status");
+		helper.assertTrue(status.size() == 1 && status.getFirst().startsWith("commands.antcraft.bot.status["), "status " + status);
+		helper.succeed();
+	}
+
 	@GameTest(maxTicks = 60)
 	public void anEndlessLoopKeepsTheServerTickingAndShowsAsRunning(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

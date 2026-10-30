@@ -1,6 +1,6 @@
 # Commands
 
-**Commands** (operators only, but a colony's owner may also use `colony trust`, `colony trust list` and `colony untrust` on it):
+**Commands** (operators only, but any player may use `script list`, a bot's owner may use `bot run`, `stop`, `status` and `log` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
 
 | Command | Effect |
 |---------|--------|
@@ -21,7 +21,7 @@
 
 ## Script commands
 
-Commands (single-player first; on a server they stay operator-only):
+Commands (on a server, `script reload` and `core script` are operator-only; the others players may use on their own bots, see [Players' scripts](scripts.md#players-scripts)):
 
 ```
 /antcraft script list                       scripts found, with compile errors

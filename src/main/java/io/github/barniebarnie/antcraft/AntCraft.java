@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
+import io.github.barniebarnie.antcraft.script.PlayerLimits;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -37,6 +38,7 @@ public class AntCraft implements ModInitializer {
 		ModItems.register();
 		AntCraftCommands.register();
 		ServerScripts.register();
+		PlayerLimits.register();
 		Blueprints.register();
 		BlueprintNetworking.register();
 		// The whole server tick.
