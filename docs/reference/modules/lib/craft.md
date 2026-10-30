@@ -20,9 +20,9 @@ An item the game does not know, or an `n` outside 1 to 1000000, stops the script
 
 `craft_all(item, n)` for a bot away from any crafting table. Where a step finds no table within reach (`no_table`), it puts one down beside the bot, as a player does: the table it carries, else one it first crafts from carried planks or logs. It places it on the first free spot north, south, east or west of the bot's feet, runs `craft_all(item, n, table=spot)`, then mines the table and picks it up again, also when a step fails. With a table within reach, or only 2x2 recipes, it is `craft_all` as is and places nothing.
 
-The steps made before the `no_table` stay made, and a table it crafts takes its planks from what the bot carries first: with planks for only one of the two, the table is made and the item then lacks them (`missing_ingredients`).
+Before it crafts anything it asks `plan(item, n)` (below) what to gather, the table and furnace it must craft included: with planks for the item or a table but not both, it crafts nothing and gives `missing_ingredients` with the logs both lack.
 
-- **Returns** what `craft_all` gives for the item, or `no_table` (the steps before it made) where the bot could not craft a table or no spot beside it took one.
+- **Returns** what `craft_all` gives for the item, `missing_ingredients` with `plan`'s `gather` before it crafts anything, or `no_table` (the steps before it made) where no spot beside the bot took a table.
 - **Pauses** yes, as `craft_all` does, and while it mines the table back.
 
 ## `smelt_here(item, n=1, fuel=None)`
@@ -36,9 +36,7 @@ Mining the furnace back takes a pickaxe: without one it stays where it was put d
 
 ## `obtain(item, n=1, chests=None)`
 
-Makes the bot carry `n` of `item`, raw items fetched from storage: where it carries `n` already it is done. Otherwise it asks [`needs`](../../crafting/needs.md)`(item, n)` what to gather and takes that from each chest of `chests` in turn (a list of [`Pos`](../../types/pos.md); `None`: the [`colony`](../../colony/colony.md)'s Colony Core, no chest for a bot in no colony), with [`lib/inv`](inv.md)'s `take_all`, so raw items spread over several chests are all used. Then it runs `craft_here(item, n)`, which puts a crafting table and furnace down as need be.
-
-Where `craft_here` gives `no_table` or `no_furnace` and the bot carries none, it obtains the table or furnace the same way, from the same chests, and runs `craft_here` once more: a table crafted from the planks the item's sticks were made from takes another log from the chest. That table or furnace stays carried.
+Makes the bot carry `n` of `item`, raw items fetched from storage: where it carries `n` already it is done. Otherwise it asks `plan(item, n)` (below) what to gather, the raw items of a crafting table and furnace `craft_here` must craft included, and takes that from each chest of `chests` in turn (a list of [`Pos`](../../types/pos.md); `None`: the [`colony`](../../colony/colony.md)'s Colony Core, no chest for a bot in no colony), with [`lib/inv`](inv.md)'s `take_all`, so raw items spread over several chests are all used. Then it runs `craft_here(item, n)`, which crafts and puts a crafting table and furnace down as need be. That table or furnace stays carried.
 
 - **Returns** a dict as `craft_all` gives: `ok`, or `missing_ingredients` with `missing`, item id to how many the chests lack, before it crafts anything (what it could take stays taken), or what `craft_here` gives.
 - **Pauses** yes, while it walks to each chest and as `craft_here` does.
@@ -51,6 +49,13 @@ A tier the bot lacks raw items for fails before anything is crafted, so trying t
 
 - **Returns** a dict as `craft_all` gives: `ok`, or what `obtain` gave for the wooden tool where no tier could be made, such as `missing_ingredients`.
 - **Pauses** yes, as `obtain` does; not where the bot carries a tool of `kind`.
+
+## `plan(item, n=1)`
+
+[`needs`](../../crafting/needs.md)`(item, n)`, with the stations `craft_here` must craft for it planned first from the same items, through `needs`'s `also`: a crafting table where a step needs one (`needs`'s `table`) and a furnace where a step smelts, each only where the bot neither carries one nor finds one with [`find_nearest`](../../world/find_nearest.md) within `REACH` (4) blocks; a furnace takes a table to craft. So its `gather` is what the item and those stations lack together. A station just out of reach of `craft` or `smelt` but within that sphere is not planned for.
+
+- **Returns** `needs`'s dict.
+- **Pauses** no, unless `find_nearest` does.
 
 The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block)` places a carried block on such a spot and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
 

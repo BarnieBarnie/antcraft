@@ -73,7 +73,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`take`](crafting/take.md) | `take(container, item, n=None)` | action: take items out of a container |
 | [`craft`](crafting/craft.md) | `craft(item, n=1, table=None)` | action: craft from carried items |
 | [`smelt`](crafting/smelt.md) | `smelt(item, n=1, furnace=None, fuel=None)` | action: smelt carried items in a furnace, blast furnace or smoker |
-| [`needs`](crafting/needs.md) | `needs(item, n=1)` | the raw items still to gather and the craft and smelt steps to make an item |
+| [`needs`](crafting/needs.md) | `needs(item, n=1, also=None)` | the raw items still to gather and the craft and smelt steps to make an item |
 
 ## Building
 
@@ -157,7 +157,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/home`](modules/lib/home.md): `go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`.
 - [`lib/shaft`](modules/lib/shaft.md): `dig_shaft(levels)`, `to_level(level)`, `to_surface()`, `shaft(levels=None)`.
 - [`lib/mine`](modules/lib/mine.md): `mine_level(level, rounds=1)`, `site(r=0)`.
-- [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`, `smelt_here(item, n=1, fuel=None)`, `obtain(item, n=1, chests=None)`, `ensure_tool(kind, chests=None)`.
+- [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`, `smelt_here(item, n=1, fuel=None)`, `obtain(item, n=1, chests=None)`, `ensure_tool(kind, chests=None)`, `plan(item, n=1)`.
 - [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4)`.
 - [`lib/inv`](modules/lib/inv.md): `take_all(chest, need)`, `store_all(chest, keep=None)`.
 - [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None)`, `is_tree(base)`, `fell(base, replant=True)`.

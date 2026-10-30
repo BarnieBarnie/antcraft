@@ -94,7 +94,7 @@ public final class TaskPlanner {
 	};
 
 	/** What a plan is made from; the recipe book and gatherables compare as their own objects do, by identity unless they say otherwise. */
-	private record PlanKey(Object item, int count, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable) {
+	private record PlanKey(Object item, int count, List<?> first, Map<?, Integer> stock, RecipeBook<?> book, Predicate<?> gatherable) {
 	}
 
 	/**
@@ -103,16 +103,21 @@ public final class TaskPlanner {
 	 * last {@link #KEPT_PLANS} plans are kept and a plan for the same item, count, stock, recipe book and gatherables is
 	 * not searched for again. A book must not change its recipes once it has planned.
 	 */
-	@SuppressWarnings("unchecked")
 	public static <I> Plan<I> plan(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
-		PlanKey key = new PlanKey(item, count, Map.copyOf(stock), book, gatherable);
+		return plan(item, count, List.of(), stock, book, gatherable);
+	}
+
+	/** Like {@link #plan(Object, int, Map, RecipeBook, Predicate)}, but one of each of {@code first} is planned before {@code item}, from the same stock. */
+	@SuppressWarnings("unchecked")
+	public static <I> Plan<I> plan(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
+		PlanKey key = new PlanKey(item, count, List.copyOf(first), Map.copyOf(stock), book, gatherable);
 		synchronized (KEPT) {
 			Plan<?> kept = KEPT.get(key);
 			if (kept != null) {
 				return (Plan<I>) kept;
 			}
 		}
-		Plan<I> plan = search(item, count, stock, book, gatherable);
+		Plan<I> plan = search(item, count, first, stock, book, gatherable, new long[1]);
 		synchronized (KEPT) {
 			KEPT.put(key, plan);
 		}
@@ -122,17 +127,17 @@ public final class TaskPlanner {
 	/** How many stock entries a search for a plan copies, for checking that a large stock stays cheap. */
 	static <I> long stockEntriesCopied(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
 		long[] copied = {0};
-		search(item, count, stock, book, gatherable, copied);
+		search(item, count, List.of(), stock, book, gatherable, copied);
 		return copied[0];
 	}
 
-	private static <I> Plan<I> search(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable) {
-		return search(item, count, stock, book, gatherable, new long[1]);
-	}
-
-	private static <I> Plan<I> search(I item, int count, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, long[] copied) {
+	private static <I> Plan<I> search(I item, int count, List<I> first, Map<I, Integer> stock, RecipeBook<I> book, Predicate<I> gatherable, long[] copied) {
 		State<I> state = new State<>(new Stock<>(stock, copied));
-		new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0, 0}).need(state, item, count, new HashSet<>(), true);
+		Search<I> search = new Search<>(book, gatherable, new HashMap<>(), new IdentityHashMap<>(), new int[] {EXPANSION_BUDGET, 0, 0});
+		for (I one : first) {
+			search.need(state, one, 1, new HashSet<>(), true);
+		}
+		search.need(state, item, count, new HashSet<>(), true);
 		// Map.copyOf would iterate in an order that differs between runs.
 		return new Plan<>(List.copyOf(state.crafts), Collections.unmodifiableMap(state.gather), Collections.unmodifiableMap(state.missing));
 	}

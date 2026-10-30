@@ -20,8 +20,9 @@ TIERS = ["netherite", "diamond", "iron", "stone", "golden", "wooden"]
 # The tiers ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
 MADE = ["diamond", "iron", "stone", "wooden"]
 
-# The block craft_here or smelt_here could not put down, by the reason it gives.
-STATIONS = {"no_table": "crafting_table", "no_furnace": "furnace"}
+# How far craft_here looks for a crafting table or furnace it need not craft. ponytail: find_nearest's sphere stands in for
+# the reach of craft and smelt, so a station just outside reach is not planned for.
+REACH = 4
 
 
 def craft_all(item, n=1, table=None, furnace=None):
@@ -50,23 +51,31 @@ def craft_all(item, n=1, table=None, furnace=None):
 
 
 def obtain(item, n=1, chests=None):
-    """Makes the bot carry n of item: the raw items needs(item, n) lists, taken from chests (a list of positions; None:
-    the colony's core, none outside a colony) one after the other, then craft_here(item, n). Where the bot cannot put a
-    crafting table or furnace down, it obtains one the same way and tries again. Gives result(): ok,
-    missing_ingredients with missing, what the chests lack, before it crafts anything, or craft_here's result."""
+    """Makes the bot carry n of item: the raw items plan(item, n) lists, those of a crafting table or furnace craft_here
+    must craft included, taken from chests (a list of positions; None: the colony's core, none outside a colony) one
+    after the other, then craft_here(item, n). Gives result(): ok, missing_ingredients with missing, what the chests
+    lack, before it crafts anything, or craft_here's result."""
     if count(item) >= n:
         return result()
     if chests is None:
         c = colony()
         chests = [c["core"]] if c else []
-    short = fetch(needs(item, n)["gather"], chests)
+    short = fetch(plan(item, n)["gather"], chests)
     if short:
         return result("missing_ingredients", None, short)
-    r = craft_here(item, n)
-    station = STATIONS.get(r["reason"])
-    if station and count(station) == 0 and obtain(station, 1, chests)["ok"]:
-        r = craft_here(item, n)
-    return r
+    return craft_here(item, n)
+
+
+def plan(item, n=1):
+    """needs(item, n), with the crafting table and furnace craft_here must craft for it planned first from the same
+    items: those its steps need that the bot neither carries nor finds within REACH (a furnace takes a table)."""
+    p = needs(item, n)
+    stations = []
+    if "smelt" in [step[2] for step in p["crafts"]] and not count("furnace") and find_nearest("furnace", radius=REACH) is None:
+        stations.append("furnace")
+    if (stations or p["table"]) and not count("crafting_table") and find_nearest("crafting_table", radius=REACH) is None:
+        stations.insert(0, "crafting_table")
+    return needs(item, n, also=stations) if stations else p
 
 
 def ensure_tool(kind, chests=None):
@@ -102,7 +111,12 @@ def fetch(more, chests):
 def craft_here(item, n=1):
     """craft_all(item, n), and where a step finds no crafting table within reach, one placed beside the bot for it: the
     carried one, else one crafted from carried planks or logs. The placed table is mined back after, also when a step
-    fails. Gives craft_all's result, or no_table where no table could be crafted or placed."""
+    fails. Gives craft_all's result, missing_ingredients with missing where plan(item, n) lacks raw items, before it
+    crafts anything, so a table or furnace is not made from what the item needs, or no_table where no table could be
+    placed."""
+    short = plan(item, n)["gather"]
+    if short:
+        return result("missing_ingredients", None, short)
     r = craft_all(item, n)
     if r["reason"] != "no_table":
         return r

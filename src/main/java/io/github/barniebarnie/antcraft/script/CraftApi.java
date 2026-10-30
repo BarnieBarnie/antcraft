@@ -99,11 +99,12 @@ public final class CraftApi {
 			return craft(run, WorkApi.bot(run, call), item, n, table, call);
 		});
 		natives.register("needs", NEEDS_COST, call -> {
-			Object[] args = Args.bind("needs", call, 1, "item", "n");
+			Object[] args = Args.bind("needs", call, 1, "item", "n", "also");
 			Item item = oneItem("needs", args[0]);
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
+			List<Item> also = Args.absent(args[2]) ? List.of() : Values.elements(args[2]).stream().map(one -> oneItem("needs", one)).toList();
 			AntBot bot = WorkApi.bot(run, call);
-			return needs(item, n, Storage.stock(BotHands.carried(bot)), GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
+			return needs(item, n, Storage.stock(BotHands.carried(bot)), also, GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
 		});
 		natives.register("smelt", 60, call -> {
 			Object[] args = Args.bind("smelt", call, 1, "item", "n", "furnace", "fuel");
@@ -119,19 +120,19 @@ public final class CraftApi {
 	}
 
 	/**
-	 * {@code needs(item, n)} (docs/reference/crafting/needs.md): what to gather and craft to make {@code n} of {@code item}
-	 * from {@code stock}.
+	 * {@code needs(item, n, also)} (docs/reference/crafting/needs.md): what to gather and craft to make one of each of
+	 * {@code also} and then {@code n} of {@code item} from {@code stock}.
 	 */
-	static PyDict needs(Item item, long n, Map<Item, Integer> stock, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
+	static PyDict needs(Item item, long n, Map<Item, Integer> stock, List<Item> also, TaskPlanner.RecipeBook<Item> book, Predicate<Item> gatherable) {
 		if (n < 1 || n > MAX_NEEDS) {
 			throw new ScriptError("needs() n must be at least 1" + (n < 1 ? "" : " and at most " + MAX_NEEDS) + ", not " + n);
 		}
-		return needs(TaskPlanner.plan(item, (int) n, stock, book, gatherable), i -> BuiltInRegistries.ITEM.getKey(i).toString());
+		return needs(TaskPlanner.plan(item, (int) n, also, stock, book, gatherable), i -> BuiltInRegistries.ITEM.getKey(i).toString());
 	}
 
 	/**
 	 * A plan as {@code needs} returns it: {@code gather}, what the plan gathers or misses, by id, and {@code crafts}, its
-	 * steps as {@code (item, n, how)} tuples.
+	 * steps as {@code (item, n, how)} tuples, and {@code table}, whether a crafting step needs a crafting table's 3x3 grid.
 	 */
 	static <I> PyDict needs(TaskPlanner.Plan<I> plan, Function<I, String> id) {
 		Map<String, Long> gather = new LinkedHashMap<>();
@@ -141,8 +142,10 @@ public final class CraftApi {
 		gather.forEach(gatherDict::put);
 		List<Object> crafts = new ArrayList<>();
 		PyDict inputs = new PyDict();
+		boolean table = false;
 		for (TaskPlanner.Craft<I> craft : plan.crafts()) {
 			TaskPlanner.Recipe<I> recipe = craft.recipe();
+			table |= !recipe.smelting() && recipe.large();
 			crafts.add(PyTuple.of(id.apply(recipe.output()), (long) craft.times() * recipe.count(), recipe.smelting() ? "smelt" : "craft"));
 			if (recipe.smelting()) {
 				// What smelt() takes: the input, any of the recipe's one ingredient.
@@ -155,6 +158,7 @@ public final class CraftApi {
 		needs.put("gather", gatherDict);
 		needs.put("crafts", new PyList(crafts));
 		needs.put("inputs", inputs);
+		needs.put("table", table);
 		return needs;
 	}
 

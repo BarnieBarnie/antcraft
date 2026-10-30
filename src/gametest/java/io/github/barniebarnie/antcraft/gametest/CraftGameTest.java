@@ -388,14 +388,26 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			tablesInTheArea(helper, 1));
 	}
 
-	/** Four planks only: the table takes them, so the pickaxe fails at the placed table, which is still taken back. */
-	@GameTest(maxTicks = 170)
-	public void craftHereTakesTheTableBackWhenAStepFails(GameTestHelper helper) {
+	/** Four planks: enough for the pickaxe or the table, not both, so it crafts nothing and gives the log both lack. */
+	@GameTest(maxTicks = 20)
+	public void craftHereWithPlanksForThePickaxeButNotATableCraftsNothing(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
-		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table", "oak_planks"),
-			List.of("False missing_ingredients {'minecraft:oak_log': 1} 0 1 0"), tablesInTheArea(helper, 0));
+		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table", "oak_planks", "stick"),
+			List.of("False missing_ingredients {'minecraft:oak_log': 1} 0 0 4 2"), tablesInTheArea(helper, 0));
+	}
+
+	/** Eight cobblestone for stone bricks: the furnace would take them all, so it crafts nothing and gives the four more both take. */
+	@GameTest(maxTicks = 20)
+	public void craftHereWithCobblestoneForTheBricksButNotAFurnaceCraftsNothing(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, craftHere("'stone_bricks'", "stone_bricks", "cobblestone", "furnace"),
+			List.of("False missing_ingredients {'minecraft:cobblestone': 4} 0 8 0"), inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
 	/** Raw iron, sticks and coal, a furnace and a table carried: the ingots are smelted in the furnace put down, then the pickaxe made. */
@@ -517,13 +529,27 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertTrue(core.isEmpty(), "the core is not empty"));
 	}
 
-	/** No cobblestone anywhere: it crafts nothing and gives what it still lacks. */
+	/** Planks for the pickaxe but not also a table: it takes a log for the table with the rest, and makes both. */
+	@GameTest(maxTicks = 180)
+	public void obtainTakesWhatTheTableTakesToo(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		expect(helper, bot, obtain("'wooden_pickaxe', chests=[" + chestAt(helper) + "]", "wooden_pickaxe", "crafting_table"),
+			List.of("True None {} 1 1"), () -> {
+				tablesInTheArea(helper, 0).run();
+				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "logs left " + chest.countItem(Items.OAK_LOG));
+			});
+	}
+
+	/** No cobblestone anywhere: it crafts nothing and gives what it still lacks, the log for the table it needs too. */
 	@GameTest(maxTicks = 20)
 	public void obtainWithTooLittleCraftsNothing(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.OAK_LOG, 1));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "oak_planks", "oak_log"),
-			List.of("False missing_ingredients {'minecraft:cobblestone': 3} 0 0 1"));
+			List.of("False missing_ingredients {'minecraft:oak_log': 1, 'minecraft:cobblestone': 3} 0 0 1"));
 	}
 
 	// lib.craft.ensure_tool
@@ -563,14 +589,14 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True None {} minecraft:wooden_pickaxe 1 0"), tablesInTheArea(helper, 0));
 	}
 
-	/** One plank and two sticks, too little for any tier: it fails and every tier leaves them as they were. */
+	/** One plank and two sticks, too little for any tier: it fails, short of the logs for the wooden pickaxe and a table, and every tier leaves them as they were. */
 	@GameTest(maxTicks = 20)
 	public void ensureToolWithNothingToMakeOneFromChangesNothing(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 1));
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
 		expect(helper, bot, ensureTool("'pickaxe'", "oak_planks", "stick", "wooden_pickaxe"),
-			List.of("False missing_ingredients {'minecraft:oak_log': 1} None 1 2 0"));
+			List.of("False missing_ingredients {'minecraft:oak_log': 2} None 1 2 0"));
 	}
 
 	// smelt

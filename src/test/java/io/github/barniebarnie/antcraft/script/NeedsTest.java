@@ -27,7 +27,11 @@ class NeedsTest {
 	}
 
 	private static PyDict needs(Item item, long n, Map<Item, Integer> stock) {
-		return CraftApi.needs(item, n, stock, VanillaData.recipeBook(), VanillaData.gatherable());
+		return needs(item, n, stock, List.of());
+	}
+
+	private static PyDict needs(Item item, long n, Map<Item, Integer> stock, List<Item> also) {
+		return CraftApi.needs(item, n, stock, also, VanillaData.recipeBook(), VanillaData.gatherable());
 	}
 
 	private static String crafts(PyDict needs) {
@@ -91,6 +95,25 @@ class NeedsTest {
 		assertEquals("{'minecraft:iron_ingot': ['minecraft:raw_iron']}", Values.repr(needs.get("inputs")));
 		PyList crafts = (PyList) needs.get("crafts");
 		assertEquals(2, crafts.items.size());
+	}
+
+	@Test
+	void tableSaysWhetherAStepNeedsACraftingTable() {
+		assertEquals(true, needs(Items.STONE_PICKAXE, 1, Map.of()).get("table"));
+		assertEquals(false, needs(Items.STICK, 1, Map.of()).get("table"));
+		assertEquals(false, needs(Items.IRON_INGOT, 1, Map.of()).get("table"));
+	}
+
+	/** Four planks and two sticks make a wooden pickaxe or a table; with also both are planned, so a log is short. */
+	@Test
+	void alsoPlansThoseItemsFirstFromTheSameStock() {
+		Map<Item, Integer> stock = Map.of(Items.OAK_PLANKS, 4, Items.STICK, 2);
+		assertEquals("{}", gather(needs(Items.WOODEN_PICKAXE, 1, stock)));
+
+		PyDict both = needs(Items.WOODEN_PICKAXE, 1, stock, List.of(Items.CRAFTING_TABLE));
+		assertEquals("{'minecraft:oak_log': 1}", gather(both));
+		assertEquals("[('minecraft:crafting_table', 1, 'craft'), ('minecraft:oak_planks', 4, 'craft'), ('minecraft:wooden_pickaxe', 1, 'craft')]",
+			crafts(both));
 	}
 
 	@Test
