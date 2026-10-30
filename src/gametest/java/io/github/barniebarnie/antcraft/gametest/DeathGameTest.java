@@ -28,6 +28,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -353,6 +354,75 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(BotRespawns.get(nether).pending(id) != null, "no respawn waiting in the Nether");
 		GameTests.forgetRespawns(helper.getLevel().getServer(), helper.getBounds());
 		helper.assertTrue(BotRespawns.get(nether).pending(id) == null, "respawn still waiting in the Nether");
+		helper.succeed();
+	}
+
+	/**
+	 * {@code /antcraft bot remove} by its owner (#458) stops the bot's script, drops what it carries where it stands, takes it
+	 * out of its colony with its jobs given back, and removes it for good: no respawn waits for it.
+	 */
+	@GameTest(maxTicks = 20)
+	public void removeTakesTheBotAwayForGood(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		long job = colony.jobs().post("haul", new CompoundTag(), id);
+		helper.assertTrue(colony.jobs().take("haul", id).isPresent(), "job not taken");
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_PICKAXE));
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		BotScripts.run(bot, SCRIPT);
+
+		List<String> answer = BotScripts.commandAsPlayer(helper, owner, "antcraft bot " + id + " remove");
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.remove[1]")), "answer " + answer);
+		helper.assertTrue(helper.getLevel().getEntity(id) == null, "bot still there");
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) == null, "a respawn waits");
+		helper.assertFalse(colony.members().contains(id), "still a member: " + colony.members());
+		helper.assertTrue(colony.jobs().jobs("haul").stream().allMatch(j -> j.id() != job || j.taker().isEmpty()),
+			"job still taken: " + colony.jobs().jobs("haul"));
+		helper.assertItemEntityPresent(Items.COBBLESTONE, new BlockPos(1, 1, 1), 2.0);
+		helper.assertItemEntityPresent(Items.IRON_PICKAXE, new BlockPos(1, 1, 1), 2.0);
+		helper.succeed();
+	}
+
+	/** A player cannot remove another player's bot (#458); an operator can. */
+	@GameTest(maxTicks = 20)
+	public void onlyItsOwnerOrAnOperatorRemovesABot(GameTestHelper helper) {
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		other.setOwner(UUID.randomUUID());
+
+		List<String> refused = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + other.getStringUUID() + " remove");
+		helper.assertTrue(other.isAlive() && !other.isRemoved(), "removed another player's bot");
+		helper.assertTrue(refused.size() == 1 && refused.getFirst().endsWith(" is not your bot"), "answer " + refused);
+		BotScripts.command(helper, "antcraft bot " + other.getStringUUID() + " remove");
+		helper.assertTrue(other.isRemoved(), "the operator did not remove it");
+		helper.assertTrue(own.isAlive() && !own.isRemoved(), "removed the player's own bot too");
+		helper.succeed();
+	}
+
+	/**
+	 * A bot removed while its dead body still lies there (#458) no longer waits to respawn, here in its home's dimension,
+	 * and leaves its colony.
+	 */
+	@GameTest(maxTicks = 20)
+	public void removingADeadBotDropsItsRespawn(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)), Level.NETHER);
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		bot.kill(helper.getLevel());
+		helper.assertTrue(BotRespawns.get(nether).pending(id) != null, "no respawn waits");
+		BotScripts.command(helper, "antcraft bot " + id + " remove");
+		helper.assertTrue(BotRespawns.get(nether).pending(id) == null, "a respawn still waits");
+		helper.assertFalse(colony.members().contains(id), "still a member: " + colony.members());
 		helper.succeed();
 	}
 }

@@ -18,6 +18,7 @@
 	"commands.antcraft.bot.edit.none": "%s runs no script",
 	"commands.antcraft.bot.run": "Started %s on %s bot(s)",
 	"commands.antcraft.bot.not_yours": "%s is not your bot",
+	"commands.antcraft.bot.remove": "Removed %s bot(s)",
 	"commands.antcraft.bot.too_many": "You may run at most %s scripts at once",
 	"commands.antcraft.core.script": "This Bot Core's bot will run %s",
 	"commands.antcraft.core.cleared": "This Bot Core's bot will run idle.py",

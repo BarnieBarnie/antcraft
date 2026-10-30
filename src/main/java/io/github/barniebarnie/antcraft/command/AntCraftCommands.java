@@ -60,7 +60,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft script list   (also any player)
  * /antcraft script edit &lt;script&gt;   (also any player; opens the script editor, which only operators may save from)
  * /antcraft script reload
- * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]|edit   (defaults to the nearest bot; also a
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
@@ -295,6 +295,16 @@ public final class AntCraftCommands {
 		return bots.size();
 	}
 
+	/** Removes {@code bots} for good ({@link AntBot#removeForGood}). */
+	private static int remove(CommandSourceStack source, List<AntBot> bots) {
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		bots.forEach(bot -> bot.removeForGood((ServerLevel) bot.level()));
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.remove", bots.size()), false);
+		return bots.size();
+	}
+
 	/** The bots a {@code bot} subcommand acts on. */
 	@FunctionalInterface
 	private interface BotsArgument {
@@ -398,12 +408,13 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
-	/** {@code run <script> [args]|stop|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
+	/** {@code run <script> [args]|stop|remove|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
 	private static <T extends ArgumentBuilder<CommandSourceStack, T>> T botCommands(T node, BotsArgument bots) {
 		return node
 			.then(Commands.literal("run")
 				.then(scriptArgument((ctx, name, args) -> runScript(ctx.getSource(), bots.get(ctx), name, args))))
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
+			.then(Commands.literal("remove").executes(ctx -> remove(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("edit").executes(ctx -> editBotScript(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("status").executes(ctx -> scriptStatus(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("log")

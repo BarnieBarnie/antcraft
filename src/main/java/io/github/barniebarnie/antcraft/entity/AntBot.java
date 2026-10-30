@@ -38,6 +38,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
@@ -819,10 +820,27 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		InventoryCarrier.pickUpItem(level, this, this, entity);
 	}
 
+	/**
+	 * Removes the bot for good ({@code /antcraft bot remove}, #458): stops its script, drops what it carries where it
+	 * stands, takes it out of its colony, which gives its jobs back, and drops any respawn it waits for, in every dimension.
+	 */
+	public void removeForGood(ServerLevel level) {
+		this.stopScript();
+		this.dropCarried(level);
+		ColonyManager.get(level).leave(this);
+		MinecraftServer server = level.getServer();
+		server.getAllLevels().forEach(each -> BotRespawns.get(each).forget(server, this.getUUID()));
+		this.discard();
+	}
+
 	/** Drops everything the bot carries, like a player: its inventory and whatever it holds or wears. */
 	@Override
 	protected void dropCustomDeathLoot(ServerLevel level, DamageSource source, boolean killedByPlayer) {
 		super.dropCustomDeathLoot(level, source, killedByPlayer);
+		this.dropCarried(level);
+	}
+
+	private void dropCarried(ServerLevel level) {
 		for (EquipmentSlot slot : EquipmentSlot.VALUES) {
 			ItemStack stack = this.getItemBySlot(slot);
 			if (!stack.isEmpty()) {

@@ -98,6 +98,14 @@ public final class BotRespawns extends SavedData {
 		}
 	}
 
+	/** Drops the wait of the bot with {@code id}, if any: it stays dead, and leaves its colony. */
+	public void forget(MinecraftServer server, UUID id) {
+		if (this.pending.remove(id) != null) {
+			ColonyManager.leave(server, id);
+			this.setDirty();
+		}
+	}
+
 	/**
 	 * Brings back the bots whose time has come, once their home ticks entities, keeping it loaded meanwhile when bots may
 	 * load chunks ({@code botsLoadChunks}), and once their dead body is gone (it lies there for a second).
