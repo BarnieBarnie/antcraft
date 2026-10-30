@@ -272,6 +272,28 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** {@code lib.retry.retry} passes {@code kwargs} to its action as keyword arguments, on every try (#468). */
+	@GameTest(maxTicks = 40)
+	public void retryPassesKeywordArgumentsToItsAction(GameTestHelper helper) {
+		String name = BotScripts.libraryScript(helper, "retry_kw_", """
+			import lib.retry
+			calls = []
+			def act(item, tag="none", **rest):
+			    calls.append((tag, rest))
+			    return equip(item)
+			print(lib.retry.retry(act, ("stone",), kwargs={"tag": "a", "x": 1}).ok, calls)
+			print(lib.retry.retry(act, ("diamond",), tries=2, again=("no_item",), delay=1, kwargs={"tag": "b"}).reason, len(calls), calls[-1])
+			""");
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			List<String> lines = bot.getLog().last(10, Output.Level.PRINT).stream().map(BotLog.Entry::text).toList();
+			helper.assertTrue(lines.equals(List.of("True [('a', {'x': 1})]", "no_item 3 ('b', {})")), "log " + lines);
+		});
+	}
+
 	@GameTest(maxTicks = 60)
 	public void anEndlessLoopKeepsTheServerTickingAndShowsAsRunning(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

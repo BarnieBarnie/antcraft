@@ -10,14 +10,15 @@
 AGAIN = ("interrupted", "timeout", "blocked")
 
 
-def retry(action, args, tries=5, again=None, delay=4):
-    """Calls action with args until it succeeds, fails with a reason not in again (AGAIN by default), or it was tried
-    tries times; waits delay ticks between tries. Gives the last result."""
+def retry(action, args, tries=5, again=None, delay=4, kwargs=None):
+    """Calls action with args, and the dict kwargs as keyword arguments, until it succeeds, fails with a reason not in
+    again (AGAIN by default), or it was tried tries times; waits delay ticks between tries. Gives the last result."""
     again = AGAIN if again is None else again
-    r = action(*args)
+    kwargs = {} if kwargs is None else kwargs
+    r = action(*args, **kwargs)
     for _ in range(tries - 1):
         if r or r.reason not in again:
             return r
         wait(delay)
-        r = action(*args)
+        r = action(*args, **kwargs)
     return r
