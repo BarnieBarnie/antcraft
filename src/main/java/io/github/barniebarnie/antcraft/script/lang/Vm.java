@@ -51,6 +51,8 @@ public final class Vm {
 		final PyModule module;
 		/** Whether this runs the top level of an imported module, which is imported once the frame returns. */
 		final boolean imports;
+		/** Whether this runs the {@code __init__} of a new instance, which is the call's result once the frame returns. */
+		boolean init;
 		int pc;
 		/** Null where a local is not set yet. */
 		final Object[] locals;
@@ -260,6 +262,10 @@ public final class Vm {
 	 * script language ({@link Natives#BUILTINS_FILE}) is placed at the script's call of that builtin instead.
 	 */
 	private ScriptError place(ScriptError e, int depth, int pc) {
+		if (depth >= frames.size()) { // the frame returned, as an __init__ does before its result is checked
+			depth = frames.size() - 1;
+			pc = frames.get(depth).pc - 1;
+		}
 		for (int i = depth; i >= 0; i--) {
 			Frame frame = frames.get(i);
 			if (!frame.code.file().equals(Natives.BUILTINS_FILE) || i == 0) {
@@ -430,8 +436,13 @@ public final class Vm {
 			case LOAD_ATTR -> f.push(attribute(f.pop(), code.names()[arg]));
 			case STORE_ATTR -> {
 				Object target = f.pop();
-				throw new ScriptError("'" + Values.typeName(target) + "' object has no attribute '" + code.names()[arg]
-						+ "'");
+				Object value = f.pop();
+				switch (target) {
+					case PyInstance instance -> instance.attributes.put(code.names()[arg], value);
+					case PyClass c -> c.attributes.put(code.names()[arg], value);
+					default -> throw new ScriptError("'" + Values.typeName(target) + "' object has no attribute '"
+							+ code.names()[arg] + "'");
+				}
 			}
 			case UNPACK -> {
 				List<Object> items = Values.elements(f.pop());
@@ -480,6 +491,12 @@ public final class Vm {
 					status = Status.FINISHED;
 				} else if (f.imports) {
 					imported(f.module); // the IMPORT that started it runs again and finds it
+				} else if (f.init) {
+					if (result != PyNone.NONE) {
+						throw new ScriptError("__init__() should return None, not '" + Values.typeName(result) + "'");
+					}
+					// ponytail: self as the frame left it; a script that assigns to self in __init__ gets that back
+					frames.getLast().push(f.locals[0]);
 				} else {
 					frames.getLast().push(result);
 				}
@@ -516,6 +533,13 @@ public final class Vm {
 			case RAISE -> throw new ScriptError(switch (f.pop()) {
 				case PyException e -> e;
 				case PyNative n when PyException.isType(n.name()) -> PyException.of(n.name(), "");
+				case PyInstance i when i.type.exceptionType() != null -> PyException.of(i);
+				case PyClass c when c.exceptionType() != null -> {
+					if (c.lookup("__init__") != null) { // its __init__ would need a frame of its own
+						throw ScriptError.of("TypeError", "raise " + c.name + "(...): the class has an __init__");
+					}
+					yield PyException.of(newInstance(c, List.of()));
+				}
 				default -> throw ScriptError.of("TypeError", "exceptions must derive from BaseException");
 			});
 			case EXC_MATCH -> {
@@ -523,12 +547,40 @@ public final class Vm {
 				PyException e = (PyException) f.pop();
 				boolean matches = false;
 				for (Object t : type instanceof PyTuple tuple ? tuple.items() : List.of(type)) {
-					if (!(t instanceof PyNative n && PyException.isType(n.name()))) {
+					if (!(t instanceof PyNative n && PyException.isType(n.name())
+							|| t instanceof PyClass c && c.exceptionType() != null)) {
 						throw ScriptError.of("TypeError", "catching classes that do not inherit from BaseException is not allowed");
 					}
-					matches |= e.isA(n.name());
+					matches |= e.isA(t);
 				}
 				f.push(matches);
+			}
+			case EXC_VALUE -> {
+				if (f.peek() instanceof PyException e && e.instance() != null) {
+					f.pop();
+					f.push(e.instance());
+				}
+			}
+			case BUILD_CLASS -> {
+				Code.ClassShape shape = (Code.ClassShape) code.constants()[arg];
+				List<Object> values = f.pop(shape.attributes().size());
+				Object base = !shape.hasBase() ? null : switch (f.pop()) {
+					case PyClass c -> c;
+					case PyNative n when PyException.isType(n.name()) -> n.name();
+					case Object other -> throw new ScriptError("a class can only derive from another class or an exception type, not '"
+							+ Values.typeName(other) + "'");
+				};
+				PyClass c = new PyClass(shape.name(), base);
+				for (int i = 0; i < values.size(); i++) {
+					Object value = values.get(i);
+					c.attributes.put(shape.attributes().get(i), value instanceof PyFunction fn
+							? new PyFunction(fn.code(), fn.defaults(), fn.module(), c) : value);
+				}
+				f.push(c);
+			}
+			case SUPER -> {
+				Object self = f.pop();
+				f.push(new PySuper((PyClass) f.pop(), self));
 			}
 			case IMPORT_FROM -> {
 				PyModule module = (PyModule) f.peek();
@@ -630,6 +682,37 @@ public final class Vm {
 	}
 
 	private Object attribute(Object value, String name) {
+		switch (value) {
+			case PyInstance instance -> {
+				Object attribute = instance.attributes.get(name);
+				if (attribute == null) {
+					attribute = bound(instance, instance.type.lookup(name));
+				}
+				if (attribute == null) {
+					throw new ScriptError("'" + instance.type.name + "' object has no attribute '" + name + "'");
+				}
+				return attribute;
+			}
+			case PyClass c -> {
+				Object attribute = name.equals("__name__") ? c.name : c.lookup(name);
+				if (attribute == null) {
+					throw new ScriptError("type object '" + c.name + "' has no attribute '" + name + "'");
+				}
+				return attribute;
+			}
+			case PySuper s -> {
+				Object attribute = s.type().base instanceof PyClass base ? bound(s.self(), base.lookup(name)) : null;
+				if (attribute == null && name.equals("__init__")) { // of object, or of a builtin exception type
+					attribute = new PyBoundMethod(s.self(), new PyNative(Builtins.INIT));
+				}
+				if (attribute == null) {
+					throw new ScriptError("'super' object has no attribute '" + name + "'");
+				}
+				return attribute;
+			}
+			default -> {
+			}
+		}
 		if (value instanceof HostValue host) {
 			Object attribute = host.attribute(name);
 			if (attribute != null) {
@@ -646,8 +729,50 @@ public final class Vm {
 		throw new ScriptError("'" + type + "' object has no attribute '" + name + "'");
 	}
 
+	/** A class attribute as an instance sees it: a method bound to {@code self}, else the attribute (null for none). */
+	private static @Nullable Object bound(Object self, @Nullable Object attribute) {
+		return attribute instanceof PyFunction function ? new PyBoundMethod(self, function) : attribute;
+	}
+
+	/** A new instance of {@code c}; an exception keeps its arguments in {@code args}, whatever its __init__ does. */
+	private static PyInstance newInstance(PyClass c, List<Object> args) {
+		PyInstance instance = new PyInstance(c);
+		if (c.exceptionType() != null) {
+			instance.attributes.put("args", new PyTuple(new ArrayList<>(args)));
+		}
+		return instance;
+	}
+
+	/** Calls class {@code c}: makes an instance and runs its {@code __init__} in a frame whose result is the instance. */
+	private void construct(PyClass c, List<Object> args, Map<String, Object> kwargs) {
+		PyInstance instance = newInstance(c, args);
+		Object init = c.lookup("__init__");
+		if (init == null) {
+			if (!kwargs.isEmpty() || !args.isEmpty() && c.exceptionType() == null) {
+				throw new ScriptError(c.name + "() takes no " + (kwargs.isEmpty() ? "" : "keyword ") + "arguments");
+			}
+			frames.getLast().push(instance);
+			return;
+		}
+		if (!(init instanceof PyFunction function)) {
+			throw new ScriptError("__init__ of " + c.name + " is not a method");
+		}
+		List<Object> withSelf = new ArrayList<>(args.size() + 1);
+		withSelf.add(instance);
+		withSelf.addAll(args);
+		call(function, withSelf, kwargs);
+		frames.getLast().init = true;
+	}
+
 	private void call(Object callee, List<Object> args, Map<String, Object> kwargs) {
 		switch (callee) {
+			case PyClass c -> construct(c, args, kwargs);
+			case PyBoundMethod m -> {
+				List<Object> withSelf = new ArrayList<>(args.size() + 1);
+				withSelf.add(m.self());
+				withSelf.addAll(args);
+				call(m.function(), withSelf, kwargs);
+			}
 			case PyFunction function -> {
 				if (frames.size() >= maxDepth) {
 					throw new ScriptError("maximum recursion depth exceeded");
@@ -747,6 +872,9 @@ public final class Vm {
 							: String.join(", ", missing.subList(0, missing.size() - 1)) + ", and " + missing.getLast();
 			throw new ScriptError(name + "() missing " + missing.size() + " required positional argument"
 					+ (missing.size() == 1 ? "" : "s") + ": " + list);
+		}
+		if (function.owner() != null && params < locals.length && code.locals()[params].equals(Compiler.CLASS_SLOT)) {
+			locals[params] = function.owner(); // for the method's super()
 		}
 		return locals;
 	}

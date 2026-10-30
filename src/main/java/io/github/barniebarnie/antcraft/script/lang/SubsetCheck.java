@@ -29,6 +29,8 @@ final class SubsetCheck {
 		for (Stmt statement : body) {
 			switch (statement) {
 				case Ast.Def def -> function(file, def, enclosing);
+				// As in Python, a class body is no scope its methods see: they see the scopes around the class.
+				case Ast.ClassDef c -> functionsIn(file, c.body(), enclosing);
 				case Ast.If s -> {
 					functionsIn(file, s.body(), enclosing);
 					functionsIn(file, s.orElse(), enclosing);
@@ -112,6 +114,18 @@ final class SubsetCheck {
 							expr(p.defaultValue());
 						}
 					});
+				}
+				case Ast.ClassDef s -> {
+					stores.add(s.name());
+					expr(s.base());
+					for (Stmt member : s.body()) { // evaluated in this scope; the names they bind are the class's
+						switch (member) {
+							case Ast.Assign a -> expr(a.value());
+							case Ast.Def d -> d.params().forEach(p -> expr(p.defaultValue()));
+							default -> {
+							}
+						}
+					}
 				}
 				case Ast.Return s -> {
 					if (s.value() != null) {

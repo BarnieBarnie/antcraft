@@ -28,6 +28,11 @@ import org.jspecify.annotations.Nullable;
  * <p>Each frame's {@code try} blocks are saved with it, so a script saved inside a {@code try}, {@code except} or
  * {@code finally} goes on there.
  *
+ * <p>A script's classes are saved as values, as its lists are: by name, base and attributes, so a class attribute the
+ * script changed comes back changed, and its methods as functions, by reference to their code. Instances are saved with
+ * their class and attributes. Classes are not looked up again by module and name on a load: a class defined in a
+ * function has neither, and the fingerprints already refuse a save whose code changed.
+ *
  * <p>Values are saved as a graph, so a list two variables share, or one that contains itself, comes back as one list.
  * Code is saved by reference, not as code: by the module it was compiled from and its place among that module's nested
  * constants, with a fingerprint of each module's compiled code. A load compiles the modules again and refuses to go on
@@ -37,7 +42,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class VmState {
 	private static final int MAGIC = 0x41435653; // ACVS
-	private static final int VERSION = 2;
+	private static final int VERSION = 3;
 
 	// Values
 	private static final byte NULL = 0;
@@ -63,6 +68,10 @@ public final class VmState {
 	private static final byte SLICE = 11;
 	private static final byte HOST = 12;
 	private static final byte EXCEPTION = 13;
+	private static final byte CLASS = 14;
+	private static final byte INSTANCE = 15;
+	private static final byte BOUND_METHOD = 16;
+	private static final byte SUPER = 17;
 	private static final byte ITER_LIST = 20;
 	private static final byte ITER_TUPLE = 21;
 	private static final byte ITER_STRING = 22;
@@ -202,6 +211,7 @@ public final class VmState {
 				fields.add(code.path());
 				fields.add(frame.module);
 				fields.add(frame.imports);
+				fields.add(frame.init);
 				fields.add((long) frame.pc);
 				fields.add((long) frame.locals.length);
 				fields.addAll(Arrays.asList(frame.locals));
@@ -288,7 +298,9 @@ public final class VmState {
 				if (!(value instanceof PyList || value instanceof PyTuple || value instanceof PyDict || value instanceof PyModule
 						|| value instanceof PyFunction || value instanceof Code || value instanceof PyNative
 						|| value instanceof PyMethod || value instanceof PyRange || value instanceof PyDictView
-						|| value instanceof Values.Slice || value instanceof Iter || value instanceof PyException)) {
+						|| value instanceof Values.Slice || value instanceof Iter || value instanceof PyException
+						|| value instanceof PyClass || value instanceof PyInstance || value instanceof PyBoundMethod
+						|| value instanceof PySuper)) {
 					Object saved = value instanceof HostValue ? host.save(value) : null;
 					if (saved == null) {
 						throw new NotSaveable("a '" + Values.typeName(value) + "' value cannot be saved");
@@ -340,8 +352,36 @@ public final class VmState {
 					fields.add(code.module());
 					fields.add(code.path());
 					fields.add(function.module());
+					fields.add(function.owner());
 					fields.addAll(function.defaults());
 					yield FUNCTION;
+				}
+				case PyClass c -> {
+					fields.add(c.name);
+					fields.add(c.base);
+					c.attributes.forEach((name, attribute) -> {
+						fields.add(name);
+						fields.add(attribute);
+					});
+					yield CLASS;
+				}
+				case PyInstance instance -> {
+					fields.add(instance.type);
+					instance.attributes.forEach((name, attribute) -> {
+						fields.add(name);
+						fields.add(attribute);
+					});
+					yield INSTANCE;
+				}
+				case PyBoundMethod m -> {
+					fields.add(m.self());
+					fields.add(m.function());
+					yield BOUND_METHOD;
+				}
+				case PySuper s -> {
+					fields.add(s.type());
+					fields.add(s.self());
+					yield SUPER;
 				}
 				case Code code -> {
 					CodeRef ref = code(code);
@@ -373,7 +413,7 @@ public final class VmState {
 					yield SLICE;
 				}
 				case PyException e -> {
-					fields.addAll(Arrays.asList(e.type(), e.message(), e.detail(), e.file(), (long) e.line()));
+					fields.addAll(Arrays.asList(e.type(), e.message(), e.detail(), e.file(), (long) e.line(), e.instance()));
 					yield EXCEPTION;
 				}
 				case Iter.OfList i -> {
@@ -634,6 +674,8 @@ public final class VmState {
 						}
 						yield module;
 					}
+					case CLASS -> new PyClass((String) raw.fields()[0], null);
+					case INSTANCE -> new PyInstance(null); // its class is set below, once every class is made
 					default -> null;
 				};
 			}
@@ -656,6 +698,18 @@ public final class VmState {
 							module.globals().put((String) f[i], value(f[i + 1]));
 						}
 					}
+					case PyClass c -> {
+						c.base = value(f[1]);
+						for (int i = 2; i < f.length; i += 2) {
+							c.attributes.put((String) f[i], value(f[i + 1]));
+						}
+					}
+					case PyInstance instance -> {
+						instance.type = (PyClass) value(f[0]);
+						for (int i = 1; i < f.length; i += 2) {
+							instance.attributes.put((String) f[i], value(f[i + 1]));
+						}
+					}
 					case null, default -> value(new Ref(id));
 				}
 			}
@@ -675,6 +729,7 @@ public final class VmState {
 				Code code = code((String) next(), (String) next());
 				PyModule module = (PyModule) value(next());
 				boolean imports = (Boolean) next();
+				boolean init = (Boolean) next();
 				int pc = nextInt();
 				Object[] locals = new Object[nextInt()];
 				for (int j = 0; j < locals.length; j++) {
@@ -682,6 +737,7 @@ public final class VmState {
 				}
 				Vm.Frame frame = new Vm.Frame(code, locals, module, imports);
 				frame.pc = pc;
+				frame.init = init;
 				int sp = nextInt();
 				frame.stack = new Object[Math.max(8, sp)];
 				for (int j = 0; j < sp; j++) {
@@ -783,8 +839,10 @@ public final class VmState {
 			try {
 				value = switch (raws.get(id).kind()) {
 					case TUPLE -> new PyTuple(values(f, 0));
-					case FUNCTION -> new PyFunction(code((String) f[0], (String) f[1]), List.copyOf(values(f, 3)),
-							(PyModule) value(f[2]));
+					case FUNCTION -> new PyFunction(code((String) f[0], (String) f[1]), List.copyOf(values(f, 4)),
+							(PyModule) value(f[2]), (PyClass) value(f[3]));
+					case BOUND_METHOD -> new PyBoundMethod(value(f[0]), value(f[1]));
+					case SUPER -> new PySuper((PyClass) value(f[0]), value(f[1]));
 					case CODE -> code((String) f[0], (String) f[1]);
 					case NATIVE -> new PyNative((String) f[0]);
 					case METHOD -> new PyMethod(value(f[0]), (String) f[1], (String) f[2]);
@@ -793,7 +851,7 @@ public final class VmState {
 					case SLICE -> new Values.Slice(value(f[0]), value(f[1]), value(f[2]));
 					case HOST -> host.load(value(f[0]));
 					case EXCEPTION -> new PyException((String) f[0], (String) f[1], (String) f[2], (String) f[3],
-							Math.toIntExact((Long) f[4]));
+							Math.toIntExact((Long) f[4]), (PyInstance) value(f[5]));
 					case ITER_LIST -> {
 						Iter.OfList iter = new Iter.OfList((PyList) value(f[0]));
 						iter.index = Math.toIntExact((Long) f[1]);

@@ -90,6 +90,7 @@ final class Builtins {
 		});
 		natives.register("dict", Builtins::dict);
 		natives.register("isinstance", Builtins::isinstance);
+		natives.register(INIT, Builtins::init);
 		natives.register("any", call -> Values.elements(Args.bind("any", call, 1, "iterable")[0]).stream()
 				.anyMatch(Values::truthy));
 		natives.register("all", call -> Values.elements(Args.bind("all", call, 1, "iterable")[0]).stream()
@@ -524,13 +525,35 @@ final class Builtins {
 		return Character.isUpperCase(name.charAt(0)) ? v -> v instanceof HostValue h && h.typeName().equals(name) : null;
 	}
 
+	/** The native that {@code super().__init__(...)} calls past a script's classes; not a name a script can write. */
+	static final String INIT = "$init";
+
+	/**
+	 * {@code super().__init__(...)} in a class whose bases are all the script's: the {@code __init__} of an exception type
+	 * keeps the arguments in {@code args}; that of {@code object} takes none.
+	 */
+	private static Object init(NativeCall call) {
+		Args.noKeywords("__init__", call.kwargs());
+		PyInstance self = (PyInstance) call.args().getFirst();
+		List<Object> args = call.args().subList(1, call.args().size());
+		if (self.type.exceptionType() != null) {
+			self.attributes.put("args", new PyTuple(new ArrayList<>(args)));
+		} else if (!args.isEmpty()) {
+			throw new ScriptError("object.__init__() takes exactly one argument (the instance to initialize)");
+		}
+		return PyNone.NONE;
+	}
+
 	private static Object isinstance(NativeCall call) {
 		Object[] a = Args.bind("isinstance", call, 2, "obj", "class_or_tuple");
 		List<Object> types = a[1] instanceof PyTuple t ? t.items() : List.of(a[1]);
 		boolean matches = false;
 		for (Object type : types) {
-			Predicate<Object> test = !(type instanceof PyNative n) ? null
+			Predicate<Object> test = type instanceof PyClass c ? v -> v instanceof PyInstance i && i.type.derivesFrom(c)
+					: !(type instanceof PyNative n) ? null
 					: PyException.isType(n.name()) ? v -> v instanceof PyException e && e.isA(n.name())
+							|| v instanceof PyInstance i && i.type.exceptionType() != null
+									&& PyException.derives(i.type.exceptionType(), n.name())
 							: TYPES.getOrDefault(n.name(), hostType(n.name()));
 			if (test == null) {
 				throw new ScriptError("isinstance() arg 2 must be a type, a tuple of types, or a union");

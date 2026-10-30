@@ -11,7 +11,7 @@ Whether `obj` is of a type, or of one of a tuple of types.
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `obj` | any | | the value to test |
-| `class_or_tuple` | type, or a tuple of types | | `int`, `float`, `str`, `bool`, `list`, `dict`, `tuple` or `range`, or a tuple of them such as `(int, float)` |
+| `class_or_tuple` | type, or a tuple of types | | `int`, `float`, `str`, `bool`, `list`, `dict`, `tuple` or `range`, an exception type such as `KeyError`, a class of the script, or a tuple of them such as `(int, float)` |
 
 ## Returns
 
@@ -27,7 +27,7 @@ One instruction, the call itself.
 
 ## Description
 
-Only the eight builtin types above can be tested; anything else as `class_or_tuple`, such as a function or a tuple inside the tuple, stops the script with an error. The API's types ([`Pos`](../types/pos.md), [`Stack`](../types/stack.md), ...) are no names a script can use: test what a value has instead, and test for `None` with `is None`.
+Only the eight builtin types above, the [exception types](../../language/errors.md#exception-types) and the script's own [classes](../../language/classes.md) (an instance of a class derived from one counts) can be tested; anything else as `class_or_tuple`, such as a function or a tuple inside the tuple, stops the script with an error. The API's types ([`Pos`](../types/pos.md), [`Stack`](../types/stack.md), ...) are no names a script can use: test what a value has instead, and test for `None` with `is None`.
 
 ## Examples
 

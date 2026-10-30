@@ -24,7 +24,7 @@ public final class Parser {
 			"import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with",
 			"yield");
 	/** Keywords of constructs outside the subset. */
-	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("class", "lambda", "with", "yield", "async", "await",
+	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("lambda", "with", "yield", "async", "await",
 			"nonlocal", "del");
 	/** Operators outside the subset. */
 	private static final Set<String> UNSUPPORTED_OPERATORS = Set.of("&", "|", "^", "~", "<<", ">>", "@", ":=", "&=", "|=",
@@ -81,6 +81,9 @@ public final class Parser {
 				}
 				case "def" -> {
 					return List.of(def());
+				}
+				case "class" -> {
+					return List.of(classDef());
 				}
 				case "try" -> {
 					return List.of(tryStatement());
@@ -404,6 +407,89 @@ public final class Parser {
 		functionDepth--;
 		loopDepth = loops;
 		return new Ast.Def(name, List.copyOf(params), body, t.line(), t.col());
+	}
+
+	/** {@code class Name:} or {@code class Name(Base):}, with one base at most and no keywords (docs/language/classes.md). */
+	private Ast.ClassDef classDef() {
+		Token t = next();
+		String name = name("expected a class name");
+		Expr base = null;
+		if (peek().isOp("(")) {
+			next();
+			if (!peek().isOp(")")) {
+				if (peek().kind() == Kind.NAME && peek(1).isOp("=")) {
+					throw error(peek(), "metaclasses and class keywords are not supported");
+				}
+				base = test();
+				if (peek().isOp(",")) {
+					next();
+					if (!peek().isOp(")")) {
+						throw error(peek(), "multiple inheritance is not supported");
+					}
+				}
+			}
+			expectOp(")", "expected ')' after the base class");
+		}
+		expectOp(":", "expected ':' after the class name");
+		int loops = loopDepth;
+		loopDepth = 0;
+		List<Stmt> body = block("class definition on line " + t.line());
+		loopDepth = loops;
+		Set<String> attributes = new HashSet<>();
+		for (Stmt statement : body) {
+			classStatement(statement, attributes);
+		}
+		return new Ast.ClassDef(name, base, body, t.line(), t.col());
+	}
+
+	/**
+	 * Checks a statement of a class body: a method, an assignment to plain names, {@code pass} or a docstring. The values
+	 * of a class body are evaluated in the scope around the class, so one may not use a name the body bound before.
+	 */
+	private void classStatement(Stmt statement, Set<String> attributes) {
+		switch (statement) {
+			case Ast.Pass ignored -> {
+			}
+			case Ast.ExprStmt s when s.expr() instanceof Ast.StrLit -> {
+			}
+			case Ast.Def def -> {
+				def.params().forEach(p -> notAnAttribute(p.defaultValue(), attributes));
+				special(def, def.name());
+				attributes.add(def.name());
+			}
+			case Ast.Assign assign when assign.targets().stream().allMatch(target -> target instanceof Ast.Name) -> {
+				notAnAttribute(assign.value(), attributes);
+				for (Expr target : assign.targets()) {
+					String attribute = ((Ast.Name) target).id();
+					if (attribute.equals("__slots__")) {
+						throw unsupportedAt(target, "`__slots__`");
+					}
+					special(target, attribute);
+					attributes.add(attribute);
+				}
+			}
+			default -> throw error(statement, "a class body may only hold methods, attribute assignments, `pass` and a docstring");
+		}
+	}
+
+	private void special(Ast.Node node, String name) {
+		if (name.length() > 4 && name.startsWith("__") && name.endsWith("__") && !name.equals("__init__")) {
+			throw error(node, "special methods other than `__init__` are not supported (`" + name + "`)");
+		}
+	}
+
+	private void notAnAttribute(Expr value, Set<String> attributes) {
+		SubsetCheck.Names names = new SubsetCheck.Names();
+		names.expr(value);
+		for (Ast.Name load : names.loads) {
+			if (attributes.contains(load.id())) {
+				throw error(load, "a class attribute cannot use another one (`" + load.id() + "`)");
+			}
+		}
+	}
+
+	private CompileError unsupportedAt(Ast.Node node, String construct) {
+		return CompileError.unsupported(file, node.line(), node.col(), construct);
 	}
 
 	/** The body after a compound statement's ':': an indented block, or simple statements on the same line. */

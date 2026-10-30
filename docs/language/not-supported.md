@@ -1,29 +1,14 @@
 # What's not supported
 
-The language is a subset of Python 3. What it leaves out is a compile error that names the construct and its place, such as ``miner.py:3:1: `class` is not supported``, never something that quietly works differently. Several of these may come later. Most are needed less than in normal Python, because actions return results instead of raising.
+The language is a subset of Python 3. What it leaves out is a compile error that names the construct and its place, such as ``miner.py:3:5: `lambda` is not supported``, never something that quietly works differently. Several of these may come later. Most are needed less than in normal Python, because actions return results instead of raising.
 
 Here is each one, with what to write instead.
 
-## class
+## Parts of classes
 
-There are no classes. Keep related values in a **dict**, and write **functions** that take it:
+[Classes](classes.md) work, with one base class each. Multiple inheritance, metaclasses, `@property` and the other decorators, special methods other than `__init__` (`__str__`, `__eq__`, `__add__`, ...) and `__slots__` do not; [What a class cannot do](classes.md#what-a-class-cannot-do) lists them with what to write instead.
 
-```python
-def new_job(kind, at):
-    return {"kind": kind, "at": at, "tries": 0}
-
-
-def attempt(job):
-    job["tries"] += 1
-    return goto(job["at"], near=2)
-
-
-job = new_job("store", find_nearest("chest"))
-while not attempt(job) and job["tries"] < 3:
-    wait(20)
-```
-
-A dict of plain values can also go into `memory` and survive a restart, which an object could not.
+An instance does not go into `memory`, which holds plain data only. Keep the values you need in a dict there, and make the instance again from it after a restart.
 
 ## lambda
 

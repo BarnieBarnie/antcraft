@@ -69,7 +69,7 @@ A script saved with the world in the middle of a `try`, an `except` or a `finall
 
 ### Exception types
 
-There are no classes, so the exception types are the builtin ones below. Each error the language raises has the type CPython gives the same error, and every type derives from `Exception`:
+The builtin exception types are below. Each error the language raises has the type CPython gives the same error, and every type derives from `Exception`. A class of your own that derives from one of them, `class NoOre(Exception): pass`, is an exception type too: `raise NoOre("none left")` raises it, and `except NoOre` or `except Exception` catches it (see [Classes](classes.md#exception-classes)).
 
 | Type | Raised for |
 | --- | --- |

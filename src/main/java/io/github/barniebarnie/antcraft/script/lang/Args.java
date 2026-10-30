@@ -78,6 +78,7 @@ public final class Args {
 	}
 
 	static boolean callable(Object value) {
-		return value instanceof PyFunction || value instanceof PyNative || value instanceof PyMethod;
+		return value instanceof PyFunction || value instanceof PyNative || value instanceof PyMethod || value instanceof PyClass
+				|| value instanceof PyBoundMethod;
 	}
 }

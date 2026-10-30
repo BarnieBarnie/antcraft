@@ -17,6 +17,10 @@ public record Code(String name, String file, Op[] ops, int[] args, int[] lines, 
 	public record FormatField(char conversion, String spec) {
 	}
 
+	/** A class statement: the class's name, whether a base is given, and the names of the attributes of its body, in order. */
+	public record ClassShape(String name, boolean hasBase, List<String> attributes) {
+	}
+
 	public int size() {
 		return ops.length;
 	}

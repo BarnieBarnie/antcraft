@@ -65,6 +65,6 @@ public final class ScriptError extends RuntimeException {
 
 	ScriptError at(String file, int line) {
 		return new ScriptError(file, line, detail,
-				exception == null ? null : new PyException(exception.type(), exception.message(), detail, file, line));
+				exception == null ? null : exception.at(detail, file, line));
 	}
 }

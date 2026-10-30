@@ -263,7 +263,39 @@ class VmStateTest {
 						        print('else', i)
 						    finally:
 						        print('done', i)
-						""", Map.of()));
+						""", Map.of()),
+				new Case("classes and instances", """
+						from lib.miner import Miner, NoOre
+						class Tunneler(Miner):
+						    made = 0
+						    def __init__(self, depth):
+						        super().__init__(depth)
+						        Tunneler.made += 1
+						        self.log = []
+						    def dig(self):
+						        self.log.append(super().dig())
+						        return self.log
+						miners = [Tunneler(i) for i in range(3)]
+						shared = {'first': miners[0]}
+						dig = miners[1].dig
+						for m in miners:
+						    try:
+						        print(m.dig(), dig(), Tunneler.made, shared['first'].log, isinstance(m, Miner))
+						    except NoOre as e:
+						        print('no ore', e, e.depth, f'{e!r}')
+						""", Map.of("lib.miner", """
+						class NoOre(Exception):
+						    def __init__(self, depth):
+						        super().__init__('none at ' + str(depth))
+						        self.depth = depth
+						class Miner:
+						    def __init__(self, depth):
+						        self.depth = depth
+						    def dig(self):
+						        if self.depth == 2:
+						            raise NoOre(self.depth)
+						        return self.depth * 10
+						""")));
 	}
 
 	@TestFactory

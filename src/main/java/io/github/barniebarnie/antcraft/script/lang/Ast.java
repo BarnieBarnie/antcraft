@@ -65,6 +65,13 @@ public final class Ast {
 	public record Def(String name, List<Param> params, List<Stmt> body, int line, int col) implements Stmt {
 	}
 
+	/**
+	 * {@code class name(base): body}; {@code base} is null when it has none. The body holds only methods, attribute
+	 * assignments to plain names, {@code pass} and docstrings (docs/language/classes.md).
+	 */
+	public record ClassDef(String name, Expr base, List<Stmt> body, int line, int col) implements Stmt {
+	}
+
 	/** A parameter; {@code defaultValue} is null when it has none. */
 	public record Param(String name, Expr defaultValue, int line, int col) implements Node {
 	}

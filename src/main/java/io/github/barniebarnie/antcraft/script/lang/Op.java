@@ -113,5 +113,17 @@ public enum Op {
 	/** Pops an exception, or an exception type to make one of, and raises it. */
 	RAISE,
 	/** Pops an exception type, or a tuple of them, and the exception, and pushes whether the exception is of that type. */
-	EXC_MATCH
+	EXC_MATCH,
+	/**
+	 * Replaces the exception at TOS with what {@code except ... as e} binds: the instance of a script's exception class
+	 * it holds, else itself.
+	 */
+	EXC_VALUE,
+	/**
+	 * Makes a class as the {@link Code.ClassShape} in {@code constants[arg]} says: pops the values of its attributes, then
+	 * its base if it has one, and pushes the class. Its functions become its methods.
+	 */
+	BUILD_CLASS,
+	/** Pops {@code self} and the class of the running method, and pushes their {@code super()}. */
+	SUPER
 }

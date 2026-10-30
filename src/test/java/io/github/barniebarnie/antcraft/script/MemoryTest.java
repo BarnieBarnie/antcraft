@@ -123,6 +123,8 @@ class MemoryTest {
 		PyDict memory = Memory.create();
 		assertEquals("error: t.py:3: memory holds only plain data (numbers, strings, booleans, None, Pos, and lists, "
 			+ "tuples and dicts of these), not 'function'", run(memory, "def f():\n    pass\nmemory['f'] = f\n"));
+		assertEquals("error: t.py:3: memory holds only plain data (numbers, strings, booleans, None, Pos, and lists, "
+			+ "tuples and dicts of these), not 'Miner'", run(memory, "class Miner:\n    pass\nmemory['m'] = Miner()\n"));
 		assertEquals("{}", Values.repr(memory));
 	}
 

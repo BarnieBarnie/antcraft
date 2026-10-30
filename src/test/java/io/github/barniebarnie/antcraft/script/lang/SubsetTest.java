@@ -13,8 +13,23 @@ class SubsetTest {
 	}
 
 	@Test
-	void classIsNotSupported() {
-		rejects("x = 1\nclass Ant:\n    pass", "bot.py:2:1: `class` is not supported");
+	void classFeaturesOutsideTheSubsetAreNotSupported() {
+		rejects("class A(B, C):\n    pass", "bot.py:1:12: multiple inheritance is not supported");
+		rejects("class A(metaclass=M):\n    pass", "bot.py:1:9: metaclasses and class keywords are not supported");
+		rejects("class A:\n    @staticmethod\n    def f():\n        pass", "bot.py:2:5: decorators are not supported");
+		rejects("class A:\n    @property\n    def f(self):\n        pass", "bot.py:2:5: decorators are not supported");
+		rejects("class A:\n    __slots__ = ('x',)", "bot.py:2:5: `__slots__` is not supported");
+		rejects("class A:\n    def __add__(self, o):\n        pass",
+				"bot.py:2:5: special methods other than `__init__` are not supported (`__add__`)");
+		rejects("class A:\n    def __str__(self):\n        pass",
+				"bot.py:2:5: special methods other than `__init__` are not supported (`__str__`)");
+		rejects("class A:\n    class B:\n        pass",
+				"bot.py:2:5: a class body may only hold methods, attribute assignments, `pass` and a docstring");
+		rejects("class A:\n    if x:\n        y = 1",
+				"bot.py:2:5: a class body may only hold methods, attribute assignments, `pass` and a docstring");
+		rejects("class A:\n    x = 1\n    y = x + 1", "bot.py:3:9: a class attribute cannot use another one (`x`)");
+		rejects("def f():\n    n = 1\n    class A:\n        def g(self):\n            return n",
+				"bot.py:5:20: closures are not supported (`g` uses `n` of `f`)");
 	}
 
 	@Test

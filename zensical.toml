@@ -28,6 +28,7 @@ nav = [
     { "Control flow" = "language/control-flow.md" },
     { "Functions" = "language/functions.md" },
     { "Modules & import" = "language/modules.md" },
+    { "Classes" = "language/classes.md" },
     { "Output & logging" = "language/output.md" },
     { "Errors & Result" = "language/errors.md" },
     { "Budget & pausing" = "language/budget.md" },

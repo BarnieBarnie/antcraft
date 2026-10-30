@@ -233,7 +233,7 @@ These functions are there in every script:
 | `any(xs)`, `all(xs)` | whether any, or all, of the values are true |
 | `str(x)`, `int(x)`, `float(x)`, `bool(x)` | `x` as text, a whole number, a float, a bool; `int("12")` reads text |
 | `list(x)`, `tuple(x)`, `dict(x)` | a new list, tuple or dict from `x`, such as `list(d.keys())` |
-| `isinstance(x, t)` | whether `x` is of type `t` (`int`, `float`, `str`, `bool`, `list`, `dict`, `tuple`, `range`, or a tuple of them) |
+| `isinstance(x, t)` | whether `x` is of type `t` (`int`, `float`, `str`, `bool`, `list`, `dict`, `tuple`, `range`, an exception type, a [class](classes.md) of the script, or a tuple of them) |
 
 `print`, `debug`, `info`, `warn` and `error` write output (see [Output & logging](output.md)).
 

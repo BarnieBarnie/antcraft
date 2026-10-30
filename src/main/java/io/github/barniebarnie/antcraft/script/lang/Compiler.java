@@ -46,6 +46,10 @@ public final class Compiler {
 	private final List<List<Stmt>> blocks = new ArrayList<>();
 	/** The hidden local slots of the exceptions the {@code except} clauses being compiled handle, innermost first. */
 	private final Deque<Integer> handling = new ArrayDeque<>();
+	/** Whether this compiles a method with a {@code self}, where {@code super()} works. */
+	private boolean method;
+	/** The local of a method that holds the class that defined it. */
+	static final String CLASS_SLOT = "__class__";
 
 	/**
 	 * A loop being compiled: where {@code continue} jumps to, the {@code break} jumps to patch at its end, and how many
@@ -73,17 +77,25 @@ public final class Compiler {
 		return compiler.code(0, 0);
 	}
 
-	private Code function(Ast.Def def) {
+	/**
+	 * A function's code. A method's has a hidden local {@value #CLASS_SLOT} right after its parameters, which a call
+	 * sets to the class that defined it, for its {@code super()}.
+	 */
+	private Code function(Ast.Def def, boolean method) {
 		SubsetCheck.Names bound = new SubsetCheck.Names();
 		bound.body(def.body());
 		Map<String, Integer> scope = new LinkedHashMap<>();
 		def.params().forEach(p -> scope.put(p.name(), scope.size()));
+		if (method) {
+			scope.putIfAbsent(CLASS_SLOT, scope.size());
+		}
 		for (String local : bound.stores) {
 			if (!bound.globals.contains(local)) {
 				scope.putIfAbsent(local, scope.size());
 			}
 		}
 		Compiler compiler = new Compiler(file, def.name(), scope, def.line());
+		compiler.method = method && !def.params().isEmpty();
 		compiler.body(def.body());
 		compiler.emit(Op.LOAD_CONST, compiler.constant(PyNone.NONE));
 		compiler.emit(Op.RETURN, 0);
@@ -204,9 +216,10 @@ public final class Compiler {
 					}
 				}
 				at(s);
-				emit(Op.MAKE_FUNCTION, constant(function(s)));
+				emit(Op.MAKE_FUNCTION, constant(function(s, false)));
 				storeName(s.name());
 			}
+			case Ast.ClassDef s -> classDef(s);
 			case Ast.Return s -> {
 				if (s.value() == null) {
 					emit(Op.LOAD_CONST, constant(PyNone.NONE));
@@ -270,6 +283,45 @@ public final class Compiler {
 		}
 	}
 
+	/**
+	 * {@code class}: the base, then the value of each attribute of the body in order (the values of assignments, and a
+	 * function for each method), evaluated in the scope around the class, then {@link Op#BUILD_CLASS}.
+	 */
+	private void classDef(Ast.ClassDef s) {
+		if (s.base() != null) {
+			expr(s.base());
+		}
+		List<String> attributes = new ArrayList<>();
+		for (Stmt member : s.body()) {
+			switch (member) {
+				case Ast.Assign a -> {
+					expr(a.value());
+					for (int i = 0; i < a.targets().size(); i++) {
+						if (i < a.targets().size() - 1) {
+							emit(Op.DUP, 0);
+						}
+						attributes.add(((Ast.Name) a.targets().get(i)).id());
+					}
+				}
+				case Ast.Def d -> {
+					for (Ast.Param p : d.params()) {
+						if (p.defaultValue() != null) {
+							expr(p.defaultValue());
+						}
+					}
+					at(d);
+					emit(Op.MAKE_FUNCTION, constant(function(d, true)));
+					attributes.add(d.name());
+				}
+				default -> { // pass, or a docstring
+				}
+			}
+		}
+		at(s);
+		emit(Op.BUILD_CLASS, constant(new Code.ClassShape(s.name(), s.base() != null, List.copyOf(attributes))));
+		storeName(s.name());
+	}
+
 	/** A hidden local slot, which no name of the script reaches. */
 	private int hidden(String name) {
 		localNames.add(name);
@@ -317,6 +369,7 @@ public final class Compiler {
 				}
 				if (handler.name() != null) {
 					emit(Op.LOAD_LOCAL, exception);
+					emit(Op.EXC_VALUE, 0);
 					storeName(handler.name());
 				}
 				body(handler.body());
@@ -672,6 +725,17 @@ public final class Compiler {
 	}
 
 	private void call(Ast.Call c) {
+		if (c.func() instanceof Ast.Name n && n.id().equals("super") && slot("super") < 0) {
+			if (!method || !c.args().isEmpty() || !c.keywords().isEmpty()) {
+				throw new CompileError(file, c.line(), c.col(),
+						"`super()` is only supported without arguments, in a method of a class");
+			}
+			at(c);
+			emit(Op.LOAD_LOCAL, slot(CLASS_SLOT));
+			emit(Op.LOAD_LOCAL, 0);
+			emit(Op.SUPER, 0);
+			return;
+		}
 		expr(c.func());
 		c.args().forEach(this::expr);
 		c.keywords().forEach(k -> expr(k.value()));

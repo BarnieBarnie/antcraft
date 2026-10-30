@@ -41,6 +41,10 @@ public final class Values {
 			case Iter i -> i.typeName();
 			case HostValue h -> h.typeName();
 			case PyException e -> e.type();
+			case PyInstance i -> i.type.name();
+			case PyClass c -> "type";
+			case PyBoundMethod m -> "method";
+			case PySuper s -> "super";
 			default -> value.getClass().getSimpleName();
 		};
 	}
@@ -66,7 +70,8 @@ public final class Values {
 
 	/** {@code str(value)}. */
 	public static String str(Object value) {
-		return value instanceof String s ? s : value instanceof PyException e ? e.message() : repr(value);
+		return value instanceof String s ? s : value instanceof PyException e ? e.message()
+				: value instanceof PyInstance i && i.type.exceptionType() != null ? i.message() : repr(value);
 	}
 
 	/** {@code repr(value)}. */

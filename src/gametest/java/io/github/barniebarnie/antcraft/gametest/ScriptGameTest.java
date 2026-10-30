@@ -289,6 +289,37 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A bot's script defines a class with a method and an exception class of its own (docs/language/classes.md). */
+	@GameTest(maxTicks = 10)
+	public void aScriptDefinesAndUsesClasses(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = BotScripts.run(bot, """
+				class Full(Exception):
+				    pass
+				class Counter:
+				    def __init__(self, limit):
+				        self.n = 0
+				        self.limit = limit
+				    def inc(self):
+				        if self.n == self.limit:
+				            raise Full('at ' + str(self.n))
+				        self.n += 1
+				c = Counter(2)
+				try:
+				    while True:
+				        c.inc()
+				        wait(1)
+				except Full as e:
+				    print('full', e, c.n)
+				""");
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state() + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("full at 2 2")), "log " + printed);
+		});
+	}
+
 	/**
 	 * {@code /antcraft script reload} after a script file changed starts the new version on the bot running it. The test
 	 * writes its own script into the world script folder, under a name of its own.

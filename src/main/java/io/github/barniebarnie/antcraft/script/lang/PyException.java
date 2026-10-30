@@ -9,8 +9,16 @@ import org.jspecify.annotations.Nullable;
  * {@code raise} raises. Its type is one of the builtin exception types ({@link #PARENTS}), named as natives are;
  * {@code str(e)} is its message. {@code detail} is the text the bot log shows when nothing catches it, and {@code file}
  * and {@code line} where it was first raised, or null and 0 while it has not been.
+ *
+ * <p>An instance of a script's exception class (docs/language/classes.md) is raised as a PyException of its class's
+ * name that holds the {@code instance}, which is what {@code except ... as e} binds.
  */
-public record PyException(String type, String message, String detail, @Nullable String file, int line) {
+public record PyException(String type, String message, String detail, @Nullable String file, int line,
+		@Nullable PyInstance instance) {
+	public PyException(String type, String message, String detail, @Nullable String file, int line) {
+		this(type, message, detail, file, line, null);
+	}
+
 	/**
 	 * The builtin exception types, each with the type it derives from: the errors the VM raises, and {@code Exception},
 	 * which every one derives from.
@@ -31,9 +39,31 @@ public record PyException(String type, String message, String detail, @Nullable 
 		return new PyException(type, message, message.isEmpty() ? type : type + ": " + message, null, 0);
 	}
 
-	/** Whether it is of type {@code type} or of one derived from it, as {@code except type} tests. */
+	/** An instance of a script's exception class, raised: its type is the class's name, its message made of its args. */
+	static PyException of(PyInstance instance) {
+		String message = instance.message();
+		String type = instance.type.name();
+		return new PyException(type, message, message.isEmpty() ? type : type + ": " + message, null, 0, instance);
+	}
+
+	/** The same exception placed at {@code file} and {@code line}, with {@code detail}. */
+	PyException at(String detail, String file, int line) {
+		return new PyException(type, message, detail, file, line, instance);
+	}
+
+	/** Whether it is of the builtin type {@code type} or of one derived from it, as {@code except type} tests. */
 	boolean isA(String type) {
-		for (String t = this.type; t != null; t = PARENTS.get(t)) {
+		return derives(instance == null ? this.type : instance.type.exceptionType(), type);
+	}
+
+	/** Whether {@code except type} catches it: {@code type} is a builtin exception type or a script's exception class. */
+	boolean isA(Object type) {
+		return type instanceof PyClass c ? instance != null && instance.type.derivesFrom(c) : isA(((PyNative) type).name());
+	}
+
+	/** Whether the builtin type {@code from} is {@code type} or derives from it. */
+	static boolean derives(String from, String type) {
+		for (String t = from; t != null; t = PARENTS.get(t)) {
 			if (t.equals(type)) {
 				return true;
 			}

@@ -233,6 +233,15 @@ class ParserTest {
 	}
 
 	@Test
+	void classStatements() {
+		assertEquals("(class Miner _ [pass])", parse("class Miner:\n    pass"));
+		assertEquals("(class Miner _ [pass])", parse("class Miner():\n    pass"));
+		assertEquals("(class Tunneler Miner [(= depth 1) (def dig (self) [(return (. self depth))])])",
+				parse("class Tunneler(Miner):\n    depth = 1\n    def dig(self):\n        return self.depth"));
+		assertEquals("(class NoOre (. lib Error) [pass])", parse("class NoOre(lib.Error): pass"));
+	}
+
+	@Test
 	void malformedTryStatements() {
 		assertEquals("t.py:3:1: expected 'except' or 'finally' block", syntaxError("try:\n    x\ny = 1"));
 		assertEquals("t.py:3:1: default 'except:' must be last", syntaxError("try:\n    x\nexcept:\n    pass\nexcept ValueError:\n    pass"));
