@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.script.lang.Code;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,6 +86,11 @@ public final class BotRespawns extends SavedData {
 	/** The wait of the bot with {@code id}, or null when it does not wait to respawn. */
 	public @Nullable Pending pending(UUID id) {
 		return this.pending.get(id);
+	}
+
+	/** The waits of every bot that waits to respawn here. */
+	public Collection<Pending> all() {
+		return this.pending.values();
 	}
 
 	/** Drops the waits of the bots whose home matches {@code home}: they stay dead, and leave their colony. */

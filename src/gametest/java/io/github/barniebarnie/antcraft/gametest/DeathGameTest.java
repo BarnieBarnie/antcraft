@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.suggestion.Suggestion;
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
@@ -19,10 +21,12 @@ import java.util.Objects;
 import java.util.UUID;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.RegistryOps;
@@ -471,5 +475,68 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(removed.equals(List.of("commands.antcraft.bot.remove[1]")), "answer " + removed);
 		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) == null, "the operator did not remove it");
 		helper.succeed();
+	}
+
+	/**
+	 * A dead bot waiting to respawn is removed by its name (#466), quoted as it has a space: its owner's
+	 * {@code bot remove "<name>"} drops the respawn and takes it out of its colony, so it does not come back.
+	 */
+	@GameTest(maxTicks = 20)
+	public void removeByNameReachesABotWaitingToRespawn(GameTestHelper helper) {
+		helper.setBlock(3, 1, 6, ModBlocks.COLONY_CORE);
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(3, 1, 6))).orElseThrow();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		String name = "Ant " + id.toString().substring(0, 8);
+		bot.setCustomName(Component.literal(name));
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		ColonyManager.get(helper.getLevel()).join(bot, colony);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		bot.kill(helper.getLevel());
+		bot.remove(Entity.RemovalReason.KILLED);
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) != null, "no respawn waits");
+
+		List<String> answer = BotScripts.commandAsPlayer(helper, owner, "antcraft bot remove \"" + name + "\"");
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.remove[1]")), "answer " + answer);
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) == null, "a respawn still waits");
+		helper.assertFalse(colony.members().contains(id), "still a member: " + colony.members());
+		helper.succeed();
+	}
+
+	/**
+	 * A player cannot remove another player's bot waiting to respawn by its name (#466), and is not offered its name; an
+	 * operator is, and removes it.
+	 */
+	@GameTest(maxTicks = 20)
+	public void onlyItsOwnerOrAnOperatorRemovesABotWaitingToRespawnByName(GameTestHelper helper) {
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		UUID id = other.getUUID();
+		String name = "Ant " + id.toString().substring(0, 8);
+		other.setCustomName(Component.literal(name));
+		other.setOwner(UUID.randomUUID());
+		other.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		other.kill(helper.getLevel());
+		other.remove(Entity.RemovalReason.KILLED);
+
+		String quoted = "\"" + name + "\"";
+		helper.assertFalse(suggestions(helper, player.createCommandSourceStack()).contains(quoted), "offered another player's bot");
+		helper.assertTrue(suggestions(helper, helper.getLevel().getServer().createCommandSourceStack()).contains(quoted),
+			"not offered to an operator");
+		List<String> refused = BotScripts.commandAsPlayer(helper, player, "antcraft bot remove " + quoted);
+		helper.assertTrue(refused.size() == 1 && refused.getFirst().endsWith(" is not your bot"), "answer " + refused);
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) != null, "removed another player's waiting bot");
+		List<String> removed = BotScripts.command(helper, "antcraft bot remove " + quoted);
+		helper.assertTrue(removed.equals(List.of("commands.antcraft.bot.remove[1]")), "answer " + removed);
+		helper.assertTrue(BotRespawns.get(helper.getLevel()).pending(id) == null, "the operator did not remove it");
+		helper.succeed();
+	}
+
+	/** What {@code /antcraft bot remove } suggests to {@code source}. */
+	private static List<String> suggestions(GameTestHelper helper, CommandSourceStack source) {
+		CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+		return dispatcher.getCompletionSuggestions(dispatcher.parse("antcraft bot remove ", source)).join().getList().stream()
+			.map(Suggestion::getText).toList();
 	}
 }

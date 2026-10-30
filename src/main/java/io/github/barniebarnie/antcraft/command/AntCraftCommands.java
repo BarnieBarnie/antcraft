@@ -49,6 +49,7 @@ import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -66,6 +67,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft script reload
  * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt; [dimension]|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
+ * /antcraft bot remove "&lt;name&gt;"   (a dead bot waiting to respawn, by its name; also its owner)
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony trust|untrust &lt;player&gt; [colony]   (also the colony's owner, not only operators)
@@ -115,6 +117,7 @@ public final class AntCraftCommands {
 				.then(Commands.literal("reload").requires(OPERATOR).executes(ctx -> reloadScripts(ctx.getSource()))))
 			// The bots argument is optional: without it, the nearest bot. Literals win over the selector, so a bot cannot be named "run".
 			.then(botCommands(Commands.literal("bot").requires(AntCraftCommands::operatorOrPlayer), ctx -> nearestBot(ctx.getSource()))
+				.then(Commands.literal("remove").then(waitingBotName()))
 				.then(botCommands(Commands.argument("bots", EntityArgument.entities()), AntCraftCommands::bots)))
 			// Literals win over the script argument, so a script named "clear" cannot be set this way.
 			.then(Commands.literal("core").requires(OPERATOR)
@@ -341,6 +344,37 @@ public final class AntCraftCommands {
 		server.getAllLevels().forEach(level -> BotRespawns.get(level).forget(server, id));
 		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.remove", 1), false);
 		return 1;
+	}
+
+	/**
+	 * {@code "<name>"} of {@code bot remove}: removes the dead bot waiting to respawn with that name ({@link #removeWaiting},
+	 * #466), suggesting the waiting bots the source may control. The bots argument cannot take a name with a space.
+	 */
+	private static RequiredArgumentBuilder<CommandSourceStack, String> waitingBotName() {
+		return Commands.argument("name", StringArgumentType.string())
+			.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(waitingBots(ctx.getSource().getServer())
+				.filter(waiting -> mayControl(ctx.getSource(), waiting.bot().read("Owner", UUIDUtil.CODEC).orElse(null)))
+				.map(AntCraftCommands::name).filter(name -> !name.isEmpty()).map(StringArgumentType::escapeIfRequired), builder))
+			.executes(ctx -> {
+				String name = StringArgumentType.getString(ctx, "name");
+				// ponytail: the first bot with that name; names carry part of the UUID, so two seldom match
+				Optional<BotRespawns.Pending> waiting = waitingBots(ctx.getSource().getServer()).filter(p -> name(p).equals(name)).findFirst();
+				if (waiting.isEmpty()) {
+					throw EntityArgument.NO_ENTITIES_FOUND.create();
+				}
+				return removeWaiting(ctx.getSource(), waiting.get().id(), EntityArgument.NO_ENTITIES_FOUND.create());
+			});
+	}
+
+	private static Stream<BotRespawns.Pending> waitingBots(MinecraftServer server) {
+		List<BotRespawns.Pending> waiting = new ArrayList<>();
+		server.getAllLevels().forEach(level -> waiting.addAll(BotRespawns.get(level).all()));
+		return waiting.stream();
+	}
+
+	/** The name of the bot waiting in {@code waiting}, empty when it has none. */
+	private static String name(BotRespawns.Pending waiting) {
+		return waiting.bot().read("CustomName", ComponentSerialization.CODEC).map(Component::getString).orElse("");
 	}
 
 	private static Optional<UUID> parseUuid(String text) {

@@ -10,7 +10,7 @@
 | `/antcraft script reload` | Loads the script folders again, with the data pack scripts of the last `/reload`; a bot running a script whose file changed starts the new version from the top (one that no longer compiles stops, with the error in its log and its owner's chat) |
 | `/antcraft bot [bots] run <script> [args]` | Starts a script on bots (without `[bots]`, the nearest bot within 64 blocks), replacing what they ran; `[args]` are given to it as the list `ARGS`. A player who runs it becomes the bots' owner |
 | `/antcraft bot [bots] stop` | Stops the bots' scripts (formerly `/antcraft stop`); they then run `idle.py`, walking home and waiting there |
-| `/antcraft bot [bots] remove` | Removes the bots for good: stops their scripts, drops what they carry where they stand, takes them out of their colony (their jobs go back to the board) and drops any respawn they wait for, so they do not come back. A dead bot whose body is gone is reached by its UUID (`/antcraft bot <uuid> remove`): its waiting respawn is dropped and it leaves its colony |
+| `/antcraft bot [bots] remove` | Removes the bots for good: stops their scripts, drops what they carry where they stand, takes them out of their colony (their jobs go back to the board) and drops any respawn they wait for, so they do not come back. A dead bot whose body is gone is reached by its UUID (`/antcraft bot <uuid> remove`) or by its name in quotes (`/antcraft bot remove "Ant 1a2b"`, which suggests the waiting bots you may remove): its waiting respawn is dropped and it leaves its colony |
 | `/antcraft bot [bots] join <core pos> [dimension]` | The bots join the colony whose Colony Core is at `<core pos>` in `[dimension]` (such as `minecraft:overworld`; default: the dimension the command runs in), leaving the colony they were in (their jobs there go back to its board). Refused for a colony you may not change (its owner, its trusted players and operators may), and for a position with no Colony Core |
 | `/antcraft bot [bots] leave` | Takes the bots out of their colony; their jobs go back to its board |
 | `/antcraft bot [bots] status` | Each bot's script, whether it is running, finished, failed or stopped, the line it is at, its current action and how many instructions it ran |
@@ -35,6 +35,7 @@ Commands (on a server, `script reload`, `core script` and saving from the editor
 /antcraft bot [bots] run <script> [args]    start a script on a bot (args are given to it as the list ARGS)
 /antcraft bot [bots] stop
 /antcraft bot [bots] remove                 remove for good: items dropped, colony left, no respawn
+/antcraft bot remove "<name>"               remove a dead bot waiting to respawn, by its name
 /antcraft bot [bots] join <core pos> [dimension]   join the colony whose core is there, leaving the old one
 /antcraft bot [bots] leave                  leave its colony
 /antcraft bot [bots] status                 script, line, current action, last result
