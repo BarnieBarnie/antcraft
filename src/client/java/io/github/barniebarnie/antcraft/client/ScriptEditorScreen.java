@@ -3,12 +3,16 @@ package io.github.barniebarnie.antcraft.client;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.script.ScriptEdits;
 import io.github.barniebarnie.antcraft.script.editor.ScriptNames;
+import io.github.barniebarnie.antcraft.script.lang.Parser;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -32,6 +36,7 @@ public class ScriptEditorScreen extends Screen {
 	private final ScriptNetworking.OpenScriptEditor script;
 	private String text;
 	private CodeEditBox editor;
+	private final Set<String> known = new HashSet<>();
 	private Component message = Component.empty();
 	private int messageColor = GREY;
 
@@ -39,6 +44,8 @@ public class ScriptEditorScreen extends Screen {
 		super(Component.translatable(script.mayEdit() ? "screen.antcraft.script_editor" : "screen.antcraft.script_editor.read_only", script.name()));
 		this.script = script;
 		this.text = script.source();
+		this.known.addAll(script.names());
+		this.known.addAll(Parser.KEYWORDS);
 	}
 
 	static void open(ScriptNetworking.OpenScriptEditor script) {
@@ -73,7 +80,7 @@ public class ScriptEditorScreen extends Screen {
 			this.text = this.editor.getValue(); // init runs again when the window is resized
 		}
 		this.editor = new CodeEditBox(this.font, MARGIN, TOP, this.width - 2 * MARGIN, Math.max(LINE_HEIGHT * 3, bottom - TOP), this.title,
-			ScriptEdits.MAX_SOURCE_BYTES, ScriptNames.natives());
+			ScriptEdits.MAX_SOURCE_BYTES, ScriptNames.natives(), this.known);
 		this.editor.setValue(this.text);
 		this.addRenderableWidget(this.editor);
 		int y = this.height - MARGIN - BUTTON_HEIGHT;
@@ -91,6 +98,15 @@ public class ScriptEditorScreen extends Screen {
 		this.message = Component.translatable("screen.antcraft.script_editor.saving");
 		this.messageColor = GREY;
 		ClientPlayNetworking.send(new ScriptNetworking.SaveScript(this.script.name(), this.editor.getValue()));
+	}
+
+	@Override
+	public boolean keyPressed(KeyEvent event) {
+		// The screen closes on Escape before the editor sees it; with suggestions open, Escape closes them instead.
+		if (event.isEscape() && this.editor.closeSuggestions()) {
+			return true;
+		}
+		return super.keyPressed(event);
 	}
 
 	@Override

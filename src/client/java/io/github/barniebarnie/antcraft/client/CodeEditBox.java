@@ -3,8 +3,10 @@ package io.github.barniebarnie.antcraft.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import io.github.barniebarnie.antcraft.script.editor.CodeText;
+import io.github.barniebarnie.antcraft.script.editor.Completions;
 import io.github.barniebarnie.antcraft.script.editor.Highlighter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
@@ -23,7 +25,8 @@ import net.minecraft.util.Util;
 
 /**
  * The script editor's text box (docs/features/scripts.md, Editing in game): lines do not wrap but scroll sideways, a
- * gutter left of them numbers them, and text is coloured by {@link Highlighter}. The editing itself is {@link CodeText}; this class draws it and maps keys
+ * gutter left of them numbers them, text is coloured by {@link Highlighter}, and a list under the caret suggests names
+ * while typing ({@link Completions}). The editing itself is {@link CodeText}; this class draws it and maps keys
  * and the mouse to it.
  */
 public class CodeEditBox extends AbstractTextAreaWidget {
@@ -34,6 +37,9 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 	private static final int LINE_NUMBER_COLOR = 0xFF707070;
 	private static final int ERROR_LINE_COLOR = 0x60FF3030;
 	private static final int GUTTER_GAP = 4;
+	private static final int SUGGESTIONS_SHOWN = 8;
+	private static final int SUGGESTION_BACKGROUND = 0xF0101018;
+	private static final int SUGGESTION_SELECTED = 0xFF304870;
 
 	private final Font font;
 	private final CodeText text;
@@ -47,12 +53,23 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 	/** The line (from 0) {@link #markLine} marked, shown until the text {@link #markedText} changes. */
 	private int markedLine = -1;
 	private String markedText;
+	/** Names to suggest besides those of the script itself. */
+	private final Set<String> known;
+	/** The open list of suggestions, empty when it is closed, and which one Tab or Enter takes. */
+	private List<String> suggestions = List.of();
+	private int suggestion;
 
-	public CodeEditBox(Font font, int x, int y, int width, int height, Component title, int maxLength, Set<String> natives) {
+	/**
+	 * A box that holds at most {@code maxLength} characters, colours {@code natives}, and suggests {@code known} names
+	 * and those the script uses.
+	 */
+	public CodeEditBox(Font font, int x, int y, int width, int height, Component title, int maxLength, Set<String> natives,
+		Set<String> known) {
 		super(x, y, width, height, title, AbstractScrollArea.defaultSettings(LINE_HEIGHT / 2), true, true);
 		this.font = font;
 		this.text = new CodeText(maxLength);
 		this.natives = natives;
+		this.known = known;
 	}
 
 	public String getValue() {
@@ -179,9 +196,54 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 			graphics.text(this.font, number, gutterRight - GUTTER_GAP / 2 - this.font.width(number), top + line * LINE_HEIGHT,
 				line == this.markedLine && value == this.markedText ? 0xFFFF5555 : LINE_NUMBER_COLOR, false);
 		}
+		if (!this.suggestions.isEmpty()) {
+			this.extractSuggestions(graphics, left, top);
+		}
 		if (this.isHovered()) {
 			graphics.requestCursor(CursorTypes.IBEAM);
 		}
+	}
+
+	/** The list of suggestions under the word being typed, or over it near the bottom of the box. */
+	private void extractSuggestions(GuiGraphicsExtractor graphics, int left, int top) {
+		int caret = this.text.caret();
+		int line = this.lineOf(caret);
+		int wordStart = caret - Completions.prefix(this.coloured, caret).length();
+		int first = Math.clamp(this.suggestion - SUGGESTIONS_SHOWN / 2, 0, Math.max(0, this.suggestions.size() - SUGGESTIONS_SHOWN));
+		List<String> shown = this.suggestions.subList(first, Math.min(this.suggestions.size(), first + SUGGESTIONS_SHOWN));
+		int width = shown.stream().mapToInt(this.font::width).max().orElse(0) + 4;
+		int height = shown.size() * LINE_HEIGHT + 2;
+		int x = Math.min(left + this.font.width(this.coloured.substring(this.lineStarts[line], wordStart)) - 2,
+			this.getX() + this.width - SCROLLBAR_WIDTH - width);
+		int y = top + (line + 1) * LINE_HEIGHT + 1;
+		if (y + height > this.getY() + this.height + this.scrollAmount()) {
+			y = top + line * LINE_HEIGHT - height - 1;
+		}
+		graphics.fill(x, y, x + width, y + height, SUGGESTION_BACKGROUND);
+		for (int i = 0; i < shown.size(); i++) {
+			int rowY = y + 1 + i * LINE_HEIGHT;
+			boolean selected = first + i == this.suggestion;
+			if (selected) {
+				graphics.fill(x, rowY, x + width, rowY + LINE_HEIGHT, SUGGESTION_SELECTED);
+			}
+			graphics.text(this.font, shown.get(i), x + 2, rowY, selected ? 0xFFFFFF55 : Highlighter.Style.PLAIN.color(), false);
+		}
+	}
+
+	/** Shows the names that complete the word before the caret, if any. */
+	private void suggest() {
+		this.refresh();
+		Set<String> names = new HashSet<>(this.known);
+		names.addAll(Highlighter.names(this.coloured));
+		this.suggestions = Completions.suggest(this.coloured, this.text.caret(), this.spans, names);
+		this.suggestion = 0;
+	}
+
+	/** Closes the list of suggestions; false if it was not open. */
+	public boolean closeSuggestions() {
+		boolean open = !this.suggestions.isEmpty();
+		this.suggestions = List.of();
+		return open;
 	}
 
 	private int firstSpanEndingAfter(int pos) {
@@ -230,6 +292,7 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 
 	@Override
 	public void onClick(MouseButtonEvent event, boolean doubleClick) {
+		this.closeSuggestions();
 		if (doubleClick) {
 			this.text.selectWord(this.positionAt(event.x(), event.y()));
 		} else {
@@ -255,8 +318,32 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 
 	@Override
 	public boolean keyPressed(KeyEvent event) {
+		if (!this.suggestions.isEmpty()) {
+			switch (event.key()) {
+				case InputConstants.KEY_UP, InputConstants.KEY_DOWN -> {
+					int step = event.key() == InputConstants.KEY_UP ? -1 : 1;
+					this.suggestion = Math.floorMod(this.suggestion + step, this.suggestions.size());
+					return true;
+				}
+				case InputConstants.KEY_TAB, InputConstants.KEY_RETURN, InputConstants.KEY_NUMPADENTER -> {
+					int caret = this.text.caret();
+					this.text.replace(caret - Completions.prefix(this.text.text(), caret).length(), caret,
+						this.suggestions.get(this.suggestion), false);
+					this.closeSuggestions();
+					this.showCaret();
+					return true;
+				}
+				default -> {
+				}
+			}
+		}
+		boolean backspace = event.key() == InputConstants.KEY_BACKSPACE && !this.suggestions.isEmpty();
+		this.closeSuggestions();
 		if (!this.edit(event)) {
 			return false;
+		}
+		if (backspace) {
+			this.suggest();
 		}
 		this.showCaret();
 		return true;
@@ -322,6 +409,7 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 			return false;
 		}
 		this.text.insert(event.codepointAsString());
+		this.suggest();
 		this.showCaret();
 		return true;
 	}

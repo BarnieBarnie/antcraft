@@ -6,8 +6,10 @@ import io.github.barniebarnie.antcraft.script.lang.Token;
 import io.github.barniebarnie.antcraft.script.lang.Tokenizer;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiConsumer;
 
 /**
  * The editor's colours (docs/features/scripts.md, Editing in game): the script {@link Tokenizer} splits the source, so
@@ -51,6 +53,35 @@ public final class Highlighter {
 	 * line of an indentation error, since a fresh start has no indentation to mismatch.
 	 */
 	public static List<Span> spans(String source, Set<String> natives) {
+		List<Span> spans = new ArrayList<>();
+		List<Span> strings = walk(source, (start, token) -> {
+			Style style = style(token, natives);
+			if (style != Style.PLAIN) {
+				spans.add(new Span(start, start + token.text().length(), style));
+			}
+		});
+		spans.addAll(strings);
+		spans.sort(Comparator.comparingInt(Span::start));
+		addComments(source, spans);
+		return spans;
+	}
+
+	/** The names {@code source} uses that are not keywords: those it defines among them, for suggestions. */
+	public static Set<String> names(String source) {
+		Set<String> names = new HashSet<>();
+		walk(source, (start, token) -> {
+			if (token.kind() == Token.Kind.NAME && !Parser.KEYWORDS.contains(token.text())) {
+				names.add(token.text());
+			}
+		});
+		return names;
+	}
+
+	/**
+	 * Gives {@code visitor} each token of {@code source} with text, and where it starts, starting again after errors as
+	 * {@link #spans} says; returns the string spans of unterminated strings.
+	 */
+	private static List<Span> walk(String source, BiConsumer<Integer, Token> visitor) {
 		List<Integer> lineStarts = new ArrayList<>();
 		lineStarts.add(0);
 		for (int i = 0; i < source.length(); i++) {
@@ -70,10 +101,7 @@ public final class Highlighter {
 				}
 				int start = lineStarts.get(firstLine + token.line() - 1) + token.col() - 1;
 				end = Math.max(end, start + token.text().length());
-				Style style = style(token, natives);
-				if (style != Style.PLAIN) {
-					spans.add(new Span(start, start + token.text().length(), style));
-				}
+				visitor.accept(start, token);
 			}
 			CompileError error = partial.error();
 			if (error == null) {
@@ -95,7 +123,6 @@ public final class Highlighter {
 			int last = Math.max(at, end - 1);
 			firstLine = lineIndex(lineStarts, last) + 1;
 		}
-		addComments(source, spans);
 		return spans;
 	}
 

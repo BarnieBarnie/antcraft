@@ -33,6 +33,8 @@ The editor colours the script as the language reads it: keywords, strings, numbe
 
 Tab stays in the text; click a button, or press Escape to close the editor.
 
+While you type a name, a list under it suggests the names that complete it, those starting with what you typed in the same case first, then shortest first: the builtins and the bot API, the keywords, the library's scripts and modules (for `import`, such as `lib.trees`), and the names the script itself uses. Up and Down pick one, Tab or Enter takes it, and Escape or any other key closes the list; while it is closed, Tab and Enter indent as above. Nothing is suggested inside strings and comments. The server sends the bot API's and the library's names when the editor opens, read from what is registered, so a new function is suggested without more work; at most 1024 names, which keeps the largest payload (a 64 KiB script with every name at its longest) at about 600 KiB, under vanilla's 1 MiB limit, while the usual hundred or so names add under 2 KiB.
+
 ## Bot Cores that carry a script
 
 A Bot Core can carry a script and its args (the item's `antcraft:script` component, named in its tooltip), so you hand out workers rather than commands: the bot it makes starts that script the moment it is activated, owned by the player who used the core, as `bot run` would start it. A core without one makes a bot that runs `idle.py`. `core script` refuses a script that does not exist or does not compile, with its error; one gone or broken since the core was set is refused the same way when the core is used, in the player's chat, and the bot runs `idle.py`. Cores with different scripts do not stack. Writing scripts in a book and quill is out of scope for v1.

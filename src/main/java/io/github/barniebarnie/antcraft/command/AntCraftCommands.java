@@ -343,7 +343,8 @@ public final class AntCraftCommands {
 			return 0;
 		}
 		String named = found.map(ScriptLibrary.Script::name).orElse(name);
-		ServerPlayNetworking.send(player, new ScriptNetworking.OpenScriptEditor(named, text, log, operator));
+		ServerPlayNetworking.send(player, new ScriptNetworking.OpenScriptEditor(named, text, log, operator,
+			ScriptNetworking.editorNames(ServerScripts.library())));
 		return 1;
 	}
 

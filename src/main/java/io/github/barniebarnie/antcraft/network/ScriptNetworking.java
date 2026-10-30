@@ -3,11 +3,15 @@ package io.github.barniebarnie.antcraft.network;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.script.ScriptEdits;
+import io.github.barniebarnie.antcraft.script.ScriptLibrary;
+import io.github.barniebarnie.antcraft.script.editor.ScriptNames;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -29,24 +33,35 @@ public final class ScriptNetworking {
 	// A character limit; ScriptEdits counts the bytes.
 	private static final StreamCodec<io.netty.buffer.ByteBuf, String> SOURCE = ByteBufCodecs.stringUtf8(ScriptEdits.MAX_SOURCE_BYTES);
 
+	/**
+	 * The most names {@link OpenScriptEditor} carries. At most {@link ScriptEdits#MAX_NAME_LENGTH} characters each, so at
+	 * most about 390 KiB; with the largest source (192 KiB) the payload stays well under vanilla's 1 MiB. The natives
+	 * and builtins are about 100 names, under 2 KiB.
+	 */
+	public static final int MAX_NAMES = 1024;
+
 	private ScriptNetworking() {
 	}
 
 	/**
 	 * Opens the editor on script {@code name} with its {@code source}, the last lines of the {@code log} of the bot it was
-	 * opened from (none from {@code script edit}), and whether the player may save ({@code mayEdit}: operators).
+	 * opened from (none from {@code script edit}), whether the player may save ({@code mayEdit}: operators), and the
+	 * {@code names} to suggest while typing ({@link #editorNames}).
 	 */
-	public record OpenScriptEditor(String name, String source, List<String> log, boolean mayEdit) implements CustomPacketPayload {
+	public record OpenScriptEditor(String name, String source, List<String> log, boolean mayEdit, List<String> names)
+		implements CustomPacketPayload {
 		public static final Type<OpenScriptEditor> TYPE = new Type<>(AntCraft.id("open_script_editor"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, OpenScriptEditor> STREAM_CODEC = StreamCodec.composite(
 			NAME, OpenScriptEditor::name,
 			SOURCE, OpenScriptEditor::source,
 			ByteBufCodecs.STRING_UTF8.apply(ByteBufCodecs.list()), OpenScriptEditor::log,
 			ByteBufCodecs.BOOL, OpenScriptEditor::mayEdit,
+			NAME.apply(ByteBufCodecs.list(MAX_NAMES)), OpenScriptEditor::names,
 			OpenScriptEditor::new).cast();
 
 		public OpenScriptEditor {
 			log = List.copyOf(log);
+			names = List.copyOf(names);
 		}
 
 		@Override
@@ -89,6 +104,18 @@ public final class ScriptNetworking {
 		public Type<ScriptSaved> type() {
 			return TYPE;
 		}
+	}
+
+	/**
+	 * The names the editor suggests besides keywords and the script's own: the natives and builtins, read from their
+	 * registration ({@link ScriptNames#natives}), and the library's scripts and modules, for {@code import}; at most
+	 * {@link #MAX_NAMES}, natives first.
+	 */
+	public static List<String> editorNames(ScriptLibrary library) {
+		Set<String> names = new LinkedHashSet<>(ScriptNames.natives());
+		library.scripts().stream().map(ScriptLibrary.Script::name).filter(name -> name.length() <= ScriptEdits.MAX_NAME_LENGTH)
+			.sorted().forEach(names::add);
+		return names.stream().limit(MAX_NAMES).toList();
 	}
 
 	public static void register() {
