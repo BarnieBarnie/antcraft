@@ -27,8 +27,10 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -41,9 +43,11 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
@@ -81,22 +85,28 @@ public final class BuildApi {
 			Long job = Args.absent(args[4]) || args[4] == PyNone.NONE ? null : Args.integer(args[4]);
 			AntBot bot = WorkApi.bot(run, call);
 			String describe = "build(" + Values.repr(id) + ", " + at + (turn == 0 ? "" : ", turn=" + turn) + (mirror ? ", mirror=True" : "") + ")";
-			Optional<BuildPlan> plan = plan((ServerLevel) bot.level(), id, WorkApi.blockPos(at), turn, mirror);
+			Optional<Planned> plan = plan((ServerLevel) bot.level(), id, WorkApi.blockPos(at), turn, mirror);
 			if (plan.isEmpty()) {
 				return run.done(describe, Result.fail(Result.NO_BLUEPRINT));
 			}
-			return run.start(new Build(run, bot, plan.get(), at, describe, job), call, at);
+			return run.start(new Build(run, bot, plan.get().plan(), plan.get().blockEntities(), at, describe, job), call, at);
 		});
+	}
+
+	/** A build's plan, and the block entity data of the blocks it places by where it places them. */
+	private record Planned(BuildPlan plan, Map<BlockPos, CompoundTag> blockEntities) {
 	}
 
 	/** The plan of blueprint {@code id} with its lowest corner at {@code at}, mirrored if asked, then turned {@code turn} quarters clockwise. */
 	// ponytail: planned in one tick, the warehouse in some 13 µs (#380); spread over ticks as the path budget does if larger blueprints show in the tick time.
-	private static Optional<BuildPlan> plan(ServerLevel level, String id, BlockPos at, long turn, boolean mirror) {
+	private static Optional<Planned> plan(ServerLevel level, String id, BlockPos at, long turn, boolean mirror) {
 		Identifier parsed = Identifier.tryParse(id);
 		Optional<Blueprint> blueprint = parsed == null ? Optional.empty() : Blueprints.get(parsed);
 		Rotation rotation = Rotation.values()[(int) Math.floorMod(turn, 4)];
+		Mirror mirrored = mirror ? Mirror.LEFT_RIGHT : Mirror.NONE;
 		return blueprint.flatMap(found -> Blueprints.template(level.getServer(), found)
-			.flatMap(template -> RegionPlan.load(template, at, mirror ? Mirror.LEFT_RIGHT : Mirror.NONE, rotation, found.palette())));
+			.flatMap(template -> RegionPlan.load(template, at, mirrored, rotation, found.palette())
+				.map(plan -> new Planned(plan, RegionPlan.blockEntities(template, at, mirrored, rotation, found.palette())))));
 	}
 
 	/** {@code blueprint(id)}: its size, role, materials and spots relative to its origin, as plain data. */
@@ -162,6 +172,8 @@ public final class BuildApi {
 		private final AntBot bot;
 		private final ServerLevel level;
 		private final BuildPlan plan;
+		/** The block entity data (sign text, a chest's name) a placed block gets, by where it goes. */
+		private final Map<BlockPos, CompoundTag> blockEntities;
 		private final Pos at;
 		private final String describe;
 		/** The job board id of the job this build is for, which the make-way hold follows; null for none given. */
@@ -189,11 +201,12 @@ public final class BuildApi {
 		private long placed;
 		private @Nullable Result result;
 
-		Build(ScriptRun run, AntBot bot, BuildPlan plan, Pos at, String describe, @Nullable Long job) {
+		Build(ScriptRun run, AntBot bot, BuildPlan plan, Map<BlockPos, CompoundTag> blockEntities, Pos at, String describe, @Nullable Long job) {
 			this.run = run;
 			this.bot = bot;
 			this.level = (ServerLevel) bot.level();
 			this.plan = plan;
+			this.blockEntities = blockEntities;
 			this.at = at;
 			this.describe = describe;
 			this.job = job;
@@ -308,6 +321,7 @@ public final class BuildApi {
 			}
 			if (!step.isPlaced(current)) {
 				this.placed++;
+				this.loadBlockEntity(step.pos());
 			}
 			return false;
 		}
@@ -398,6 +412,18 @@ public final class BuildApi {
 			this.run.host().body().setBuildScaffold(null, spot -> false);
 			if (this.result == null) {
 				this.bot.leaveBuildScaffold(this.describe, this.scaffold);
+			}
+		}
+
+		/** Gives the block just placed at {@code pos} its blueprint's block entity data, as a structure block would, and shows it to players. */
+		private void loadBlockEntity(BlockPos pos) {
+			CompoundTag data = this.blockEntities.get(pos);
+			BlockEntity entity = data == null ? null : this.level.getBlockEntity(pos);
+			if (entity != null) {
+				entity.loadWithComponents(TagValueInput.create(ProblemReporter.DISCARDING, this.level.registryAccess(), data));
+				entity.setChanged();
+				BlockState state = this.level.getBlockState(pos);
+				this.level.sendBlockUpdated(pos, state, state, Block.UPDATE_ALL);
 			}
 		}
 

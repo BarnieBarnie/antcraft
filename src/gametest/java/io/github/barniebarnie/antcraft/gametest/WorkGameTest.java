@@ -44,6 +44,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.entity.SignBlockEntity;
+import net.minecraft.world.level.block.entity.SignTextSlot;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
@@ -749,6 +752,24 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.COBBLESTONE, 3, 1, 3);
 				helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 3);
 				helper.assertBlockPresent(Blocks.OAK_PLANKS, 4, 2, 3);
+			});
+	}
+
+	/**
+	 * A schematic's block entity data comes along ({@code imported_sign.litematic}): the built sign reads its text, and the
+	 * chest, which holds a diamond in the schematic, is built empty.
+	 */
+	@GameTest(maxTicks = 25)
+	public void buildGivesAnImportedSignItsText(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SIGN));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST));
+		expect(helper, bot, "r = build('antcraft-gametest:imported_sign', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value)\n",
+			List.of("True None 3"), () -> {
+				helper.assertValueEqual(helper.getBlockEntity(new BlockPos(3, 2, 3), SignBlockEntity.class).getText(SignTextSlot.FRONT).getMessages(false).getFirst().getString(),
+					"Hello", "sign text");
+				helper.assertTrue(helper.getBlockEntity(new BlockPos(4, 1, 3), ChestBlockEntity.class).isEmpty(), "chest not empty");
 			});
 	}
 

@@ -57,13 +57,32 @@ def pack(indices, palette_size):
     return longs
 
 
-def region(position, size, palette, indices):
+def strings(items):
+    return bytes([8]) + int_(len(items)) + b''.join(text(i) for i in items)
+
+
+def tile_entity(block_entity, x, y, z, entries):
+    """A TileEntities entry as Litematica saves it: the block entity's NBT, at x, y, z from the region's lowest corner."""
+    return [(8, 'id', text(block_entity)), (3, 'x', int_(x)), (3, 'y', int_(y)), (3, 'z', int_(z))] + entries
+
+
+def sign(x, y, z, line):
+    return tile_entity('minecraft:sign', x, y, z, [(10, 'front_text', compound([(9, 'messages', strings([line, '', '', '']))]))])
+
+
+def chest(x, y, z, name, item):
+    """A chest named name holding one item."""
+    return tile_entity('minecraft:chest', x, y, z, [(8, 'CustomName', text(name)), (9, 'Items', compounds([
+        [(1, 'Slot', bytes([0])), (8, 'id', text(item)), (3, 'count', int_(1))]]))])
+
+
+def region(position, size, palette, indices, tile_entities=()):
     return compound([
         (10, 'Position', vec(*position)),
         (10, 'Size', vec(*size)),
         (9, 'BlockStatePalette', compounds(palette)),
         (12, 'BlockStates', long_array(pack(indices, len(palette)))),
-        (9, 'TileEntities', bytes([0]) + int_(0)),
+        (9, 'TileEntities', compounds(tile_entities) if tile_entities else bytes([0]) + int_(0)),
         (9, 'Entities', bytes([0]) + int_(0)),
     ])
 
@@ -97,4 +116,21 @@ write('regions.litematic', 'Two regions', [
 write('../../../gametest/resources/data/antcraft-gametest/blueprint/imported_step.litematic', 'Imported step', [
     ('Floor', region((0, 0, 0), (2, 1, 1), [state('minecraft:air'), state('minecraft:cobblestone')], [1, 1])),
     ('Top', region((1, 1, 0), (-1, -1, -1), [state('minecraft:air'), state('minecraft:oak_planks')], [1])),
+])
+
+# entities: 'Floor' at (0,0,0), size (2,1,1): stone, then a chest named Loot holding a diamond. 'Top' at (2,1,0), size
+# (-2,-1,-1), so it spans x 1..2, y 1: air, then a sign reading Hello at x 2, its block entity at x 1 from the region's
+# lowest corner (x 3 if read from its position).
+CHEST = state('minecraft:chest', facing='north', type='single', waterlogged='false')
+SIGN = state('minecraft:oak_sign', rotation='0', waterlogged='false')
+write('entities.litematic', 'Block entities', [
+    ('Floor', region((0, 0, 0), (2, 1, 1), [state('minecraft:air'), state('minecraft:stone'), CHEST], [1, 2],
+        [chest(1, 0, 0, 'Loot', 'minecraft:diamond')])),
+    ('Top', region((2, 1, 0), (-2, -1, -1), [state('minecraft:air'), SIGN], [0, 1], [sign(1, 0, 0, 'Hello')])),
+])
+
+# The game tests' imported_sign: a cobblestone with a sign reading Hello on it, and a chest holding a diamond beside it.
+write('../../../gametest/resources/data/antcraft-gametest/blueprint/imported_sign.litematic', 'Imported sign', [
+    ('Main', region((0, 0, 0), (2, 2, 1), [state('minecraft:air'), state('minecraft:cobblestone'), CHEST, SIGN], [1, 2, 3, 0],
+        [chest(1, 0, 0, 'Loot', 'minecraft:diamond'), sign(0, 1, 0, 'Hello')])),
 ])

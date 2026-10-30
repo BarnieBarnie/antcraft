@@ -23,7 +23,8 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 /**
  * A Litematica schematic ({@code data/<namespace>/blueprint/<name>.litematic}) read as a blueprint (docs/features/blueprints.md,
  * Litematica schematics). Its regions merge into one structure from their lowest corner, a later region over an earlier where
- * they overlap; block states only, without block entity contents or entities.
+ * they overlap. Block entity data comes along (a bot leaves out container contents, see {@code RegionPlan.blockEntities});
+ * entities do not.
  */
 public final class Litematic {
 	private Litematic() {
@@ -48,10 +49,14 @@ public final class Litematic {
 		return template;
 	}
 
-	/** The schematic as a structure file's NBT ({@code size}, {@code palette}, {@code blocks}), palette entries as the schematic has them. */
+	/**
+	 * The schematic as a structure file's NBT ({@code size}, {@code palette}, {@code blocks} with their block entities'
+	 * {@code nbt}), palette entries and block entity data as the schematic has them.
+	 */
 	static CompoundTag toStructure(CompoundTag schematic) {
 		Map<CompoundTag, Integer> palette = new LinkedHashMap<>();
 		Map<BlockPos, Integer> blocks = new HashMap<>();
+		Map<BlockPos, CompoundTag> blockEntities = new HashMap<>();
 		CompoundTag regions = schematic.getCompoundOrEmpty("Regions");
 		for (String name : regions.keySet()) {
 			CompoundTag region = regions.getCompoundOrEmpty(name);
@@ -75,9 +80,16 @@ public final class Litematic {
 						int entry = entry(packed, bits, (y * sz + z) * sx + x);
 						if (entry < merged.length) {
 							blocks.put(min.offset(x, y, z), merged[entry]);
+							blockEntities.remove(min.offset(x, y, z));
 						}
 					}
 				}
+			}
+			// A block entity's x, y, z run from the region's lowest corner, as its blocks do.
+			for (CompoundTag tag : region.getListOrEmpty("TileEntities").compoundStream().toList()) {
+				CompoundTag data = tag.copy();
+				List.of("x", "y", "z").forEach(data::remove);
+				blockEntities.put(min.offset(vec(tag)), data);
 			}
 		}
 		BlockPos low = blocks.keySet().stream().reduce(BlockPos::min).orElse(BlockPos.ZERO);
@@ -87,6 +99,9 @@ public final class Litematic {
 			CompoundTag block = new CompoundTag();
 			block.put("pos", ints(pos.subtract(low)));
 			block.putInt("state", state);
+			if (blockEntities.containsKey(pos)) {
+				block.put("nbt", blockEntities.get(pos));
+			}
 			blockList.add(block);
 		});
 		CompoundTag structure = new CompoundTag();

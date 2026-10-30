@@ -1,13 +1,17 @@
 package io.github.barniebarnie.antcraft.blueprint;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import io.github.barniebarnie.antcraft.work.RegionPlan;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -16,6 +20,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
@@ -68,6 +74,21 @@ class LitematicTest {
 			new BlueprintSummary.Block(new BlockPos(1, 0, 0), Blocks.DIRT.defaultBlockState()),
 			new BlueprintSummary.Block(new BlockPos(2, 2, 1), Blocks.GLASS.defaultBlockState()),
 			new BlueprintSummary.Block(new BlockPos(3, 2, 1), Blocks.COBBLESTONE.defaultBlockState())), blocks.blocks());
+	}
+
+	/**
+	 * Block entity data comes along, at its block (the sign's region has a negative size, so its block entity's position runs
+	 * from the region's lowest corner); a chest keeps its name but not its items, which a bot would neither need nor conjure.
+	 */
+	@Test
+	void keepsBlockEntityDataButNotContainerContents() throws IOException {
+		Map<BlockPos, CompoundTag> data = RegionPlan.blockEntities(Litematic.template(fixture("entities")), BlockPos.ZERO, Mirror.NONE, Rotation.NONE, 0);
+		assertEquals(Set.of(new BlockPos(1, 0, 0), new BlockPos(2, 1, 0)), data.keySet());
+		CompoundTag chest = data.get(new BlockPos(1, 0, 0));
+		assertEquals("Loot", chest.getStringOr("CustomName", ""), chest::toString);
+		assertFalse(chest.contains("Items"), chest::toString);
+		CompoundTag sign = data.get(new BlockPos(2, 1, 0));
+		assertEquals("Hello", sign.getCompoundOrEmpty("front_text").getListOrEmpty("messages").getStringOr(0, ""), sign::toString);
 	}
 
 	/** The blueprint of a schematic builds itself (its structure is its own id) and is named by the schematic's name. */

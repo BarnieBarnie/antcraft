@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.LiquidBlock;
@@ -81,7 +82,7 @@ public final class RegionPlan {
 	 * {@code mirror}, then turned by {@code rotation}, as a structure block places it, with the lowest corner of the turned box at {@code at}, batched like
 	 * {@link #copy}. A template with several palettes (block variants, like vanilla shipwrecks) is
 	 * built from palette {@code palette}, which must be below {@link #paletteCount}. Structure void
-	 * is left as it is; block-entity contents and entities are skipped.
+	 * is left as it is; entities are skipped. Block entity data is not in the plan: {@link #blockEntities} gives it.
 	 */
 	public static Optional<BuildPlan> load(StructureTemplate template, BlockPos at, Mirror mirror, Rotation rotation, int palette) {
 		Vec3i size = template.getSize();
@@ -104,6 +105,26 @@ public final class RegionPlan {
 		BlockPos min = BlockPos.min(turn(BlockPos.ZERO, mirror, rotation),
 			turn(new BlockPos(size.getX() - 1, size.getY() - 1, size.getZ() - 1), mirror, rotation));
 		return at.offset(turn(pos, mirror, rotation).subtract(min));
+	}
+
+	/** Inventory tags a built block entity leaves out: a bot neither needs nor conjures what a container holds, nor rolls its loot. */
+	// ponytail: the vanilla containers' tags; a modded block entity's own inventory tag comes along.
+	private static final List<String> CONTENTS = List.of("Items", "Item", "item", "RecordItem", "Book", "LootTable", "LootTableSeed");
+
+	/**
+	 * The block entity data (sign text, banner patterns, a chest's name) of the blocks {@link #load} places, by where it places
+	 * them, without container contents ({@link #CONTENTS}) (docs/features/blueprints.md, Litematica schematics).
+	 */
+	public static Map<BlockPos, CompoundTag> blockEntities(StructureTemplate template, BlockPos at, Mirror mirror, Rotation rotation, int palette) {
+		Map<BlockPos, CompoundTag> data = new HashMap<>();
+		for (StructureTemplate.StructureBlockInfo block : template.palettes.get(palette).blocks()) {
+			if (block.nbt() != null) {
+				CompoundTag tag = block.nbt().copy();
+				CONTENTS.forEach(tag::remove);
+				data.put(placed(block.pos(), template.getSize(), at, mirror, rotation), tag);
+			}
+		}
+		return data;
 	}
 
 	/** How many palettes {@code template} holds: 1 for a structure block's save. */
