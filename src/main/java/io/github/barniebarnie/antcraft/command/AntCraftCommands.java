@@ -60,7 +60,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft script list   (also any player)
  * /antcraft script edit &lt;script&gt;   (also any player; opens the script editor, which only operators may save from)
  * /antcraft script reload
- * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|status|log [n] [level]|edit   (defaults to the nearest bot; also a
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt;|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
@@ -305,6 +305,41 @@ public final class AntCraftCommands {
 		return bots.size();
 	}
 
+	/**
+	 * Makes {@code bots} members of the colony whose core is at {@code core} in the source's level, leaving the colony they
+	 * were in ({@link ColonyManager#join}), if the source may change it ({@link ColonyActions#mayAct}, as a Bot Core checks).
+	 */
+	private static int join(CommandSourceStack source, List<AntBot> bots, BlockPos core) {
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		ColonyManager colonies = ColonyManager.get(source.getLevel());
+		Optional<Colony> colony = colonies.byCore(core);
+		if (colony.isEmpty()) {
+			source.sendFailure(Component.translatable("commands.antcraft.bot.join.no_colony", core.toShortString()));
+			return 0;
+		}
+		// The console and command blocks run as operators.
+		ServerPlayer player = source.getPlayer();
+		if (player != null && !ColonyActions.mayAct(colony.get(), player)) {
+			source.sendFailure(Component.translatable("commands.antcraft.bot.join.not_allowed", core.toShortString()));
+			return 0;
+		}
+		bots.forEach(bot -> colonies.join(bot, colony.get()));
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.join", bots.size(), core.toShortString()), false);
+		return bots.size();
+	}
+
+	/** Takes {@code bots} out of their colony; their jobs there go back to the board. */
+	private static int leave(CommandSourceStack source, List<AntBot> bots) {
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		bots.forEach(bot -> ColonyManager.get((ServerLevel) bot.level()).leave(bot));
+		source.sendSuccess(() -> Component.translatable("commands.antcraft.bot.leave", bots.size()), false);
+		return bots.size();
+	}
+
 	/** The bots a {@code bot} subcommand acts on. */
 	@FunctionalInterface
 	private interface BotsArgument {
@@ -408,13 +443,16 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
-	/** {@code run <script> [args]|stop|remove|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
+	/** {@code run <script> [args]|stop|remove|join <core pos>|leave|status|log [n] [level]} under {@code node}, acting on the bots {@code bots} gives. */
 	private static <T extends ArgumentBuilder<CommandSourceStack, T>> T botCommands(T node, BotsArgument bots) {
 		return node
 			.then(Commands.literal("run")
 				.then(scriptArgument((ctx, name, args) -> runScript(ctx.getSource(), bots.get(ctx), name, args))))
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("remove").executes(ctx -> remove(ctx.getSource(), bots.get(ctx))))
+			.then(Commands.literal("join").then(Commands.argument("core", BlockPosArgument.blockPos())
+				.executes(ctx -> join(ctx.getSource(), bots.get(ctx), BlockPosArgument.getBlockPos(ctx, "core")))))
+			.then(Commands.literal("leave").executes(ctx -> leave(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("edit").executes(ctx -> editBotScript(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("status").executes(ctx -> scriptStatus(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("log")

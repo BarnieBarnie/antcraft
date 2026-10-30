@@ -28,6 +28,7 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -859,5 +860,91 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.OAK_TRAPDOOR, new BlockPos(3, 5, 3));
 			helper.assertTrue(colony.jobs().jobs("shaft").isEmpty(), "shaft jobs " + colony.jobs().jobs("shaft"));
 		});
+	}
+
+	/** {@code x y z} of {@code pos} in the test's area, as a command takes it. */
+	private static String at(GameTestHelper helper, int x, int y, int z) {
+		BlockPos pos = helper.absolutePos(new BlockPos(x, y, z));
+		return pos.getX() + " " + pos.getY() + " " + pos.getZ();
+	}
+
+	/** {@code /antcraft bot join} by its owner (#459) makes a bot in no colony a member: {@code colony()} then gives it. */
+	@GameTest(maxTicks = 20)
+	public void aBotInNoColonyJoinsOneByCommand(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 1, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		colony.setOwner(owner.getUUID());
+
+		List<String> answer = BotScripts.commandAsPlayer(helper, owner, "antcraft bot " + bot.getStringUUID() + " join " + at(helper, 1, 1, 1));
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.join[1, " + colony.core().toShortString() + "]")), "answer " + answer);
+		helper.assertTrue(colony.members().contains(bot.getUUID()), "not a member: " + colony.members());
+		BotScripts.run(bot, "c = colony()['core']\nprint((c.x, c.y, c.z) == (" + at(helper, 1, 1, 1).replace(" ", ", ") + "))\n");
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True")), "printed " + printed(bot)));
+	}
+
+	/** A member moved to another colony by {@code join} (#459) leaves the first, where its taken job is open again. */
+	@GameTest(maxTicks = 20)
+	public void aMemberJoiningAnotherColonyLeavesTheFirstAndItsJobsOpen(GameTestHelper helper) {
+		Colony first = colonyAt(helper, 1, 1, 1);
+		Colony second = colonyAt(helper, 6, 1, 6);
+		AntBot bot = member(helper, first, 3, 1, 3);
+		UUID id = bot.getUUID();
+		long job = first.jobs().post("haul", new CompoundTag(), id);
+		helper.assertTrue(first.jobs().take("haul", id).isPresent(), "job not taken");
+
+		BotScripts.command(helper, "antcraft bot " + id + " join " + at(helper, 6, 1, 6));
+		helper.assertTrue(second.id().equals(bot.getColonyId()) && second.members().contains(id), "not in the second colony");
+		helper.assertFalse(first.members().contains(id), "still in the first: " + first.members());
+		helper.assertTrue(first.jobs().jobs("haul").stream().anyMatch(j -> j.id() == job && j.taker().isEmpty()),
+			"job not open: " + first.jobs().jobs("haul"));
+		helper.succeed();
+	}
+
+	/** {@code /antcraft bot leave} (#459) takes a bot out of its colony. */
+	@GameTest(maxTicks = 20)
+	public void leaveTakesABotOutOfItsColony(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 1, 1, 1);
+		AntBot bot = member(helper, colony, 3, 1, 3);
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+
+		List<String> answer = BotScripts.commandAsPlayer(helper, owner, "antcraft bot " + bot.getStringUUID() + " leave");
+		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.leave[1]")), "answer " + answer);
+		helper.assertTrue(bot.getColonyId() == null, "still has colony " + bot.getColonyId());
+		helper.assertFalse(colony.members().contains(bot.getUUID()), "still listed: " + colony.members());
+		helper.succeed();
+	}
+
+	/**
+	 * {@code join} (#459) is refused for a colony the player may not change, for another player's bot, and for a position
+	 * with no Colony Core; {@code leave} for another player's bot.
+	 */
+	@GameTest(maxTicks = 20)
+	public void joinAndLeaveAreRefusedWhereThePlayerMayNot(GameTestHelper helper) {
+		Colony theirs = colonyAt(helper, 1, 1, 1);
+		theirs.setOwner(UUID.randomUUID());
+		Colony mine = colonyAt(helper, 6, 1, 6);
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		mine.setOwner(player.getUUID());
+		AntBot other = member(helper, theirs, 5, 1, 1);
+		other.setOwner(UUID.randomUUID());
+
+		List<String> notTheirs = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + own.getStringUUID() + " join " + at(helper, 1, 1, 1));
+		helper.assertTrue(own.getColonyId() == null, "joined a colony the player may not change");
+		helper.assertTrue(notTheirs.equals(List.of("You may not change the colony at " + theirs.core().toShortString())),
+			"answer " + notTheirs);
+		List<String> notOwn = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + other.getStringUUID() + " join " + at(helper, 6, 1, 6));
+		helper.assertTrue(theirs.id().equals(other.getColonyId()), "moved another player's bot");
+		helper.assertTrue(notOwn.size() == 1 && notOwn.getFirst().endsWith(" is not your bot"), "answer " + notOwn);
+		List<String> notOwnLeave = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + other.getStringUUID() + " leave");
+		helper.assertTrue(theirs.id().equals(other.getColonyId()), "took another player's bot out");
+		helper.assertTrue(notOwnLeave.size() == 1 && notOwnLeave.getFirst().endsWith(" is not your bot"), "answer " + notOwnLeave);
+		List<String> noCore = BotScripts.commandAsPlayer(helper, player, "antcraft bot " + own.getStringUUID() + " join " + at(helper, 4, 1, 4));
+		helper.assertTrue(own.getColonyId() == null, "joined at no core");
+		helper.assertTrue(noCore.equals(List.of("No Colony Core at " + helper.absolutePos(new BlockPos(4, 1, 4)).toShortString())),
+			"answer " + noCore);
+		helper.succeed();
 	}
 }

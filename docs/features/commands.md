@@ -1,6 +1,6 @@
 # Commands
 
-**Commands** (operators only, but any player may use `script list` and `script edit` (only operators may save from the editor), a bot's owner may use `bot run`, `stop`, `remove`, `status`, `log` and `edit` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
+**Commands** (operators only, but any player may use `script list` and `script edit` (only operators may save from the editor), a bot's owner may use `bot run`, `stop`, `remove`, `join`, `leave`, `status`, `log` and `edit` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
 
 | Command | Effect |
 |---------|--------|
@@ -11,6 +11,8 @@
 | `/antcraft bot [bots] run <script> [args]` | Starts a script on bots (without `[bots]`, the nearest bot within 64 blocks), replacing what they ran; `[args]` are given to it as the list `ARGS`. A player who runs it becomes the bots' owner |
 | `/antcraft bot [bots] stop` | Stops the bots' scripts (formerly `/antcraft stop`); they then run `idle.py`, walking home and waiting there |
 | `/antcraft bot [bots] remove` | Removes the bots for good: stops their scripts, drops what they carry where they stand, takes them out of their colony (their jobs go back to the board) and drops any respawn they wait for, so they do not come back |
+| `/antcraft bot [bots] join <core pos>` | The bots join the colony whose Colony Core is at `<core pos>`, leaving the colony they were in (their jobs there go back to its board). Refused for a colony you may not change (its owner, its trusted players and operators may), and for a position with no Colony Core |
+| `/antcraft bot [bots] leave` | Takes the bots out of their colony; their jobs go back to its board |
 | `/antcraft bot [bots] status` | Each bot's script, whether it is running, finished, failed or stopped, the line it is at, its current action and how many instructions it ran |
 | `/antcraft bot [bots] log [n] [level]` | The last `n` (default 10) lines of each bot's log at or above `level` (`debug`, the default, `info`, `warn`, `error` or `print`), each with the game time it was written at |
 | `/antcraft bot [bots] edit` | Opens the script the bot runs (the first of `[bots]`) in the in-game editor, with its last log lines |
@@ -33,6 +35,8 @@ Commands (on a server, `script reload`, `core script` and saving from the editor
 /antcraft bot [bots] run <script> [args]    start a script on a bot (args are given to it as the list ARGS)
 /antcraft bot [bots] stop
 /antcraft bot [bots] remove                 remove for good: items dropped, colony left, no respawn
+/antcraft bot [bots] join <core pos>        join the colony whose core is there, leaving the old one
+/antcraft bot [bots] leave                  leave its colony
 /antcraft bot [bots] status                 script, line, current action, last result
 /antcraft bot [bots] log [n] [level]        last n log lines at or above level (default debug)
 /antcraft bot [bots] edit                   the bot's script in the editor, with its log
