@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.script;
 
+import com.mojang.authlib.GameProfile;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -17,7 +18,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * Who may script which bot, and the limits of the scripts of players who are not operators: all their bots share
  * {@code playerInstructionsPerTick}, and they may run {@code maxScriptsPerPlayer} scripts at once (docs/features/scripts.md,
- * Players' scripts). Operators, and every player off a dedicated server, are exempt.
+ * Players' scripts). Operators, and the host of a single-player or LAN world, are exempt.
  */
 public final class PlayerLimits {
 	/** Each limited owner's bots' budget this tick, worked out at the start of the tick. */
@@ -47,9 +48,16 @@ public final class PlayerLimits {
 		return Math.max(1, Math.min(perBot, perPlayer / bots));
 	}
 
-	/** Whether the limits leave {@code player} alone: an operator, or anyone off a dedicated server. */
+	/** Whether the limits leave {@code player} alone: an operator, or the host of a single-player or LAN world. */
 	public static boolean exempt(MinecraftServer server, UUID player) {
-		return !server.isDedicatedServer() || Commands.LEVEL_GAMEMASTERS.check(server.getProfilePermissions(new NameAndId(player, "")));
+		GameProfile host = server.getSingleplayerProfile();
+		return exempt(server.isDedicatedServer(), host != null && player.equals(host.id()),
+			Commands.LEVEL_GAMEMASTERS.check(server.getProfilePermissions(new NameAndId(player, ""))));
+	}
+
+	/** Whether the limits leave a player alone: an operator, or the host of a world that is not on a dedicated server. */
+	public static boolean exempt(boolean dedicated, boolean host, boolean isOp) {
+		return isOp || !dedicated && host;
 	}
 
 	/** The budget of a bot {@code owner} owns this tick. */

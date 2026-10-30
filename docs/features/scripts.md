@@ -51,7 +51,7 @@ Their scripts have two limits (config):
 - `playerInstructionsPerTick` (default 10000) is shared by all the bots of one player running a script, `idle.py` included: each gets an even share, at most `scriptInstructionsPerTick` and at least 1 instruction a tick. So ten bots of one player at the defaults run 1000 instructions a tick each, while another player's one bot runs its full 2000.
 - `maxScriptsPerPlayer` (default 8) is how many scripts of their own (`idle.py` not counted) a player's bots may run at once; `bot run` that would go over it is refused. `0` lets no player who is not an operator run scripts.
 
-Operators are exempt from both, and so is everyone in single-player and LAN worlds (the limits apply on a dedicated server only). A Bot Core's script is not counted against `maxScriptsPerPlayer` when the core is used, but its bot shares its owner's instruction budget like any other.
+Operators are exempt from both, and so is the host of a single-player or LAN world, so playing alone nothing is throttled; guests who join a world opened to LAN get the limits like players on a dedicated server. A Bot Core's script is not counted against `maxScriptsPerPlayer` when the core is used, but its bot shares its owner's instruction budget like any other.
 
 ## Pausing
 

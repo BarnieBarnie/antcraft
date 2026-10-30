@@ -58,4 +58,23 @@ class PlayerLimitsTest {
 	void operatorsAreExempt() {
 		assertEquals(2000, PlayerLimits.budget(2000, 10000, 10, true));
 	}
+
+	@Test
+	void onADedicatedServerOnlyOperatorsAreExempt() {
+		assertTrue(PlayerLimits.exempt(true, false, true));
+		assertFalse(PlayerLimits.exempt(true, false, false));
+	}
+
+	@Test
+	void inSinglePlayerTheHostIsExempt() {
+		assertTrue(PlayerLimits.exempt(false, true, false), "the host, without cheats");
+	}
+
+	@Test
+	void aLanGuestIsNotExemptAndTheirBotsAreThrottled() {
+		boolean guest = PlayerLimits.exempt(false, false, false);
+		assertFalse(guest);
+		assertEquals(1000, PlayerLimits.budget(2000, 10000, 10, guest));
+		assertTrue(PlayerLimits.exempt(false, false, true), "a guest who is an operator");
+	}
 }
