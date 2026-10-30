@@ -139,6 +139,39 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A player who already runs {@code maxScriptsPerPlayer} scripts and uses a Bot Core that carries one gets a bot that
+	 * runs {@code idle.py}, and is told why (docs/features/scripts.md, Players' scripts).
+	 */
+	@GameTest(maxTicks = 5)
+	public void aBotCoresScriptCountsAgainstThePlayersCap(GameTestHelper helper) {
+		int max = AntCraftConfig.maxScriptsPerPlayer();
+		helper.assertTrue(max > 0 && max <= 12, "the test needs a cap of 1 to 12 scripts, not " + max);
+		String name = BotScripts.libraryScript(helper, "capped_", "while True:\n    wait(20)\n");
+		List<AntBot> running = new java.util.ArrayList<>();
+		BotScripts.RecordingPlayer player = null;
+		for (int i = 0; i < max; i++) {
+			AntBot bot = helper.spawn(ModEntities.ANT_BOT, i % 6, 1, 6 + i / 6);
+			if (player == null) {
+				player = BotScripts.owner(helper, bot);
+			}
+			bot.setOwner(player.getUUID());
+			BotScripts.run(bot, "while True:\n    wait(20)\n");
+			running.add(bot);
+		}
+		ItemStack core = new ItemStack(ModItems.BOT_CORE);
+		core.set(ModComponents.CORE_SCRIPT, new CoreScript(name, List.of()));
+		useOnTheFloor(helper, player, core);
+		AntBot made = helper.getEntities(ModEntities.ANT_BOT).stream().filter(bot -> !running.contains(bot)).findFirst()
+			.orElseThrow(() -> helper.assertionException("the core made no bot"));
+		List<String> chat = player.messages().stream().map(BotScripts.Message::text).toList();
+		helper.assertTrue(chat.equals(List.of("You may run at most " + max + " scripts at once")), "player was told " + chat);
+		helper.succeedWhen(() -> {
+			ScriptRun run = made.getScript();
+			helper.assertTrue(run != null && run.name().equals(DefaultScripts.IDLE), "runs " + (run == null ? null : run.name()));
+		});
+	}
+
 	/** A Bot Core without a script gives a bot that runs {@code idle.py}, as before. */
 	@GameTest(maxTicks = 20)
 	public void aBotCoreWithoutAScriptGivesAnIdleBot(GameTestHelper helper) {
@@ -205,7 +238,10 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 
 	/** A player who uses {@code core} on the middle of the floor; the bot appears above it. */
 	private static ServerPlayer useOnTheFloor(GameTestHelper helper, ItemStack core) {
-		ServerPlayer player = helper.makeMockServerPlayerInLevel();
+		return useOnTheFloor(helper, helper.makeMockServerPlayerInLevel(), core);
+	}
+
+	private static ServerPlayer useOnTheFloor(GameTestHelper helper, ServerPlayer player, ItemStack core) {
 		player.setItemInHand(InteractionHand.MAIN_HAND, core);
 		BlockPos floor = helper.absolutePos(new BlockPos(3, 0, 3));
 		core.useOn(new UseOnContext(player, InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(floor), Direction.UP, floor, false)));

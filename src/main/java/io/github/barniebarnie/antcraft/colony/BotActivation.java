@@ -5,6 +5,8 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.item.CoreScript;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.PlayerLimits;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
@@ -35,7 +37,8 @@ public final class BotActivation {
 	 * player, such as a Bot Core used by a machine, it joins none. The player owns the bot (see {@link AntBot#getOwner}).
 	 * With a {@code script} (the core's {@link CoreScript}) the bot starts it at once, as {@code /antcraft bot run} would;
 	 * one that is gone or no longer compiles is refused as that command refuses it, in the player's chat, and the bot
-	 * runs {@code idle.py} as one from a core without a script does.
+	 * runs {@code idle.py} as one from a core without a script does. So does a player who already runs
+	 * {@code maxScriptsPerPlayer} scripts ({@link PlayerLimits#mayStart}), who is told so.
 	 */
 	public static @Nullable AntBot activate(ServerLevel level, BlockPos pos, @Nullable Player player, @Nullable CoreScript script) {
 		AntBot bot = activate(level, pos, mayJoin(player, pos));
@@ -45,7 +48,10 @@ public final class BotActivation {
 		if (player != null) {
 			bot.setOwner(player.getUUID());
 		}
-		if (script != null) {
+		if (script != null && player != null && !PlayerLimits.mayStart(PlayerLimits.running(level.getServer(), player.getUUID(), List.of()), 1,
+			AntCraftConfig.maxScriptsPerPlayer(), PlayerLimits.exempt(level.getServer(), player.getUUID()))) {
+			player.sendSystemMessage(Component.translatable("commands.antcraft.bot.too_many", AntCraftConfig.maxScriptsPerPlayer()));
+		} else if (script != null) {
 			AntCraftCommands.runnable(script.name(), failure -> {
 				if (player != null) {
 					player.sendSystemMessage(failure);

@@ -38,6 +38,13 @@ class PlayerLimitsTest {
 	}
 
 	@Test
+	void aBotCoresScriptIsOneMoreScript() {
+		assertTrue(PlayerLimits.mayStart(7, 1, 8, false));
+		assertFalse(PlayerLimits.mayStart(8, 1, 8, false), "a player at the cap");
+		assertTrue(PlayerLimits.mayStart(8, 1, 8, true), "an operator at the cap");
+	}
+
+	@Test
 	void thePlayerBudgetIsSplitAcrossTheirBots() {
 		assertEquals(1000, PlayerLimits.budget(2000, 10000, 10, false));
 		assertEquals(2500, PlayerLimits.budget(5000, 10000, 4, false));
