@@ -74,6 +74,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`craft`](crafting/craft.md) | `craft(item, n=1, table=None)` | action: craft from carried items |
 | [`smelt`](crafting/smelt.md) | `smelt(item, n=1, furnace=None, fuel=None)` | action: smelt carried items in a furnace, blast furnace or smoker |
 | [`needs`](crafting/needs.md) | `needs(item, n=1, also=None)` | the raw items still to gather and the craft and smelt steps to make an item |
+| [`cooks_in`](crafting/cooks_in.md) | `cooks_in(item)` | which of the furnace, smoker and blast furnace cook an item |
 
 ## Building
 

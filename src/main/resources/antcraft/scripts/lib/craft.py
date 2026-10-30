@@ -24,10 +24,6 @@ MADE = ["diamond", "iron", "stone", "wooden"]
 # the reach of craft and smelt, so a station just outside reach is not planned for.
 REACH = 4
 
-# The stations smelt cooks in besides a furnace, with the items each cooks. ponytail: told by convention tag, so a modded
-# food or ore outside these tags (or kelp) plans for a furnace.
-COOKS = {"smoker": "#c:foods", "blast_furnace": ["#c:ores", "#c:raw_materials"]}
-
 
 def craft_all(item, n=1, table=None, furnace=None):
     """Makes n of item from what the bot carries: each step needs(item, n) lists, crafted at table or smelted in furnace
@@ -241,11 +237,11 @@ def can_take_back_furnace(inputs):
 
 def furnace_in_reach(inputs):
     """Whether a station within REACH cooks each of inputs (lists of items, one of each to smelt, as smelt_inputs gives
-    them): a furnace, or a smoker or blast furnace where every input has an item COOKS lists for it."""
+    them): a furnace, or a smoker or blast furnace where every input has an item cooks_in names it for."""
     if find_nearest("furnace", radius=REACH) is not None:
         return True
-    for station, cooks in COOKS.items():
-        if all([any([matches(i, cooks) for i in items]) for items in inputs]) and find_nearest(station, radius=REACH) is not None:
+    for station in ("minecraft:smoker", "minecraft:blast_furnace"):
+        if all([any([station in cooks_in(i) for i in items]) for items in inputs]) and find_nearest(station, radius=REACH) is not None:
             return True
     return False
 

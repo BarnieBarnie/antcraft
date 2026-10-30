@@ -562,6 +562,29 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
+	/** Kelp, in no food tag, has a smoking recipe: craft_here cooks it in the smoker within reach and places no furnace. */
+	@GameTest(maxTicks = 220)
+	public void craftHereCooksKelpInASmokerWithinReach(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.KELP, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, craftHere("'dried_kelp'", "dried_kelp", "kelp"), List.of("True None {} 1 0"),
+			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	/** Chorus fruit, a food, has only a smelting recipe: plan does not let the smoker within reach stand in for the furnace. */
+	@GameTest(maxTicks = 20)
+	public void planPutsAFurnaceForWhatTheSmokerCannotCook(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.CHORUS_FRUIT, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		expect(helper, bot, "import lib.craft\np = lib.craft.plan('popped_chorus_fruit')\nprint(p['gather'], p['no_tool'])\n",
+			List.of("{'minecraft:cobblestone': 8} True"));
+	}
+
 	/** The pickaxe does not fit in the full inventory: the step fails at the table put down, which is still taken back. */
 	@GameTest(maxTicks = 40)
 	public void craftHereTakesTheTableBackWhenAStepFails(GameTestHelper helper) {

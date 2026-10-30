@@ -106,6 +106,18 @@ public final class CraftApi {
 			AntBot bot = WorkApi.bot(run, call);
 			return needs(item, n, Storage.stock(BotHands.carried(bot)), also, GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
 		});
+		natives.register("cooks_in", 15, call -> {
+			Object[] args = Args.bind("cooks_in", call, 1, "item");
+			ItemStack stack = new ItemStack(oneItem("cooks_in", args[0]));
+			ServerLevel level = (ServerLevel) WorkApi.bot(run, call).level();
+			List<Object> stations = new ArrayList<>();
+			for (var station : List.of(Blocks.FURNACE, Blocks.SMOKER, Blocks.BLAST_FURNACE)) {
+				if (!cooked(level, Objects.requireNonNull(cooking(station.defaultBlockState())), stack).isEmpty()) {
+					stations.add(BuiltInRegistries.BLOCK.getKey(station).toString());
+				}
+			}
+			return new PyList(stations);
+		});
 		natives.register("smelt", 60, call -> {
 			Object[] args = Args.bind("smelt", call, 1, "item", "n", "furnace", "fuel");
 			Selector item = Selector.parse(args[0]);
