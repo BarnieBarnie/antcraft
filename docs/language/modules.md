@@ -59,7 +59,7 @@ A module that is not there fails the script at the line of the import (`No modul
 
 ## The mod's library
 
-The mod's default library modules live under `lib/` and are copied with `idle.py` (see [Scripts in the game](../features/scripts.md)): `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`), `lib/shaft.py` and `lib/mine.py` (see [Mining](../features/mining.md)), and `lib/craft.py` (see [`lib/craft`](../reference/modules/lib/craft.md)). The default colony scripts live under `colony/` (see [Default colony scripts](../features/colony-scripts.md)), and their shared helpers in `colony/common.py`. Reading them is a good way to learn the language.
+The mod's default library modules live under `lib/` and are copied with `idle.py` (see [Scripts in the game](../features/scripts.md)): `lib/home.py` (`go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`), `lib/shaft.py` and `lib/mine.py` (see [Mining](../features/mining.md)), `lib/craft.py` (see [`lib/craft`](../reference/modules/lib/craft.md)) and `lib/trees.py` (see [`lib/trees`](../reference/modules/lib/trees.md)). The default colony scripts live under `colony/` (see [Default colony scripts](../features/colony-scripts.md)), and their shared helpers in `colony/common.py`. Reading them is a good way to learn the language.
 
 ```python
 from lib.home import go_home
