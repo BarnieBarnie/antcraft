@@ -504,6 +504,45 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/** Eight cobblestone to smelt and no furnace: the furnace would take them all, so it crafts none and keeps all eight. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereKeepsItsInputBackFromTheFurnace(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'cobblestone', 8", "cobblestone", "furnace", "stone").replace("r['reason']", "r['reason'], r['missing']"),
+			List.of("False missing_ingredients {'minecraft:cobblestone': 8} 8 0 0"), () -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
+	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
+	@GameTest(maxTicks = 220)
+	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {
+		helper.setBlock(FURNACE, Blocks.SMOKER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, craftHere("'cooked_beef'", "cooked_beef", "beef"), List.of("True None {} 1 0"),
+			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	/** The pickaxe does not fit in the full inventory: the step fails at the table put down, which is still taken back. */
+	@GameTest(maxTicks = 40)
+	public void craftHereTakesTheTableBackWhenAStepFails(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 64));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 64));
+		fillInventory(bot);
+		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table"), List.of("False no_space {} 0 2"),
+			tablesInTheArea(helper, 0));
+	}
+
 	/** No pickaxe: craft_here refuses an iron pickaxe before it crafts the sticks, since its furnace could not be taken back. */
 	@GameTest(maxTicks = 20)
 	public void craftHereWithoutAPickaxeForTheFurnaceCraftsNothing(GameTestHelper helper) {

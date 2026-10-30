@@ -24,6 +24,10 @@ MADE = ["diamond", "iron", "stone", "wooden"]
 # the reach of craft and smelt, so a station just outside reach is not planned for.
 REACH = 4
 
+# The stations smelt cooks in besides a furnace, with the items each cooks. ponytail: told by convention tag, so a modded
+# food or ore outside these tags (or kelp) plans for a furnace.
+COOKS = {"smoker": "#c:foods", "blast_furnace": ["#c:ores", "#c:raw_materials"]}
+
 
 def craft_all(item, n=1, table=None, furnace=None):
     """Makes n of item from what the bot carries: each step needs(item, n) lists, crafted at table or smelted in furnace
@@ -68,12 +72,14 @@ def obtain(item, n=1, chests=None):
 
 def plan(item, n=1):
     """needs(item, n), with the crafting table and furnace craft_here must craft for it planned first from the same
-    items: those its steps need that the bot neither carries nor finds within REACH (a furnace takes a table)."""
+    items: those its steps need that the bot neither carries nor finds within REACH (a furnace takes a table). A smoker
+    or blast furnace within REACH that cooks every smelted input stands in for the furnace."""
     p = needs(item, n)
     stations = []
-    if "smelt" in [step[2] for step in p["crafts"]] and not count("furnace") and find_nearest("furnace", radius=REACH) is None:
+    inputs = smelt_inputs(p)
+    if inputs and not count("furnace") and not furnace_in_reach(inputs):
         stations.append("furnace")
-    if (stations or p["table"]) and not count("crafting_table") and find_nearest("crafting_table", radius=REACH) is None:
+    if (stations or p["table"]) and not table_near():
         stations.insert(0, "crafting_table")
     return needs(item, n, also=stations) if stations else p
 
@@ -161,7 +167,8 @@ def craft_here(item, n=1):
     p = plan(item, n)
     if p["gather"]:
         return result("missing_ingredients", None, p["gather"])
-    if "smelt" in [step[2] for step in p["crafts"]] and not can_take_back_furnace():
+    inputs = smelt_inputs(p)
+    if inputs and not can_take_back_furnace(inputs):
         return result("no_tool")
     r = craft_all(item, n)
     if r["reason"] != "no_table":
@@ -179,16 +186,28 @@ def craft_here(item, n=1):
 
 def smelt_here(item, n=1, fuel=None):
     """smelt(item, n, fuel=fuel), and where no furnace is within reach, one placed beside the bot for it: the carried
-    one, else one crafted from 8 cobblestone with craft_here. The placed furnace is mined back after, with anything left
-    in it, also when the smelt fails. Gives result(): ok, smelt's reason, no_tool where the bot carries no pickaxe to
-    mine a furnace back (it places and crafts none), or no_furnace where no furnace could be crafted or placed."""
+    one, else one crafted with craft_here from what the bot carries besides the n of item it smelts. The placed furnace
+    is mined back after, with anything left in it, also when the smelt fails. Gives result(): ok, smelt's reason,
+    no_tool where the bot carries no pickaxe to mine a furnace back (it places and crafts none), missing_ingredients
+    with missing, what the furnace lacks with the input kept back, before it crafts anything, or no_furnace where no
+    furnace could be crafted or placed."""
     r = smelt(item, n, fuel=fuel)
     if r or r.reason != "no_furnace":
         return result(r.reason)
-    if not can_take_back_furnace():
+    # No station within reach cooks item, so only a pickaxe brings a placed furnace back.
+    if not count("#minecraft:pickaxes"):
         return result("no_tool")
-    if count("furnace") == 0 and not craft_here("furnace")["ok"]:
-        return result(r.reason)
+    if count("furnace") == 0:
+        carried = [s.item for s in inventory() if matches(s, item)]
+        if not carried:
+            return result("missing_ingredients")
+        # ponytail: keeps back the first carried item item selects, the one smelt loads unless a station cooks only another.
+        stations = ["furnace"] if table_near() else ["crafting_table", "furnace"]
+        p = needs(carried[0], min(n, count(carried[0])), also=stations)
+        if p["gather"]:
+            return result("missing_ingredients", None, p["gather"])
+        if not craft_here("furnace")["ok"]:
+            return result(r.reason)
     spot = place_beside("furnace")
     if spot is None:
         return result(r.reason)
@@ -200,10 +219,31 @@ def smelt_here(item, n=1, fuel=None):
         pick_up(radius=3)
 
 
-def can_take_back_furnace():
-    """Whether a furnace smelt_here puts down comes back: one is within REACH, so none is put down, or the bot carries a
-    pickaxe to mine it."""
-    return find_nearest("furnace", radius=REACH) is not None or count("#minecraft:pickaxes") > 0
+def can_take_back_furnace(inputs):
+    """Whether a furnace smelt_here puts down to smelt inputs comes back: a station within REACH cooks them
+    (furnace_in_reach), so none is put down, or the bot carries a pickaxe to mine it."""
+    return furnace_in_reach(inputs) or count("#minecraft:pickaxes") > 0
+
+
+def furnace_in_reach(inputs):
+    """Whether a station within REACH cooks each of inputs (lists of items, one of each to smelt, as smelt_inputs gives
+    them): a furnace, or a smoker or blast furnace where every input has an item COOKS lists for it."""
+    if find_nearest("furnace", radius=REACH) is not None:
+        return True
+    for station, cooks in COOKS.items():
+        if all([any([matches(i, cooks) for i in items]) for items in inputs]) and find_nearest(station, radius=REACH) is not None:
+            return True
+    return False
+
+
+def smelt_inputs(p):
+    """The inputs of the smelting steps of p, a needs() plan: a list of items to smelt from for each."""
+    return [p["inputs"][step] for step, k, how in p["crafts"] if how == "smelt"]
+
+
+def table_near():
+    """Whether the bot carries a crafting table or finds one within REACH."""
+    return count("crafting_table") > 0 or find_nearest("crafting_table", radius=REACH) is not None
 
 
 def place_beside(block):
