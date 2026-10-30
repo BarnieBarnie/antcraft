@@ -19,7 +19,8 @@ import java.util.Set;
  * ({@code .}) and conditional expressions ({@code if}) at their operator, so a runtime error can point at it.
  */
 public final class Parser {
-	private static final Set<String> KEYWORDS = Set.of("False", "None", "True", "and", "as", "assert", "async", "await",
+	/** Python's keywords, those outside the subset too. */
+	public static final Set<String> KEYWORDS = Set.of("False", "None", "True", "and", "as", "assert", "async", "await",
 			"break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if",
 			"import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with",
 			"yield");

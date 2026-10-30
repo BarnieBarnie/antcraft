@@ -2,17 +2,17 @@ package io.github.barniebarnie.antcraft.client;
 
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.script.ScriptEdits;
+import io.github.barniebarnie.antcraft.script.editor.ScriptNames;
 import java.util.List;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
 /**
- * Shows a script the server sent ({@link ScriptNetworking.OpenScriptEditor}) in vanilla's multi-line edit box, with the
+ * Shows a script the server sent ({@link ScriptNetworking.OpenScriptEditor}) in a {@link CodeEditBox}, with the
  * last log lines of the bot it was opened from, and for operators a Save button that sends it back
  * ({@link ScriptNetworking.SaveScript}); the server's answer, such as a compile error with its line, shows above the
  * buttons (docs/features/scripts.md, Editing in game).
@@ -31,7 +31,7 @@ public class ScriptEditorScreen extends Screen {
 
 	private final ScriptNetworking.OpenScriptEditor script;
 	private String text;
-	private MultiLineEditBox editor;
+	private CodeEditBox editor;
 	private Component message = Component.empty();
 	private int messageColor = GREY;
 
@@ -65,11 +65,12 @@ public class ScriptEditorScreen extends Screen {
 	protected void init() {
 		int logHeight = this.log().isEmpty() ? 0 : (this.log().size() + 1) * LINE_HEIGHT + 4;
 		int bottom = this.height - MARGIN - BUTTON_HEIGHT - LINE_HEIGHT - 4 - logHeight;
-		this.editor = MultiLineEditBox.builder().setX(MARGIN).setY(TOP)
-			.build(this.font, this.width - 2 * MARGIN, Math.max(LINE_HEIGHT * 3, bottom - TOP), this.title);
-		this.editor.setCharacterLimit(ScriptEdits.MAX_SOURCE_BYTES);
+		if (this.editor != null) {
+			this.text = this.editor.getValue(); // init runs again when the window is resized
+		}
+		this.editor = new CodeEditBox(this.font, MARGIN, TOP, this.width - 2 * MARGIN, Math.max(LINE_HEIGHT * 3, bottom - TOP), this.title,
+			ScriptEdits.MAX_SOURCE_BYTES, ScriptNames.natives());
 		this.editor.setValue(this.text);
-		this.editor.setValueListener(value -> this.text = value);
 		this.addRenderableWidget(this.editor);
 		int y = this.height - MARGIN - BUTTON_HEIGHT;
 		int x = this.width - MARGIN - BUTTON_WIDTH;
@@ -85,7 +86,7 @@ public class ScriptEditorScreen extends Screen {
 	private void save() {
 		this.message = Component.translatable("screen.antcraft.script_editor.saving");
 		this.messageColor = GREY;
-		ClientPlayNetworking.send(new ScriptNetworking.SaveScript(this.script.name(), this.text));
+		ClientPlayNetworking.send(new ScriptNetworking.SaveScript(this.script.name(), this.editor.getValue()));
 	}
 
 	@Override

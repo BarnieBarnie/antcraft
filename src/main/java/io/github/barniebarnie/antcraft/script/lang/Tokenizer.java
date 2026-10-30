@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Splits a script's source into Python 3 tokens. Lines are ended by NEWLINE, and a change of indentation gives
@@ -49,6 +50,23 @@ public final class Tokenizer {
 			normalized = normalized.substring(1);
 		}
 		return new Tokenizer(file, normalized, 1, 1, false).run();
+	}
+
+	/** The tokens a source has up to its first error, and that error, or null if it has none. */
+	public record Partial(List<Token> tokens, @Nullable CompileError error) {
+	}
+
+	/**
+	 * The tokens of {@code source} up to its first error, which it gives instead of throwing, for the editor's colours
+	 * (docs/features/scripts.md, Editing in game). Unlike {@link #tokenize}, line ends must be {@code \n} already.
+	 */
+	public static Partial tokenizeUntilError(String source) {
+		Tokenizer tokenizer = new Tokenizer("<editor>", source, 1, 1, false);
+		try {
+			return new Partial(tokenizer.run(), null);
+		} catch (CompileError e) {
+			return new Partial(List.copyOf(tokenizer.tokens), e);
+		}
 	}
 
 	/**

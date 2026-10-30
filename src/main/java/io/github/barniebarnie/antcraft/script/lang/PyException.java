@@ -30,6 +30,13 @@ public record PyException(String type, String message, String detail, @Nullable 
 			Map.entry("RuntimeError", "Exception"), Map.entry("SyntaxError", "Exception"), Map.entry("TypeError", "Exception"),
 			Map.entry("ValueError", "Exception"), Map.entry("ZeroDivisionError", "Exception"));
 
+	/** The names of the exception types. */
+	public static java.util.Set<String> types() {
+		java.util.Set<String> types = new java.util.HashSet<>(PARENTS.keySet());
+		types.add("Exception");
+		return types;
+	}
+
 	static boolean isType(String name) {
 		return name.equals("Exception") || PARENTS.containsKey(name);
 	}
