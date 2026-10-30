@@ -13,12 +13,14 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.item.CoreScript;
+import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.registry.ModItems;
 import io.github.barniebarnie.antcraft.script.BotLog;
 import io.github.barniebarnie.antcraft.script.PlayerLimits;
+import io.github.barniebarnie.antcraft.script.ScriptEdits;
 import io.github.barniebarnie.antcraft.script.ScriptLibrary;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.ServerScripts;
@@ -35,6 +37,7 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 import net.minecraft.ChatFormatting;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -55,9 +58,10 @@ import org.jspecify.annotations.Nullable;
  * /antcraft status
  * /antcraft profile start|stop|report   (server tick time, per part of the bots' work)
  * /antcraft script list   (also any player)
+ * /antcraft script edit &lt;script&gt;   (also any player; opens the script editor, which only operators may save from)
  * /antcraft script reload
- * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]   (defaults to the nearest bot; also a bot's
- *     owner, on their own bots, within the limits of {@link PlayerLimits})
+ * /antcraft bot [bots] run &lt;script&gt; [args]|stop|status|log [n] [level]|edit   (defaults to the nearest bot; also a
+ *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
  * /antcraft colony trust|untrust &lt;player&gt; [colony]   (also the colony's owner, not only operators)
@@ -68,6 +72,8 @@ public final class AntCraftCommands {
 	public static final int COLONY_RANGE = 64;
 	/** How many lines {@code bot log} shows without {@code n}. */
 	private static final int DEFAULT_LOG_LINES = 10;
+	/** How many of a bot's log lines the script editor shows. */
+	private static final int EDITOR_LOG_LINES = 20;
 
 	private AntCraftCommands() {
 	}
@@ -79,13 +85,18 @@ public final class AntCraftCommands {
 		return OPERATOR.test(source) || source.isPlayer();
 	}
 
+	/** Whether {@code player} is an operator, who may do what the operator-only commands do. */
+	public static boolean isOperator(ServerPlayer player) {
+		return OPERATOR.test(player.createCommandSourceStack());
+	}
+
 	public static void register() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, buildContext, selection) -> register(dispatcher));
 	}
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
-		// Every subcommand is for operators but trust (with trust list) and untrust, which a colony's owner may use too, and
-		// script list and bot, which a bot's owner may use on their own bots (checked when run).
+		// Every subcommand is for operators but trust (with trust list) and untrust, which a colony's owner may use too,
+		// script list and edit, and bot, which a bot's owner may use on their own bots (checked when run).
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(AntCraftCommands::operatorOrPlayer)
 			.then(Commands.literal("status").requires(OPERATOR).executes(AntCraftCommands::status))
@@ -95,6 +106,8 @@ public final class AntCraftCommands {
 				.then(Commands.literal("report").executes(ctx -> profileReport(ctx.getSource()))))
 			.then(Commands.literal("script").requires(AntCraftCommands::operatorOrPlayer)
 				.then(Commands.literal("list").executes(ctx -> listScripts(ctx.getSource())))
+				.then(Commands.literal("edit").then(scriptName(Commands.argument("script", StringArgumentType.string()))
+					.executes(ctx -> editScript(ctx.getSource(), StringArgumentType.getString(ctx, "script"), List.of()))))
 				.then(Commands.literal("reload").requires(OPERATOR).executes(ctx -> reloadScripts(ctx.getSource()))))
 			// The bots argument is optional: without it, the nearest bot. Literals win over the selector, so a bot cannot be named "run".
 			.then(botCommands(Commands.literal("bot").requires(AntCraftCommands::operatorOrPlayer), ctx -> nearestBot(ctx.getSource()))
@@ -294,13 +307,59 @@ public final class AntCraftCommands {
 
 	/** {@code <script> [args]}, suggesting the library's scripts, running {@code command} with the script's name and args. */
 	private static RequiredArgumentBuilder<CommandSourceStack, String> scriptArgument(ScriptCommand command) {
-		return Commands.argument("script", StringArgumentType.string())
-			.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
-				ServerScripts.library().scripts().stream().map(ScriptLibrary.Script::name), builder))
+		return scriptName(Commands.argument("script", StringArgumentType.string()))
 			.executes(ctx -> command.run(ctx, StringArgumentType.getString(ctx, "script"), List.of()))
 			.then(Commands.argument("args", StringArgumentType.greedyString())
 				.executes(ctx -> command.run(ctx, StringArgumentType.getString(ctx, "script"),
 					List.of(StringArgumentType.getString(ctx, "args").trim().split("\\s+")))));
+	}
+
+	/** {@code node}, suggesting the library's scripts. */
+	private static RequiredArgumentBuilder<CommandSourceStack, String> scriptName(RequiredArgumentBuilder<CommandSourceStack, String> node) {
+		return node.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+			ServerScripts.library().scripts().stream().map(ScriptLibrary.Script::name), builder));
+	}
+
+	/**
+	 * Opens the script editor on the player's client with the library's script {@code name} and {@code log}, the last lines
+	 * of the bot it was opened from (docs/features/scripts.md, Editing in game). Any player may look; only operators may
+	 * save, and so only they may open a script the library does not have yet, to write it.
+	 */
+	private static int editScript(CommandSourceStack source, String name, List<String> log) throws CommandSyntaxException {
+		ServerPlayer player = source.getPlayerOrException();
+		if (!ServerPlayNetworking.canSend(player, ScriptNetworking.OpenScriptEditor.TYPE)) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.no_client"));
+			return 0;
+		}
+		boolean operator = isOperator(player);
+		Optional<ScriptLibrary.Script> found = ServerScripts.library().get(name);
+		if (found.isEmpty() && !operator) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.unknown", name));
+			return 0;
+		}
+		String text = found.map(ScriptLibrary.Script::source).orElse("");
+		if (text.length() > ScriptEdits.MAX_SOURCE_BYTES) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.too_large", name));
+			return 0;
+		}
+		String named = found.map(ScriptLibrary.Script::name).orElse(name);
+		ServerPlayNetworking.send(player, new ScriptNetworking.OpenScriptEditor(named, text, log, operator));
+		return 1;
+	}
+
+	/** Opens the script editor on the script the first of {@code bots} runs, with that bot's last log lines. */
+	private static int editBotScript(CommandSourceStack source, List<AntBot> bots) throws CommandSyntaxException {
+		if (!checkAny(source, bots)) {
+			return 0;
+		}
+		AntBot bot = bots.getFirst();
+		ScriptRun run = bot.getScript();
+		if (run == null) {
+			source.sendFailure(Component.translatable("commands.antcraft.bot.edit.none", bot.getName()));
+			return 0;
+		}
+		List<String> log = bot.getLog().last(EDITOR_LOG_LINES, Output.Level.DEBUG).stream().map(BotLog.Entry::format).toList();
+		return editScript(source, run.name(), log);
 	}
 
 	/**
@@ -344,6 +403,7 @@ public final class AntCraftCommands {
 			.then(Commands.literal("run")
 				.then(scriptArgument((ctx, name, args) -> runScript(ctx.getSource(), bots.get(ctx), name, args))))
 			.then(Commands.literal("stop").executes(ctx -> stop(ctx.getSource(), bots.get(ctx))))
+			.then(Commands.literal("edit").executes(ctx -> editBotScript(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("status").executes(ctx -> scriptStatus(ctx.getSource(), bots.get(ctx))))
 			.then(Commands.literal("log")
 				.executes(ctx -> showLog(ctx.getSource(), bots.get(ctx), DEFAULT_LOG_LINES, "debug"))

@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.SayBubble;
+import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotLog;
@@ -21,6 +22,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -31,6 +33,8 @@ import net.minecraft.core.UUIDUtil;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.permissions.LevelBasedPermissionSet;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -386,6 +390,47 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one", "two")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
 		});
+	}
+
+	/**
+	 * A script saved from the in-game editor (docs/features/scripts.md, Editing in game) is written to the world script
+	 * folder and reloaded, and the bot running it starts the new version. Only an operator may save: the server refuses the
+	 * same save from a player who is not one, whatever the client sends.
+	 */
+	@GameTest(maxTicks = 10)
+	public void anEditedScriptIsSavedAndTheRunningBotRestarts(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, bot);
+		NameAndId profile = new NameAndId(player.getGameProfile());
+		GameTests.onEnd(helper, () -> helper.getLevel().getServer().getPlayerList().deop(profile));
+		String before = "print('one')\nwhile True:\n    wait(1)\n";
+		String name = runLibraryScript(helper, bot, "edit_", before);
+		Path file = ServerScripts.worldFolder(helper.getLevel().getServer()).resolve(name + ".py");
+		String edited = "print('two')\nwhile True:\n    wait(1)\n";
+
+		helper.runAfterDelay(3, () -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			ScriptNetworking.ScriptSaved refused = ScriptNetworking.save(player, new ScriptNetworking.SaveScript(name, edited));
+			helper.assertFalse(refused.saved(), "a player who is not an operator saved: " + refused);
+			helper.assertTrue(read(file).equals(before), "the file changed on a refused save");
+			// The game test server makes operators at level 0; saving needs gamemaster, as the operator commands do.
+			helper.getLevel().getServer().getPlayerList().op(profile, Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.of(false));
+			ScriptNetworking.ScriptSaved saved = ScriptNetworking.save(player, new ScriptNetworking.SaveScript(name, edited));
+			helper.assertTrue(saved.saved(), "save answered " + saved);
+			helper.assertTrue(read(file).equals(edited), "file " + read(file));
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one", "two")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
+		});
+	}
+
+	private static String read(Path file) {
+		try {
+			return Files.readString(file);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	/** Adds, changes or with a null {@code source} removes the data pack script {@code id}, keeping the others. */

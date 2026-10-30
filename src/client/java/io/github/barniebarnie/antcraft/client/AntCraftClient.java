@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.client.render.AntBotRenderer;
 import io.github.barniebarnie.antcraft.client.render.GhostRenderer;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
 import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
+import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
@@ -43,5 +44,7 @@ public class AntCraftClient implements ClientModInitializer {
 		ClientPlayNetworking.registerGlobalReceiver(BlueprintNetworking.BlueprintList.TYPE, (list, context) -> ClientBlueprints.set(list.blueprints()));
 		ClientPlayNetworking.registerGlobalReceiver(BlueprintNetworking.BlueprintBlocksReply.TYPE, (reply, context) -> ClientBlueprints.receive(reply));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBlueprints.set(List.of()));
+		ClientPlayNetworking.registerGlobalReceiver(ScriptNetworking.OpenScriptEditor.TYPE, (script, context) -> ScriptEditorScreen.open(script));
+		ClientPlayNetworking.registerGlobalReceiver(ScriptNetworking.ScriptSaved.TYPE, (reply, context) -> ScriptEditorScreen.saved(reply));
 	}
 }

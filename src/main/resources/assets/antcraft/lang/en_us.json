@@ -13,6 +13,9 @@
 	"commands.antcraft.script.reload": "Loaded %s script(s), %s with errors; restarted %s bot(s)",
 	"commands.antcraft.script.unknown": "No script named %s (see /antcraft script list)",
 	"commands.antcraft.script.broken": "%s does not compile: %s",
+	"commands.antcraft.script.too_large": "%s is too large to edit in game",
+	"commands.antcraft.script.no_client": "The script editor needs AntCraft on your client",
+	"commands.antcraft.bot.edit.none": "%s runs no script",
 	"commands.antcraft.bot.run": "Started %s on %s bot(s)",
 	"commands.antcraft.bot.not_yours": "%s is not your bot",
 	"commands.antcraft.bot.too_many": "You may run at most %s scripts at once",
@@ -56,5 +59,14 @@
 	"screen.antcraft.blueprint_picker.role.farm": "Farm",
 	"screen.antcraft.blueprint_picker.role.generator": "Generator",
 	"screen.antcraft.blueprint_picker.material": "%s %s",
-	"screen.antcraft.blueprint_picker.materials": "Needs: %s"
+	"screen.antcraft.blueprint_picker.materials": "Needs: %s",
+	"screen.antcraft.script_editor": "Script %s",
+	"screen.antcraft.script_editor.read_only": "Script %s (read only: only operators may save)",
+	"screen.antcraft.script_editor.save": "Save",
+	"screen.antcraft.script_editor.close": "Close",
+	"screen.antcraft.script_editor.log": "Log",
+	"screen.antcraft.script_editor.saving": "Saving...",
+	"screen.antcraft.script_editor.saved": "Saved %s; restarted %s bot(s)",
+	"screen.antcraft.script_editor.not_operator": "Only operators may save scripts",
+	"screen.antcraft.script_editor.cannot_write": "Cannot write the file: %s"
 }

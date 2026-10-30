@@ -16,6 +16,12 @@ Scripts are loaded from two folders and from data packs; on a name clash the wor
 
 The mod copies its default scripts (`idle.py`, the library modules `lib/home.py`, `lib/shaft.py` and `lib/mine.py` and the colony scripts under `colony/`) into `config/antcraft/scripts/` each time the server starts, and never overwrites a file the player changed: `config/antcraft/scripts/.antcraft-defaults` records what it last copied, and a file that differs from that is the player's. A deleted default comes back.
 
+## Editing in game
+
+`/antcraft script edit <script>` opens the script in an editor on your screen (it needs AntCraft on your client), and `/antcraft bot [bot] edit` opens the script a bot runs, with the bot's last log lines under it. Any player may look at the scripts they can run; only operators may save, since the library's scripts are shared by every player's bots. An operator may also open a name the library does not have yet, to write a new script.
+
+Save sends the script to the server, which checks it whatever the client sent: the player must be an operator, the script at most 64 KiB (UTF-8), its name dotted words of letters, digits, `_` and `-` (so it maps to a file inside the world script folder, never `..`, a separator or an absolute path), and it must compile. A refused save shows why above the buttons, a compile error with its file and line, and nothing is written. A saved script goes to `<world>/antcraft/scripts/`, with folders for the dots (`lib.trees` is `lib/trees.py`), and the server reloads the scripts as `/antcraft script reload` does, so the bots running it start the new version. Saving a script of the config folder or a data pack writes a copy to the world folder, which wins on the name clash; the original stays as it was. The editor wraps long lines and shows no line numbers: a compile error names the line.
+
 ## Bot Cores that carry a script
 
 A Bot Core can carry a script and its args (the item's `antcraft:script` component, named in its tooltip), so you hand out workers rather than commands: the bot it makes starts that script the moment it is activated, owned by the player who used the core, as `bot run` would start it. A core without one makes a bot that runs `idle.py`. `core script` refuses a script that does not exist or does not compile, with its error; one gone or broken since the core was set is refused the same way when the core is used, in the player's chat, and the bot runs `idle.py`. Cores with different scripts do not stack. Writing scripts in a book and quill is out of scope for v1.
