@@ -519,6 +519,38 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/** Four planks to burn and no table: the table would take them all, so it crafts nothing and keeps all four. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereKeepsItsFuelBackFromTheTable(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron', 1, fuel='oak_planks'", "oak_planks", "cobblestone", "crafting_table", "furnace")
+				.replace("r['reason']", "r['reason'], r['missing']"),
+			List.of("False missing_ingredients {'minecraft:oak_log': 1} 4 8 0 0"), () -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
+	/** One log, the fuel smelt burns without fuel=: the table would take it, so it crafts nothing and keeps it. */
+	@GameTest(maxTicks = 20)
+	public void smeltHereKeepsItsDefaultFuelBackFromTheTable(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "oak_log", "cobblestone", "crafting_table", "furnace")
+				.replace("r['reason']", "r['reason'], r['missing']"),
+			List.of("False missing_ingredients {'minecraft:oak_log': 1} 1 8 0 0"), () -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
 	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {
