@@ -485,7 +485,10 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** A lumberjack alone fells the colony's tree, plants its sapling where it stood and puts the logs into the core. */
+	/**
+	 * A lumberjack alone fells the colony's tree, plants a sapling where it stood and puts the logs, and all else it carries
+	 * but its saplings, into the core (lib.inv's store_all, #457).
+	 */
 	@GameTest(maxTicks = 600)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {
 		helper.setBlock(5, 0, 5, Blocks.DIRT);
@@ -507,12 +510,17 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		colony.setRadius(7);
 		Container core = container(helper, 1, 1, 6);
 		AntBot lumberjack = member(helper, colony, 1, 1, 1);
-		lumberjack.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		lumberjack.getInventory().addItem(new ItemStack(Items.OAK_SAPLING, 2));
+		lumberjack.getInventory().addItem(new ItemStack(Items.DIRT));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(5, 1, 5));
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			helper.assertTrue(core.countItem(Items.DIRT) == 1, "dirt in the core: " + core.countItem(Items.DIRT));
+			int saplings = lumberjack.getInventory().countItem(Items.OAK_SAPLING)
+				+ (lumberjack.getMainHandItem().is(Items.OAK_SAPLING) ? lumberjack.getMainHandItem().getCount() : 0);
+			helper.assertTrue(saplings == 1, "saplings the lumberjack keeps: " + saplings);
 		});
 	}
 
