@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.script.lang;
 
 import io.github.barniebarnie.antcraft.script.lang.Ast.Expr;
 import io.github.barniebarnie.antcraft.script.lang.Ast.Stmt;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,11 +29,7 @@ public final class AstDump {
 			case Ast.Break s -> "break";
 			case Ast.Continue s -> "continue";
 			case Ast.Pass s -> "pass";
-			case Ast.Def s -> "(def " + s.name() + " (" + java.util.stream.Stream.concat(s.params().stream()
-					.map(p -> p.defaultValue() == null ? p.name() : "(" + p.name() + " " + dump(p.defaultValue()) + ")"),
-					java.util.stream.Stream.of(s.varArgs() == null ? null : "(* " + s.varArgs() + ")",
-							s.varKeywords() == null ? null : "(** " + s.varKeywords() + ")").filter(java.util.Objects::nonNull))
-					.collect(Collectors.joining(" ")) + ") " + block(s.body()) + ")";
+			case Ast.Def s -> "(def " + s.name() + " (" + params(s) + ") " + block(s.body()) + ")";
 			case Ast.ClassDef s -> "(class " + s.name() + " " + dump(s.base()) + " " + block(s.body()) + ")";
 			case Ast.Return s ->s.value() == null ? "return" : "(return " + dump(s.value()) + ")";
 			case Ast.Assert s -> "(assert " + dump(s.test()) + (s.message() == null ? "" : " " + dump(s.message())) + ")";
@@ -114,5 +111,27 @@ public final class AstDump {
 
 	private static String quote(String s) {
 		return "'" + s.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n") + "'";
+	}
+
+	private static String params(Ast.Def def) {
+		List<String> out = new ArrayList<>();
+		int positional = def.params().size() - def.kwOnly();
+		for (int i = 0; i < def.params().size(); i++) {
+			if (i == positional) {
+				out.add(def.varArgs() == null ? "*" : "(* " + def.varArgs() + ")");
+			}
+			Ast.Param p = def.params().get(i);
+			out.add(p.defaultValue() == null ? p.name() : "(" + p.name() + " " + dump(p.defaultValue()) + ")");
+			if (i == def.posOnly() - 1) {
+				out.add("/");
+			}
+		}
+		if (def.kwOnly() == 0 && def.varArgs() != null) {
+			out.add("(* " + def.varArgs() + ")");
+		}
+		if (def.varKeywords() != null) {
+			out.add("(** " + def.varKeywords() + ")");
+		}
+		return String.join(" ", out);
 	}
 }

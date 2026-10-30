@@ -52,6 +52,22 @@ class VmErrorTest {
 	}
 
 	@Test
+	void keywordOnlyAndPositionalOnlyArgumentErrors() {
+		assertEquals("t.py:3: f() missing 1 required keyword-only argument: 'b'", fails("def f(a, *, b):\n    pass\nf(1)"));
+		assertEquals("t.py:3: f() missing 2 required keyword-only arguments: 'b' and 'c'",
+				fails("def f(*, b, c):\n    pass\nf()"));
+		assertEquals("t.py:3: f() takes 1 positional argument but 2 were given", fails("def f(a, *, b):\n    pass\nf(1, 2)"));
+		assertEquals("t.py:3: f() takes 1 positional argument but 2 positional arguments (and 1 keyword-only argument) were given",
+				fails("def f(a, *, b):\n    pass\nf(1, 2, b=3)"));
+		assertEquals("t.py:3: f() got an unexpected keyword argument 'c'", fails("def f(a, *, b):\n    pass\nf(1, b=2, c=3)"));
+		assertEquals("t.py:3: f() got some positional-only arguments passed as keyword arguments: 'a'",
+				fails("def f(a, /):\n    pass\nf(a=1)"));
+		assertEquals("t.py:3: f() got some positional-only arguments passed as keyword arguments: 'a, b'",
+				fails("def f(a, b, /, c):\n    pass\nf(c=3, a=1, b=2)"));
+		assertEquals("t.py:3: f() missing 1 required positional argument: 'a'", fails("def f(a, /):\n    pass\nf()"));
+	}
+
+	@Test
 	void unknownName() {
 		assertEquals("t.py:3: name 'find_nearst' is not defined", fails("x = 1\n\ny = find_nearst('chest')"));
 	}

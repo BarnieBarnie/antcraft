@@ -68,7 +68,24 @@ twice(place, pos().north(), "torch")
 twice(gather, "wheat", radius=8)
 ```
 
-Parameters after `*args` (keyword-only parameters) and a bare `*` are not supported.
+## Keyword-only and positional-only parameters
+
+Parameters after `*args`, or after a bare `*`, are keyword-only: a call must name them. Parameters before a `/` are positional-only: a call may not name them. Both work as in Python:
+
+```python
+def mine(block, *, radius=8, keep):
+    say(f"mining {block} within {radius}, keeping {keep}")
+
+
+def walk(to, /, steps=1):
+    say(f"walking {steps} steps to {to}")
+
+
+mine("stone", keep=4)      # radius stays 8
+walk(pos().north(), steps=2)
+```
+
+A keyword-only parameter without a default that a call leaves out stops the script (`mine() missing 1 required keyword-only argument: 'keep'`), and so does a positional-only one given by name (`walk() got some positional-only arguments passed as keyword arguments: 'to'`), unless the function has `**kwargs`, which then takes it. A bare `*` must be followed by a named parameter, and `/` must come before any `*`, as in Python.
 
 ## Several values back
 
@@ -132,4 +149,4 @@ There is no `lambda`: write a small `def` instead.
 
 ## Not in the subset
 
-Keyword-only parameters, `lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.
+`lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.

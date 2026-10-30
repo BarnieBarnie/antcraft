@@ -900,32 +900,36 @@ public final class Vm {
 	private static Object[] bind(PyFunction function, List<Object> args, Map<String, Object> kwargs) {
 		Code code = function.code();
 		String name = code.name();
+		List<String> localNames = Arrays.asList(code.locals());
 		int params = code.paramCount();
-		int defaults = function.defaults().size();
+		int named = params + code.kwOnlyCount();
+		List<String> kwDefaults = Arrays.asList(code.kwDefaults());
+		int defaults = code.defaultCount() - kwDefaults.size(); // those of the positional parameters
 		Object[] locals = new Object[code.locals().length];
-		int slot = params; // the next hidden local: *args, **kwargs, then the method's class
-		if (code.varArgs()) {
-			locals[slot++] = new PyTuple(args.size() > params ? new ArrayList<>(args.subList(params, args.size())) : List.of());
-		} else if (args.size() > params) {
-			String takes = defaults == 0 ? params + " positional argument" + (params == 1 ? "" : "s")
-					: "from " + (params - defaults) + " to " + params + " positional arguments";
-			throw new ScriptError(name + "() takes " + takes + " but " + args.size()
-					+ (args.size() == 1 ? " was" : " were") + " given");
-		}
 		for (int i = 0; i < Math.min(args.size(), params); i++) {
 			locals[i] = args.get(i);
+		}
+		int slot = named; // the next hidden local: *args, **kwargs, then the method's class
+		if (code.varArgs()) {
+			locals[slot++] = new PyTuple(args.size() > params ? new ArrayList<>(args.subList(params, args.size())) : List.of());
 		}
 		PyDict rest = code.varKeywords() ? new PyDict() : null;
 		if (rest != null) {
 			locals[slot++] = rest;
 		}
+		List<String> posOnly = localNames.subList(0, code.posOnlyCount());
 		for (Map.Entry<String, Object> kwarg : kwargs.entrySet()) {
-			int index = Arrays.asList(code.locals()).subList(0, params).indexOf(kwarg.getKey());
-			if (index < 0 && rest != null) {
+			int index = localNames.subList(0, named).indexOf(kwarg.getKey());
+			if (index < code.posOnlyCount() && rest != null) {
 				rest.put(kwarg.getKey(), kwarg.getValue());
 				continue;
 			}
-			if (index < 0) {
+			if (index < code.posOnlyCount()) {
+				List<String> passed = kwargs.keySet().stream().filter(posOnly::contains).toList();
+				if (!passed.isEmpty()) {
+					throw new ScriptError(name + "() got some positional-only arguments passed as keyword arguments: '"
+							+ String.join(", ", passed) + "'");
+				}
 				throw new ScriptError(name + "() got an unexpected keyword argument '" + kwarg.getKey() + "'");
 			}
 			if (locals[index] != null) {
@@ -933,26 +937,51 @@ public final class Vm {
 			}
 			locals[index] = kwarg.getValue();
 		}
+		if (!code.varArgs() && args.size() > params) {
+			long kwOnlyGiven = Arrays.stream(locals, params, named).filter(java.util.Objects::nonNull).count();
+			String takes = defaults == 0 ? params + " positional argument" + (params == 1 ? "" : "s")
+					: "from " + (params - defaults) + " to " + params + " positional arguments";
+			String given = kwOnlyGiven == 0 ? "" : " positional argument" + (args.size() == 1 ? "" : "s") + " (and "
+					+ kwOnlyGiven + " keyword-only argument" + (kwOnlyGiven == 1 ? "" : "s") + ")";
+			throw new ScriptError(name + "() takes " + takes + " but " + args.size() + given
+					+ (args.size() == 1 && kwOnlyGiven == 0 ? " was" : " were") + " given");
+		}
 		List<String> missing = new ArrayList<>();
 		for (int i = 0; i < params; i++) {
 			if (locals[i] == null) {
 				if (i >= params - defaults) {
 					locals[i] = function.defaults().get(i - (params - defaults));
 				} else {
-					missing.add("'" + code.locals()[i] + "'");
+					missing.add(code.locals()[i]);
 				}
 			}
 		}
-		if (!missing.isEmpty()) {
-			String list = missing.size() == 1 ? missing.getFirst()
-					: missing.size() == 2 ? missing.get(0) + " and " + missing.get(1)
-							: String.join(", ", missing.subList(0, missing.size() - 1)) + ", and " + missing.getLast();
-			throw new ScriptError(name + "() missing " + missing.size() + " required positional argument"
-					+ (missing.size() == 1 ? "" : "s") + ": " + list);
+		missing(name, missing, "positional");
+		for (int i = params; i < named; i++) {
+			int d = kwDefaults.indexOf(code.locals()[i]);
+			if (locals[i] == null && d >= 0) {
+				locals[i] = function.defaults().get(defaults + d);
+			} else if (locals[i] == null) {
+				missing.add(code.locals()[i]);
+			}
 		}
+		missing(name, missing, "keyword-only");
 		if (function.owner() != null && slot < locals.length && code.locals()[slot].equals(Compiler.CLASS_SLOT)) {
 			locals[slot] = function.owner(); // for the method's super()
 		}
 		return locals;
+	}
+
+	/** Throws Python's error for the {@code kind} arguments a call of {@code name} is {@code missing}, if any. */
+	private static void missing(String name, List<String> missing, String kind) {
+		if (missing.isEmpty()) {
+			return;
+		}
+		List<String> quoted = missing.stream().map(m -> "'" + m + "'").toList();
+		String list = quoted.size() == 1 ? quoted.getFirst()
+				: quoted.size() == 2 ? quoted.get(0) + " and " + quoted.get(1)
+						: String.join(", ", quoted.subList(0, quoted.size() - 1)) + ", and " + quoted.getLast();
+		throw new ScriptError(name + "() missing " + quoted.size() + " required " + kind + " argument"
+				+ (quoted.size() == 1 ? "" : "s") + ": " + list);
 	}
 }

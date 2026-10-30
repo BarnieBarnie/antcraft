@@ -363,6 +363,9 @@ public final class Parser {
 		List<Ast.Param> params = new ArrayList<>();
 		Set<String> names = new HashSet<>();
 		boolean defaults = false;
+		int posOnly = 0;
+		Token star = null; // the * or *varArgs after which parameters are keyword-only
+		int kwOnly = 0;
 		String varArgs = null;
 		String varKeywords = null;
 		while (!peek().isOp(")")) {
@@ -371,16 +374,31 @@ public final class Parser {
 				throw error(p, "arguments cannot follow var-keyword argument");
 			}
 			if (p.isOp("/")) {
-				throw unsupported(p, "`/` in parameters");
-			}
-			if (p.isOp("*") || p.isOp("**")) {
-				if (p.isOp("*") && varArgs != null) {
+				if (star != null) {
+					throw error(p, "/ must be ahead of *");
+				}
+				if (posOnly > 0) {
+					throw error(p, "/ may appear only once");
+				}
+				if (params.isEmpty()) {
+					throw error(p, "at least one argument must precede /");
+				}
+				next();
+				posOnly = params.size();
+			} else if (p.isOp("*") && (peek(1).isOp(",") || peek(1).isOp(")"))) {
+				if (star != null) {
 					throw error(p, "* argument may appear only once");
 				}
 				next();
-				if (peek().kind() != Kind.NAME || KEYWORDS.contains(peek().text())) {
-					throw error(p, "keyword-only parameters are not supported");
+				star = p;
+			} else if (p.isOp("*") || p.isOp("**")) {
+				if (p.isOp("*") && star != null) {
+					throw error(p, "* argument may appear only once");
 				}
+				if (p.isOp("**") && star != null && varArgs == null && kwOnly == 0) {
+					throw error(star, "named arguments must follow bare *");
+				}
+				next();
 				Token n = peek();
 				String param = name("expected a parameter name");
 				if (!names.add(param)) {
@@ -388,13 +406,11 @@ public final class Parser {
 				}
 				if (p.isOp("*")) {
 					varArgs = param;
+					star = p;
 				} else {
 					varKeywords = param;
 				}
 			} else {
-				if (varArgs != null) {
-					throw error(p, "keyword-only parameters are not supported");
-				}
 				String param = name("expected a parameter name");
 				if (peek().isOp(":")) {
 					throw error(peek(), "annotations are not supported");
@@ -404,19 +420,25 @@ public final class Parser {
 					next();
 					defaultValue = test();
 					defaults = true;
-				} else if (defaults) {
+				} else if (defaults && star == null) {
 					throw error(p, "parameter without a default follows parameter with a default");
 				}
 				if (!names.add(param)) {
 					throw error(p, "duplicate parameter '" + param + "'");
 				}
 				params.add(new Ast.Param(param, defaultValue, p.line(), p.col()));
+				if (star != null) {
+					kwOnly++;
+				}
 			}
 			if (peek().isOp(",")) {
 				next();
 			} else if (!peek().isOp(")")) {
 				throw unexpected(peek());
 			}
+		}
+		if (star != null && varArgs == null && kwOnly == 0) {
+			throw error(star, "named arguments must follow bare *");
 		}
 		next();
 		if (peek().isOp("->")) {
@@ -429,7 +451,7 @@ public final class Parser {
 		List<Stmt> body = block("function definition on line " + t.line());
 		functionDepth--;
 		loopDepth = loops;
-		return new Ast.Def(name, List.copyOf(params), varArgs, varKeywords, body, t.line(), t.col());
+		return new Ast.Def(name, List.copyOf(params), posOnly, kwOnly, varArgs, varKeywords, body, t.line(), t.col());
 	}
 
 	/** {@code class Name:} or {@code class Name(Base):}, with one base at most and no keywords (docs/language/classes.md). */

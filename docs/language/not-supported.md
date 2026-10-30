@@ -53,16 +53,6 @@ for log in scan("#minecraft:logs", radius=16):
 
 To drop duplicates from a list: `unique = []` and then `if x not in unique: unique.append(x)` for each value.
 
-## Keyword-only parameters
-
-`def f(*args, **kwargs)` and `f(*xs, **d)` work as in Python (see [Functions](functions.md#taking-any-number-of-arguments)), but a parameter after `*args`, or after a bare `*`, is not supported (`keyword-only parameters are not supported`), and neither is `/` among the parameters. Put such a parameter before `*args` with a default, or read it from `**kwargs`:
-
-```python
-def store_all(chest, *items, **opts):
-    for item in items:
-        put(chest, item, opts.get("n"))
-```
-
 ## Closures and nonlocal
 
 A function defined inside another may not use the outer function's variables (`closures are not supported`), and there is no `nonlocal`. Define the function at the top level and give it what it needs as arguments; to change a value, return the new one, or keep it in a dict or list the caller passes in.

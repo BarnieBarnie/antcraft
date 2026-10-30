@@ -168,6 +168,9 @@ class ParserTest {
 		assertEquals("(def f (a) [(return (tuple a 1))])", parse("def f(a,):\n    return a, 1"));
 		assertEquals("(def f (a (b 1) (* args) (** kwargs)) [pass])", parse("def f(a, b=1, *args, **kwargs):\n    pass"));
 		assertEquals("(def f ((** kw)) [pass])", parse("def f(**kw,):\n    pass"));
+		assertEquals("(def f (a / b * c (d 1)) [pass])", parse("def f(a, /, b, *, c, d=1):\n    pass"));
+		assertEquals("(def f (a (* args) (b 2) c (** kw)) [pass])", parse("def f(a, *args, b=2, c, **kw):\n    pass"));
+		assertEquals("(def f ((a 1) / (b 2)) [pass])", parse("def f(a=1, /, b=2):\n    pass"));
 	}
 
 	@Test
@@ -177,8 +180,15 @@ class ParserTest {
 		assertEquals("t.py:1:11: * argument may appear only once", syntaxError("def f(*a, *b):\n    pass"));
 		assertEquals("t.py:1:12: arguments cannot follow var-keyword argument", syntaxError("def f(**k, a):\n    pass"));
 		assertEquals("t.py:1:11: duplicate parameter 'a'", syntaxError("def f(a, *a):\n    pass"));
-		assertEquals("t.py:1:11: keyword-only parameters are not supported", syntaxError("def f(*a, b):\n    pass"));
-		assertEquals("t.py:1:7: keyword-only parameters are not supported", syntaxError("def f(*, b):\n    pass"));
+		assertEquals("t.py:1:7: named arguments must follow bare *", syntaxError("def f(*):\n    pass"));
+		assertEquals("t.py:1:7: named arguments must follow bare *", syntaxError("def f(*, **k):\n    pass"));
+		assertEquals("t.py:1:13: * argument may appear only once", syntaxError("def f(*, a, *b):\n    pass"));
+		assertEquals("t.py:1:13: duplicate parameter 'a'", syntaxError("def f(a, *, a):\n    pass"));
+		assertEquals("t.py:1:7: at least one argument must precede /", syntaxError("def f(/):\n    pass"));
+		assertEquals("t.py:1:16: / may appear only once", syntaxError("def f(a, /, b, /):\n    pass"));
+		assertEquals("t.py:1:11: / must be ahead of *", syntaxError("def f(*a, /):\n    pass"));
+		assertEquals("t.py:1:15: parameter without a default follows parameter with a default",
+				syntaxError("def f(a=1, /, b):\n    pass"));
 	}
 
 	@Test

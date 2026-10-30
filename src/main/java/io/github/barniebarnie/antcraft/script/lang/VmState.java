@@ -490,6 +490,8 @@ public final class VmState {
 				.append(Arrays.toString(code.ops())).append(Arrays.toString(code.args())).append(Arrays.toString(code.lines()))
 				.append(Arrays.toString(code.names())).append(Arrays.toString(code.locals())).append(code.paramCount())
 				.append(',').append(code.defaultCount()).append(',').append(code.varArgs()).append(',').append(code.varKeywords())
+				.append(',').append(code.posOnlyCount()).append(',').append(code.kwOnlyCount())
+				.append(Arrays.toString(code.kwDefaults()))
 				.append("|[");
 		for (Object constant : code.constants()) {
 			if (constant instanceof Code nested) {

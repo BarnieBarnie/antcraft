@@ -82,11 +82,6 @@ class SubsetTest {
 	}
 
 	@Test
-	void keywordOnlyParametersAreNotSupported() {
-		rejects("def f(*args, b):\n    pass", "bot.py:1:14: keyword-only parameters are not supported");
-	}
-
-	@Test
 	void closuresAreNotSupported() {
 		rejects("def outer():\n    n = 0\n    def inner():\n        return n + 1\n    return inner()",
 				"bot.py:4:16: closures are not supported (`inner` uses `n` of `outer`)");

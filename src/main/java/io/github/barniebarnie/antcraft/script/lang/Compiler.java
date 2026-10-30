@@ -74,7 +74,7 @@ public final class Compiler {
 		compiler.body(module.body());
 		compiler.emit(Op.LOAD_CONST, compiler.constant(PyNone.NONE));
 		compiler.emit(Op.RETURN, 0);
-		return compiler.code(0, 0, false, false);
+		return compiler.code(0, 0, false, false, 0, 0, new String[0]);
 	}
 
 	/**
@@ -95,21 +95,25 @@ public final class Compiler {
 			}
 		}
 		Compiler compiler = new Compiler(file, def.name(), scope, def.line());
-		compiler.method = method && !def.params().isEmpty();
+		compiler.method = method && !def.positional().isEmpty();
 		compiler.body(def.body());
 		compiler.emit(Op.LOAD_CONST, compiler.constant(PyNone.NONE));
 		compiler.emit(Op.RETURN, 0);
 		int defaults = (int) def.params().stream().filter(p -> p.defaultValue() != null).count();
-		return compiler.code(def.params().size(), defaults, def.varArgs() != null, def.varKeywords() != null);
+		String[] kwDefaults = def.params().subList(def.positional().size(), def.params().size()).stream()
+				.filter(p -> p.defaultValue() != null).map(Ast.Param::name).toArray(String[]::new);
+		return compiler.code(def.positional().size(), defaults, def.varArgs() != null, def.varKeywords() != null,
+				def.posOnly(), def.kwOnly(), kwDefaults);
 	}
 
-	private Code code(int paramCount, int defaultCount, boolean varArgs, boolean varKeywords) {
+	private Code code(int paramCount, int defaultCount, boolean varArgs, boolean varKeywords, int posOnlyCount,
+			int kwOnlyCount, String[] kwDefaults) {
 		String[] nameTable = new String[names.size()];
 		names.forEach((n, i) -> nameTable[i] = n);
 		String[] localTable = localNames.toArray(String[]::new);
 		return new Code(name, file, ops.toArray(Op[]::new), args.stream().mapToInt(Integer::intValue).toArray(),
 				lines.stream().mapToInt(Integer::intValue).toArray(), constants.toArray(), nameTable, localTable,
-				paramCount, defaultCount, varArgs, varKeywords);
+				paramCount, defaultCount, varArgs, varKeywords, posOnlyCount, kwOnlyCount, kwDefaults);
 	}
 
 	// Emitting

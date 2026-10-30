@@ -63,10 +63,16 @@ public final class Ast {
 
 	/**
 	 * {@code def name(params, *varArgs, **varKeywords): body}; {@code varArgs} and {@code varKeywords} are null when it
-	 * has none.
+	 * has none. The first {@code posOnly} params are positional-only (before a {@code /}), the last {@code kwOnly}
+	 * keyword-only (after {@code *} or {@code *varArgs}).
 	 */
-	public record Def(String name, List<Param> params, String varArgs, String varKeywords, List<Stmt> body, int line,
-			int col) implements Stmt {
+	public record Def(String name, List<Param> params, int posOnly, int kwOnly, String varArgs, String varKeywords,
+			List<Stmt> body, int line, int col) implements Stmt {
+		/** The params that can be given by position. */
+		public List<Param> positional() {
+			return params.subList(0, params.size() - kwOnly);
+		}
+
 		/** The names of its parameters, {@code *varArgs} and {@code **varKeywords} included, in order. */
 		public List<String> paramNames() {
 			List<String> names = new java.util.ArrayList<>(params.stream().map(Param::name).toList());

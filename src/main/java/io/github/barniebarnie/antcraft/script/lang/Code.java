@@ -5,11 +5,14 @@ import java.util.List;
 /**
  * The compiled code of a module or of one function: its instructions, with the source line of each, and the constants,
  * global and attribute names and local variable names they refer to. The first {@code paramCount} locals are the
- * parameters, followed by the {@code *args} tuple when {@code varArgs} and the {@code **kwargs} dict when
- * {@code varKeywords}. Code does not change once compiled.
+ * positional parameters, the first {@code posOnlyCount} of them positional-only, followed by {@code kwOnlyCount}
+ * keyword-only parameters, the {@code *args} tuple when {@code varArgs} and the {@code **kwargs} dict when
+ * {@code varKeywords}. A function has {@code defaultCount} defaults: those of its last positional parameters, then
+ * those of its keyword-only parameters named in {@code kwDefaults}. Code does not change once compiled.
  */
 public record Code(String name, String file, Op[] ops, int[] args, int[] lines, Object[] constants, String[] names,
-		String[] locals, int paramCount, int defaultCount, boolean varArgs, boolean varKeywords) {
+		String[] locals, int paramCount, int defaultCount, boolean varArgs, boolean varKeywords, int posOnlyCount,
+		int kwOnlyCount, String[] kwDefaults) {
 	/**
 	 * The arguments of a call with keywords or {@code *value}s: how many positional ones, the names of the keyword ones
 	 * (null for a {@code **value}, whose items they spread into), and the indexes of the positional ones that are

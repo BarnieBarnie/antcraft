@@ -285,6 +285,21 @@ class VmTest {
 	}
 
 	@Test
+	void keywordOnlyAndPositionalOnlyParameters() {
+		String f = "def f(a, *, b, c=3):\n    return a, b, c\n";
+		assertEquals("(1, 2, 3)\n(1, 2, 4)", run(f + "print(f(1, b=2))\nprint(f(1, c=4, b=2))"));
+		String g = "def g(*args, b=1):\n    return args, b\n";
+		assertEquals("((1, 2), 1)\n((1,), 5)", run(g + "print(g(1, 2))\nprint(g(1, b=5))"));
+		assertEquals("(0, 1, 2, 3)", run("def f(x=0, *, a=1, b, c=3):\n    return x, a, b, c\nprint(f(b=2))"));
+		String h = "def h(a, b=2, /, c=3):\n    return a, b, c\n";
+		assertEquals("(1, 2, 3)\n(1, 5, 6)\n(1, 2, 3)", run(h + "print(h(1))\nprint(h(1, 5, c=6))\nprint(h(1, 2, 3))"));
+		assertEquals("(1, {'a': 2})", run("def k(a, /, **kw):\n    return a, kw\nprint(k(1, a=2))"));
+		assertEquals("1", run("class A:\n    def m(self, *, x):\n        return x\nprint(A().m(x=1))"));
+		assertEquals("2", run("class A:\n    def m(self, /, *, x):\n        return x\n"
+				+ "class B(A):\n    def m(self, *, x):\n        return super().m(x=x + 1)\nprint(B().m(x=1))"));
+	}
+
+	@Test
 	void defaultsAreEvaluatedOnceWhenTheFunctionIsDefined() {
 		assertEquals("[1]\n[1, 1]", run("def f(xs=[]):\n    xs += [1]\n    return xs\nprint(f())\nprint(f())"));
 		assertEquals("1", run("n = 1\ndef f(x=n):\n    return x\nn = 2\nprint(f())"));
