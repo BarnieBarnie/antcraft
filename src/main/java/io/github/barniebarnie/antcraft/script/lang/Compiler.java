@@ -620,6 +620,7 @@ public final class Compiler {
 				at(s);
 				emit(Op.GET_ITEM, 0);
 			}
+			case Ast.Starred s -> throw new IllegalStateException("a starred value is only compiled as a call's argument");
 			case Ast.Slice s -> throw new IllegalStateException("a slice is only compiled as an index");
 			case Ast.Call c -> call(c);
 			case Ast.ListComp c -> listComp(c);
@@ -737,17 +738,25 @@ public final class Compiler {
 			return;
 		}
 		expr(c.func());
-		c.args().forEach(this::expr);
+		List<Integer> starred = new ArrayList<>();
+		for (int i = 0; i < c.args().size(); i++) {
+			if (c.args().get(i) instanceof Ast.Starred s) {
+				starred.add(i);
+				expr(s.value());
+			} else {
+				expr(c.args().get(i));
+			}
+		}
 		c.keywords().forEach(k -> expr(k.value()));
 		at(c);
-		if (c.keywords().isEmpty()) {
+		if (c.keywords().isEmpty() && starred.isEmpty()) {
 			emit(Op.CALL, c.args().size());
 		} else {
 			List<String> keywords = c.keywords().stream().map(Ast.Keyword::name).toList();
 			if (Set.copyOf(keywords).size() < keywords.size()) {
 				throw new CompileError(file, c.line(), c.col(), "keyword argument repeated");
 			}
-			emit(Op.CALL_KW, constant(new Code.CallShape(c.args().size(), keywords)));
+			emit(Op.CALL_KW, constant(new Code.CallShape(c.args().size(), keywords, List.copyOf(starred))));
 		}
 	}
 }

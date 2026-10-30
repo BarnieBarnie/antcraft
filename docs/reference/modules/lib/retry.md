@@ -10,7 +10,7 @@ Calls `action` with the values of the tuple `args` as its arguments until it suc
 - **Returns** the last result: truthy on success, else its `reason` says why it stopped.
 - **Pauses** yes, while the action runs and between tries.
 
-`args` holds at most 4 values, as the language has no `f(*args)`; more stops the script with an assertion error. Pass `()` for an action without arguments and `(x,)` for one with one.
+Pass `()` for an action without arguments and `(x,)` for one with one.
 
 ```python
 import lib.retry

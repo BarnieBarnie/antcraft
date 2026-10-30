@@ -77,6 +77,7 @@ public final class AstDump {
 			case Ast.IfExp i -> "(if " + dump(i.test()) + " " + dump(i.body()) + " " + dump(i.orElse()) + ")";
 			case Ast.Attribute a -> "(. " + dump(a.value()) + " " + a.attr() + ")";
 			case Ast.Subscript s -> "(index " + dump(s.value()) + " " + dump(s.index()) + ")";
+			case Ast.Starred s -> "(* " + dump(s.value()) + ")";
 			case Ast.Slice s -> "(slice " + dump(s.lower()) + " " + dump(s.upper()) + " " + dump(s.step()) + ")";
 			case Ast.Call c -> "(call " + dump(c.func()) + prefixed(c.args()) + c.keywords().stream()
 					.map(k -> " (kw " + k.name() + " " + dump(k.value()) + ")").collect(Collectors.joining()) + ")";

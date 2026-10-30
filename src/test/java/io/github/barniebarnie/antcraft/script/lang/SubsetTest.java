@@ -84,7 +84,6 @@ class SubsetTest {
 	@Test
 	void starArgsAreNotSupported() {
 		rejects("def f(*args):\n    pass", "bot.py:1:7: `*args` is not supported");
-		rejects("f(*xs)", "bot.py:1:3: `*args` is not supported");
 	}
 
 	@Test

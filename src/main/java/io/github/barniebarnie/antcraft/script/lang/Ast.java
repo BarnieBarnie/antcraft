@@ -231,7 +231,12 @@ public final class Ast {
 	public record Slice(Expr lower, Expr upper, Expr step, int line, int col) implements Expr {
 	}
 
+	/** A call; an argument {@link Starred} spreads its items as positional arguments. */
 	public record Call(Expr func, List<Expr> args, List<Keyword> keywords, int line, int col) implements Expr {
+	}
+
+	/** {@code *value} among a call's arguments. */
+	public record Starred(Expr value, int line, int col) implements Expr {
 	}
 
 	/** A keyword argument {@code name=value}. */

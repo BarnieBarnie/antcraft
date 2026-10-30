@@ -33,6 +33,12 @@ class VmErrorTest {
 	}
 
 	@Test
+	void starArgumentThatIsNotIterable() {
+		assertEquals("t.py:3: f() argument after * must be an iterable, not int", fails("def f(a):\n    pass\nf(*1)"));
+		assertEquals("t.py:1: print() argument after * must be an iterable, not NoneType", fails("print(*None)"));
+	}
+
+	@Test
 	void unknownName() {
 		assertEquals("t.py:3: name 'find_nearst' is not defined", fails("x = 1\n\ny = find_nearst('chest')"));
 	}

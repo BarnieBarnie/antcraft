@@ -765,12 +765,11 @@ public final class Parser {
 		while (!peek().isOp(")")) {
 			Token a = peek();
 			if (a.isOp("*")) {
-				throw unsupported(a, "`*args`");
-			}
-			if (a.isOp("**")) {
+				next();
+				args.add(new Ast.Starred(test(), a.line(), a.col()));
+			} else if (a.isOp("**")) {
 				throw unsupported(a, "`**kwargs`");
-			}
-			if (a.kind() == Kind.NAME && !KEYWORDS.contains(a.text()) && peek(1).isOp("=")) {
+			} else if (a.kind() == Kind.NAME && !KEYWORDS.contains(a.text()) && peek(1).isOp("=")) {
 				next();
 				next();
 				if (!names.add(a.text())) {

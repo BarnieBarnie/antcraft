@@ -9,8 +9,11 @@ import java.util.List;
  */
 public record Code(String name, String file, Op[] ops, int[] args, int[] lines, Object[] constants, String[] names,
 		String[] locals, int paramCount, int defaultCount) {
-	/** The arguments of a call with keywords: how many positional ones, then the names of the keyword ones. */
-	public record CallShape(int positional, List<String> keywords) {
+	/**
+	 * The arguments of a call with keywords or {@code *value}s: how many positional ones, the names of the keyword ones,
+	 * and the indexes of the positional ones that are {@code *value}s, whose items they spread into.
+	 */
+	public record CallShape(int positional, List<String> keywords, List<Integer> starred) {
 	}
 
 	/** An f-string field's conversion ({@code 's'}, {@code 'r'}, {@code 'a'}, or {@code '\0'} for none) and format spec. */

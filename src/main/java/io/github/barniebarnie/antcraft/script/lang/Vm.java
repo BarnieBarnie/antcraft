@@ -482,7 +482,8 @@ public final class Vm {
 					kwargs.put(shape.keywords().get(i), values.get(i));
 				}
 				List<Object> args = f.pop(shape.positional());
-				call(f.pop(), args, kwargs);
+				Object callee = f.pop();
+				call(callee, spread(callee, args, shape.starred()), kwargs);
 			}
 			case RETURN -> {
 				Object result = f.pop();
@@ -762,6 +763,43 @@ public final class Vm {
 		withSelf.addAll(args);
 		call(function, withSelf, kwargs);
 		frames.getLast().init = true;
+	}
+
+	/** {@code args} with the items of each one at an index in {@code starred} in its place (docs/language/functions.md). */
+	private static List<Object> spread(Object callee, List<Object> args, List<Integer> starred) {
+		if (starred.isEmpty()) {
+			return args;
+		}
+		List<Object> out = new ArrayList<>();
+		for (int i = 0; i < args.size(); i++) {
+			Object arg = args.get(i);
+			if (!starred.contains(i)) {
+				out.add(arg);
+				continue;
+			}
+			Iter iter;
+			try {
+				iter = Values.iter(arg);
+			} catch (ScriptError e) {
+				throw new ScriptError(calleeName(callee) + "() argument after * must be an iterable, not "
+						+ Values.typeName(arg));
+			}
+			for (Object next = iter.next(); next != null; next = iter.next()) {
+				out.add(next);
+			}
+		}
+		return out;
+	}
+
+	private static String calleeName(Object callee) {
+		return switch (callee) {
+			case PyFunction f -> f.code().name();
+			case PyBoundMethod m -> calleeName(m.function());
+			case PyNative n -> n.name();
+			case PyMethod m -> m.name();
+			case PyClass c -> c.name();
+			default -> Values.typeName(callee);
+		};
 	}
 
 	private void call(Object callee, List<Object> args, Map<String, Object> kwargs) {

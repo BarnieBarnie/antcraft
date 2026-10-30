@@ -246,6 +246,20 @@ class VmTest {
 	}
 
 	@Test
+	void starArgumentsSpreadASequence() {
+		String f = "def f(a, b=2, c=3):\n    return [a, b, c]\n";
+		assertEquals("[1, 5, 3]", run(f + "print(f(*(1, 5)))"));
+		assertEquals("[1, 5, 3]", run(f + "print(f(*[1, 5]))"));
+		assertEquals("[0, 1, 5]", run(f + "print(f(0, *[1, 5]))"));
+		assertEquals("[1, 5, 9]", run(f + "print(f(*[1], 5, *(9,)))"));
+		assertEquals("[1, 2, 9]", run(f + "print(f(*[1], c=9))"));
+		assertEquals("[1, 2, 3]", run(f + "print(f(1, *()))"));
+		assertEquals("['a', 'b', 3]", run(f + "print(f(*'ab'))"));
+		assertEquals("1 2 3", run("print(*range(1, 4))"));
+		assertEquals("5", run("print(max(*[3, 5]))"));
+	}
+
+	@Test
 	void defaultsAreEvaluatedOnceWhenTheFunctionIsDefined() {
 		assertEquals("[1]\n[1, 1]", run("def f(xs=[]):\n    xs += [1]\n    return xs\nprint(f())\nprint(f())"));
 		assertEquals("1", run("n = 1\ndef f(x=n):\n    return x\nn = 2\nprint(f())"));

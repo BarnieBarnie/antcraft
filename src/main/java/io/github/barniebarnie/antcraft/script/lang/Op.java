@@ -69,8 +69,8 @@ public enum Op {
 	/** Calls with {@code arg} positional arguments: pops them and the function, pushes the result. */
 	CALL,
 	/**
-	 * Calls with keyword arguments: {@code constants[arg]} is a {@link Code.CallShape} giving how many positional
-	 * arguments and the keyword names, whose values follow them on the stack.
+	 * Calls with keyword or {@code *value} arguments: {@code constants[arg]} is a {@link Code.CallShape} giving how many
+	 * positional arguments, which of them to spread, and the keyword names, whose values follow them on the stack.
 	 */
 	CALL_KW,
 	/** Pops the result and returns from the frame. */

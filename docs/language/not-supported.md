@@ -66,7 +66,7 @@ def store_all(chest, items):
 store_all(find_nearest("chest"), ["cobblestone", "#minecraft:logs", "coal"])
 ```
 
-A call cannot unpack a list into arguments either (`f(*xs)`, `f(**d)`): pass them by name or by place.
+A call can spread a list into arguments by place with `f(*xs)` (see [Functions](functions.md#spreading-a-list-into-arguments)), but not a dict into keyword arguments (`f(**d)`): pass them by name.
 
 ## Closures and nonlocal
 

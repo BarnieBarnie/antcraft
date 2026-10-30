@@ -78,6 +78,7 @@ class ParserTest {
 	void callsAttributesAndIndexing() {
 		assertEquals("(call f)", expr("f()"));
 		assertEquals("(call f 1 (kw near 2))", expr("f(1, near=2)"));
+		assertEquals("(call f 1 (* xs) 2 (kw near 2))", expr("f(1, *xs, 2, near=2)"));
 		assertEquals("(call (. (. lib shaft) dig_down) (kw to_y 16))", expr("lib.shaft.dig_down(to_y=16)"));
 		assertEquals("(index a 0)", expr("a[0]"));
 		assertEquals("(index (index a 0) (neg 1))", expr("a[0][-1]"));

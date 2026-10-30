@@ -233,6 +233,7 @@ final class SubsetCheck {
 					expr(s.value());
 					expr(s.index());
 				}
+				case Ast.Starred s -> expr(s.value());
 				case Ast.Slice s -> {
 					expr(s.lower());
 					expr(s.upper());

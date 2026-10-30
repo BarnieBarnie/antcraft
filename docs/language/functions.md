@@ -41,6 +41,23 @@ gather("#minecraft:logs", 32)
 gather("wheat", radius=8)
 ```
 
+## Spreading a list into arguments
+
+`*` before an argument passes the items of a list, tuple or other sequence as arguments by place, as in Python. It mixes with other arguments, also with more than one `*`, and works for the bot API too. That is how a function can call another with arguments it was handed:
+
+```python
+def twice(action, args):
+    action(*args)
+    action(*args)
+
+
+twice(place, (pos().north(), "torch"))
+p = (10, 64, -3)
+print(*p)                                       # 10 64 -3
+```
+
+A value that is not a sequence stops the script: `f() argument after * must be an iterable, not int`.
+
 ## Several values back
 
 Return a tuple to give several values, and unpack it where you call:
@@ -103,4 +120,4 @@ There is no `lambda`: write a small `def` instead.
 
 ## Not in the subset
 
-`*args` and `**kwargs`, `lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.
+`def f(*args)`, `**kwargs` (in a `def` and in a call), `lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.
