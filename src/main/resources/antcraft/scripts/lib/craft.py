@@ -78,21 +78,52 @@ def plan(item, n=1):
     return needs(item, n, also=stations) if stations else p
 
 
-def ensure_tool(kind, chests=None):
-    """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword"): the best it carries, else the
-    best of MADE that obtain(f"{tier}_{kind}", 1, chests) makes. Gives result(): ok, or obtain's result for the wooden
-    tool where no tier could be made."""
+def ensure_tool(kind, chests=None, upgrade=False):
+    """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword"): the best it carries; where it
+    carries none, or with upgrade none of the best tier, the best of TIERS one of chests (a list of positions; None:
+    the colony's core) holds, else the best of MADE that obtain(f"{tier}_{kind}", 1, chests) makes. With upgrade only a
+    tier better than the carried one is taken or made, and the worse tool is kept, a spare. Gives result(): ok, or
+    obtain's result for the worst tier tried where the bot carries none and none could be taken or made."""
+    if chests is None:
+        c = colony()
+        chests = [c["core"]] if c else []
+    # The rank of the best tool carried: its index in TIERS, len(TIERS) for one of no listed tier, more for none.
+    have = len(TIERS) + 1
+    for i, tier in enumerate(TIERS):
+        if count(f"{tier}_{kind}"):
+            have = i
+            break
+    if have > len(TIERS) and count(f"#minecraft:{kind}s"):
+        have = len(TIERS)
+    if have <= len(TIERS) and not upgrade:
+        return hold(kind)
+    better = [f"{tier}_{kind}" for tier in TIERS[:have]]
+    if have > len(TIERS):
+        better.append(f"#minecraft:{kind}s")
+    for tool in better:
+        for chest in chests:
+            if any([matches(s, tool) for s in container(chest) or []]) and take(chest, tool, 1):
+                return hold(kind)
+    r = result()
+    for tier in MADE:
+        if TIERS.index(tier) >= have:
+            break
+        r = obtain(f"{tier}_{kind}", 1, chests)
+        if r["ok"]:
+            break
+    if r["ok"] or have <= len(TIERS):
+        return hold(kind)
+    return r
+
+
+def hold(kind):
+    """Equips the best tool of kind the bot carries, by TIERS; one of no listed tier only where it carries none of these.
+    Gives result()."""
     for tier in TIERS:
         if equip(f"{tier}_{kind}"):
             return result()
-    if equip(f"#minecraft:{kind}s"):
-        return result()
-    for tier in MADE:
-        r = obtain(f"{tier}_{kind}", 1, chests)
-        if r["ok"]:
-            equip(f"{tier}_{kind}")
-            return r
-    return r
+    equip(f"#minecraft:{kind}s")
+    return result()
 
 
 def fetch(more, chests):

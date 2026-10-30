@@ -638,6 +638,50 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("False missing_ingredients {'minecraft:oak_log': 2} None 1 2 0"));
 	}
 
+	/** No pickaxe, a chest with a wooden and an iron one and logs: it takes and holds the iron one, crafting nothing. */
+	@GameTest(maxTicks = 20)
+	public void ensureToolTakesTheBestFromAChest(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.WOODEN_PICKAXE), new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.OAK_LOG, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "iron_pickaxe", "wooden_pickaxe", "oak_log"),
+			List.of("True None {} minecraft:iron_pickaxe 1 0 0"), () -> {
+				helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 1, "wooden pickaxes left " + chest.countItem(Items.WOODEN_PICKAXE));
+				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
+			});
+	}
+
+	/** A wooden pickaxe carried and an iron one in the chest: upgrade takes and holds the iron one, the wooden one kept. */
+	@GameTest(maxTicks = 20)
+	public void ensureToolUpgradeTakesABetterOneFromAChest(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.IRON_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "], upgrade=True", "iron_pickaxe", "wooden_pickaxe"),
+			List.of("True None {} minecraft:iron_pickaxe 1 1"), () -> helper.assertTrue(chest.isEmpty(), "the chest is not empty"));
+	}
+
+	/** A stone pickaxe carried and a wooden one in the chest: upgrade leaves the worse one there and holds the stone one. */
+	@GameTest(maxTicks = 20)
+	public void ensureToolUpgradeTakesNoWorseTool(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.WOODEN_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "], upgrade=True", "stone_pickaxe", "wooden_pickaxe"),
+			List.of("True None {} minecraft:stone_pickaxe 1 0"),
+			() -> helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 1, "wooden pickaxes left " + chest.countItem(Items.WOODEN_PICKAXE)));
+	}
+
+	/** A wooden pickaxe, logs and cobblestone carried, no chest: upgrade makes and holds a stone one. */
+	@GameTest(maxTicks = 180)
+	public void ensureToolUpgradeMakesABetterOne(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		expect(helper, bot, ensureTool("'pickaxe', chests=[], upgrade=True", "stone_pickaxe", "wooden_pickaxe"),
+			List.of("True None {} minecraft:stone_pickaxe 1 1"), tablesInTheArea(helper, 0));
+	}
+
 	// smelt
 
 	/** It burns the best fuel it carries, coal before logs, and takes the ingot out. */

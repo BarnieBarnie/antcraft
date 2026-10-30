@@ -1,6 +1,6 @@
 # `lib/craft`
 
-Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md); `obtain` and `ensure_tool` also take the raw items from chests with [`lib/inv`](inv.md)'s `take_all`.
+Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md); `obtain` and `ensure_tool` also take the raw items (and `ensure_tool` a finished tool) from chests with [`lib/inv`](inv.md)'s `take_all`.
 
 ## `craft_all(item, n=1, table=None, furnace=None)`
 
@@ -41,14 +41,16 @@ Makes the bot carry `n` of `item`, raw items fetched from storage: where it carr
 - **Returns** a dict as `craft_all` gives: `ok`, or `missing_ingredients` with `missing`, item id to how many the chests lack, before it crafts anything (what it could take stays taken), or what `craft_here` gives.
 - **Pauses** yes, while it walks to each chest and as `craft_here` does.
 
-## `ensure_tool(kind, chests=None)`
+## `ensure_tool(kind, chests=None, upgrade=False)`
 
-Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`. Where it carries one, it [`equip`](../../inventory/equip.md)s the best: netherite, diamond, iron, stone, golden, then wooden, by the tier in the item id; a tool of another tier (from a mod) only where it carries none of these. Otherwise it runs `obtain(f"{tier}_{kind}", 1, chests)` for each tier from diamond, iron and stone down to wooden, stops at the first that works and holds that tool.
+Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`. Where it carries one, it [`equip`](../../inventory/equip.md)s the best: netherite, diamond, iron, stone, golden, then wooden, by the tier in the item id; a tool of another tier (from a mod) only where it carries none of these. Where it carries none, it [`take`](../../crafting/take.md)s the best finished one from `chests` (a list of positions; `None`: the colony's core, none outside a colony), by the same order, and holds it. Where the chests hold none, it runs `obtain(f"{tier}_{kind}", 1, chests)` for each tier from diamond, iron and stone down to wooden, stops at the first that works and holds that tool.
 
-A tier the bot lacks raw items for fails before anything is crafted, so trying the better tiers first uses up nothing, and so does the iron tier for a bot with no pickaxe and no furnace within reach (`no_tool`); what `obtain` could take from the chests for it stays taken. It does not take a finished tool from the chests: [`take`](../../crafting/take.md) one first for that.
+With `upgrade=True` it does the same where the bot carries a tool, but only for tiers better than the best one carried: a worse tool in a chest stays there, and where no better one can be taken or made it holds the one it carries. The worse tool is kept, a spare for when the better one breaks. Leave `upgrade` off in a script that calls `ensure_tool` every loop: an upgrade tries to make each better tier each time.
 
-- **Returns** a dict as `craft_all` gives: `ok`, or what `obtain` gave for the wooden tool where no tier could be made, such as `missing_ingredients`.
-- **Pauses** yes, as `obtain` does; not where the bot carries a tool of `kind`.
+A tier the bot lacks raw items for fails before anything is crafted, so trying the better tiers first uses up nothing, and so does the iron tier for a bot with no pickaxe and no furnace within reach (`no_tool`); what `obtain` could take from the chests for it stays taken.
+
+- **Returns** a dict as `craft_all` gives: `ok`, or, where the bot carries no tool of `kind` and none could be taken or made, what `obtain` gave for the wooden tool, such as `missing_ingredients`.
+- **Pauses** yes, while it walks to a chest and as `obtain` does; not where the bot carries a tool of `kind` and `upgrade` is off.
 
 ## `plan(item, n=1)`
 

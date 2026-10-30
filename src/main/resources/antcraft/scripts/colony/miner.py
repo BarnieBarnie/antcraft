@@ -99,8 +99,7 @@ def mine(job):
         warn(f"the shaft has no level at {y}")
         finish_job(job["id"])
         return
-    fetch("#minecraft:pickaxes", 1)
-    lib.craft.ensure_tool("pickaxe")  # the best carried, else one made from what the core holds
+    lib.craft.ensure_tool("pickaxe")  # the best carried, else the best in the core, else one made from what it holds
     fetch("minecraft:torch", len(m["level"][y]["torches"]))
     memory["mine"] = {y: r0}
     lib.shaft.to_level(y)

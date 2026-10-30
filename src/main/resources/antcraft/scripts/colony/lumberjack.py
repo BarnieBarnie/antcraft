@@ -19,7 +19,7 @@ while True:
         store_all(core(), keep=[SAPLINGS])
         wait(200)
     else:
-        ensure_tool("axe")  # the best carried, else one made from what the core holds; without one it fells by hand
+        ensure_tool("axe")  # the best carried, else the best in the core, else one made from what it holds; without one it fells by hand
         fell(tree)
         store_all(core(), keep=[SAPLINGS])
         if is_log(tree):
