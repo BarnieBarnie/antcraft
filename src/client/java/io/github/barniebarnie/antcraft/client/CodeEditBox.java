@@ -423,6 +423,8 @@ public class CodeEditBox extends AbstractTextAreaWidget {
 	public void setFocused(boolean focused) {
 		super.setFocused(focused);
 		this.focusedTime = Util.getMillis();
+		// Typed characters only arrive while a focused widget has asked for text input, as vanilla's edit boxes do.
+		Minecraft.getInstance().onTextInputFocusChange(this, focused);
 	}
 
 	@Override
