@@ -641,6 +641,18 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertTrue(chest.countItem(Items.OAK_LOG) == 5, "logs left " + chest.countItem(Items.OAK_LOG)));
 	}
 
+	/** No pickaxe, no furnace near, a chest with raw iron, sticks and coal: obtain takes nothing for an iron pickaxe and gives no_tool. */
+	@GameTest(maxTicks = 20)
+	public void obtainWithoutAPickaxeForTheFurnaceTakesNothing(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.STICK, 2), new ItemStack(Items.COAL, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, obtain("'iron_pickaxe', chests=[" + chestAt(helper) + "]", "iron_pickaxe", "raw_iron", "stick"),
+			List.of("False no_tool {} 0 0 0"), () -> {
+				helper.assertTrue(chest.countItem(Items.RAW_IRON) == 3, "raw iron left " + chest.countItem(Items.RAW_IRON));
+				helper.assertTrue(chest.countItem(Items.STICK) == 2, "sticks left " + chest.countItem(Items.STICK));
+			});
+	}
+
 	// lib.craft.ensure_tool
 
 	/** Prints what {@code lib.craft.ensure_tool(args)} gives, the item held and then {@code counts}, the {@code count} of each item. */
@@ -691,6 +703,20 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
 				helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 7, "cobblestone left " + chest.countItem(Items.COBBLESTONE));
 			});
+	}
+
+	/**
+	 * No pickaxe, raw iron, coal, logs and cobblestone in a chest: the iron tier takes no raw iron, as its furnace could not be
+	 * mined back, and a stone pickaxe is made and held.
+	 */
+	@GameTest(maxTicks = 180)
+	public void ensureToolWithoutAPickaxeSkipsTheIronTier(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.COAL, 1), new ItemStack(Items.OAK_LOG, 5),
+			new ItemStack(Items.COBBLESTONE, 10));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "raw_iron"),
+			List.of("True None {} minecraft:stone_pickaxe 1 0"),
+			() -> helper.assertTrue(chest.countItem(Items.RAW_IRON) == 3, "raw iron left " + chest.countItem(Items.RAW_IRON)));
 	}
 
 	/** One plank and two sticks, too little for any tier: it fails, short of the logs for the wooden pickaxe and a table, and every tier leaves them as they were. */

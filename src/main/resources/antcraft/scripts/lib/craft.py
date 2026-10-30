@@ -57,14 +57,17 @@ def craft_all(item, n=1, table=None, furnace=None):
 def obtain(item, n=1, chests=None):
     """Makes the bot carry n of item: the raw items plan(item, n) lists, those of a crafting table or furnace craft_here
     must craft included, taken from chests (a list of positions; None: the colony's core, none outside a colony) one
-    after the other, then craft_here(item, n). Gives result(): ok, missing_ingredients with missing, what the chests
-    lack, before it takes or crafts anything, or craft_here's result."""
+    after the other, then craft_here(item, n). Gives result(): ok, no_tool where plan(item, n) does, or
+    missing_ingredients with missing, what the chests lack, before it takes or crafts anything, or craft_here's result."""
     if count(item) >= n:
         return result()
     if chests is None:
         c = colony()
         chests = [c["core"]] if c else []
-    short = fetch(plan(item, n)["gather"], chests)
+    p = plan(item, n)
+    if p["no_tool"]:
+        return result("no_tool")
+    short = fetch(p["gather"], chests)
     if short:
         return result("missing_ingredients", None, short)
     return craft_here(item, n)
@@ -73,7 +76,8 @@ def obtain(item, n=1, chests=None):
 def plan(item, n=1):
     """needs(item, n), with the crafting table and furnace craft_here must craft for it planned first from the same
     items: those its steps need that the bot neither carries nor finds within REACH (a furnace takes a table). A smoker
-    or blast furnace within REACH that cooks every smelted input stands in for the furnace."""
+    or blast furnace within REACH that cooks every smelted input stands in for the furnace. Its no_tool is True where a
+    step smelts in a furnace craft_here could not mine back (can_take_back_furnace)."""
     p = needs(item, n)
     stations = []
     inputs = smelt_inputs(p)
@@ -81,7 +85,10 @@ def plan(item, n=1):
         stations.append("furnace")
     if (stations or p["table"]) and not table_near():
         stations.insert(0, "crafting_table")
-    return needs(item, n, also=stations) if stations else p
+    if stations:
+        p = needs(item, n, also=stations)
+    p["no_tool"] = bool(inputs) and not can_take_back_furnace(inputs)
+    return p
 
 
 def ensure_tool(kind, chests=None, upgrade=False):
@@ -167,8 +174,7 @@ def craft_here(item, n=1):
     p = plan(item, n)
     if p["gather"]:
         return result("missing_ingredients", None, p["gather"])
-    inputs = smelt_inputs(p)
-    if inputs and not can_take_back_furnace(inputs):
+    if p["no_tool"]:
         return result("no_tool")
     r = craft_all(item, n)
     if r["reason"] != "no_table":
