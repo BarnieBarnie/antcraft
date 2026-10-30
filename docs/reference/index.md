@@ -157,7 +157,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/home`](modules/lib/home.md): `go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`.
 - [`lib/shaft`](modules/lib/shaft.md): `dig_shaft(levels)`, `to_level(level)`, `to_surface()`, `shaft(levels=None)`.
 - [`lib/mine`](modules/lib/mine.md): `mine_level(level, rounds=1)`, `site(r=0)`.
-- [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`.
+- [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`.
 - [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4)`.
 - [`lib/inv`](modules/lib/inv.md): `take_all(chest, need)`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).

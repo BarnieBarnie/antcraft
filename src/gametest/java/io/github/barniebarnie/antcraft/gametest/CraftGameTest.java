@@ -328,6 +328,68 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			"raw_iron", "stick"), List.of("True None {} 1 0 0 0"));
 	}
 
+	// lib.craft.craft_here
+
+	/** Prints what {@code lib.craft.craft_here(args)} gives and then {@code counts}, the {@code count} of each item. */
+	private static String craftHere(String args, String... counts) {
+		return craftAll(args, counts).replace("craft_all(", "craft_here(");
+	}
+
+	/** Checks the test area holds {@code n} crafting tables. */
+	private static Runnable tablesInTheArea(GameTestHelper helper, int n) {
+		return () -> {
+			int tables = 0;
+			for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 7, 7)) {
+				if (helper.getBlockState(pos).is(Blocks.CRAFTING_TABLE)) {
+					tables++;
+				}
+			}
+			helper.assertTrue(tables == n, tables + " tables in the area, expected " + n);
+		};
+	}
+
+	/** Logs and cobblestone, no table near or carried: it crafts one, places it, makes the pickaxe and takes the table back. */
+	@GameTest(maxTicks = 170)
+	public void craftHereCraftsAndPlacesATableAndTakesItBack(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		expect(helper, bot, craftHere("'stone_pickaxe'", "stone_pickaxe", "crafting_table", "oak_log", "cobblestone"),
+			List.of("True None {} 1 1 0 0"), tablesInTheArea(helper, 0));
+	}
+
+	@GameTest(maxTicks = 170)
+	public void craftHereUsesACarriedTableAndKeepsIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 3));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table", "oak_planks"),
+			List.of("True None {} 1 1 0"), tablesInTheArea(helper, 0));
+	}
+
+	/** A table within reach: it is used, and the carried one stays carried. */
+	@GameTest(maxTicks = 20)
+	public void craftHereWithATableInReachPlacesNone(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 3));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table"), List.of("True None {} 1 1"),
+			tablesInTheArea(helper, 1));
+	}
+
+	/** Four planks only: the table takes them, so the pickaxe fails at the placed table, which is still taken back. */
+	@GameTest(maxTicks = 170)
+	public void craftHereTakesTheTableBackWhenAStepFails(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		expect(helper, bot, craftHere("'wooden_pickaxe'", "wooden_pickaxe", "crafting_table", "oak_planks"),
+			List.of("False missing_ingredients {'minecraft:oak_log': 1} 0 1 0"), tablesInTheArea(helper, 0));
+	}
+
 	// smelt
 
 	/** It burns the best fuel it carries, coal before logs, and takes the ingot out. */
