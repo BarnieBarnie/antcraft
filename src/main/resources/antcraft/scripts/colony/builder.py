@@ -16,16 +16,8 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-from colony.common import fetch, store
-
-
-def gather(materials):
-    """Takes from the core what the bot lacks of materials; gives the items still short, with how many."""
-    short = {}
-    for item, n in materials.items():
-        if not fetch(item, n):
-            short[item] = n - count(item)
-    return short
+from colony.common import core, store
+from lib.inv import take_all
 
 
 def ask_haulers(job, short):
@@ -44,7 +36,7 @@ def build_job(job):
         finish_job(job["id"])
         return
     while True:
-        short = gather(plan["materials"])
+        short = take_all(core(), plan["materials"])
         r = build(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False), job=job["id"])
         if r:
             break

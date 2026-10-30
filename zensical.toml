@@ -55,6 +55,7 @@ nav = [
       "reference/modules/lib/mine.md",
       "reference/modules/lib/craft.md",
       "reference/modules/lib/retry.md",
+      "reference/modules/lib/inv.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

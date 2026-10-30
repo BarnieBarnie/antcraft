@@ -20,6 +20,7 @@
 import lib.mine
 import lib.shaft
 from colony.common import core, fetch, store
+from lib.inv import take_all
 
 # The heights to mine at unless colony_memory["mineshaft"] says otherwise: iron, then diamonds.
 LEVELS = [16, -16, -54]
@@ -64,26 +65,25 @@ def site():
     return s
 
 
-def take_all(need):
-    """Takes from the core what the bot lacks of need (item to how many more); gives what is still short."""
-    short = {}
-    for item, n in need.items():
-        if not fetch(item, count(item) + n):
-            short[item] = n
-    return short
+def take_more(more):
+    """Takes from the core what the bot lacks of more (item to how many more than it carries); gives what is still short."""
+    need = {}
+    for item, n in more.items():
+        need[item] = count(item) + n
+    return take_all(core(), need)
 
 
 def dig(job):
     """Digs the shared shaft; once dug, posts a mine job for each level."""
     m = lib.shaft.shaft()
-    take_all(lib.shaft.missing(m))
+    take_more(lib.shaft.missing(m))
     r = lib.shaft.dig_shaft(m["levels"])
     if r["ok"]:
         finish_job(job["id"])
         for y in m["levels"]:
             post_job("mine", {"level": y})
         return
-    if r["reason"] == "missing_ingredients" and not take_all(r["missing"]):
+    if r["reason"] == "missing_ingredients" and not take_more(r["missing"]):
         return  # the core had it: dig on at once
     warn(f"the shaft stopped at {r['at']}: {r['reason']} {r['missing']}")
     wait(200)  # the job stays this bot's: it tries again once the core has more

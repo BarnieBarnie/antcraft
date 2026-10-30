@@ -3,6 +3,7 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
+from lib.inv import take_all
 
 
 def core():
@@ -30,6 +31,4 @@ def store(item):
 def fetch(item, n):
     """Takes items from the core until the bot carries n of item (an item id or a selector such as "#minecraft:planks"),
     as far as the core has them; gives whether it does."""
-    if count(item) < n and any([matches(s, item) for s in container(core()) or []]):
-        take(core(), item, n - count(item))
-    return count(item) >= n
+    return not take_all(core(), {item: n})
