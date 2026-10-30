@@ -36,9 +36,9 @@ Mining the furnace back takes a pickaxe: where it would put one down and the bot
 
 ## `obtain(item, n=1, chests=None)`
 
-Makes the bot carry `n` of `item`, raw items fetched from storage: where it carries `n` already it is done. Otherwise it asks `plan(item, n)` (below) what to gather, the raw items of a crafting table and furnace `craft_here` must craft included, and takes that from each chest of `chests` in turn (a list of [`Pos`](../../types/pos.md); `None`: the [`colony`](../../colony/colony.md)'s Colony Core, no chest for a bot in no colony), with [`lib/inv`](inv.md)'s `take_all`, so raw items spread over several chests are all used. Then it runs `craft_here(item, n)`, which crafts and puts a crafting table and furnace down as need be. That table or furnace stays carried.
+Makes the bot carry `n` of `item`, raw items fetched from storage: where it carries `n` already it is done. Otherwise it asks `plan(item, n)` (below) what to gather, the raw items of a crafting table and furnace `craft_here` must craft included, and, where the chests and the bot together hold all of it, takes that from each chest of `chests` in turn (a list of [`Pos`](../../types/pos.md); `None`: the [`colony`](../../colony/colony.md)'s Colony Core, no chest for a bot in no colony), with [`lib/inv`](inv.md)'s `take_all`, so raw items spread over several chests are all used. Then it runs `craft_here(item, n)`, which crafts and puts a crafting table and furnace down as need be. That table or furnace stays carried.
 
-- **Returns** a dict as `craft_all` gives: `ok`, or `missing_ingredients` with `missing`, item id to how many the chests lack, before it crafts anything (what it could take stays taken), or what `craft_here` gives.
+- **Returns** a dict as `craft_all` gives: `ok`, or `missing_ingredients` with `missing`, item id to how many the chests lack, before it takes or crafts anything, or what `craft_here` gives.
 - **Pauses** yes, while it walks to each chest and as `craft_here` does.
 
 ## `ensure_tool(kind, chests=None, upgrade=False)`
@@ -47,7 +47,7 @@ Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` o
 
 With `upgrade=True` it does the same where the bot carries a tool, but only for tiers better than the best one carried: a worse tool in a chest stays there, and where no better one can be taken or made it holds the one it carries. The worse tool is kept, a spare for when the better one breaks. Leave `upgrade` off in a script that calls `ensure_tool` every loop: an upgrade tries to make each better tier each time.
 
-A tier the bot lacks raw items for fails before anything is crafted, so trying the better tiers first uses up nothing, and so does the iron tier for a bot with no pickaxe and no furnace within reach (`no_tool`); what `obtain` could take from the chests for it stays taken.
+A tier the bot and the chests lack raw items for fails before anything is taken or crafted, so trying the better tiers first uses up nothing. The iron tier for a bot with no pickaxe and no furnace within reach also fails before crafting (`no_tool`), but what `obtain` took from the chests for it stays taken.
 
 - **Returns** a dict as `craft_all` gives: `ok`, or, where the bot carries no tool of `kind` and none could be taken or made, what `obtain` gave for the wooden tool, such as `missing_ingredients`.
 - **Pauses** yes, while it walks to a chest and as `obtain` does; not where the bot carries a tool of `kind` and `upgrade` is off.

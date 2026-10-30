@@ -582,13 +582,24 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
-	/** No cobblestone anywhere: it crafts nothing and gives what it still lacks, the log for the table it needs too. */
+	/** No cobblestone anywhere: it takes and crafts nothing and gives what it lacks, the log for the table it needs too. */
 	@GameTest(maxTicks = 20)
 	public void obtainWithTooLittleCraftsNothing(GameTestHelper helper) {
-		chest(helper, new ItemStack(Items.OAK_LOG, 1));
+		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 1));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "oak_planks", "oak_log"),
-			List.of("False missing_ingredients {'minecraft:oak_log': 1, 'minecraft:cobblestone': 3} 0 0 1"));
+			List.of("False missing_ingredients {'minecraft:oak_log': 1, 'minecraft:cobblestone': 3} 0 0 0"),
+			() -> helper.assertTrue(chest.countItem(Items.OAK_LOG) == 1, "logs left " + chest.countItem(Items.OAK_LOG)));
+	}
+
+	/** A chest of logs but no diamonds: it takes no log for the diamond pickaxe and gives the diamonds it lacks. */
+	@GameTest(maxTicks = 20)
+	public void obtainTakesNothingUnlessTheChestsHoldEverything(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, obtain("'diamond_pickaxe', chests=[" + chestAt(helper) + "]", "diamond_pickaxe", "oak_log"),
+			List.of("False missing_ingredients {'minecraft:diamond': 3} 0 0"),
+			() -> helper.assertTrue(chest.countItem(Items.OAK_LOG) == 5, "logs left " + chest.countItem(Items.OAK_LOG)));
 	}
 
 	// lib.craft.ensure_tool
@@ -626,6 +637,21 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
 		expect(helper, bot, ensureTool("'pickaxe'", "wooden_pickaxe", "stone_pickaxe"),
 			List.of("True None {} minecraft:wooden_pickaxe 1 0"), tablesInTheArea(helper, 0));
+	}
+
+	/**
+	 * No pickaxe, logs and cobblestone in the core: the diamond and iron tiers take nothing, so the stone pickaxe takes only
+	 * its own logs and cobblestone and no stray item is left in the bot.
+	 */
+	@GameTest(maxTicks = 180)
+	public void ensureToolLeavesNoStrayItemsFromTheFailedTiers(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5), new ItemStack(Items.COBBLESTONE, 10));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "oak_log", "cobblestone"),
+			List.of("True None {} minecraft:stone_pickaxe 1 0 0"), () -> {
+				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
+				helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 7, "cobblestone left " + chest.countItem(Items.COBBLESTONE));
+			});
 	}
 
 	/** One plank and two sticks, too little for any tier: it fails, short of the logs for the wooden pickaxe and a table, and every tier leaves them as they were. */

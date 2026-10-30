@@ -54,7 +54,7 @@ def obtain(item, n=1, chests=None):
     """Makes the bot carry n of item: the raw items plan(item, n) lists, those of a crafting table or furnace craft_here
     must craft included, taken from chests (a list of positions; None: the colony's core, none outside a colony) one
     after the other, then craft_here(item, n). Gives result(): ok, missing_ingredients with missing, what the chests
-    lack, before it crafts anything, or craft_here's result."""
+    lack, before it takes or crafts anything, or craft_here's result."""
     if count(item) >= n:
         return result()
     if chests is None:
@@ -127,7 +127,20 @@ def hold(kind):
 
 
 def fetch(more, chests):
-    """Takes more (item to how many more than the bot carries) from each chest in turn; gives what is still short."""
+    """Takes more (item to how many more than the bot carries) from each chest in turn; gives what is still short. Where
+    the chests together hold too little of any item it takes nothing and gives what they lack."""
+    # ponytail: a stack two selectors of more both match counts for each, so overlapping selectors can pass this check
+    # and still come up short after taking.
+    stacks = []
+    for chest in chests:
+        stacks += container(chest) or []
+    short = {}
+    for item, k in more.items():
+        k -= sum([s.count for s in stacks if matches(s, item)])
+        if k > 0:
+            short[item] = k
+    if short:
+        return short
     need = {}
     for item, k in more.items():
         need[item] = count(item) + k
