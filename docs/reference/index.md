@@ -161,6 +161,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4)`.
 - [`lib/inv`](modules/lib/inv.md): `take_all(chest, need)`.
 - [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None)`, `is_tree(base)`, `fell(base, replant=True)`.
+- [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ## Notes on actions

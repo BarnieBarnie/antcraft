@@ -57,6 +57,7 @@ nav = [
       "reference/modules/lib/retry.md",
       "reference/modules/lib/inv.md",
       "reference/modules/lib/trees.md",
+      "reference/modules/lib/area.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },
