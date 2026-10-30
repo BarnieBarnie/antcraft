@@ -738,6 +738,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
 	}
 
+	/** A bot builds a blueprint imported from a Litematica schematic ({@code imported_step.litematic}) as any other. */
+	@GameTest(maxTicks = 25)
+	public void buildBuildsAnImportedSchematic(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS));
+		expect(helper, bot, "r = build('antcraft-gametest:imported_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value)\n",
+			List.of("True None 3"), () -> {
+				helper.assertBlockPresent(Blocks.COBBLESTONE, 3, 1, 3);
+				helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 3);
+				helper.assertBlockPresent(Blocks.OAK_PLANKS, 4, 2, 3);
+			});
+	}
+
 	/** Turned a quarter clockwise, the step runs south and its stairs face south. */
 	@GameTest(maxTicks = 60)
 	public void buildBuildsTheCobbleStepTurnedAQuarter(GameTestHelper helper) {

@@ -142,7 +142,7 @@ public final class BlueprintNetworking {
 	 */
 	public static List<BlueprintBlocksReply> blocks(MinecraftServer server, BlueprintBlocksRequest request) {
 		return BlueprintBlocksReply.of(Blueprints.get(request.blueprint())
-			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), server.getStructureTemplateManager().get(blueprint.structure()), blueprint.palette()))
+			.map(blueprint -> BlueprintBlocks.of(request.blueprint(), Blueprints.template(server, blueprint), blueprint.palette()))
 			.orElse(new BlueprintBlocks(request.blueprint(), Vec3i.ZERO, List.of())));
 	}
 }

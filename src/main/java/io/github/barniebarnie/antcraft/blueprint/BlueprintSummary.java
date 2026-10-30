@@ -93,7 +93,7 @@ public record BlueprintSummary(Identifier id, String name, Optional<Blueprint.Ro
 	public static List<BlueprintSummary> all(MinecraftServer server) {
 		List<BlueprintSummary> summaries = new ArrayList<>();
 		Blueprints.all().forEach((id, blueprint) ->
-			summaries.add(of(id, blueprint, server.getStructureTemplateManager().get(blueprint.structure()))));
+			summaries.add(of(id, blueprint, Blueprints.template(server, blueprint))));
 		return summaries;
 	}
 

@@ -36,7 +36,7 @@ All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
 - **`pathing/`**: a custom A* (`PathFinder`) over the `WorldView` interface. `LevelWorldView` backs it with a live world; tests use `GridWorld`. `MoveType`, `Step`, `Path` and `Goal` describe moves and targets.
 - **`colony/`**: `Colony` (core, members, radius, owner, trusted players; saved with a Codec that ignores the fields older versions wrote), `ColonyManager` (the `SavedData` holding a level's colonies), `ColonyActions` (who may change a colony), `BotActivation` (a Bot Core into a bot), and `TaskPlanner` (an order into crafting steps, generic over the item type so it is unit-tested without a game).
 - **`work/`**: world logic and plain-data plans the actions build on or will: `BuildPlan` (ordered clear and place steps in batches; progress lives in the world), `RegionPlan` (structures into plans), `Mineshaft`, `OreVein`, `Mining`, `Storage` (moving items between containers, crafting from one), `Crafting`, `GameRecipeBook` (the real recipes behind `TaskPlanner`), `ToolKind`, `PickaxeTier`, `Fuels`.
-- **`blueprint/`**: the blueprint library loaded from data packs, and what the picker and preview ghost need of it.
+- **`blueprint/`**: the blueprint library loaded from data packs (JSON blueprints, and Litematica schematics read by `Litematic`), and what the picker and preview ghost need of it.
 - **`command/`**: `AntCraftCommands`, the whole `/antcraft` Brigadier tree.
 - **`network/`**: `BlueprintNetworking`, the payload records between the blueprint picker and the server.
 

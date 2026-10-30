@@ -16,6 +16,7 @@ import net.minecraft.world.item.TooltipFlag;
 import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -82,6 +83,29 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 		helper.assertValueEqual(step.blocks().size(), 3, "blocks of the cobble step");
 		BlueprintBlocks castle = BlueprintNetworking.blocks(server, new BlueprintNetworking.BlueprintBlocksRequest(AntCraft.id("castle"))).getFirst().blocks();
 		helper.assertValueEqual(castle, new BlueprintBlocks(AntCraft.id("castle"), Vec3i.ZERO, List.of()), "blocks of an unknown blueprint");
+		helper.succeed();
+	}
+
+	/**
+	 * A Litematica schematic in a data pack ({@code blueprint/imported_step.litematic}, two regions) is a blueprint: the
+	 * picker's list has it with its size and materials, and a client previewing it gets its blocks for the ghost.
+	 */
+	@GameTest(maxTicks = 5)
+	public void anImportedSchematicShowsInThePickerAndGhost(GameTestHelper helper) {
+		MinecraftServer server = helper.getLevel().getServer();
+		Identifier id = Identifier.fromNamespaceAndPath("antcraft-gametest", "imported_step");
+		Optional<BlueprintSummary> summary = BlueprintNetworking.BlueprintList.of(server).blueprints().stream()
+			.filter(blueprint -> blueprint.id().equals(id)).findFirst();
+		helper.assertTrue(summary.isPresent(), "no " + id + " in " + Blueprints.ids());
+		helper.assertValueEqual(summary.get().name(), "Imported step", "name");
+		helper.assertValueEqual(summary.get().size(), new Vec3i(2, 2, 1), "size");
+		helper.assertValueEqual(List.copyOf(summary.get().materials().entrySet()),
+			List.of(Map.entry(Items.COBBLESTONE, 2), Map.entry(Items.OAK_PLANKS, 1)), "materials");
+		BlueprintBlocks blocks = BlueprintNetworking.blocks(server, new BlueprintNetworking.BlueprintBlocksRequest(id)).getFirst().blocks();
+		helper.assertValueEqual(blocks.blocks(), List.of(
+			new BlueprintSummary.Block(new BlockPos(0, 0, 0), Blocks.COBBLESTONE.defaultBlockState()),
+			new BlueprintSummary.Block(new BlockPos(1, 0, 0), Blocks.COBBLESTONE.defaultBlockState()),
+			new BlueprintSummary.Block(new BlockPos(1, 1, 0), Blocks.OAK_PLANKS.defaultBlockState())), "blocks");
 		helper.succeed();
 	}
 

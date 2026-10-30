@@ -69,7 +69,7 @@ public final class BuildApi {
 			if (blueprint.isEmpty()) {
 				return PyNone.NONE;
 			}
-			Optional<StructureTemplate> template = ((ServerLevel) bot.level()).getServer().getStructureTemplateManager().get(blueprint.get().structure());
+			Optional<StructureTemplate> template = Blueprints.template(((ServerLevel) bot.level()).getServer(), blueprint.get());
 			return describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template), at, turn, mirror);
 		});
 		natives.register("build", call -> {
@@ -95,7 +95,7 @@ public final class BuildApi {
 		Identifier parsed = Identifier.tryParse(id);
 		Optional<Blueprint> blueprint = parsed == null ? Optional.empty() : Blueprints.get(parsed);
 		Rotation rotation = Rotation.values()[(int) Math.floorMod(turn, 4)];
-		return blueprint.flatMap(found -> level.getServer().getStructureTemplateManager().get(found.structure())
+		return blueprint.flatMap(found -> Blueprints.template(level.getServer(), found)
 			.flatMap(template -> RegionPlan.load(template, at, mirror ? Mirror.LEFT_RIGHT : Mirror.NONE, rotation, found.palette())));
 	}
 
