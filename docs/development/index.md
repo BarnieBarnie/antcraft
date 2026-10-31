@@ -11,7 +11,7 @@ AntCraft is a Fabric mod for Minecraft 26.3 (Java 25, Mojang names). It adds bot
 | Directory | Purpose |
 |-----------|---------|
 | `src/main/java` | Mod logic, runs on the server (about 13k lines) |
-| `src/client/java` | Client only: the bot renderer, the blueprint picker and its preview ghost, the script editor |
+| `src/client/java` | Client only: the bot renderer, the blueprint picker and its preview ghost, the script editor, the bots screen |
 | `src/test/java` | JUnit unit tests for pure logic |
 | `src/gametest/java` | Fabric GameTests: real bots on a headless server |
 | `src/main/resources` | `fabric.mod.json`, lang, textures, recipes, tags, loot tables |
@@ -38,7 +38,7 @@ All paths are relative to `src/main/java/io/github/barniebarnie/antcraft`.
 - **`work/`**: world logic and plain-data plans the actions build on or will: `BuildPlan` (ordered clear and place steps in batches; progress lives in the world), `RegionPlan` (structures into plans), `Mineshaft`, `OreVein`, `Mining`, `Storage` (moving items between containers, crafting from one), `Crafting`, `GameRecipeBook` (the real recipes behind `TaskPlanner`), `ToolKind`, `PickaxeTier`, `Fuels`.
 - **`blueprint/`**: the blueprint library loaded from data packs (JSON blueprints, and Litematica schematics read by `Litematic`), and what the picker and preview ghost need of it.
 - **`command/`**: `AntCraftCommands`, the whole `/antcraft` Brigadier tree.
-- **`network/`**: `BlueprintNetworking`, the payload records between the blueprint picker and the server; `ScriptNetworking`, those of the in-game script editor, with the server's save handler (the checks of a saved name and source are in `script/ScriptEdits`).
+- **`network/`**: `BlueprintNetworking`, the payload records between the blueprint picker and the server; `ScriptNetworking`, those of the in-game script editor, with the server's save handler (the checks of a saved name and source are in `script/ScriptEdits`). `BotNetworking`, those of the bots screen (`client/BotsScreen`), whose requests the server runs through the `bot` commands' own checks in `AntCraftCommands`.
 
 ## Runtime flow
 

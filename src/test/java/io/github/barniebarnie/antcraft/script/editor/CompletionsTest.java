@@ -48,4 +48,13 @@ class CompletionsTest {
 		assertTrue(!names.contains("def") && !names.contains("return"), names.toString());
 		assertEquals(List.of("count"), Completions.suggest(source, source.length(), Highlighter.spans(source, Set.of()), names));
 	}
+
+	@Test
+	void theBotsScreenSearchOrdersScriptNamesAsCompletionDoesWithTheNameItself() {
+		Set<String> names = Set.of("miner", "Mine", "mi", "lib.mine", "farm", "minerals");
+		assertEquals(List.of("mi", "miner", "minerals", "Mine"), Completions.matching("mi", names));
+		assertEquals(List.of("farm"), Completions.matching("FARM", names));
+		// Nothing typed: every name, alphabetically.
+		assertEquals(List.of("Mine", "farm", "lib.mine", "mi", "miner", "minerals"), Completions.matching("", names));
+	}
 }

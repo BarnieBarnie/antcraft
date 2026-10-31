@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.SayBubble;
+import io.github.barniebarnie.antcraft.network.BotNetworking;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -32,6 +33,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.permissions.LevelBasedPermissionSet;
 import net.minecraft.server.players.NameAndId;
@@ -522,6 +524,83 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("one", "two")), "log " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(bot.isRunningScript(), "script " + bot.getScript().state());
 		});
+	}
+
+	/**
+	 * The bots screen (docs/features/scripts.md, The bots screen) lists the bots a player may control, each with its
+	 * script, args and state, as {@code bot run} decides who may control a bot: a player their own, an operator every bot.
+	 */
+	@GameTest(maxTicks = 10)
+	public void theBotsScreenListsTheBotsAPlayerMayControl(GameTestHelper helper) {
+		String name = BotScripts.libraryScript(helper, "listed_", "while True:\n    wait(20)\n");
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		NameAndId profile = new NameAndId(player.getGameProfile());
+		GameTests.onEnd(helper, () -> helper.getLevel().getServer().getPlayerList().deop(profile));
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		other.setOwner(UUID.randomUUID());
+		BotScripts.commandAsPlayer(helper, player, "antcraft bot " + own.getStringUUID() + " run " + name + " a b");
+
+		BotNetworking.BotList listed = BotNetworking.list(player, Component.empty());
+		List<BotNetworking.BotEntry> owns = listed.bots().stream().filter(entry -> entry.id().equals(own.getUUID())).toList();
+		helper.assertTrue(owns.size() == 1 && owns.getFirst().script().equals(name) && owns.getFirst().args().equals("a b")
+			&& owns.getFirst().state().equals("running") && owns.getFirst().pos().equals(own.blockPosition())
+			&& owns.getFirst().dimension().equals("minecraft:overworld"), "own bot listed as " + owns);
+		helper.assertTrue(listed.bots().stream().noneMatch(entry -> entry.id().equals(other.getUUID())), "another player's bot listed");
+		helper.assertTrue(listed.scripts().contains(name), "scripts " + listed.scripts());
+
+		helper.getLevel().getServer().getPlayerList().op(profile, Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.of(false));
+		Set<UUID> all = BotNetworking.list(player, Component.empty()).bots().stream().map(BotNetworking.BotEntry::id)
+			.collect(java.util.stream.Collectors.toSet());
+		helper.assertTrue(all.containsAll(Set.of(own.getUUID(), other.getUUID())), "an operator's list misses a bot");
+		helper.succeed();
+	}
+
+	/**
+	 * A run request from the bots screen starts the chosen script on the player's own bot, as {@code bot run} does, and is
+	 * refused, with {@code bot run}'s answer, for another player's bot, an unknown script and a bot that is not there. A
+	 * status request answers with the bot's status line and the items it carries.
+	 */
+	@GameTest(maxTicks = 10)
+	public void theBotsScreenRunsAScriptOnlyOnTheirOwnBot(GameTestHelper helper) {
+		String name = BotScripts.libraryScript(helper, "picked_", "while True:\n    wait(20)\n");
+		AntBot own = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, own);
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		other.setOwner(UUID.randomUUID());
+
+		String ran = answer(BotNetworking.handle(player, new BotNetworking.BotAction(own.getUUID(), BotNetworking.Action.RUN, name, " a  b ")));
+		helper.assertTrue(ran.equals("commands.antcraft.bot.run[" + name + ", 1]"), "run answered " + ran);
+		helper.assertTrue(own.getScript() != null && own.getScript().name().equals(name) && own.getScript().args().equals(List.of("a", "b")),
+			"own bot runs " + (own.getScript() == null ? "nothing" : own.getScript().name() + own.getScript().args()));
+
+		String refused = answer(BotNetworking.handle(player, new BotNetworking.BotAction(other.getUUID(), BotNetworking.Action.RUN, name, "")));
+		helper.assertTrue(refused.endsWith(" is not your bot"), "another player's bot answered " + refused);
+		helper.assertFalse(other.getScript() != null && other.getScript().name().equals(name), "ran on another player's bot");
+
+		String unknown = answer(BotNetworking.handle(player, new BotNetworking.BotAction(own.getUUID(), BotNetworking.Action.RUN, "no_such_script", "")));
+		helper.assertTrue(unknown.startsWith("No script named no_such_script"), "an unknown script answered " + unknown);
+		helper.assertTrue(own.getScript().name().equals(name), "own bot runs " + own.getScript().name());
+		String gone = answer(BotNetworking.handle(player, new BotNetworking.BotAction(UUID.randomUUID(), BotNetworking.Action.RUN, name, "")));
+		helper.assertTrue(gone.equals("No bots found"), "a missing bot answered " + gone);
+
+		own.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 12));
+		if (!(BotNetworking.handle(player, new BotNetworking.BotAction(own.getUUID(), BotNetworking.Action.STATUS, "", ""))
+			instanceof BotNetworking.BotStatus status)) {
+			helper.fail("status did not answer with the bot's status");
+			return;
+		}
+		helper.assertTrue(BotScripts.text(status.status()).startsWith("commands.antcraft.bot.status["), "status " + status.status());
+		helper.assertTrue(status.inventory().size() == 1 && status.inventory().getFirst().is(Items.COBBLESTONE)
+			&& status.inventory().getFirst().getCount() == 12, "inventory " + status.inventory());
+		helper.assertTrue(BotNetworking.handle(player, new BotNetworking.BotAction(other.getUUID(), BotNetworking.Action.STATUS, "", ""))
+			instanceof BotNetworking.BotList, "another player's bot's status was sent");
+		helper.succeed();
+	}
+
+	/** The answer in the bot list a bots screen request was answered with. */
+	private static String answer(@Nullable Object reply) {
+		return reply instanceof BotNetworking.BotList list ? BotScripts.text(list.message()) : "not a bot list: " + reply;
 	}
 
 	private static String read(Path file) {

@@ -14,6 +14,7 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.item.CoreScript;
+import io.github.barniebarnie.antcraft.network.BotNetworking;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModComponents;
@@ -67,6 +68,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft script reload
  * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt; [dimension]|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
+ * /antcraft bots   (any player; opens the bots screen with the bots they may control)
  * /antcraft bot remove "&lt;name&gt;"   (a dead bot waiting to respawn, by its name; also its owner)
  * /antcraft core script &lt;script&gt; [args]|clear   (the Bot Core in the player's main hand)
  * /antcraft colony info|radius &lt;blocks&gt;   (nearest colony)
@@ -79,7 +81,7 @@ public final class AntCraftCommands {
 	/** How many lines {@code bot log} shows without {@code n}. */
 	private static final int DEFAULT_LOG_LINES = 10;
 	/** How many of a bot's log lines the script editor shows. */
-	private static final int EDITOR_LOG_LINES = 20;
+	public static final int EDITOR_LOG_LINES = 20;
 
 	private AntCraftCommands() {
 	}
@@ -119,6 +121,7 @@ public final class AntCraftCommands {
 			.then(botCommands(Commands.literal("bot").requires(AntCraftCommands::operatorOrPlayer), ctx -> nearestBot(ctx.getSource()))
 				.then(Commands.literal("remove").then(waitingBotName()))
 				.then(botCommands(Commands.argument("bots", EntityArgument.entities()), AntCraftCommands::bots)))
+			.then(Commands.literal("bots").requires(CommandSourceStack::isPlayer).executes(ctx -> openBots(ctx.getSource())))
 			// Literals win over the script argument, so a script named "clear" cannot be set this way.
 			.then(Commands.literal("core").requires(OPERATOR)
 				.then(Commands.literal("script")
@@ -293,7 +296,7 @@ public final class AntCraftCommands {
 		return (int) report.ticks();
 	}
 
-	private static int stop(CommandSourceStack source, List<AntBot> bots) {
+	public static int stop(CommandSourceStack source, List<AntBot> bots) {
 		if (!checkAny(source, bots)) {
 			return 0;
 		}
@@ -474,8 +477,20 @@ public final class AntCraftCommands {
 		return 1;
 	}
 
+	/** Opens the bots screen on the player's client with the bots they may control (docs/features/scripts.md, The bots screen). */
+	private static int openBots(CommandSourceStack source) throws CommandSyntaxException {
+		ServerPlayer player = source.getPlayerOrException();
+		if (!ServerPlayNetworking.canSend(player, BotNetworking.BotList.TYPE)) {
+			source.sendFailure(Component.translatable("commands.antcraft.bots.no_client"));
+			return 0;
+		}
+		BotNetworking.BotList list = BotNetworking.list(player, Component.empty());
+		ServerPlayNetworking.send(player, list);
+		return list.bots().size();
+	}
+
 	/** Opens the script editor on the script the first of {@code bots} runs, with that bot's last log lines. */
-	private static int editBotScript(CommandSourceStack source, List<AntBot> bots) throws CommandSyntaxException {
+	public static int editBotScript(CommandSourceStack source, List<AntBot> bots) throws CommandSyntaxException {
 		if (!checkAny(source, bots)) {
 			return 0;
 		}
@@ -574,7 +589,7 @@ public final class AntCraftCommands {
 		return library.scripts().size();
 	}
 
-	private static int runScript(CommandSourceStack source, List<AntBot> bots, String name, List<String> args) {
+	public static int runScript(CommandSourceStack source, List<AntBot> bots, String name, List<String> args) {
 		if (!checkAllowed(source) || !checkAny(source, bots)) {
 			return 0;
 		}
@@ -610,7 +625,7 @@ public final class AntCraftCommands {
 	}
 
 	/** A bot's script, whether it runs, the line it is at, its current action, its last action's result and how many instructions it ran. */
-	static Component statusLine(AntBot bot) {
+	public static Component statusLine(AntBot bot) {
 		ScriptRun run = bot.getScript();
 		if (run == null) {
 			return Component.translatable("commands.antcraft.bot.status.none", bot.getName());
@@ -649,7 +664,7 @@ public final class AntCraftCommands {
 	}
 
 	/** Whether there are {@code bots}, all of which the source may control ({@link PlayerLimits#mayControl}); if not, says why. */
-	private static boolean checkAny(CommandSourceStack source, List<AntBot> bots) {
+	public static boolean checkAny(CommandSourceStack source, List<AntBot> bots) {
 		if (bots.isEmpty()) {
 			source.sendFailure(Component.translatable("commands.antcraft.no_bots"));
 			return false;
@@ -664,7 +679,7 @@ public final class AntCraftCommands {
 	}
 
 	/** Whether the source may use the {@code bot} commands on {@code bot}: the console and command blocks run as operators. */
-	private static boolean mayControl(CommandSourceStack source, AntBot bot) {
+	public static boolean mayControl(CommandSourceStack source, AntBot bot) {
 		return mayControl(source, bot.getOwner());
 	}
 

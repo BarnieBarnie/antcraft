@@ -47,6 +47,7 @@ public class AntCraftClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBlueprints.set(List.of()));
 		ClientPlayNetworking.registerGlobalReceiver(ScriptNetworking.OpenScriptEditor.TYPE, (script, context) -> ScriptEditorScreen.open(script));
 		ClientPlayNetworking.registerGlobalReceiver(ScriptNetworking.ScriptSaved.TYPE, (reply, context) -> ScriptEditorScreen.saved(reply));
+		BotsScreen.register(CATEGORY);
 		// Litematica is optional: its classes are only touched with it installed.
 		if (FabricLoader.getInstance().isModLoaded("litematica")) {
 			LitematicaPlacements.register();

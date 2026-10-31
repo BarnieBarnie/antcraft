@@ -1,6 +1,6 @@
 # Commands
 
-**Commands** (operators only, but any player may use `script list` and `script edit` (only operators may save from the editor), a bot's owner may use `bot run`, `stop`, `remove`, `join`, `leave`, `status`, `log` and `edit` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
+**Commands** (operators only, but any player may use `script list` and `script edit` (only operators may save from the editor), any player may use `bots`, a bot's owner may use `bot run`, `stop`, `remove`, `join`, `leave`, `status`, `log` and `edit` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
 
 | Command | Effect |
 |---------|--------|
@@ -16,6 +16,7 @@
 | `/antcraft bot [bots] status` | Each bot's script, whether it is running, finished, failed or stopped, the line it is at, its current action and how many instructions it ran |
 | `/antcraft bot [bots] log [n] [level]` | The last `n` (default 10) lines of each bot's log at or above `level` (`debug`, the default, `info`, `warn`, `error` or `print`), each with the game time it was written at |
 | `/antcraft bot [bots] edit` | Opens the script the bot runs (the first of `[bots]`) in the in-game editor, with its last log lines |
+| `/antcraft bots` | Opens the [bots screen](scripts.md#the-bots-screen): the bots you may control, each with its script and state, to change its script, see its status and inventory, stop it or edit its script. The **Bots screen** key (unbound by default, under AntCraft in Controls) opens it too |
 | `/antcraft core script <script> [args]` | Sets the script of the Bot Core in your main hand: the bot it makes starts that script with those args at once, owned by you, without `bot run`. The tooltip names it; cores with different scripts do not stack. A script that does not exist or does not compile is refused with its error. `/antcraft core script clear` takes it off, so the bot runs `idle.py` |
 | `/antcraft profile start\|stop\|report` | Measures where server tick time goes: `start` forgets what was measured and starts, `stop` stops, `report` lists the ticks measured with their average and worst time and which tick was the worst, then each part of the bots' work (a bot's tick `bot.tick`, its script `bot.script`, pathfinding for a walk `path.find` and for `reachable` `path.plan`) with its time per tick, worst tick and calls, the costliest first. Parts nest, such as pathfinding inside a bot's tick, so they do not add up to the tick |
 | `/antcraft colony info` | The nearest colony's core, members and radius, and its owner and trusted players |
@@ -43,6 +44,7 @@ Commands (on a server, `script reload`, `core script` and saving from the editor
 /antcraft bot [bots] status                 script, line, current action, last result
 /antcraft bot [bots] log [n] [level]        last n log lines at or above level (default debug)
 /antcraft bot [bots] edit                   the bot's script in the editor, with its log
+/antcraft bots                              the bots screen: list your bots, change their script
 /antcraft core script <script> [args]       the Bot Core in your main hand makes bots that run this script
 /antcraft core script clear                 ...and back to idle.py
 ```

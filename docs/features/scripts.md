@@ -35,6 +35,17 @@ Tab stays in the text; click a button, or press Escape to close the editor.
 
 While you type a name, a list under it suggests the names that complete it, those starting with what you typed in the same case first, then shortest first: the builtins and the bot API, the keywords, the library's scripts and modules (for `import`, such as `lib.trees`), and the names the script itself uses. Up and Down pick one, Tab or Enter takes it, and Escape or any other key closes the list; while it is closed, Tab and Enter indent as above. Nothing is suggested inside strings and comments. The server sends the bot API's and the library's names when the editor opens, read from what is registered, so a new function is suggested without more work; at most 1024 names, which keeps the largest payload (a 64 KiB script with every name at its longest) at about 600 KiB, under vanilla's 1 MiB limit, while the usual hundred or so names add under 2 KiB.
 
+## The bots screen
+
+`/antcraft bots`, or the **Bots screen** key (unbound by default; set it under AntCraft in Controls), opens a screen that lists the bots you may control, as `bot run` decides it: your own, or every bot for an operator, in every dimension. It needs AntCraft on your client. Each row shows the bot's name, its script with its args and whether it runs, finished, failed or was stopped, and where it is. A list longer than the screen is split into pages: the arrows at the bottom, or the mouse wheel, turn them. Each row has four buttons:
+
+- **Script** opens a search box over the library's scripts, the names `script list` shows: as you type, the names starting with it are listed, in the same case first, then shortest first, as the editor suggests names. Click one, or press Enter for the first, to run it on the bot, with what you typed in the args box (optional, split on spaces as `bot run <script> [args]` splits them).
+- **Status** shows the bot's status line (its script, state, line, current action, last result and instructions run, as `bot status` has it), the items it carries with their counts, and its last log lines. Refresh asks again; Back returns to the list.
+- **Stop** stops its script, as `bot stop` does.
+- **Edit** opens the script it runs in the [editor](#editing-in-game), as `bot edit` does.
+
+The screen only asks; the server checks each request as it checks the command it stands for, whatever the client sent: you must be allowed to control the bot, the script must exist and compile, bots must be enabled, and the [limits of players' scripts](#players-scripts) apply. The answer, such as `Started miner on 1 bot(s)` or why it was refused, shows under the title, and the list is sent again. The list carries at most 256 bots (an operator on a busy server sees the first by name), and names, args and dimensions are cut to 64 characters.
+
 ## Bot Cores that carry a script
 
 A Bot Core can carry a script and its args (the item's `antcraft:script` component, named in its tooltip), so you hand out workers rather than commands: the bot it makes starts that script the moment it is activated, owned by the player who used the core, as `bot run` would start it. A core without one makes a bot that runs `idle.py`. `core script` refuses a script that does not exist or does not compile, with its error; one gone or broken since the core was set is refused the same way when the core is used, in the player's chat, and the bot runs `idle.py`. Cores with different scripts do not stack. Writing scripts in a book and quill is out of scope for v1.

@@ -19,8 +19,20 @@ public final class Completions {
 		if (prefix.isEmpty() || inStringOrComment(spans, caret)) {
 			return List.of();
 		}
+		return matching(prefix, names).stream().filter(name -> name.length() > prefix.length()).toList();
+	}
+
+	/**
+	 * The names in {@code names} starting with {@code prefix}, in any case, ordered as {@link #suggest} orders them, the
+	 * name itself first; with nothing typed, every name alphabetically. The bots screen's script search
+	 * (docs/features/scripts.md, The bots screen).
+	 */
+	public static List<String> matching(String prefix, Collection<String> names) {
+		if (prefix.isEmpty()) {
+			return names.stream().sorted().toList();
+		}
 		return names.stream()
-			.filter(name -> name.length() > prefix.length() && name.regionMatches(true, 0, prefix, 0, prefix.length()))
+			.filter(name -> name.regionMatches(true, 0, prefix, 0, prefix.length()))
 			.sorted(Comparator.comparing((String name) -> !name.startsWith(prefix))
 				.thenComparingInt(String::length)
 				.thenComparing(Comparator.naturalOrder()))

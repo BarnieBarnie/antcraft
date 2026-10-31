@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
 import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
+import io.github.barniebarnie.antcraft.network.BotNetworking;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
@@ -45,6 +46,7 @@ public class AntCraft implements ModInitializer {
 		Placements.register();
 		BlueprintNetworking.register();
 		ScriptNetworking.register();
+		BotNetworking.register();
 		// The whole server tick.
 		ServerTickEvents.START_SERVER_TICK.register(server -> TickProfiler.SERVER.startTick());
 		ServerTickEvents.END_SERVER_TICK.register(server -> TickProfiler.SERVER.endTick());
