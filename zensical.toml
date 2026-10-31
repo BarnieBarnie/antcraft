@@ -58,6 +58,7 @@ nav = [
       "reference/modules/lib/inv.md",
       "reference/modules/lib/trees.md",
       "reference/modules/lib/area.md",
+      "reference/modules/lib/gather.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

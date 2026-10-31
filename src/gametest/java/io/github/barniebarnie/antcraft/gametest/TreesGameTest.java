@@ -22,12 +22,18 @@ import net.minecraft.world.level.block.LeavesBlock;
  * leaves, and passes over a wall of logs on stone nearer the bot; {@code fell} fells it, picks up the logs and replants.
  */
 public class TreesGameTest implements CustomTestMethodInvoker {
-	private static final BlockPos TREE = new BlockPos(5, 1, 5);
+	static final BlockPos TREE = new BlockPos(5, 1, 5);
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
+		plantTree(helper);
+		method.invoke(this, helper);
+	}
+
+	/** An oak of four logs at {@link #TREE}, on dirt, under persistent leaves. */
+	static void plantTree(GameTestHelper helper) {
 		helper.setBlock(TREE.below(), Blocks.DIRT);
 		for (int y = 1; y <= 4; y++) {
 			helper.setBlock(TREE.getX(), y, TREE.getZ(), Blocks.OAK_LOG);
@@ -43,7 +49,6 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
-		method.invoke(this, helper);
 	}
 
 	/** The oak's base as a script expression. */

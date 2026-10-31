@@ -24,6 +24,7 @@
 			"io.github.barniebarnie.antcraft.gametest.MineGameTest",
 			"io.github.barniebarnie.antcraft.gametest.InvGameTest",
 			"io.github.barniebarnie.antcraft.gametest.TreesGameTest",
+			"io.github.barniebarnie.antcraft.gametest.GatherGameTest",
 			"io.github.barniebarnie.antcraft.gametest.CookbookGameTest",
 			"io.github.barniebarnie.antcraft.gametest.AreaGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BenchmarkGameTest"
