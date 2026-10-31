@@ -347,6 +347,18 @@ public final class Vm {
 				f.push(value);
 			}
 			case STORE_LOCAL -> f.locals[arg] = f.pop();
+			case LOAD_DEREF -> {
+				Object value = ((Cell) f.locals[arg]).value;
+				if (value == null) {
+					boolean free = Arrays.stream(code.freeSlots()).anyMatch(slot -> slot == arg);
+					throw new ScriptError("cannot access " + (free ? "free" : "local") + " variable '" + code.locals()[arg]
+							+ "' where it is not associated with a value" + (free ? " in enclosing scope" : ""));
+				}
+				f.push(value);
+			}
+			case STORE_DEREF -> ((Cell) f.locals[arg]).value = f.pop();
+			case LOAD_CLOSURE -> f.push(f.locals[arg]);
+			case MAKE_CELL -> f.locals[arg] = new Cell(f.locals[arg] instanceof Cell ? null : f.locals[arg]);
 			case LOAD_GLOBAL -> f.push(global(f.module, code.names()[arg]));
 			case STORE_GLOBAL -> f.module.globals().put(code.names()[arg], f.pop());
 			case POP -> f.pop();
@@ -468,7 +480,8 @@ public final class Vm {
 			}
 			case MAKE_FUNCTION -> {
 				Code function = (Code) code.constants()[arg];
-				f.push(new PyFunction(function, List.copyOf(f.pop(function.defaultCount())), f.module));
+				List<Cell> closure = f.pop(function.freeSlots().length).stream().map(Cell.class::cast).toList();
+				f.push(new PyFunction(function, List.copyOf(f.pop(function.defaultCount())), f.module, null, closure));
 			}
 			case CALL -> {
 				List<Object> args = f.pop(arg);
@@ -571,7 +584,7 @@ public final class Vm {
 				for (int i = 0; i < values.size(); i++) {
 					Object value = values.get(i);
 					c.attributes.put(shape.attributes().get(i), value instanceof PyFunction fn
-							? new PyFunction(fn.code(), fn.defaults(), fn.module(), c) : value);
+							? new PyFunction(fn.code(), fn.defaults(), fn.module(), c, fn.closure()) : value);
 				}
 				f.push(c);
 			}
@@ -968,6 +981,9 @@ public final class Vm {
 		missing(name, missing, "keyword-only");
 		if (function.owner() != null && slot < locals.length && code.locals()[slot].equals(Compiler.CLASS_SLOT)) {
 			locals[slot] = function.owner(); // for the method's super()
+		}
+		for (int i = 0; i < code.freeSlots().length; i++) {
+			locals[code.freeSlots()[i]] = function.closure().get(i);
 		}
 		return locals;
 	}

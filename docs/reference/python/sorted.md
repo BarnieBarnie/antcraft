@@ -28,7 +28,7 @@ One instruction, the call itself; with `key`, also the instructions of each call
 
 ## Description
 
-The sort is stable, as in Python: elements that compare equal keep their order, also with `reverse`. Elements are compared with `<`: numbers with numbers, strings with strings, lists and tuples element by element; values that cannot be compared, such as a string and an int, stop the script with an error. The key function is one written with `def` or a builtin such as `len`; there is no `lambda` (see [Functions as values](../../language/functions.md#functions-as-values)).
+The sort is stable, as in Python: elements that compare equal keep their order, also with `reverse`. Elements are compared with `<`: numbers with numbers, strings with strings, lists and tuples element by element; values that cannot be compared, such as a string and an int, stop the script with an error. The key function is one written with `def`, a `lambda` or a builtin such as `len` (see [Functions as values](../../language/functions.md#functions-as-values)).
 
 ## Examples
 

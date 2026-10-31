@@ -30,7 +30,7 @@ One instruction, the call itself; with `key`, also the instructions of each call
 
 ## Description
 
-Elements are compared with `<` as in Python: numbers with numbers, strings with strings, lists and tuples element by element. Values that cannot be compared, such as a string and an int, stop the script with an error, as does an empty `iterable` without `default`, or `default` with several positional arguments. The key function is one written with `def` or a builtin such as `len`; there is no `lambda` (see [Functions as values](../../language/functions.md#functions-as-values)).
+Elements are compared with `<` as in Python: numbers with numbers, strings with strings, lists and tuples element by element. Values that cannot be compared, such as a string and an int, stop the script with an error, as does an empty `iterable` without `default`, or `default` with several positional arguments. The key function is one written with `def`, a `lambda` or a builtin such as `len` (see [Functions as values](../../language/functions.md#functions-as-values)).
 
 ## Examples
 

@@ -25,8 +25,7 @@ public final class Parser {
 			"import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with",
 			"yield");
 	/** Keywords of constructs outside the subset. */
-	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("lambda", "with", "yield", "async", "await",
-			"nonlocal", "del");
+	private static final Set<String> UNSUPPORTED_KEYWORDS = Set.of("with", "yield", "async", "await", "del");
 	/** Operators outside the subset. */
 	private static final Set<String> UNSUPPORTED_OPERATORS = Set.of("&", "|", "^", "~", "<<", ">>", "@", ":=", "&=", "|=",
 			"^=", "<<=", ">>=", "@=", "...");
@@ -187,15 +186,19 @@ public final class Parser {
 					}
 					return new Ast.Assert(test, message, t.line(), t.col());
 				}
-				case "global" -> {
+				case "global", "nonlocal" -> {
 					next();
+					if (t.text().equals("nonlocal") && functionDepth == 0) {
+						throw error(t, "nonlocal declaration not allowed at module level");
+					}
 					List<String> names = new ArrayList<>();
-					names.add(name("expected a name after 'global'"));
+					names.add(name("expected a name after '" + t.text() + "'"));
 					while (peek().isOp(",")) {
 						next();
 						names.add(name("expected a name after ','"));
 					}
-					return new Ast.Global(List.copyOf(names), t.line(), t.col());
+					return t.text().equals("global") ? new Ast.Global(List.copyOf(names), t.line(), t.col())
+							: new Ast.Nonlocal(List.copyOf(names), t.line(), t.col());
 				}
 				case "raise" -> {
 					next();
@@ -360,6 +363,27 @@ public final class Parser {
 		Token t = next();
 		String name = name("expected a function name");
 		expectOp("(", "expected '(' after the function name");
+		Ast.Def params = parameters(name, ")", t);
+		next();
+		if (peek().isOp("->")) {
+			throw error(peek(), "annotations are not supported");
+		}
+		expectOp(":", "expected ':' after function signature");
+		int loops = loopDepth;
+		loopDepth = 0;
+		functionDepth++;
+		List<Stmt> body = block("function definition on line " + t.line());
+		functionDepth--;
+		loopDepth = loops;
+		return new Ast.Def(name, params.params(), params.posOnly(), params.kwOnly(), params.varArgs(),
+				params.varKeywords(), body, t.line(), t.col());
+	}
+
+	/**
+	 * The parameters of a {@code def} or {@code lambda}, up to the {@code close} token ({@code )} or {@code :}), which is
+	 * left to read: a {@link Ast.Def} with no body.
+	 */
+	private Ast.Def parameters(String name, String close, Token t) {
 		List<Ast.Param> params = new ArrayList<>();
 		Set<String> names = new HashSet<>();
 		boolean defaults = false;
@@ -368,7 +392,7 @@ public final class Parser {
 		int kwOnly = 0;
 		String varArgs = null;
 		String varKeywords = null;
-		while (!peek().isOp(")")) {
+		while (!peek().isOp(close)) {
 			Token p = peek();
 			if (varKeywords != null) {
 				throw error(p, "arguments cannot follow var-keyword argument");
@@ -385,7 +409,7 @@ public final class Parser {
 				}
 				next();
 				posOnly = params.size();
-			} else if (p.isOp("*") && (peek(1).isOp(",") || peek(1).isOp(")"))) {
+			} else if (p.isOp("*") && (peek(1).isOp(",") || peek(1).isOp(close))) {
 				if (star != null) {
 					throw error(p, "* argument may appear only once");
 				}
@@ -412,7 +436,7 @@ public final class Parser {
 				}
 			} else {
 				String param = name("expected a parameter name");
-				if (peek().isOp(":")) {
+				if (peek().isOp(":") && !close.equals(":")) {
 					throw error(peek(), "annotations are not supported");
 				}
 				Expr defaultValue = null;
@@ -433,25 +457,25 @@ public final class Parser {
 			}
 			if (peek().isOp(",")) {
 				next();
-			} else if (!peek().isOp(")")) {
+			} else if (!peek().isOp(close)) {
 				throw unexpected(peek());
 			}
 		}
 		if (star != null && varArgs == null && kwOnly == 0) {
 			throw error(star, "named arguments must follow bare *");
 		}
+		return new Ast.Def(name, List.copyOf(params), posOnly, kwOnly, varArgs, varKeywords, List.of(), t.line(), t.col());
+	}
+
+	/** {@code lambda params: value}: a function named {@code <lambda>} that returns the value. */
+	private Expr lambda() {
+		Token t = next();
+		Ast.Def params = parameters("<lambda>", ":", t);
 		next();
-		if (peek().isOp("->")) {
-			throw error(peek(), "annotations are not supported");
-		}
-		expectOp(":", "expected ':' after function signature");
-		int loops = loopDepth;
-		loopDepth = 0;
-		functionDepth++;
-		List<Stmt> body = block("function definition on line " + t.line());
-		functionDepth--;
-		loopDepth = loops;
-		return new Ast.Def(name, List.copyOf(params), posOnly, kwOnly, varArgs, varKeywords, body, t.line(), t.col());
+		Expr value = test();
+		return new Ast.Lambda(new Ast.Def("<lambda>", params.params(), params.posOnly(), params.kwOnly(), params.varArgs(),
+				params.varKeywords(), List.of(new Ast.Return(value, value.line(), value.col())), t.line(), t.col()),
+				t.line(), t.col());
 	}
 
 	/** {@code class Name:} or {@code class Name(Base):}, with one base at most and no keywords (docs/language/classes.md). */
@@ -625,6 +649,9 @@ public final class Parser {
 
 	private Expr test() {
 		Token t = peek();
+		if (t.isName("lambda")) {
+			return lambda();
+		}
 		if (t.isOp("*")) {
 			throw unsupported(t, "`*` unpacking");
 		}
@@ -827,8 +854,11 @@ public final class Parser {
 				keywords.add(new Ast.Keyword(a.text(), test(), a.line(), a.col()));
 			} else {
 				Expr value = test();
-				if (peek().isName("for")) {
-					throw error(peek(), "generator expressions are not supported");
+				if (peek().isName("for")) { // a generator expression, the call's only argument
+					value = new Ast.ListComp(value, comprehensions(), a.line(), a.col());
+					if (!args.isEmpty() || !keywords.isEmpty() || !peek().isOp(")")) {
+						throw error(a, "Generator expression must be parenthesized");
+					}
 				}
 				if (!keywords.isEmpty()) {
 					throw error(a, "positional argument follows keyword argument" + (unpacked ? " unpacking" : ""));
@@ -998,8 +1028,10 @@ public final class Parser {
 			return new Ast.TupleLit(List.of(), open.line(), open.col());
 		}
 		Expr first = test();
-		if (peek().isName("for")) {
-			throw error(peek(), "generator expressions are not supported");
+		if (peek().isName("for")) { // a generator expression
+			first = new Ast.ListComp(first, comprehensions(), open.line(), open.col());
+			expectOp(")", null);
+			return first;
 		}
 		if (peek().isOp(")")) {
 			next();

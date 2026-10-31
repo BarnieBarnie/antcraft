@@ -26,7 +26,7 @@ One instruction, the call itself, however many elements there are. Building the 
 
 ## Description
 
-What counts as truthy is as in Python (see [Truthiness](../../language/values.md#truthiness)). There are no generator expressions, so test a list comprehension: `any([b.is_fluid for b in blocks])`. Every element is collected before any is tested, so `any` does not stop early.
+What counts as truthy is as in Python (see [Truthiness](../../language/values.md#truthiness)). A generator expression works too, `any(b.is_fluid for b in blocks)`, but every element is collected before any is tested, so `any` does not stop early (see [Generator expressions](../../language/functions.md#generator-expressions)).
 
 ## Examples
 

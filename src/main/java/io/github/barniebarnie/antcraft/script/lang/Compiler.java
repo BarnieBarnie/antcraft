@@ -6,6 +6,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,10 +16,15 @@ import java.util.Set;
  * Compiles a parsed module to bytecode for {@link Vm}: one {@link Code} for the module's top level and one for each
  * function, held as a constant of the code that defines it.
  *
- * <p>Names follow Python's scoping without closures: at the top level every name is global; in a function a name is
- * local when the function binds it (assigns it, loops over it, defines it or has it as a parameter) and does not
- * declare it {@code global}, and global otherwise. A global that is not set falls back to the natives (builtins). A
- * list comprehension is compiled inline, and its variables get hidden local slots of their own, so they do not leak.
+ * <p>Names follow Python's scoping: at the top level every name is global; in a function a name is local when the
+ * function binds it (assigns it, loops over it, defines it or has it as a parameter) and does not declare it
+ * {@code global} or {@code nonlocal}. Else it is a variable of a function around, when one has it, and global
+ * otherwise. A global that is not set falls back to the natives (builtins). A list comprehension is compiled inline,
+ * and its variables get hidden local slots of their own, so they do not leak.
+ *
+ * <p>A variable that a nested function or lambda uses lives in a {@link Cell}, as in CPython: the function that has it
+ * keeps the cell in the variable's local slot, and the nested function gets it in its closure
+ * (docs/language/functions.md, Closures).
  */
 public final class Compiler {
 	private final String file;
@@ -46,6 +52,10 @@ public final class Compiler {
 	private final List<List<Stmt>> blocks = new ArrayList<>();
 	/** The hidden local slots of the exceptions the {@code except} clauses being compiled handle, innermost first. */
 	private final Deque<Integer> handling = new ArrayDeque<>();
+	/** The local slots that hold a {@link Cell}: the variables nested functions use, and this function's free ones. */
+	private final Set<Integer> cells = new HashSet<>();
+	/** The local slots of the variables of the functions around that this function uses, in closure order. */
+	private final List<Integer> freeSlots = new ArrayList<>();
 	/** Whether this compiles a method with a {@code self}, where {@code super()} works. */
 	private boolean method;
 	/** The local of a method that holds the class that defined it. */
@@ -78,24 +88,45 @@ public final class Compiler {
 	}
 
 	/**
+	 * Pushes a function of {@code def}, whose defaults are pushed already: its closure's cells, then
+	 * {@link Op#MAKE_FUNCTION}.
+	 */
+	private void makeFunction(Ast.Def def, boolean method) {
+		Code code = function(def, method);
+		at(def);
+		for (int free : code.freeSlots()) {
+			emit(Op.LOAD_CLOSURE, slot(code.locals()[free]));
+		}
+		emit(Op.MAKE_FUNCTION, constant(code));
+	}
+
+	/**
 	 * A function's code. A method's has a hidden local {@value #CLASS_SLOT} right after its parameters, which a call
 	 * sets to the class that defined it, for its {@code super()}.
 	 */
 	private Code function(Ast.Def def, boolean method) {
-		SubsetCheck.Names bound = new SubsetCheck.Names();
-		bound.body(def.body());
+		SubsetCheck.Names bound = SubsetCheck.Names.of(def);
+		Set<String> locals = bound.locals(def);
 		Map<String, Integer> scope = new LinkedHashMap<>();
 		def.paramNames().forEach(p -> scope.put(p, scope.size()));
 		if (method) {
 			scope.putIfAbsent(CLASS_SLOT, scope.size());
 		}
-		for (String local : bound.stores) {
-			if (!bound.globals.contains(local)) {
-				scope.putIfAbsent(local, scope.size());
-			}
-		}
+		bound.stores.stream().filter(locals::contains).sorted().forEach(local -> scope.putIfAbsent(local, scope.size()));
+		List<String> free = bound.free(def).stream().filter(n -> slot(n) >= 0).sorted().toList();
+		free.forEach(n -> scope.put(n, scope.size()));
 		Compiler compiler = new Compiler(file, def.name(), scope, def.line());
 		compiler.method = method && !def.positional().isEmpty();
+		for (String n : free) {
+			compiler.cells.add(scope.get(n));
+			compiler.freeSlots.add(scope.get(n));
+		}
+		for (Map.Entry<String, Integer> local : scope.entrySet()) {
+			if (locals.contains(local.getKey()) && bound.inner.contains(local.getKey())) {
+				compiler.cells.add(local.getValue());
+				compiler.emit(Op.MAKE_CELL, local.getValue());
+			}
+		}
 		compiler.body(def.body());
 		compiler.emit(Op.LOAD_CONST, compiler.constant(PyNone.NONE));
 		compiler.emit(Op.RETURN, 0);
@@ -113,7 +144,8 @@ public final class Compiler {
 		String[] localTable = localNames.toArray(String[]::new);
 		return new Code(name, file, ops.toArray(Op[]::new), args.stream().mapToInt(Integer::intValue).toArray(),
 				lines.stream().mapToInt(Integer::intValue).toArray(), constants.toArray(), nameTable, localTable,
-				paramCount, defaultCount, varArgs, varKeywords, posOnlyCount, kwOnlyCount, kwDefaults);
+				paramCount, defaultCount, varArgs, varKeywords, posOnlyCount, kwOnlyCount, kwDefaults,
+				freeSlots.stream().mapToInt(Integer::intValue).toArray());
 	}
 
 	// Emitting
@@ -219,8 +251,7 @@ public final class Compiler {
 						expr(p.defaultValue());
 					}
 				}
-				at(s);
-				emit(Op.MAKE_FUNCTION, constant(function(s, false)));
+				makeFunction(s, false);
 				storeName(s.name());
 			}
 			case Ast.ClassDef s -> classDef(s);
@@ -263,6 +294,8 @@ public final class Compiler {
 				patch(toEnd, here());
 			}
 			case Ast.Global s -> {
+			}
+			case Ast.Nonlocal s -> {
 			}
 			case Ast.Import s -> {
 				// import a.b.c imports a, a.b and a.b.c, and binds a.
@@ -313,8 +346,7 @@ public final class Compiler {
 							expr(p.defaultValue());
 						}
 					}
-					at(d);
-					emit(Op.MAKE_FUNCTION, constant(function(d, true)));
+					makeFunction(d, true);
 					attributes.add(d.name());
 				}
 				default -> { // pass, or a docstring
@@ -511,7 +543,7 @@ public final class Compiler {
 	private void loadName(String n) {
 		int slot = slot(n);
 		if (slot >= 0) {
-			emit(Op.LOAD_LOCAL, slot);
+			emit(cells.contains(slot) ? Op.LOAD_DEREF : Op.LOAD_LOCAL, slot);
 		} else {
 			emit(Op.LOAD_GLOBAL, name(n));
 		}
@@ -520,7 +552,7 @@ public final class Compiler {
 	private void storeName(String n) {
 		int slot = slot(n);
 		if (slot >= 0) {
-			emit(Op.STORE_LOCAL, slot);
+			emit(cells.contains(slot) ? Op.STORE_DEREF : Op.STORE_LOCAL, slot);
 		} else {
 			emit(Op.STORE_GLOBAL, name(n));
 		}
@@ -628,6 +660,14 @@ public final class Compiler {
 			case Ast.Slice s -> throw new IllegalStateException("a slice is only compiled as an index");
 			case Ast.Call c -> call(c);
 			case Ast.ListComp c -> listComp(c);
+			case Ast.Lambda l -> {
+				for (Ast.Param p : l.def().params()) {
+					if (p.defaultValue() != null) {
+						expr(p.defaultValue());
+					}
+				}
+				makeFunction(l.def(), false);
+			}
 		}
 	}
 
@@ -640,12 +680,15 @@ public final class Compiler {
 		at(c);
 		emit(Op.BUILD_LIST, 0);
 		expr(c.generators().getFirst().iter());
-		SubsetCheck.Names bound = new SubsetCheck.Names();
-		c.generators().forEach(g -> bound.target(g.target()));
+		SubsetCheck.Names bound = SubsetCheck.Names.comprehension(c);
 		Map<String, Integer> scope = new HashMap<>();
-		for (String variable : bound.stores) {
+		for (String variable : bound.stores.stream().sorted().toList()) {
 			scope.put(variable, localNames.size());
 			localNames.add(variable);
+			if (bound.inner.contains(variable)) { // a lambda in it uses the variable: a new cell for each run
+				cells.add(scope.get(variable));
+				emit(Op.MAKE_CELL, scope.get(variable));
+			}
 		}
 		comprehensions.push(scope);
 		generator(c, 0);
@@ -737,7 +780,7 @@ public final class Compiler {
 			}
 			at(c);
 			emit(Op.LOAD_LOCAL, slot(CLASS_SLOT));
-			emit(Op.LOAD_LOCAL, 0);
+			emit(cells.contains(0) ? Op.LOAD_DEREF : Op.LOAD_LOCAL, 0);
 			emit(Op.SUPER, 0);
 			return;
 		}

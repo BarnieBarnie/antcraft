@@ -8,11 +8,13 @@ import java.util.List;
  * positional parameters, the first {@code posOnlyCount} of them positional-only, followed by {@code kwOnlyCount}
  * keyword-only parameters, the {@code *args} tuple when {@code varArgs} and the {@code **kwargs} dict when
  * {@code varKeywords}. A function has {@code defaultCount} defaults: those of its last positional parameters, then
- * those of its keyword-only parameters named in {@code kwDefaults}. Code does not change once compiled.
+ * those of its keyword-only parameters named in {@code kwDefaults}. The locals in {@code freeSlots} hold the
+ * {@link Cell}s of the variables of functions around it that it uses, its function's closure, in order. Code does not
+ * change once compiled.
  */
 public record Code(String name, String file, Op[] ops, int[] args, int[] lines, Object[] constants, String[] names,
 		String[] locals, int paramCount, int defaultCount, boolean varArgs, boolean varKeywords, int posOnlyCount,
-		int kwOnlyCount, String[] kwDefaults) {
+		int kwOnlyCount, String[] kwDefaults, int[] freeSlots) {
 	/**
 	 * The arguments of a call with keywords or {@code *value}s: how many positional ones, the names of the keyword ones
 	 * (null for a {@code **value}, whose items they spread into), and the indexes of the positional ones that are

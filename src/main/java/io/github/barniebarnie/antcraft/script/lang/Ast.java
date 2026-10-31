@@ -108,6 +108,10 @@ public final class Ast {
 	public record Global(List<String> names, int line, int col) implements Stmt {
 	}
 
+	/** {@code nonlocal a, b}: names of a function around this one that it assigns. */
+	public record Nonlocal(List<String> names, int line, int col) implements Stmt {
+	}
+
 	/** {@code import a.b, c}: dotted module names. */
 	public record Import(List<String> modules, int line, int col) implements Stmt {
 	}
@@ -264,7 +268,11 @@ public final class Ast {
 	public record Keyword(String name, Expr value, int line, int col) implements Node {
 	}
 
-	/** {@code [elt for ... in ... if ...]}. */
+	/** {@code lambda params: value}: a {@link Def} named {@code <lambda>} whose body returns the value. */
+	public record Lambda(Def def, int line, int col) implements Expr {
+	}
+
+	/** {@code [elt for ... in ... if ...]}, or a generator expression, which is evaluated as a list. */
 	public record ListComp(Expr elt, List<Comprehension> generators, int line, int col) implements Expr {
 	}
 

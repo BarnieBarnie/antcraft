@@ -8,16 +8,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The checks of the subset that need more than one token: a nested function may not use a variable of a function
- * around it (closures are not supported). It may use globals and its own variables, and its enclosing function may
- * call it.
+ * The checks of the subset that need more than one token: each name of a {@code nonlocal} must be a variable of a
+ * function around it. {@link Names} is also the scope analysis of the compiler (docs/language/functions.md, Closures).
  */
 final class SubsetCheck {
 	private SubsetCheck() {
-	}
-
-	/** A function's name and the names local to it. */
-	private record Scope(String name, Set<String> locals) {
 	}
 
 	static void check(Ast.Module module) {
@@ -25,7 +20,7 @@ final class SubsetCheck {
 	}
 
 	/** Checks every function defined in {@code body}, at any depth of blocks, but not inside nested functions. */
-	private static void functionsIn(String file, List<Stmt> body, List<Scope> enclosing) {
+	private static void functionsIn(String file, List<Stmt> body, List<Set<String>> enclosing) {
 		for (Stmt statement : body) {
 			switch (statement) {
 				case Ast.Def def -> function(file, def, enclosing);
@@ -49,33 +44,92 @@ final class SubsetCheck {
 		}
 	}
 
-	private static void function(String file, Ast.Def def, List<Scope> enclosing) {
-		Names names = new Names();
-		names.body(def.body());
-		Set<String> locals = new HashSet<>(names.stores);
-		locals.addAll(def.paramNames());
-		locals.removeAll(names.globals);
-		for (Ast.Name load : names.loads) {
-			if (locals.contains(load.id()) || names.globals.contains(load.id())) {
-				continue;
-			}
-			for (Scope scope : enclosing.reversed()) {
-				if (scope.locals().contains(load.id())) {
-					throw new CompileError(file, load.line(), load.col(), "closures are not supported (`" + def.name()
-							+ "` uses `" + load.id() + "` of `" + scope.name() + "`)");
+	/** Checks {@code def}; {@code enclosing} holds the variables of each function around it. */
+	private static void function(String file, Ast.Def def, List<Set<String>> enclosing) {
+		Names names = Names.of(def);
+		for (Ast.Nonlocal statement : names.nonlocals) {
+			for (String name : statement.names()) {
+				if (def.paramNames().contains(name)) {
+					throw new CompileError(file, statement.line(), statement.col(), "name '" + name + "' is parameter and nonlocal");
+				}
+				if (enclosing.stream().noneMatch(locals -> locals.contains(name))) {
+					throw new CompileError(file, statement.line(), statement.col(), "no binding for nonlocal '" + name + "' found");
 				}
 			}
 		}
-		List<Scope> inner = new ArrayList<>(enclosing);
-		inner.add(new Scope(def.name(), locals));
+		List<Set<String>> inner = new ArrayList<>(enclosing);
+		inner.add(names.locals(def));
 		functionsIn(file, def.body(), inner);
 	}
 
-	/** The names a function body reads, binds and declares global, leaving out the bodies of nested functions. */
+	/**
+	 * The names a function body reads, binds and declares global or nonlocal, leaving out the bodies of nested functions,
+	 * and the names those nested functions use from the scopes around them.
+	 */
 	static final class Names {
 		final List<Ast.Name> loads = new ArrayList<>();
 		final Set<String> stores = new HashSet<>();
 		final Set<String> globals = new HashSet<>();
+		final List<Ast.Nonlocal> nonlocals = new ArrayList<>();
+		/** The free names of the functions and lambdas nested in the body, less those a comprehension of it binds. */
+		final Set<String> inner = new HashSet<>();
+
+		/** The names of the body of {@code def}. */
+		static Names of(Ast.Def def) {
+			Names names = new Names();
+			names.body(def.body());
+			return names;
+		}
+
+		/** The names of a comprehension's own scope: its variables are the {@code stores}. */
+		static Names comprehension(Ast.ListComp c) {
+			Names names = new Names();
+			for (int i = 0; i < c.generators().size(); i++) {
+				Ast.Comprehension generator = c.generators().get(i);
+				names.target(generator.target());
+				if (i > 0) {
+					names.expr(generator.iter());
+				}
+				generator.ifs().forEach(names::expr);
+			}
+			names.expr(c.elt());
+			return names;
+		}
+
+		Set<String> nonlocalNames() {
+			Set<String> names = new HashSet<>();
+			nonlocals.forEach(n -> names.addAll(n.names()));
+			return names;
+		}
+
+		/** The variables of {@code def}, whose body these are the names of: its parameters and the names it binds. */
+		Set<String> locals(Ast.Def def) {
+			Set<String> locals = new HashSet<>(stores);
+			locals.addAll(def.paramNames());
+			locals.removeAll(globals);
+			locals.removeAll(nonlocalNames());
+			return locals;
+		}
+
+		/**
+		 * The names {@code def} uses from the scopes around it: those it reads without binding or declares nonlocal, and
+		 * those its nested functions use that it does not bind. The compiler resolves each to a variable of a function
+		 * around, else to a global.
+		 */
+		Set<String> free(Ast.Def def) {
+			Set<String> free = new HashSet<>(inner);
+			loads.forEach(load -> free.add(load.id()));
+			free.removeAll(locals(def));
+			free.removeAll(globals);
+			free.addAll(nonlocalNames());
+			return free;
+		}
+
+		/** A nested function: its defaults are evaluated in this scope, and its free names are {@link #inner}. */
+		private void function(Ast.Def def) {
+			def.params().forEach(p -> expr(p.defaultValue()));
+			inner.addAll(of(def).free(def));
+		}
 
 		void body(List<Stmt> body) {
 			body.forEach(this::statement);
@@ -109,11 +163,7 @@ final class SubsetCheck {
 				}
 				case Ast.Def s -> {
 					stores.add(s.name());
-					s.params().forEach(p -> {
-						if (p.defaultValue() != null) {
-							expr(p.defaultValue());
-						}
-					});
+					function(s);
 				}
 				case Ast.ClassDef s -> {
 					stores.add(s.name());
@@ -121,7 +171,7 @@ final class SubsetCheck {
 					for (Stmt member : s.body()) { // evaluated in this scope; the names they bind are the class's
 						switch (member) {
 							case Ast.Assign a -> expr(a.value());
-							case Ast.Def d -> d.params().forEach(p -> expr(p.defaultValue()));
+							case Ast.Def d -> function(d);
 							default -> {
 							}
 						}
@@ -137,6 +187,7 @@ final class SubsetCheck {
 					expr(s.message());
 				}
 				case Ast.Global s -> globals.addAll(s.names());
+				case Ast.Nonlocal s -> nonlocals.add(s);
 				case Ast.Import s -> s.modules().forEach(m -> stores.add(m.split("\\.")[0]));
 				case Ast.FromImport s -> stores.addAll(s.names());
 				case Ast.Break s -> {
@@ -244,21 +295,14 @@ final class SubsetCheck {
 					c.args().forEach(this::expr);
 					c.keywords().forEach(k -> expr(k.value()));
 				}
+				case Ast.Lambda l -> function(l.def());
 				case Ast.ListComp c -> {
 					// As in Python, a comprehension has its own scope: its variables are not bound around it, and
 					// only its first iterable is evaluated in the scope around it.
 					expr(c.generators().getFirst().iter());
-					Names inner = new Names();
-					for (int i = 0; i < c.generators().size(); i++) {
-						Ast.Comprehension generator = c.generators().get(i);
-						inner.target(generator.target());
-						if (i > 0) {
-							inner.expr(generator.iter());
-						}
-						generator.ifs().forEach(inner::expr);
-					}
-					inner.expr(c.elt());
+					Names inner = comprehension(c);
 					inner.loads.stream().filter(load -> !inner.stores.contains(load.id())).forEach(loads::add);
+					inner.inner.stream().filter(name -> !inner.stores.contains(name)).forEach(this.inner::add);
 				}
 			}
 		}

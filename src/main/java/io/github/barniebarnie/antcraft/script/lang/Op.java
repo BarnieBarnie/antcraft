@@ -11,6 +11,14 @@ public enum Op {
 	LOAD_LOCAL,
 	/** Pops into local {@code arg}. */
 	STORE_LOCAL,
+	/** Pushes the value of the {@link Cell} in local {@code arg}; an error if it was not set yet. */
+	LOAD_DEREF,
+	/** Pops into the {@link Cell} in local {@code arg}. */
+	STORE_DEREF,
+	/** Pushes the {@link Cell} in local {@code arg} itself, for a closure. */
+	LOAD_CLOSURE,
+	/** Puts a new {@link Cell} in local {@code arg}, holding the local's value (a parameter's) unless that is a cell. */
+	MAKE_CELL,
 	/** Pushes the global {@code names[arg]}, else the native of that name; an error if there is neither. */
 	LOAD_GLOBAL,
 	/** Pops into the global {@code names[arg]}. */
@@ -64,7 +72,10 @@ public enum Op {
 	GET_ITER,
 	/** Pushes the next item of the iterator at TOS, or pops the iterator and jumps to {@code arg} when it is done. */
 	FOR_ITER,
-	/** Pops the defaults of the {@link Code} in {@code constants[arg]} and pushes a function of it. */
+	/**
+	 * Pops the cells of the closure, then the defaults, of the {@link Code} in {@code constants[arg]} and pushes a
+	 * function of it.
+	 */
 	MAKE_FUNCTION,
 	/** Calls with {@code arg} positional arguments: pops them and the function, pushes the result. */
 	CALL,

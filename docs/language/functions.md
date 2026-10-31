@@ -145,8 +145,46 @@ highest = max(logs, key=height) if logs else None
 names = sorted(["spruce", "oak", "birch"], key=len)
 ```
 
-There is no `lambda`: write a small `def` instead.
+## lambda
+
+`lambda params: value` is a function without a name that gives back one value, for where a `def` would be longer than its use. Its parameters are as a `def`'s, defaults and `*args` included:
+
+```python
+farm = pos()
+chests = sorted(scan("chest", radius=16), key=lambda c: farm.distance(c))
+```
+
+## Closures
+
+A function defined inside another, or a `lambda`, can use the outer function's variables, as in Python. It sees them as they are when it runs, not when it was made, and keeps them after the outer function has returned. To assign one, say `nonlocal` first; without it, an assignment makes a new variable of the inner function, and reading that before the assignment stops the script (`cannot access local variable 'n' where it is not associated with a value`).
+
+```python
+def counter():
+    n = 0
+
+    def step(by=1):
+        nonlocal n
+        n += by
+        return n
+
+    return step
+
+
+trips = counter()
+trips()
+say(f"{trips()} trips")                # 2 trips
+```
+
+A `nonlocal` name must be a variable of a function around (`no binding for nonlocal 'n' found`). As in Python, a lambda made in a loop or comprehension sees the variable's last value when it runs: `[lambda: i for i in range(3)]` gives three functions that each return 2. Give it as a default to keep each value: `lambda i=i: i`. A script saved while it runs, such as at a restart, keeps its closures.
+
+## Generator expressions
+
+`sum(x for x in xs)`, `min(...)`, `any(...)` and other calls take a generator expression as their only argument, and `(x for x in xs)` makes one anywhere else. Unlike Python's, it is made as a whole list at once, as a list comprehension is: it does not stop early in `any` or `all`, and it can be used more than once. As in Python, one among other arguments needs its own parentheses (`Generator expression must be parenthesized`).
+
+```python
+total = sum(s.count for s in inventory())
+```
 
 ## Not in the subset
 
-`lambda`, decorators and closures (a function inside a function that uses the outer one's variables) are not supported. A function defined inside another works as long as it uses only its own variables and the script's globals. See [What's not supported](not-supported.md) for workarounds.
+Decorators are not supported. See [What's not supported](not-supported.md) for a workaround.

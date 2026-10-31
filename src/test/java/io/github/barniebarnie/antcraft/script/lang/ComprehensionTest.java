@@ -51,10 +51,9 @@ class ComprehensionTest {
 	}
 
 	@Test
-	void aComprehensionInANestedFunctionStillMayNotCaptureAVariable() {
-		CompileError error = assertThrows(CompileError.class, () -> Parser.parse("bot.py",
-				"def outer(n):\n    def inner():\n        return [x for x in range(n)]\n    return inner()"));
-		assertEquals("bot.py:3:34: closures are not supported (`inner` uses `n` of `outer`)", error.getMessage());
+	void aComprehensionInANestedFunctionMayUseAVariableOfTheFunctionAround() {
+		assertEquals("[0, 3, 6]", run("def outer(n):\n    def inner():\n        return [x * n for x in range(n)]\n    return inner()\n"
+				+ "print(outer(3))"));
 	}
 
 	@Test

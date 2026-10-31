@@ -1,6 +1,6 @@
 # What's not supported
 
-The language is a subset of Python 3. What it leaves out is a compile error that names the construct and its place, such as ``miner.py:3:5: `lambda` is not supported``, never something that quietly works differently. Several of these may come later. Most are needed less than in normal Python, because actions return results instead of raising.
+The language is a subset of Python 3. What it leaves out is a compile error that names the construct and its place, such as ``miner.py:3:5: `with` is not supported``, never something that quietly works differently. Several of these may come later. Most are needed less than in normal Python, because actions return results instead of raising.
 
 Here is each one, with what to write instead.
 
@@ -10,25 +10,13 @@ Here is each one, with what to write instead.
 
 An instance does not go into `memory`, which holds plain data only. Keep the values you need in a dict there, and make the instance again from it after a restart.
 
-## lambda
-
-Write a small function with `def` and pass its name:
-
-```python
-def by_height(p):
-    return p.y
-
-
-logs = sorted(scan("#minecraft:logs", radius=8), key=by_height)
-```
-
 ## with
 
 `with` manages resources such as open files; a script has no files to open. There is nothing to write instead.
 
 ## Generators and yield
 
-There are no generators, `yield` or generator expressions (`sum(x for x in xs)`). Build a list instead, with a loop or a list comprehension, and pass that: `sum([s.count for s in inventory()])`. A function that would yield values one by one can return the list of them.
+There are no generators and no `yield`. A function that would yield values one by one can return the list of them. Generator expressions (`sum(x for x in xs)`) work, but make the whole list first (see [Generator expressions](functions.md#generator-expressions)).
 
 ## Decorators
 
@@ -52,24 +40,6 @@ for log in scan("#minecraft:logs", radius=16):
 ```
 
 To drop duplicates from a list: `unique = []` and then `if x not in unique: unique.append(x)` for each value.
-
-## Closures and nonlocal
-
-A function defined inside another may not use the outer function's variables (`closures are not supported`), and there is no `nonlocal`. Define the function at the top level and give it what it needs as arguments; to change a value, return the new one, or keep it in a dict or list the caller passes in.
-
-```python
-def nearest_of(points, to):
-    best = None
-    for p in points:
-        if best is None or to.distance(p) < to.distance(best):
-            best = p
-    return best
-
-
-chest = nearest_of(scan("chest", radius=16), pos())
-```
-
-A function defined inside another works as long as it uses only its own variables and the module's globals.
 
 ## else on a loop
 

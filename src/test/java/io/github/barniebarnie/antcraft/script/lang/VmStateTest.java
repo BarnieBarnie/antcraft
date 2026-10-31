@@ -201,6 +201,24 @@ class VmStateTest {
 						print(sorted(words, key=len), sorted([3, 1, 2], key=neg), min(words, key=len), max(words, key=len))
 						print(sorted(words, key=len, reverse=True))
 						""", Map.of()),
+				new Case("closures and lambdas", """
+						def counter():
+						    n = 0
+						    def inc(by=1):
+						        nonlocal n
+						        n += by
+						        return n
+						    return inc
+						def nearest(spots, farm):
+						    def walk(k):
+						        return 0 if k == 0 else 1 + walk(k - 1)
+						    return sorted(spots, key=lambda s: abs(s - farm) + walk(2))
+						c = counter()
+						for i in range(3):
+						    print(c(i), nearest([1, 9, 4], i * 3), sum(x * i for x in range(3)))
+						fs = [lambda: j for j in range(2)]
+						print([f() for f in fs], c())
+						""", Map.of()),
 				new Case("dict views", """
 						d = {'a': 1, 'b': 2}
 						keys = d.keys()

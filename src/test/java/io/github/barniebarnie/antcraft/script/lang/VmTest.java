@@ -300,6 +300,57 @@ class VmTest {
 	}
 
 	@Test
+	void lambdaAsASortKeyUsingAnOuterVariable() {
+		assertEquals("[4, 1, 9]", run("def nearest(chests, farm):\n    return sorted(chests, key=lambda c: abs(c - farm))\n"
+				+ "print(nearest([1, 9, 4], 5))"));
+		assertEquals("[4, 1, 9]", run("farm = 5\nprint(sorted([1, 9, 4], key=lambda c: abs(c - farm)))"));
+		assertEquals("6\n3\n(1, 2)\n<function <lambda>>", run("f = lambda x, y=2: x * y\nprint(f(3))\nprint((lambda: 3)())\n"
+				+ "print((lambda *a, **k: a)(1, 2))\nprint(f)"));
+		assertEquals("5", run("def adder(n):\n    return lambda x: x + n\nprint(adder(2)(3))"));
+		assertEquals("7", run("def f(a):\n    return (lambda b: lambda c: a + b + c)(2)(4)\nprint(f(1))"));
+	}
+
+	@Test
+	void closures() {
+		assertEquals("7 1", run("""
+				def counter():
+				    n = 0
+				    def inc(by=1):
+				        nonlocal n
+				        n += by
+				        return n
+				    return inc
+				c = counter()
+				d = counter()
+				c()
+				c()
+				print(c(5), d())"""));
+		assertEquals("3", run("def a(x):\n    def b():\n        def c():\n            return x\n        return c()\n    return b()\nprint(a(3))"));
+		assertEquals("120", run("def f(n):\n    def fact(k):\n        return 1 if k == 0 else k * fact(k - 1)\n    return fact(n)\nprint(f(5))"));
+		assertEquals("4", run("def make(n):\n    class A:\n        def get(self):\n            return n\n    return A()\nprint(make(4).get())"));
+		assertEquals("7", run("def f():\n    g = lambda: x\n    x = 7\n    return g()\nprint(f())"));
+		assertEquals("[2, 2, 2]", run("def f():\n    fs = [lambda: i for i in range(3)]\n    return [g() for g in fs]\nprint(f())"));
+		assertEquals("[2, 2, 2]", run("fs = [lambda: i for i in range(3)]\nprint([g() for g in fs])"));
+		assertEquals("[0, 1, 2]", run("fs = [lambda i=i: i for i in range(3)]\nprint([g() for g in fs])"));
+		assertEquals("2 2", run("def f():\n    x = 1\n    def set_x():\n        nonlocal x\n        x = 2\n"
+				+ "    def get_x():\n        return x\n    set_x()\n    return x, get_x()\nprint(*f())"));
+		assertEquals("1", run("x = 1\ndef f():\n    def g():\n        return x\n    return g()\nprint(f())"));
+		assertEquals("2", run("class A:\n    def m(self):\n        return 1\nclass B(A):\n    def m(self):\n"
+				+ "        f = lambda: self\n        return super().m() + (f() is not None)\nprint(B().m())"));
+	}
+
+	@Test
+	void generatorExpressionsInACall() {
+		assertEquals("14", eval("sum(x * x for x in range(4))"));
+		assertEquals("2", eval("min(p[0] for p in [(3, 1), (2, 5)])"));
+		assertEquals("True", eval("any(x > 2 for x in [1, 3])"));
+		assertEquals("['a', 'b']", eval("list(c for c in 'ab')"));
+		assertEquals("[3, 1]", eval("sorted((x for x in [1, 3]), reverse=True)"));
+		assertEquals("3", run("def f(n):\n    return sum(x * n for x in range(3))\nprint(f(1))"));
+		assertEquals("5", run("g = (x + 1 for x in [1, 2])\nprint(sum(g))"));
+	}
+
+	@Test
 	void defaultsAreEvaluatedOnceWhenTheFunctionIsDefined() {
 		assertEquals("[1]\n[1, 1]", run("def f(xs=[]):\n    xs += [1]\n    return xs\nprint(f())\nprint(f())"));
 		assertEquals("1", run("n = 1\ndef f(x=n):\n    return x\nn = 2\nprint(f())"));

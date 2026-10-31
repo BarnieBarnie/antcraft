@@ -174,6 +174,26 @@ class ParserTest {
 	}
 
 	@Test
+	void lambdaNonlocalAndGeneratorExpressions() {
+		assertEquals("(= f (lambda (x (y 2)) (+ x y)))", parse("f = lambda x, y=2: x + y"));
+		assertEquals("(lambda () 1)", expr("lambda: 1"));
+		assertEquals("(lambda ((* a) (** k)) a)", expr("lambda *a, **k: a"));
+		assertEquals("(lambda (x) (if x 1 2))", expr("lambda x: 1 if x else 2"));
+		assertEquals("(call sorted xs (kw key (lambda (c) (. c y))))", expr("sorted(xs, key=lambda c: c.y)"));
+		assertEquals("(def g () [(= a b 1) (def f () [(nonlocal a b)])])",
+				parse("def g():\n    a = b = 1\n    def f():\n        nonlocal a, b"));
+		assertEquals("(call sum (listcomp x (for x xs)))", expr("sum(x for x in xs)"));
+		assertEquals("(call sorted (listcomp x (for x xs)) (kw reverse True))", expr("sorted((x for x in xs), reverse=True)"));
+		assertEquals("(= g (listcomp x (for x xs (if x))))", parse("g = (x for x in xs if x)"));
+		assertEquals("t.py:1:3: Generator expression must be parenthesized", syntaxError("f(x for x in xs, 1)"));
+		assertEquals("t.py:1:6: Generator expression must be parenthesized", syntaxError("f(1, x for x in xs)"));
+		assertEquals("t.py:1:1: nonlocal declaration not allowed at module level", syntaxError("nonlocal x"));
+		assertEquals("t.py:2:5: no binding for nonlocal 'x' found", syntaxError("def f():\n    nonlocal x"));
+		assertEquals("t.py:5:9: name 'x' is parameter and nonlocal", syntaxError("def f(x):\n    def g(x):\n        pass\n    def h(x):\n        nonlocal x"));
+		assertEquals("t.py:4:9: no binding for nonlocal 'x' found", syntaxError("x = 1\ndef f():\n    def g():\n        nonlocal x"));
+	}
+
+	@Test
 	void argumentUnpackingFollowsPythonsRules() {
 		assertEquals("t.py:1:8: positional argument follows keyword argument unpacking", syntaxError("f(**d, 1)"));
 		assertEquals("t.py:1:8: iterable argument unpacking follows keyword argument unpacking", syntaxError("f(**d, *xs)"));

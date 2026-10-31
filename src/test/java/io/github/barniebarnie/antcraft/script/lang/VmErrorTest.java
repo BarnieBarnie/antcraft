@@ -52,6 +52,16 @@ class VmErrorTest {
 	}
 
 	@Test
+	void assigningAnOuterVariableWithoutNonlocalMakesItLocal() {
+		assertEquals("t.py:4: cannot access local variable 'n' where it is not associated with a value",
+				fails("def f():\n    n = 0\n    def g():\n        n += 1\n    g()\nf()"));
+		assertEquals("t.py:3: cannot access free variable 'x' where it is not associated with a value in enclosing scope",
+				fails("def f():\n    def g():\n        return x\n    g()\n    x = 1\nf()"));
+		assertEquals("t.py:3: cannot access local variable 'x' where it is not associated with a value",
+				fails("def f():\n    g = lambda: x\n    print(x)\n    x = 1\nf()"));
+	}
+
+	@Test
 	void keywordOnlyAndPositionalOnlyArgumentErrors() {
 		assertEquals("t.py:3: f() missing 1 required keyword-only argument: 'b'", fails("def f(a, *, b):\n    pass\nf(1)"));
 		assertEquals("t.py:3: f() missing 2 required keyword-only arguments: 'b' and 'c'",

@@ -67,7 +67,7 @@ class ScriptLibraryTest {
 		Path config = temp.resolve("config");
 		write(config.resolve("good.py"), "print(1)\n");
 		write(config.resolve("bad.py"), "if True\n    pass\n");
-		write(config.resolve("classy.py"), "lambda x: x\n");
+		write(config.resolve("classy.py"), "del x\n");
 		ScriptLibrary library = ScriptLibrary.load(List.of(config));
 		assertEquals(3, library.scripts().size());
 		ScriptLibrary.Script bad = library.get("bad").orElseThrow();

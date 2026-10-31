@@ -97,4 +97,4 @@ These are compile errors, or runtime errors where only the running script can te
 | deriving from a builtin type such as `list` or `dict` (`class A(list)`) | keep the list as an attribute |
 | `type(x)`, `getattr`, `setattr`, `hasattr` | `isinstance`, and plain attribute access |
 
-A class defined inside a function is a variable of that function, so its methods cannot use the class by its name ([closures](not-supported.md#closures-and-nonlocal) are not supported); define such a class at the top level.
+A class defined inside a function is a variable of that function; its methods can use it, and the function's other variables, as [closures](functions.md#closures) do.

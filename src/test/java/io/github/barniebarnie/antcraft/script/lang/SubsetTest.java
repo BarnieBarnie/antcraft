@@ -28,14 +28,6 @@ class SubsetTest {
 		rejects("class A:\n    if x:\n        y = 1",
 				"bot.py:2:5: a class body may only hold methods, attribute assignments, `pass` and a docstring");
 		rejects("class A:\n    x = 1\n    y = x + 1", "bot.py:3:9: a class attribute cannot use another one (`x`)");
-		rejects("def f():\n    n = 1\n    class A:\n        def g(self):\n            return n",
-				"bot.py:5:20: closures are not supported (`g` uses `n` of `f`)");
-	}
-
-	@Test
-	void lambdaIsNotSupported() {
-		rejects("f = lambda x: x", "bot.py:1:5: `lambda` is not supported");
-		rejects("sorted(xs, key=lambda x: x)", "bot.py:1:16: `lambda` is not supported");
 	}
 
 	@Test
@@ -47,12 +39,6 @@ class SubsetTest {
 	void yieldIsNotSupported() {
 		rejects("def g():\n    yield 1", "bot.py:2:5: `yield` is not supported");
 		rejects("def g():\n    x = yield", "bot.py:2:9: `yield` is not supported");
-	}
-
-	@Test
-	void generatorExpressionsAreNotSupported() {
-		rejects("s = sum(x for x in xs)", "bot.py:1:11: generator expressions are not supported");
-		rejects("g = (x for x in xs)", "bot.py:1:8: generator expressions are not supported");
 	}
 
 	@Test
@@ -82,21 +68,8 @@ class SubsetTest {
 	}
 
 	@Test
-	void closuresAreNotSupported() {
-		rejects("def outer():\n    n = 0\n    def inner():\n        return n + 1\n    return inner()",
-				"bot.py:4:16: closures are not supported (`inner` uses `n` of `outer`)");
-		rejects("def outer(n):\n    if n:\n        def inner():\n            return [x * n for x in xs]\n",
-				"bot.py:4:25: closures are not supported (`inner` uses `n` of `outer`)");
-	}
-
-	@Test
 	void aNestedFunctionMayUseGlobalsAndItsOwnVariables() {
 		Parser.parse("bot.py", "n = 1\ndef outer():\n    global n\n    n = 2\n    def inner(m):\n        k = m\n        return k + n\n    return inner(n)");
-	}
-
-	@Test
-	void nonlocalIsNotSupported() {
-		rejects("def f():\n    nonlocal x", "bot.py:2:5: `nonlocal` is not supported");
 	}
 
 	@Test

@@ -26,7 +26,7 @@ One instruction, the call itself, however many elements there are. Building the 
 
 ## Description
 
-What counts as truthy is as in Python (see [Truthiness](../../language/values.md#truthiness)). There are no generator expressions, so test a list comprehension: `all([has(i) for i in items])`. Every element is collected before any is tested, so `all` does not stop early.
+What counts as truthy is as in Python (see [Truthiness](../../language/values.md#truthiness)). A generator expression works too, `all(has(i) for i in items)`, but every element is collected before any is tested, so `all` does not stop early (see [Generator expressions](../../language/functions.md#generator-expressions)).
 
 ## Examples
 

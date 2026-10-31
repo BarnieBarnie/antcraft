@@ -42,7 +42,7 @@ import org.jspecify.annotations.Nullable;
  */
 public final class VmState {
 	private static final int MAGIC = 0x41435653; // ACVS
-	private static final int VERSION = 3;
+	private static final int VERSION = 4;
 
 	// Values
 	private static final byte NULL = 0;
@@ -72,6 +72,7 @@ public final class VmState {
 	private static final byte INSTANCE = 15;
 	private static final byte BOUND_METHOD = 16;
 	private static final byte SUPER = 17;
+	private static final byte CELL = 18;
 	private static final byte ITER_LIST = 20;
 	private static final byte ITER_TUPLE = 21;
 	private static final byte ITER_STRING = 22;
@@ -300,7 +301,7 @@ public final class VmState {
 						|| value instanceof PyMethod || value instanceof PyRange || value instanceof PyDictView
 						|| value instanceof Values.Slice || value instanceof Iter || value instanceof PyException
 						|| value instanceof PyClass || value instanceof PyInstance || value instanceof PyBoundMethod
-						|| value instanceof PySuper)) {
+						|| value instanceof PySuper || value instanceof Cell)) {
 					Object saved = value instanceof HostValue ? host.save(value) : null;
 					if (saved == null) {
 						throw new NotSaveable("a '" + Values.typeName(value) + "' value cannot be saved");
@@ -353,6 +354,8 @@ public final class VmState {
 					fields.add(code.path());
 					fields.add(function.module());
 					fields.add(function.owner());
+					fields.add((long) function.closure().size());
+					fields.addAll(function.closure());
 					fields.addAll(function.defaults());
 					yield FUNCTION;
 				}
@@ -382,6 +385,10 @@ public final class VmState {
 					fields.add(s.type());
 					fields.add(s.self());
 					yield SUPER;
+				}
+				case Cell c -> {
+					fields.add(c.value);
+					yield CELL;
 				}
 				case Code code -> {
 					CodeRef ref = code(code);
@@ -491,7 +498,7 @@ public final class VmState {
 				.append(Arrays.toString(code.names())).append(Arrays.toString(code.locals())).append(code.paramCount())
 				.append(',').append(code.defaultCount()).append(',').append(code.varArgs()).append(',').append(code.varKeywords())
 				.append(',').append(code.posOnlyCount()).append(',').append(code.kwOnlyCount())
-				.append(Arrays.toString(code.kwDefaults()))
+				.append(Arrays.toString(code.kwDefaults())).append(Arrays.toString(code.freeSlots()))
 				.append("|[");
 		for (Object constant : code.constants()) {
 			if (constant instanceof Code nested) {
@@ -679,6 +686,7 @@ public final class VmState {
 					}
 					case CLASS -> new PyClass((String) raw.fields()[0], null);
 					case INSTANCE -> new PyInstance(null); // its class is set below, once every class is made
+					case CELL -> new Cell(null);
 					default -> null;
 				};
 			}
@@ -707,6 +715,7 @@ public final class VmState {
 							c.attributes.put((String) f[i], value(f[i + 1]));
 						}
 					}
+					case Cell c -> c.value = value(f[0]);
 					case PyInstance instance -> {
 						instance.type = (PyClass) value(f[0]);
 						for (int i = 1; i < f.length; i += 2) {
@@ -842,8 +851,13 @@ public final class VmState {
 			try {
 				value = switch (raws.get(id).kind()) {
 					case TUPLE -> new PyTuple(values(f, 0));
-					case FUNCTION -> new PyFunction(code((String) f[0], (String) f[1]), List.copyOf(values(f, 4)),
-							(PyModule) value(f[2]), (PyClass) value(f[3]));
+					case FUNCTION -> {
+						int cells = Math.toIntExact((Long) f[4]);
+						List<Object> rest = values(f, 5);
+						yield new PyFunction(code((String) f[0], (String) f[1]), List.copyOf(rest.subList(cells, rest.size())),
+								(PyModule) value(f[2]), (PyClass) value(f[3]),
+								rest.subList(0, cells).stream().map(Cell.class::cast).toList());
+					}
 					case BOUND_METHOD -> new PyBoundMethod(value(f[0]), value(f[1]));
 					case SUPER -> new PySuper((PyClass) value(f[0]), value(f[1]));
 					case CODE -> code((String) f[0], (String) f[1]);

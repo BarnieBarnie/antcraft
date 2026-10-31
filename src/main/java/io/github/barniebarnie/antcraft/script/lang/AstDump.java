@@ -34,6 +34,7 @@ public final class AstDump {
 			case Ast.Return s ->s.value() == null ? "return" : "(return " + dump(s.value()) + ")";
 			case Ast.Assert s -> "(assert " + dump(s.test()) + (s.message() == null ? "" : " " + dump(s.message())) + ")";
 			case Ast.Global s -> "(global " + String.join(" ", s.names()) + ")";
+			case Ast.Nonlocal s -> "(nonlocal " + String.join(" ", s.names()) + ")";
 			case Ast.Import s -> "(import " + String.join(" ", s.modules()) + ")";
 			case Ast.FromImport s -> "(from " + s.module() + " " + String.join(" ", s.names()) + ")";
 			case Ast.Try s -> "(try " + block(s.body()) + s.handlers().stream()
@@ -80,6 +81,7 @@ public final class AstDump {
 			case Ast.Slice s -> "(slice " + dump(s.lower()) + " " + dump(s.upper()) + " " + dump(s.step()) + ")";
 			case Ast.Call c -> "(call " + dump(c.func()) + prefixed(c.args()) + c.keywords().stream()
 					.map(k -> k.name() == null ? " (** " + dump(k.value()) + ")" : " (kw " + k.name() + " " + dump(k.value()) + ")").collect(Collectors.joining()) + ")";
+			case Ast.Lambda l -> "(lambda (" + params(l.def()) + ") " + dump(((Ast.Return) l.def().body().getFirst()).value()) + ")";
 			case Ast.ListComp c -> "(listcomp " + dump(c.elt()) + c.generators().stream()
 					.map(g -> " (for " + dump(g.target()) + " " + dump(g.iter())
 							+ g.ifs().stream().map(i -> " (if " + dump(i) + ")").collect(Collectors.joining()) + ")")
