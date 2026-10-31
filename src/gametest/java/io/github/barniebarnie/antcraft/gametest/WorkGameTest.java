@@ -22,7 +22,12 @@ import io.github.barniebarnie.antcraft.script.Result;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.Output;
+import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Method;
+import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -207,7 +212,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "held", "find_nearest", "scan", "entities",
 		"items_near", "deaths", "last_death", "colony", "time", "is_day", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
-		"drop_job", "health", "max_health", "attack", "needs", "cooks_in");
+		"drop_job", "health", "max_health", "attack", "needs", "cooks_in", "build_placement");
 
 	/**
 	 * Every native that takes a position refuses one from another dimension (a home in the Nether over a chest in the
@@ -789,6 +794,61 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 					"Hello", "sign text");
 				helper.assertTrue(helper.getBlockEntity(new BlockPos(4, 1, 3), ChestBlockEntity.class).isEmpty(), "chest not empty");
 			});
+	}
+
+	/** The bytes of {@code imported_step.litematic}: cobblestone at (0, 0, 0) and (1, 0, 0), oak planks at (1, 1, 0). */
+	private static byte[] importedStep() {
+		try (InputStream in = WorkGameTest.class.getResourceAsStream("/data/antcraft-gametest/blueprint/imported_step.litematic")) {
+			return Objects.requireNonNull(in).readAllBytes();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
+
+	/** Sends {@code file} as Litematica placement {@code name} from {@code player}, part by part as a client does. */
+	private static void sendPlacement(ServerPlayer player, String name, BlockPos origin, Rotation rotation, Mirror mirror, byte[] file) {
+		BlueprintNetworking.PlacementPart.of(name, origin, rotation, mirror, file).forEach(part -> BlueprintNetworking.handle(player, part));
+	}
+
+	/**
+	 * A player sends a Litematica placement of {@code imported_step} at (3, 1, 3), mirrored front to back, then turned a
+	 * quarter clockwise; the player's bot builds it where Litematica shows it: x mirrored to (0, 0, 0), (-1, 0, 0),
+	 * (-1, 1, 0), then turned to (0, 0, 0), (0, 0, -1), (0, 1, -1) from the origin.
+	 */
+	@GameTest(maxTicks = 35)
+	public void buildPlacementBuildsWhereLitematicaPlacesIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS));
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		sendPlacement(owner, "step", helper.absolutePos(new BlockPos(3, 1, 3)), Rotation.CLOCKWISE_90, Mirror.FRONT_BACK, importedStep());
+		helper.assertTrue(owner.messages().stream().anyMatch(message -> message.text().contains("received")), "owner told " + owner.messages());
+		expect(helper, bot, "r = build_placement('step')\nprint(r.ok, r.reason, r.value)\n", List.of("True None 3"), () -> {
+			helper.assertBlockPresent(Blocks.COBBLESTONE, 3, 1, 3);
+			helper.assertBlockPresent(Blocks.COBBLESTONE, 3, 1, 2);
+			helper.assertBlockPresent(Blocks.OAK_PLANKS, 3, 2, 2);
+			helper.assertBlockPresent(Blocks.AIR, 4, 1, 3);
+		});
+	}
+
+	/**
+	 * A malformed file is refused with a message and kept by no name; a bot builds only its own owner's placements, not
+	 * another player's of the same name: both give no_blueprint and nothing is built.
+	 */
+	@GameTest(maxTicks = 20)
+	public void buildPlacementRefusesAMalformedFileAndAnotherPlayersPlacement(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS));
+		BotScripts.RecordingPlayer stranger = BotScripts.owner(helper, helper.spawn(ModEntities.ANT_BOT, 1, 1, 1));
+		BotScripts.RecordingPlayer owner = BotScripts.owner(helper, bot);
+		sendPlacement(stranger, "step", helper.absolutePos(new BlockPos(3, 1, 3)), Rotation.NONE, Mirror.NONE, importedStep());
+		sendPlacement(owner, "bad", helper.absolutePos(new BlockPos(3, 1, 3)), Rotation.NONE, Mirror.NONE, "not a schematic".getBytes());
+		helper.assertTrue(owner.messages().stream().anyMatch(message -> message.text().contains("refused")), "owner told " + owner.messages());
+		expect(helper, bot, "print(build_placement('step').reason, build_placement('bad').reason)\n", List.of("no_blueprint no_blueprint"), () -> {
+			helper.assertBlockPresent(Blocks.AIR, 3, 1, 3);
+			helper.assertBlockPresent(Blocks.AIR, 4, 1, 3);
+		});
 	}
 
 	/** Turned a quarter clockwise, the step runs south and its stairs face south. */

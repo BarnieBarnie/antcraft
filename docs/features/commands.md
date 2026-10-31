@@ -24,6 +24,8 @@
 | `/antcraft colony trust list [colony]` | Names the owner and the trusted players of the same colony `trust` would act on, so an owner who is not an operator can see whom their colony trusts; another player's colony is refused |
 | `/antcraft colony radius <blocks>` | Sets the nearest colony's radius (default 32) |
 
+There is no command to build a [Litematica placement](blueprints.md): start a script on your bot with `bot run` that calls [`build_placement`](../reference/building/build_placement.md) with the placement's name, such as a script `placement.py` holding `build_placement(ARGS[0])`, run as `/antcraft bot run placement house`. The bot builds the placements its owner sent, so `bot run` making you its owner also gives it yours.
+
 ## Script commands
 
 Commands (on a server, `script reload`, `core script` and saving from the editor are operator-only; the others players may use on their own bots, see [Players' scripts](scripts.md#players-scripts)):

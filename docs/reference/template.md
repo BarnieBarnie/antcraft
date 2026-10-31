@@ -13,7 +13,7 @@ Every builtin a script can call has its own page, listed on the [index](index.md
 | `inventory/` | Inventory | `inventory`, `held`, `count`, `has`, `free_slots`, `matches`, `equip`, `drop`, `pick_up` |
 | `blocks/` | Working blocks | `mine`, `place`, `use` |
 | `crafting/` | Containers and crafting | `container`, `put`, `take`, `craft`, `smelt`, `needs`, `cooks_in` |
-| `building/` | Building | `build`, `blueprint` |
+| `building/` | Building | `build`, `build_placement`, `blueprint` |
 | `mining/` | Mining | `mineshaft`, `mineshaft_at`, `ore_vein` |
 | `combat/` | Fighting | `attack` |
 | `colony/` | Colony and jobs | `colony`, `post_job`, `take_job`, `jobs`, `finish_job`, `drop_job` |

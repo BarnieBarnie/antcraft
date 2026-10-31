@@ -7,6 +7,8 @@
 	"item.antcraft.blueprint.none": "No blueprint chosen; right-click to pick one",
 	"message.antcraft.disabled": "AntCraft bots are disabled on this server. The server owner can enable them in config/antcraft.properties.",
 	"message.antcraft.limit": "This world already has the maximum of %s bots.",
+	"message.antcraft.placement.received": "Placement %1$s received: your bots build it with build_placement(\"%1$s\").",
+	"message.antcraft.placement.refused": "Placement %s refused: %s.",
 	"commands.antcraft.status": "AntCraft is %s. Bots in this dimension: %s / %s",
 	"commands.antcraft.stop": "Stopped %s bot(s)",
 	"commands.antcraft.script.list": "%s script(s) in %s, %s and data packs:",

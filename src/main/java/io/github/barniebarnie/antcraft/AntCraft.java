@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft;
 
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
+import io.github.barniebarnie.antcraft.blueprint.Placements;
 import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.BotChunks;
@@ -41,6 +42,7 @@ public class AntCraft implements ModInitializer {
 		ServerScripts.register();
 		PlayerLimits.register();
 		Blueprints.register();
+		Placements.register();
 		BlueprintNetworking.register();
 		ScriptNetworking.register();
 		// The whole server tick.

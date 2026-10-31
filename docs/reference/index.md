@@ -81,6 +81,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | Builtin | Signature | Does |
 |---|---|---|
 | [`build`](building/build.md) | `build(blueprint, at, turn=0, mirror=False, job=None)` | action: build a blueprint from carried blocks |
+| [`build_placement`](building/build_placement.md) | `build_placement(name, job=None)` | action: build a Litematica placement the bot's owner sent |
 | [`blueprint`](building/blueprint.md) | `blueprint(id, at=None, turn=0, mirror=False)` | a blueprint's size, role, materials and spots as plain data |
 
 ## Mining

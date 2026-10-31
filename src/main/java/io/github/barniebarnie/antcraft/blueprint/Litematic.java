@@ -60,10 +60,8 @@ public final class Litematic {
 		CompoundTag regions = schematic.getCompoundOrEmpty("Regions");
 		for (String name : regions.keySet()) {
 			CompoundTag region = regions.getCompoundOrEmpty(name);
-			BlockPos position = vec(region.getCompoundOrEmpty("Position"));
-			BlockPos size = vec(region.getCompoundOrEmpty("Size"));
-			// A negative size runs back from the position: the region's blocks start at its lowest corner.
-			BlockPos min = position.offset(size.getX() < 0 ? size.getX() + 1 : 0, size.getY() < 0 ? size.getY() + 1 : 0, size.getZ() < 0 ? size.getZ() + 1 : 0);
+			BlockPos size = size(region);
+			BlockPos min = min(region);
 			int sx = Math.abs(size.getX());
 			int sy = Math.abs(size.getY());
 			int sz = Math.abs(size.getZ());
@@ -112,6 +110,18 @@ public final class Litematic {
 		structure.put("blocks", blockList);
 		structure.put("entities", new ListTag());
 		return structure;
+	}
+
+	/** The lowest corner of a region, where its blocks start: a negative size runs back from its position. */
+	static BlockPos min(CompoundTag region) {
+		BlockPos position = vec(region.getCompoundOrEmpty("Position"));
+		BlockPos size = size(region);
+		return position.offset(size.getX() < 0 ? size.getX() + 1 : 0, size.getY() < 0 ? size.getY() + 1 : 0, size.getZ() < 0 ? size.getZ() + 1 : 0);
+	}
+
+	/** A region's size as saved, a side negative where the region runs back from its position. */
+	static BlockPos size(CompoundTag region) {
+		return vec(region.getCompoundOrEmpty("Size"));
 	}
 
 	/** Entry {@code index} of {@code packed}, {@code bits} wide, low bits first; one that falls over the end of a long goes on in the next. */

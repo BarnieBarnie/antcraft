@@ -4,13 +4,17 @@ import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintBlocks;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
+import io.github.barniebarnie.antcraft.blueprint.Placements;
 import io.github.barniebarnie.antcraft.item.BlueprintItem;
+import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -19,6 +23,8 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
 
 /**
  * Payloads between the client's blueprint picker and preview and the server. Each payload is a record here, registered in
@@ -109,7 +115,47 @@ public final class BlueprintNetworking {
 		}
 	}
 
+	/**
+	 * Part {@code part} of the {@code parts} a client sends a Litematica placement in: the bytes of its {@code .litematic}
+	 * file, split by {@link #of}, and, the same in each part, the placement's {@code name}, its {@code origin} and its
+	 * {@code rotation} and {@code mirror} as Litematica has them (docs/features/blueprints.md, Litematica placements). The
+	 * server keeps it for the player's bots ({@link Placements#receive}).
+	 */
+	public record PlacementPart(String name, BlockPos origin, Rotation rotation, Mirror mirror, int part, int parts, byte[] bytes)
+		implements CustomPacketPayload {
+		/** The most file bytes in one part, under the 32767 bytes the game takes in a payload from a client. */
+		public static final int PART_SIZE = 30_000;
+		public static final int NAME_LENGTH = 256;
+		public static final Type<PlacementPart> TYPE = new Type<>(AntCraft.id("placement_part"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, PlacementPart> STREAM_CODEC = StreamCodec.of(
+			(buf, payload) -> {
+				buf.writeUtf(payload.name(), NAME_LENGTH);
+				buf.writeBlockPos(payload.origin());
+				buf.writeEnum(payload.rotation());
+				buf.writeEnum(payload.mirror());
+				buf.writeVarInt(payload.part());
+				buf.writeVarInt(payload.parts());
+				buf.writeByteArray(payload.bytes());
+			},
+			buf -> new PlacementPart(buf.readUtf(NAME_LENGTH), buf.readBlockPos(), buf.readEnum(Rotation.class), buf.readEnum(Mirror.class),
+				buf.readVarInt(), buf.readVarInt(), buf.readByteArray(PART_SIZE)));
+
+		/** The parts that send {@code file}, the bytes of a {@code .litematic}, as placement {@code name}. */
+		public static List<PlacementPart> of(String name, BlockPos origin, Rotation rotation, Mirror mirror, byte[] file) {
+			int parts = Math.max(1, (file.length + PART_SIZE - 1) / PART_SIZE);
+			return IntStream.range(0, parts).mapToObj(i -> new PlacementPart(name, origin, rotation, mirror, i, parts,
+				Arrays.copyOfRange(file, i * PART_SIZE, Math.min(file.length, (i + 1) * PART_SIZE)))).toList();
+		}
+
+		@Override
+		public Type<PlacementPart> type() {
+			return TYPE;
+		}
+	}
+
 	public static void register() {
+		PayloadTypeRegistry.serverboundPlay().register(PlacementPart.TYPE, PlacementPart.STREAM_CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(PlacementPart.TYPE, (part, context) -> handle(context.player(), part));
 		PayloadTypeRegistry.serverboundPlay().register(ChooseBlueprint.TYPE, ChooseBlueprint.STREAM_CODEC);
 		PayloadTypeRegistry.clientboundPlay().register(BlueprintList.TYPE, BlueprintList.STREAM_CODEC);
 		PayloadTypeRegistry.serverboundPlay().register(BlueprintBlocksRequest.TYPE, BlueprintBlocksRequest.STREAM_CODEC);
@@ -133,6 +179,14 @@ public final class BlueprintNetworking {
 	 */
 	public static boolean handle(ServerPlayer player, ChooseBlueprint request) {
 		return BlueprintItem.choose(player.getItemInHand(request.hand()), request.blueprint());
+	}
+
+	/** Takes part of a placement {@code player} sent, in their dimension, and tells them once it is received or refused. */
+	public static void handle(ServerPlayer player, PlacementPart part) {
+		Component reply = Placements.receive(player.getUUID(), player.level().dimension().identifier().toString(), part);
+		if (reply != null) {
+			player.sendSystemMessage(reply);
+		}
 	}
 
 	/**

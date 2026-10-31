@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.blueprint.Blueprint;
 import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
 import io.github.barniebarnie.antcraft.blueprint.Blueprints;
+import io.github.barniebarnie.antcraft.blueprint.Placements;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
@@ -53,7 +54,8 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jspecify.annotations.Nullable;
 
 /**
- * {@code build(blueprint, at, turn=0, mirror=False, job=None)} and the sense {@code blueprint(id)} (docs/reference/index.md,
+ * {@code build(blueprint, at, turn=0, mirror=False, job=None)}, {@code build_placement(name, job=None)} (a Litematica
+ * placement the bot's owner sent, see {@link Placements}) and the sense {@code blueprint(id)} (docs/reference/index.md,
  * Building): a blueprint built from what the bot carries, step by step as {@link BuildPlan} orders it.
  */
 public final class BuildApi {
@@ -90,6 +92,22 @@ public final class BuildApi {
 				return run.done(describe, Result.fail(Result.NO_BLUEPRINT));
 			}
 			return run.start(new Build(run, bot, plan.get().plan(), plan.get().blockEntities(), at, describe, job), call, at);
+		});
+		natives.register("build_placement", call -> {
+			Object[] args = Args.bind("build_placement", call, 1, "name", "job");
+			String name = Values.str(args[0]);
+			Long job = Args.absent(args[1]) || args[1] == PyNone.NONE ? null : Args.integer(args[1]);
+			AntBot bot = WorkApi.bot(run, call);
+			String describe = "build_placement(" + Values.repr(name) + ")";
+			// Only the placements of the bot's owner: whoever may run its scripts (PlayerLimits.mayControl).
+			Optional<Placements.Placement> placement = bot.getOwner() == null ? Optional.empty() : Placements.get(bot.getOwner(), name);
+			Optional<BuildPlan> plan = placement.flatMap(Placements.Placement::plan);
+			if (plan.isEmpty()) {
+				return run.done(describe, Result.fail(Result.NO_BLUEPRINT));
+			}
+			BlockPos corner = placement.get().at();
+			Pos at = new Pos(corner.getX(), corner.getY(), corner.getZ(), placement.get().dimension());
+			return run.start(new Build(run, bot, plan.get(), placement.get().blockEntities(), at, describe, job), call, at);
 		});
 	}
 
