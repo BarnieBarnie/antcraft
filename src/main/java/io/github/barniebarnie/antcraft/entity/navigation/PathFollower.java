@@ -90,6 +90,7 @@ public class PathFollower {
 	private TagKey<Item> scaffold = SCAFFOLD_BLOCKS;
 	private Predicate<BlockPos> mayPlaceAt = pos -> true;
 	private Predicate<BlockPos> keep = pos -> false;
+	private Predicate<ItemStack> keepItems = stack -> false;
 
 	public PathFollower(AntBot bot) {
 		this.bot = bot;
@@ -124,6 +125,11 @@ public class PathFollower {
 	/** Blocks paths never break, besides others' scaffold, none unless set; applies from the next path planned. */
 	public void setKeep(Predicate<BlockPos> keep) {
 		this.keep = keep;
+	}
+
+	/** Scaffold blocks paths may not place, such as what a script's {@code goto(keep=)} keeps; none unless set. */
+	public void setKeepItems(Predicate<ItemStack> keepItems) {
+		this.keepItems = keepItems;
 	}
 
 	/** Which blocks paths and {@link #placeBlock} may place as scaffolding. */
@@ -260,7 +266,7 @@ public class PathFollower {
 	}
 
 	private PathFinder.Options options() {
-		return new PathFinder.Options(this.mayBreak, this.mayPlace && scaffoldCount(this.bot.getInventory(), this.scaffold) > 0, this.maxNodes, MAX_DROP);
+		return new PathFinder.Options(this.mayBreak, this.mayPlace && this.hasScaffold(), this.maxNodes, MAX_DROP);
 	}
 
 	/**
@@ -466,7 +472,7 @@ public class PathFollower {
 		SimpleContainer inventory = this.bot.getInventory();
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack stack = inventory.getItem(i);
-			if (stack.is(this.scaffold) && stack.getItem() instanceof BlockItem blockItem) {
+			if (this.isScaffold(stack) && stack.getItem() instanceof BlockItem blockItem) {
 				BlockState state = blockItem.getBlock().defaultBlockState();
 				if (!level.isUnobstructed(state, pos, CollisionContext.empty())) {
 					return Placed.OBSTRUCTED;
@@ -484,6 +490,20 @@ public class PathFollower {
 			}
 		}
 		return Placed.NO_SCAFFOLD;
+	}
+
+	private boolean isScaffold(ItemStack stack) {
+		return stack.is(this.scaffold) && !this.keepItems.test(stack);
+	}
+
+	private boolean hasScaffold() {
+		SimpleContainer inventory = this.bot.getInventory();
+		for (int i = 0; i < inventory.getContainerSize(); i++) {
+			if (this.isScaffold(inventory.getItem(i))) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public static int scaffoldCount(Container inventory) {

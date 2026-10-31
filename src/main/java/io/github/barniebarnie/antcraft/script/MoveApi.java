@@ -12,10 +12,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
+import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Moving the bot (docs/reference/index.md): {@code goto(pos, near=0)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
+ * Moving the bot (docs/reference/index.md): {@code goto(pos, near=0, keep=None)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
  * and {@code home_dimension()}, {@code travel(portal)}, {@code portals()},
  * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
@@ -93,6 +94,10 @@ public final class MoveApi {
 		 * for any scaffold block anywhere. Nor do they break a block {@code keep} says, such as one its blueprint has in place.
 		 */
 		default void setBuildScaffold(@Nullable Predicate<Pos> mayPlace, Predicate<Pos> keep) {
+		}
+
+		/** Which scaffold blocks the next walks may not place, as {@code goto(keep=)} says; none unless set. */
+		default void setKeepItems(Predicate<ItemStack> keep) {
 		}
 
 		/** Whether the bot, where it stands, sees {@code target} within {@link #REACH}. */
@@ -194,13 +199,14 @@ public final class MoveApi {
 			return PyNone.NONE;
 		});
 		natives.register("goto", call -> {
-			Object[] args = Args.bind("goto", call, 1, "pos", "near");
+			Object[] args = Args.bind("goto", call, 1, "pos", "near", "keep");
 			Pos target = Pos.of(args[0]);
 			long near = Args.absent(args[1]) ? 0 : Args.integer(args[1]);
 			if (near < 0) {
 				throw new ScriptError("goto() near must be at least 0, not " + near);
 			}
-			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false), call, target);
+			Selector keep = Args.absent(args[2]) ? null : Selector.parse(args[2]);
+			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false, keep), call, target);
 		});
 		natives.register("travel", call -> {
 			Pos portal = Pos.of(Args.bind("travel", call, 1, "portal")[0]);
@@ -310,7 +316,7 @@ public final class MoveApi {
 			}
 			body.clearPortalCooldown();
 			if (walk == null && waited == 0) {
-				walk = new Goto(host, body.portalFloor(portal), 0, false);
+				walk = new Goto(host, body.portalFloor(portal), 0, false, null);
 			}
 			if (walk != null) {
 				if (!walk.tick()) {
@@ -427,24 +433,27 @@ public final class MoveApi {
 	 * {@link #REACH}; {@code unreachable} when it cannot get there.
 	 */
 	static ScriptRun.Action reach(ScriptRun.Host host, Pos target) {
-		return new Goto(host, target, 0, true);
+		return new Goto(host, target, 0, true, null);
 	}
 
 	/** Like {@code goto(target, near)}, for the actions that walk to something first, such as {@code pick_up}. */
 	static ScriptRun.Action walk(ScriptRun.Host host, Pos target, int near) {
-		return new Goto(host, target, near, false);
+		return new Goto(host, target, near, false, null);
 	}
 
 	/**
-	 * {@code goto(pos, near=0)}: loads the chunks of the next stretch of the way (or, with {@code botsLoadChunks} off,
+	 * {@code goto(pos, near=0, keep=None)}: loads the chunks of the next stretch of the way (or, with {@code botsLoadChunks} off,
 	 * gives up with {@code not_loaded} if one is not loaded), then walks with the bot's path follower, planning on as it goes.
-	 * With {@code reach}, it walks into reach of {@code target} instead ({@link #reach}).
+	 * With {@code reach}, it walks into reach of {@code target} instead ({@link #reach}). With {@code keep}, it places none
+	 * of the items {@code keep} selects as scaffold (docs/reference/movement/goto.md); only goto takes it, as the walks of
+	 * the other actions are short and a script can goto first.
 	 */
 	private static final class Goto implements ScriptRun.Action {
 		private final ScriptRun.Host host;
 		private final Pos target;
 		private final int near;
 		private final boolean reach;
+		private final @Nullable Selector keep;
 		private @Nullable Body body;
 		private @Nullable Result result;
 		private boolean walking;
@@ -453,11 +462,12 @@ public final class MoveApi {
 		private long closest = Long.MAX_VALUE;
 		private int stalled;
 
-		Goto(ScriptRun.Host host, Pos target, int near, boolean reach) {
+		Goto(ScriptRun.Host host, Pos target, int near, boolean reach, @Nullable Selector keep) {
 			this.host = host;
 			this.target = target;
 			this.near = near;
 			this.reach = reach;
+			this.keep = keep;
 		}
 
 		@Override
@@ -488,6 +498,9 @@ public final class MoveApi {
 			}
 			waited = 0;
 			if (!walking) {
+				if (keep != null) {
+					body.setKeepItems(keep.items());
+				}
 				if (reach) {
 					body.startReach(target);
 				} else {
@@ -519,6 +532,9 @@ public final class MoveApi {
 			this.result = result;
 			if (walking && body != null) {
 				body.stopPath();
+				if (keep != null) {
+					body.setKeepItems(stack -> false);
+				}
 			}
 			walking = false;
 			return true;
@@ -541,7 +557,7 @@ public final class MoveApi {
 
 		@Override
 		public String describe() {
-			return "goto(" + target + (near == 0 ? "" : ", near=" + near) + ")";
+			return "goto(" + target + (near == 0 ? "" : ", near=" + near) + (keep == null ? "" : ", keep=" + keep) + ")";
 		}
 	}
 }

@@ -115,8 +115,50 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False unreachable False")), "printed " + printed(bot)));
 	}
 
+	/** A bot at the bottom of a pit two deep in bedrock, carrying only cobblestone; returns it. */
+	private static AntBot inABedrockPit(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				for (int y = 1; y <= 2; y++) {
+					helper.setBlock(x, y, z, x == 2 && z == 2 ? Blocks.AIR : Blocks.BEDROCK);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 4));
+		return bot;
+	}
+
+	/** Out of a pit with keep="cobblestone": it may not pillar with it, and cannot dig bedrock, so unreachable, all of it kept. */
+	@GameTest(maxTicks = 20)
+	public void gotoWithKeepDoesNotPillarWithTheKeptBlocks(GameTestHelper helper) {
+		AntBot bot = inABedrockPit(helper);
+		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
+		BotScripts.run(bot, "r = goto(" + pos(target) + ", keep=\"cobblestone\")\nprint(r.ok, r.reason)\n");
+		failOnError(helper, bot);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(printed(bot).equals(List.of("False unreachable")), "printed " + printed(bot));
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 4, "carries " + bot.getInventory().getItems());
+		});
+	}
+
+	/** Out of the same pit without keep: it pillars up one cobblestone and steps out. */
+	@GameTest(maxTicks = 60)
+	public void gotoWithoutKeepPillarsOutOfAPit(GameTestHelper helper) {
+		AntBot bot = inABedrockPit(helper);
+		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
+		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, r.reason)\n");
+		failOnError(helper, bot);
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(printed(bot).equals(List.of("True None")), "printed " + printed(bot));
+			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 3, "carries " + bot.getInventory().getItems());
+		});
+	}
+
 	/**
-	 * Far from every other test, on a bridge high in the air: the bot's own chunk ticket keeps the three chunks around it
+	 * Far from every other test, on a bridge high in the air:the bot's own chunk ticket keeps the three chunks around it
 	 * loaded, and the target lies in the fourth chunk on, which nothing loads until {@code goto} does. The bot crosses the
 	 * last three blocks on cobblestone of its own. The bot's entities load in the background once it is put on the far spot,
 	 * and the target's chunk is new, so it generates in the background once {@code goto} asks for it: both waits have a

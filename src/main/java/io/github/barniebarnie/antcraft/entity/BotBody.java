@@ -16,6 +16,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import org.jspecify.annotations.Nullable;
 
@@ -83,6 +84,11 @@ final class BotBody implements MoveApi.Body {
 		this.follower.setScaffold(mayPlace == null ? PathFollower.SCAFFOLD_BLOCKS : PathFollower.FAST_SCAFFOLD_BLOCKS);
 		this.follower.setMayPlaceAt(mayPlace == null ? pos -> true : pos -> mayPlace.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
 		this.follower.setKeep(pos -> keep.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
+	}
+
+	@Override
+	public void setKeepItems(Predicate<ItemStack> keep) {
+		this.follower.setKeepItems(keep);
 	}
 
 	@Override

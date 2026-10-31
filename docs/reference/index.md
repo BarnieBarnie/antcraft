@@ -19,7 +19,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 
 | Builtin | Signature | Does |
 |---|---|---|
-| [`goto`](movement/goto.md) | `goto(pos, near=0)` | action: walk to within `near` blocks, digging, pillaring and bridging as needed |
+| [`goto`](movement/goto.md) | `goto(pos, near=0, keep=None)` | action: walk to within `near` blocks, digging, pillaring and bridging as needed, never with what `keep` selects |
 | [`travel`](movement/travel.md) | `travel(portal)` | action: go through the nether portal at `portal` to the other dimension |
 | [`reachable`](movement/reachable.md) | `reachable(pos, near=0)` | whether the bot could walk to within `near` blocks of `pos`; plans without moving (may pause) |
 | [`pos`](movement/pos.md) | `pos()` | the bot's position, with its dimension |
