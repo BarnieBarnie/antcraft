@@ -18,7 +18,7 @@ An item the game does not know, or an `n` outside 1 to 1000000, stops the script
 
 ## `craft_here(item, n=1)`
 
-`craft_all(item, n)` for a bot away from any crafting table. Where a step finds no table within reach (`no_table`), it puts one down beside the bot, as a player does: the table it carries, else one it first crafts from carried planks or logs. It places it on the first free spot north, south, east or west of the bot's feet, runs `craft_all(item, n, table=spot)`, then mines the table and picks it up again, also when a step fails. With a table within reach, or only 2x2 recipes, it is `craft_all` as is and places nothing.
+`craft_all(item, n)` for a bot away from any crafting table. Where a step finds no table within reach (`no_table`), it puts one down beside the bot, as a player does: the table it carries, else one it first crafts from carried planks or logs. It places it on the first free spot north, south, east or west of the bot's feet, else of its head, else above its head; in a pit where none is free, it [`mine`](../../blocks/mine.md)s out a spot beside its feet, keeping what it mined, and places it there. Then it runs `craft_all(item, n, table=spot)`, then mines the table and picks it up again, also when a step fails. With a table within reach, or only 2x2 recipes, it is `craft_all` as is and places nothing.
 
 Before it crafts anything it asks `plan(item, n)` (below) what to gather, the table and furnace it must craft included: with planks for the item or a table but not both, it crafts nothing and gives `missing_ingredients` with the logs both lack. Where `plan`'s `no_tool` is `True` (a step smelts, no station within `REACH` cooks it and the bot carries no pickaxe), it crafts nothing and gives `no_tool`, as `smelt_here` would for the furnace it could not mine back.
 
@@ -27,7 +27,7 @@ Before it crafts anything it asks `plan(item, n)` (below) what to gather, the ta
 
 ## `smelt_here(item, n=1, fuel=None)`
 
-[`smelt`](../../crafting/smelt.md)`(item, n, fuel=fuel)` for a bot away from any furnace: `item` is the input, such as `"raw_iron"`. Where no furnace is within reach (`no_furnace`), it puts one down beside the bot as `craft_here` does a table: the furnace it carries, else one it first crafts from 8 carried cobblestone with `craft_here`. It plans that furnace with the `n` of `item` it smelts kept back, so `smelt_here("cobblestone", 8)` with only 8 cobblestone crafts no furnace from them. It keeps back the fuel too, `fuel` or else the fuel `smelt` would burn, one for each 1.5 items smelted (as wood burns, the only fuel a table or furnace takes), so 4 planks to burn crafts no table from them: where the stations, the input and the fuel together lack raw items it crafts nothing and gives `missing_ingredients` with `missing`, what they lack. It smelts in it, then mines the furnace and picks it up again, with anything a failed smelt left in it, also when the smelt fails. With a furnace, or a blast furnace or smoker that cooks `item`, within reach it is `smelt` as is.
+[`smelt`](../../crafting/smelt.md)`(item, n, fuel=fuel)` for a bot away from any furnace: `item` is the input, such as `"raw_iron"`. Where no furnace is within reach (`no_furnace`), it puts one down beside the bot as `craft_here` does a table, on the same spots, mining one out in a pit: the furnace it carries, else one it first crafts from 8 carried cobblestone with `craft_here`. It plans that furnace with the `n` of `item` it smelts kept back, so `smelt_here("cobblestone", 8)` with only 8 cobblestone crafts no furnace from them. It keeps back the fuel too, `fuel` or else the fuel `smelt` would burn, one for each 1.5 items smelted (as wood burns, the only fuel a table or furnace takes), so 4 planks to burn crafts no table from them: where the stations, the input and the fuel together lack raw items it crafts nothing and gives `missing_ingredients` with `missing`, what they lack. It smelts in it, then mines the furnace and picks it up again, with anything a failed smelt left in it, also when the smelt fails. With a furnace, or a blast furnace or smoker that cooks `item`, within reach it is `smelt` as is.
 
 Mining the furnace back takes a pickaxe: where it would put one down and the bot carries no `#minecraft:pickaxes`, it places and crafts none and gives `no_tool`, with the inventory as it was.
 
@@ -59,7 +59,7 @@ A tier the bot and the chests lack raw items for fails before anything is taken 
 - **Returns** `needs`'s dict, with `no_tool`.
 - **Pauses** no, unless `find_nearest` does.
 
-The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block)` places a carried block on such a spot and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
+The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block)` places a carried block on the first of those spots that takes it and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
 
 ## Example
 

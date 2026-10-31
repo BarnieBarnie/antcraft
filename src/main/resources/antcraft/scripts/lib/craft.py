@@ -257,10 +257,17 @@ def table_near():
 
 
 def place_beside(block):
-    """Places a carried block on the first free spot beside the bot, at its feet; that Pos, or None where none takes it."""
+    """Places a carried block on the first free spot beside the bot's feet, beside its head or above its head, else on a
+    spot beside its feet it mines out first, keeping what it mined (a bot in a 1x1 pit); that Pos, or None where none
+    takes it."""
     here = pos()
-    for spot in (here.north(), here.south(), here.east(), here.west()):
+    head = here.up()
+    feet = [here.north(), here.south(), here.east(), here.west()]
+    for spot in feet + [head.north(), head.south(), head.east(), head.west(), head.up()]:
         if place(spot, block):
+            return spot
+    for spot in feet:
+        if mine(spot) and place(spot, block):
             return spot
     return None
 

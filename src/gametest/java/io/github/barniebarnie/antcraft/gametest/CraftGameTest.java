@@ -366,6 +366,30 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True None {} 1 1 0 0"), tablesInTheArea(helper, 0));
 	}
 
+	/** Stone around {@code (x, 1, z)} and {@code (x, 2, z)}, a 1x1 pit two deep, and over it at {@code (x, 3, z)} where {@code covered}. */
+	private static void pit(GameTestHelper helper, int x, int z, boolean covered) {
+		for (int y = 1; y <= 2; y++) {
+			helper.setBlock(x + 1, y, z, Blocks.STONE);
+			helper.setBlock(x - 1, y, z, Blocks.STONE);
+			helper.setBlock(x, y, z + 1, Blocks.STONE);
+			helper.setBlock(x, y, z - 1, Blocks.STONE);
+		}
+		if (covered) {
+			helper.setBlock(x, 3, z, Blocks.STONE);
+		}
+	}
+
+	/** In a 1x1 pit, every spot beside its feet and head stone: the table goes above its head and comes back (#477). */
+	@GameTest(maxTicks = 190)
+	public void craftHereInAPitPlacesTheTableAboveItsHead(GameTestHelper helper) {
+		pit(helper, 3, 4, false);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		expect(helper, bot, craftHere("'stone_pickaxe'", "stone_pickaxe", "crafting_table", "oak_log", "cobblestone"),
+			List.of("True None {} 1 1 0 0"), tablesInTheArea(helper, 0));
+	}
+
 	@GameTest(maxTicks = 170)
 	public void craftHereUsesACarriedTableAndKeepsIt(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -464,6 +488,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
 		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "cobblestone"), List.of("True None 1 1 8"),
+			inTheArea(helper, Blocks.FURNACE, 0));
+	}
+
+	/** In a covered 1x1 pit: it mines out a spot beside its feet, keeps the cobblestone, smelts there and takes the furnace back (#477). */
+	@GameTest(maxTicks = 580)
+	public void smeltHereInACoveredPitMinesOutASpot(GameTestHelper helper) {
+		pit(helper, 3, 4, true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE, 1));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'raw_iron'", "iron_ingot", "furnace", "cobblestone"), List.of("True None 1 1 1"),
 			inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
