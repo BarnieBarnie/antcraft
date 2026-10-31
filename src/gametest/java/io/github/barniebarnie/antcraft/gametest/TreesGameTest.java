@@ -97,4 +97,23 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "import lib.trees\nlib.trees.fell(" + tree(helper) + ", replant=False)\n"
 			+ "print(count('oak_log'), count('oak_sapling') > 0)\n", List.of("4 True"), () -> helper.assertBlockPresent(Blocks.AIR, TREE));
 	}
+
+	/** logs(2) mines the two lowest logs of the oak, picks them up and leaves the two above standing (#481). */
+	@GameTest(maxTicks = 440)
+	public void logsMinesTheLowestLogs(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(2)\nprint(r['ok'], count('oak_log'))\n", List.of("True 2"),
+			() -> {
+				helper.assertBlockPresent(Blocks.OAK_LOG, new BlockPos(TREE.getX(), 3, TREE.getZ()));
+				helper.assertBlockPresent(Blocks.OAK_LOG, new BlockPos(TREE.getX(), 4, TREE.getZ()));
+			});
+	}
+
+	/** With no log within radius, logs fails with no_logs and what it lacks instead of looping. */
+	@GameTest(maxTicks = 40)
+	public void logsFailsWithNoLogsInRadius(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(1, radius=2)\nprint(r['ok'], r['reason'], r['missing'])\n",
+			List.of("False no_logs {'#minecraft:logs': 1}"));
+	}
 }

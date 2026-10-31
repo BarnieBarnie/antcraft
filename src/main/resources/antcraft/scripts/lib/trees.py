@@ -5,6 +5,8 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+from lib.shaft import result
+
 LOGS = "#minecraft:logs"
 SAPLINGS = "#minecraft:saplings"
 
@@ -53,3 +55,31 @@ def fell(base, replant=True):
     pick_up([LOGS, SAPLINGS])
     if replant and block(base).is_air and has(SAPLINGS):
         place(base, SAPLINGS)
+
+
+def low_log(radius=32, skip=None):
+    """The lowest log within radius not in skip (a dict of positions), the nearest among those, or None."""
+    here = pos()
+    logs = [p for p in scan(LOGS, radius=radius, limit=256) if skip is None or p not in skip]
+    if not logs:
+        return None
+    pairs = sorted([(p.y, p.distance(here), i) for i, p in enumerate(logs)])
+    return logs[pairs[0][2]]
+
+
+def logs(n, radius=32):
+    """Mines the lowest logs within radius, so trunk bottoms and never a climb, until the bot carries n more. Gives
+    result(): ok, no_space where its inventory is full, or no_logs with missing once no log it can mine is left."""
+    target = count(LOGS) + n
+    skip = {}
+    while count(LOGS) < target:
+        p = low_log(radius, skip)
+        if p is None:
+            return result("no_logs", None, {LOGS: target - count(LOGS)})
+        r = mine(p)
+        if not r:
+            if r.reason == "no_space":
+                return result("no_space", p)
+            skip[p] = True
+        pick_up(LOGS)
+    return result()

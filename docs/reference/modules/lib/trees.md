@@ -26,6 +26,25 @@ Mines the trunk at `base` from the ground up, picks up the logs and saplings tha
 - **Returns** `None`.
 - **Pauses** yes, while it walks, mines and picks up.
 
+## `logs(n, radius=32)`
+
+Mines logs within `radius` blocks until the bot carries `n` more, the lowest logs first and the nearest among those, so it takes trunk bottoms it reaches from the ground and never climbs a tall tree. A log it cannot mine is skipped.
+
+- **Returns** a dict: `ok`, `reason` (`None`, `no_logs` once no log it can mine is left, or `no_space` with a full inventory), `at` (where `no_space` struck) and `missing` (`{"#minecraft:logs": k}`, the logs it still lacks, with `no_logs`).
+- **Pauses** yes, while it walks, mines and picks up.
+
+```python
+import lib.trees
+
+r = lib.trees.logs(3)
+if not r["ok"]:
+    say("no logs: " + r["reason"])
+```
+
+## `low_log(radius=32, skip=None)`
+
+The lowest log within `radius`, the nearest among those, leaving out the positions in the dict `skip`; `None` if there is none.
+
 ## `is_log(p)`, `trunk_base(log)`
 
 Whether the block at `p` is a log, and the lowest log of the trunk `log` is in. Done at once.
