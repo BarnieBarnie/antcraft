@@ -165,6 +165,25 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			"[" + printed(helper, 3, 2, 4) + ", " + printed(helper, 1, 1, 3) + "] [] [" + printed(helper, 3, 2, 4) + "]"));
 	}
 
+	/** {@code around} searches around a position instead of the bot, nearest to it first (#479). */
+	@GameTest(maxTicks = 10)
+	public void scanAndFindNearestSearchAroundAPosition(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 0);
+		helper.setBlock(0, 1, 1, Blocks.COAL_BLOCK);
+		helper.setBlock(4, 3, 5, Blocks.COAL_BLOCK);
+		helper.setBlock(2, 1, 4, Blocks.COAL_BLOCK);
+		helper.setBlock(4, 1, 5, Blocks.COAL_BLOCK);
+		String p = at(helper, 4, 1, 4);
+		ScriptRun run = run(helper, bot, "p = " + p + "\n"
+			+ "print(scan('coal_block', radius=3, around=p))\n"
+			+ "print(find_nearest('coal_block', radius=3, around=p), find_nearest('coal_block', around=p, radius=0))\n"
+			+ "print(find_nearest('coal_block', 2), scan('coal_block', 3, 1, p))\n");
+		succeedWhenPrinted(helper, bot, run, List.of(
+			"[" + String.join(", ", printed(helper, 4, 1, 5), printed(helper, 2, 1, 4), printed(helper, 4, 3, 5)) + "]",
+			printed(helper, 4, 1, 5) + " None",
+			printed(helper, 0, 1, 1) + " [" + printed(helper, 4, 1, 5) + "]"));
+	}
+
 	/**
 	 * A search of radius 32 reads some 137,000 blocks, more than the server's scan budget for one tick: it goes on over
 	 * the next ticks, pausing the script, and charges the script an instruction per few blocks read.

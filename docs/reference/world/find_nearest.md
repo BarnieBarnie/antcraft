@@ -1,10 +1,10 @@
 # `find_nearest`
 
 ```text
-find_nearest(what, radius=32)
+find_nearest(what, radius=32, around=None)
 ```
 
-The nearest block that `what` selects, within `radius` blocks of the bot.
+The nearest block that `what` selects, within `radius` blocks of the bot, or of `around`.
 
 ## Parameters
 
@@ -12,10 +12,11 @@ The nearest block that `what` selects, within `radius` blocks of the bot.
 |---|---|---|---|
 | `what` | [selector](../types/selectors.md) | | the blocks to look for, such as `"oak_log"` or `"#minecraft:logs"` |
 | `radius` | int | `32` | how far to look, from 0 to 32; another number stops the script with an error |
+| `around` | [`Pos`](../types/pos.md) or tuple | `None` | where to search around, such as the centre of a farm; `None` searches around the bot |
 
 ## Returns
 
-The [`Pos`](../types/pos.md) of the nearest matching block, or `None` if there is none within `radius`. The position has no `dimension`: it is in the bot's.
+The [`Pos`](../types/pos.md) of the matching block nearest to the bot (or to `around`), or `None` if there is none within `radius`, or if `around` is in another dimension than the bot. The position has no `dimension`: it is in the bot's.
 
 ## Pauses
 
@@ -27,7 +28,7 @@ One instruction per 8 blocks read, besides the call.
 
 ## Description
 
-The search reads the blocks within `radius` (a sphere around the block the bot stands in), nearest first, ties by y, then x, then z, and stops at the first match. It reads loaded blocks only and loads no chunks, so a block in an unloaded chunk is not found. It is [`scan`](scan.md) with a `limit` of 1.
+The search reads the blocks within `radius` (a sphere around the block the bot stands in, or around `around`, wherever the bot is), nearest first, ties by y, then x, then z, and stops at the first match. It reads loaded blocks only and loads no chunks, so a block in an unloaded chunk is not found. It is [`scan`](scan.md) with a `limit` of 1.
 
 A malformed selector, or a name or tag the game does not know, stops the script with an error.
 
@@ -39,6 +40,12 @@ if log is None:
     say("no trees around")
 else:
     mine(log)
+```
+
+The chest nearest to a farm, wherever the bot is:
+
+```python
+chest = find_nearest("chest", radius=16, around=memory["farm"])
 ```
 
 ## See also

@@ -111,16 +111,16 @@ public final class SenseApi {
 			return state == null ? PyNone.NONE : block(state, pos);
 		});
 		natives.register("find_nearest", call -> {
-			Object[] args = Args.bind("find_nearest", call, 1, "what", "radius");
-			return search(run, call, args[0], radius(args[1], 32, BlockScan.MAX_RADIUS), 1, true);
+			Object[] args = Args.bind("find_nearest", call, 1, "what", "radius", "around");
+			return search(run, call, args[0], radius(args[1], 32, BlockScan.MAX_RADIUS), 1, true, args[2]);
 		});
 		natives.register("scan", call -> {
-			Object[] args = Args.bind("scan", call, 1, "what", "radius", "limit");
+			Object[] args = Args.bind("scan", call, 1, "what", "radius", "limit", "around");
 			long limit = Args.absent(args[2]) ? 64 : Args.integer(args[2]);
 			if (limit < 0) {
 				throw new ScriptError("scan() limit must not be negative, not " + limit);
 			}
-			return search(run, call, args[0], radius(args[1], 16, BlockScan.MAX_RADIUS), (int) Math.min(limit, Integer.MAX_VALUE), false);
+			return search(run, call, args[0], radius(args[1], 16, BlockScan.MAX_RADIUS), (int) Math.min(limit, Integer.MAX_VALUE), false, args[3]);
 		});
 		natives.register("entities", 120, call -> {
 			Object[] args = Args.bind("entities", call, 0, "what", "radius");
@@ -267,10 +267,19 @@ public final class SenseApi {
 
 	/**
 	 * {@code scan} ({@code nearest} false: a list of positions) or {@code find_nearest} (a position or {@code None}):
-	 * at once when the tick's {@link #SCAN_BUDGET} allows, otherwise as an action that goes on over the next ticks.
+	 * around {@code around} (the bot when left out; an empty result in another dimension, #479), at once when the
+	 * tick's {@link #SCAN_BUDGET} allows, otherwise as an action that goes on over the next ticks.
 	 */
-	private static Object search(ScriptRun run, NativeCall call, Object what, int radius, int limit, boolean nearest) {
-		Search search = new Search(run, bot(run, call), radius, limit, Selector.parse(what).blocks(), nearest);
+	private static Object search(ScriptRun run, NativeCall call, Object what, int radius, int limit, boolean nearest,
+		@Nullable Object around) {
+		AntBot bot = bot(run, call);
+		Predicate<BlockState> blocks = Selector.parse(what).blocks();
+		Pos center = Args.absent(around) ? null : Pos.of(around);
+		if (run.elsewhere(center)) {
+			return nearest ? PyNone.NONE : new PyList();
+		}
+		BlockPos from = center == null ? bot.blockPosition() : blockPos(center);
+		Search search = new Search(run, bot, from, radius, limit, blocks, nearest);
 		if (search.tick()) {
 			return search.result();
 		}
@@ -288,13 +297,13 @@ public final class SenseApi {
 		/** Made anew each tick: it remembers chunks, which may unload between ticks. */
 		private LoadedBlocks loaded;
 
-		Search(ScriptRun run, AntBot bot, int radius, int limit, Predicate<BlockState> blocks, boolean nearest) {
+		Search(ScriptRun run, AntBot bot, BlockPos center, int radius, int limit, Predicate<BlockState> blocks, boolean nearest) {
 			this.run = run;
 			this.bot = bot;
 			this.blocks = blocks;
 			this.nearest = nearest;
 			this.loaded = new LoadedBlocks(bot.level());
-			this.scan = new BlockScan(EntityInfo.pos(bot.blockPosition()), radius, limit, this::matches);
+			this.scan = new BlockScan(EntityInfo.pos(center), radius, limit, this::matches);
 		}
 
 		private boolean matches(int x, int y, int z) {

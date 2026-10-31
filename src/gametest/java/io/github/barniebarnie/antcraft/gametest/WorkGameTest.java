@@ -202,14 +202,16 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("container", "container(h)"),
 		Map.entry("mineshaft", "mineshaft([0], near=h)"),
 		Map.entry("mineshaft_at", "mineshaft_at(h, [0])"),
-		Map.entry("ore_vein", "ore_vein(h)"));
+		Map.entry("ore_vein", "ore_vein(h)"),
+		Map.entry("find_nearest", "find_nearest('chest', around=h)"),
+		Map.entry("scan", "scan('chest', around=h)"));
 
 	/**
 	 * The bot natives and {@code Pos} methods that take no position, or take one on purpose from any dimension:
 	 * {@code set_home} sets the home in the position's dimension, and the {@code Pos} methods work on coordinates.
 	 */
 	private static final Set<String> TAKE_NO_POSITION = Set.of("pos", "say", "wait", "stop", "home", "home_dimension",
-		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "held", "find_nearest", "scan", "entities",
+		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "held", "entities",
 		"items_near", "deaths", "last_death", "colony", "time", "is_day", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
 		"drop_job", "health", "max_health", "attack", "needs", "cooks_in", "build_placement");
@@ -230,8 +232,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			source.append("print('").append(name).append("', ").append(call).append(")\n");
 			expected.add(name + " " + switch (name) {
 				case "reachable" -> "False";
-				case "block", "container", "mineshaft", "mineshaft_at" -> "None";
-				case "ore_vein" -> "[]";
+				case "block", "container", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
+				case "ore_vein", "scan" -> "[]";
 				default -> Result.WRONG_DIMENSION;
 			});
 		});

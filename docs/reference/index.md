@@ -35,8 +35,8 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | Builtin | Signature | Does |
 |---|---|---|
 | [`block`](world/block.md) | `block(pos)` | the [`Block`](types/block.md) at `pos`, or `None` where it is not loaded |
-| [`find_nearest`](world/find_nearest.md) | `find_nearest(what, radius=32)` | the nearest matching block's position, or `None` (may pause) |
-| [`scan`](world/scan.md) | `scan(what, radius=16, limit=64)` | the positions of matching blocks, nearest first (may pause) |
+| [`find_nearest`](world/find_nearest.md) | `find_nearest(what, radius=32, around=None)` | the nearest matching block's position (to the bot or `around`), or `None` (may pause) |
+| [`scan`](world/scan.md) | `scan(what, radius=16, limit=64, around=None)` | the positions of matching blocks, nearest first (to the bot or `around`) (may pause) |
 | [`entities`](world/entities.md) | `entities(what=None, radius=16)` | the [`Entity`](types/entity.md) values around, nearest first |
 | [`items_near`](world/items_near.md) | `items_near(item=None, radius=16)` | the dropped items around, nearest first |
 | [`time`](world/time.md) | `time()` | the time of day, 0 to 23999 |
