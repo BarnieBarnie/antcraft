@@ -64,6 +64,25 @@ class LitematicTest {
 		assertEquals(expected, blocks.blocks());
 	}
 
+	/** An export of schematic-architect itself (make_architect_fixture.py) reads back block for block, states and all. */
+	@Test
+	void readsASchematicArchitectExport() throws IOException {
+		BlueprintBlocks blocks = blocks(fixture("architect"));
+		assertEquals(new Vec3i(3, 2, 2), blocks.size());
+		BlockState planks = Blocks.OAK_PLANKS.defaultBlockState();
+		List<BlueprintSummary.Block> expected = new ArrayList<>();
+		for (int z = 0; z < 2; z++) {
+			for (int x = 0; x < 3; x++) {
+				expected.add(new BlueprintSummary.Block(new BlockPos(x, 0, z), planks));
+			}
+		}
+		expected.add(new BlueprintSummary.Block(new BlockPos(0, 1, 0),
+			Blocks.OAK_LOG.defaultBlockState().setValue(net.minecraft.world.level.block.RotatedPillarBlock.AXIS, Direction.Axis.X)));
+		expected.add(new BlueprintSummary.Block(new BlockPos(1, 1, 0),
+			Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.EAST)));
+		assertEquals(expected, blocks.blocks());
+	}
+
 	/** Two regions merge into one blueprint from their lowest corner; one has a negative size, so it runs back from its position. */
 	@Test
 	void mergesRegionsIncludingOneWithANegativeSize() throws IOException {
