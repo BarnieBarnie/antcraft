@@ -43,7 +43,7 @@ class BotNetworkingTest {
 	void thePayloadsRoundTrip() {
 		BotNetworking.BotEntry entry = new BotNetworking.BotEntry("Ant 1a2b", UUID.randomUUID(), new BlockPos(1, -60, 3),
 			"minecraft:overworld", "miner", "12 deep", "running");
-		BotNetworking.BotList list = new BotNetworking.BotList(List.of(entry), List.of("miner", "lib.trees"), Component.literal("Started"));
+		BotNetworking.BotList list = new BotNetworking.BotList(List.of(entry), List.of("miner", "lib.trees"), Component.literal("Started"), true);
 		assertEquals(list, roundTrip(BotNetworking.BotList.STREAM_CODEC, list));
 
 		for (BotNetworking.Action action : BotNetworking.Action.values()) {
@@ -61,6 +61,7 @@ class BotNetworkingTest {
 		assertTrue(ItemStack.matches(status.inventory().get(1), read.inventory().get(1)), read.inventory().toString());
 
 		assertEquals(new BotNetworking.RequestBots(), roundTrip(BotNetworking.RequestBots.STREAM_CODEC, new BotNetworking.RequestBots()));
+		assertEquals(new BotNetworking.NewScript("lib.farm"), roundTrip(BotNetworking.NewScript.STREAM_CODEC, new BotNetworking.NewScript("lib.farm")));
 	}
 
 	@Test
@@ -69,7 +70,7 @@ class BotNetworkingTest {
 		BotNetworking.BotEntry entry = new BotNetworking.BotEntry("€".repeat(BotNetworking.MAX_TEXT), UUID.randomUUID(), BlockPos.ZERO,
 			"€".repeat(BotNetworking.MAX_TEXT), "€".repeat(ScriptEdits.MAX_NAME_LENGTH), "€".repeat(BotNetworking.MAX_TEXT), "€".repeat(BotNetworking.MAX_TEXT));
 		BotNetworking.BotList largest = new BotNetworking.BotList(Collections.nCopies(BotNetworking.MAX_BOTS, entry),
-			Collections.nCopies(ScriptNetworking.MAX_NAMES, "€".repeat(ScriptEdits.MAX_NAME_LENGTH)), Component.literal("€".repeat(BotNetworking.MAX_MESSAGE)));
+			Collections.nCopies(ScriptNetworking.MAX_NAMES, "€".repeat(ScriptEdits.MAX_NAME_LENGTH)), Component.literal("€".repeat(BotNetworking.MAX_MESSAGE)), true);
 		RegistryFriendlyByteBuf buf = new RegistryFriendlyByteBuf(Unpooled.buffer(), RegistryAccess.EMPTY);
 		BotNetworking.BotList.STREAM_CODEC.encode(buf, largest);
 		assertTrue(buf.readableBytes() < MAX_PAYLOAD_BYTES, buf.readableBytes() + " bytes");

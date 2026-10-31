@@ -65,6 +65,7 @@ import org.jspecify.annotations.Nullable;
  * /antcraft profile start|stop|report   (server tick time, per part of the bots' work)
  * /antcraft script list   (also any player)
  * /antcraft script edit &lt;script&gt;   (also any player; opens the script editor, which only operators may save from)
+ * /antcraft script new &lt;script&gt;   (opens the script editor on a new script; any player may run it, only operators are let through)
  * /antcraft script reload
  * /antcraft bot [bots] run &lt;script&gt; [args]|stop|remove|join &lt;core pos&gt; [dimension]|leave|status|log [n] [level]|edit   (defaults to the nearest bot; also a
  *     bot's owner, on their own bots, within the limits of {@link PlayerLimits})
@@ -104,7 +105,7 @@ public final class AntCraftCommands {
 
 	private static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
 		// Every subcommand is for operators but trust (with trust list) and untrust, which a colony's owner may use too,
-		// script list and edit, and bot, which a bot's owner may use on their own bots (checked when run).
+		// script list, edit and new (which checks itself), and bot, which a bot's owner may use on their own bots (checked when run).
 		dispatcher.register(Commands.literal("antcraft")
 			.requires(AntCraftCommands::operatorOrPlayer)
 			.then(Commands.literal("status").requires(OPERATOR).executes(AntCraftCommands::status))
@@ -116,6 +117,8 @@ public final class AntCraftCommands {
 				.then(Commands.literal("list").executes(ctx -> listScripts(ctx.getSource())))
 				.then(Commands.literal("edit").then(scriptName(Commands.argument("script", StringArgumentType.string()))
 					.executes(ctx -> editScript(ctx.getSource(), StringArgumentType.getString(ctx, "script"), List.of()))))
+				.then(Commands.literal("new").then(Commands.argument("script", StringArgumentType.string())
+					.executes(ctx -> newScript(ctx.getSource(), StringArgumentType.getString(ctx, "script")))))
 				.then(Commands.literal("reload").requires(OPERATOR).executes(ctx -> reloadScripts(ctx.getSource()))))
 			// The bots argument is optional: without it, the nearest bot. Literals win over the selector, so a bot cannot be named "run".
 			.then(botCommands(Commands.literal("bot").requires(AntCraftCommands::operatorOrPlayer), ctx -> nearestBot(ctx.getSource()))
@@ -475,6 +478,50 @@ public final class AntCraftCommands {
 		ServerPlayNetworking.send(player, new ScriptNetworking.OpenScriptEditor(named, text, log, operator,
 			ScriptNetworking.editorNames(ServerScripts.library())));
 		return 1;
+	}
+
+	/** The source a new script starts from: a comment with its name and a loop that waits. */
+	public static String newScriptTemplate(String name) {
+		return "# " + name + "\nwhile True:\n    wait(20)\n";
+	}
+
+	/** Opens the script editor on {@link #newScriptTemplate} under the new name {@code name}, as {@link #newScriptEditor} allows. */
+	private static int newScript(CommandSourceStack source, String name) throws CommandSyntaxException {
+		ServerPlayer player = source.getPlayerOrException();
+		ScriptNetworking.OpenScriptEditor editor = newScriptEditor(source, name);
+		if (editor == null) {
+			return 0;
+		}
+		if (!ServerPlayNetworking.canSend(player, ScriptNetworking.OpenScriptEditor.TYPE)) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.no_client"));
+			return 0;
+		}
+		ServerPlayNetworking.send(player, editor);
+		return 1;
+	}
+
+	/**
+	 * The editor on a new script {@code name} (docs/features/scripts.md, Editing in game), or null after telling
+	 * {@code source} why not: only operators may, as only they may save; the name must be one {@link ScriptEdits#check}
+	 * takes and that the library does not have yet.
+	 */
+	public static ScriptNetworking.@Nullable OpenScriptEditor newScriptEditor(CommandSourceStack source, String name) {
+		if (!OPERATOR.test(source)) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.new.not_operator"));
+			return null;
+		}
+		String template = newScriptTemplate(name);
+		try {
+			ScriptEdits.check(ServerScripts.worldFolder(source.getServer()), name, template);
+		} catch (IllegalArgumentException e) {
+			source.sendFailure(Component.literal(e.getMessage()));
+			return null;
+		}
+		if (ServerScripts.library().get(name).isPresent()) {
+			source.sendFailure(Component.translatable("commands.antcraft.script.new.exists", name));
+			return null;
+		}
+		return new ScriptNetworking.OpenScriptEditor(name, template, List.of(), true, ScriptNetworking.editorNames(ServerScripts.library()));
 	}
 
 	/** Opens the bots screen on the player's client with the bots they may control (docs/features/scripts.md, The bots screen). */

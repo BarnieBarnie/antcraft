@@ -1,12 +1,13 @@
 # Commands
 
-**Commands** (operators only, but any player may use `script list` and `script edit` (only operators may save from the editor), any player may use `bots`, a bot's owner may use `bot run`, `stop`, `remove`, `join`, `leave`, `status`, `log` and `edit` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
+**Commands** (operators only, but any player may use `script list` and `script edit` (only operators may save from the editor; `script new` tells a player who is not one so), any player may use `bots`, a bot's owner may use `bot run`, `stop`, `remove`, `join`, `leave`, `status`, `log` and `edit` on their own bots within the [limits of players' scripts](scripts.md#players-scripts), and a colony's owner may use `colony trust`, `colony trust list` and `colony untrust` on it):
 
 | Command | Effect |
 |---------|--------|
 | `/antcraft status` | Shows whether bots are enabled, and the bot count |
 | `/antcraft script list` | Lists the scripts found in `config/antcraft/scripts/`, `<world>/antcraft/scripts/` and data packs, each with where it came from (`config`, `world` or `data pack`) and the error of each that does not compile. A script is named by its path without `.py`, with dots for folders (`lib/trees.py` is `lib.trees`), and a data pack script by its id with dots (`mypack:lib/trees` is `mypack.lib.trees`); the world folder wins on a name clash, and either folder over a data pack (see [Script folders](scripts.md#script-folders)) |
 | `/antcraft script edit <script>` | Opens the script in the in-game editor. Only operators may save; the server checks the save and writes it to `<world>/antcraft/scripts/`, then reloads as `script reload` does (see [Editing in game](scripts.md#editing-in-game)) |
+| `/antcraft script new <script>` | Opens the in-game editor on a short template under a new name, to write and save a new script; operators only. A name the library has already is refused (use `script edit`), as is a name a save would refuse (see [Editing in game](scripts.md#editing-in-game)). The bots screen's **New script** button does the same |
 | `/antcraft script reload` | Loads the script folders again, with the data pack scripts of the last `/reload`; a bot running a script whose file changed starts the new version from the top (one that no longer compiles stops, with the error in its log and its owner's chat) |
 | `/antcraft bot [bots] run <script> [args]` | Starts a script on bots (without `[bots]`, the nearest bot within 64 blocks), replacing what they ran; `[args]` are given to it as the list `ARGS`. A player who runs it becomes the bots' owner |
 | `/antcraft bot [bots] stop` | Stops the bots' scripts (formerly `/antcraft stop`); they then run `idle.py`, walking home and waiting there |
@@ -34,6 +35,7 @@ Commands (on a server, `script reload`, `core script` and saving from the editor
 ```
 /antcraft script list                       scripts found, with compile errors
 /antcraft script edit <script>              view a script in game; operators may edit and save it
+/antcraft script new <script>               start a new script in the editor (operators)
 /antcraft script reload                     reload changed files; a bot whose script or imported module changed restarts it
 /antcraft bot [bots] run <script> [args]    start a script on a bot (args are given to it as the list ARGS)
 /antcraft bot [bots] stop

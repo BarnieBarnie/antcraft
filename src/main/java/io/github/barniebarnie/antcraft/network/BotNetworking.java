@@ -36,8 +36,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Payloads of the bots screen (docs/features/scripts.md, The bots screen): the client asks for the bots its player may
- * control ({@link RequestBots}, or {@code /antcraft bots}), and acts on one of them ({@link BotAction}). The server
- * treats both as untrusted: an action goes through the same checks as the {@code bot} command it stands for.
+ * control ({@link RequestBots}, or {@code /antcraft bots}), acts on one of them ({@link BotAction}) and starts a new
+ * script ({@link NewScript}). The server treats all of them as untrusted: each goes through the same checks as the
+ * command it stands for.
  */
 public final class BotNetworking {
 	/** The most bots {@link BotList} carries; operators on a busy server see the first, by name. */
@@ -84,14 +85,16 @@ public final class BotNetworking {
 
 	/**
 	 * Opens the bots screen, or updates it: the {@code bots} the player may control, the library's {@code scripts} to
-	 * pick from, and the answer to the last action ({@code message}, empty for none).
+	 * pick from, the answer to the last action ({@code message}, empty for none), and whether the player may write
+	 * scripts ({@code mayEdit}: operators), which shows the New script button.
 	 */
-	public record BotList(List<BotEntry> bots, List<String> scripts, Component message) implements CustomPacketPayload {
+	public record BotList(List<BotEntry> bots, List<String> scripts, Component message, boolean mayEdit) implements CustomPacketPayload {
 		public static final Type<BotList> TYPE = new Type<>(AntCraft.id("bot_list"));
 		public static final StreamCodec<RegistryFriendlyByteBuf, BotList> STREAM_CODEC = StreamCodec.composite(
 			BotEntry.STREAM_CODEC.apply(ByteBufCodecs.list(MAX_BOTS)), BotList::bots,
 			NAME.apply(ByteBufCodecs.list(ScriptNetworking.MAX_NAMES)), BotList::scripts,
 			ComponentSerialization.STREAM_CODEC, BotList::message,
+			ByteBufCodecs.BOOL, BotList::mayEdit,
 			BotList::new);
 
 		public BotList {
@@ -101,6 +104,19 @@ public final class BotNetworking {
 
 		@Override
 		public Type<BotList> type() {
+			return TYPE;
+		}
+	}
+
+	/** The client asks to start a new script {@code name} in the editor, standing for {@code script new}. */
+	public record NewScript(String name) implements CustomPacketPayload {
+		public static final Type<NewScript> TYPE = new Type<>(AntCraft.id("new_script"));
+		public static final StreamCodec<RegistryFriendlyByteBuf, NewScript> STREAM_CODEC = StreamCodec.composite(
+			NAME, NewScript::name,
+			NewScript::new).cast();
+
+		@Override
+		public Type<NewScript> type() {
 			return TYPE;
 		}
 	}
@@ -154,6 +170,9 @@ public final class BotNetworking {
 		PayloadTypeRegistry.clientboundPlay().register(BotStatus.TYPE, BotStatus.STREAM_CODEC);
 		ServerPlayNetworking.registerGlobalReceiver(RequestBots.TYPE, (request, context) ->
 			context.responseSender().sendPacket(list(context.player(), Component.empty())));
+		PayloadTypeRegistry.serverboundPlay().register(NewScript.TYPE, NewScript.STREAM_CODEC);
+		ServerPlayNetworking.registerGlobalReceiver(NewScript.TYPE, (request, context) ->
+			context.responseSender().sendPacket(newScript(context.player(), request)));
 		ServerPlayNetworking.registerGlobalReceiver(BotAction.TYPE, (request, context) -> {
 			CustomPacketPayload reply = handle(context.player(), request);
 			if (reply != null) {
@@ -184,7 +203,18 @@ public final class BotNetworking {
 		List<String> scripts = ServerScripts.library().scripts().stream().map(ScriptLibrary.Script::name)
 			.filter(name -> name.length() <= ScriptEdits.MAX_NAME_LENGTH).sorted().limit(ScriptNetworking.MAX_NAMES).toList();
 		return new BotList(bots.stream().sorted(Comparator.comparing(BotEntry::name)).limit(MAX_BOTS).toList(), scripts,
-			message.getString().length() <= MAX_MESSAGE ? message : Component.literal(cap(message.getString(), MAX_MESSAGE)).withStyle(message.getStyle()));
+			message.getString().length() <= MAX_MESSAGE ? message : Component.literal(cap(message.getString(), MAX_MESSAGE)).withStyle(message.getStyle()),
+			AntCraftCommands.isOperator(player));
+	}
+
+	/**
+	 * Opens the editor on a new script, as {@code script new} does when {@code player} runs it: the editor, or the bot
+	 * list again with why not.
+	 */
+	public static CustomPacketPayload newScript(ServerPlayer player, NewScript request) {
+		List<Component> said = new ArrayList<>();
+		ScriptNetworking.OpenScriptEditor editor = AntCraftCommands.newScriptEditor(player.createCommandSourceStack().withSource(recorder(said)), request.name());
+		return editor != null ? editor : list(player, said.isEmpty() ? Component.empty() : said.getLast());
 	}
 
 	/**

@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.colony.Colony;
 import io.github.barniebarnie.antcraft.colony.ColonyManager;
+import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.SayBubble;
@@ -595,6 +596,55 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			&& status.inventory().getFirst().getCount() == 12, "inventory " + status.inventory());
 		helper.assertTrue(BotNetworking.handle(player, new BotNetworking.BotAction(other.getUUID(), BotNetworking.Action.STATUS, "", ""))
 			instanceof BotNetworking.BotList, "another player's bot's status was sent");
+		helper.succeed();
+	}
+
+	/**
+	 * {@code script new} and the bots screen's New script button (docs/features/scripts.md, Editing in game) open the editor
+	 * on a short template under a new name, for operators only; a name the library has and a name that is not one are
+	 * refused. Saving it from the editor adds it to the library.
+	 */
+	@GameTest(maxTicks = 10)
+	public void aNewScriptOpensTheEditorOnATemplateForOperators(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.RecordingPlayer player = BotScripts.owner(helper, bot);
+		NameAndId profile = new NameAndId(player.getGameProfile());
+		GameTests.onEnd(helper, () -> helper.getLevel().getServer().getPlayerList().deop(profile));
+		String existing = BotScripts.libraryScript(helper, "existing_", "wait(1)\n");
+		String name = "new_" + UUID.randomUUID().toString().substring(0, 8);
+		Path file = ServerScripts.worldFolder(helper.getLevel().getServer()).resolve(name + ".py");
+		GameTests.onEnd(helper, () -> {
+			try {
+				Files.deleteIfExists(file);
+			} catch (IOException e) {
+				throw new UncheckedIOException(e);
+			}
+		});
+
+		List<String> notOperator = BotScripts.commandAsPlayer(helper, player, "antcraft script new " + name);
+		helper.assertTrue(notOperator.equals(List.of("Only operators may write new scripts")),
+			"a player who is not an operator was answered " + notOperator);
+		String button = answer(BotNetworking.newScript(player, new BotNetworking.NewScript(name)));
+		helper.assertTrue(button.equals("Only operators may write new scripts"), "the button answered a player who is not an operator with " + button);
+		helper.assertFalse(BotNetworking.list(player, Component.empty()).mayEdit(), "the bots screen shows New script to a player who is not an operator");
+
+		helper.getLevel().getServer().getPlayerList().op(profile, Optional.of(LevelBasedPermissionSet.GAMEMASTER), Optional.of(false));
+		helper.assertTrue(BotNetworking.list(player, Component.empty()).mayEdit(), "the bots screen hides New script from an operator");
+		List<String> taken = BotScripts.command(helper, player, "antcraft script new " + existing);
+		helper.assertTrue(taken.equals(List.of("There is a script named " + existing + " already; open it with /antcraft script edit")), "an existing name was answered " + taken);
+		String bad = answer(BotNetworking.newScript(player, new BotNetworking.NewScript("../evil")));
+		helper.assertTrue(bad.equals("not a script name: ../evil"), "a bad name was answered " + bad);
+
+		if (!(BotNetworking.newScript(player, new BotNetworking.NewScript(name)) instanceof ScriptNetworking.OpenScriptEditor editor)) {
+			helper.fail("New script did not open the editor");
+			return;
+		}
+		helper.assertTrue(editor.name().equals(name) && editor.mayEdit() && editor.log().isEmpty()
+			&& editor.source().equals(AntCraftCommands.newScriptTemplate(name)), "the editor opened as " + editor);
+		ScriptNetworking.ScriptSaved saved = ScriptNetworking.save(player, new ScriptNetworking.SaveScript(name, editor.source()));
+		helper.assertTrue(saved.saved(), "save answered " + saved);
+		List<String> listed = BotScripts.command(helper, "antcraft script list");
+		helper.assertTrue(listed.stream().anyMatch(line -> line.startsWith(name + " (")), "script list " + listed);
 		helper.succeed();
 	}
 

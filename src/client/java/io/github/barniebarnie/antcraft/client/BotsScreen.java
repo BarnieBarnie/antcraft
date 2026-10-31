@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.barniebarnie.antcraft.network.BotNetworking;
+import io.github.barniebarnie.antcraft.script.ScriptEdits;
 import io.github.barniebarnie.antcraft.script.editor.Completions;
 import io.github.barniebarnie.antcraft.script.editor.Page;
 import java.util.ArrayList;
@@ -23,8 +24,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Lists the bots the server says the player may control ({@link BotNetworking.BotList}), a page at a time, each with
  * its script and state and buttons to change its script ({@link PickScript}), see its status ({@link StatusView}), stop
- * it or open its script in the editor; every action is a {@link BotNetworking.BotAction} the server checks as the
- * {@code bot} command it stands for (docs/features/scripts.md, The bots screen).
+ * it or open its script in the editor, and for operators a New script button ({@link NameScript}); every action is a
+ * {@link BotNetworking.BotAction} the server checks as the {@code bot} command it stands for (docs/features/scripts.md, The bots screen).
  */
 public class BotsScreen extends Screen {
 	private static final int MARGIN = 10;
@@ -65,7 +66,7 @@ public class BotsScreen extends Screen {
 		Minecraft client = Minecraft.getInstance();
 		Screen open = client.gui.screen();
 		BotsScreen screen = open instanceof BotsScreen bots ? bots : open instanceof PickScript pick ? pick.parent
-			: open instanceof StatusView view ? view.parent : null;
+			: open instanceof StatusView view ? view.parent : open instanceof NameScript name ? name.parent : null;
 		if (screen == null) {
 			client.gui.setScreen(new BotsScreen(list));
 			return;
@@ -108,7 +109,10 @@ public class BotsScreen extends Screen {
 		this.addRenderableWidget(Button.builder(Component.literal("<"), b -> this.turn(-1)).bounds(MARGIN, y, 20, BAR_HEIGHT).build()).active = page.index() > 0;
 		this.addRenderableWidget(Button.builder(Component.literal(">"), b -> this.turn(1)).bounds(MARGIN + 90, y, 20, BAR_HEIGHT).build()).active =
 			page.index() < page.count() - 1;
-		// The New script button of #476 goes here, left of Refresh.
+		if (this.list.mayEdit()) {
+			this.addRenderableWidget(Button.builder(Component.translatable("screen.antcraft.bots.new"),
+				b -> this.minecraft.gui.setScreen(new NameScript(this))).bounds(this.width - MARGIN - 248, y, 80, BAR_HEIGHT).build());
+		}
 		this.addRenderableWidget(Button.builder(Component.translatable("screen.antcraft.bots.refresh"),
 			b -> ClientPlayNetworking.send(new BotNetworking.RequestBots())).bounds(this.width - MARGIN - 164, y, 80, BAR_HEIGHT).build());
 		this.addRenderableWidget(Button.builder(Component.translatable("screen.antcraft.script_editor.close"), b -> this.onClose())
@@ -241,6 +245,67 @@ public class BotsScreen extends Screen {
 			if (this.found().isEmpty()) {
 				graphics.text(this.font, Component.translatable("screen.antcraft.bots.no_match"), MARGIN, TOP + 2 * (BUTTON_HEIGHT + 4), GREY);
 			}
+		}
+	}
+
+	/**
+	 * Asks for the name of a new script; Create (or Enter) asks the server to open the editor on it
+	 * ({@link BotNetworking.NewScript}), which answers with the editor or, refused, the bot list with why.
+	 */
+	static class NameScript extends Screen {
+		private final BotsScreen parent;
+		private EditBox name;
+
+		NameScript(BotsScreen parent) {
+			super(Component.translatable("screen.antcraft.bots.new"));
+			this.parent = parent;
+		}
+
+		@Override
+		protected void init() {
+			this.name = this.addRenderableWidget(new EditBox(this.font, MARGIN, TOP, Math.min(300, this.width - 2 * MARGIN), BUTTON_HEIGHT,
+				Component.translatable("screen.antcraft.bots.new.name")));
+			this.name.setHint(Component.translatable("screen.antcraft.bots.new.name"));
+			this.name.setMaxLength(ScriptEdits.MAX_NAME_LENGTH);
+			int y = this.height - MARGIN - BAR_HEIGHT;
+			this.addRenderableWidget(Button.builder(Component.translatable("screen.antcraft.bots.new.create"), b -> this.create())
+				.bounds(this.width - MARGIN - 164, y, 80, BAR_HEIGHT).build());
+			this.addRenderableWidget(Button.builder(Component.translatable("screen.antcraft.bots.cancel"), b -> this.onClose())
+				.bounds(this.width - MARGIN - 80, y, 80, BAR_HEIGHT).build());
+			this.setInitialFocus(this.name);
+		}
+
+		private void create() {
+			if (!this.name.getValue().isBlank()) {
+				ClientPlayNetworking.send(new BotNetworking.NewScript(this.name.getValue().trim()));
+			}
+		}
+
+		@Override
+		public boolean keyPressed(KeyEvent event) {
+			if (event.isConfirmation()) {
+				this.create();
+				return true;
+			}
+			return super.keyPressed(event);
+		}
+
+		@Override
+		public void onClose() {
+			this.minecraft.gui.setScreen(this.parent);
+		}
+
+		@Override
+		public boolean isPauseScreen() {
+			return false;
+		}
+
+		@Override
+		public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+			super.extractRenderState(graphics, mouseX, mouseY, partialTick);
+			graphics.text(this.font, this.title, MARGIN, 8, WHITE);
+			// Why the server refused the last name, which receive() put in the parent's list.
+			graphics.text(this.font, this.parent.list.message(), MARGIN, TOP + BUTTON_HEIGHT + 6, GREY);
 		}
 	}
 
