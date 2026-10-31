@@ -22,6 +22,32 @@ def box(a, b):
     return ps
 
 
+def bounds(positions, margin=0):
+    """The low and high corner (low, high) of the box around positions, grown by margin on every side; None for no
+    positions."""
+    if not positions:
+        return None
+    ps = [Pos(p) for p in positions]
+    low = Pos(min([p.x for p in ps]) - margin, min([p.y for p in ps]) - margin, min([p.z for p in ps]) - margin)
+    high = Pos(max([p.x for p in ps]) + margin, max([p.y for p in ps]) + margin, max([p.z for p in ps]) + margin)
+    return (low, high)
+
+
+def inside(p, low, high):
+    """Whether p is in the box with corners low and high (both in it)."""
+    p = Pos(p)
+    low = Pos(low)
+    high = Pos(high)
+    return low.x <= p.x <= high.x and low.y <= p.y <= high.y and low.z <= p.z <= high.z
+
+
+def centre(low, high):
+    """The block in the middle of the box with corners low and high, rounded down."""
+    low = Pos(low)
+    high = Pos(high)
+    return Pos((low.x + high.x) // 2, (low.y + high.y) // 2, (low.z + high.z) // 2)
+
+
 def clear(a, b):
     """Mines every block of the cuboid but air and fluids, top down; the drops go into the bot's inventory. Gives
     result(): ok, or the reason of the mine that failed with at, where."""

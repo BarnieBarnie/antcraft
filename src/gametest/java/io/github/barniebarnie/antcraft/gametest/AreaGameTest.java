@@ -57,6 +57,21 @@ public class AreaGameTest implements CustomTestMethodInvoker {
 			List.of("[(1, 1, 1), (2, 1, 1), (1, 1, 2), (2, 1, 2), (1, 2, 1), (2, 2, 1), (1, 2, 2), (2, 2, 2)]"));
 	}
 
+	/** bounds around known positions, with and without a margin, None for none; inside and centre of that box. */
+	@GameTest(maxTicks = 20)
+	public void boundsInsideAndCentreOfKnownPositions(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		expect(helper, bot, header(helper)
+				+ "ps = [o + (3, 1, 2), o + (1, 2, 5), o + (2, 1, 4)]\n"
+				+ "lo, hi = lib.area.bounds(ps)\nprint(rel(lo), rel(hi))\n"
+				+ "lo, hi = lib.area.bounds(ps, 1)\nprint(rel(lo), rel(hi))\n"
+				+ "print(lib.area.bounds([]))\n"
+				+ "print(lib.area.inside(o + (0, 0, 1), lo, hi), lib.area.inside(o + (4, 3, 6), lo, hi), "
+				+ "lib.area.inside(o + (5, 1, 2), lo, hi))\n"
+				+ "print(rel(lib.area.centre(lo, hi)))\n",
+			List.of("(1, 1, 2) (3, 2, 5)", "(0, 0, 1) (4, 3, 6)", "None", "True True False", "(2, 1, 3)"));
+	}
+
 	/** A 3x3x3 of dirt is mined away, and the bot carries the 27 dirt. */
 	@GameTest(maxTicks = 1000)
 	public void clearEmptiesACubeOfDirtAndTheBotCarriesIt(GameTestHelper helper) {

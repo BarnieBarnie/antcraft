@@ -1,6 +1,7 @@
 # `lib/area`
 
-Clearing or filling a cuboid in one call, instead of loops over x, y and z. A module of the mod's default library: `import lib.area`, then `lib.area.clear(a, b)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/area.py`, written with [`mine`](../../blocks/mine.md), [`place`](../../blocks/place.md) and [`lib/retry`](retry.md).
+Clearing or filling a cuboid in one call, instead of loops over x, y and z, and the box around blocks found. A module of the mod's default library: `import lib.area`, then `lib.area.clear(a, b)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/area.py`, written with [`mine`](../../blocks/mine.md), [`place`](../../blocks/place.md) and [`lib/retry`](retry.md).
+
 
 The corners `a` and `b` are [`Pos`](../../types/pos.md) values or tuples, in any order; both are in the cuboid. Its positions are in the bot's dimension.
 
@@ -16,6 +17,33 @@ import lib.area
 for p in lib.area.box((0, 64, 0), (2, 64, 2)):
     print(p, block(p).id)
 ```
+
+## `bounds(positions, margin=0)`
+
+The box around `positions` (a list of `Pos` values or tuples), grown by `margin` blocks on every side, as `(low, high)`: the corner with the lowest x, y and z and the one with the highest. `None` for an empty list.
+
+- **Pauses** no.
+
+```python
+import lib.area
+
+found = [p for p in lib.area.box(pos() - (8, 2, 8), pos() + (8, 2, 8)) if block(p).id == "minecraft:wheat"]
+b = lib.area.bounds(found, 1)
+if b is not None:
+    low, high = b
+```
+
+## `inside(p, low, high)`
+
+Whether `p` is in the box with corners `low` and `high`, both in it. `low` must be the low corner, as `bounds` gives.
+
+- **Pauses** no.
+
+## `centre(low, high)`
+
+The `Pos` in the middle of the box, each coordinate rounded down.
+
+- **Pauses** no.
 
 ## `clear(a, b)`
 
