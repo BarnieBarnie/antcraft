@@ -9,6 +9,7 @@ import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import net.fabricmc.api.ClientModInitializer;
+import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientChunkEvents;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
@@ -46,5 +47,9 @@ public class AntCraftClient implements ClientModInitializer {
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> ClientBlueprints.set(List.of()));
 		ClientPlayNetworking.registerGlobalReceiver(ScriptNetworking.OpenScriptEditor.TYPE, (script, context) -> ScriptEditorScreen.open(script));
 		ClientPlayNetworking.registerGlobalReceiver(ScriptNetworking.ScriptSaved.TYPE, (reply, context) -> ScriptEditorScreen.saved(reply));
+		// Litematica is optional: its classes are only touched with it installed.
+		if (FabricLoader.getInstance().isModLoaded("litematica")) {
+			LitematicaPlacements.register();
+		}
 	}
 }

@@ -2,7 +2,7 @@
 
 ## Install
 
-AntCraft targets Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API. Put the AntCraft jar (built with `./gradlew build`, in `build/libs/`) and Fabric API into the `mods` folder of the server and of every player's client: the mod must be installed on both (see [Server admins](features/server-admins.md)). On a dedicated server, bots stay off until the server owner sets `enableOnDedicatedServer = true` (see [Config](features/config.md)).
+AntCraft targets Minecraft 26.3 with Fabric Loader 0.19.5 and Fabric API. Put the AntCraft jar (built with `./gradlew build`, in `build/libs/`) and Fabric API into the `mods` folder of the server and of every player's client: the mod must be installed on both (see [Server admins](features/server-admins.md)). [Litematica](https://modrinth.com/mod/litematica) is optional: with it on your client, bots can build your Litematica placements (see [Blueprints](features/blueprints.md)). On a dedicated server, bots stay off until the server owner sets `enableOnDedicatedServer = true` (see [Config](features/config.md)).
 
 ## First bot
 

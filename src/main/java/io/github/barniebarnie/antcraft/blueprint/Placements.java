@@ -142,7 +142,7 @@ public final class Placements {
 		return Component.translatable("message.antcraft.placement.received", name);
 	}
 
-	private static Component refused(String name, String why) {
+	static Component refused(String name, String why) {
 		return Component.translatable("message.antcraft.placement.refused", name, why);
 	}
 
