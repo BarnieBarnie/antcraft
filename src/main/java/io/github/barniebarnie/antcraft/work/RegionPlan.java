@@ -11,6 +11,7 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
@@ -81,7 +82,7 @@ public final class RegionPlan {
 	 * A plan that builds a structure template (a structure block's {@code .nbt}) mirrored by
 	 * {@code mirror}, then turned by {@code rotation}, as a structure block places it, with the lowest corner of the turned box at {@code at}, batched like
 	 * {@link #copy}. A template with several palettes (block variants, like vanilla shipwrecks) is
-	 * built from palette {@code palette}, which must be below {@link #paletteCount}. Structure void
+	 * built from palette {@code palette}, which must be below {@link #paletteCount}. Structure void, left out of the file or saved in it,
 	 * is left as it is; entities are skipped. Block entity data is not in the plan: {@link #blockEntities} gives it.
 	 */
 	public static Optional<BuildPlan> load(StructureTemplate template, BlockPos at, Mirror mirror, Rotation rotation, int palette) {
@@ -91,6 +92,10 @@ public final class RegionPlan {
 		}
 		Map<BlockPos, BlockState> blocks = new HashMap<>();
 		for (StructureTemplate.StructureBlockInfo block : template.palettes.get(palette).blocks()) {
+			// Structure void, saved or not, keeps what stands there (docs/features/blueprints.md, Structure void).
+			if (block.state().is(Blocks.STRUCTURE_VOID)) {
+				continue;
+			}
 			blocks.put(turn(block.pos(), mirror, rotation), block.state().mirror(mirror).rotate(rotation));
 		}
 		return copy(blocks::get, turn(BlockPos.ZERO, mirror, rotation),

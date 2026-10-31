@@ -134,3 +134,12 @@ write('../../../gametest/resources/data/antcraft-gametest/blueprint/imported_sig
     ('Main', region((0, 0, 0), (2, 2, 1), [state('minecraft:air'), state('minecraft:cobblestone'), CHEST, SIGN], [1, 2, 3, 0],
         [chest(1, 0, 0, 'Loot', 'minecraft:diamond'), sign(0, 1, 0, 'Hello')])),
 ])
+
+# void: one 3x1x1 region: structure void, air, stone. Structure void keeps what stands there; air clears it.
+VOID = [state('minecraft:air'), state('minecraft:structure_void'), state('minecraft:stone')]
+write('void.litematic', 'Structure void', [('Main', region((0, 0, 0), (3, 1, 1), VOID, [1, 0, 2]))])
+
+# The game tests' kept_void: structure void, then air, so building it clears the second block and keeps the first.
+write('../../../gametest/resources/data/antcraft-gametest/blueprint/kept_void.litematic', 'Kept void', [
+    ('Main', region((0, 0, 0), (2, 1, 1), VOID[:2], [1, 0])),
+])

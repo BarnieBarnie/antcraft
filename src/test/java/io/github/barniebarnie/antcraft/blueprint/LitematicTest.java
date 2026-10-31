@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.blueprint;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import io.github.barniebarnie.antcraft.work.BuildPlan;
 import io.github.barniebarnie.antcraft.work.RegionPlan;
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,6 +20,7 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
@@ -108,6 +110,20 @@ class LitematicTest {
 		assertFalse(chest.contains("Items"), chest::toString);
 		CompoundTag sign = data.get(new BlockPos(2, 1, 0));
 		assertEquals("Hello", sign.getCompoundOrEmpty("front_text").getListOrEmpty("messages").getStringOr(0, ""), sign::toString);
+	}
+
+	/**
+	 * Structure void keeps what stands there: the plan neither places nor clears it, and the ghost and materials leave it
+	 * out; air is still cleared (docs/features/blueprints.md, Structure void).
+	 */
+	@Test
+	void structureVoidIsNeitherPlacedNorCleared() throws IOException {
+		CompoundTag schematic = fixture("void");
+		assertEquals(List.of(BuildPlan.Step.clear(new BlockPos(1, 0, 0)), new BuildPlan.Step(new BlockPos(2, 0, 0), Blocks.STONE.defaultBlockState())),
+			RegionPlan.load(Litematic.template(schematic), BlockPos.ZERO, Mirror.NONE, Rotation.NONE, 0).orElseThrow().steps());
+		BlueprintBlocks blocks = blocks(schematic);
+		assertEquals(List.of(new BlueprintSummary.Block(new BlockPos(2, 0, 0), Blocks.STONE.defaultBlockState())), blocks.blocks());
+		assertEquals(Map.of(Items.STONE, 1), BlueprintSummary.materials(blocks.blocks()));
 	}
 
 	/** The blueprint of a schematic builds itself (its structure is its own id) and is named by the schematic's name. */

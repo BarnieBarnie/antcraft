@@ -12,6 +12,7 @@ import net.minecraft.network.VarLong;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 
@@ -19,7 +20,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
  * The blocks of a blueprint's structure, which a client asks for when it previews the blueprint
  * ({@link io.github.barniebarnie.antcraft.network.BlueprintNetworking.BlueprintBlocksRequest}) rather than getting those of
  * every blueprint with the list. The blocks are the structure's own, of the palette the blueprint builds, relative to its origin, unturned, without
- * air and inside its size, kept in layer order (by y, then z, then x); turn them with
+ * air or structure void and inside its size, kept in layer order (by y, then z, then x); turn them with
  * {@link io.github.barniebarnie.antcraft.work.RegionPlan#placed} and {@link BlockState#mirror}/{@link BlockState#rotate}
  * as a placement does.
  *
@@ -96,7 +97,7 @@ public record BlueprintBlocks(Identifier id, Vec3i size, List<BlueprintSummary.B
 		Vec3i size = template.map(StructureTemplate::getSize).orElse(Vec3i.ZERO);
 		List<BlueprintSummary.Block> blocks = template.filter(structure -> palette >= 0 && palette < structure.palettes.size())
 			.map(structure -> structure.palettes.get(palette).blocks().stream()
-				.filter(info -> !info.state().isAir())
+				.filter(info -> !info.state().isAir() && !info.state().is(Blocks.STRUCTURE_VOID))
 				.map(info -> new BlueprintSummary.Block(info.pos(), info.state()))
 				.toList())
 			.orElse(List.of());

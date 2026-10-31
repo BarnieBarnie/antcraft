@@ -756,6 +756,24 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Structure void keeps what stands there ({@code kept_void.litematic}: structure void, then air): built over two
+	 * stone blocks, the bot clears the one under the air and leaves the one under the structure void, placing nothing.
+	 */
+	// Measured: passes at tick 17.
+	@GameTest(maxTicks = 40)
+	public void buildLeavesStoneUnderStructureVoid(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.STONE);
+		helper.setBlock(4, 1, 3, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.IRON_PICKAXE));
+		expect(helper, bot, "r = build('antcraft-gametest:kept_void', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value)\n",
+			List.of("True None 0"), () -> {
+				helper.assertBlockPresent(Blocks.STONE, 3, 1, 3);
+				helper.assertBlockPresent(Blocks.AIR, 4, 1, 3);
+			});
+	}
+
+	/**
 	 * A schematic's block entity data comes along ({@code imported_sign.litematic}): the built sign reads its text, and the
 	 * chest, which holds a diamond in the schematic, is built empty.
 	 */
