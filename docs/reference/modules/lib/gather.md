@@ -23,7 +23,7 @@ if not r["ok"]:
 
 Makes the bot carry `n` more of a raw item it knows how to get within `radius` blocks:
 
-- a log (`#minecraft:logs` or any `..._log` id; any log does, as a plan's oak log only goes into planks): through [`lib.trees.logs(n, radius)`](trees.md), the lowest logs first, so it never climbs a tree;
+- a log (`#minecraft:logs` or any `..._log` id; any log does, as a plan's oak log only goes into planks): through [`lib.trees.logs(n, radius)`](trees.md), one tree at a time, its bottom logs from the ground, so it never climbs a tree;
 - cobblestone: through `stone(n, radius)`.
 
 Any other item fails at once with `no_recipe`.
