@@ -151,6 +151,8 @@ class ScriptRunTest {
 		assertEquals("put(Pos(0, 0, 0), 'stone') -> no_space, 5", ScriptRun.describe("put(Pos(0, 0, 0), 'stone')", Result.fail(Result.NO_SPACE, 5L)));
 		assertEquals("craft('stick') -> ok, 4", ScriptRun.describe("craft('stick')", Result.ok(4L)));
 		assertEquals("wait(1) -> ok", ScriptRun.describe("wait(1)", Result.OK));
+		assertEquals("build('antcraft:hut', Pos(0, 0, 0)) -> blocked: no dirt to pillar up with, to reach Pos(1, 2, 3), 4",
+			ScriptRun.describe("build('antcraft:hut', Pos(0, 0, 0))", Result.fail(Result.BLOCKED, 4L, "no dirt to pillar up with, to reach Pos(1, 2, 3)")));
 	}
 
 	@Test

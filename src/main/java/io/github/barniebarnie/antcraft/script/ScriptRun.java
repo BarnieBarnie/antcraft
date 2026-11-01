@@ -449,7 +449,7 @@ public final class ScriptRun {
 	Result done(String describe, Result result) {
 		lastResult = describe(describe, result);
 		if (!result.ok()) {
-			write(Level.DEBUG, describe + " -> " + result.reason());
+			write(Level.DEBUG, describe + " -> " + why(result));
 		}
 		return result;
 	}
@@ -510,8 +510,13 @@ public final class ScriptRun {
 
 	/** An action and its result as {@code /antcraft bot status} shows them: {@code goto(...) -> unreachable}, {@code craft(...) -> ok, 4}. */
 	static String describe(String action, Result result) {
-		String line = action + " -> " + (result.ok() ? "ok" : result.reason());
+		String line = action + " -> " + (result.ok() ? "ok" : why(result));
 		return result.value() instanceof PyNone ? line : line + ", " + Values.repr(result.value());
+	}
+
+	/** A failure's reason, and its detail after a colon where it has one: {@code blocked: minecraft:water is in the way at Pos(1, 2, 3)}. */
+	private static String why(Result result) {
+		return result.detail() == null ? result.reason() : result.reason() + ": " + result.detail();
 	}
 
 	/** The modules the script imported from its library, by name, with the source each had when it was imported. */

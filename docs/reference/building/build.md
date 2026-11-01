@@ -18,7 +18,7 @@ Builds a blueprint from the blocks the bot carries.
 
 ## Returns
 
-A [`Result`](../types/result.md); its `value` is how many blocks it placed, also when it fails.
+A [`Result`](../types/result.md); its `value` is how many blocks it placed, also when it fails, and its `detail`, when it fails with `blocked`, says what stopped it where (see [Fails with](#fails-with)).
 
 ## Pauses
 
@@ -54,7 +54,18 @@ if not r and r.reason == "missing_ingredients":
 | `no_blueprint` | there is no blueprint with that id, or its structure is missing |
 | `missing_ingredients` | the bot carries no block for the next step; `value` is how many it placed |
 | `protected` | a block of it may not be changed: outside the build height or border, or under spawn protection |
-| `blocked` | a player or mob still stands where a block goes after two seconds, a fluid is in the way, or the bot could not walk into reach, such as a block too high with no dirt to pillar up with |
+| `blocked` | something is in the way; `detail` says what, one of the ones below |
+
+The `detail` of `blocked`, with the position of the step it stopped at:
+
+| `detail` | When |
+|---|---|
+| `no dirt to pillar up with, to reach Pos(x, y, z)` | no walk reaches the step, and the bot carries no dirt to pillar up with |
+| `no walk reaches Pos(x, y, z), and dirt goes on no spot the blueprint puts a block or air in (structure_void leaves room for it)` | no walk reaches the step, though the bot carries dirt: the dirt may not go where the blueprint has a block or air, so a schematic that fills its box with air leaves it no room; `structure_void` there does |
+| `minecraft:armor_stand stands at Pos(x, y, z), where a block goes` | a player, mob or bot (its entity type) still stands where a block goes after two seconds |
+| `minecraft:water is in the way at Pos(x, y, z)` | a fluid fills a spot to clear |
+| `the walk to Pos(x, y, z) got nowhere twice` | the bot walked to the step twice and is still out of reach |
+| `no step left can be placed, the next is at Pos(x, y, z)` | steps remain, but none the bot can place now |
 | `not_loaded` | a chunk the blueprint is in is not loaded and the bot could not get to it |
 | `wrong_dimension` | `at` is in another dimension than the bot's |
 | `timeout` | a walk got stuck |

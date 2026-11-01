@@ -7,9 +7,10 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * What an action returns (docs/reference/types/result.md): {@code ok}, the {@code reason} it failed (a code such as
- * {@code unreachable}, None on success) and the {@code value} it produced, if any. False in a test when the action failed.
+ * {@code unreachable}, None on success), the {@code value} it produced, if any, and the {@code detail} of a failure: why, in
+ * words, such as which step stopped a build (null for none). False in a test when the action failed.
  */
-public record Result(boolean ok, @Nullable String reason, Object value) implements HostValue {
+public record Result(boolean ok, @Nullable String reason, Object value, @Nullable String detail) implements HostValue {
 	public static final String TYPE = "Result";
 	public static final Result OK = new Result(true, null, PyNone.NONE);
 
@@ -33,6 +34,10 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 	public static final String NO_TABLE = "no_table";
 	public static final String NO_FURNACE = "no_furnace";
 
+	public Result(boolean ok, @Nullable String reason, Object value) {
+		this(ok, reason, value, null);
+	}
+
 	public static Result fail(String reason) {
 		return new Result(false, reason, PyNone.NONE);
 	}
@@ -40,6 +45,11 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 	/** A failure that still produced {@code value}, such as how many items {@code pick_up} took before it ran out of space. */
 	public static Result fail(String reason, Object value) {
 		return new Result(false, reason, value);
+	}
+
+	/** A failure that produced {@code value}, saying why in {@code detail}, such as which step stopped a build. */
+	public static Result fail(String reason, Object value, @Nullable String detail) {
+		return new Result(false, reason, value, detail);
 	}
 
 	public static Result ok(Object value) {
@@ -62,6 +72,7 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 			case "ok" -> ok;
 			case "reason" -> reason == null ? PyNone.NONE : reason;
 			case "value" -> value;
+			case "detail" -> detail == null ? PyNone.NONE : detail;
 			default -> null;
 		};
 	}
@@ -71,6 +82,6 @@ public record Result(boolean ok, @Nullable String reason, Object value) implemen
 		if (ok) {
 			return value instanceof PyNone ? "Result(ok=True)" : "Result(ok=True, value=" + Values.repr(value) + ")";
 		}
-		return "Result(ok=False, reason=" + Values.repr(reason) + ")";
+		return "Result(ok=False, reason=" + Values.repr(reason) + (detail == null ? "" : ", detail=" + Values.repr(detail)) + ")";
 	}
 }

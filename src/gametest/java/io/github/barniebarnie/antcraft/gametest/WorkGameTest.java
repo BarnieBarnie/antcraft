@@ -1042,13 +1042,27 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None"), () -> assertCobbleStep(helper, 0));
 	}
 
-	/** A step too high to reach and nothing to pillar with but what the blueprint needs: blocked, and nothing placed up there. */
+	/**
+	 * A step too high to reach and nothing to pillar with but what the blueprint needs: blocked, saying it has no dirt to
+	 * reach the step with (#485), and nothing placed up there.
+	 */
 	@GameTest(maxTicks = 40)
 	public void buildOutOfReachWithoutScaffoldIsBlocked(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
 		carryCobbleStep(bot, 2);
-		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 7, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
-			List.of("False blocked 0 2"), () -> helper.assertBlockPresent(Blocks.AIR, 3, 7, 3));
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 7, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\nprint(r.detail)\n",
+			List.of("False blocked 0 2", "no dirt to pillar up with, to reach Pos" + at(helper, 3, 7, 3)), () -> helper.assertBlockPresent(Blocks.AIR, 3, 7, 3));
+	}
+
+	/** Water where the cobble step has air, to be cleared: blocked, saying which fluid is in the way where (#485). */
+	// Measured: passes at tick 11.
+	@GameTest(maxTicks = 24)
+	public void buildWithWaterOnTheSiteIsBlocked(GameTestHelper helper) {
+		helper.setBlock(4, 2, 3, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value)\nprint(r.detail)\n",
+			List.of("False blocked 3", "minecraft:water is in the way at Pos" + at(helper, 4, 2, 3)));
 	}
 
 	/** A second bot idling where the step's second cobblestone goes is asked to step aside, and the build finishes. */
@@ -1088,14 +1102,14 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
 	}
 
-	/** An armor stand where a block goes does not move: blocked after a short wait, and it still stands there. */
+	/** An armor stand where a block goes does not move: blocked after a short wait, naming it (#485), and it still stands there. */
 	@GameTest(maxTicks = 100)
 	public void buildWithAnArmorStandOnTheSiteIsBlocked(GameTestHelper helper) {
 		helper.spawn(EntityTypes.ARMOR_STAND, 3, 1, 3);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
 		carryCobbleStep(bot, 2);
-		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n",
-			List.of("False blocked"), () -> {
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\nprint(r.detail)\n",
+			List.of("False blocked", "minecraft:armor_stand stands at Pos" + at(helper, 3, 1, 3) + ", where a block goes"), () -> {
 				helper.assertBlockPresent(Blocks.AIR, 3, 1, 3);
 				helper.assertEntityPresent(EntityTypes.ARMOR_STAND, 3, 1, 3);
 			});

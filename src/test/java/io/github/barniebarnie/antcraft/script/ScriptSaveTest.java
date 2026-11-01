@@ -234,7 +234,7 @@ class ScriptSaveTest {
 		for (Object value : List.of(new Pos(1, -2, 3), new Stack("minecraft:dirt", 3),
 				new BlockInfo("minecraft:oak_log", new Pos(1, 2, 3), false, false, List.of("#minecraft:logs"), Map.of("axis", "y")),
 				new BlockInfo("minecraft:wheat", new Pos(1, 2, 3), false, false, List.of(), Map.of("age", 7L)),
-				Result.ok(4L), Result.fail(Result.UNREACHABLE))) {
+				Result.ok(4L), Result.fail(Result.UNREACHABLE), Result.fail(Result.BLOCKED, 2L, "minecraft:water is in the way at Pos(1, 2, 3)"))) {
 			Object saved = values.save(value);
 			assertNotNull(saved, value.toString());
 			assertEquals(value, values.load(saved));

@@ -5,6 +5,7 @@ What every action returns. Truthy when the action succeeded.
 - `ok`: a bool.
 - `reason`: a string code, `None` on success.
 - `value`: what the action produced, if anything, for example how many items `craft` made.
+- `detail`: why the action failed, in words, where it says more than `reason`, such as which step stopped a [`build`](../building/build.md) and why; `None` otherwise. The bot's log line of the action shows it after the reason: `build('antcraft:farm', Pos(4, 64, 0)) -> blocked: no dirt to pillar up with, to reach Pos(5, 67, 2), 12`.
 
 ## Reason codes
 

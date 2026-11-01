@@ -216,6 +216,8 @@ public final class BuildApi {
 		private boolean takingDown;
 		/** Why the build stopped short, which it gives once its scaffold is down; null for a blueprint that stands. */
 		private @Nullable String stopping;
+		/** The detail of {@link #stopping}, in words. */
+		private @Nullable String stoppingDetail;
 		private long placed;
 		private @Nullable Result result;
 
@@ -269,8 +271,10 @@ public final class BuildApi {
 				} else if (Result.UNREACHABLE.equals(walked.reason()) && this.walked != null && !this.walked.equals(this.breakingKept)) {
 					this.breakingKept = this.walked;
 					this.walked = null;
+				} else if (Result.UNREACHABLE.equals(walked.reason())) {
+					return this.finish(Result.BLOCKED, this.unreachable());
 				} else if (!walked.ok()) {
-					return this.finish(Result.UNREACHABLE.equals(walked.reason()) ? Result.BLOCKED : walked.reason());
+					return this.finish(walked.reason());
 				}
 			}
 			if (this.breaking != null) {
@@ -288,7 +292,8 @@ public final class BuildApi {
 				return this.walkTo(this.at, null);
 			}
 			if (next.isEmpty()) {
-				return this.plan.nextStep(this::state).isEmpty() ? this.takeDown() : this.finish(Result.BLOCKED);
+				Optional<BuildPlan.Step> left = this.plan.nextStep(this::state);
+				return left.isEmpty() ? this.takeDown() : this.finish(Result.BLOCKED, "no step left can be placed, the next is at " + EntityInfo.pos(left.get().pos()));
 			}
 			BuildPlan.Step step = next.get();
 			BlockState current = this.state(step.pos());
@@ -326,7 +331,10 @@ public final class BuildApi {
 					}
 					return false;
 				}
-				return this.finish(Result.BLOCKED);
+				AABB spot = state.getCollisionShape(this.level, step.pos()).move(step.pos()).bounds();
+				String who = this.level.getEntities(this.bot, spot).stream().findFirst()
+					.map(other -> BuiltInRegistries.ENTITY_TYPE.getKey(other.getType()).toString()).orElse("the bot itself");
+				return this.finish(Result.BLOCKED, who + " stands at " + EntityInfo.pos(step.pos()) + ", where a block goes");
 			}
 			this.waited = 0;
 			step.otherHalf().ifPresent(other -> this.level.setBlockAndUpdate(other.pos(), other.state()));
@@ -353,7 +361,7 @@ public final class BuildApi {
 			this.scaffold.removeIf(pos -> !this.state(pos).getBlock().asItem().getDefaultInstance().is(PathFollower.FAST_SCAFFOLD_BLOCKS));
 			Optional<BlockPos> top = this.scaffold.stream().max(Comparator.comparingInt(BlockPos::getY));
 			if (top.isEmpty()) {
-				return this.finish(this.stopping);
+				return this.finish(this.stopping, this.stoppingDetail);
 			}
 			if (!this.inReach(top.get())) {
 				if (top.get().equals(this.walked)) {
@@ -371,7 +379,7 @@ public final class BuildApi {
 				return this.finish(Result.PROTECTED);
 			}
 			if (!current.getFluidState().isEmpty() && current.liquid()) {
-				return this.finish(Result.BLOCKED);
+				return this.finish(Result.BLOCKED, BuiltInRegistries.FLUID.getKey(current.getFluidState().getType()) + " is in the way at " + EntityInfo.pos(pos));
 			}
 			if (!this.inReach(pos)) {
 				return this.walkTo(EntityInfo.pos(pos), pos);
@@ -388,7 +396,7 @@ public final class BuildApi {
 		private boolean walkTo(Pos target, @Nullable BlockPos pos) {
 			if (pos == null ? this.walked != null && this.walked.equals(WorkApi.blockPos(this.at)) : pos.equals(this.walked)) {
 				if (pos == null || pos.equals(this.breakingKept)) {
-					return this.finish(pos == null ? Result.NOT_LOADED : Result.BLOCKED);
+					return pos == null ? this.finish(Result.NOT_LOADED) : this.finish(Result.BLOCKED, "the walk to " + EntityInfo.pos(pos) + " got nowhere twice");
 				}
 				this.breakingKept = pos;
 			}
@@ -399,14 +407,30 @@ public final class BuildApi {
 			return false;
 		}
 
-		/** Ends the build, ok or failing with {@code reason}; one that stops short takes its scaffold down first. */
+		/**
+		 * Why no walk reached the step last walked to: no dirt to pillar up with, or, carrying some, that scaffold goes on no
+		 * spot the blueprint puts a block or air in.
+		 */
+		private String unreachable() {
+			Pos step = EntityInfo.pos(this.walked == null ? WorkApi.blockPos(this.at) : this.walked);
+			boolean dirt = this.bot.getMainHandItem().is(PathFollower.FAST_SCAFFOLD_BLOCKS) || this.bot.getInventory().hasAnyMatching(stack -> stack.is(PathFollower.FAST_SCAFFOLD_BLOCKS));
+			return dirt ? "no walk reaches " + step + ", and dirt goes on no spot the blueprint puts a block or air in (structure_void leaves room for it)"
+				: "no dirt to pillar up with, to reach " + step;
+		}
+
 		private boolean finish(@Nullable String reason) {
+			return this.finish(reason, null);
+		}
+
+		/** Ends the build, ok or failing with {@code reason} and why in {@code detail}; one that stops short takes its scaffold down first. */
+		private boolean finish(@Nullable String reason, @Nullable String detail) {
 			if (reason != null && !this.takingDown && !this.scaffold.isEmpty()) {
 				this.stopping = reason;
+				this.stoppingDetail = detail;
 				return this.takeDown();
 			}
 			this.run.host().body().setBuildScaffold(null, spot -> false);
-			this.result = reason == null ? Result.ok(this.placed) : Result.fail(reason, this.placed);
+			this.result = reason == null ? Result.ok(this.placed) : Result.fail(reason, this.placed, detail);
 			return true;
 		}
 
