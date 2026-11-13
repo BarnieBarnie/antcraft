@@ -101,6 +101,67 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "False no_space {'oak_planks': 4} 1 4"));
 	}
 
+	/** The bot owns 3 planks, borrows 4 and uses 5 (a crafting table and one placed): the borrowed ones count as used first, so nothing goes back and it keeps its own 2. */
+	@GameTest(maxTicks = 40)
+	public void ownItemsAreNotGivenBack(GameTestHelper helper) {
+		Container chest = chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 10));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 3));
+		run(helper, bot, IMPORT + """
+			borrow(%s, "oak_planks", 4)
+			craft("crafting_table")
+			place(%s, "oak_planks")
+			r = give_back()
+			print(r["ok"], borrowed(), count("oak_planks"))
+			""".formatted(pos(helper, CHEST), pos(helper, new BlockPos(6, 1, 7))));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True [] 2");
+			helper.assertTrue(count(chest, Items.OAK_PLANKS) == 6, "planks in the chest " + count(chest, Items.OAK_PLANKS));
+		});
+	}
+
+	/** keep strikes what a job keeps off the record: all the planks, then 1 of 2 pickaxes; the other pickaxe goes back. */
+	@GameTest(maxTicks = 40)
+	public void keepLeavesAnItemOutOfGiveBack(GameTestHelper helper) {
+		Container chest = chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 4), new ItemStack(Items.IRON_PICKAXE),
+			new ItemStack(Items.IRON_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		run(helper, bot, "from lib.borrow import borrow, borrowed, give_back, keep\n" + """
+			a = %s
+			borrow(a, "oak_planks", 4)
+			borrow(a, "iron_pickaxe", 2)
+			keep("minecraft:oak_planks")
+			keep("iron_pickaxe", 1)
+			print([(b["item"], b["n"]) for b in borrowed()])
+			r = give_back()
+			print(r["ok"], borrowed(), count("oak_planks"), count("iron_pickaxe"))
+			""".formatted(pos(helper, CHEST)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "[('iron_pickaxe', 1)]", "True [] 4 1");
+			helper.assertTrue(count(chest, Items.IRON_PICKAXE) == 1, "pickaxes in the chest " + count(chest, Items.IRON_PICKAXE));
+		});
+	}
+
+	/** A record from before the bot's own count was kept (no "had") still gives back. */
+	@GameTest(maxTicks = 40)
+	public void anOlderRecordStillGivesBack(GameTestHelper helper) {
+		Container chest = chest(helper, CHEST);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		run(helper, bot, IMPORT + """
+			memory["borrowed"] = [{"chest": %s, "item": "oak_planks", "n": 4}]
+			r = give_back()
+			print(r["ok"], borrowed(), count("oak_planks"))
+			""".formatted(pos(helper, CHEST)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True [] 0");
+			helper.assertTrue(count(chest, Items.OAK_PLANKS) == 4, "planks in the chest " + count(chest, Items.OAK_PLANKS));
+		});
+	}
+
 	/** One script borrows, the next gives back: the record is kept in memory between them. */
 	@GameTest(maxTicks = 60)
 	public void theRecordSurvivesARestart(GameTestHelper helper) {

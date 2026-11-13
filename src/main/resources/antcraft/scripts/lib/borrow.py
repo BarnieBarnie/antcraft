@@ -1,4 +1,4 @@
-# Borrowing from chests and giving back, for any script: `from lib.borrow import borrow, borrowed, give_back`.
+# Borrowing from chests and giving back, for any script: `from lib.borrow import borrow, borrowed, give_back, keep`.
 # A module of the mod's default library (lib/), a primitive: it imports only lib.result. What it lent out is kept in
 # memory["borrowed"], so it survives restarts, reloads and respawns.
 #
@@ -13,17 +13,19 @@ CHESTS = ["chest", "trapped_chest", "barrel"]
 def borrow(chest, item, n=1):
     """Takes up to n of item (an item id or selector) from chest and records them as borrowed. Gives result(): ok,
     or the reason take failed with and what it is short of in missing; what it did take is recorded either way."""
+    had = count(item)
     r = take(chest, item, n)
     got = r.value or 0
     if got:
-        memory["borrowed"] = borrowed() + [{"chest": chest, "item": item, "n": got}]
+        memory["borrowed"] = borrowed() + [record(chest, item, got, had)]
     if got < n:
         return result(r.reason or "no_item", chest, {item: n - got})
     return result()
 
 
 def borrowed():
-    """What is out, oldest first: a list of dicts with the chest, the item and how many (n)."""
+    """What is out, oldest first: a list of dicts with the chest, the item, how many (n) and how many of it the bot
+    carried before (had: its own and what it borrowed earlier)."""
     return list(memory.get("borrowed", []))
 
 
@@ -33,9 +35,11 @@ def give_back(radius=16):
     missing, item to how many the bot kept as no chest took them; those stay borrowed."""
     left = []
     missing = {}
-    for b in borrowed():
-        # ponytail: carried items of the same kind count as borrowed ones, the bot's own included.
-        n = min(b["n"], count(b["item"]))
+    # Newest first, each record gives back only what the bot carries above what it had before it: what the bot used
+    # counts as borrowed first, and its own items stay. A record from before "had" was kept counts all as borrowed.
+    for b in reversed(borrowed()):
+        had = b.get("had", 0)
+        n = min(b["n"], count(b["item"]) - had)
         if n > 0:
             n = n - (put(b["chest"], b["item"], n).value or 0)
         if n > 0:
@@ -43,7 +47,32 @@ def give_back(radius=16):
                 if n > 0 and chest != b["chest"]:
                     n = n - (put(chest, b["item"], n).value or 0)
         if n > 0:
-            left.append({"chest": b["chest"], "item": b["item"], "n": n})
+            left = [record(b["chest"], b["item"], n, had)] + left
             missing[b["item"]] = missing.get(b["item"], 0) + n
     memory["borrowed"] = left
     return result("no_space" if missing else None, None, missing)
+
+
+def keep(item, n=None):
+    """Strikes n of item (all when None) off what is borrowed, newest first, for a job that keeps them: give_back then
+    leaves them with the bot. item matches a record's item as borrow was given it, with or without "minecraft:"."""
+    left = []
+    for b in reversed(borrowed()):
+        k = b["n"] if n is None else min(n, b["n"])
+        if k == 0 or full(b["item"]) != full(item):
+            left = [b] + left
+            continue
+        if n is not None:
+            n = n - k
+        if k < b["n"]:
+            # The kept ones are the bot's own now.
+            left = [record(b["chest"], b["item"], b["n"] - k, b.get("had", 0) + k)] + left
+    memory["borrowed"] = left
+
+
+def record(chest, item, n, had):
+    return {"chest": chest, "item": item, "n": n, "had": had}
+
+
+def full(item):
+    return item if item.startswith("#") or ":" in item else "minecraft:" + item

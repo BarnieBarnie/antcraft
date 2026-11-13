@@ -6,7 +6,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from lib.get import get, key
-from lib.borrow import borrowed, give_back
+from lib.borrow import borrowed, give_back, keep
 
 if not ARGS:
     say("usage: jobs.get <item> [n] [radius]")
@@ -17,7 +17,9 @@ radius = int(ARGS[2]) if len(ARGS) > 2 else 32
 try:
     r = get(item, n, radius)
 finally:
-    # The item asked for is the job's: struck off what was borrowed, so give_back does not take it back.
-    memory["borrowed"] = [b for b in borrowed() if key(b["item"]) != key(item)]
+    # The item asked for is the job's: kept, so give_back does not take it back.
+    for b in borrowed():
+        if key(b["item"]) == key(item):
+            keep(b["item"])
     give_back()
 say(f"got {n} {item}" if r["ok"] else f"no {item}: {r['reason']} {r['missing']}")
