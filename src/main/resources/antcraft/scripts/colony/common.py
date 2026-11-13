@@ -1,8 +1,11 @@
 # What the colony scripts (colony.lumberjack, colony.hauler, colony.builder,
 # colony.farmer, colony.miner) share: `from colony.common import core, store`.
+# Importing it keeps the library within the colony: lib.find.WHERE is in_colony, so lib.get, lib.stock, lib.trees and
+# lib.dig neither take from a chest nor gather a block outside the colony's radius of its core.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
+import lib.find
 from lib.inv import take_all
 
 
@@ -32,3 +35,6 @@ def fetch(item, n):
     """Takes items from the core until the bot carries n of item (an item id or a selector such as "#minecraft:planks"),
     as far as the core has them; gives whether it does."""
     return not take_all(core(), {item: n})
+
+
+lib.find.WHERE = in_colony

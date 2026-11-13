@@ -252,6 +252,39 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * lib.find.WHERE limits get to where it is true (#540): with it true only within 2 blocks of the bot, an iron axe in a
+	 * chest, the oak and iron ore just outside are not used. choose makes a stone axe from what the bot carries instead of
+	 * the chest's, the iron source costs DEEP more, ensure_tool crafts the stone axe and get finds no logs.
+	 */
+	@GameTest(maxTicks = 240)
+	public void whereKeepsGetFromChestsAndBlocksOutsideIt(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		Container chest = chest(helper, new ItemStack(Items.IRON_AXE));
+		helper.setBlock(6, 1, 5, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
+		run(helper, bot, """
+			import lib.find
+			from lib.get import SOURCES, choose, ensure_tool, get
+			here = pos()
+			iron = SOURCES["minecraft:raw_iron"]
+			print(choose("axe", 30, radius=8)[1:3], iron.cost(1, 8)[0])
+			lib.find.WHERE = lambda p: here.distance(p) <= 2
+			print(choose("axe", 30, radius=8)[1:3], iron.cost(1, 8)[0])
+			r = ensure_tool("axe", 30, radius=8)
+			print(r["ok"], held().item)
+			r = get("oak_log", 1, radius=8)
+			print(r["ok"], r["reason"])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "('chest', 'iron') 60", "('make', 'stone') 2060", "True minecraft:stone_axe", "False no_logs");
+			helper.assertTrue(chest.countItem(Items.IRON_AXE) == 1, "the iron axe left the chest");
+			helper.assertBlockPresent(Blocks.OAK_LOG, TreesGameTest.TREE);
+		});
+	}
+
+	/**
 	 * An iron axe in a chest: it beats making one for 30 logs, but for 400 it is not enough and an iron one is made, with
 	 * iron ore in sight (see chooseStoneForFewUsesIronForMany).
 	 */

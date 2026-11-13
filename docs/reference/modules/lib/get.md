@@ -4,6 +4,8 @@ The resolver: get anything, and the tool to get it with, by the cheapest way. A 
 
 The skills below it assume what they need: [`lib.dig.stone`](dig.md#stonen-radius32) a pickaxe, [`lib.craft.craft_here`](craft.md) the raw items. `lib/get` is where those needs are met, so a script asks for what it wants and the chain of who fetches what lives in one place (see [The script library](../../../design/library.md#the-resolver-libget)). What it takes from a chest is borrowed: end a job with [`give_back()`](borrow.md).
 
+To keep it within an area, set [`lib.find.WHERE`](find.md#where) to a function of a [`Pos`](../../types/pos.md): every chest it takes from, every tree, stone, ore and dirt it gathers, and every cost `choose` and `Source.cost` estimate leave out the positions it is false for. [`colony/common`](../colony/common.md) sets it to `in_colony`, so a colony script that imports it neither borrows from a neighbour's chest nor fells a tree outside the colony.
+
 ```python
 from lib.get import get
 from lib.borrow import give_back

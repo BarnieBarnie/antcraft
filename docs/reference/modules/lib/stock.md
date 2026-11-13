@@ -6,7 +6,7 @@ What it takes from a chest is borrowed: [`lib/borrow`](borrow.md) records it, an
 
 ## `chests(radius=32)`
 
-The chests the bot may take from, nearest first: its colony's core (none for a bot in no colony), the positions listed in [`memory`](../../types/memory.md)`["chests"]`, and the chests, trapped chests and barrels within `radius` blocks. Each is listed once, and one in another [dimension](../../types/pos.md#dimension) than the bot's is left out.
+The chests the bot may take from, nearest first: its colony's core (none for a bot in no colony), the positions listed in [`memory`](../../types/memory.md)`["chests"]`, and the chests, trapped chests and barrels within `radius` blocks. Each is listed once, and one in another [dimension](../../types/pos.md#dimension) than the bot's is left out, as is one [`lib.find.WHERE`](find.md#where) is false for (outside the colony, for a script that imports [`colony/common`](../colony/common.md)).
 
 - **Returns** a list of [`Pos`](../../types/pos.md); `[]` when there is none.
 - **Pauses** no.

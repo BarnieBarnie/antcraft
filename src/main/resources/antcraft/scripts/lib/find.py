@@ -6,13 +6,23 @@
 
 # How many blocks a finder looks through, nearest first.
 LIMIT = 256
+# Where the library may look, a function of a Pos (None: anywhere): the finders here, lib.trees.next_tree and
+# lib.stock.chests leave out each position it is false for, so lib.get neither takes from nor gathers outside it, nor
+# counts on it in a cost. colony.common sets it to in_colony. ponytail: the LIMIT nearest blocks are looked through
+# before it, so a bot far outside it may find none of the blocks within.
+WHERE = None
+
+
+def allowed(p):
+    """Whether WHERE lets the library use p."""
+    return WHERE is None or WHERE(p)
 
 
 def nearest(what, radius=32, where=None):
-    """The nearest block what selects within radius for which where(p) is true (any, where is None); None if there is
-    none."""
+    """The nearest block what selects within radius for which where(p) is true (any, where is None) and WHERE allows;
+    None if there is none."""
     for p in scan(what, radius=radius, limit=LIMIT):
-        if where is None or where(p):
+        if (where is None or where(p)) and allowed(p):
             return p
     return None
 
@@ -31,9 +41,10 @@ def is_open(p):
 def exposed(what, radius=32, skip=None):
     """The nearest block what selects within radius with air beside or above it, at or above the bot's feet first,
     which it mines sideways without digging a pit; else the nearest exposed one below; None if there is none. Leaves out
-    the positions in the dict skip."""
+    the positions in the dict skip and those WHERE leaves out."""
     feet = pos().y
-    found = [p for p in scan(what, radius=radius, limit=LIMIT) if (skip is None or p not in skip) and is_open(p)]
+    found = [p for p in scan(what, radius=radius, limit=LIMIT)
+             if (skip is None or p not in skip) and allowed(p) and is_open(p)]
     for p in found:  # nearest first
         if p.y >= feet:
             return p

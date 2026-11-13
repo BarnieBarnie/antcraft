@@ -448,6 +448,25 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Importing {@code colony.common} keeps the library within the colony (#540): {@code lib.find.WHERE} is
+	 * {@code in_colony}, so {@code lib.stock.chests} gives the core but not a chest just outside the colony's radius.
+	 */
+	@GameTest(maxTicks = 20)
+	public void colonyCommonKeepsTheLibraryWithinTheColony(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 3, 1, 1);
+		colony.setRadius(3);
+		helper.setBlock(6, 1, 5, Blocks.CHEST);
+		AntBot bot = member(helper, colony, 3, 1, 3);
+		BotScripts.run(bot, """
+			from colony.common import core
+			import lib.stock
+			print(lib.stock.chests(8) == [core()])
+			""");
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True")), "printed " + printed(bot)));
+	}
+
 	/** {@code fetch} takes a selector: one for {@code #minecraft:planks} takes birch planks from the core and leaves the dirt (#383). */
 	@GameTest(maxTicks = 20)
 	public void fetchForATagTakesMatchingItemsFromTheCore(GameTestHelper helper) {

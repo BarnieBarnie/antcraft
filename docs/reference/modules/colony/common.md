@@ -2,6 +2,8 @@
 
 What the default colony scripts share: finding the Colony Core and storing in and fetching from it. A module of the mod's default library: `from colony.common import core, store` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/colony/common.py`, written with [`colony`](../../colony/colony.md), `put` and [`lib/inv`](../lib/inv.md)'s `take_all`.
 
+Importing it keeps the library within the colony: it sets [`lib.find.WHERE`](../lib/find.md#where) to `in_colony`, so [`lib/get`](../lib/get.md), [`lib/stock`](../lib/stock.md), [`lib/trees`](../lib/trees.md) and [`lib/dig`](../lib/dig.md) neither take from a chest nor gather a block outside the colony's radius of its core.
+
 The colony scripts themselves (`colony.lumberjack`, `colony.hauler`, `colony.builder`, `colony.farmer`, `colony.miner`) are scripts a bot runs, not modules to import; what each does and the data of their jobs is on [Default colony scripts](../../../features/colony-scripts.md).
 
 ## `core()`

@@ -5,6 +5,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.find
 from lib.result import result
 
 LOGS = "#minecraft:logs"
@@ -48,7 +49,7 @@ def crowned(base):
 
 def next_tree(radius=32, where=None, remnants=False, around=None):
     """The base of the nearest tree within radius of around (None: the bot) whose base passes where (a function, None:
-    any), or None. With remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
+    any) and lib.find.WHERE, or None. With remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
     # Only a log with no log under it is a base, so each trunk costs one is_tree. A scan reads the whole sphere unless it
     # reaches its limit, from a block budget every bot shares (some 2,000 blocks at radius 8, 137,000 at 32), so it looks
     # within 8 blocks first, then 16, then radius (#527), and at the nearest 64 logs first: only where all 64 are no tree
@@ -60,7 +61,7 @@ def next_tree(radius=32, where=None, remnants=False, around=None):
     while True:
         found = scan(LOGS, radius=r, limit=limit, around=around)
         for base in found[done:]:
-            if not is_log(base.down()) and (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
+            if not is_log(base.down()) and (where is None or where(base)) and lib.find.allowed(base) and (is_tree(base) or remnants and is_remnant(base)):
                 return base
         done = len(found)
         if len(found) == limit:

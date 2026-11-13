@@ -30,6 +30,17 @@ if ore is not None:
         mine(p)
 ```
 
+## `WHERE`
+
+Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` (the default) for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. [`colony/common`](../colony/common.md) sets it to `in_colony`. Each finder looks through the `LIMIT` nearest blocks before it, so a bot far outside the area may find none of the blocks within.
+
+```python
+import lib.find
+
+home = pos()
+lib.find.WHERE = lambda p: home.distance(p) <= 16
+```
+
 ## `is_open(p)`
 
 Whether a block beside `p` (north, south, east or west) or above it is air. Done at once.
