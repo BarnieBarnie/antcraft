@@ -148,13 +148,13 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * An empty bot, no chest, exposed iron and coal ore in sight: a stone axe for few logs, an iron one for many; nothing
-	 * is done. Without the ore in sight the make cost digs stairs for it (#529), and the stone axes win.
+	 * An empty bot, no chest, exposed iron ore in sight: a stone axe for few logs, an iron one for many; nothing is done.
+	 * Without the ore in sight the make cost digs stairs for it (#529), and the stone axes win; without coal ore it burns
+	 * wood for the fuel, as get would (#536).
 	 */
 	@GameTest(maxTicks = 140)
 	public void chooseStoneForFewUsesIronForMany(GameTestHelper helper) {
 		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
-		helper.setBlock(6, 1, 6, Blocks.COAL_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
@@ -165,7 +165,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * The make cost of an iron axe counts the pickaxe raw iron needs and whether iron ore is in sight (#529): an empty bot
-	 * with no iron ore within radius 2 pays for a stone pickaxe and DEEP for each raw iron, more than a bot that carries a
+	 * with no iron ore within radius 2 pays for a stone pickaxe and DEEP once for the raw iron, more than a bot that carries a
 	 * stone pickaxe and sees exposed iron ore within radius 8.
 	 */
 	@GameTest(maxTicks = 40)
@@ -187,10 +187,62 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Iron ore in sight but no coal ore: the make cost of two iron axes, whose six smelts plan a coal, burns wood for the
+	 * fuel, as get would, rather than dig for coal (#536). With DEEP a million, digging for it would cost more than that.
+	 */
+	@GameTest(maxTicks = 40)
+	public void ironFuelIsWoodWithoutCoalInSight(GameTestHelper helper) {
+		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.get
+			lib.get.DEEP = 1000000
+			print(lib.get.make_cost("iron_axe", 2, radius=8) < 1000000)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True"));
+	}
+
+	/**
+	 * A stone pickaxe in a chest within radius 8 but not 2, iron ore within both: the make cost of an iron axe walks to the
+	 * chest for the pickaxe raw iron needs, less than making one (#536).
+	 */
+	@GameTest(maxTicks = 40)
+	public void aChestPickaxeLowersAnIronToolsCost(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.STONE_PICKAXE));
+		helper.setBlock(2, 1, 5, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		run(helper, bot, "from lib.get import make_cost\nprint(make_cost('iron_axe', 1, radius=2), make_cost('iron_axe', 1, radius=8))\n");
+		helper.succeedWhen(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.size() == 1, "printed " + log);
+			String[] costs = log.get(0).split(" ");
+			helper.assertTrue(Integer.parseInt(costs[0]) > Integer.parseInt(costs[1]), "without the chest, with it: " + log);
+		});
+	}
+
+	/**
+	 * A source's cost counts DEEP once for all it gets, as one flight of stairs reaches a vein, and takes the pickaxe tier
+	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
+	 */
+	@GameTest(maxTicks = 40)
+	public void aSourceCostCountsDeepOnceAndTheBlocksTier(GameTestHelper helper) {
+		helper.setBlock(5, 1, 4, Blocks.LODESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.dig
+			from lib.get import ore, DEEP
+			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
+			s = ore("lodestone", "minecraft:lodestone", 60)
+			print(s.cost(3, 8), s.cost(3, 1)[0] - DEEP, s.cost(3, 1)[1])
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "(180, 'iron') 180 wooden"));
+	}
+
+	/**
 	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
 	 * of it lib.craft.plan of each tier's tool (needs costs 3000); 45,600 (24 ticks) since the make cost counts the pickaxe
-	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks. The
-	 * limit keeps it there.
+	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks; 48,200
+	 * (26 ticks) since that tool may come from a chest (#536), a chest scan for each tool costed. The limit keeps it there.
 	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
@@ -201,13 +253,12 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * An iron axe in a chest: it beats making one for 30 logs, but for 400 it is not enough and an iron one is made, with
-	 * iron and coal ore in sight (see chooseStoneForFewUsesIronForMany).
+	 * iron ore in sight (see chooseStoneForFewUsesIronForMany).
 	 */
 	@GameTest(maxTicks = 110)
 	public void chooseAChestToolThatIsEnough(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.IRON_AXE));
 		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
-		helper.setBlock(6, 1, 6, Blocks.COAL_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
