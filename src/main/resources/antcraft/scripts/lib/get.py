@@ -186,7 +186,8 @@ def gather(source, n, radius):
 
 def make_cost(item, n, radius=32, tools=None):
     """The estimated ticks to make n of item in total from what the bot carries: the cost of each raw item
-    lib.craft.plan lists from its source (coal from logs as charcoal where that is cheaper, as get does), SMELT for each
+    lib.craft.plan lists from its source (coal the walk to the nearest chest of lib.stock within radius that holds some,
+    else from logs as charcoal where that is cheaper, as get does), SMELT for each
     item smelted, and for each kind of tool their sources need the tool_cost of the highest tier any needs; None where a
     raw item has no source, or it or that tool is being got or costed. tools holds the tool costs found so far, by tool
     id, for one options."""
@@ -201,6 +202,12 @@ def make_cost(item, n, radius=32, tools=None):
             s = SOURCES.get(key(raw))
             if s is None or key(raw) in GETTING:
                 return None
+            if key(raw) == COAL:
+                # get takes coal from a chest first: the walk there, however much it holds, as wood_for_coal.
+                chests = lib.stock.where(COAL, radius)
+                if chests:
+                    ticks += lib.cost.walk(pos(), chests[0])
+                    continue
             c, tier = s.cost(k, radius)
             if key(raw) == COAL and LOGS not in GETTING:
                 wood = charcoal(k, radius)[1]

@@ -237,6 +237,23 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Coal in a chest within radius 8 but not 2 (#548): the make cost of four torches, whose one coal costs charcoal or
+	 * digging without the chest, is that of their stick plus the walk to the chest with it, as get takes from chests first.
+	 */
+	@GameTest(maxTicks = 20)
+	public void chestCoalLowersATorchsCostToTheWalk(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.COAL));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.cost, lib.stock
+			from lib.get import make_cost
+			far, near, stick = make_cost("torch", 4, radius=2), make_cost("torch", 4, radius=8), make_cost("stick", 1, radius=8)
+			print(far > near, near - stick == lib.cost.walk(pos(), lib.stock.where("coal", 8)[0]))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
 	 * A source's cost counts DEEP once for all it gets, as one flight of stairs reaches a vein, and takes the pickaxe tier
 	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
 	 */
