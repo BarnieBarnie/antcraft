@@ -10,8 +10,7 @@ from lib.result import result
 LOGS = "#minecraft:logs"
 SAPLINGS = "#minecraft:saplings"
 # The blocks of the item tag antcraft:scaffold_blocks, which walks pillar and bridge with.
-# ponytail: a copy of the tag's values, stale if a datapack changes the tag.
-SCAFFOLD = ["dirt", "cobblestone", "cobbled_deepslate", "netherrack", "stone", "andesite", "diorite", "granite", "tuff"]
+SCAFFOLD = tag_items("#antcraft:scaffold_blocks")
 
 
 def is_log(p):
@@ -219,6 +218,8 @@ def fell_whole(base, replant=True):
         left[p] = True
     # What the walks place, under the stands and wherever else they pillar or bridge, is what of SCAFFOLD the bot carries
     # that was not there before.
+    # ponytail: a scan, so a block of those kinds someone else put near the tree meanwhile goes too; no walk (goto, nor
+    # mine's) reports what it placed (#521).
     ids = [b for b in SCAFFOLD if has(b)]
     radius = min(32, 3 + int(max([base.distance(p) for p in blocks])))
     before = {}

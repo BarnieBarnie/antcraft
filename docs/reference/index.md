@@ -52,6 +52,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`has`](inventory/has.md) | `has(item, n=1)` | whether the bot carries at least `n` matching items |
 | [`free_slots`](inventory/free_slots.md) | `free_slots()` | how many inventory slots are empty |
 | [`matches`](inventory/matches.md) | `matches(item, selector)` | whether an item id or a `Stack` is one the [selector](types/selectors.md) selects |
+| [`tag_items`](inventory/tag_items.md) | `tag_items(tag)` | the item ids of an item tag, such as `"#antcraft:scaffold_blocks"` |
 | [`equip`](inventory/equip.md) | `equip(item)` | hold a carried item |
 | [`drop`](inventory/drop.md) | `drop(item, n=None)` | toss up to `n` matching items |
 | [`pick_up`](inventory/pick_up.md) | `pick_up(what=None, radius=8)` | action: walk to dropped items and take them |

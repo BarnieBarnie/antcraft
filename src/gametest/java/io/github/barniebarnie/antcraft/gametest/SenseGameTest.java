@@ -282,6 +282,14 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	}
 
 	@GameTest(maxTicks = 10)
+	public void tagItemsListsTheItemsOfTheModsScaffoldTag(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = run(helper, bot, "print(tag_items('#antcraft:scaffold_blocks'))\n");
+		succeedWhenPrinted(helper, bot, run, List.of("['minecraft:dirt', 'minecraft:cobblestone', 'minecraft:cobbled_deepslate', "
+			+ "'minecraft:netherrack', 'minecraft:stone', 'minecraft:andesite', 'minecraft:diorite', 'minecraft:granite', 'minecraft:tuff']"));
+	}
+
+	@GameTest(maxTicks = 10)
 	public void timeAndIsDayReadTheWorldsTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		ScriptRun run = run(helper, bot, "t = time()\nprint(isinstance(t, int) and 0 <= t < 24000, is_day())\n");

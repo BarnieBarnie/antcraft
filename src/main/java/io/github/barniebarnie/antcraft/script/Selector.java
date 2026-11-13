@@ -169,6 +169,18 @@ public record Selector(List<String> ids, List<String> tags) {
 		return parse(selector).items().test(new ItemStack(found));
 	}
 
+	/** {@code tag_items(tag)}: the ids of the items of one item tag, in the tag's order; anything else fails the script. */
+	public static PyList tagItems(Object tag) {
+		Selector selector = parse(tag);
+		if (!selector.ids.isEmpty() || selector.tags.size() != 1) {
+			throw new ScriptError("tag_items() takes one item tag such as '#minecraft:logs', not " + selector);
+		}
+		PyList items = new PyList();
+		BuiltInRegistries.ITEM.getTagOrEmpty(selector.tags(BuiltInRegistries.ITEM, Registries.ITEM, "item").getFirst())
+			.forEach(holder -> items.items.add(BuiltInRegistries.ITEM.getKey(holder.value()).toString()));
+		return items;
+	}
+
 	/** Which blocks this selects; an unknown block or block tag fails the script. */
 	public Predicate<BlockState> blocks() {
 		return cached(BLOCKS, this, Selector::resolveBlocks);

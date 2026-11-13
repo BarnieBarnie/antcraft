@@ -33,7 +33,7 @@ import net.minecraft.world.level.block.state.properties.Property;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code held},
+ * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code tag_items}, {@code held},
  * {@code block}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
  * {@code time}, {@code is_day}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
@@ -94,6 +94,7 @@ public final class SenseApi {
 			Object[] args = Args.bind("matches", call, 2, "item", "selector");
 			return Selector.matches(args[0], args[1]);
 		});
+		natives.register("tag_items", 20, call -> Selector.tagItems(Args.bind("tag_items", call, 1, "tag")[0]));
 		natives.register("held", call -> {
 			Args.bind("held", call, 0);
 			ItemStack hand = bot(run, call).getMainHandItem();

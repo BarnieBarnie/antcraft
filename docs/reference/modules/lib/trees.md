@@ -101,7 +101,7 @@ Whether the block at `p` is a log, and whether it is what `kind` selects (a bloc
 
 ## `LOGS`, `SAPLINGS`, `SCAFFOLD`
 
-The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`, and the blocks of the item tag `antcraft:scaffold_blocks` as the mod ships it, which `fell_whole` takes back.
+The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`, and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which `fell_whole` takes back.
 
 ## Example
 

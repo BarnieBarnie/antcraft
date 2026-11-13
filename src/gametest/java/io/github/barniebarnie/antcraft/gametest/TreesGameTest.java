@@ -95,6 +95,13 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A wall of 73 logs on stone, all nearer the bot than the oak, does not hide the oak (#520). */
+	/** SCAFFOLD is read from the item tag the walks pillar and bridge with, so a data pack that changes the tag changes it. */
+	@GameTest(maxTicks = 40)
+	public void scaffoldIsTheScaffoldTagsItems(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 0);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.SCAFFOLD == tag_items('#antcraft:scaffold_blocks'))\n", List.of("True"));
+	}
+
 	@GameTest(maxTicks = 40)
 	public void nextTreeFindsATreeBehindMoreThan64NearerLogs(GameTestHelper helper) {
 		for (int x = 0; x <= 4; x++) {

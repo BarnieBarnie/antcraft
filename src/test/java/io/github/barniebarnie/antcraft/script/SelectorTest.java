@@ -125,4 +125,24 @@ class SelectorTest {
 		assertEquals("matches() item must be an item id or a Stack, not 'int'",
 			assertThrows(ScriptError.class, () -> Selector.matches(3L, "dirt")).getMessage());
 	}
+
+	@Test
+	void tagItemsListsTheItemsOfAnItemTag() {
+		VanillaData.bindTags();
+		PyList planks = Selector.tagItems("#planks");
+		assertTrue(planks.items.contains("minecraft:oak_planks"));
+		assertTrue(planks.items.contains("minecraft:spruce_planks"));
+		assertFalse(planks.items.contains("minecraft:oak_log"));
+	}
+
+	@Test
+	void tagItemsTakesOnlyOneKnownItemTag() {
+		VanillaData.bindTags();
+		assertEquals("unknown item tag '#minecraft:no_such_tag'",
+			assertThrows(ScriptError.class, () -> Selector.tagItems("#no_such_tag")).getMessage());
+		assertEquals("tag_items() takes one item tag such as '#minecraft:logs', not 'minecraft:dirt'",
+			assertThrows(ScriptError.class, () -> Selector.tagItems("dirt")).getMessage());
+		assertEquals("tag_items() takes one item tag such as '#minecraft:logs', not ['#minecraft:logs', '#minecraft:planks']",
+			assertThrows(ScriptError.class, () -> Selector.tagItems(new PyList(new ArrayList<>(List.of("#logs", "#planks"))))).getMessage());
+	}
 }
