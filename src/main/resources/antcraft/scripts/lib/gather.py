@@ -1,6 +1,7 @@
-# Gathering raw items and making things from nothing, for any script: `import lib.gather`, then
+# Gathering raw items and making things from nothing, kept for old scripts: `import lib.gather`, then
 # lib.gather.make("stone_axe").
-# A module of the mod's default library (lib/): wrappers of lib.get that take "n more" where get takes a total.
+# A module of the mod's default library (lib/): wrappers of lib.get that take "n more" where get takes a total; new
+# scripts call lib.get.get and lib.find.exposed themselves.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.

@@ -43,11 +43,11 @@ A `kind` is `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`; its tools ar
 A lumberjack that makes sure its axes last the job before it starts:
 
 ```python
+import lib.get
 import lib.tools
-import lib.craft
 
 if not lib.tools.enough("axe", 64):
-    lib.craft.ensure_tool("axe", upgrade=True)
+    lib.get.ensure_tool("axe", 64)
 lib.tools.hold("axe")
 print("pickaxe for diamonds:", lib.tools.tier_for("diamond_ore"))
 print("pickaxe for the block below:", lib.tools.tier_for(pos().down()))
@@ -55,4 +55,4 @@ print("pickaxe for the block below:", lib.tools.tier_for(pos().down()))
 
 ## See also
 
-[`lib/cost`](cost.md), [`lib/craft`](craft.md), [`Stack`](../../types/stack.md), [`equip`](../../inventory/equip.md).
+[`lib/cost`](cost.md), [`lib/get`](get.md), [`Stack`](../../types/stack.md), [`equip`](../../inventory/equip.md).

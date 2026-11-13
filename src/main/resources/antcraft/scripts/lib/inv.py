@@ -1,28 +1,21 @@
-# Taking what the bot lacks from a chest and putting the rest away, for any script:
-# `from lib.inv import take_all, store_all`, or `import lib.inv` and call lib.inv.take_all(chest, need).
+# Putting what the bot carries away, for any script: `from lib.inv import store_all`, then store_all(chest).
+# take_all is kept for old scripts; lib.stock.take_up_to takes from a chest.
 # A module of the mod's default library (lib/).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
 from lib.result import result
-from lib.stock import take_from
+from lib.stock import take_up_to
 
 # What store_all never puts away: tools and food.
 KEPT = ["#minecraft:pickaxes", "#minecraft:axes", "#minecraft:shovels", "#minecraft:hoes", "#minecraft:swords", "#c:foods"]
 
 
 def take_all(chest, need):
-    """Takes from chest until the bot carries each count of need (an item id or a selector such as "#minecraft:planks"
-    to how many), as far as the chest has it, borrowed with lib.borrow unless chest is the colony's core; gives what is
+    """Kept for old scripts: lib.stock.take_up_to(item, n, chests=[chest]) for each item to n of need; gives what is
     still short, item to how many ({} when nothing is)."""
-    short = {}
-    for item, n in need.items():
-        if count(item) < n and any([matches(s, item) for s in container(chest) or []]):
-            take_from(chest, item, n - count(item))
-        if count(item) < n:
-            short[item] = n - count(item)
-    return short
+    return dict([(item, n - count(item)) for item, n in need.items() if not take_up_to(item, n, chests=[chest])["ok"]])
 
 
 def store_all(chest, keep=None):

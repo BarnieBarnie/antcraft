@@ -667,114 +667,28 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("False no_tool {} 0 0 2 3 1"), inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
-	// lib.craft.obtain
-
-	/** Prints what the bot borrowed, item and how many. */
-	private static final String BORROWED = "from lib.borrow import borrowed\nprint([(b['item'], b['n']) for b in borrowed()])\n";
+	// lib.craft.obtain and ensure_tool, kept for old scripts as lib.get.get and lib.get.ensure_tool (#545)
 
 	/** Prints what {@code lib.craft.obtain(args)} gives and then {@code counts}, the {@code count} of each item. */
 	private static String obtain(String args, String... counts) {
 		return craftAll(args, counts).replace("craft_all(", "obtain(");
 	}
 
-	/**
-	 * An empty bot, a chest of logs and cobblestone, no table: it takes the log the pickaxe needs, then the one the table
-	 * it crafts takes the planks of, and ends with the pickaxe and the table carried.
-	 */
-	@GameTest(maxTicks = 180)
-	public void obtainTakesFromAChestAndCrafts(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5), new ItemStack(Items.COBBLESTONE, 10));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "crafting_table"),
-			List.of("True None {} 1 1"), () -> {
-				tablesInTheArea(helper, 0).run();
-				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
-				helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 7, "cobblestone left " + chest.countItem(Items.COBBLESTONE));
-			});
-	}
-
-	/** The log in one chest, the cobblestone in another, a table in the area: both chests are emptied for the pickaxe, borrowed. */
-	@GameTest(maxTicks = 20)
-	public void obtainUsesEveryChest(GameTestHelper helper) {
-		Container logs = chest(helper, new ItemStack(Items.OAK_LOG, 1));
-		helper.setBlock(5, 1, 1, Blocks.CHEST);
-		Container stone = container(helper, new BlockPos(5, 1, 1));
-		stone.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
-		helper.setBlock(1, 1, 4, Blocks.CRAFTING_TABLE);
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + ", " + at(helper, 5, 1, 1) + "]", "stone_pickaxe")
-			+ BORROWED, List.of("True None {} 1", "[('minecraft:oak_log', 1), ('minecraft:cobblestone', 3)]"), () -> helper.assertTrue(logs.isEmpty() && stone.isEmpty(), "a chest is not empty"));
-	}
-
-	/** No chests given, the bot in a colony: it takes from the Colony Core, which is not borrowing. */
-	@GameTest(maxTicks = 20)
-	public void obtainTakesFromTheColonyCore(GameTestHelper helper) {
-		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
-		Container core = container(helper, CHEST);
-		core.setItem(0, new ItemStack(Items.OAK_LOG, 1));
-		core.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
-		helper.setBlock(1, 1, 4, Blocks.CRAFTING_TABLE);
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		ColonyManager manager = ColonyManager.get(helper.getLevel());
-		manager.join(bot, manager.byCore(helper.absolutePos(CHEST)).orElseThrow());
-		expect(helper, bot, obtain("'stone_pickaxe'", "stone_pickaxe") + BORROWED, List.of("True None {} 1", "[]"),
-			() -> helper.assertTrue(core.isEmpty(), "the core is not empty"));
-	}
-
-	/** Planks for the pickaxe but not also a table: it takes a log for the table with the rest, and makes both. */
-	@GameTest(maxTicks = 180)
-	public void obtainTakesWhatTheTableTakesToo(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
-		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
-		expect(helper, bot, obtain("'wooden_pickaxe', chests=[" + chestAt(helper) + "]", "wooden_pickaxe", "crafting_table"),
-			List.of("True None {} 1 1"), () -> {
-				tablesInTheArea(helper, 0).run();
-				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 4, "logs left " + chest.countItem(Items.OAK_LOG));
-			});
-	}
-
-	/** No cobblestone anywhere: it takes and crafts nothing and gives what it lacks, the log for the table it needs too. */
-	@GameTest(maxTicks = 20)
-	public void obtainWithTooLittleCraftsNothing(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 1));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "oak_planks", "oak_log"),
-			List.of("False missing_ingredients {'minecraft:oak_log': 1, 'minecraft:cobblestone': 3} 0 0 0"),
-			() -> helper.assertTrue(chest.countItem(Items.OAK_LOG) == 1, "logs left " + chest.countItem(Items.OAK_LOG)));
-	}
-
-	/** A chest of logs but no diamonds: it takes no log for the diamond pickaxe and gives the diamonds it lacks. */
-	@GameTest(maxTicks = 20)
-	public void obtainTakesNothingUnlessTheChestsHoldEverything(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, obtain("'diamond_pickaxe', chests=[" + chestAt(helper) + "]", "diamond_pickaxe", "oak_log"),
-			List.of("False missing_ingredients {'minecraft:diamond': 3} 0 0"),
-			() -> helper.assertTrue(chest.countItem(Items.OAK_LOG) == 5, "logs left " + chest.countItem(Items.OAK_LOG)));
-	}
-
-	/** No pickaxe, no furnace near, a chest with raw iron, sticks and coal: obtain takes nothing for an iron pickaxe and gives no_tool. */
-	@GameTest(maxTicks = 20)
-	public void obtainWithoutAPickaxeForTheFurnaceTakesNothing(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.STICK, 2), new ItemStack(Items.COAL, 1));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, obtain("'iron_pickaxe', chests=[" + chestAt(helper) + "]", "iron_pickaxe", "raw_iron", "stick"),
-			List.of("False no_tool {} 0 0 0"), () -> {
-				helper.assertTrue(chest.countItem(Items.RAW_IRON) == 3, "raw iron left " + chest.countItem(Items.RAW_IRON));
-				helper.assertTrue(chest.countItem(Items.STICK) == 2, "sticks left " + chest.countItem(Items.STICK));
-			});
-	}
-
-	// lib.craft.ensure_tool
-
 	/** Prints what {@code lib.craft.ensure_tool(args)} gives, the item held and then {@code counts}, the {@code count} of each item. */
 	private static String ensureTool(String args, String... counts) {
 		return craftAll(args, counts).replace("craft_all(", "ensure_tool(").replace("r['missing']", "r['missing'], held() and held().item");
 	}
 
-	/** Two pickaxes carried: the stone one is held, nothing is crafted. */
+	/** A stone pickaxe in a chest the bot is not given: obtain is lib.get.get, which takes it from the chests nearby. */
+	@GameTest(maxTicks = 20)
+	public void obtainIsGet(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.STONE_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		expect(helper, bot, obtain("'stone_pickaxe', chests=[]", "stone_pickaxe"), List.of("True None {} 1"),
+			() -> helper.assertTrue(chest.isEmpty(), "the chest is not empty"));
+	}
+
+	/** Two pickaxes carried: ensure_tool holds the best at once, without costing lib.get.ensure_tool's options. */
 	@GameTest(maxTicks = 20)
 	public void ensureToolHoldsTheBestCarried(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -783,108 +697,6 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		expect(helper, bot, ensureTool("'pickaxe'", "wooden_pickaxe", "stone_pickaxe", "oak_log"),
 			List.of("True None {} minecraft:stone_pickaxe 1 1 3"));
-	}
-
-	/** No pickaxe, logs and cobblestone: the diamond and iron tiers fail before crafting, and a stone pickaxe is made and held. */
-	@GameTest(maxTicks = 180)
-	public void ensureToolMakesAStonePickaxe(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
-		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
-		expect(helper, bot, ensureTool("'pickaxe'", "stone_pickaxe", "wooden_pickaxe", "cobblestone"),
-			List.of("True None {} minecraft:stone_pickaxe 1 0 0"), tablesInTheArea(helper, 0));
-	}
-
-	/** Only logs: the stone tier lacks cobblestone, so a wooden pickaxe is made and held. */
-	@GameTest(maxTicks = 180)
-	public void ensureToolWithOnlyLogsMakesAWoodenPickaxe(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
-		expect(helper, bot, ensureTool("'pickaxe'", "wooden_pickaxe", "stone_pickaxe"),
-			List.of("True None {} minecraft:wooden_pickaxe 1 0"), tablesInTheArea(helper, 0));
-	}
-
-	/**
-	 * No pickaxe, logs and cobblestone in the core: the diamond and iron tiers take nothing, so the stone pickaxe takes only
-	 * its own logs and cobblestone and no stray item is left in the bot.
-	 */
-	@GameTest(maxTicks = 180)
-	public void ensureToolLeavesNoStrayItemsFromTheFailedTiers(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.OAK_LOG, 5), new ItemStack(Items.COBBLESTONE, 10));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "oak_log", "cobblestone"),
-			List.of("True None {} minecraft:stone_pickaxe 1 0 0"), () -> {
-				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
-				helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 7, "cobblestone left " + chest.countItem(Items.COBBLESTONE));
-			});
-	}
-
-	/**
-	 * No pickaxe, raw iron, coal, logs and cobblestone in a chest: the iron tier takes no raw iron, as its furnace could not be
-	 * mined back, and a stone pickaxe is made and held.
-	 */
-	@GameTest(maxTicks = 180)
-	public void ensureToolWithoutAPickaxeSkipsTheIronTier(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.RAW_IRON, 3), new ItemStack(Items.COAL, 1), new ItemStack(Items.OAK_LOG, 5),
-			new ItemStack(Items.COBBLESTONE, 10));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "stone_pickaxe", "raw_iron"),
-			List.of("True None {} minecraft:stone_pickaxe 1 0"),
-			() -> helper.assertTrue(chest.countItem(Items.RAW_IRON) == 3, "raw iron left " + chest.countItem(Items.RAW_IRON)));
-	}
-
-	/** One plank and two sticks, too little for any tier: it fails, short of the logs for the wooden pickaxe and a table, and every tier leaves them as they were. */
-	@GameTest(maxTicks = 40)
-	public void ensureToolWithNothingToMakeOneFromChangesNothing(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 1));
-		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
-		expect(helper, bot, ensureTool("'pickaxe'", "oak_planks", "stick", "wooden_pickaxe"),
-			List.of("False missing_ingredients {'minecraft:oak_log': 2} None 1 2 0"));
-	}
-
-	/** No pickaxe, a chest with a wooden and an iron one and logs: it borrows and holds the iron one, crafting nothing. */
-	@GameTest(maxTicks = 20)
-	public void ensureToolTakesTheBestFromAChest(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.WOODEN_PICKAXE), new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.OAK_LOG, 3));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "iron_pickaxe", "wooden_pickaxe", "oak_log") + BORROWED,
-			List.of("True None {} minecraft:iron_pickaxe 1 0 0", "[('iron_pickaxe', 1)]"), () -> {
-				helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 1, "wooden pickaxes left " + chest.countItem(Items.WOODEN_PICKAXE));
-				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
-			});
-	}
-
-	/** A wooden pickaxe carried and an iron one in the chest: upgrade takes and holds the iron one, the wooden one kept. */
-	@GameTest(maxTicks = 20)
-	public void ensureToolUpgradeTakesABetterOneFromAChest(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.IRON_PICKAXE));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
-		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "], upgrade=True", "iron_pickaxe", "wooden_pickaxe"),
-			List.of("True None {} minecraft:iron_pickaxe 1 1"), () -> helper.assertTrue(chest.isEmpty(), "the chest is not empty"));
-	}
-
-	/** A stone pickaxe carried and a wooden one in the chest: upgrade leaves the worse one there and holds the stone one. */
-	@GameTest(maxTicks = 20)
-	public void ensureToolUpgradeTakesNoWorseTool(GameTestHelper helper) {
-		Container chest = chest(helper, new ItemStack(Items.WOODEN_PICKAXE));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
-		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "], upgrade=True", "stone_pickaxe", "wooden_pickaxe"),
-			List.of("True None {} minecraft:stone_pickaxe 1 0"),
-			() -> helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 1, "wooden pickaxes left " + chest.countItem(Items.WOODEN_PICKAXE)));
-	}
-
-	/** A wooden pickaxe, logs and cobblestone carried, no chest: upgrade makes and holds a stone one. */
-	@GameTest(maxTicks = 180)
-	public void ensureToolUpgradeMakesABetterOne(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
-		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
-		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
-		expect(helper, bot, ensureTool("'pickaxe', chests=[], upgrade=True", "stone_pickaxe", "wooden_pickaxe"),
-			List.of("True None {} minecraft:stone_pickaxe 1 1"), tablesInTheArea(helper, 0));
 	}
 
 	// smelt

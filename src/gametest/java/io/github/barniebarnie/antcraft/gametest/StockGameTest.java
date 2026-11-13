@@ -90,6 +90,28 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** take_up_to with chests (#545): only the far chest given, 4 of its 5 planks taken up to 6 with 2 carried, none from the near one. */
+	@GameTest(maxTicks = 50)
+	public void takeUpToTakesOnlyFromTheChestsGiven(GameTestHelper helper) {
+		Container near = chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 6));
+		Container far = chest(helper, FAR, new ItemStack(Items.OAK_PLANKS, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 2));
+		run(helper, bot, IMPORT + """
+			from lib.stock import take_up_to
+			r = take_up_to("oak_planks", 6, chests=[%s])
+			print(r["ok"], count("oak_planks"))
+			r = take_up_to("oak_planks", 9, chests=[%s])
+			print(r["ok"], r["missing"], count("oak_planks"))
+			""".formatted(pos(helper, FAR), pos(helper, FAR)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 6", "False {'oak_planks': 2} 7");
+			helper.assertTrue(count(near, Items.OAK_PLANKS) == 6, "planks in the near chest " + count(near, Items.OAK_PLANKS));
+			helper.assertTrue(count(far, Items.OAK_PLANKS) == 0, "planks in the far chest " + count(far, Items.OAK_PLANKS));
+		});
+	}
+
 	/** A remembered chest in another dimension (#525) is left out; one in the bot's dimension or with none stays. */
 	@GameTest(maxTicks = 40)
 	public void leavesOutARememberedChestInAnotherDimension(GameTestHelper helper) {

@@ -14,18 +14,13 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-from colony.common import core, in_colony
-
-CONTAINERS = ["chest", "trapped_chest", "barrel"]
+from colony.common import core
+import lib.stock
 
 
 def holders(item):
-    """The containers in the colony that hold item, nearest first; the core left out."""
-    found = []
-    for p in scan(CONTAINERS, radius=32):
-        if p != core() and in_colony(p) and any([matches(s, item) for s in container(p) or []]):
-            found.append(p)
-    return found
+    """The containers in the colony that hold item, nearest first (lib.stock.where); the core left out."""
+    return [p for p in lib.stock.where(item) if p != core()]
 
 
 def haul(job):

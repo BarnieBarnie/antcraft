@@ -20,7 +20,7 @@
 # delete it and the default comes back when the server starts.
 from colony.common import core, store
 from lib.borrow import give_back
-from lib.inv import take_all
+from lib.stock import take_up_to
 
 
 def get_or_haul(job, short, need):
@@ -43,7 +43,7 @@ def build_job(job):
         finish_job(job["id"])
         return
     while True:
-        short = take_all(core(), plan["materials"])
+        short = [item for item, n in plan["materials"].items() if not take_up_to(item, n, chests=[core()])["ok"]]
         r = build(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False), job=job["id"])
         if r:
             break

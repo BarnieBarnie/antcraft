@@ -2,26 +2,26 @@
 # lib.craft.craft_all("stone_pickaxe").
 # A module of the mod's default library (lib/).
 #
-# craft_all and craft_here gather nothing: fetch the raw items first, with take from a chest or by mining, or let
-# obtain take them from chests.
+# craft_all and craft_here gather nothing: get the raw items first, or let lib.get.get gather and craft them.
+# obtain, ensure_tool and fetch are kept for old scripts: use lib.get.get, lib.get.ensure_tool and lib.stock.fetch_all.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
 from lib.result import result
-from lib.stock import fetch_all, take_from
+from lib.stock import fetch_all
 # hold lives in lib.tools; imported here, lib.craft.hold keeps working.
-from lib.tools import TIERS, hold
+from lib.tools import hold
 
 # smelt loads at most a stack a call.
 STACK = 64
 
-# The tiers ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
-MADE = ["diamond", "iron", "stone", "wooden"]
-
 # How far craft_here looks for a crafting table or furnace it need not craft. ponytail: find_nearest's sphere stands in for
 # the reach of craft and smelt, so a station just outside reach is not planned for.
 REACH = 4
+
+# The tool tiers lib.get.ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
+MADE = ["diamond", "iron", "stone", "wooden"]
 
 
 def craft_all(item, n=1, table=None, furnace=None):
@@ -50,22 +50,9 @@ def craft_all(item, n=1, table=None, furnace=None):
 
 
 def obtain(item, n=1, chests=None):
-    """Makes the bot carry n of item: the raw items plan(item, n) lists, those of a crafting table or furnace craft_here
-    must craft included, taken from chests (a list of positions; None: the colony's core, none outside a colony) one
-    after the other, then craft_here(item, n). Gives result(): ok, no_tool where plan(item, n) does, or
-    missing_ingredients with missing, what the chests lack, before it takes or crafts anything, or craft_here's result."""
-    if count(item) >= n:
-        return result()
-    if chests is None:
-        c = colony()
-        chests = [c["core"]] if c else []
-    p = plan(item, n)
-    if p["no_tool"]:
-        return result("no_tool")
-    short = fetch(p["gather"], chests)
-    if short:
-        return result("missing_ingredients", None, short)
-    return craft_here(item, n)
+    """Kept for old scripts: lib.get.get(item, n), which also gathers what the chests lack; chests is not used."""
+    import lib.get
+    return lib.get.get(item, n)
 
 
 def plan(item, n=1):
@@ -87,45 +74,12 @@ def plan(item, n=1):
 
 
 def ensure_tool(kind, chests=None, upgrade=False):
-    """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword"): the best it carries; where it
-    carries none, or with upgrade none of the best tier, the best of TIERS one of chests (a list of positions; None:
-    the colony's core) holds, borrowed but from the core, else the best of MADE that obtain(f"{tier}_{kind}", 1, chests)
-    makes; it gathers nothing (lib.get.ensure_tool does, and picks the tier by cost). With upgrade only a
-    tier better than the carried one is taken or made, and the worse tool is kept, a spare. Gives result(): ok, or
-    obtain's result for the worst tier tried where the bot carries none and none could be taken or made."""
-    if chests is None:
-        c = colony()
-        chests = [c["core"]] if c else []
-    # The rank of the best tool carried: its index in TIERS, len(TIERS) for one of no listed tier, more for none.
-    have = len(TIERS) + 1
-    for i, tier in enumerate(TIERS):
-        if count(f"{tier}_{kind}"):
-            have = i
-            break
-    if have > len(TIERS) and count(f"#minecraft:{kind}s"):
-        have = len(TIERS)
-    if have <= len(TIERS) and not upgrade:
-        return hold(kind)
-    better = [f"{tier}_{kind}" for tier in TIERS[:have]]
-    if have > len(TIERS):
-        better.append(f"#minecraft:{kind}s")
-    for tool in better:
-        for chest in chests:
-            if any([matches(s, tool) for s in container(chest) or []]):
-                before = count(tool)
-                take_from(chest, tool, 1)
-                if count(tool) > before:
-                    return hold(kind)
-    r = result()
-    for tier in MADE:
-        if TIERS.index(tier) >= have:
-            break
-        r = obtain(f"{tier}_{kind}", 1, chests)
-        if r["ok"]:
-            break
-    if r["ok"] or have <= len(TIERS):
-        return hold(kind)
-    return r
+    """Kept for old scripts: holds the best tool of kind carried, else lib.get.ensure_tool(kind), the cheapest one
+    borrowed or made; chests and upgrade are not used."""
+    if count(f"#minecraft:{kind}s"):
+        return hold(kind)  # at once: lib.get.ensure_tool costs every way to make one first
+    import lib.get
+    return lib.get.ensure_tool(kind)
 
 
 def fetch(more, chests):

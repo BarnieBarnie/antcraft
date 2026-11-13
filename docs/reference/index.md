@@ -162,22 +162,27 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/home`](modules/lib/home.md): `go_home()`, `at_home()`, `to_home_dimension()`, `portal_out()`.
 - [`lib/shaft`](modules/lib/shaft.md): `dig_shaft(levels)`, `to_level(level)`, `to_surface()`, `shaft(levels=None)`.
 - [`lib/mine`](modules/lib/mine.md): `mine_level(level, rounds=1)`, `site(r=0)`.
-- [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`, `smelt_here(item, n=1, fuel=None)`, `obtain(item, n=1, chests=None)`, `ensure_tool(kind, chests=None, upgrade=False)`, `plan(item, n=1)`.
+- [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`, `smelt_here(item, n=1, fuel=None)`, `plan(item, n=1)`.
 - [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4, kwargs=None)`.
-- [`lib/inv`](modules/lib/inv.md): `take_all(chest, need)`, `store_all(chest, keep=None)`.
+- [`lib/inv`](modules/lib/inv.md): `store_all(chest, keep=None)`.
 - [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False, around=None)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`, `tree_blocks(base)`, `is_giant(base)`, `stands(blocks)`, `fell_whole(base, replant=True)`, `take_back()`, `LOGS`, `SAPLINGS`, `SCAFFOLD`, `KEEP`.
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
-- [`lib/gather`](modules/lib/gather.md): `make(item, n=1, radius=32)`, `gather(item, n=1, radius=32)`, `stone(n, radius=32)`, `exposed_stone(radius=32, skip=None)`.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `walk(a, b)`, `breaking(n, material, tier)`.
 - [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(what)`, `hold(kind)`.
 - [`lib/borrow`](modules/lib/borrow.md): `borrow(chest, item, n=1)`, `borrowed()`, `give_back(radius=16)`, `keep(item, n=None)`.
 - [`lib/find`](modules/lib/find.md): `nearest(what, radius=32, where=None)`, `exposed(what, radius=32, skip=None)`, `is_open(p)`, `is_air(p)`.
 - [`lib/dig`](modules/lib/dig.md): `stone(n, radius=32)`, `ore(item, n, radius=32, y=None, facing="north", length=32)`, `best_y(item)`, `stairs_to(y, facing="north")`, `stairs_up(facing="north")`, `branch(length, every=8, facing="north")`.
-- [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `take_up_to(item, n, radius=32)`, `fetch_all(more, chests)`.
+- [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `take_up_to(item, n, radius=32, chests=None)`, `fetch_all(more, chests)`.
 - [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None, ore=None)`, `DEEP`, `wood_for_coal(k, radius)`, `key(item)`, the resolver.
 - [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32)`, the things a job starts with.
-- [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
+- [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, shared by the [default colony scripts](../features/colony-scripts.md).
+
+Kept for old scripts, each now a wrapper of the library function after it; new scripts call that one:
+
+- [`lib.craft.obtain`](modules/lib/craft.md#kept-for-old-scripts): `lib.get.get`; [`lib.craft.ensure_tool`](modules/lib/craft.md#kept-for-old-scripts): `lib.get.ensure_tool`; `lib.craft.fetch`: `lib.stock.fetch_all`.
+- [`lib.inv.take_all`](modules/lib/inv.md#take_allchest-need) and [`colony.common.fetch`](modules/colony/common.md#fetchitem-n): `lib.stock.take_up_to(item, n, chests=[...])`.
+- [`lib/gather`](modules/lib/gather.md)'s `make`, `gather` and `stone`: `lib.get.get`, which takes a total where these take "`n` more"; `exposed_stone`: `lib.find.exposed`.
 
 ### Writing library functions
 

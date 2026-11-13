@@ -11,8 +11,9 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-from colony.common import core, fetch, store
+from colony.common import core, store
 from lib.borrow import give_back
+from lib.stock import take_up_to
 
 # (crop block, seed item, harvest item, ripe age); wheat first, so it is planted
 # where the bot carries several kinds of seed.
@@ -64,14 +65,14 @@ while True:
     if till and not has("#minecraft:hoes"):
         # The core's best hoe first, as lib.get costs every tier it could make, some 130 ticks.
         for hoe in ["minecraft:iron_hoe", "minecraft:stone_hoe", "minecraft:wooden_hoe"]:
-            if fetch(hoe, 1):
+            if take_up_to(hoe, 1, chests=[core()])["ok"]:
                 break
         if not has("#minecraft:hoes"):
             ensure_tool("hoe", till)
     bare = len([s for s in spots if block(s.up()).is_air])
     for c in CROPS:
         if bare > 0:
-            fetch(c[1], bare)
+            take_up_to(c[1], bare, chests=[core()])
             bare -= count(c[1])
     for soil in spots:
         tend(soil)

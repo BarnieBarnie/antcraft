@@ -2,7 +2,7 @@
 
 The chests a bot may take from, which of them hold an item, and fetching an item from them. A module of the mod's default library: `from lib.stock import chests, where, fetch` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/stock.py`, written with `scan`, `container`, `count` and [`lib/borrow`](borrow.md); read it to see how.
 
-What it takes from a chest is borrowed: [`lib/borrow`](borrow.md) records it, and `give_back()` returns what is left at the end of the job. What it takes from the bot's [Colony Core](../../colony/colony.md) is not: colony storage is the colony's own, so a builder or miner taking its materials there takes them for good, as `colony/common`'s `fetch` and `store` always did.
+What it takes from a chest is borrowed: [`lib/borrow`](borrow.md) records it, and `give_back()` returns what is left at the end of the job. What it takes from the bot's [Colony Core](../../colony/colony.md) is not: colony storage is the colony's own, so a builder or miner taking its materials there takes them for good, as `colony/common`'s `store` always did.
 
 ## `chests(radius=32)`
 
@@ -35,16 +35,16 @@ if r["ok"]:
 give_back()
 ```
 
-## `take_up_to(item, n, radius=32)`
+## `take_up_to(item, n, radius=32, chests=None)`
 
-`fetch` without the all or nothing: takes `item` from the chests of `where(item, radius)`, nearest first, each borrowed, until the bot carries `n` in total or the chests hold no more, and keeps what it took. [`lib/get`](get.md)'s `get` takes with it, then gathers or crafts the rest.
+`fetch` without the all or nothing: takes `item` from the chests of `where(item, radius)`, nearest first, each borrowed, until the bot carries `n` in total or the chests hold no more, and keeps what it took. With `chests`, a list of [`Pos`](../../types/pos.md), it takes from those in turn instead, so `chests=[colony()["core"]]` takes from the Colony Core only, as the default colony scripts do. [`lib/get`](get.md)'s `get` takes with it, then gathers or crafts the rest. It replaces [`lib/inv`](inv.md)'s `take_all` and [`colony/common`](../colony/common.md)'s `fetch`, kept as wrappers of it.
 
 - **Returns** a [`result()`](result.md) dict: `ok`, or `no_item` with `missing`, the item to how many the bot is still short.
 - **Pauses** yes, while it walks to each chest and takes; not where the bot carries `n` already or no chest holds the item.
 
 ## `fetch_all(more, chests)`
 
-The work of `fetch` for several items and given chests: takes `more`, item to how many more than the bot carries, from each of `chests` (a list of [`Pos`](../../types/pos.md)) in turn, borrowed but from the colony's core. Where the chests together hold too little of any item it takes nothing. [`lib/craft`](craft.md)'s `obtain` fetches its raw items with it.
+The work of `fetch` for several items and given chests: takes `more`, item to how many more than the bot carries, from each of `chests` (a list of [`Pos`](../../types/pos.md)) in turn, borrowed but from the colony's core. Where the chests together hold too little of any item it takes nothing.
 
 - **Returns** what is still short, item to how many; `{}` when nothing is.
 - **Pauses** as `fetch`.

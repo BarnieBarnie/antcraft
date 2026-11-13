@@ -27,7 +27,7 @@ import lib.mine
 import lib.shaft
 import lib.tools
 from lib.borrow import give_back
-from lib.inv import take_all
+import lib.stock
 from lib.result import result
 
 # The heights to mine at unless colony_memory["mineshaft"] says otherwise: iron, then diamonds.
@@ -82,10 +82,12 @@ def site():
 
 def take_more(more):
     """Takes from the core what the bot lacks of more (item to how many more than it carries); gives what is still short."""
-    need = {}
+    short = {}
     for item, n in more.items():
-        need[item] = count(item) + n
-    return take_all(core(), need)
+        r = lib.stock.take_up_to(item, count(item) + n, chests=[core()])
+        if not r["ok"]:
+            short[item] = r["missing"][item]
+    return short
 
 
 def supply(more, uses):

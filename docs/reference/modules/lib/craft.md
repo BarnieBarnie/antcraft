@@ -1,6 +1,6 @@
 # `lib/craft`
 
-Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md); `obtain` and `ensure_tool` also take the raw items (and `ensure_tool` a finished tool) from chests: the raw items with [`lib/stock`](stock.md)'s `fetch_all`, borrowed but from the Colony Core.
+Crafting and smelting an item through its whole recipe tree, with a crafting table or furnace put down and taken back if need be. A module of the mod's default library: `import lib.craft`, then `lib.craft.craft_all("stone_pickaxe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/craft.py`, written with [`needs`](../../crafting/needs.md), [`craft`](../../crafting/craft.md) and [`smelt`](../../crafting/smelt.md). It gathers nothing: [`lib/get`](get.md)'s `get` gets the raw items from chests and the world and crafts with this module.
 
 ## `craft_all(item, n=1, table=None, furnace=None)`
 
@@ -34,25 +34,15 @@ Mining the furnace back takes a pickaxe: where it would put one down and the bot
 - **Returns** a dict as `craft_all` gives: `ok`, or `smelt`'s reason (see [`Result`](../../types/result.md)), `no_tool` where the bot carries no pickaxe to mine the furnace back, `missing_ingredients` before it crafts anything, or `no_furnace` where the bot could not craft a furnace or no spot beside it took one.
 - **Pauses** yes, as `smelt` does, and while it crafts, places and mines the furnace.
 
-## `obtain(item, n=1, chests=None)`
+## Kept for old scripts
 
-Makes the bot carry `n` of `item`, raw items fetched from storage: where it carries `n` already it is done. Otherwise it asks `plan(item, n)` (below) what to gather, the raw items of a crafting table and furnace `craft_here` must craft included; where `plan`'s `no_tool` is `True` it takes nothing and gives `no_tool`. Otherwise, where the chests and the bot together hold all of it, takes that from each chest of `chests` in turn (a list of [`Pos`](../../types/pos.md); `None`: the [`colony`](../../colony/colony.md)'s Colony Core, no chest for a bot in no colony), with [`lib/stock`](stock.md)'s `fetch_all`, borrowed with [`lib/borrow`](borrow.md) but from the Colony Core, so raw items spread over several chests are all used. Then it runs `craft_here(item, n)`, which crafts and puts a crafting table and furnace down as need be. That table or furnace stays carried.
+`obtain`, `ensure_tool` and `fetch` were this module's chest-only ways to get an item or tool. They are kept so older scripts still run, each now a wrapper of the library function that does it; new scripts call that one.
 
-- **Returns** a dict as `craft_all` gives: `ok`, or `no_tool`, or `missing_ingredients` with `missing`, item id to how many the chests lack, both before it takes or crafts anything, or what `craft_here` gives.
-- **Pauses** yes, while it walks to each chest and as `craft_here` does.
-
-## `ensure_tool(kind, chests=None, upgrade=False)`
-
-Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`. Where it carries one, it [`equip`](../../inventory/equip.md)s the best, with [`lib/tools`](tools.md)'s `hold` (also `lib.craft.hold`): netherite, diamond, iron, stone, golden, then wooden, by the tier in the item id; a tool of another tier (from a mod) only where it carries none of these. Where it carries none, it takes the best finished one from `chests` (a list of positions; `None`: the colony's core, none outside a colony), by the same order, borrowed with [`lib/borrow`](borrow.md) but from the Colony Core, and holds it. Where the chests hold none, it runs `obtain(f"{tier}_{kind}", 1, chests)` for each tier from diamond, iron and stone down to wooden, stops at the first that works and holds that tool.
-
-With `upgrade=True` it does the same where the bot carries a tool, but only for tiers better than the best one carried: a worse tool in a chest stays there, and where no better one can be taken or made it holds the one it carries. The worse tool is kept, a spare for when the better one breaks. Leave `upgrade` off in a script that calls `ensure_tool` every loop: an upgrade tries to make each better tier each time.
-
-A tier the bot and the chests lack raw items for fails before anything is taken or crafted, so trying the better tiers first uses up nothing. The iron tier for a bot with no pickaxe and no furnace within reach also fails before anything is taken (`no_tool`).
-
-- **Returns** a dict as `craft_all` gives: `ok`, or, where the bot carries no tool of `kind` and none could be taken or made, what `obtain` gave for the wooden tool, such as `missing_ingredients`.
-- **Pauses** yes, while it walks to a chest and as `obtain` does; not where the bot carries a tool of `kind` and `upgrade` is off.
-
-`obtain` and `ensure_tool` gather nothing from the world. [`lib/get`](get.md)'s `get` and `ensure_tool` do, and pick a tool's tier by cost; they build on this module, which cannot import them back.
+| Function | Now |
+|---|---|
+| `obtain(item, n=1, chests=None)` | [`lib.get.get(item, n)`](get.md#getitem-n1-radius32), which also gathers; `chests` is not used |
+| `ensure_tool(kind, chests=None, upgrade=False)` | holds the best carried tool of `kind`, else [`lib.get.ensure_tool(kind)`](get.md#ensure_toolkind-uses1-tiernone-radius32); `chests` and `upgrade` are not used |
+| `fetch(more, chests)` | [`lib.stock.fetch_all(more, chests)`](stock.md#fetch_allmore-chests) |
 
 ## `plan(item, n=1)`
 
@@ -94,25 +84,7 @@ import lib.craft
 r = lib.craft.craft_here("iron_pickaxe")
 ```
 
-An empty-handed bot beside a chest of logs and cobblestone:
-
-```python
-import lib.craft
-
-r = lib.craft.obtain("stone_pickaxe", chests=[memory["chest"]])
-if not r["ok"]:
-    warn(f"no pickaxe: {r['reason']} {r['missing']}")
-```
-
-A miner that makes sure it holds a pickaxe before it digs:
-
-```python
-import lib.craft
-
-r = lib.craft.ensure_tool("pickaxe", chests=[memory["chest"]])
-if not r["ok"]:
-    warn(f"no pickaxe: {r['reason']} {r['missing']}")
-```
+To get the raw items as well, from chests or the world, use [`lib.get.get`](get.md#getitem-n1-radius32), and [`lib.get.ensure_tool`](get.md#ensure_toolkind-uses1-tiernone-radius32) for a tool.
 
 ## See also
 

@@ -29,4 +29,4 @@ post_job("build", {"blueprint": "antcraft:farm", "at": colony()["core"] + (4, -1
 post_job("haul", {"item": "minecraft:oak_log", "n": 16})
 ```
 
-They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, `store(item)` (put all carried into the core) and `fetch(item, n)` (take from the core up to `n` carried; `item` may be a selector such as `"#minecraft:planks"`).
+They share `colony/common.py`: `core()` (the core, or say and stop outside a colony), `in_colony(pos)`, and `store(item)` (put all carried into the core). They take from the core with [`lib.stock.take_up_to(item, n, chests=[core()])`](../reference/modules/lib/stock.md#take_up_toitem-n-radius32-chestsnone) (up to `n` carried; `item` may be a selector such as `"#minecraft:planks"`), and `colony.hauler` finds the chests that hold an item with `lib.stock.where`; `fetch(item, n)` is kept for old scripts.
