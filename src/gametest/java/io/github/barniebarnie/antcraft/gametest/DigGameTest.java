@@ -146,6 +146,30 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A branch of 6 east with a stone pickaxe takes the coal vein beside it and leaves the lodestone vein after it, which
+	 * the game test tags put in needs_iron_tool and c:ores, in its wall rather than fail on it (#547).
+	 */
+	@GameTest(maxTicks = 560)
+	public void branchLeavesAVeinItsPickaxeDoesNotDrop(GameTestHelper helper) {
+		stone(helper, 4);
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		helper.setBlock(3, 1, 2, Blocks.COAL_ORE);
+		helper.setBlock(5, 2, 4, Blocks.LODESTONE);
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			r = lib.dig.branch(6, 3, "east")
+			print(r["ok"], r["reason"], count("coal"), count("lodestone"))
+			""", List.of("True None 1 0"),
+			() -> {
+				helper.assertBlockPresent(Blocks.AIR, 3, 1, 2);
+				helper.assertBlockPresent(Blocks.LODESTONE, 5, 2, 4);
+				helper.assertBlockPresent(Blocks.AIR, 7, 2, 3);
+			});
+	}
+
+	/**
 	 * From a pocket in stone with no staircase remembered, stairs_up digs a staircase east up to the open air. The area
 	 * has sky access: no barrier ceiling over it.
 	 */

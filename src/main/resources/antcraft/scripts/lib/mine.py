@@ -10,6 +10,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.tools
 from lib.result import result
 from lib.shaft import dig, seal, put_block, FILL, TORCHES
 
@@ -103,13 +104,16 @@ def fluids(cells):
 
 
 def veins(cells, opened, stand, chest=None):
-    """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up. With
-    a chest, it empties the bot into it (room) when its inventory is nearly full."""
+    """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up; a
+    vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547). With a chest, it empties the bot into it
+    (room) when its inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
             if p in opened:
                 continue
             vein = ore_vein(p)
+            if vein and not lib.tools.drops(p):
+                continue
             for b in vein:
                 failure = (room(chest) if chest is not None else None) or dig(b, opened + vein, stand)
                 if failure:

@@ -72,6 +72,13 @@ def tier_for(what):
     return "wooden"
 
 
+def drops(p):
+    """Whether the best pickaxe the bot carries is of a tier that drops the block at p (tier_for); also for one of no
+    listed tier, which mine itself then tells about. False where it carries none."""
+    t = best("pickaxe")
+    return t is not None and (tier(t) is None or rank(t) <= TIERS.index(tier_for(p)))
+
+
 def hold(kind):
     """Equips the best tool of kind the bot carries, by TIERS; one of no listed tier only where it carries none of these.
     Gives result()."""

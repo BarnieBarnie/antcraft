@@ -6,7 +6,7 @@ It works on the shaft in `memory["shaft"]`. How many rounds of a level are done 
 
 ## `mine_level(level, rounds=1)`
 
-Digs the hall of the level at height `level` and its next `rounds` rounds of branches, mines every ore vein it uncovers, puts torches at the level's torch spots, and puts the ore into the landing chest, also whenever its inventory fills. The stone and other junk it does not keep it drops where it stands rather than store it, so the chest never fills with junk and the level can be mined round after round; dropped items vanish after 5 minutes, as a player's do. Where water or lava is in or beside the next block, it seals it, stops that hall or branch and goes on with the next.
+Digs the hall of the level at height `level` and its next `rounds` rounds of branches, mines every ore vein it uncovers that its pickaxe drops ([`lib.tools.drops`](tools.md)), puts torches at the level's torch spots, and puts the ore into the landing chest, also whenever its inventory fills. The stone and other junk it does not keep it drops where it stands rather than store it, so the chest never fills with junk and the level can be mined round after round; dropped items vanish after 5 minutes, as a player's do. Where water or lava is in or beside the next block, it seals it, stops that hall or branch and goes on with the next.
 
 - **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives (`ok`, `reason`, `at`, `missing`) and `sealed`, the fluid blocks where a hall or branch stopped.
 - **Pauses** yes, while it digs, walks and puts away.

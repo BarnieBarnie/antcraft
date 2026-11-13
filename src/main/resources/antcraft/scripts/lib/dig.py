@@ -9,6 +9,7 @@
 import lib.find
 import lib.mine
 import lib.shaft
+import lib.tools
 from lib.result import result
 
 COBBLESTONE = "minecraft:cobblestone"
@@ -68,7 +69,7 @@ def stone(n, radius=32):
 
 def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     """Makes the bot carry n more of item, a raw item such as "raw_iron" or "coal": mines the exposed veins of its ore
-    within radius, nearest first; where they give too few, digs stairs down to y (best_y(item) where None) towards
+    within radius, nearest first, but for those its pickaxe does not drop (lib.tools.drops); where they give too few, digs stairs down to y (best_y(item) where None) towards
     facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
     staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where ROUNDS branches found
     too little or there is no y to dig to (emerald), or where a step failed."""
@@ -82,6 +83,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
         if p is None:
             break
         skip[p] = True  # once tried, whether its vein came out or not
+        if not lib.tools.drops(p):
+            continue  # a vein its pickaxe does not drop is left (#547)
         for b in ore_vein(p):
             r = mine(b)
             if not r and r.reason == "no_space":
@@ -226,7 +229,7 @@ def dig_up(facing):
 
 def branch(length, every=8, facing="north"):
     """Digs a tunnel two blocks tall length blocks on from the bot's feet towards facing and walks it, mining each ore
-    vein in its walls and ceiling and putting a torch on the floor every every blocks while it carries one. Walls off a
+    vein in its walls and ceiling that its pickaxe drops (lib.mine.veins) and putting a torch on the floor every every blocks while it carries one. Walls off a
     fluid or falling block beside it as lib.shaft does. Gives result(): ok, or the reason it stopped with at."""
     step = FACING[facing]
     stand = pos()

@@ -25,6 +25,11 @@ A `kind` is `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`; its tools ar
 - `what` is a [`Pos`](../../types/pos.md) (or a tuple) or a block id (`"diamond_ore"` or `"minecraft:diamond_ore"`). At a position it reads the block's `#minecraft:needs_stone_tool`, `needs_iron_tool` and `needs_diamond_tool` tags ([`block(pos).tags`](../../types/block.md)), so a modded ore a data pack puts in those tags gives its tier. For an id it reads a table of the vanilla blocks of those tags (`NEEDS`), so a modded block gives `"wooden"` unless you add it to `lib.tools.NEEDS` in your script; pass its position where you know it.
 - **Pauses** no.
 
+## `drops(p)`
+
+- **Returns** whether the best pickaxe the bot carries is of a tier that drops the block at `p`: at least `tier_for(p)`. `True` for a pickaxe of no listed tier (a modded one), whose [`mine`](../../blocks/mine.md) then tells; `False` where it carries no pickaxe. `lib.dig` and `lib.mine` leave a vein it gives `False` for.
+- **Pauses** no.
+
 ## `hold(kind)`
 
 - **Does** [`equip`](../../inventory/equip.md) the best tool of `kind` the bot carries, by `TIERS`; one of no listed tier only where it carries none of these.

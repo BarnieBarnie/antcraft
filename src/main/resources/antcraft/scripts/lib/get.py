@@ -175,7 +175,7 @@ def charcoal(k, radius):
 
 def gather(source, n, radius):
     """source.do(n, radius) with its tool held, of the tier source.cost gives: n more of its item.
-    ponytail: only the nearest exposed block's tier; a later vein that needs more is tried with this pickaxe."""
+    ponytail: only the nearest exposed block's tier; lib.dig.ore leaves a later vein that needs more."""
     tier = source.cost(n, radius)[1]
     if source.tool:
         r = ensure_tool(source.tool, n, tier, radius)
