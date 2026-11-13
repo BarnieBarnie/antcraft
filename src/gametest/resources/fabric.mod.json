@@ -32,6 +32,7 @@
 			"io.github.barniebarnie.antcraft.gametest.GetJobGameTest",
 			"io.github.barniebarnie.antcraft.gametest.TreesGameTest",
 			"io.github.barniebarnie.antcraft.gametest.GiantTreeGameTest",
+			"io.github.barniebarnie.antcraft.gametest.StripMineGameTest",
 			"io.github.barniebarnie.antcraft.gametest.GatherGameTest",
 			"io.github.barniebarnie.antcraft.gametest.DigGameTest",
 			"io.github.barniebarnie.antcraft.gametest.CookbookGameTest",

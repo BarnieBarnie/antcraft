@@ -82,6 +82,7 @@ nav = [
     "cookbook/giant-tree.md",
     "cookbook/bootstrap.md",
     "cookbook/get.md",
+    "cookbook/strip-mine.md",
   ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md", "design/library.md"] },
