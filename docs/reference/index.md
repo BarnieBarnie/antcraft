@@ -168,6 +168,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `walk(a, b)`, `breaking(n, material, tier)`.
 - [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(block_id)`, `hold(kind)`.
+- [`lib/borrow`](modules/lib/borrow.md): `borrow(chest, item, n=1)`, `borrowed()`, `give_back(radius=16)`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ### Writing library functions
@@ -179,6 +180,7 @@ The library follows a few rules, so that its functions chain into bigger ones (t
 - **Preconditions are the caller's.** A doer assumes what it needs (an axe held, a pickaxe of the right tier, room in the inventory) and fails with a reason when it is not there, instead of fetching it. Fetching what is needed is left to one place, the caller or a resolver, so each function stays small.
 - **Doers that obtain things ensure totals.** "Get one stone pickaxe" means "carry at least one": called again, it does nothing, so running it twice (after a reload, a death or a [`retry`](modules/lib/retry.md)) is safe. Low-level gatherers such as `logs(n)` take "n more", as they are only called through one that ensures totals.
 - **Layers import downwards.** The modules form layers, from primitives such as `lib/result`, `lib/area` and `lib/retry` up to skills such as `lib/trees` and `lib/shaft`. A module imports only modules of a layer below its own, never one of its own layer or above, so there are no import cycles (a cycle fails the script, see [When an import fails](../language/modules.md#when-an-import-fails)).
+- **What it borrowed it gives back.** Anything taken from a chest goes through [`lib/borrow`](modules/lib/borrow.md), which remembers it in `memory`; `give_back()` returns it at the end of a job, used or not.
 - **Tested and documented.** Each function has a game test or a unit test, and each module a page under `reference/modules/lib/`.
 
 ## Notes on actions
