@@ -1,14 +1,14 @@
 # `lib/gather`
 
-Gathering the raw items of early tools and making an item from nothing. A module of the mod's default library: `import lib.gather`, then `lib.gather.make("stone_axe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/gather.py`, written with [`lib/craft`](craft.md), [`lib/trees`](trees.md), [`lib/dig`](dig.md), [`scan`](../../world/scan.md), [`mine`](../../blocks/mine.md) and [`goto`](../../movement/goto.md).
+Making an item or gathering a raw item, `n` more than the bot carries. A module of the mod's default library: `import lib.gather`, then `lib.gather.make("stone_axe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/gather.py`, a few wrappers of [`lib/get`](get.md).
 
-Where [`lib/craft`](craft.md)'s `obtain` takes raw items from chests, this module gets them from the world, so a bot with an empty inventory near a tree and some stone can make a stone axe.
+[`lib.get.get(item, n)`](get.md#getitem-n1-radius32) takes a total: "carry `n`". The functions here take "`n` more", as they did before `lib/get`, and call `get` with what the bot carries plus `n`. A new script calls `get` itself.
 
 ## `make(item, n=1, radius=32)`
 
-Makes the bot carry `n` more of `item`: gathers with `gather` the raw items [`lib.craft.plan(item, n)`](craft.md) lists, plans again and gathers again (at most 5 rounds) until nothing is missing, then crafts it with [`lib.craft.craft_here(item, n)`](craft.md), a crafting table put down and taken back as need be.
+Makes the bot carry `n` more of `item`: [`get`](get.md#getitem-n1-radius32) from the chests within `radius`, by crafting and by gathering the raw items, a tool made first where a source needs one.
 
-- **Returns** a dict: `ok`, `reason`, `at` and `missing`, those of the first `gather` that failed, else those of `craft_here`.
+- **Returns** what `get` gives: `ok`, `reason`, `at` and `missing`.
 - **Pauses** yes, while it gathers and crafts.
 
 ```python
@@ -21,21 +21,16 @@ if not r["ok"]:
 
 ## `gather(item, n=1, radius=32)`
 
-Makes the bot carry `n` more of a raw item it knows how to get within `radius` blocks:
+The same as `make`: `n` more of `item` through `get`. For a raw item, that is its source in [`lib.get.SOURCES`](get.md#sources); an item `get` can neither gather nor craft fails at once with `no_recipe`.
 
-- a log (`#minecraft:logs` or any `..._log` id; any log does, as a plan's oak log only goes into planks): through [`lib.trees.logs(n, radius)`](trees.md), one tree at a time, its bottom logs from the ground, so it never climbs a tree;
-- cobblestone: through `stone(n, radius)`.
-
-Any other item fails at once with `no_recipe`.
-
-- **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` for an item it does not know how to get, or the reason of `lib.trees.logs` or `stone`), `at` and `missing` (the items it still lacks).
+- **Returns** what `get` gives.
 - **Pauses** yes, while it walks and mines.
 
 ## `stone(n, radius=32)`
 
-[`lib.dig.stone(n, radius)`](dig.md#stonen-radius32), making a wooden pickaxe first with `make` where the bot carries no pickaxe.
+`n` more cobblestone through `get`: [`lib.dig.stone`](dig.md#stonen-radius32), with a pickaxe made first where the bot carries none.
 
-- **Returns** a dict: `ok`, `reason` (`None`, that of `make` for the pickaxe, or that of `lib.dig.stone`), `at` and `missing`.
+- **Returns** what `get` gives.
 - **Pauses** yes, while it walks and mines.
 
 ## `exposed_stone(radius=32, skip=None)`
@@ -44,8 +39,8 @@ Any other item fails at once with `no_recipe`.
 
 ## `is_log(item)`
 
-Whether the item id or selector `item` means a log to `gather`. Done at once.
+Whether the item id or selector `item` means a log. Done at once.
 
 ## See also
 
-[`lib/craft`](craft.md), [`lib/trees`](trees.md), [`needs`](../../crafting/needs.md).
+[`lib/get`](get.md), [`lib/craft`](craft.md), [`lib/trees`](trees.md), [`needs`](../../crafting/needs.md).

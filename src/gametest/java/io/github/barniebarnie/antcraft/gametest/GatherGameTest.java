@@ -36,16 +36,16 @@ public class GatherGameTest implements CustomTestMethodInvoker {
 			List.of("True 1"));
 	}
 
-	/** An item it does not know how to gather, raw or in a recipe, fails at once with the item missing. */
-	@GameTest(maxTicks = 20)
+	/** An item it does not know how to gather, raw or in a recipe, fails at once with the item missing (diamonds it now digs, lib.get). */
+	@GameTest(maxTicks = 60)
 	public void unknownRawItemFailsWithNoRecipe(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		expect(helper, bot, """
 			import lib.gather
-			r = lib.gather.gather('minecraft:diamond', 2)
+			r = lib.gather.gather('minecraft:feather', 2)
 			print(r['ok'], r['reason'], r['missing'])
 			r = lib.gather.make('elytra')
 			print(r['ok'], r['reason'], r['missing'])
-			""", List.of("False no_recipe {'minecraft:diamond': 2}", "False no_recipe {'minecraft:elytra': 1}"));
+			""", List.of("False no_recipe {'minecraft:feather': 2}", "False no_recipe {'minecraft:elytra': 1}"));
 	}
 }

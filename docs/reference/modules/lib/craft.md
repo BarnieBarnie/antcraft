@@ -43,7 +43,7 @@ Makes the bot carry `n` of `item`, raw items fetched from storage: where it carr
 
 ## `ensure_tool(kind, chests=None, upgrade=False)`
 
-Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`. Where it carries one, it [`equip`](../../inventory/equip.md)s the best, with [`lib/tools`](tools.md)'s `hold` (also `lib.craft.hold`): netherite, diamond, iron, stone, golden, then wooden, by the tier in the item id; a tool of another tier (from a mod) only where it carries none of these. Where it carries none, it [`take`](../../crafting/take.md)s the best finished one from `chests` (a list of positions; `None`: the colony's core, none outside a colony), by the same order, and holds it. Where the chests hold none, it runs `obtain(f"{tier}_{kind}", 1, chests)` for each tier from diamond, iron and stone down to wooden, stops at the first that works and holds that tool.
+Makes the bot hold a tool of `kind`: `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`. Where it carries one, it [`equip`](../../inventory/equip.md)s the best, with [`lib/tools`](tools.md)'s `hold` (also `lib.craft.hold`): netherite, diamond, iron, stone, golden, then wooden, by the tier in the item id; a tool of another tier (from a mod) only where it carries none of these. Where it carries none, it takes the best finished one from `chests` (a list of positions; `None`: the colony's core, none outside a colony), by the same order, borrowed with [`lib/borrow`](borrow.md) but from the Colony Core, and holds it. Where the chests hold none, it runs `obtain(f"{tier}_{kind}", 1, chests)` for each tier from diamond, iron and stone down to wooden, stops at the first that works and holds that tool.
 
 With `upgrade=True` it does the same where the bot carries a tool, but only for tiers better than the best one carried: a worse tool in a chest stays there, and where no better one can be taken or made it holds the one it carries. The worse tool is kept, a spare for when the better one breaks. Leave `upgrade` off in a script that calls `ensure_tool` every loop: an upgrade tries to make each better tier each time.
 
@@ -51,6 +51,8 @@ A tier the bot and the chests lack raw items for fails before anything is taken 
 
 - **Returns** a dict as `craft_all` gives: `ok`, or, where the bot carries no tool of `kind` and none could be taken or made, what `obtain` gave for the wooden tool, such as `missing_ingredients`.
 - **Pauses** yes, while it walks to a chest and as `obtain` does; not where the bot carries a tool of `kind` and `upgrade` is off.
+
+`obtain` and `ensure_tool` gather nothing from the world. [`lib/get`](get.md)'s `get` and `ensure_tool` do, and pick a tool's tier by cost; they build on this module, which cannot import them back.
 
 ## `plan(item, n=1)`
 

@@ -9,7 +9,7 @@
 # delete it and the default comes back when the server starts.
 
 from lib.result import result
-from lib.stock import fetch_all
+from lib.stock import fetch_all, take_from
 # hold lives in lib.tools; imported here, lib.craft.hold keeps working.
 from lib.tools import TIERS, hold
 
@@ -89,7 +89,8 @@ def plan(item, n=1):
 def ensure_tool(kind, chests=None, upgrade=False):
     """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword"): the best it carries; where it
     carries none, or with upgrade none of the best tier, the best of TIERS one of chests (a list of positions; None:
-    the colony's core) holds, else the best of MADE that obtain(f"{tier}_{kind}", 1, chests) makes. With upgrade only a
+    the colony's core) holds, borrowed but from the core, else the best of MADE that obtain(f"{tier}_{kind}", 1, chests)
+    makes; it gathers nothing (lib.get.ensure_tool does, and picks the tier by cost). With upgrade only a
     tier better than the carried one is taken or made, and the worse tool is kept, a spare. Gives result(): ok, or
     obtain's result for the worst tier tried where the bot carries none and none could be taken or made."""
     if chests is None:
@@ -110,8 +111,11 @@ def ensure_tool(kind, chests=None, upgrade=False):
         better.append(f"#minecraft:{kind}s")
     for tool in better:
         for chest in chests:
-            if any([matches(s, tool) for s in container(chest) or []]) and take(chest, tool, 1):
-                return hold(kind)
+            if any([matches(s, tool) for s in container(chest) or []]):
+                before = count(tool)
+                take_from(chest, tool, 1)
+                if count(tool) > before:
+                    return hold(kind)
     r = result()
     for tier in MADE:
         if TIERS.index(tier) >= have:

@@ -824,13 +824,13 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("False missing_ingredients {'minecraft:oak_log': 2} None 1 2 0"));
 	}
 
-	/** No pickaxe, a chest with a wooden and an iron one and logs: it takes and holds the iron one, crafting nothing. */
+	/** No pickaxe, a chest with a wooden and an iron one and logs: it borrows and holds the iron one, crafting nothing. */
 	@GameTest(maxTicks = 20)
 	public void ensureToolTakesTheBestFromAChest(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.WOODEN_PICKAXE), new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.OAK_LOG, 3));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "iron_pickaxe", "wooden_pickaxe", "oak_log"),
-			List.of("True None {} minecraft:iron_pickaxe 1 0 0"), () -> {
+		expect(helper, bot, ensureTool("'pickaxe', chests=[" + chestAt(helper) + "]", "iron_pickaxe", "wooden_pickaxe", "oak_log") + BORROWED,
+			List.of("True None {} minecraft:iron_pickaxe 1 0 0", "[('iron_pickaxe', 1)]"), () -> {
 				helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 1, "wooden pickaxes left " + chest.countItem(Items.WOODEN_PICKAXE));
 				helper.assertTrue(chest.countItem(Items.OAK_LOG) == 3, "logs left " + chest.countItem(Items.OAK_LOG));
 			});

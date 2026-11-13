@@ -1,19 +1,15 @@
 # Gathering raw items and making things from nothing, for any script: `import lib.gather`, then
 # lib.gather.make("stone_axe").
-# A module of the mod's default library (lib/).
+# A module of the mod's default library (lib/): wrappers of lib.get that take "n more" where get takes a total.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-import lib.craft
-import lib.dig
 import lib.find
+import lib.get
 import lib.trees
-from lib.result import result
 
 from lib.dig import COBBLESTONE, STONE
-# How often make plans and gathers again before it crafts with what it has.
-ROUNDS = 5
 
 
 def is_log(item):
@@ -21,15 +17,14 @@ def is_log(item):
     return item == lib.trees.LOGS or item.endswith("_log")
 
 
+def more(item, n, radius):
+    """lib.get.get for n more of item than the bot carries."""
+    return lib.get.get(item, count(lib.get.key(item)) + n, radius)
+
+
 def gather(item, n=1, radius=32):
-    """Makes the bot carry n more of a raw item it knows how to get within radius: a log (any log, through
-    lib.trees.logs) or cobblestone (stone). Gives result(): ok, the reason it failed with missing, or no_recipe with
-    missing for an item it does not know how to get."""
-    if is_log(item):
-        return lib.trees.logs(n, radius)
-    if item in ("cobblestone", COBBLESTONE):
-        return stone(n, radius)
-    return result("no_recipe", None, {item: n})
+    """Makes the bot carry n more of item within radius, through lib.get.get. Gives get's result()."""
+    return more(item, n, radius)
 
 
 def exposed_stone(radius=32, skip=None):
@@ -39,25 +34,11 @@ def exposed_stone(radius=32, skip=None):
 
 
 def stone(n, radius=32):
-    """lib.dig.stone(n, radius), making a wooden pickaxe first where the bot carries no pickaxe. Gives result(): ok,
-    make's result for the pickaxe, or lib.dig.stone's."""
-    if not count("#minecraft:pickaxes"):
-        r = make("wooden_pickaxe")
-        if not r["ok"]:
-            return r
-    return lib.dig.stone(n, radius)
+    """n more cobblestone through lib.get.get, a pickaxe made first where the bot carries none. Gives get's result()."""
+    return more(COBBLESTONE, n, radius)
 
 
 def make(item, n=1, radius=32):
-    """Makes the bot carry n more of item from what it carries and what it gathers within radius: gathers what
-    lib.craft.plan(item, n) lists, and plans again, until nothing is missing, then lib.craft.craft_here(item, n). Gives
-    result(): ok, the result of the first gather that failed, or craft_here's."""
-    for attempt in range(ROUNDS):
-        need = lib.craft.plan(item, n)["gather"]
-        if not need:
-            break
-        for raw, k in need.items():
-            r = gather(raw, k, radius)
-            if not r["ok"]:
-                return r
-    return lib.craft.craft_here(item, n)
+    """Makes the bot carry n more of item from what it carries, the chests within radius and what it gathers there,
+    through lib.get.get. Gives get's result()."""
+    return more(item, n, radius)
