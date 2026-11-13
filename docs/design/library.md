@@ -2,6 +2,10 @@
 
 A big, stable library of default scripts that any bot script builds on, so a player writes the few lines that are theirs and leaves the rest to the library. This page is the plan: the rules every library function follows, the layers it is built in, the modules and their building blocks, and four example jobs that prove the approach. What is done is listed under [Library modules](../reference/index.md#library-modules).
 
+## Status
+
+The plan is done (#503 to #514). Every module below exists, with a reference page under `reference/modules/lib/`, and so do the four example jobs, each with a game test and a cookbook page: [bootstrap](../cookbook/bootstrap.md), [get](../cookbook/get.md), [giant_tree](../cookbook/giant-tree.md) and [strip_mine](../cookbook/strip-mine.md). Later issues grew it: `lib.stock.take_up_to`, `lib.borrow.keep`, charcoal where coal is deep (`wood_for_coal`), `lib.trees.KEEP`, `tier_for` at a position and the `tag_items` sense. A job is a script in the folder `jobs/`, so it runs by its dotted name: `/antcraft bot run jobs.giant_tree`, not `jobs/giant_tree`.
+
 ## Rules
 
 The library is written the Unix way: small functions that each do one thing well, chained into bigger ones.
@@ -18,8 +22,8 @@ The library is written the Unix way: small functions that each do one thing well
 ## Layers
 
 ```text
- jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py   run with bot run <job> [args]
- kits         lib/bootstrap                                                            a set of things a job starts with
+ jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py   run with bot run jobs.<job> [args]
+ kits         lib/bootstrap  lib/gather                                                a set of things a job starts with; make and gather over get
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine     one skill each, preconditions assumed
  primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/retry  lib/home             no ticks, or a single action
@@ -54,7 +58,7 @@ New modules are marked *new*; the others exist and grow.
 1. what it carries;
 2. chests, through `stock.fetch` (borrowed);
 3. crafting: `craft.plan(item, n)` lists the raw items, each of which `get` gets, then `craft.craft_here`;
-4. gathering a raw item: `SOURCES[item]`, a `Source(do, tool=None, tier=None, estimate=None)`. `get` first makes the bot hold the tool (`ensure_tool(tool, uses, tier)`), then calls `do(n, radius)`.
+4. gathering a raw item: `SOURCES[item]`, a `Source(do, tool=None, tier=None, estimate=None, ore=None)`. `get` first makes the bot hold the tool (`ensure_tool(tool, uses, tier)`), then calls `do(n, radius)`.
 
 `ensure_tool(kind, uses=1, tier=None)` makes the bot hold a tool of `kind` that lasts `uses` blocks and is at least `tier`: a carried one; one from a chest (borrowed); else the tier whose cost to make plus `cost.breaking(uses, tier)` is lowest, counting the tools of a cheaper tier it would wear out. So felling three oaks takes a stone axe, a forest of jungle trees an iron one, and a chest's iron axe beats crafting either. The choice is a finder, `choose(kind, uses, tier)` (the cheapest of `options(...)`), so it is tested without ticks. A source's `tier="hand"` means the bare hand drops the item too (logs, dirt): the tool is then only made where it beats the hand, which also lets an empty bot bootstrap (logs by hand, a wooden pickaxe, cobblestone, stone tools). `get` keeps the items it is getting in `GETTING`: a tier whose recipe needs one of them is not made for it, and a get that waits on itself gives `cycle`.
 
@@ -73,7 +77,7 @@ What the library needs from the API:
 
 ## Example jobs
 
-Four jobs in `jobs/`, each a few lines over the library, each with a game test. Each ends with `borrow.give_back()`, also when it fails.
+Four jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each ends with `borrow.give_back()`, also when it fails.
 
 1. **`jobs/bootstrap.py`**: an empty-handed bot gets `lib.bootstrap.KIT` from what is around: logs, a crafting table, a wooden pickaxe, cobblestone, the stone tools, a furnace, charcoal and torches; tools in a nearby chest are borrowed instead of made. Test: an empty bot by trees and stone; again with an iron pickaxe in a chest, which it uses and gives back.
 2. **`jobs/get.py <item> [n]`**: `get(ARGS[0], n)`, the resolver alone. Test: `iron_pickaxe` from nothing, with trees, stone and iron ore in the area.

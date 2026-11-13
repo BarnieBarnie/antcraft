@@ -163,7 +163,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`, `smelt_here(item, n=1, fuel=None)`, `obtain(item, n=1, chests=None)`, `ensure_tool(kind, chests=None, upgrade=False)`, `plan(item, n=1)`.
 - [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4, kwargs=None)`.
 - [`lib/inv`](modules/lib/inv.md): `take_all(chest, need)`, `store_all(chest, keep=None)`.
-- [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`.
+- [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False, around=None)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`, `tree_blocks(base)`, `is_giant(base)`, `stands(blocks)`, `fell_whole(base, replant=True)`, `LOGS`, `SAPLINGS`, `SCAFFOLD`, `KEEP`.
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/gather`](modules/lib/gather.md): `make(item, n=1, radius=32)`, `gather(item, n=1, radius=32)`, `stone(n, radius=32)`, `exposed_stone(radius=32, skip=None)`.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
@@ -172,8 +172,8 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/borrow`](modules/lib/borrow.md): `borrow(chest, item, n=1)`, `borrowed()`, `give_back(radius=16)`, `keep(item, n=None)`.
 - [`lib/find`](modules/lib/find.md): `nearest(what, radius=32, where=None)`, `exposed(what, radius=32, skip=None)`, `is_open(p)`, `is_air(p)`.
 - [`lib/dig`](modules/lib/dig.md): `stone(n, radius=32)`, `ore(item, n, radius=32, y=None, facing="north", length=32)`, `best_y(item)`, `stairs_to(y, facing="north")`, `stairs_up(facing="north")`, `branch(length, every=8, facing="north")`.
-- [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `fetch_all(more, chests)`.
-- [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None)`, the resolver.
+- [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `take_up_to(item, n, radius=32)`, `fetch_all(more, chests)`.
+- [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None, ore=None)`, `DEEP`, `wood_for_coal(k, radius)`, `key(item)`, the resolver.
 - [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32)`, the things a job starts with.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
@@ -186,7 +186,7 @@ The library follows a few rules, so that its functions chain into bigger ones (t
 - **Preconditions are the caller's.** A doer assumes what it needs (an axe held, a pickaxe of the right tier, room in the inventory) and fails with a reason when it is not there, instead of fetching it. Fetching what is needed is left to one place, the caller or a resolver, so each function stays small.
 - **Doers that obtain things ensure totals.** "Get one stone pickaxe" means "carry at least one": called again, it does nothing, so running it twice (after a reload, a death or a [`retry`](modules/lib/retry.md)) is safe. Low-level gatherers such as `logs(n)` take "n more", as they are only called through one that ensures totals.
 - **Layers import downwards.** The modules form layers, from primitives such as `lib/result`, `lib/area` and `lib/retry` up to skills such as `lib/trees` and `lib/shaft`. A module imports only modules of a layer below its own, never one of its own layer or above, so there are no import cycles (a cycle fails the script, see [When an import fails](../language/modules.md#when-an-import-fails)).
-- **What it borrowed it gives back.** Anything taken from a chest goes through [`lib/borrow`](modules/lib/borrow.md), which remembers it in `memory`; `give_back()` returns it at the end of a job, used or not.
+- **What it borrowed it gives back.** Anything taken from a chest goes through [`lib/borrow`](modules/lib/borrow.md), which remembers it in `memory`; `give_back()` returns it at the end of a job, used or not. Taking from the bot's Colony Core is not borrowing: colony storage is the colony's own (see [`lib/stock`](modules/lib/stock.md)).
 - **Tested and documented.** Each function has a game test or a unit test, and each module a page under `reference/modules/lib/`.
 
 ## Notes on actions

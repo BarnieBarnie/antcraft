@@ -56,12 +56,17 @@ class DocExampleTest {
 		}
 	}
 
-	/** docs/cookbook/get.md shows the bundled job jobs/get.py, below its header comment, which GetJobGameTest runs. */
+	/**
+	 * Each job's cookbook page shows the bundled job, below its header comment: docs/cookbook/get.md shows jobs/get.py,
+	 * which GetJobGameTest runs, and so on for the jobs BootstrapGameTest, GiantTreeGameTest and StripMineGameTest run.
+	 */
 	@Test
-	void theGetRecipeIsTheBundledJob() throws IOException {
-		String job = Files.readString(Path.of("src/main/resources/antcraft/scripts/jobs/get.py"));
-		assertEquals(example(Files.readString(Path.of("docs/cookbook/get.md")), "```python"),
-			job.lines().dropWhile(line -> line.startsWith("#")).collect(Collectors.joining("\n", "", "\n")));
+	void theJobRecipesAreTheBundledJobs() throws IOException {
+		for (String page : List.of("get", "bootstrap", "giant-tree", "strip-mine")) {
+			String job = Files.readString(Path.of("src/main/resources/antcraft/scripts/jobs/" + page.replace('-', '_') + ".py"));
+			assertEquals(example(Files.readString(Path.of("docs/cookbook/" + page + ".md")), "```python"),
+				job.lines().dropWhile(line -> line.startsWith("#") || line.isBlank()).collect(Collectors.joining("\n", "", "\n")), page);
+		}
 	}
 
 	/** A python block: its fence's indent (inside an admonition), then its lines up to a closing fence at that indent. */

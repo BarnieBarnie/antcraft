@@ -26,7 +26,7 @@ public final class DefaultScripts {
 	public static final String IDLE = "idle";
 	/**
 	 * The bundled scripts, by path in the script folder; the library modules scripts import live under {@code lib/}, the
-	 * colony's roles under {@code colony/}.
+	 * colony's roles under {@code colony/}, and the jobs a bot runs by dotted name ({@code jobs.get}) under {@code jobs/}.
 	 */
 	private static final List<String> FILES = List.of(IDLE + ".py", "lib/home.py", "lib/shaft.py", "lib/mine.py", "lib/craft.py", "lib/retry.py", "lib/inv.py", "lib/trees.py", "lib/area.py", "lib/gather.py", "lib/result.py", "lib/cost.py", "lib/tools.py", "lib/borrow.py", "lib/find.py", "lib/dig.py", "lib/stock.py", "lib/get.py", "colony/common.py", "colony/lumberjack.py",
 		"colony/hauler.py", "colony/builder.py", "colony/farmer.py", "colony/miner.py",

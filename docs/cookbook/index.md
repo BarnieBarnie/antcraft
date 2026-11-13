@@ -12,7 +12,7 @@ Recipes: complete scripts that combine builtins into useful bots, each with how 
 - [Get anything from nothing](get.md): `jobs.get <item> [n]` gets any item and the tools for it with `lib/get`, an iron pickaxe from a tree, stone and iron ore.
 - [Strip-mine for an ore](strip-mine.md): `jobs.strip_mine` stairs down and branches for an ore, keeping a pickaxe up from the cobblestone it dug, and climbs back.
 
-Each recipe's script also runs as it is in a game test (`CraftGameTest` for the chest, `CookbookGameTest` for the farm, the item recovery and the tunnel), so a change of the API that breaks one shows. The mining loop only compiles: its shaft and levels go far deeper than a test area of 8 by 8 by 8 blocks, and `ShaftGameTest` and `MineGameTest` test `lib/shaft` and `lib/mine` that it runs on.
+Each recipe's script also runs as it is in a game test (`CraftGameTest` for the chest, `CookbookGameTest` for the farm, the item recovery and the tunnel, and `BootstrapGameTest`, `GetJobGameTest`, `GiantTreeGameTest` and `StripMineGameTest` for the jobs, which are the bundled `jobs/` scripts), so a change of the API that breaks one shows. The mining loop only compiles: its shaft and levels go far deeper than a test area of 8 by 8 by 8 blocks, and `ShaftGameTest` and `MineGameTest` test `lib/shaft` and `lib/mine` that it runs on.
 
 Two short examples:
 
