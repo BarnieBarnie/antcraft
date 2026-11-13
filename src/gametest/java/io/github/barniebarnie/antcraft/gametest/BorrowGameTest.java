@@ -144,6 +144,25 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** keep by a selector over records of several items counts what the bot owns of each: 1 oak and 1 birch plank owned, 3 of each borrowed, 4 kept, so 4 planks are left (#549). */
+	@GameTest(maxTicks = 40)
+	public void keepBySelectorCountsWhatTheBotOwnsOfEachItem(GameTestHelper helper) {
+		chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 3), new ItemStack(Items.BIRCH_PLANKS, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 1));
+		run(helper, bot, "from lib.borrow import borrow, borrowed, give_back, keep\n" + """
+			a = %s
+			borrow(a, "oak_planks", 3)
+			borrow(a, "birch_planks", 3)
+			keep("#minecraft:planks", 4)
+			r = give_back()
+			print(r["ok"], borrowed(), count("#minecraft:planks"))
+			""".formatted(pos(helper, CHEST)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> printed(helper, bot, "True [] 4"));
+	}
+
 	/** give_back(since=1) gives back only what was borrowed after the first record: the pickaxe, not the planks (#535). */
 	@GameTest(maxTicks = 40)
 	public void giveBackSinceLeavesTheOlderRecords(GameTestHelper helper) {
