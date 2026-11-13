@@ -171,6 +171,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/borrow`](modules/lib/borrow.md): `borrow(chest, item, n=1)`, `borrowed()`, `give_back(radius=16)`.
 - [`lib/find`](modules/lib/find.md): `nearest(what, radius=32, where=None)`, `exposed(what, radius=32, skip=None)`, `is_open(p)`, `is_air(p)`.
 - [`lib/dig`](modules/lib/dig.md): `stone(n, radius=32)`, `ore(item, n, radius=32, y=None, facing="north")`, `best_y(item)`, `stairs_to(y, facing="north")`, `stairs_up()`, `branch(length, every=8, facing="north")`.
+- [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `fetch_all(more, chests)`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ### Writing library functions

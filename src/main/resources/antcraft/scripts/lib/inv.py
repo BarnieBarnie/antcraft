@@ -6,6 +6,7 @@
 # delete it and the default comes back when the server starts.
 
 from lib.result import result
+from lib.stock import take_from
 
 # What store_all never puts away: tools and food.
 KEPT = ["#minecraft:pickaxes", "#minecraft:axes", "#minecraft:shovels", "#minecraft:hoes", "#minecraft:swords", "#c:foods"]
@@ -13,11 +14,12 @@ KEPT = ["#minecraft:pickaxes", "#minecraft:axes", "#minecraft:shovels", "#minecr
 
 def take_all(chest, need):
     """Takes from chest until the bot carries each count of need (an item id or a selector such as "#minecraft:planks"
-    to how many), as far as the chest has it; gives what is still short, item to how many ({} when nothing is)."""
+    to how many), as far as the chest has it, borrowed with lib.borrow unless chest is the colony's core; gives what is
+    still short, item to how many ({} when nothing is)."""
     short = {}
     for item, n in need.items():
         if count(item) < n and any([matches(s, item) for s in container(chest) or []]):
-            take(chest, item, n - count(item))
+            take_from(chest, item, n - count(item))
         if count(item) < n:
             short[item] = n - count(item)
     return short

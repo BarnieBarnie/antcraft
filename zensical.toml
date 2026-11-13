@@ -65,6 +65,7 @@ nav = [
       "reference/modules/lib/borrow.md",
       "reference/modules/lib/find.md",
       "reference/modules/lib/dig.md",
+      "reference/modules/lib/stock.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

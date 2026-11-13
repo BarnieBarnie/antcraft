@@ -87,6 +87,7 @@ class DefaultScriptsTest {
 		assertTrue(bundled.containsKey("lib/borrow.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("lib/dig.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("lib/find.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("lib/stock.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 

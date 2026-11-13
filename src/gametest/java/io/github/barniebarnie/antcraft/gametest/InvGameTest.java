@@ -32,14 +32,15 @@ public class InvGameTest implements CustomTestMethodInvoker {
 		method.invoke(this, helper);
 	}
 
-	/** The chest has enough: the bot takes 4 cobblestone, no torches (it carries its 3), and nothing is short. */
+	/** The chest has enough: the bot borrows 4 cobblestone, no torches (it carries its 3), and nothing is short. */
 	@GameTest(maxTicks = 40)
 	public void takeAllFillsWhatIsLacking(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.COBBLESTONE, 10), new ItemStack(Items.TORCH, 5));
 		AntBot bot = run(helper, List.of(new ItemStack(Items.TORCH, 3)), """
 			take_all(chest, {"minecraft:cobblestone": 4, "minecraft:torch": 3})""", """
-			print(r == {}, count("minecraft:cobblestone"), count("minecraft:torch"))""");
-		succeedWhenPrinted(helper, bot, "True 4 3", () -> {
+			from lib.borrow import borrowed
+			print(r == {}, count("minecraft:cobblestone"), count("minecraft:torch"), [(b["item"], b["n"]) for b in borrowed()])""");
+		succeedWhenPrinted(helper, bot, "True 4 3 [('minecraft:cobblestone', 4)]", () -> {
 			helper.assertTrue(count(chest, Items.COBBLESTONE) == 6, "cobblestone left " + count(chest, Items.COBBLESTONE));
 			helper.assertTrue(count(chest, Items.TORCH) == 5, "torches left " + count(chest, Items.TORCH));
 		});

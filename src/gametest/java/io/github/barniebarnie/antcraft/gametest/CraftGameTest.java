@@ -650,6 +650,9 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 
 	// lib.craft.obtain
 
+	/** Prints what the bot borrowed, item and how many. */
+	private static final String BORROWED = "from lib.borrow import borrowed\nprint([(b['item'], b['n']) for b in borrowed()])\n";
+
 	/** Prints what {@code lib.craft.obtain(args)} gives and then {@code counts}, the {@code count} of each item. */
 	private static String obtain(String args, String... counts) {
 		return craftAll(args, counts).replace("craft_all(", "obtain(");
@@ -671,7 +674,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
-	/** The log in one chest, the cobblestone in another, a table in the area: both chests are emptied for the pickaxe. */
+	/** The log in one chest, the cobblestone in another, a table in the area: both chests are emptied for the pickaxe, borrowed. */
 	@GameTest(maxTicks = 20)
 	public void obtainUsesEveryChest(GameTestHelper helper) {
 		Container logs = chest(helper, new ItemStack(Items.OAK_LOG, 1));
@@ -680,11 +683,11 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		stone.setItem(0, new ItemStack(Items.COBBLESTONE, 3));
 		helper.setBlock(1, 1, 4, Blocks.CRAFTING_TABLE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
-		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + ", " + at(helper, 5, 1, 1) + "]", "stone_pickaxe"),
-			List.of("True None {} 1"), () -> helper.assertTrue(logs.isEmpty() && stone.isEmpty(), "a chest is not empty"));
+		expect(helper, bot, obtain("'stone_pickaxe', chests=[" + chestAt(helper) + ", " + at(helper, 5, 1, 1) + "]", "stone_pickaxe")
+			+ BORROWED, List.of("True None {} 1", "[('minecraft:oak_log', 1), ('minecraft:cobblestone', 3)]"), () -> helper.assertTrue(logs.isEmpty() && stone.isEmpty(), "a chest is not empty"));
 	}
 
-	/** No chests given, the bot in a colony: it takes from the Colony Core. */
+	/** No chests given, the bot in a colony: it takes from the Colony Core, which is not borrowing. */
 	@GameTest(maxTicks = 20)
 	public void obtainTakesFromTheColonyCore(GameTestHelper helper) {
 		helper.setBlock(CHEST, ModBlocks.COLONY_CORE);
@@ -695,7 +698,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		ColonyManager manager = ColonyManager.get(helper.getLevel());
 		manager.join(bot, manager.byCore(helper.absolutePos(CHEST)).orElseThrow());
-		expect(helper, bot, obtain("'stone_pickaxe'", "stone_pickaxe"), List.of("True None {} 1"),
+		expect(helper, bot, obtain("'stone_pickaxe'", "stone_pickaxe") + BORROWED, List.of("True None {} 1", "[]"),
 			() -> helper.assertTrue(core.isEmpty(), "the core is not empty"));
 	}
 

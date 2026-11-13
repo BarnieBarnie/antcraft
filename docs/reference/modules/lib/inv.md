@@ -4,7 +4,7 @@ Taking what the bot lacks from a chest, and putting the rest away. A module of t
 
 ## `take_all(chest, need)`
 
-Takes from the chest at `chest` until the bot carries, of each item in `need`, as many as `need` gives: `need` maps an item id or a [selector](../../types/selectors.md) such as `"#minecraft:planks"` to how many the bot should carry. What the bot already carries counts, so an item it carries in full is not taken; an item the chest has none of is skipped, and of one the chest has too little it takes what there is.
+Takes from the chest at `chest` until the bot carries, of each item in `need`, as many as `need` gives: `need` maps an item id or a [selector](../../types/selectors.md) such as `"#minecraft:planks"` to how many the bot should carry. What the bot already carries counts, so an item it carries in full is not taken; an item the chest has none of is skipped, and of one the chest has too little it takes what there is. What it takes is borrowed with [`lib/borrow`](borrow.md), but not from the bot's Colony Core (see [`lib/stock`](stock.md)).
 
 - **Returns** what is still short, item to how many: `{}` when the bot carries everything in `need`.
 - **Pauses** yes, while it walks to the chest and takes; not when the bot carries enough already or the chest has none of what it lacks.

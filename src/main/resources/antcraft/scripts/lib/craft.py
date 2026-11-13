@@ -8,8 +8,8 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-from lib.inv import take_all
 from lib.result import result
+from lib.stock import fetch_all
 # hold lives in lib.tools; imported here, lib.craft.hold keeps working.
 from lib.tools import TIERS, hold
 
@@ -125,29 +125,10 @@ def ensure_tool(kind, chests=None, upgrade=False):
 
 
 def fetch(more, chests):
-    """Takes more (item to how many more than the bot carries) from each chest in turn; gives what is still short. Where
-    the chests together hold too little of any item it takes nothing and gives what they lack."""
-    # ponytail: a stack two selectors of more both match counts for each, so overlapping selectors can pass this check
-    # and still come up short after taking.
-    stacks = []
-    for chest in chests:
-        stacks += container(chest) or []
-    short = {}
-    for item, k in more.items():
-        k -= sum([s.count for s in stacks if matches(s, item)])
-        if k > 0:
-            short[item] = k
-    if short:
-        return short
-    need = {}
-    for item, k in more.items():
-        need[item] = count(item) + k
-    short = more
-    for chest in chests:
-        short = take_all(chest, need)
-        if not short:
-            break
-    return short
+    """lib.stock.fetch_all(more, chests): takes more (item to how many more than the bot carries) from each chest in
+    turn, borrowed but from the colony's core; gives what is still short. Where the chests together hold too little of
+    any item it takes nothing and gives what they lack."""
+    return fetch_all(more, chests)
 
 
 def craft_here(item, n=1):
