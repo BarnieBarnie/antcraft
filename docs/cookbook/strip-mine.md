@@ -1,6 +1,6 @@
 # Strip-mine for an ore
 
-A job that digs for an ore until the bot carries enough of it, then climbs back up and goes home. It starts with a small miner's kit, a stone pickaxe, a crafting table and 16 torches, taken from what is around, and keeps a pickaxe that lasts by making a new stone one from the cobblestone it dug. The mod bundles it as `jobs/strip_mine.py`; start it with `/antcraft bot run jobs.strip_mine raw_iron 12`. The words are the ore, a raw item such as `coal`, `raw_iron` or `diamond`; how many, 8 by default; the height to mine at, by default where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)); and how far to look for chests, 32 blocks.
+A job that digs for an ore until the bot carries enough of it, then climbs back up and goes home. It starts with a small miner's kit, a stone pickaxe, a crafting table and 16 torches, taken from what is around, and keeps a pickaxe that lasts by making a new stone one from the cobblestone it dug. The mod bundles it as `jobs/strip_mine.py`; start it with `/antcraft bot run jobs.strip_mine raw_iron 12`. The words are the ore, a raw item such as `coal`, `raw_iron` or `diamond`; how many, 8 by default; the height to mine at, by default where the ore is most common ([`best_y`](../reference/modules/lib/dig.md)); how far to look for chests, 32 blocks; and the way it digs, `north` by default, or `south`, `east` or `west`. Emerald has no default height, as it is only in mountains: give it one.
 
 ```python
 import lib.bootstrap
@@ -23,6 +23,7 @@ item = lib.dig.short(ARGS[0])
 n = int(ARGS[1]) if len(ARGS) > 1 else 8
 y = int(ARGS[2]) if len(ARGS) > 2 else lib.dig.best_y(item)
 radius = int(ARGS[3]) if len(ARGS) > 3 else 32
+facing = ARGS[4] if len(ARGS) > 4 else "north"
 
 
 def tier():
@@ -32,7 +33,7 @@ def tier():
 
 
 def strip_mine():
-    """Gets the kit, digs stairs down to y and branches on until the bot carries n of item, making sure before the stairs
+    """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure before the stairs
     and each branch that its pickaxe lasts them, then climbs back up and goes home. Gives result()."""
     if item not in lib.dig.ORES or y is None:
         return result("no_recipe", None, {"minecraft:" + item: n})
@@ -40,14 +41,14 @@ def strip_mine():
     if r["ok"]:
         r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(), radius)
     if r["ok"]:
-        r = lib.dig.stairs_to(y)
+        r = lib.dig.stairs_to(y, facing)
     for _ in range(ROUNDS):
         if not r["ok"] or count(item) >= n:
             break
         # A new pickaxe where the one it holds would break in the branch: stone from the cobblestone it dug.
         r = ensure_tool("pickaxe", USES, tier(), radius)
         if r["ok"]:
-            r = lib.dig.branch(LENGTH)
+            r = lib.dig.branch(LENGTH, facing=facing)
     if memory.get("stairs") is not None:
         up = lib.dig.stairs_up()
         r = r if not r["ok"] else up
@@ -72,13 +73,13 @@ finally:
 ## How it works
 
 - [`kit(MINER)`](../reference/modules/lib/bootstrap.md) makes sure the bot carries the kit: a carried or chest pickaxe of at least stone does, the rest it gets with [`get`](../reference/modules/lib/get.md), borrowing from chests or making it.
-- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards the north, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times.
+- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times.
 - Before the stairs and before each branch, [`ensure_tool`](../reference/modules/lib/get.md) makes sure the pickaxes the bot carries last the blocks it will break: about three a step, and twice the branch's length plus a few for ore. Where they do not, it takes the cheapest that does, usually a new stone pickaxe from the cobblestone the stairs and branches gave and the crafting table of the kit. An ore that needs a better pickaxe, such as diamond, asks for that tier ([`tier_for`](../reference/modules/lib/tools.md)).
 - [`stairs_up`](../reference/modules/lib/dig.md) walks back up the staircase, also when a branch failed, and [`go_home`](../reference/modules/lib/home.md) walks home.
 - [`give_back`](../reference/modules/lib/borrow.md) in `finally` returns what was borrowed, also when a step failed or the script stopped with an error.
 - A step that fails ends the job with a `warn` of its reason, such as `no_tool`, or `no_ore` where 16 branches found too little, which the bot's log shows (`/antcraft bot log`).
 
-`StripMineGameTest` runs the bundled job in a test area with stone filled under its floor and three coal ore beside where the branch goes, as `jobs.strip_mine coal 3 <y> 8` with `y` three blocks under the bot: the bot ends at the top of its stairs with the coal. A second run starts with a pickaxe ten uses from breaking and two sticks: the job makes a new stone pickaxe before the branch, and the old one breaks. Both bots carry the kit already, so the test does not bootstrap one.
+`StripMineGameTest` runs the bundled job in a test area with stone filled under its floor and three coal ore beside where the branch goes, as `jobs.strip_mine coal 3 <y> 8` with `y` three blocks under the bot: the bot ends at the top of its stairs with the coal. Another starts at the west edge with `east` and mines the coal beside its eastward branch. A third run starts with a pickaxe ten uses from breaking and two sticks: the job makes a new stone pickaxe before the branch, and the old one breaks. Both bots carry the kit already, so the test does not bootstrap one.
 
 ## See also
 

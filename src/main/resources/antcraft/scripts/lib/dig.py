@@ -31,6 +31,8 @@ FACING = {"north": (0, 0, -1), "south": (0, 0, 1), "east": (1, 0, 0), "west": (-
 # How many branches ore digs at its depth, and how long, before it gives up.
 ROUNDS = 4
 LENGTH = 32
+# How much open air above its head counts as the surface. ponytail: no sky sense; a cave this tall passes for it.
+SKY = 16
 
 
 def short(item):
@@ -66,11 +68,12 @@ def stone(n, radius=32):
     return r
 
 
-def ore(item, n, radius=32, y=None, facing="north"):
+def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     """Makes the bot carry n more of item, a raw item such as "raw_iron" or "coal": mines the exposed veins of its ore
     within radius, nearest first; where they give too few, digs stairs down to y (best_y(item) where None) towards
-    facing, branches on from there and climbs back up. Gives result(): ok, no_recipe for an item that is no ore, no_ore
-    with missing where ROUNDS branches found too little, or where a step failed."""
+    facing, branches of length on from there and climbs back up. Gives result(): ok, no_recipe for an item that is no
+    ore, no_ore with missing where ROUNDS branches found too little or there is no y to dig to (emerald), or where a step
+    failed."""
     key = short(item)
     if key not in ORES:
         return result("no_recipe", None, {"minecraft:" + key: n})
@@ -87,11 +90,14 @@ def ore(item, n, radius=32, y=None, facing="north"):
                 return result("no_space", b)
     if count(key) >= target:
         return result()
-    r = stairs_to(best_y(key) if y is None else y, facing)
+    y = best_y(key) if y is None else y
+    if y is None:
+        return result("no_ore", None, {"minecraft:" + key: target - count(key)})
+    r = stairs_to(y, facing)
     for _ in range(ROUNDS):
         if not r["ok"] or count(key) >= target:
             break
-        r = branch(LENGTH, facing=facing)
+        r = branch(length, facing=facing)
     up = stairs_up()
     if not r["ok"]:
         return r
@@ -136,16 +142,44 @@ def stairs_to(y, facing="north"):
     return result()
 
 
-def stairs_up():
-    """Walks back up the staircase stairs_to dug, to its top. Gives result(): ok, no_stairs where it dug none, or goto's
-    reason with at."""
+def stairs_up(facing="north"):
+    """Walks back up the staircase stairs_to dug, to its top; where it remembers none, digs one up towards facing to the
+    surface. Gives result(): ok, or goto's reason or the reason a step failed with at."""
     kept = memory.get("stairs")
     if kept is None:
-        return result("no_stairs")
+        return dig_up(facing)
     r = goto(kept["top"])
     if not r:
         return result(r.reason, kept["top"])
     memory.pop("stairs")
+    return result()
+
+
+def surfaced(here, step):
+    """Whether the bot at here walks out towards step without digging: the block ahead of its feet is air and none is
+    above its head up to SKY blocks."""
+    above = [block(here.up(k)) for k in range(1, SKY + 1)]
+    return lib.find.is_air(here + step) and all([b is None or b.is_air for b in above])
+
+
+def dig_up(facing):
+    """Digs a 1-wide staircase from the bot's feet up towards facing, one block on for each block up, and walks up it
+    until surfaced. Gives result(): ok, or the reason a step failed with at."""
+    step = FACING[facing]
+    here = pos()
+    opened = [here, here.up()]
+    while not surfaced(here, step):
+        up = here + (step[0], 1, step[2])
+        cells = [here.up(2), up, up.up()]
+        opened = opened + cells
+        for p in cells:
+            failure = cut(p, here, opened)
+            if failure:
+                return failure
+        r = goto(up)
+        if not r:
+            return result(r.reason, up)
+        here = up
     return result()
 
 

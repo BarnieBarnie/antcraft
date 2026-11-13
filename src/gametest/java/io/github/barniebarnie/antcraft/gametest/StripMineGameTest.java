@@ -45,9 +45,28 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	/** The bot with the kit, y passed: it ends back at the surface with the 3 coal. */
 	@GameTest(maxTicks = 1000)
 	public void minesTheSeededCoalAndComesBackUp(GameTestHelper helper) {
-		AntBot bot = miner(helper, new ItemStack(Items.STONE_PICKAXE));
-		run(helper, bot);
-		helper.succeedWhen(() -> mined(helper, bot));
+		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, "coal 3 %d 8");
+		helper.succeedWhen(() -> mined(helper, bot, START, 3));
+	}
+
+	/**
+	 * Facing east from the west edge (#523): the stairs go down east and the branch runs east, past the area's east edge
+	 * through stone filled under it, beside the two coal at x=4; the coal north of the branch's line is left.
+	 */
+	@GameTest(maxTicks = 1000)
+	public void facingEastDigsEast(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(8, -4, 2, 12, -1, 4)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		BlockPos start = new BlockPos(0, 1, 3);
+		AntBot bot = miner(helper, start, new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, "coal 2 %d 8 east");
+		helper.succeedWhen(() -> {
+			mined(helper, bot, start, 2);
+			helper.assertBlockPresent(Blocks.AIR, 4, -2, 2);
+			helper.assertBlockPresent(Blocks.COAL_ORE, 2, -1, 0);
+		});
 	}
 
 	/**
@@ -58,39 +77,42 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	public void aNearlyBrokenPickaxeIsReplaced(GameTestHelper helper) {
 		ItemStack worn = new ItemStack(Items.STONE_PICKAXE);
 		worn.setDamageValue(worn.getMaxDamage() - 10);
-		AntBot bot = miner(helper, worn);
+		AntBot bot = miner(helper, START, worn);
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
-		run(helper, bot);
+		run(helper, bot, "coal 3 %d 8");
 		helper.succeedWhen(() -> {
-			mined(helper, bot);
+			mined(helper, bot, START, 3);
 			helper.assertTrue(carried(bot, Items.STONE_PICKAXE) == 1, "carries " + carried(bot, Items.STONE_PICKAXE)
 				+ " stone pickaxes: " + bot.getMainHandItem() + " in hand, " + bot.getInventory().getItems());
 			helper.assertTrue(carried(bot, Items.STICK) == 0, "the sticks are left: no pickaxe was made");
 		});
 	}
 
-	private static AntBot miner(GameTestHelper helper, ItemStack pickaxe) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, START.getX(), START.getY(), START.getZ());
+	private static AntBot miner(GameTestHelper helper, BlockPos start, ItemStack pickaxe) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, start.getX(), start.getY(), start.getZ());
 		bot.setItemSlot(EquipmentSlot.MAINHAND, pickaxe);
 		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE));
 		bot.getInventory().addItem(new ItemStack(Items.TORCH, 16));
 		return bot;
 	}
 
-	/** The job finished and said so, the bot stands back at the top of its stairs and carries the 3 coal. */
-	private static void mined(GameTestHelper helper, AntBot bot) {
+	/** The job finished and said so, the bot stands back at start, the top of its stairs, and carries n coal. */
+	private static void mined(GameTestHelper helper, AntBot bot, BlockPos start, int n) {
 		ScriptRun run = bot.getScript();
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);
-		helper.assertTrue(log.equals(List.of("strip mined 3 coal")), "printed " + log);
+		helper.assertTrue(log.equals(List.of("strip mined " + n + " coal")), "printed " + log);
 		helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
-		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(START)), "the bot is at " + helper.relativePos(bot.blockPosition()));
-		helper.assertTrue(carried(bot, Items.COAL) == 3, "carries " + carried(bot, Items.COAL) + " coal");
+		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(start)), "the bot is at " + helper.relativePos(bot.blockPosition()));
+		helper.assertTrue(carried(bot, Items.COAL) == n, "carries " + carried(bot, Items.COAL) + " coal");
 	}
 
-	/** Runs jobs.strip_mine coal 3 at y=-2 with radius 8, and fails the test at once when it fails or warns. */
-	private static void run(GameTestHelper helper, AntBot bot) {
+	/**
+	 * Runs jobs.strip_mine with args, %d in them the absolute y of y=-2, and fails the test at once when it fails or
+	 * warns.
+	 */
+	private static void run(GameTestHelper helper, AntBot bot, String args) {
 		int y = helper.absolutePos(new BlockPos(0, -2, 0)).getY();
-		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.strip_mine coal 3 " + y + " 8");
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.strip_mine " + args.formatted(y));
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.strip_mine, 1]")), "run answered " + started);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();

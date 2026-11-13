@@ -19,7 +19,8 @@ import net.minecraft.world.level.block.Blocks;
 
 /**
  * {@code lib/dig.py} and {@code lib/find.py} (#509): ore from an exposed vein, a staircase down and back up, and a 1x2
- * branch tunnel that takes the ore it uncovers and puts torches. Each bot holds a stone pickaxe.
+ * branch tunnel that takes the ore it uncovers and puts torches; a staircase up from a pocket with none remembered, and
+ * ore's deep fallback under the floor (#523). Each bot holds a stone pickaxe.
  */
 public class DigGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -129,5 +130,59 @@ public class DigGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.AIR, 4, 2, 2);
 				helper.assertBlockPresent(Blocks.AIR, 5, 2, 4);
 			});
+	}
+
+	/**
+	 * From a pocket in stone with no staircase remembered, stairs_up digs a staircase east up to the open air. The area
+	 * has sky access: no barrier ceiling over it.
+	 */
+	@GameTest(maxTicks = 500, skyAccess = true)
+	public void stairsUpWithoutStairsDigsToTheSurface(GameTestHelper helper) {
+		stone(helper, 5);
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			r = lib.dig.stairs_up("east")
+			print(r["ok"], pos().x - s.x, pos().y - s.y)
+			""", List.of("True 5 5"),
+			() -> {
+				for (int k = 1; k <= 5; k++) {
+					helper.assertBlockPresent(Blocks.STONE, 1 + k, k, 3);
+				}
+			});
+	}
+
+	/**
+	 * Coal buried under the floor, none exposed: ore digs stairs down to y, branches north (4 blocks, so it stays under
+	 * the area) past the coal and climbs back up to where it started. Stone is filled under the floor, y -4 to -1.
+	 */
+	@GameTest(maxTicks = 700)
+	public void oreDigsDownForBuriedCoal(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 7, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(4, -2, 2, Blocks.COAL_ORE);
+		AntBot bot = miner(helper, 3, 1, 7);
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			r = lib.dig.ore("coal", 1, 1, s.y - 3, length=4)
+			print(r["ok"], count("coal"), pos() == s)
+			""", List.of("True 1 True"),
+			() -> helper.assertBlockPresent(Blocks.AIR, 4, -2, 2));
+	}
+
+	/** Emerald has no best_y (it is only in mountains): without y, and no exposed vein, ore gives no_ore at once. */
+	@GameTest(maxTicks = 40)
+	public void emeraldWithoutYGivesNoOre(GameTestHelper helper) {
+		AntBot bot = miner(helper, 1, 1, 1);
+		expect(helper, bot, """
+			import lib.dig
+			r = lib.dig.ore("emerald", 1, 1)
+			print(r["reason"], r["missing"])
+			""", List.of("no_ore {'minecraft:emerald': 1}"));
 	}
 }

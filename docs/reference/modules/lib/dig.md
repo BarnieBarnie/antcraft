@@ -13,11 +13,11 @@ Mines stone or cobblestone within `radius` until the bot carries `n` more cobble
 - **Returns** a dict: `ok`, `reason` (`None`, `no_stone` with `missing` once no stone it can mine is left, or `no_space` with `at` where its inventory is full).
 - **Pauses** yes, while it walks and mines.
 
-## `ore(item, n, radius=32, y=None, facing="north")`
+## `ore(item, n, radius=32, y=None, facing="north", length=32)`
 
-Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md). Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to 4 branches of 32 blocks on from there until it carries enough, and climbs back with `stairs_up()`.
+Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md). Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to 4 branches of `length` blocks on from there until it carries enough, and climbs back with `stairs_up()`. Emerald has no `best_y`: pass `y`, or `ore` gives `no_ore` once the exposed veins are out.
 
-- **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` with `missing` for an item that is no ore, `no_ore` with `missing` where the branches found too little, `no_space` with `at`, or the reason a step failed with `at`).
+- **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` with `missing` for an item that is no ore, `no_ore` with `missing` where the branches found too little or there is no `y` to dig to, `no_space` with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.
 
 ```python
@@ -30,7 +30,7 @@ if not r["ok"]:
 
 ## `best_y(item)`
 
-The height where the ore of the raw item `item` is most common: coal 96, raw iron 16, raw copper 48, raw gold -16, redstone and diamond -59, lapis lazuli 0; `None` for any other. Done at once.
+The height where the ore of the raw item `item` is most common: coal 96, raw iron 16, raw copper 48, raw gold -16, redstone and diamond -59, lapis lazuli 0; `None` for any other, emerald too: it is only in mountains, high up, which a height alone does not find. Done at once.
 
 ## `stairs_to(y, facing="north")`
 
@@ -39,12 +39,12 @@ Digs a staircase one block wide from the bot's feet down to `y`, one block towar
 - **Returns** a dict: `ok`, `reason` (`None`, or the reason a step failed, with `at`).
 - **Pauses** yes, while it digs and walks.
 
-## `stairs_up()`
+## `stairs_up(facing="north")`
 
-Walks back up the staircase `stairs_to` dug, to its top, and forgets it.
+Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `memory` holds no staircase, such as for a bot that came down another way, it digs one up towards `facing`, one block on for each block up, each step three blocks tall, until the bot stands where the block ahead of its feet is air and none is above its head for 16 blocks: the surface. A cave that tall passes for it.
 
-- **Returns** a dict: `ok`, `reason` (`None`, `no_stairs` where `memory` holds no staircase, or that of [`goto`](../../movement/goto.md) with `at`).
-- **Pauses** yes, while it walks.
+- **Returns** a dict: `ok`, `reason` (`None`, that of [`goto`](../../movement/goto.md) with `at`, or the reason a step failed with `at`).
+- **Pauses** yes, while it walks and digs.
 
 ## `branch(length, every=8, facing="north")`
 
