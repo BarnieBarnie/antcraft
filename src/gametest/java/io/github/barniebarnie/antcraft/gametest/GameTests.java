@@ -18,6 +18,7 @@ import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
@@ -32,7 +33,8 @@ public final class GameTests {
 
 	/**
 	 * Call first in {@code invokeTestMethod}. Logs the tick the test passes or fails on, as
-	 * {@code Game test <id> passed at tick <n> of <maxTicks>}, so {@code maxTicks} can be set from measured runs.
+	 * {@code Game test <id> passed at tick <n> of <maxTicks>}, so {@code maxTicks} can be set from measured runs. Lays the
+	 * stone floor at y=0 that CLAUDE.md promises every test, across the whole area (#558): the framework leaves y=0 air.
 	 */
 	public static void start(GameTestHelper helper) {
 		GameTestInfo info = info(helper);
@@ -55,9 +57,12 @@ public final class GameTests {
 			public void testAddedForRerun(GameTestInfo old, GameTestInfo next, GameTestRunner runner) {
 			}
 		});
+		AABB bounds = helper.getBounds();
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, (int) bounds.getXsize() - 1, 0, (int) bounds.getZsize() - 1)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
 		// A bot that died in the test would otherwise come back at its home in the test's area after the test, into
 		// whatever test runs there next. Every level: a bot waits in the level of its home, not of where it died.
-		AABB bounds = helper.getBounds();
 		onEnd(helper, () -> forgetRespawns(helper.getLevel().getServer(), bounds));
 	}
 
