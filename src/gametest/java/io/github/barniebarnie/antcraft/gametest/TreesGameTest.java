@@ -178,4 +178,105 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(1, radius=2)\nprint(r['ok'], r['reason'], r['missing'])\n",
 			List.of("False no_logs {'#minecraft:logs': 1}"));
 	}
+
+	/**
+	 * Clears the oak every test starts with and builds a 2x2 spruce with its north-west log at (3, 1, 3), six logs high on
+	 * dirt, with a branch of two logs that each touch the last only at a corner: (5, 4, 2) and (6, 5, 1). No leaves, so
+	 * nothing hides a log.
+	 */
+	private static void plantGiant(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+				for (int y = 1; y < 8; y++) {
+					helper.setBlock(x, y, z, Blocks.AIR);
+				}
+			}
+		}
+		for (int x = 3; x <= 4; x++) {
+			for (int z = 3; z <= 4; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+				for (int y = 1; y <= 6; y++) {
+					helper.setBlock(x, y, z, Blocks.SPRUCE_LOG);
+				}
+			}
+		}
+		helper.setBlock(5, 4, 2, Blocks.SPRUCE_LOG);
+		helper.setBlock(6, 5, 1, Blocks.SPRUCE_LOG);
+	}
+
+	/**
+	 * tree_blocks of the giant spruce gives its 24 trunk logs and two branch logs, and not the spruce of three logs a block
+	 * west of it; is_giant says its trunk is 2x2 and the small one's not (#510).
+	 */
+	@GameTest(maxTicks = 100)
+	public void treeBlocksGivesTheLogsOfOneGiantTree(GameTestHelper helper) {
+		plantGiant(helper);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(1, y, 3, Blocks.SPRUCE_LOG);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, """
+			import lib.trees
+			b = lib.trees.tree_blocks(Pos%s)
+			print(len(b), all([lib.trees.is_kind(p, 'spruce_log') for p in b]), Pos%s in b, Pos%s in b)
+			print(lib.trees.is_giant(Pos%s), lib.trees.is_giant(Pos%s))
+			""".formatted(at(helper, 4, 1, 4), at(helper, 6, 5, 1), at(helper, 1, 1, 3), at(helper, 4, 1, 4), at(helper, 1, 1, 3)),
+			List.of("26 True True False", "True False"));
+	}
+
+	/**
+	 * fell_whole fells the giant spruce: no log left, all 26 in the bot's inventory, the scaffold it stood on taken back so
+	 * no dirt stands above the floor and it carries its six again (it placed no more than those), and its four spruce
+	 * saplings planted where the trunk stood (#510).
+	 */
+	@GameTest(maxTicks = 1400)
+	public void fellWholeFellsAGiantTreeAndTakesItsScaffoldBack(GameTestHelper helper) {
+		plantGiant(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 6));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING, 4));
+		expect(helper, bot, "import lib.trees\nr = lib.trees.fell_whole(Pos" + at(helper, 3, 1, 3) + ")\n"
+			+ "print(r['ok'], count('spruce_log'), count('dirt'), count('spruce_sapling'))\n", List.of("True 26 6 0"),
+			() -> assertGiantFelled(helper));
+	}
+
+	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
+	private static void assertGiantFelled(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				for (int y = 1; y < 8; y++) {
+					BlockPos p = new BlockPos(x, y, z);
+					helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, p);
+					helper.assertBlockNotPresent(Blocks.DIRT, p);
+				}
+			}
+		}
+		for (int x = 3; x <= 4; x++) {
+			for (int z = 3; z <= 4; z++) {
+				helper.assertBlockPresent(Blocks.SPRUCE_SAPLING, new BlockPos(x, 1, z));
+			}
+		}
+	}
+
+	/**
+	 * logs(26) needs all of the giant spruce, crowned with leaves so it is a tree, so it fells it whole with fell_whole,
+	 * scaffold taken back and four saplings planted, rather than as four trees of one column each (#510).
+	 */
+	@GameTest(maxTicks = 1400)
+	public void logsFellsAGiantTreeItNeedsAllOfWhole(GameTestHelper helper) {
+		plantGiant(helper);
+		for (int x = 2; x <= 5; x++) {
+			for (int z = 2; z <= 5; z++) {
+				helper.setBlock(x, 7, z, Blocks.SPRUCE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 6));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING, 4));
+		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(26, kind='spruce_log')\nprint(r['ok'], count('spruce_log'), count('dirt'))\n",
+			List.of("True 26 6"), () -> assertGiantFelled(helper));
+	}
 }

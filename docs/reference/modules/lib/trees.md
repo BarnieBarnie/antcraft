@@ -28,7 +28,7 @@ Mines the trunk at `base` from the ground up, picks up the logs and saplings tha
 
 ## `logs(n, radius=32, kind=LOGS)`
 
-Gets logs that `kind` selects (a block id such as `"spruce_log"`, or a tag; any log by default) from trees within `radius` blocks until the bot carries `n` more, one tree at a time, the nearest first, so it does not walk to and fro between trees. Where it needs the whole trunk or more, it fells the tree with `fell`, replanting it; where it needs fewer logs, it mines only the bottom ones it needs, from the ground, and leaves the rest standing. What is left of such a tree it takes first the next time (`next_tree(remnants=True)`), before it starts on another tree. A log wall or cabin is no tree, so it is left alone; a tree it cannot get a log from is skipped. A trunk is one column of logs, so a 2x2 spruce is taken as four trees side by side.
+Gets logs that `kind` selects (a block id such as `"spruce_log"`, or a tag; any log by default) from trees within `radius` blocks until the bot carries `n` more, one tree at a time, the nearest first, so it does not walk to and fro between trees. Where it needs all of a tree's logs (`tree_blocks`), it fells the whole tree with `fell_whole`, replanting it; where it needs fewer, it mines only the bottom ones of one trunk column it needs, from the ground, and leaves the rest standing. What is left of such a tree it takes first the next time (`next_tree(remnants=True)`), before it starts on another tree. A log wall or cabin is no tree, so it is left alone; a tree it cannot get a log from is skipped. Of a 2x2 tree it needs only part of, it takes a column at a time.
 
 - **Returns** a dict: `ok`, `reason` (`None`, `no_logs` once no tree it can take from is left, or `no_space` with a full inventory), `at` (where `no_space` struck) and `missing` (`{kind: k}`, the logs it still lacks, with `no_logs`).
 - **Pauses** yes, while it walks, mines and picks up.
@@ -42,6 +42,39 @@ if not r["ok"]:
 r = lib.trees.logs(6, kind="spruce_log")
 ```
 
+## `tree_blocks(base)`
+
+The logs of the tree at `base`, `base` first: those of `base`'s block (a spruce log for a spruce) reached from it log by log, diagonal steps too, as acacia and jungle branches touch only at a corner, at most 512. A tree of another kind next to it is left out; one of the same kind whose logs touch it is taken as the same tree. Done at once, in some 30 instructions a log (about 15 ticks for a 2x2 spruce).
+
+## `is_giant(base)`, `square(base)`
+
+Whether the trunk `base` is a bottom log of is 2x2, as a giant spruce's, jungle tree's or dark oak's; and its four bottom logs, or `None` for a trunk one log wide. Done at once.
+
+## `stands(blocks)`
+
+Where to stand to mine the logs in the list `blocks`: few spots that together reach every log, chosen greedily, each the spot that reaches the most logs not yet reached less the blocks the bot must place to stand there, a spot on one of the logs first on a tie. The spots looked at are the air above and beside each log; a log none reaches is left out. A spot reaches a log as `mine` measures it: 4 blocks from the bot's eyes to the log's centre. Done at once; for a 2x2 spruce some 30 ticks of instructions.
+
+## `fell_whole(base, replant=True)`
+
+Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (a `spruce_sapling` for spruce logs, else any it carries) on each spot of the trunk's bottom that is air over dirt: four for a 2x2 trunk, so a giant tree grows again.
+
+It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes those back, but only of the kinds it carried when it started (`SCAFFOLD`).
+
+- **Returns** a dict: `ok`, `reason` (`None`, `out_of_reach` with `at` a log it could not mine, or `no_space` with `at` a log whose drops did not fit).
+- **Pauses** yes, while it walks, mines, picks up and plants.
+
+```python
+import lib.trees
+import lib.tools
+
+base = lib.trees.next_tree()
+if base is not None and lib.trees.is_giant(base):
+    lib.tools.hold("axe")
+    r = lib.trees.fell_whole(base)
+    if not r["ok"]:
+        say("left a log at " + str(r["at"]))
+```
+
 ## `low_log(radius=32, skip=None)`
 
 The lowest log within `radius`, the nearest among those, leaving out the positions in the dict `skip`; `None` if there is none.
@@ -50,13 +83,13 @@ The lowest log within `radius`, the nearest among those, leaving out the positio
 
 Whether the trunk with its lowest log at `base` hangs over air with leaves at its top, what `logs` leaves of a tree it took the bottom of; and whether it has leaves at its top. Done at once.
 
-## `is_log(p)`, `is_kind(p, kind)`, `trunk_base(log)`, `trunk(base)`
+## `is_log(p)`, `is_kind(p, kind)`, `trunk_base(log)`, `trunk(base)`, `reaches(feet, p)`, `pillar(spot)`
 
-Whether the block at `p` is a log, and whether it is what `kind` selects (a block id or a tag); the lowest log of the trunk `log` is in, and the logs of the same block straight up from `base`, `base` first. Done at once.
+Whether the block at `p` is a log, and whether it is what `kind` selects (a block id or a tag); the lowest log of the trunk `log` is in, and the logs of the same block straight up from `base`, `base` first; whether a bot with its feet at `feet` reaches the block at `p`; and how many blocks a bot must place under `spot` to stand there (99 for more than 16). Done at once.
 
-## `LOGS`, `SAPLINGS`
+## `LOGS`, `SAPLINGS`, `SCAFFOLD`
 
-The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`.
+The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`, and the blocks of the item tag `antcraft:scaffold_blocks` as the mod ships it, which `fell_whole` takes back.
 
 ## Example
 
