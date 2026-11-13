@@ -588,6 +588,25 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * One log to smelt to charcoal and planks for the table and fuel: smelt loads the log first, so the planks burn and
+	 * the log is not also kept back as fuel (#530).
+	 */
+	@GameTest(maxTicks = 680)
+	public void smeltHereDoesNotKeepTheLastOfItsInputBackAsFuel(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 6));
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE, 1));
+		expect(helper, bot, smeltHere("'oak_log'", "charcoal", "oak_log", "oak_planks", "furnace", "crafting_table")
+				.replace("r['reason']", "r['reason'], r['missing']"),
+			List.of("True None {} 1 0 1 1 1"), () -> {
+				tablesInTheArea(helper, 0).run();
+				inTheArea(helper, Blocks.FURNACE, 0).run();
+			});
+	}
+
 	/** A smoker within reach and no pickaxe or cobblestone: craft_here cooks the beef there and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksInASmokerWithinReach(GameTestHelper helper) {

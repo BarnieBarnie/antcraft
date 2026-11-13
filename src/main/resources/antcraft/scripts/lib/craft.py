@@ -180,12 +180,14 @@ def smelt_here(item, n=1, fuel=None):
         # ponytail: keeps back the first carried item item selects, the one smelt loads unless a station cooks only another.
         stations = ["furnace"] if table_near() else ["crafting_table", "furnace"]
         k = min(n, count(carried[0]))
-        # The fuel smelt burns: fuel, else the best carried, as smelt picks it.
+        # The fuel smelt burns: fuel, else the best carried, as smelt picks it once the k it smelts are loaded, so the
+        # input burns only where more of it is carried (#530).
         for f in [fuel] if fuel else ["coal", "charcoal", "#minecraft:logs", "#minecraft:planks"]:
-            burnt = [s.item for s in inventory() if matches(s, f)]
+            burnt = [s.item for s in inventory() if matches(s, f) and count(s.item) > (k if s.item == carried[0] else 0)]
             if burnt:
+                spare = count(burnt[0]) - (k if burnt[0] == carried[0] else 0)
                 # ponytail: one for each 1.5 smelted, as wood burns, the only fuel a table or furnace takes; at most what is carried, so a short fuel is smelt's to report.
-                stations = stations + [burnt[0]] * min(count(burnt[0]), (2 * k + 2) // 3)
+                stations = stations + [burnt[0]] * min(spare, (2 * k + 2) // 3)
                 break
         p = needs(carried[0], k, also=stations)
         if p["gather"]:
