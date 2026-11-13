@@ -11,11 +11,12 @@ from lib.result import result
 
 def chests(radius=32):
     """The chests the bot may take from, nearest first: its colony's core, the positions in memory["chests"], and the
-    chests, trapped chests and barrels within radius blocks."""
+    chests, trapped chests and barrels within radius blocks. A position in another dimension than the bot's is left out."""
     c = colony()
     found = []
+    here = dimension()
     for p in ([c["core"]] if c else []) + list(memory.get("chests", [])) + scan(CHESTS, radius=radius):
-        if p not in found:
+        if p.dimension in (None, here) and p not in found:
             found.append(p)
     return sorted(found, key=distance)
 

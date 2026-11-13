@@ -90,6 +90,22 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A remembered chest in another dimension (#525) is left out; one in the bot's dimension or with none stays. */
+	@GameTest(maxTicks = 40)
+	public void leavesOutARememberedChestInAnotherDimension(GameTestHelper helper) {
+		chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		BlockPos far = helper.absolutePos(FAR);
+		run(helper, bot, IMPORT + """
+			a = %s
+			b = Pos(%d, %d, %d, dimension())
+			memory["chests"] = [Pos(%d, %d, %d, "minecraft:the_nether"), b]
+			print(chests(radius=8) == [a, b])
+			""".formatted(pos(helper, NEAR), far.getX(), far.getY(), far.getZ(), far.getX() + 1, far.getY(), far.getZ()));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> printed(helper, bot, "True"));
+	}
+
 	private static Container chest(GameTestHelper helper, BlockPos at, ItemStack... stacks) {
 		helper.setBlock(at, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
