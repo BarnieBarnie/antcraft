@@ -209,6 +209,31 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A modded ore stand-in: lodestone, which the game test tags put in needs_iron_tool and c:ores, with an ore Source named after a
+	 * block any pickaxe drops. The bot carries a stone pickaxe, the chest holds an iron one: get takes the tier from the
+	 * exposed block's tags and mines it only with the iron pickaxe (#528).
+	 */
+	@GameTest(maxTicks = 70)
+	public void anOreSourceTakesItsTierFromTheBlock(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.IRON_PICKAXE));
+		helper.setBlock(5, 1, 5, Blocks.LODESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			import lib.dig
+			from lib.get import get, ore, SOURCES
+			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
+			SOURCES["minecraft:lodestone"] = ore("lodestone", "minecraft:lodestone", 60)
+			r = get("lodestone", radius=8)
+			print(r["ok"], r["reason"], count("lodestone"), held().item)
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 1 minecraft:iron_pickaxe");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
 	 * A bot with a stone pickaxe and a furnace, no wood or coal, by the oak of {@link TreesGameTest} and eight exposed iron
 	 * ore: eight smelts plan a coal, but with no coal ore within radius get fells the oak for fuel and digs no stairs
 	 * (#519). The coal source fails, so digging for coal fails the test at once.

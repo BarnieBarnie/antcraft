@@ -158,9 +158,16 @@ def wood_for_coal(k, radius):
 
 
 def gather(source, n, radius):
-    """source.do(n, radius) with its tool held: n more of its item."""
+    """source.do(n, radius) with its tool held: n more of its item. For an ore source the pickaxe tier is that of the
+    nearest exposed ore block (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs.
+    ponytail: only the first block's tier; a later vein that needs more is tried with this pickaxe."""
+    tier = source.tier
+    if source.tool == "pickaxe" and source.ore is not None:
+        p = lib.find.exposed(source.ore, radius)
+        if p is not None:
+            tier = lib.tools.tier_for(p)
     if source.tool:
-        r = ensure_tool(source.tool, n, source.tier, radius)
+        r = ensure_tool(source.tool, n, tier, radius)
         if not r["ok"]:
             return r
     return source.do(n, radius)

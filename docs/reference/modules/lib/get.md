@@ -80,6 +80,8 @@ How `get` gathers each raw item: a dict of item id (`"#minecraft:logs"` for any 
 | dirt, sand | the exposed ones within `radius`, nearest first | shovel, or by hand |
 | coal, raw iron, raw copper, raw gold, redstone, lapis lazuli, diamond, emerald | [`lib.dig.ore`](dig.md) | pickaxe of [`lib.tools.tier_for`](tools.md) its ore |
 
+An ore source's pickaxe tier comes from the block it is about to mine: before it digs, `get` finds the nearest exposed block of the source's `ore` and asks [`lib.tools.tier_for`](tools.md#tier_forwhat) of its position, which reads the block's `needs_*_tool` tags, so a modded ore that needs an iron pickaxe gets one. Where none is exposed it uses the source's `tier`. ponytail: only that first block's tier counts; a vein further on that needs more is tried with the same pickaxe.
+
 A script adds a source for anything the library cannot get yet, or replaces one, by assigning to it; `get` uses it from then on, also for the items it crafts from it:
 
 ```python
