@@ -606,9 +606,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A lumberjack with a stone axe fells an oak of six logs, taller than it reaches from the ground, whole: it climbs on
-	 * dirt from the core, takes the dirt back, replants the sapling from the core and stores the logs and the dirt (#541). Passes at about tick 320.
+	 * dirt from the core, takes the dirt back, replants the sapling from the core and stores the logs and the dirt (#541). Passes at about tick 380, 540 with the other colony tests.
 	 */
-	@GameTest(maxTicks = 640)
+	@GameTest(maxTicks = 1080)
 	public void aLumberjackFellsATreeTallerThanItReaches(GameTestHelper helper) {
 		helper.setBlock(4, 0, 4, Blocks.DIRT);
 		for (int y = 1; y <= 6; y++) {
@@ -637,6 +637,78 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(4, 1, 4));
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
 			helper.assertTrue(core.countItem(Items.DIRT) == 6, "dirt in the core: " + core.countItem(Items.DIRT));
+		});
+	}
+
+	/**
+	 * A lumberjack with a stone axe by an oak of six logs, the core holding three dirt and three cobblestone: it climbs on
+	 * the core's blocks, not on dirt dug from the colony's ground (four exposed dirt blocks in the floor), and puts them
+	 * back (#553). Passes at about tick 390, 540 with the other colony tests.
+	 */
+	@GameTest(maxTicks = 1080)
+	public void aLumberjackClimbsOnTheCoresBlocksNotTheGround(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.DIRT);
+		for (int y = 1; y <= 6; y++) {
+			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
+		}
+		helper.setBlock(4, 7, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		BlockPos[] ground = {new BlockPos(6, 0, 1), new BlockPos(7, 0, 1), new BlockPos(6, 0, 2), new BlockPos(7, 0, 2)};
+		for (BlockPos p : ground) {
+			helper.setBlock(p, Blocks.DIRT);
+		}
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.DIRT, 3));
+		core.setItem(1, new ItemStack(Items.COBBLESTONE, 3));
+		core.setItem(2, new ItemStack(Items.OAK_SAPLING));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.onEachTick(() -> {
+			for (BlockPos p : ground) {
+				if (!helper.getBlockState(p).is(Blocks.DIRT)) {
+					helper.fail("the lumberjack dug the colony's ground at " + p);
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (int y = 1; y < 8; y++) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(4, y, 4));
+			}
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(4, 1, 4));
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			helper.assertTrue(core.countItem(Items.DIRT) == 3 && core.countItem(Items.COBBLESTONE) == 3,
+				"dirt and cobblestone in the core: " + core.countItem(Items.DIRT) + " " + core.countItem(Items.COBBLESTONE));
+		});
+	}
+
+	/**
+	 * An empty-handed lumberjack, no axe anywhere, by three oaks of three logs: one tree is cheaper felled by hand, but the
+	 * nine logs together are cheaper with a wooden axe, so it makes one, and a crafting table, from three of them and fells the rest with it (#553). Passes at about tick 860, 1130 with the other colony tests.
+	 */
+	@GameTest(maxTicks = 2260)
+	public void aLumberjackMakesAnAxeForSeveralSmallTrees(GameTestHelper helper) {
+		for (BlockPos base : List.of(new BlockPos(3, 1, 3), new BlockPos(6, 1, 2), new BlockPos(5, 1, 6))) {
+			helper.setBlock(base.below(), Blocks.DIRT);
+			for (int y = 0; y < 3; y++) {
+				helper.setBlock(base.above(y), Blocks.OAK_LOG);
+			}
+			helper.setBlock(base.above(3), Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		}
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			helper.assertTrue(lumberjack.getMainHandItem().is(ItemTags.AXES) || lumberjack.getInventory().hasAnyMatching(s -> s.is(ItemTags.AXES)),
+				"the lumberjack has no axe");
 		});
 	}
 

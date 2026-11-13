@@ -67,6 +67,18 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		return "Pos(" + at(helper, TREE.getX(), TREE.getY(), TREE.getZ()) + ")";
 	}
 
+	/**
+	 * The sapling of a log: a table for the vanilla logs whose sapling is no {@code _sapling}, else {@code _sapling} where
+	 * the game knows it as a sapling, else None, so the lumberjack gets none for an unknown log (#553).
+	 */
+	@GameTest(maxTicks = 40)
+	public void saplingOfALog(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		expect(helper, bot, "from lib.trees import sapling\nprint(sapling('minecraft:mangrove_log'), sapling('minecraft:crimson_stem'), "
+			+ "sapling('minecraft:oak_log'), sapling('minecraft:oak_wood'), sapling('mymod:ebony_log'))\n",
+			List.of("minecraft:mangrove_propagule minecraft:crimson_fungus minecraft:oak_sapling None None"));
+	}
+
 	/** A wall of two logs on stone next to the bot is no tree; the oak further off is. */
 	@GameTest(maxTicks = 40)
 	public void nextTreeFindsATreeAndSkipsALogWall(GameTestHelper helper) {

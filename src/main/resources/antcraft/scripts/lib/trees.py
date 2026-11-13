@@ -14,6 +14,18 @@ SAPLINGS = "#minecraft:saplings"
 SCAFFOLD = tag_items("#antcraft:scaffold_blocks")
 
 
+# The vanilla logs whose sapling is no _sapling: the item that grows each.
+SAPLING = {"minecraft:mangrove_log": "minecraft:mangrove_propagule", "minecraft:crimson_stem": "minecraft:crimson_fungus",
+           "minecraft:warped_stem": "minecraft:warped_fungus"}
+
+
+def sapling(log):
+    """The item that grows the tree of log, a block id: SAPLING's, else its _log made _sapling where that is in
+    #minecraft:saplings, else None."""
+    s = log.replace("_log", "_sapling")
+    return SAPLING.get(log) or (s if s in tag_items(SAPLINGS) else None)
+
+
 def is_log(p):
     b = block(p)
     return b is not None and LOGS in b.tags
@@ -264,7 +276,7 @@ def fell_whole(base, replant=True):
     it could not mine, or no_space at one whose drops did not fit; it takes back its scaffold either way."""
     blocks = tree_blocks(base)
     spots = square(base) or [base]
-    sapling = block(base).id.replace("_log", "_sapling")
+    kind = sapling(block(base).id)
     plan = sorted(stands(blocks), key=lambda s: -s.y)
     left = {}
     for p in blocks:
@@ -293,8 +305,8 @@ def fell_whole(base, replant=True):
     if replant:
         for p in spots:
             if block(p).is_air and "#minecraft:dirt" in block(p.down()).tags:
-                if has(sapling):
-                    place(p, sapling)
+                if kind and has(kind):
+                    place(p, kind)
                 elif has(SAPLINGS):
                     place(p, SAPLINGS)
     return result()

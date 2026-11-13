@@ -68,7 +68,7 @@ Where to stand to mine the logs in the list `blocks`: few spots that together re
 
 ## `fell_whole(base, replant=True)`
 
-Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (a `spruce_sapling` for spruce logs, else any it carries) on each spot of the trunk's bottom that is air over dirt: four for a 2x2 trunk, so a giant tree grows again.
+Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (`sapling` of its log, else any it carries) on each spot of the trunk's bottom that is air over dirt: four for a 2x2 trunk, so a giant tree grows again.
 
 It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes back exactly the blocks its walks placed that have not changed since, as [`placed_scaffold`](../../movement/placed_scaffold.md) gives them, also when it stops early with `no_space` or `out_of_reach`. A block someone else put by the tree meanwhile stays, even in a spot where its own block was until they mined it, and so does one that walks placed before `fell_whole` began: it calls `placed_scaffold()` first, which forgets those.
 
@@ -105,6 +105,10 @@ Whether the trunk with its lowest log at `base` hangs over air with leaves at it
 ## `is_log(p)`, `is_kind(p, kind)`, `trunk_base(log)`, `trunk(base)`, `reaches(feet, p)`, `pillar(spot)`
 
 Whether the block at `p` is a log, and whether it is what `kind` selects (a block id or a tag); the lowest log of the trunk `log` is in, and the logs of the same block straight up from `base`, `base` first; whether a bot with its feet at `feet` reaches the block at `p`; and how many blocks a bot must place under `spot` to stand there (99 for more than 16). Done at once.
+
+## `sapling(log)`
+
+The item that grows the tree of `log`, a block id such as `"minecraft:spruce_log"`: `SAPLING`'s for the vanilla logs whose sapling is no `_sapling` (`mangrove_propagule`, `crimson_fungus`, `warped_fungus`), else the log's `_log` made `_sapling` where that item is in `#minecraft:saplings`, else None, as for a log of a mod whose sapling is named otherwise. A script adds its own: `lib.trees.SAPLING["mymod:ebony_log"] = "mymod:ebony_seed"`.
 
 ## `LOGS`, `SAPLINGS`, `SCAFFOLD`
 
