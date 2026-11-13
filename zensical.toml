@@ -60,6 +60,8 @@ nav = [
       "reference/modules/lib/area.md",
       "reference/modules/lib/gather.md",
       "reference/modules/lib/result.md",
+      "reference/modules/lib/cost.md",
+      "reference/modules/lib/tools.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

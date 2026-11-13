@@ -10,13 +10,12 @@
 
 from lib.inv import take_all
 from lib.result import result
+# hold lives in lib.tools; imported here, lib.craft.hold keeps working.
+from lib.tools import TIERS, hold
 
 # smelt loads at most a stack a call.
 STACK = 64
 
-# Tool tiers from best to worst. ponytail: ranked by the tier in the id, golden after stone; a modded tool of no listed
-# tier is held only when the bot carries none of these.
-TIERS = ["netherite", "diamond", "iron", "stone", "golden", "wooden"]
 # The tiers ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
 MADE = ["diamond", "iron", "stone", "wooden"]
 
@@ -123,16 +122,6 @@ def ensure_tool(kind, chests=None, upgrade=False):
     if r["ok"] or have <= len(TIERS):
         return hold(kind)
     return r
-
-
-def hold(kind):
-    """Equips the best tool of kind the bot carries, by TIERS; one of no listed tier only where it carries none of these.
-    Gives result()."""
-    for tier in TIERS:
-        if equip(f"{tier}_{kind}"):
-            return result()
-    equip(f"#minecraft:{kind}s")
-    return result()
 
 
 def fetch(more, chests):

@@ -166,6 +166,8 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/gather`](modules/lib/gather.md): `make(item, n=1, radius=32)`, `gather(item, n=1, radius=32)`, `stone(n, radius=32)`, `exposed_stone(radius=32, skip=None)`.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
+- [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `walk(a, b)`, `breaking(n, material, tier)`.
+- [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(block_id)`, `hold(kind)`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ### Writing library functions

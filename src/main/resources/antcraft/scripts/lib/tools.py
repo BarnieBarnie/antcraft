@@ -1,0 +1,76 @@
+# The tools the bot carries, for any script: `import lib.tools`, then lib.tools.enough("axe", 50).
+# A module of the mod's default library (lib/), a skill: only hold takes a tick, the rest are finders.
+#
+# A kind is "pickaxe", "axe", "shovel", "hoe" or "sword"; its tools are those of the item tag #minecraft:<kind>s.
+#
+# This is the mod's default. Change it and the mod leaves your version alone;
+# delete it and the default comes back when the server starts.
+
+from lib.result import result
+
+# Tool tiers from best to worst. ponytail: ranked by the tier in the id, golden after stone; a modded tool of no listed
+# tier counts as worse than these.
+TIERS = ["netherite", "diamond", "iron", "stone", "golden", "wooden"]
+
+# The lowest pickaxe tier each block needs to drop anything, by the game's needs_*_tool block tags; any other block
+# drops with a wooden one. ponytail: the vanilla blocks of those tags, not the tags; a sense if modded blocks need it.
+NEEDS = {}
+for b in ["iron_ore", "deepslate_iron_ore", "raw_iron_block", "iron_block", "copper_ore", "deepslate_copper_ore",
+          "raw_copper_block", "copper_block", "lapis_ore", "deepslate_lapis_ore", "lapis_block"]:
+    NEEDS[b] = "stone"
+for b in ["diamond_ore", "deepslate_diamond_ore", "diamond_block", "gold_ore", "deepslate_gold_ore", "raw_gold_block",
+          "gold_block", "redstone_ore", "deepslate_redstone_ore", "emerald_ore", "deepslate_emerald_ore", "emerald_block"]:
+    NEEDS[b] = "iron"
+for b in ["obsidian", "crying_obsidian", "respawn_anchor", "ancient_debris", "netherite_block"]:
+    NEEDS[b] = "diamond"
+
+
+def tier(stack):
+    """The tier in a tool's id ("stone" for minecraft:stone_axe), or None for a tool of no listed tier."""
+    for t in TIERS:
+        if stack.item.startswith(f"minecraft:{t}_"):
+            return t
+    return None
+
+
+def rank(stack):
+    """A tool's index in TIERS, len(TIERS) for one of no listed tier: lower is better."""
+    t = tier(stack)
+    return TIERS.index(t) if t else len(TIERS)
+
+
+def uses_left(stack):
+    """How many more blocks a tool Stack breaks before it is used up."""
+    return stack.max_damage - stack.damage
+
+
+def carried(kind):
+    """The Stacks of tools of kind the bot carries, held one included, best first by TIERS."""
+    return sorted([s for s in inventory() if matches(s, f"#minecraft:{kind}s")], key=rank)
+
+
+def best(kind):
+    """The best tool of kind the bot carries, a Stack, by TIERS; None where it carries none."""
+    tools = carried(kind)
+    return tools[0] if tools else None
+
+
+def enough(kind, uses):
+    """Whether the tools of kind the bot carries together last uses more blocks."""
+    return sum([uses_left(s) for s in carried(kind)]) >= uses
+
+
+def tier_for(block_id):
+    """The lowest pickaxe tier that drops block_id ("iron" for "minecraft:diamond_ore"); "wooden" for a block any
+    pickaxe drops."""
+    return NEEDS.get(block_id.replace("minecraft:", ""), "wooden")
+
+
+def hold(kind):
+    """Equips the best tool of kind the bot carries, by TIERS; one of no listed tier only where it carries none of these.
+    Gives result()."""
+    for t in TIERS:
+        if equip(f"{t}_{kind}"):
+            return result()
+    equip(f"#minecraft:{kind}s")
+    return result()

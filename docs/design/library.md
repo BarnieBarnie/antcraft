@@ -35,7 +35,7 @@ New modules are marked *new*; the others exist and grow.
 - `lib/result` *new*: `result(reason=None, at=None, missing=None)`, moved out of `lib/shaft` (which keeps importing it, so old scripts work).
 - `lib/find` *new*, finders over `scan` and `find_nearest`: `nearest(what, radius, where=None)` with a filter, `exposed(what, radius)` (a block with an air neighbour the bot can stand by, nearest at or above its feet first, as `lib.gather.exposed_stone` does now), `reachable_first(positions)`.
 - `lib/borrow` *new*: `borrow(chest, item, n)` takes and records it in `memory["borrowed"]`; `borrowed()` lists what is out; `give_back()` puts each item back in its chest (where the chest is gone or full, into the nearest chest that has room, else kept and named in `missing`).
-- `lib/cost` *new*, the numbers the heuristics need: `WALK` ticks a block, `BREAK[material][tier]` ticks to break a block, `USES[tier]` a tool's uses (59, 131, 250, 1561, 32 for gold, 2031 for netherite), `SMELT` ticks an item; `walk(a, b)`, `breaking(blocks, tier)`. ponytail: constants, not the game's break-time formula; a `break_ticks(pos, item)` sense if estimates prove too rough.
+- `lib/cost` *new*, the numbers the heuristics need: `WALK` ticks a block, `BREAK[material][tier]` ticks to break a block, `USES[tier]` a tool's uses (59, 131, 250, 1561, 32 for gold, 2031 for netherite), `SMELT` ticks an item; `walk(a, b)`, `breaking(n, material, tier)`. ponytail: constants, not the game's break-time formula; a `break_ticks(pos, item)` sense if estimates prove too rough.
 - Existing: `lib/area`, `lib/retry`, `lib/home`.
 
 ### Skills
