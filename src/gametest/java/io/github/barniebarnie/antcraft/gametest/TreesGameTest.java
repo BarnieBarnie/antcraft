@@ -73,7 +73,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A {@code where} that rejects every base finds no tree; one that takes the oak's base finds it. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 60)
 	public void nextTreeTakesOnlyABaseWherePasses(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, """

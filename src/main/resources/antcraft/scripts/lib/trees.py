@@ -50,11 +50,18 @@ def crowned(base):
 def next_tree(radius=32, where=None, remnants=False, around=None):
     """The base of the nearest tree within radius of around (None: the bot) whose base passes where (a function, None:
     any), or None. With remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
-    # Only a log with no log under it is a base, so each trunk costs one is_tree; the limit reaches past a forest's
-    # nearer logs (#520).
-    for base in scan(LOGS, radius=radius, limit=4096, around=around):
-        if not is_log(base.down()) and (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
-            return base
+    # Only a log with no log under it is a base, so each trunk costs one is_tree. The nearest 64 logs first: a scan reads
+    # the whole sphere unless it reaches its limit, from a block budget every bot shares, so only where all 64 are no tree
+    # does it look again, up to 4096, past a forest's nearer logs (#520).
+    done = 0
+    for limit in [64, 4096]:
+        found = scan(LOGS, radius=radius, limit=limit, around=around)
+        for base in found[done:]:
+            if not is_log(base.down()) and (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
+                return base
+        if len(found) < limit:
+            return None
+        done = len(found)
     return None
 
 
