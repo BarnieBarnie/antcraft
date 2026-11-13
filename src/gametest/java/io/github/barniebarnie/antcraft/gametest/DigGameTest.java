@@ -5,16 +5,26 @@ import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.expect;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -23,6 +33,8 @@ import net.minecraft.world.level.block.Blocks;
  * ore's deep fallback under the floor (#523). Each bot holds a stone pickaxe.
  */
 public class DigGameTest implements CustomTestMethodInvoker {
+	private static final AtomicInteger NETHER_SPOTS = new AtomicInteger();
+
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
@@ -157,11 +169,15 @@ public class DigGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * Out of a cave 17 blocks tall (#534): air ahead and 16 blocks of it overhead are not the surface while the cave's
-	 * roof is over the bot. stairs_up bridges the first step with the cobblestone it carries and digs on east through a
-	 * wall of stone 4 high, out from under the roof, to its top. The area has sky access; the roof is above it, at y=18.
+	 * roof is over the bot. Carrying no blocks to bridge with (#538), stairs_up walks on along the cave's floor to the
+	 * wall of stone 4 high east of it and digs up through it, out from under the roof, to its top. The area has sky
+	 * access; the roof is above it, at y=18.
 	 */
-	@GameTest(maxTicks = 350, skyAccess = true)
+	@GameTest(maxTicks = 320, skyAccess = true)
 	public void stairsUpOutOfATallCaveDigsToTheRealSurface(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 2, 0, 7)) {
+			helper.setBlock(pos, Blocks.STONE); // the cave's floor
+		}
 		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 0, 7, 4, 7)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
@@ -169,18 +185,65 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(pos, Blocks.STONE);
 		}
 		AntBot bot = miner(helper, 1, 1, 3);
-		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 4));
 		expect(helper, bot, """
 			import lib.dig
 			s = pos()
 			r = lib.dig.stairs_up("east")
 			print(r["ok"], pos().x - s.x, pos().y - s.y)
-			""", List.of("True 4 4"),
+			""", List.of("True 5 4"),
 			() -> {
-				for (int k = 2; k <= 4; k++) {
-					helper.assertBlockPresent(Blocks.STONE, 1 + k, k, 3);
+				for (int k = 1; k <= 4; k++) {
+					helper.assertBlockPresent(Blocks.STONE, 2 + k, k, 3);
 				}
 			});
+	}
+
+	/**
+	 * In the Nether the bedrock roof is over every column (#538): surface gives None there, and stairs_up with no
+	 * staircase remembered gives no_surface at once instead of digging up into the roof. At a far Nether spot of its
+	 * own, in a closed stone pocket; the bot is put there once the chunk ticks entities, and its script runs there.
+	 */
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 40)
+	public void stairsUpInTheNetherGivesNoSurface(GameTestHelper helper) {
+		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
+		ChunkPos spot = new ChunkPos(-3000, 3000 + 16 * NETHER_SPOTS.getAndIncrement());
+		BlockPos feet = new BlockPos(spot.getMinBlockX() + 8, 100, spot.getMinBlockZ() + 8);
+		AntBot bot = miner(helper, 1, 1, 1);
+		UUID id = bot.getUUID();
+		GameTests.onEnd(helper, () -> {
+			if (nether.getEntity(id) instanceof AntBot there) {
+				there.discard();
+			}
+		});
+		ScriptRun[] run = {null};
+		GameTests.waitAtMost(helper, () -> run[0] == null, () -> "Nether chunk not ticking entities");
+		helper.onEachTick(() -> {
+			BotChunks.keep(nether, spot);
+			if (run[0] == null && nether.isPositionEntityTicking(feet)) {
+				for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-1, -1, -1), feet.offset(1, 2, 1))) {
+					nether.setBlockAndUpdate(pos, Blocks.STONE.defaultBlockState());
+				}
+				nether.setBlockAndUpdate(feet, Blocks.AIR.defaultBlockState());
+				nether.setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
+				bot.teleportTo(nether, feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, Set.of(), 0, 0, false);
+				AntBot there = (AntBot) Objects.requireNonNull(nether.getEntity(id));
+				run[0] = BotScripts.run(there, """
+					import lib.dig
+					s = pos()
+					print(surface(s))
+					r = lib.dig.stairs_up("east")
+					print(r["ok"], r["reason"], pos() == s)
+					""");
+			} else if (run[0] != null && run[0].state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log((AntBot) nether.getEntity(id), Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run[0] != null && run[0].state() == ScriptRun.State.FINISHED, "script not done");
+			List<String> printed = BotScripts.log((AntBot) nether.getEntity(id), Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("None", "False no_surface True")), "printed " + printed);
+			helper.assertTrue(nether.getBlockState(feet.offset(1, 1, 0)).is(Blocks.STONE), "dug east");
+		});
 	}
 
 	/**

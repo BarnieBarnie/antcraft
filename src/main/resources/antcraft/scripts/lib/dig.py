@@ -142,7 +142,7 @@ def stairs_to(y, facing="north"):
 
 def stairs_up(facing="north"):
     """Walks back up the staircase stairs_to dug, to its top; where it remembers none, digs one up towards facing to the
-    surface. Gives result(): ok, or goto's reason or the reason a step failed with at."""
+    surface. Gives result(): ok, no_surface in the Nether, or goto's reason or the reason a step failed with at."""
     kept = memory.get("stairs")
     if kept is None:
         return dig_up(facing)
@@ -160,15 +160,30 @@ def surfaced(here, step):
     return lib.find.is_air(here + step) and (top is None or here.y >= top.y)
 
 
+def is_floor(p):
+    """Whether the block at p is one to stand on: loaded, neither air nor a fluid."""
+    b = block(p)
+    return b is not None and not b.is_air and not b.is_fluid
+
+
 def dig_up(facing):
     """Digs a 1-wide staircase from the bot's feet up towards facing, one block on for each block up, and walks up it
-    until surfaced. Gives result(): ok, or the reason a step failed with at."""
+    until surfaced. Where the block ahead is air with a floor under it, as in a cave, walks on along the floor instead,
+    so it needs no block to build its next step with. Gives result(): ok, no_surface in a dimension with a roof over it
+    (surface gives None there), or the reason a step failed with at."""
     step = FACING[facing]
     here = pos()
+    if surface(here) is None:
+        return result("no_surface", here)
     opened = [here, here.up()]
     while not surfaced(here, step):
         up = here + (step[0], 1, step[2])
         cells = [here.up(2), up, up.up()]
+        ahead = here + step
+        if lib.find.is_air(ahead) and is_floor(ahead.down()):
+            # ponytail: a long cave floor is walked to its end; a pit ahead still needs a block to bridge with
+            up = ahead
+            cells = [ahead.up()]
         opened = opened + cells
         for p in cells:
             failure = cut(p, here, opened)

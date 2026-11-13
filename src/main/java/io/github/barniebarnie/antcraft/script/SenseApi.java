@@ -28,6 +28,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -120,8 +121,12 @@ public final class SenseApi {
 			if (run.elsewhere(pos)) {
 				return PyNone.NONE;
 			}
+			Level level = bot(run, call).level();
+			if (level.dimensionType().hasCeiling()) {
+				return PyNone.NONE; // the Nether's bedrock roof: no open sky to come up to (#538)
+			}
 			BlockPos at = blockPos(pos);
-			LevelChunk chunk = bot(run, call).level().getChunkSource()
+			LevelChunk chunk = level.getChunkSource()
 				.getChunkNow(SectionPos.blockToSectionCoord(at.getX()), SectionPos.blockToSectionCoord(at.getZ()));
 			// The heightmap is up to date with every block change, which sky light is not; leaves let a bot out under a tree.
 			return chunk == null ? PyNone.NONE

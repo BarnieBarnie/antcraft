@@ -41,9 +41,9 @@ Digs a staircase one block wide from the bot's feet down to `y`, one block towar
 
 ## `stairs_up(facing="north")`
 
-Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `memory` holds no staircase, such as for a bot that came down another way, it digs one up towards `facing`, one block on for each block up, each step three blocks tall, until the bot stands where the block ahead of its feet is air and nothing above it blocks motion but leaves ([`surface`](../../world/surface.md)): the surface, not the floor of a tall cave.
+Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `memory` holds no staircase, such as for a bot that came down another way, it digs one up towards `facing`, one block on for each block up, each step three blocks tall, until the bot stands where the block ahead of its feet is air and nothing above it blocks motion but leaves ([`surface`](../../world/surface.md)): the surface, not the floor of a tall cave. Where the block ahead is air with a floor under it, as on a cave's floor, it walks on along the floor instead of stepping up, so it needs no blocks to build its steps with; only a pit ahead takes one, of those it carries or dug on the way. In a dimension with a roof over it, the Nether, `surface` gives `None` and it gives `no_surface` at once, without digging up into the roof.
 
-- **Returns** a dict: `ok`, `reason` (`None`, that of [`goto`](../../movement/goto.md) with `at`, or the reason a step failed with `at`).
+- **Returns** a dict: `ok`, `reason` (`None`, `no_surface`, that of [`goto`](../../movement/goto.md) with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.
 
 ## `branch(length, every=8, facing="north")`
