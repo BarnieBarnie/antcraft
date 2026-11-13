@@ -199,6 +199,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("smelt", "smelt('dirt', furnace=h).reason"),
 		Map.entry("build", "build('antcraft:cobble_step', h).reason"),
 		Map.entry("block", "block(h)"),
+		Map.entry("surface", "surface(h)"),
 		Map.entry("container", "container(h)"),
 		Map.entry("mineshaft", "mineshaft([0], near=h)"),
 		Map.entry("mineshaft_at", "mineshaft_at(h, [0])"),
@@ -232,7 +233,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			source.append("print('").append(name).append("', ").append(call).append(")\n");
 			expected.add(name + " " + switch (name) {
 				case "reachable" -> "False";
-				case "block", "container", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
+				case "block", "surface", "container", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
 				case "ore_vein", "scan" -> "[]";
 				default -> Result.WRONG_DIMENSION;
 			});

@@ -41,7 +41,7 @@ Digs a staircase one block wide from the bot's feet down to `y`, one block towar
 
 ## `stairs_up(facing="north")`
 
-Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `memory` holds no staircase, such as for a bot that came down another way, it digs one up towards `facing`, one block on for each block up, each step three blocks tall, until the bot stands where the block ahead of its feet is air and none is above its head for 16 blocks: the surface. A cave that tall passes for it.
+Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `memory` holds no staircase, such as for a bot that came down another way, it digs one up towards `facing`, one block on for each block up, each step three blocks tall, until the bot stands where the block ahead of its feet is air and nothing above it blocks motion but leaves ([`surface`](../../world/surface.md)): the surface, not the floor of a tall cave.
 
 - **Returns** a dict: `ok`, `reason` (`None`, that of [`goto`](../../movement/goto.md) with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.

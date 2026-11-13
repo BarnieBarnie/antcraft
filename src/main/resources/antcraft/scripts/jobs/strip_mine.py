@@ -39,8 +39,10 @@ def tier():
 def strip_mine():
     """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure before the stairs
     and each branch that its pickaxe lasts them, then climbs back up and goes home. Gives result()."""
-    if item not in lib.dig.ORES or y is None:
+    if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
+    if y is None:
+        return result("no_ore", None, {"minecraft:" + item: n})  # as lib.dig.ore: no height to dig to (emerald)
     r = lib.bootstrap.kit(MINER, radius)
     if r["ok"]:
         r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(), radius)

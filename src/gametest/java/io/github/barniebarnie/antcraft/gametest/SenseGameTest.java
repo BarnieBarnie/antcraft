@@ -313,6 +313,22 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			+ "'minecraft:netherrack', 'minecraft:stone', 'minecraft:andesite', 'minecraft:diorite', 'minecraft:granite', 'minecraft:tuff']"));
 	}
 
+	/**
+	 * surface(pos) is the lowest spot of pos's column with nothing that blocks motion above it: on top of a stone pillar,
+	 * on the floor, and under leaves, which it leaves out (#534). The area has sky access: no barrier ceiling over it.
+	 */
+	@GameTest(maxTicks = 10, skyAccess = true)
+	public void surfaceIsAboveTheHighestBlockOfAColumn(GameTestHelper helper) {
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(2, y, 2, Blocks.STONE);
+		}
+		helper.setBlock(6, 3, 6, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		ScriptRun run = run(helper, bot, "print(surface(%s))\nprint(surface(%s))\nprint(surface(%s))\n"
+			.formatted(at(helper, 2, 1, 2), at(helper, 5, 6, 5), at(helper, 6, 1, 6)));
+		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 2, 4, 2), printed(helper, 5, 1, 5), printed(helper, 6, 1, 6)));
+	}
+
 	@GameTest(maxTicks = 10)
 	public void timeAndIsDayReadTheWorldsTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

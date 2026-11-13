@@ -88,6 +88,18 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Emerald without y (#534): it has no best_y to dig to, so the job says no_ore with what is missing, as lib.dig.ore does. */
+	@GameTest(maxTicks = 40)
+	public void emeraldWithoutYIsNoOre(GameTestHelper helper) {
+		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.strip_mine emerald 2");
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.strip_mine, 1]")), "run answered " + started);
+		helper.succeedWhen(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.WARN);
+			helper.assertTrue(log.equals(List.of("strip mine: no_ore None {'minecraft:emerald': 2}")), "warned " + log);
+		});
+	}
+
 	private static AntBot miner(GameTestHelper helper, BlockPos start, ItemStack pickaxe) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, start.getX(), start.getY(), start.getZ());
 		bot.setItemSlot(EquipmentSlot.MAINHAND, pickaxe);

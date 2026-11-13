@@ -156,6 +156,34 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Out of a cave 17 blocks tall (#534): air ahead and 16 blocks of it overhead are not the surface while the cave's
+	 * roof is over the bot. stairs_up bridges the first step with the cobblestone it carries and digs on east through a
+	 * wall of stone 4 high, out from under the roof, to its top. The area has sky access; the roof is above it, at y=18.
+	 */
+	@GameTest(maxTicks = 350, skyAccess = true)
+	public void stairsUpOutOfATallCaveDigsToTheRealSurface(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 0, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(0, 18, 0, 2, 18, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		AntBot bot = miner(helper, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 4));
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			r = lib.dig.stairs_up("east")
+			print(r["ok"], pos().x - s.x, pos().y - s.y)
+			""", List.of("True 4 4"),
+			() -> {
+				for (int k = 2; k <= 4; k++) {
+					helper.assertBlockPresent(Blocks.STONE, 1 + k, k, 3);
+				}
+			});
+	}
+
+	/**
 	 * Coal buried under the floor, none exposed: ore digs stairs down to y, branches north (4 blocks, so it stays under
 	 * the area) past the coal and climbs back up to where it started. Stone is filled under the floor, y -4 to -1.
 	 */

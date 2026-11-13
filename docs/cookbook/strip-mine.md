@@ -35,8 +35,10 @@ def tier():
 def strip_mine():
     """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure before the stairs
     and each branch that its pickaxe lasts them, then climbs back up and goes home. Gives result()."""
-    if item not in lib.dig.ORES or y is None:
+    if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
+    if y is None:
+        return result("no_ore", None, {"minecraft:" + item: n})  # as lib.dig.ore: no height to dig to (emerald)
     r = lib.bootstrap.kit(MINER, radius)
     if r["ok"]:
         r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(), radius)
@@ -77,9 +79,9 @@ finally:
 - Before the stairs and before each branch, [`ensure_tool`](../reference/modules/lib/get.md) makes sure the pickaxes the bot carries last the blocks it will break: about three a step, and twice the branch's length plus a few for ore. Where they do not, it takes the cheapest that does, usually a new stone pickaxe from the cobblestone the stairs and branches gave and the crafting table of the kit. An ore that needs a better pickaxe, such as diamond, asks for that tier ([`tier_for`](../reference/modules/lib/tools.md)).
 - [`stairs_up`](../reference/modules/lib/dig.md) walks back up the staircase, also when a branch failed, and [`go_home`](../reference/modules/lib/home.md) walks home.
 - [`give_back`](../reference/modules/lib/borrow.md) in `finally` returns what was borrowed, also when a step failed or the script stopped with an error.
-- A step that fails ends the job with a `warn` of its reason, such as `no_tool`, or `no_ore` where 16 branches found too little, which the bot's log shows (`/antcraft bot log`).
+- A step that fails ends the job with a `warn` of its reason, such as `no_tool`, or `no_ore` with what is missing where 16 branches found too little or there is no height to dig to (emerald without `y`), which the bot's log shows (`/antcraft bot log`).
 
-`StripMineGameTest` runs the bundled job in a test area with stone filled under its floor and three coal ore beside where the branch goes, as `jobs.strip_mine coal 3 <y> 8` with `y` three blocks under the bot: the bot ends at the top of its stairs with the coal. Another starts at the west edge with `east` and mines the coal beside its eastward branch. A third run starts with a pickaxe ten uses from breaking and two sticks: the job makes a new stone pickaxe before the branch, and the old one breaks. Both bots carry the kit already, so the test does not bootstrap one.
+`StripMineGameTest` runs the bundled job in a test area with stone filled under its floor and three coal ore beside where the branch goes, as `jobs.strip_mine coal 3 <y> 8` with `y` three blocks under the bot: the bot ends at the top of its stairs with the coal. Another starts at the west edge with `east` and mines the coal beside its eastward branch. A third run starts with a pickaxe ten uses from breaking and two sticks: the job makes a new stone pickaxe before the branch, and the old one breaks. A fourth asks for emerald without `y` and gets `no_ore`. The bots carry the kit already, so the test does not bootstrap one.
 
 ## See also
 

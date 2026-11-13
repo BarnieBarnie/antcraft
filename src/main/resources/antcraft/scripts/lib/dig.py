@@ -31,8 +31,6 @@ FACING = {"north": (0, 0, -1), "south": (0, 0, 1), "east": (1, 0, 0), "west": (-
 # How many branches ore digs at its depth, and how long, before it gives up.
 ROUNDS = 4
 LENGTH = 32
-# How much open air above its head counts as the surface. ponytail: no sky sense; a cave this tall passes for it.
-SKY = 16
 
 
 def short(item):
@@ -156,10 +154,10 @@ def stairs_up(facing="north"):
 
 
 def surfaced(here, step):
-    """Whether the bot at here walks out towards step without digging: the block ahead of its feet is air and none is
-    above its head up to SKY blocks."""
-    above = [block(here.up(k)) for k in range(1, SKY + 1)]
-    return lib.find.is_air(here + step) and all([b is None or b.is_air for b in above])
+    """Whether the bot at here walks out towards step without digging: the block ahead of its feet is air and nothing
+    that blocks motion is above it but leaves (surface)."""
+    top = surface(here)
+    return lib.find.is_air(here + step) and (top is None or here.y >= top.y)
 
 
 def dig_up(facing):

@@ -21,6 +21,7 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
@@ -30,11 +31,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.Heightmap;
 import org.jspecify.annotations.Nullable;
 
 /**
  * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code tag_items}, {@code held},
- * {@code block}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
+ * {@code block}, {@code surface}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
  * {@code time}, {@code is_day}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
  */
@@ -111,6 +114,19 @@ public final class SenseApi {
 			BlockPos at = blockPos(pos);
 			BlockState state = new LoadedBlocks(bot.level()).loaded(at);
 			return state == null ? PyNone.NONE : block(state, pos);
+		});
+		natives.register("surface", 30, call -> {
+			Pos pos = Pos.of(Args.bind("surface", call, 1, "pos")[0]);
+			if (run.elsewhere(pos)) {
+				return PyNone.NONE;
+			}
+			BlockPos at = blockPos(pos);
+			LevelChunk chunk = bot(run, call).level().getChunkSource()
+				.getChunkNow(SectionPos.blockToSectionCoord(at.getX()), SectionPos.blockToSectionCoord(at.getZ()));
+			// The heightmap is up to date with every block change, which sky light is not; leaves let a bot out under a tree.
+			return chunk == null ? PyNone.NONE
+				: new Pos(pos.x(), chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX() & 15, at.getZ() & 15) + 1, pos.z(),
+					pos.dimension());
 		});
 		natives.register("find_nearest", call -> {
 			Object[] args = Args.bind("find_nearest", call, 1, "what", "radius", "around");
