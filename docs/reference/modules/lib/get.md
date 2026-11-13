@@ -19,9 +19,9 @@ give_back()
 Makes the bot carry at least `n` of `item`, an item id such as `"stone_axe"` or `"minecraft:raw_iron"` (any log for a log, such as `"oak_log"`: planks come from any). Called again, it does nothing. It tries, in turn:
 
 1. what the bot carries: where it carries `n`, it is done;
-2. the chests of [`lib.stock.chests(radius)`](stock.md#chestsradius32): where they hold enough with what the bot carries, it [`fetch`](stock.md#fetchitem-n-radius32)es them, borrowed (from the Colony Core taken);
+2. the chests of [`lib.stock.chests(radius)`](stock.md#chestsradius32): it [takes](stock.md#take_up_toitem-n-radius32) as many as they hold, up to `n` with what the bot carries, borrowed (from the Colony Core taken), and gets only the rest by the steps below; so with 5 planks in a chest, `get("oak_planks", 8)` takes the 5 and crafts the rest from a log;
 3. `SOURCES[item]`, for a raw item: it makes the bot hold the source's tool with `ensure_tool` (below), then runs the source for what is short;
-4. crafting: [`lib.craft.plan(item, n)`](craft.md) lists the raw items, the crafting table and furnace included; `get` gets each, plans again (at most 5 rounds, as getting a tool for one raw item can use up another), then [`lib.craft.craft_here(item, n)`](craft.md). Where the plan smelts and the bot carries no pickaxe to mine the furnace back, it gets one first.
+4. crafting: [`lib.craft.plan(item, n)`](craft.md) lists the raw items, the crafting table and furnace included; `get` gets each, chests first as above, plans again (at most 5 rounds, as getting a tool for one raw item can use up another), then [`lib.craft.craft_here(item, n)`](craft.md). Where the plan smelts and the bot carries no pickaxe to mine the furnace back, it gets one first.
 
 So an empty bot by a tree and some stone gets a stone axe: logs by hand, a wooden pickaxe from them, cobblestone with it, then the axe.
 

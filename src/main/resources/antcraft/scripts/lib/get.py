@@ -89,7 +89,7 @@ def key(item):
 
 def get(item, n=1, radius=32):
     """Makes the bot carry at least n of item, by the first of: what it carries; the chests of lib.stock within radius,
-    borrowed; SOURCES[item], with ensure_tool first; crafting, getting each raw item lib.craft.plan lists, then
+    borrowed, as many as they hold, the rest by what follows; SOURCES[item], with ensure_tool first; crafting, getting each raw item lib.craft.plan lists, then
     lib.craft.craft_here. Gives result(): ok, no_recipe with missing for an item it can neither gather nor craft, cycle
     where getting it waits on itself, or the reason a step failed with."""
     item = key(item)
@@ -105,7 +105,7 @@ def get(item, n=1, radius=32):
 
 
 def resolve(item, n, radius):
-    if lib.stock.where(item, radius) and lib.stock.fetch(item, n, radius)["ok"]:
+    if lib.stock.take_up_to(item, n, radius)["ok"]:
         return result()
     s = SOURCES.get(item)
     if s is not None:

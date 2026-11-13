@@ -94,6 +94,42 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "True None minecraft:wooden_pickaxe 1"));
 	}
 
+	/** 5 planks in a chest and a log carried: get takes the 5 and crafts the rest from the log (#517). */
+	@GameTest(maxTicks = 40)
+	public void takesPartFromAChestAndCraftsTheRest(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.OAK_PLANKS, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG));
+		run(helper, bot, """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("oak_planks", 8, radius=8)
+			print(r["ok"], count("oak_planks"), count("oak_log"), [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 9 0 [('minecraft:oak_planks', 5)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/** A log in a chest, two needed for 8 planks: get takes that log and fells the oak for the other (#517). */
+	@GameTest(maxTicks = 200)
+	public void takesPartOfARawItemFromAChest(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		Container chest = chest(helper, new ItemStack(Items.OAK_LOG));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		run(helper, bot, """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("oak_planks", 8, radius=8)
+			print(r["ok"], count("oak_planks") >= 8, [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True True [('#minecraft:logs', 1)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
 	/** An empty bot, no chest: a stone axe for few logs, an iron one for many; nothing is done. */
 	@GameTest(maxTicks = 80)
 	public void chooseStoneForFewUsesIronForMany(GameTestHelper helper) {

@@ -34,6 +34,15 @@ def fetch(item, n, radius=32):
     return result()
 
 
+def take_up_to(item, n, radius=32):
+    """Takes item from the chests that hold it, nearest first, until the bot carries n in total or they hold no more.
+    Gives result(): ok, or no_item with missing, how many the bot is still short, keeping what it took."""
+    for chest in where(item, radius):
+        if count(item) < n:
+            take_from(chest, item, n - count(item))
+    return result("no_item", None, {item: n - count(item)}) if count(item) < n else result()
+
+
 def fetch_all(more, chests):
     """Takes more (item to how many more than the bot carries) from each of chests (a list of positions) in turn; gives
     what is still short, item to how many ({} when nothing is). Where the chests together hold too little of any item
