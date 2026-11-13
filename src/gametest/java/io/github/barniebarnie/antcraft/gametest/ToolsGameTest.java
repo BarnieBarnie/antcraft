@@ -9,9 +9,11 @@ import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 
 /** {@code lib/tools.py} and {@code lib/cost.py} (#507): carried tools, their uses left and effort estimates. */
 public class ToolsGameTest implements CustomTestMethodInvoker {
@@ -69,6 +71,34 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(log.equals(List.of("minecraft:iron_pickaxe None", "iron stone wooden diamond",
 				"True minecraft:iron_pickaxe", "True minecraft:iron_pickaxe", "131 True", "True True")), "printed " + log);
 		});
+	}
+
+	/**
+	 * tier_for of a position reads the block's needs_*_tool tags (#515): a lodestone, which the game test
+	 * data pack adds to #minecraft:needs_iron_tool and lib.tools.NEEDS leaves out, gives "iron" there and "wooden" by id.
+	 */
+	@GameTest(maxTicks = 40)
+	public void tierForAPositionReadsTheBlocksTags(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.LODESTONE);
+		helper.setBlock(1, 1, 2, Blocks.OBSIDIAN);
+		helper.setBlock(1, 1, 3, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		String name = BotScripts.libraryScript(helper, "tools_", """
+			import lib.tools
+			print(lib.tools.tier_for(Pos%s), lib.tools.tier_for(Pos%s), lib.tools.tier_for(Pos%s))
+			print(lib.tools.tier_for("lodestone"))
+			""".formatted(at(helper, 1, 1, 1), at(helper, 1, 1, 2), at(helper, 1, 1, 3)));
+		run(helper, bot, name);
+		helper.succeedWhen(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of("iron diamond wooden", "wooden")), "printed " + log);
+		});
+	}
+
+	/** The position {@code (x, y, z)} of the test area as a script tuple. */
+	private static String at(GameTestHelper helper, int x, int y, int z) {
+		BlockPos pos = helper.absolutePos(new BlockPos(x, y, z));
+		return "(" + pos.getX() + ", " + pos.getY() + ", " + pos.getZ() + ")";
 	}
 
 	private static void run(GameTestHelper helper, AntBot bot, String name) {

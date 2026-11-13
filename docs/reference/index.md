@@ -168,7 +168,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/gather`](modules/lib/gather.md): `make(item, n=1, radius=32)`, `gather(item, n=1, radius=32)`, `stone(n, radius=32)`, `exposed_stone(radius=32, skip=None)`.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `walk(a, b)`, `breaking(n, material, tier)`.
-- [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(block_id)`, `hold(kind)`.
+- [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(what)`, `hold(kind)`.
 - [`lib/borrow`](modules/lib/borrow.md): `borrow(chest, item, n=1)`, `borrowed()`, `give_back(radius=16)`, `keep(item, n=None)`.
 - [`lib/find`](modules/lib/find.md): `nearest(what, radius=32, where=None)`, `exposed(what, radius=32, skip=None)`, `is_open(p)`, `is_air(p)`.
 - [`lib/dig`](modules/lib/dig.md): `stone(n, radius=32)`, `ore(item, n, radius=32, y=None, facing="north", length=32)`, `best_y(item)`, `stairs_to(y, facing="north")`, `stairs_up(facing="north")`, `branch(length, every=8, facing="north")`.

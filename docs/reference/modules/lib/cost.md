@@ -7,7 +7,7 @@ The numbers are constants, rounded from the game's, not its break-time formula: 
 ## Constants
 
 - `WALK`: ticks the bot takes to walk one block, `5`.
-- `BREAK`: ticks to break one block, `BREAK[material][tier]`. `material` is `"stone"` (stone, cobblestone, deepslate: a pickaxe), `"ore"` (an ore: a pickaxe), `"wood"` (a log: an axe) or `"dirt"` (dirt, sand, gravel: a shovel); `tier` is `"wooden"`, `"stone"`, `"iron"`, `"diamond"`, `"netherite"`, `"golden"` or `"hand"` (no tool). An ore broken with a pickaxe of too low a tier takes longer and drops nothing: check [`lib.tools.tier_for`](tools.md#tier_forblock_id) first.
+- `BREAK`: ticks to break one block, `BREAK[material][tier]`. `material` is `"stone"` (stone, cobblestone, deepslate: a pickaxe), `"ore"` (an ore: a pickaxe), `"wood"` (a log: an axe) or `"dirt"` (dirt, sand, gravel: a shovel); `tier` is `"wooden"`, `"stone"`, `"iron"`, `"diamond"`, `"netherite"`, `"golden"` or `"hand"` (no tool). An ore broken with a pickaxe of too low a tier takes longer and drops nothing: check [`lib.tools.tier_for`](tools.md#tier_forwhat) first.
 - `USES`: how many blocks a tool of each tier breaks before it is used up: wooden 59, stone 131, iron 250, diamond 1561, golden 32, netherite 2031.
 - `SMELT`: ticks a furnace takes to smelt one item, `200`.
 

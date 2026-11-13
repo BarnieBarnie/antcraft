@@ -13,7 +13,7 @@ from lib.result import result
 TIERS = ["netherite", "diamond", "iron", "stone", "golden", "wooden"]
 
 # The lowest pickaxe tier each block needs to drop anything, by the game's needs_*_tool block tags; any other block
-# drops with a wooden one. ponytail: the vanilla blocks of those tags, not the tags; a sense if modded blocks need it.
+# drops with a wooden one. Only for a block id: tier_for of a Pos reads the block's tags, which modded blocks are in too.
 NEEDS = {}
 for b in ["iron_ore", "deepslate_iron_ore", "raw_iron_block", "iron_block", "copper_ore", "deepslate_copper_ore",
           "raw_copper_block", "copper_block", "lapis_ore", "deepslate_lapis_ore", "lapis_block"]:
@@ -60,10 +60,16 @@ def enough(kind, uses):
     return sum([uses_left(s) for s in carried(kind)]) >= uses
 
 
-def tier_for(block_id):
-    """The lowest pickaxe tier that drops block_id ("iron" for "minecraft:diamond_ore"); "wooden" for a block any
-    pickaxe drops."""
-    return NEEDS.get(block_id.replace("minecraft:", ""), "wooden")
+def tier_for(what):
+    """The lowest pickaxe tier that drops what ("iron" for "minecraft:diamond_ore"); "wooden" for a block any pickaxe
+    drops. what is a block id, looked up in NEEDS, or a Pos, whose block's needs_*_tool tags tell, modded blocks too."""
+    if isinstance(what, str):
+        return NEEDS.get(what.replace("minecraft:", ""), "wooden")
+    tags = block(what).tags
+    for t in ["diamond", "iron", "stone"]:
+        if f"#minecraft:needs_{t}_tool" in tags:
+            return t
+    return "wooden"
 
 
 def hold(kind):

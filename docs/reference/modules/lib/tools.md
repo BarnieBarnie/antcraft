@@ -19,12 +19,11 @@ A `kind` is `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`; its tools ar
 - **Returns** whether the tools of `kind` the bot carries together last `uses` more blocks: the sum of their `uses_left`. A fresh stone axe lasts 50 blocks; one at damage 100 does not.
 - **Pauses** no.
 
-## `tier_for(block_id)`
+## `tier_for(what)`
 
-- **Returns** the lowest pickaxe tier that drops `block_id` (`"diamond_ore"` or `"minecraft:diamond_ore"`): `"stone"` for iron, copper and lapis ore, `"iron"` for gold, redstone, emerald and diamond ore, `"diamond"` for obsidian and ancient debris (and the blocks made of each), `"wooden"` for any other block.
+- **Returns** the lowest pickaxe tier that drops a block: `"stone"` for iron, copper and lapis ore, `"iron"` for gold, redstone, emerald and diamond ore, `"diamond"` for obsidian and ancient debris (and the blocks made of each), `"wooden"` for any other block.
+- `what` is a [`Pos`](../../types/pos.md) (or a tuple) or a block id (`"diamond_ore"` or `"minecraft:diamond_ore"`). At a position it reads the block's `#minecraft:needs_stone_tool`, `needs_iron_tool` and `needs_diamond_tool` tags ([`block(pos).tags`](../../types/block.md)), so a modded ore a data pack puts in those tags gives its tier. For an id it reads a table of the vanilla blocks of those tags (`NEEDS`), so a modded block gives `"wooden"` unless you add it to `lib.tools.NEEDS` in your script; pass its position where you know it.
 - **Pauses** no.
-
-It reads a table of the vanilla blocks of the game's `needs_*_tool` tags (`NEEDS`), not the tags, so a modded block that needs a tier gives `"wooden"`; add it to `lib.tools.NEEDS` in your script.
 
 ## `hold(kind)`
 
@@ -46,6 +45,7 @@ if not lib.tools.enough("axe", 64):
     lib.craft.ensure_tool("axe", upgrade=True)
 lib.tools.hold("axe")
 print("pickaxe for diamonds:", lib.tools.tier_for("diamond_ore"))
+print("pickaxe for the block below:", lib.tools.tier_for(pos().down()))
 ```
 
 ## See also
