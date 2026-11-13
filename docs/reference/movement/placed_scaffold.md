@@ -22,21 +22,17 @@ No, it is done at once.
 
 The positions belong to the script run: a new script starts with none. They are saved with the bot, so a script resumed after a reload still gets what it placed before. The bot keeps the last 4096 for a script that never asks.
 
-A position is where a block was placed, not what is there now: the block may have been mined or replaced since, by the bot or by someone else. Check it with [`block`](../world/block.md) before taking it back, as [`lib.trees.fell_whole`](../modules/lib/trees.md) does.
+Only blocks that have not changed since the bot placed them are given: one mined, replaced or changed in any way since, by the bot, another bot, a player, a piston or anything else, is left out, even where the same block is back in its place, so a script takes back only the bot's own. [`lib.trees.fell_whole`](../modules/lib/trees.md) takes back what it gives with `lib.trees.take_back()`.
 
 ## Examples
 
 Walk somewhere, then take back the blocks the walk put up, highest first:
 
 ```python
-import lib.trees
-
 placed_scaffold()  # forget what earlier walks placed
 goto(Pos(100, 80, 100))
 for p in sorted(placed_scaffold(), key=lambda p: -p.y):
-    b = block(p)
-    if b is not None and b.id in lib.trees.SCAFFOLD:
-        mine(p)
+    mine(p)
 ```
 
 ## See also

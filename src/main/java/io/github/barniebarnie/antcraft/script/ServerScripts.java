@@ -49,7 +49,10 @@ public final class ServerScripts {
 				reload(server);
 			}
 		});
-		ServerLifecycleEvents.SERVER_STOPPED.register(server -> Selector.clearCache());
+		ServerLifecycleEvents.SERVER_STOPPED.register(server -> {
+			Selector.clearCache();
+			ScriptRun.forgetPlacedBy();
+		});
 	}
 
 	public static Path configFolder() {

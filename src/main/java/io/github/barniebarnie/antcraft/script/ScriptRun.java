@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
 import io.github.barniebarnie.antcraft.script.lang.VmState;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -228,6 +229,17 @@ public final class ScriptRun {
 	private final LinkedHashSet<Pos> placed = new LinkedHashSet<>();
 	/** How many {@link #placed} positions a run keeps, the last placed, for a script that never takes them. */
 	static final int PLACED_MAX = 4096;
+	/**
+	 * Each position where a run's walk placed scaffold whose block has not changed since, to that run's {@link #id}
+	 * (#539). Server thread only.
+	 * ponytail: keyed without the dimension, so a change at the same x, y, z in another dimension makes a run leave its
+	 * block standing (never take another's); and an ended run's entries stay until their block changes or the server
+	 * stops. Key by dimension, or forget a run's entries as it ends, if either shows.
+	 */
+	private static final Long2LongOpenHashMap PLACED_BY = new Long2LongOpenHashMap();
+	private static long runs;
+	/** Which run this is, in {@link #PLACED_BY}: a resumed run is a new one. */
+	private final long id = ++runs;
 
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log) {
 		this(name, code, args, host, log, Memory.create());
@@ -288,8 +300,9 @@ public final class ScriptRun {
 			run = new ScriptRun(saved.name(), code, saved.args(), host, log, memory, library);
 		}
 		run.lastResult = saved.lastResult();
+		// ponytail: a block changed while the bot was unloaded and the server ran on counts as unchanged.
 		for (long at : saved.placed()) {
-			run.placed.add(new Pos(BlockPos.getX(at), BlockPos.getY(at), BlockPos.getZ(at)));
+			run.notePlaced(new Pos(BlockPos.getX(at), BlockPos.getY(at), BlockPos.getZ(at)));
 		}
 		return run;
 	}
@@ -299,7 +312,7 @@ public final class ScriptRun {
 		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
 		long[] saveData = this.recall ? this.progressData : this.action == null ? new long[0] : this.action.progressData();
 		// ponytail: saved without their dimension, as the bot's when it loads; a walk does not cross dimensions.
-		long[] savePlaced = this.placed.stream().mapToLong(p -> BlockPos.asLong((int) p.x(), (int) p.y(), (int) p.z())).toArray();
+		long[] savePlaced = this.placed.stream().mapToLong(ScriptRun::key).filter(at -> PLACED_BY.get(at) == this.id).toArray();
 		try {
 			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, saveData,
 					null, this.lastResult, savePlaced);
@@ -315,16 +328,39 @@ public final class ScriptRun {
 	public void notePlaced(Pos pos) {
 		this.placed.remove(pos);
 		this.placed.add(pos);
+		PLACED_BY.put(key(pos), this.id);
 		if (this.placed.size() > PLACED_MAX) {
-			this.placed.removeFirst();
+			PLACED_BY.remove(key(this.placed.removeFirst()), this.id);
 		}
 	}
 
-	/** Where the run's walks placed scaffold since the last call, oldest first; none noted after. */
+	/**
+	 * Where the run's walks placed scaffold since the last call, oldest first, leaving out each whose block changed
+	 * since ({@link #blockChanged}); none noted after.
+	 */
 	public List<Pos> takePlaced() {
-		List<Pos> out = List.copyOf(this.placed);
+		List<Pos> out = this.placed.stream().filter(p -> PLACED_BY.remove(key(p), this.id)).toList();
 		this.placed.clear();
 		return out;
+	}
+
+	/**
+	 * Notes that the block at {@code pos} ({@link BlockPos#asLong}) changed, as the server does for each block that does
+	 * (ServerLevelMixin): scaffold placed there is no run's any more, even once the same block is back (#539).
+	 */
+	public static void blockChanged(long pos) {
+		if (!PLACED_BY.isEmpty()) {
+			PLACED_BY.remove(pos);
+		}
+	}
+
+	/** Forgets whose scaffold every position holds, when the server stops. */
+	public static void forgetPlacedBy() {
+		PLACED_BY.clear();
+	}
+
+	private static long key(Pos pos) {
+		return BlockPos.asLong((int) pos.x(), (int) pos.y(), (int) pos.z());
 	}
 
 	/** The script's {@code memory}: the bot's, or the one a resumed run was saved with, with the run's own references into it. */

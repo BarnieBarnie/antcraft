@@ -70,7 +70,7 @@ Where to stand to mine the logs in the list `blocks`: few spots that together re
 
 Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (a `spruce_sapling` for spruce logs, else any it carries) on each spot of the trunk's bottom that is air over dirt: four for a 2x2 trunk, so a giant tree grows again.
 
-It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes back exactly the blocks its walks placed, as [`placed_scaffold`](../../movement/placed_scaffold.md) gives them, where they are still of `SCAFFOLD`. A block someone else put by the tree meanwhile stays, and so does one that walks placed before `fell_whole` began: it calls `placed_scaffold()` first, which forgets those.
+It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes back exactly the blocks its walks placed that have not changed since, as [`placed_scaffold`](../../movement/placed_scaffold.md) gives them, also when it stops early with `no_space` or `out_of_reach`. A block someone else put by the tree meanwhile stays, even in a spot where its own block was until they mined it, and so does one that walks placed before `fell_whole` began: it calls `placed_scaffold()` first, which forgets those.
 
 - **Returns** a dict: `ok`, `reason` (`None`, `out_of_reach` with `at` a log it could not mine, or `no_space` with `at` a log whose drops did not fit).
 - **Pauses** yes, while it walks, mines, picks up and plants.
@@ -87,6 +87,13 @@ if base is not None and lib.trees.is_giant(base):
         say("left a log at " + str(r["at"]))
 ```
 
+## `take_back()`
+
+Mines the blocks the script's walks placed since it last called [`placed_scaffold`](../../movement/placed_scaffold.md), the highest first: only those unchanged since, so a block someone else mined or put there meanwhile stays. `fell_whole` ends with it.
+
+- **Returns** `None`.
+- **Pauses** yes, while it walks and mines.
+
 ## `low_log(radius=32, skip=None)`
 
 The lowest log within 8 blocks, else within 16, else within `radius`, the nearest among those, leaving out the positions in the dict `skip` and in `KEEP`; `None` if there is none. Looking near first, a log by the bot costs some 2,000 blocks of the [block search budget](../../world/scan.md) rather than the 137,000 of the whole radius of 32.
@@ -101,7 +108,7 @@ Whether the block at `p` is a log, and whether it is what `kind` selects (a bloc
 
 ## `LOGS`, `SAPLINGS`, `SCAFFOLD`
 
-The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`, and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which `fell_whole` takes back.
+The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`, and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which walks pillar and bridge with.
 
 ## Example
 

@@ -342,6 +342,54 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * The bot's first scaffold block, mined and put back as dirt by someone else in the same tick, is theirs now: the bot
+	 * leaves it standing though it is dirt where its walk placed dirt (#539).
+	 */
+	@GameTest(maxTicks = 1400)
+	public void fellWholeLeavesAScaffoldSpotSomeoneElseReplaced(GameTestHelper helper) {
+		plantGiant(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 6));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING, 4));
+		BlockPos[] theirs = new BlockPos[1];
+		helper.onEachTick(() -> {
+			if (theirs[0] == null && bot.getInventory().countItem(Items.DIRT) < 6) {
+				theirs[0] = BlockPos.betweenClosedStream(0, 1, 0, 7, 7, 7)
+					.filter(p -> helper.getBlockState(p).is(Blocks.DIRT)).findFirst().orElseThrow().immutable();
+				helper.setBlock(theirs[0], Blocks.AIR);
+				helper.setBlock(theirs[0], Blocks.DIRT);
+			}
+		});
+		expect(helper, bot, "import lib.trees\nr = lib.trees.fell_whole(Pos" + at(helper, 3, 1, 3) + ")\n"
+			+ "print(r['ok'], count('spruce_log'), count('dirt'))\n", List.of("True 26 5"), () -> {
+				helper.assertBlockPresent(Blocks.DIRT, theirs[0]);
+				assertGiantFelled(helper, theirs[0]);
+			});
+	}
+
+	/**
+	 * A fell that stops because the logs no longer fit still takes back the scaffold it placed: dirt fits on the bot's
+	 * stack of dirt where no log does (#539).
+	 */
+	@GameTest(maxTicks = 340)
+	public void fellWholeTakesBackItsScaffoldWhenItStopsForNoSpace(GameTestHelper helper) {
+		plantGiant(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 6));
+		// No axe: one taken into the hand would free a slot for the logs.
+		while (bot.getInventory().canAddItem(new ItemStack(Items.SPRUCE_LOG))) {
+			bot.getInventory().addItem(new ItemStack(Items.STICK, 64));
+		}
+		expect(helper, bot, "import lib.trees\nr = lib.trees.fell_whole(Pos" + at(helper, 3, 1, 3) + ")\n"
+			+ "print(r['ok'], r['reason'], count('dirt'))\n", List.of("False no_space 6"), () -> {
+				for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+					helper.assertBlockNotPresent(Blocks.DIRT, p);
+				}
+			});
+	}
+
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
 	static void assertGiantFelled(GameTestHelper helper) {
 		assertGiantFelled(helper, null);

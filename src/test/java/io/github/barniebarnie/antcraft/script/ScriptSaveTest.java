@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -218,6 +219,27 @@ class ScriptSaveTest {
 		ScriptRun resumed = ScriptRun.resume(roundTrip(run.save()), library.load("w"), host, log, Memory.create(), library);
 		assertEquals(List.of(new Pos(1, 2, 3), new Pos(1, 3, 3)), resumed.takePlaced());
 		assertEquals(List.of(), resumed.takePlaced());
+	}
+
+	/**
+	 * A scaffold block that changed since the run's walk placed it, mined or replaced by anything, is no longer the run's:
+	 * placed_scaffold() leaves it out, even where the same block is back, and another run that placed it again gets it (#539).
+	 */
+	@Test
+	void aScaffoldBlockThatChangedSinceIsNoLongerTheRuns() throws IOException {
+		ScriptLibrary library = library("w.py", "wait(10)\n");
+		FakeHost host = new FakeHost();
+		BotLog log = new BotLog(100);
+		ScriptRun a = new ScriptRun("w", library.load("w"), List.of(), host, log, Memory.create(), library);
+		ScriptRun b = new ScriptRun("w", library.load("w"), List.of(), host, log, Memory.create(), library);
+		a.notePlaced(new Pos(7, 2, 9, "minecraft:overworld"));
+		a.notePlaced(new Pos(7, 3, 9, "minecraft:overworld"));
+		a.notePlaced(new Pos(7, 4, 9, "minecraft:overworld"));
+		ScriptRun.blockChanged(BlockPos.asLong(7, 2, 9));
+		ScriptRun.blockChanged(BlockPos.asLong(7, 3, 9));
+		b.notePlaced(new Pos(7, 3, 9, "minecraft:overworld"));
+		assertEquals(List.of(new Pos(7, 4, 9, "minecraft:overworld")), a.takePlaced());
+		assertEquals(List.of(new Pos(7, 3, 9, "minecraft:overworld")), b.takePlaced());
 	}
 
 	@Test

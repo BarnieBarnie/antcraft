@@ -247,13 +247,20 @@ def stands(blocks):
     return out
 
 
+def take_back():
+    """Mines the scaffold the script's walks placed since it last asked placed_scaffold(), the highest first: only blocks
+    unchanged since, so one someone else mined or put there meanwhile stays."""
+    for q in sorted(placed_scaffold(), key=lambda q: -q.y):
+        mine(q)
+
+
 def fell_whole(base, replant=True):
     """Fells the whole tree at base, branches and 2x2 trunk too: stands at each of stands(tree_blocks(base)), the highest
     first so each stands on logs not yet mined, mines the logs it reaches there, the highest first, then takes back the
     scaffold blocks its walks placed around the tree and picks up what fell. With replant, plants a sapling of the tree's
     kind (else any) where each log of the trunk's bottom stood, four for a 2x2 trunk. Assumes the bot holds an axe or goes
     without one, and carries scaffold blocks for a tree taller than it reaches. Gives result(): ok, out_of_reach at a log
-    it could not mine, or no_space at one whose drops did not fit."""
+    it could not mine, or no_space at one whose drops did not fit; it takes back its scaffold either way."""
     blocks = tree_blocks(base)
     spots = square(base) or [base]
     sapling = block(base).id.replace("_log", "_sapling")
@@ -273,16 +280,14 @@ def fell_whole(base, replant=True):
             if r or r.reason == "target_gone":
                 left.pop(p)
             elif r.reason == "no_space":
+                take_back()
                 return result("no_space", p)
     for p in sorted(list(left), key=lambda p: -p.y):
         r = mine(p)
         if not r and r.reason != "target_gone":
+            take_back()
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)
-    # Only what is still a scaffold block: one mined or replaced since is someone else's now.
-    for q in sorted(placed_scaffold(), key=lambda q: -q.y):
-        b = block(q)
-        if b is not None and b.id in SCAFFOLD:
-            mine(q)
+    take_back()
     pick_up([LOGS, SAPLINGS])
     if replant:
         for p in spots:

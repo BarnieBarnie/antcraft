@@ -23,6 +23,7 @@
 		]
 	},
 	"mixins": [
+		"antcraft.mixins.json",
 		{
 			"config": "antcraft.client.mixins.json",
 			"environment": "client"
