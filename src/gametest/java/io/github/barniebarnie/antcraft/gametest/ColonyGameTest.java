@@ -310,7 +310,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * are in a chest in the colony, which the builder borrows them from with lib.get (#543) or a hauler brings to the
 	 * core, and the builder builds.
 	 */
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 340)
 	public void aBuilderAndAHaulerBuildAPostedCobbleStepFromAChest(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -338,9 +338,10 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * An idle bot homed where the cobble step's second cobblestone goes, standing over the edge where the first goes, is
 	 * asked to make way once (#388): the builder finds one cobblestone in the core, stops with missing_ingredients, fails
 	 * to get the second with lib.get (no tree for a pickaxe) and posts a haul job for it (#543), builds on once the second
-	 * is put there, and the idle bot keeps off the site in between instead of going back home.
+	 * is put there, cancelling the haul job no hauler took, and the idle bot keeps off the site in between instead of going
+	 * back home.
 	 */
-	@GameTest(maxTicks = 420)
+	@GameTest(maxTicks = 730)
 	public void anIdleBotMakesWayOnceForABuildThatGoesOnAfterMissingIngredients(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -365,6 +366,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			WorkGameTest.assertCobbleStep(helper, 0);
 			helper.assertValueEqual(idle.getWaysMade(), 1, "times the idle bot made way");
+			// The haul job no hauler took is cancelled once the build is done (#557).
+			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
 		});
 	}
 
@@ -475,6 +478,27 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
 			helper.assertTrue(chest.countItem(Items.DIRT) == 2, "dirt in the chest: " + chest.countItem(Items.DIRT));
 		});
+	}
+
+	/**
+	 * A haul job for a build that is done is moot (#557): the builder got the cobblestone another way and finished, so
+	 * the hauler finds none in the colony and finishes the job without a warning, instead of reporting itself stuck.
+	 */
+	@GameTest(maxTicks = 140)
+	public void aHaulJobForADoneBuildIsFinishedQuietly(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		AntBot hauler = member(helper, colony, 6, 1, 4);
+		long build = colony.jobs().post("build", Memory.encode(new PyDict()), hauler.getUUID());
+		colony.jobs().finish(build, hauler.getUUID());
+		PyDict data = new PyDict();
+		data.put("item", "minecraft:cobblestone");
+		data.put("n", 2L);
+		data.put("for", build);
+		colony.jobs().post("haul", Memory.encode(data), hauler.getUUID());
+		runDefault(helper, hauler, "colony.hauler");
+		failOnWarning(helper, hauler);
+		helper.succeedWhen(() -> helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null)));
 	}
 
 	/**

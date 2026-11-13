@@ -22,7 +22,7 @@ Their jobs' data, dicts of plain data:
 |---|---|
 | `mine` | `level` (a height of the shaft) and `round` (optional, 0: the round of branches to mine). `shaft` and `shaft_site` jobs carry no data |
 | `build` | `blueprint` (an id), `at` (the lowest corner), `turn` and `mirror` (optional, as `build` takes them) |
-| `haul` | `item` (a selector: an item id, a tag such as `"#minecraft:logs"` or a list of these), `n` (optional; all found without it), `from` (optional: the container to take from; else every chest and barrel within the colony's radius that holds the item, nearest first) and `to` (optional: the container to bring to; else the core). The builder adds `for`, the id of its build job |
+| `haul` | `item` (a selector: an item id, a tag such as `"#minecraft:logs"` or a list of these), `n` (optional; all found without it), `from` (optional: the container to take from; else every chest and barrel within the colony's radius that holds the item, nearest first) and `to` (optional: the container to bring to; else the core). The builder adds `for`, the id of its build job: once the build is done it cancels its haul jobs no hauler took, and a hauler that finds none of the item for a job no longer on the board finishes the haul without a warning |
 
 ```python
 post_job("build", {"blueprint": "antcraft:farm", "at": colony()["core"] + (4, -1, 0)})

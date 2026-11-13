@@ -55,6 +55,10 @@ def build_job(job):
             return
         get_or_haul(job, short, plan["materials"])
         wait(40)
+    # The haul jobs no hauler took are moot now (#557): a hauler would find their items used up.
+    for h in jobs("haul"):
+        if h["data"].get("for") == job["id"] and h["taker"] is None:
+            finish_job(h["id"])
     # What get borrowed and the build did not use (a tool, spare planks) goes back to its chest first.
     give_back()
     for item in plan["materials"]:

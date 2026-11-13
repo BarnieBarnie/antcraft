@@ -9,6 +9,8 @@
 #   "from"  the container to take them from (optional; else every chest and
 #           barrel in the colony that holds them, nearest first)
 #   "to"    the container to bring them to (optional; else the core)
+#   "for"   the id of the job it is for (optional): once that job is done, a haul
+#           that finds nothing is finished without a warning
 # Post one from any member's script:
 #   post_job("haul", {"item": "minecraft:oak_log", "n": 16})
 #
@@ -35,8 +37,9 @@ def haul(job):
     if has(item):
         to = d.get("to")
         put(core() if to is None else to, item, n)
-    else:
+    elif d.get("for") is None or any([j["id"] == d["for"] for j in jobs()]):
         warn(f"no {item} to haul in the colony")
+    # else the job it was for is done: its poster got the items another way (#557), so there is nothing to say.
     finish_job(job["id"])
 
 
