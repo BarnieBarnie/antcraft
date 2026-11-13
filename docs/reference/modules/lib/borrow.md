@@ -17,9 +17,11 @@ What is out, oldest first: a list of dicts with `chest`, `item`, `n` and `had`, 
 
 - **Pauses** no.
 
-## `give_back(radius=16)`
+## `give_back(radius=16, since=0)`
 
 Puts each borrowed item back in the chest it came from. Where that chest is gone or full, it puts the rest in the nearest chest, trapped chest or barrel with room within `radius` blocks of it. A tool goes back as worn as it is. What the bot no longer carries, as it used it up or the tool broke, is struck off: of 4 borrowed planks it placed 2 of, it gives back 2. It gives back only what the bot carries above what it had before it borrowed, so what it used counts as borrowed first and its own items stay with it: a bot that owned 3 planks, borrowed 4 and used 5 gives back none and keeps its 2. A record without `had` counts every carried item of its kind as borrowed.
+
+With `since`, it gives back only the records from index `since` of `borrowed()` on and leaves the older ones out: a function that notes `len(borrowed())` as it starts gives back only what it borrowed itself, as [`get`](get.md) does when it fails.
 
 - **Returns** a [`result()`](result.md) dict: `ok`, or `no_space` with `missing`, item to how many the bot kept as no chest took them. Those stay in `borrowed()`, for a later `give_back`.
 - **Pauses** yes, while it walks to the chests and puts; not when the bot carries nothing it borrowed.
@@ -38,7 +40,7 @@ if not r["ok"]:
 
 ## `keep(item, n=None)`
 
-Strikes `n` of `item` off what is borrowed, newest first, or all of it when `n` is `None`, for a job that keeps what it took: `give_back` then leaves it with the bot. `item` is matched against the item `borrow` was given, with or without `minecraft:`; a selector matches only the same selector.
+Strikes `n` of `item` off what is borrowed, newest first, or all of it when `n` is `None`, for a job that keeps what it took: `give_back` then leaves it with the bot. `item` is matched against the item `borrow` was given, with or without `minecraft:`; a selector also matches each item id it [selects](../../inventory/matches.md), so `keep("#minecraft:planks", 2)` keeps 2 of borrowed `oak_planks`. A record borrowed by a selector is matched only by the same selector.
 
 - **Returns** `None`.
 - **Pauses** no.

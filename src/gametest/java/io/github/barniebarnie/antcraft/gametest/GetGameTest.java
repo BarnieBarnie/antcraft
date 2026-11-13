@@ -112,6 +112,23 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** 5 planks in a chest, no log and no tree: get fails for the other 3 and gives the 5 back (#535). */
+	@GameTest(maxTicks = 40)
+	public void givesBackWhatItBorrowedWhenItFails(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.OAK_PLANKS, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("oak_planks", 8, radius=8)
+			print(r["ok"], count("oak_planks"), borrowed())
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "False 0 []");
+			helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 5, "planks in the chest " + chest.countItem(Items.OAK_PLANKS));
+		});
+	}
+
 	/** A log in a chest, two needed for 8 planks: get takes that log and fells the oak for the other (#517). */
 	@GameTest(maxTicks = 200)
 	public void takesPartOfARawItemFromAChest(GameTestHelper helper) {

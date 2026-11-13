@@ -29,15 +29,17 @@ def borrowed():
     return list(memory.get("borrowed", []))
 
 
-def give_back(radius=16):
+def give_back(radius=16, since=0):
     """Puts each borrowed item back in its chest, else in the nearest chests with room within radius blocks of it;
-    what the bot no longer carries (used up, a tool that broke) is struck off. Gives result(): ok, or no_space with
+    what the bot no longer carries (used up, a tool that broke) is struck off. Only the records from index since of
+    borrowed() on, those borrowed after it had that many; the older ones stay. Gives result(): ok, or no_space with
     missing, item to how many the bot kept as no chest took them; those stay borrowed."""
+    out = borrowed()
     left = []
     missing = {}
     # Newest first, each record gives back only what the bot carries above what it had before it: what the bot used
     # counts as borrowed first, and its own items stay. A record from before "had" was kept counts all as borrowed.
-    for b in reversed(borrowed()):
+    for b in reversed(out[since:]):
         had = b.get("had", 0)
         n = min(b["n"], count(b["item"]) - had)
         if n > 0:
@@ -49,17 +51,18 @@ def give_back(radius=16):
         if n > 0:
             left = [record(b["chest"], b["item"], n, had)] + left
             missing[b["item"]] = missing.get(b["item"], 0) + n
-    memory["borrowed"] = left
+    memory["borrowed"] = out[:since] + left
     return result("no_space" if missing else None, None, missing)
 
 
 def keep(item, n=None):
     """Strikes n of item (all when None) off what is borrowed, newest first, for a job that keeps them: give_back then
-    leaves them with the bot. item matches a record's item as borrow was given it, with or without "minecraft:"."""
+    leaves them with the bot. item matches a record's item as borrow was given it, with or without "minecraft:", and a
+    selector also each item id it selects."""
     left = []
     for b in reversed(borrowed()):
         k = b["n"] if n is None else min(n, b["n"])
-        if k == 0 or full(b["item"]) != full(item):
+        if k == 0 or not same(b["item"], item):
             left = [b] + left
             continue
         if n is not None:
@@ -72,6 +75,12 @@ def keep(item, n=None):
 
 def record(chest, item, n, had):
     return {"chest": chest, "item": item, "n": n, "had": had}
+
+
+def same(recorded, item):
+    if full(recorded) == full(item):
+        return True
+    return item.startswith("#") and not recorded.startswith("#") and matches(recorded, item)
 
 
 def full(item):

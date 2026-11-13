@@ -73,6 +73,42 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * 5 oak planks borrowed by an earlier script, then jobs.get of 2 of #minecraft:planks: the job keeps 2, matched by the
+	 * selector, and gives the other 3 back (#535).
+	 */
+	@GameTest(maxTicks = 40)
+	public void keepsOnlyTheNItAskedFor(GameTestHelper helper) {
+		BlockPos at = new BlockPos(6, 1, 3);
+		helper.setBlock(at, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.OAK_PLANKS, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BlockPos p = helper.absolutePos(at);
+		String borrow = BotScripts.libraryScript(helper, "get_job_", "from lib.borrow import borrow\nborrow(Pos(%d, %d, %d), \"oak_planks\", 5)\n"
+			.formatted(p.getX(), p.getY(), p.getZ()));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + borrow);
+		boolean[] started = {false};
+		String says = "got 2 #minecraft:planks";
+		helper.onEachTick(() -> {
+			ScriptRun run = bot.getScript();
+			if (run != null && run.state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+			if (!started[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
+				started[0] = true;
+				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get #minecraft:planks 2 8");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(started[0] && BotScripts.log(bot, Output.Level.PRINT).equals(List.of(says)),
+				"said " + BotScripts.log(bot, Output.Level.PRINT));
+			int planks = bot.getInventory().countItem(Items.OAK_PLANKS);
+			helper.assertTrue(planks == 2, "planks " + planks);
+			helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 3, "planks in the chest " + chest.countItem(Items.OAK_PLANKS));
+		});
+	}
+
+	/**
 	 * Runs jobs.get with args by the command; the test succeeds once the bot said {@code says} and {@code then} holds, and
 	 * fails at once when the script fails or says something else.
 	 */

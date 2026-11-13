@@ -144,6 +144,24 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** give_back(since=1) gives back only what was borrowed after the first record: the pickaxe, not the planks (#535). */
+	@GameTest(maxTicks = 40)
+	public void giveBackSinceLeavesTheOlderRecords(GameTestHelper helper) {
+		Container chest = chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 4), new ItemStack(Items.IRON_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		run(helper, bot, IMPORT + """
+			borrow(%s, "oak_planks", 4)
+			borrow(%s, "iron_pickaxe")
+			r = give_back(since=1)
+			print(r["ok"], [(b["item"], b["n"]) for b in borrowed()], count("oak_planks"), count("iron_pickaxe"))
+			""".formatted(pos(helper, CHEST), pos(helper, CHEST)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True [('oak_planks', 4)] 4 0");
+			helper.assertTrue(count(chest, Items.IRON_PICKAXE) == 1, "no pickaxe in the chest");
+		});
+	}
+
 	/** A record from before the bot's own count was kept (no "had") still gives back. */
 	@GameTest(maxTicks = 40)
 	public void anOlderRecordStillGivesBack(GameTestHelper helper) {

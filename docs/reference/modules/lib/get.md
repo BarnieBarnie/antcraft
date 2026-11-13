@@ -34,6 +34,8 @@ So an empty bot by a tree and some stone gets a stone axe: logs by hand, a woode
 | `no_tool` | no tool of the kind a source needs can be had (see `ensure_tool`) |
 | another reason | that of the source, the chest or `craft_here` that failed, such as `no_logs` or `no_stone` |
 
+Where it fails, it [gives back](borrow.md#give_backradius16-since0) what it borrowed during the call, from a chest or for a tool, so a failed `get` leaves the chests as it found them: with 5 planks in a chest and no log in reach, `get("oak_planks", 8)` takes the 5, fails for the rest and puts the 5 back. What was borrowed before the call stays borrowed, and a nested `get` (a raw item, a tool) that failed has given its own back already. What it made from borrowed items, such as planks from a borrowed log, the bot keeps; the log is struck off as used.
+
 - **Pauses** yes, while it walks, gathers and crafts; not where the bot carries `n` already.
 
 ## `ensure_tool(kind, uses=1, tier=None, radius=32)`

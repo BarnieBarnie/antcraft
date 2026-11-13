@@ -6,6 +6,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.borrow
 import lib.cost
 import lib.craft
 import lib.dig
@@ -101,19 +102,25 @@ def key(item):
 
 def get(item, n=1, radius=32):
     """Makes the bot carry at least n of item, by the first of: what it carries; the chests of lib.stock within radius,
-    borrowed, as many as they hold, the rest by what follows; SOURCES[item], with ensure_tool first; crafting, getting each raw item lib.craft.plan lists, then
-    lib.craft.craft_here. Gives result(): ok, no_recipe with missing for an item it can neither gather nor craft, cycle
-    where getting it waits on itself, or the reason a step failed with."""
+    borrowed, as many as they hold, the rest by what follows; SOURCES[item], with ensure_tool first; crafting, getting
+    each raw item lib.craft.plan lists, then lib.craft.craft_here. Gives result(): ok, no_recipe with missing for an item
+    it can neither gather nor craft, cycle where getting it waits on itself, or the reason a step failed with. Where it
+    fails it gives back what it borrowed during this call (lib.borrow.give_back), not what was borrowed before it."""
     item = key(item)
     if count(item) >= n:
         return result()
     if item in GETTING or len(GETTING) >= DEPTH:
         return result("cycle", None, {item: n - count(item)})
     GETTING.append(item)
+    # What this call borrows is given back when it fails; a nested get that failed gave its own back already.
+    since = len(lib.borrow.borrowed())
     try:
-        return resolve(item, n, radius)
+        r = resolve(item, n, radius)
     finally:
         GETTING.pop()
+    if not r["ok"]:
+        lib.borrow.give_back(since=since)
+    return r
 
 
 def resolve(item, n, radius):
