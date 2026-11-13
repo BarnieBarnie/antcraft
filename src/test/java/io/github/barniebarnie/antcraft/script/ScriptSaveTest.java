@@ -197,7 +197,7 @@ class ScriptSaveTest {
 		ScriptLibrary library = library("w.py", "print(ARGS)\nwait(10)\n");
 		FakeHost host = new FakeHost();
 		BotLog log = new BotLog(100);
-		ScriptRun.Saved old = new ScriptRun.Saved("w", List.of("a", "b"), null, 0, new long[0], null, null, new long[0]);
+		ScriptRun.Saved old = new ScriptRun.Saved("w", List.of("a", "b"), null, 0, new long[0], null, null, List.of());
 		ScriptRun run = ScriptRun.resume(roundTrip(old), library.load("w"), host, log, Memory.create(), library);
 		runFor(run, host, 1, 2000);
 		assertEquals(List.of("[0 info] w starts again from the top", "[0 print] ['a', 'b']"), lines(log));
@@ -206,7 +206,7 @@ class ScriptSaveTest {
 
 	/**
 	 * The scaffold the run's walks placed ({@code placed_scaffold()}, #533) outlives a save, so a fell_whole resumed after a
-	 * reload still takes back what it placed before; taking it leaves none.
+	 * reload still takes back what it placed before, each in its dimension (#550); taking it leaves none.
 	 */
 	@Test
 	void theScaffoldARunPlacedOutlivesASave() throws IOException {
@@ -215,10 +215,44 @@ class ScriptSaveTest {
 		BotLog log = new BotLog(100);
 		ScriptRun run = runFor(new ScriptRun("w", library.load("w"), List.of(), host, log, Memory.create(), library), host, 2, 2000);
 		run.notePlaced(new Pos(1, 2, 3, "minecraft:overworld"));
-		run.notePlaced(new Pos(1, 3, 3, "minecraft:overworld"));
+		run.notePlaced(new Pos(1, 3, 3, "minecraft:the_nether"));
 		ScriptRun resumed = ScriptRun.resume(roundTrip(run.save()), library.load("w"), host, log, Memory.create(), library);
-		assertEquals(List.of(new Pos(1, 2, 3), new Pos(1, 3, 3)), resumed.takePlaced());
+		List<Pos> taken = resumed.takePlaced();
+		assertEquals(List.of(new Pos(1, 2, 3), new Pos(1, 3, 3)), taken);
+		assertEquals(List.of("minecraft:overworld", "minecraft:the_nether"), taken.stream().map(Pos::dimension).toList());
 		assertEquals(List.of(), resumed.takePlaced());
+	}
+
+	/** A run that ends, finished, failed or stopped (as a script that replaces it stops it), leaves nothing in the scaffold index (#550). */
+	@Test
+	void anEndedRunLeavesNothingInTheScaffoldIndex() throws IOException {
+		ScriptLibrary library = library("w.py", "wait(10)\n", "f.py", "x = 1\n", "e.py", "x = 1 / 0\n");
+		FakeHost host = new FakeHost();
+		BotLog log = new BotLog(100);
+		int before = ScriptRun.indexed();
+		ScriptRun stopped = runFor(new ScriptRun("w", library.load("w"), List.of(), host, log, Memory.create(), library), host, 2, 2000);
+		stopped.notePlaced(new Pos(5, 2, 5, "minecraft:overworld"));
+		stopped.notePlaced(new Pos(5, 3, 5, "minecraft:overworld"));
+		ScriptRun finished = new ScriptRun("f", library.load("f"), List.of(), host, log, Memory.create(), library);
+		finished.notePlaced(new Pos(6, 2, 5, "minecraft:overworld"));
+		ScriptRun failed = new ScriptRun("e", library.load("e"), List.of(), host, log, Memory.create(), library);
+		failed.notePlaced(new Pos(7, 2, 5, "minecraft:overworld"));
+		assertEquals(before + 4, ScriptRun.indexed());
+		stopped.stop();
+		assertEquals(before + 2, ScriptRun.indexed());
+		assertEquals(ScriptRun.State.FINISHED, runFor(finished, host, 2, 2000).state());
+		assertEquals(ScriptRun.State.FAILED, runFor(failed, host, 2, 2000).state());
+		assertEquals(before, ScriptRun.indexed());
+	}
+
+	/** A block that changes at the same x, y, z in another dimension leaves the run's scaffold its own (#550). */
+	@Test
+	void aChangeInAnotherDimensionLeavesTheScaffoldTheRuns() throws IOException {
+		ScriptLibrary library = library("w.py", "wait(10)\n");
+		ScriptRun run = new ScriptRun("w", library.load("w"), List.of(), new FakeHost(), new BotLog(100), Memory.create(), library);
+		run.notePlaced(new Pos(8, 2, 9, "minecraft:overworld"));
+		ScriptRun.blockChanged("minecraft:the_nether", BlockPos.asLong(8, 2, 9));
+		assertEquals(List.of(new Pos(8, 2, 9)), run.takePlaced());
 	}
 
 	/**
@@ -235,8 +269,8 @@ class ScriptSaveTest {
 		a.notePlaced(new Pos(7, 2, 9, "minecraft:overworld"));
 		a.notePlaced(new Pos(7, 3, 9, "minecraft:overworld"));
 		a.notePlaced(new Pos(7, 4, 9, "minecraft:overworld"));
-		ScriptRun.blockChanged(BlockPos.asLong(7, 2, 9));
-		ScriptRun.blockChanged(BlockPos.asLong(7, 3, 9));
+		ScriptRun.blockChanged("minecraft:overworld", BlockPos.asLong(7, 2, 9));
+		ScriptRun.blockChanged("minecraft:overworld", BlockPos.asLong(7, 3, 9));
 		b.notePlaced(new Pos(7, 3, 9, "minecraft:overworld"));
 		assertEquals(List.of(new Pos(7, 4, 9, "minecraft:overworld")), a.takePlaced());
 		assertEquals(List.of(new Pos(7, 3, 9, "minecraft:overworld")), b.takePlaced());

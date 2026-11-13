@@ -13,9 +13,9 @@ import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.script.lang.Vm;
 import io.github.barniebarnie.antcraft.script.lang.VmState;
-import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -148,14 +148,16 @@ public final class ScriptRun {
 	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads. {@code lastResult} is
 	 * its last action's result, which {@code /antcraft bot status} shows. {@code progressData} is what the action saves
 	 * beside its progress ({@link Action#progressData}), empty in saves from before it. {@code placed} is where the run's
-	 * walks placed scaffold ({@link #takePlaced}), as {@link BlockPos#asLong}.
+	 * walks placed scaffold ({@link #takePlaced}), stored as {@link BlockPos#asLong} under {@code placed} with their dimensions
+	 * under {@code placedDimensions}; a save from before that has none, and they are the bot's when it loads (#550).
 	 */
 	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, long[] progressData, @Nullable String problem,
-			@Nullable String lastResult, long[] placed) {
+			@Nullable String lastResult, List<Pos> placed) {
 		private static final String KEY = "Script";
 
 		public Saved {
 			args = List.copyOf(args);
+			placed = List.copyOf(placed);
 		}
 
 		/** Stores it with the bot. */
@@ -178,8 +180,11 @@ public final class ScriptRun {
 			if (lastResult != null) {
 				tag.putString("lastResult", lastResult);
 			}
-			if (placed.length > 0) {
-				tag.putLongArray("placed", placed);
+			if (!placed.isEmpty()) {
+				tag.putLongArray("placed", placed.stream().mapToLong(ScriptRun::asLong).toArray());
+				ListTag dimensions = new ListTag();
+				placed.forEach(pos -> dimensions.add(StringTag.valueOf(Objects.requireNonNullElse(pos.dimension(), ""))));
+				tag.put("placedDimensions", dimensions);
 			}
 			output.store(KEY, CompoundTag.CODEC, tag);
 		}
@@ -192,9 +197,16 @@ public final class ScriptRun {
 				for (int i = 0; i < list.size(); i++) {
 					args.add(list.getStringOr(i, ""));
 				}
+				long[] at = tag.getLongArray("placed").orElse(new long[0]);
+				ListTag dimensions = tag.getListOrEmpty("placedDimensions");
+				List<Pos> placed = new ArrayList<>();
+				for (int i = 0; i < at.length; i++) {
+					String dimension = dimensions.getStringOr(i, "");
+					placed.add(new Pos(BlockPos.getX(at[i]), BlockPos.getY(at[i]), BlockPos.getZ(at[i]), dimension.isEmpty() ? null : dimension));
+				}
 				return new Saved(tag.getStringOr("name", ""), args, tag.getByteArray("vm").orElse(null),
 						tag.getLongOr("progress", 0), tag.getLongArray("progressData").orElse(new long[0]), tag.getString("problem").orElse(null),
-						tag.getString("lastResult").orElse(null), tag.getLongArray("placed").orElse(new long[0]));
+						tag.getString("lastResult").orElse(null), placed);
 			});
 		}
 	}
@@ -230,13 +242,19 @@ public final class ScriptRun {
 	/** How many {@link #placed} positions a run keeps, the last placed, for a script that never takes them. */
 	static final int PLACED_MAX = 4096;
 	/**
-	 * Each position where a run's walk placed scaffold whose block has not changed since, to that run's {@link #id}
-	 * (#539). Server thread only.
-	 * ponytail: keyed without the dimension, so a change at the same x, y, z in another dimension makes a run leave its
-	 * block standing (never take another's); and an ended run's entries stay until their block changes or the server
-	 * stops. Key by dimension, or forget a run's entries as it ends, if either shows.
+	 * Each position, in its dimension, where a running run's walk placed scaffold whose block has not changed since, to that
+	 * run's {@link #id} (#539, #550). Server thread only.
+	 * ponytail: a run whose bot is unloaded or discarded without it ending keeps its entries until their block changes or
+	 * the server stops; a resumed run notes them again under its own id.
 	 */
-	private static final Long2LongOpenHashMap PLACED_BY = new Long2LongOpenHashMap();
+	private static final Map<Placed, Long> PLACED_BY = new HashMap<>();
+
+	/** A key of {@link #PLACED_BY}: {@code pos} as {@link BlockPos#asLong} in {@code dimension}. */
+	private record Placed(@Nullable String dimension, long pos) {
+		Placed(Pos pos) {
+			this(pos.dimension(), asLong(pos));
+		}
+	}
 	private static long runs;
 	/** Which run this is, in {@link #PLACED_BY}: a resumed run is a new one. */
 	private final long id = ++runs;
@@ -301,8 +319,8 @@ public final class ScriptRun {
 		}
 		run.lastResult = saved.lastResult();
 		// ponytail: a block changed while the bot was unloaded and the server ran on counts as unchanged.
-		for (long at : saved.placed()) {
-			run.notePlaced(new Pos(BlockPos.getX(at), BlockPos.getY(at), BlockPos.getZ(at)));
+		for (Pos at : saved.placed()) {
+			run.notePlaced(at.dimension() == null ? at.in(host.pos().dimension()) : at);
 		}
 		return run;
 	}
@@ -311,8 +329,7 @@ public final class ScriptRun {
 	public Saved save() {
 		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
 		long[] saveData = this.recall ? this.progressData : this.action == null ? new long[0] : this.action.progressData();
-		// ponytail: saved without their dimension, as the bot's when it loads; a walk does not cross dimensions.
-		long[] savePlaced = this.placed.stream().mapToLong(ScriptRun::key).filter(at -> PLACED_BY.get(at) == this.id).toArray();
+		List<Pos> savePlaced = this.placed.stream().filter(this::owns).toList();
 		try {
 			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, saveData,
 					null, this.lastResult, savePlaced);
@@ -328,10 +345,20 @@ public final class ScriptRun {
 	public void notePlaced(Pos pos) {
 		this.placed.remove(pos);
 		this.placed.add(pos);
-		PLACED_BY.put(key(pos), this.id);
+		PLACED_BY.put(new Placed(pos), this.id);
 		if (this.placed.size() > PLACED_MAX) {
-			PLACED_BY.remove(key(this.placed.removeFirst()), this.id);
+			this.disown(this.placed.removeFirst());
 		}
+	}
+
+	/** Whether {@code pos}'s block is still this run's scaffold. */
+	private boolean owns(Pos pos) {
+		return Objects.equals(PLACED_BY.get(new Placed(pos)), this.id);
+	}
+
+	/** Whether {@code pos}'s block was still this run's scaffold, which it no longer is. */
+	private boolean disown(Pos pos) {
+		return PLACED_BY.remove(new Placed(pos), this.id);
 	}
 
 	/**
@@ -339,19 +366,36 @@ public final class ScriptRun {
 	 * since ({@link #blockChanged}); none noted after.
 	 */
 	public List<Pos> takePlaced() {
-		List<Pos> out = this.placed.stream().filter(p -> PLACED_BY.remove(key(p), this.id)).toList();
+		List<Pos> out = this.placed.stream().filter(this::disown).toList();
 		this.placed.clear();
 		return out;
 	}
 
+	/** Takes the run's scaffold out of {@link #PLACED_BY}, as it ends (#550). */
+	private void ended() {
+		this.placed.forEach(this::disown);
+		this.placed.clear();
+	}
+
+	/** Whether any run's scaffold is noted, so {@link #blockChanged} has something to do. */
+	public static boolean anyPlaced() {
+		return !PLACED_BY.isEmpty();
+	}
+
 	/**
-	 * Notes that the block at {@code pos} ({@link BlockPos#asLong}) changed, as the server does for each block that does
-	 * (ServerLevelMixin): scaffold placed there is no run's any more, even once the same block is back (#539).
+	 * Notes that the block at {@code pos} ({@link BlockPos#asLong}) in {@code dimension} changed, as the server does for
+	 * each block that does (ServerLevelMixin): scaffold placed there is no run's any more, even once the same block is
+	 * back (#539).
 	 */
-	public static void blockChanged(long pos) {
+	public static void blockChanged(String dimension, long pos) {
 		if (!PLACED_BY.isEmpty()) {
-			PLACED_BY.remove(pos);
+			PLACED_BY.remove(new Placed(dimension, pos));
 		}
+	}
+
+	/** How many positions {@link #PLACED_BY} holds, for tests. */
+	static int indexed() {
+		return PLACED_BY.size();
 	}
 
 	/** Forgets whose scaffold every position holds, when the server stops. */
@@ -359,7 +403,7 @@ public final class ScriptRun {
 		PLACED_BY.clear();
 	}
 
-	private static long key(Pos pos) {
+	private static long asLong(Pos pos) {
 		return BlockPos.asLong((int) pos.x(), (int) pos.y(), (int) pos.z());
 	}
 
@@ -449,6 +493,7 @@ public final class ScriptRun {
 			AntCraft.LOGGER.warn("Script {} failed with an internal error at {}:{}", name, file, vm.line(), e);
 			action = null;
 			state = State.FAILED;
+			ended();
 			write(Level.ERROR, file + ":" + vm.line() + ": internal error: " + e);
 			return;
 		}
@@ -467,6 +512,9 @@ public final class ScriptRun {
 			}
 			case RUNNING -> {
 			}
+		}
+		if (state != State.RUNNING) {
+			ended();
 		}
 	}
 
@@ -538,6 +586,7 @@ public final class ScriptRun {
 				action.cancel();
 			}
 			action = null;
+			ended();
 		}
 	}
 

@@ -20,7 +20,7 @@ No, it is done at once.
 
 ## Description
 
-The positions belong to the script run: a new script starts with none. They are saved with the bot, so a script resumed after a reload still gets what it placed before. The bot keeps the last 4096 for a script that never asks.
+The positions belong to the script run: a new script starts with none. They are saved with the bot, so a script resumed after a reload still gets what it placed before, each in its dimension. The bot keeps the last 4096 for a script that never asks.
 
 Only blocks that have not changed since the bot placed them are given: one mined, replaced or changed in any way since, by the bot, another bot, a player, a piston or anything else, is left out, even where the same block is back in its place, so a script takes back only the bot's own. [`lib.trees.fell_whole`](../modules/lib/trees.md) takes back what it gives with `lib.trees.take_back()`.
 

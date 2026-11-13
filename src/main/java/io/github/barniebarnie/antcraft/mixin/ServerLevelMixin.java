@@ -10,13 +10,15 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Tells {@link ScriptRun#blockChanged} of each block that changes: {@code Level.setBlock} calls this for every block
- * whose state it changed, whoever changed it (#539).
+ * Tells {@link ScriptRun#blockChanged} of each block that changes, in its dimension: {@code Level.setBlock} calls this for
+ * every block whose state it changed, whoever changed it (#539, #550).
  */
 @Mixin(ServerLevel.class)
 abstract class ServerLevelMixin {
 	@Inject(method = "updatePOIOnBlockStateChange", at = @At("HEAD"))
 	private void antcraft$blockChanged(BlockPos pos, BlockState oldState, BlockState newState, CallbackInfo ci) {
-		ScriptRun.blockChanged(pos.asLong());
+		if (ScriptRun.anyPlaced()) { // the dimension's id only where there is scaffold to forget
+			ScriptRun.blockChanged(((ServerLevel) (Object) this).dimension().identifier().toString(), pos.asLong());
+		}
 	}
 }
