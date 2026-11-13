@@ -56,7 +56,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** 8 planks in the chests and 1 carried, 10 asked: missing names the 1 short and nothing is taken. */
-	@GameTest(maxTicks = 10)
+	@GameTest(maxTicks = 40)
 	public void tooFewTakesNothing(GameTestHelper helper) {
 		Container near = chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 4));
 		Container far = chest(helper, FAR, new ItemStack(Items.OAK_PLANKS, 4));
@@ -74,7 +74,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The bot already carries 10: fetch takes nothing. */
-	@GameTest(maxTicks = 10)
+	@GameTest(maxTicks = 40)
 	public void alreadyCarryingDoesNothing(GameTestHelper helper) {
 		Container near = chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 6));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);

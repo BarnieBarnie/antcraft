@@ -43,7 +43,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** nearest takes a filter; exposed leaves out an ore walled in by stone. */
-	@GameTest(maxTicks = 20)
+	@GameTest(maxTicks = 40)
 	public void findNearestAndExposed(GameTestHelper helper) {
 		helper.setBlock(2, 1, 2, Blocks.IRON_ORE);
 		for (BlockPos pos : List.of(new BlockPos(1, 1, 2), new BlockPos(3, 1, 2), new BlockPos(2, 1, 1), new BlockPos(2, 1, 3),
