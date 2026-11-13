@@ -23,6 +23,10 @@ Without a shaft in memory that has such a level, it stops the script with an ass
 
 The shaft in `memory["shaft"]` with its branches of round `r`, as `mineshaft_at` gives it; `None` without a shaft in memory. Besides `top` and `levels`, `memory["shaft"]` may hold `branches` (per side, default 4) and `length` (of a branch, default 16) for a shaft of another size.
 
+## `tier_at(y)`
+
+The pickaxe tier the ores common at height `y` need: the best [`lib.tools.tier_for`](tools.md) of the ores of `SPREAD` (each ore block with the heights it is common at, from the game's ore spread) at `y`, `"wooden"` where none is. `"stone"` at 16, where iron is the best of them; `"iron"` below -8, where gold, redstone and diamonds are. A modded ore is not in `SPREAD`; `colony.miner` takes a tier per level from `colony_memory["mineshaft"]["tiers"]` where this is not right.
+
 ## Example
 
 Mine two rounds of level 20, then bring up what is in the chest:

@@ -233,6 +233,15 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** The pickaxe tier a level's ores need (#559): stone where iron is the best (16), iron where gold, diamonds and redstone are (-16, -54). */
+	@GameTest(maxTicks = 20)
+	public void tierAtIsWhatTheOresOfAHeightNeed(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.run(bot, "import lib.mine\nprint(lib.mine.tier_at(16), lib.mine.tier_at(-16), lib.mine.tier_at(-54))\n");
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("stone iron iron")),
+			"printed " + BotScripts.log(bot, Output.Level.PRINT) + " " + BotScripts.log(bot, Output.Level.ERROR)));
+	}
+
 	/** A bot with 3 slots free, the rest raw iron, whose landing chest is full stops with no_space before it digs. */
 	@GameTest(maxTicks = 20)
 	public void aBotFullOfOreWithAFullChestGivesNoSpace(GameTestHelper helper) {

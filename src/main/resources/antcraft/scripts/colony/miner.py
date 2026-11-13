@@ -5,14 +5,18 @@
 # takes one, mines a round of that level's branches (lib.mine), brings the ore
 # from the landing chest to the core and posts the level again, so the miners
 # take turns, the level mined least first. Ladders, a wooden trapdoor for the
-# hatch, torches, chests and pickaxes come from the core; what the core lacks
-# the miner gets with lib.get, from the colony's chests, trees, stone and ore,
-# and gives back what it borrowed once each job is done. Run it on a colony
-# member with `/antcraft bot run colony.miner`.
+# hatch (of the planks or logs the colony has, else oak), torches, chests and
+# pickaxes come from the core; what the core lacks the miner gets with lib.get,
+# from the colony's chests, trees, stone and ore, and gives back what it
+# borrowed once each job is done. The shaft takes a stone pickaxe; each level a
+# pickaxe of the tier its ores need (lib.mine.tier_at: iron below -8, for gold,
+# redstone and diamonds), as a too-low one leaves their veins in place. Run it
+# on a colony member with `/antcraft bot run colony.miner`.
 #
 # The shaft is kept in colony_memory["mineshaft"]: top and levels once picked.
-# Set it before the first miner runs to choose the levels (heights) and the size
-# of the halls: {"levels": [16, -16], "branches": 4, "length": 16}.
+# Set it before the first miner runs to choose the levels (heights), the size
+# of the halls and, if lib.mine.tier_at is not right for a level, its tier:
+# {"levels": [16, -16], "branches": 4, "length": 16, "tiers": {16: "iron"}}.
 # A mine job's data is a dict: "level" (a height of the shaft) and "round" (the
 # round of branches to mine, optional, 0). Post one from any member's script:
 #   post_job("mine", {"level": 16})
@@ -33,11 +37,7 @@ import lib.stock
 LEVELS = [16, -16, -54]
 ORES = lib.mine.ORES
 PICKAXES = "#minecraft:pickaxes"
-# What lib.get makes where the core holds none of a tag the shaft takes.
-# ponytail: an oak trapdoor, which takes oak logs; the trapdoor of the logs at hand if a colony has no oaks.
-MAKE = {lib.shaft.HATCH[0]: "minecraft:oak_trapdoor"}
-# The pickaxe tier a level takes: what drops its iron and coal.
-# ponytail: one tier for every level, so diamonds at deep levels are left; the level's ore (lib.tools.tier_for) per level once that matters.
+# The pickaxe tier the shaft takes: any digs it, this one the ore it passes.
 TIER = lib.tools.tier_for("minecraft:iron_ore")
 
 
@@ -79,6 +79,19 @@ def site():
     return s
 
 
+def hatch():
+    """The wooden trapdoor lib.get makes for the hatch: that of the first planks or logs the bot carries or the core
+    holds, so of wood the colony has; oak where it has none."""
+    for s in inventory() + (container(core()) or []):
+        if matches(s, "#minecraft:planks") or matches(s, "#minecraft:logs"):
+            wood = s.item.replace("stripped_", "")
+            for end in ["_planks", "_log", "_wood", "_stem", "_hyphae", "_block"]:
+                wood = wood.replace(end, "")
+            if matches(wood + "_trapdoor", lib.shaft.HATCH[0]):
+                return wood + "_trapdoor"
+    return "minecraft:oak_trapdoor"
+
+
 def take_more(more):
     """Takes from the core what the bot lacks of more (item to how many more than it carries); gives what is still short."""
     short = {}
@@ -89,17 +102,17 @@ def take_more(more):
     return short
 
 
-def supply(more, uses):
-    """Makes the bot hold a pickaxe that lasts uses more blocks (lib.get.ensure_tool: carried, from a chest, else made)
-    and carry what it lacks of more (item to how many more than it carries): from the core, the rest with lib.get.get.
-    Gives result(): ok, or the first that failed."""
+def supply(more, uses, tier=TIER):
+    """Makes the bot hold a pickaxe of at least tier that lasts uses more blocks (lib.get.ensure_tool: carried, from a
+    chest, else made) and carry what it lacks of more (item to how many more than it carries): from the core, the rest
+    with lib.get.get, the hatch's trapdoor of wood the colony has. Gives result(): ok, or the first that failed."""
     short = take_more(more)
     short.pop(PICKAXES, None)
-    r = lib.get.ensure_tool("pickaxe", uses, TIER)
+    r = lib.get.ensure_tool("pickaxe", uses, tier)
     for item, n in short.items():
         if not r["ok"]:
             break
-        k = MAKE.get(item, item)
+        k = hatch() if item == lib.shaft.HATCH[0] else item
         r = lib.get.get(k, count(k) + n)
     return r
 
@@ -135,7 +148,9 @@ def mine(job):
     here = m["level"][y]
     # The blocks the round breaks: both cells of the hall, its branches and a few ore. ponytail: the veins are a guess.
     uses = 2 * len(here["hall"]) + sum([len(cells) for cells in here["branches"]]) + 8
-    r = supply({"minecraft:torch": max(len(here["torches"]) - count("minecraft:torch"), 0)}, uses)
+    # The tier its ores need: colony_memory["mineshaft"]["tiers"] of the level, else lib.mine.tier_at.
+    tier = colony_memory["mineshaft"].get("tiers", {}).get(y) or lib.mine.tier_at(y)
+    r = supply({"minecraft:torch": max(len(here["torches"]) - count("minecraft:torch"), 0)}, uses, tier)
     # Short of torches it mines on: mine_level lights what it can.
     if not has(PICKAXES):
         warn(f"mining level {y} waits for a pickaxe: {r['reason']} {r['missing']}")

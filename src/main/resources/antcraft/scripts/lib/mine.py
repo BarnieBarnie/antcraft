@@ -20,6 +20,10 @@ ORES = ["minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecra
 # What digging gives that it has no use for, which it drops whole: kept in the chest it would fill it.
 JUNK = ["minecraft:gravel", "minecraft:flint", "minecraft:dirt", "minecraft:granite", "minecraft:diorite", "minecraft:andesite",
         "minecraft:tuff", "minecraft:calcite", "minecraft:sand", "minecraft:red_sand", "minecraft:clay_ball"]
+# The ore blocks common at a height: (block, lowest y, highest y), from the game's ore spread.
+# ponytail: where each is common, not every height it can be (diamonds are rare at 16); a modded ore is left out.
+SPREAD = [("coal_ore", 0, 320), ("iron_ore", -24, 320), ("copper_ore", -16, 112), ("lapis_ore", -64, 64),
+          ("gold_ore", -64, -8), ("redstone_ore", -64, -8), ("diamond_ore", -64, -8)]
 # How much of the rest of what it digs it keeps to wall fluid off with; it drops the rest too.
 KEEP = 64
 # How many blocks to wall fluid off with it keeps at least, of the junk if it has nothing else.
@@ -35,6 +39,13 @@ def site(r=0):
     if kept is None:
         return None
     return mineshaft_at(kept["top"], kept["levels"], round=r, branches=kept.get("branches", 4), length=kept.get("length", 16))
+
+
+def tier_at(y):
+    """The pickaxe tier the ores common at height y need (lib.tools.tier_for of each in SPREAD): "stone" at 16, "iron"
+    at -16, where gold, redstone and diamonds are."""
+    tiers = [lib.tools.TIERS.index(lib.tools.tier_for(b)) for b, low, high in SPREAD if low <= y <= high]
+    return lib.tools.TIERS[min(tiers)] if tiers else "wooden"
 
 
 def report(reason=None, at=None, missing=None, sealed=None):

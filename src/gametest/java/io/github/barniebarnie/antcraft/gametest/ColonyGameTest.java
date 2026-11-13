@@ -998,6 +998,39 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A miner mines a level with the pickaxe tier its ores need (#559): colony_memory["mineshaft"]["tiers"] says the level
+	 * at y 1 takes iron, as lib.mine.tier_at says of a deep level, and lodestone, which the game test tags put in
+	 * needs_iron_tool and c:ores, stands in the south branch at (7, 2, 4). The core holds a stone pickaxe, which the shaft
+	 * takes, and an iron one after it, which the level takes; the lodestone is mined. About twice its pass (854 ticks).
+	 */
+	@GameTest(maxTicks = 1700)
+	public void aMinerMinesADeepLevelWithThePickaxeItsOresNeed(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		helper.setBlock(7, 2, 4, Blocks.LODESTONE);
+		PyDict tiers = new PyDict();
+		tiers.put((long) helper.absolutePos(new BlockPos(0, 1, 0)).getY(), "iron");
+		((PyDict) colony.memory().get("mineshaft")).put("tiers", tiers);
+		AntBot bot = miners(helper, colony, new BlockPos(1, 6, 1)).getFirst();
+		container(helper, 0, 6, 0).setItem(5, new ItemStack(Items.IRON_PICKAXE));
+		succeedWhenMined(helper, colony, () -> {
+			helper.assertTrue(helper.getBlockState(new BlockPos(7, 2, 4)).isAir(), "lodestone left in the branch");
+			helper.assertTrue(bot.getInventory().countItem(Items.IRON_PICKAXE) == 1, "no iron pickaxe carried");
+		});
+	}
+
+	/**
+	 * With spruce logs in the core and no trapdoor, the miner makes the hatch a spruce trapdoor (#559), not an oak one,
+	 * which it has no wood for. About twice its pass (362 ticks).
+	 */
+	@GameTest(maxTicks = 750)
+	public void aMinersHatchIsOfTheWoodTheColonyHas(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		miners(helper, colony, new BlockPos(1, 6, 1));
+		container(helper, 0, 6, 0).setItem(3, new ItemStack(Items.SPRUCE_LOG, 4));
+		helper.succeedWhen(() -> helper.assertBlockPresent(Blocks.SPRUCE_TRAPDOOR, new BlockPos(3, 5, 3)));
+	}
+
+	/**
 	 * Two miners started on the same tick share the colony's one shaft (#393): neither picks a second site, one shaft job
 	 * is posted, and with a level each both take a mine job and mine a round. In a wide area, as the two halls go opposite
 	 * ways: stone up to y 5 from (0, 0, 0) to (15, 5, 15), the core at (4, 6, 4), the shaft's top at (7, 6, 7), the hall of
