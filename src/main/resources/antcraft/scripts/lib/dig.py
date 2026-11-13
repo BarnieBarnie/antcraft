@@ -69,9 +69,9 @@ def stone(n, radius=32):
 def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     """Makes the bot carry n more of item, a raw item such as "raw_iron" or "coal": mines the exposed veins of its ore
     within radius, nearest first; where they give too few, digs stairs down to y (best_y(item) where None) towards
-    facing, branches of length on from there and climbs back up. Gives result(): ok, no_recipe for an item that is no
-    ore, no_ore with missing where ROUNDS branches found too little or there is no y to dig to (emerald), or where a step
-    failed."""
+    facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
+    staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where ROUNDS branches found
+    too little or there is no y to dig to (emerald), or where a step failed."""
     key = short(item)
     if key not in ORES:
         return result("no_recipe", None, {"minecraft:" + key: n})
@@ -91,17 +91,26 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     y = best_y(key) if y is None else y
     if y is None:
         return result("no_ore", None, {"minecraft:" + key: target - count(key)})
+    start = pos()
     r = stairs_to(y, facing)
     for _ in range(ROUNDS):
         if not r["ok"] or count(key) >= target:
             break
         r = branch(length, facing=facing)
-    up = stairs_up()
+    # Where it dug no staircase, as at y already, it walks back to start: digging up would look for a surface, which
+    # the Nether has none of.
+    up = stairs_up() if memory.get("stairs") is not None else back(start)
     if not r["ok"]:
         return r
     if count(key) < target:
         return result("no_ore", None, {"minecraft:" + key: target - count(key)})
     return up
+
+
+def back(p):
+    """Walks to p. Gives result(): ok, or goto's reason with at."""
+    r = goto(p)
+    return result() if r else result(r.reason, p)
 
 
 def cut(p, stand, opened):
@@ -166,11 +175,26 @@ def is_floor(p):
     return b is not None and not b.is_air and not b.is_fluid
 
 
+def bridge_block(here, step, opened):
+    """Digs blocks out of the walls beside and behind the bot at here, facing step, head high first, until it carries a
+    lib.shaft.FILL block to fill a pit with. None once it does, else no_blocks at here."""
+    side = (step[2], 0, step[0])
+    for d in (side, (-side[0], 0, -side[2]), (-step[0], 0, -step[2])):
+        for p in (here.up() + d, here + d):
+            if has(lib.shaft.FILL):
+                return None
+            if is_floor(p):
+                cut(p, here, opened)  # ponytail: a block that will not come out is passed over
+    return None if has(lib.shaft.FILL) else result("no_blocks", here)
+
+
 def dig_up(facing):
     """Digs a 1-wide staircase from the bot's feet up towards facing, one block on for each block up, and walks up it
     until surfaced. Where the block ahead is air with a floor under it, as in a cave, walks on along the floor instead,
-    so it needs no block to build its next step with. Gives result(): ok, no_surface in a dimension with a roof over it
-    (surface gives None there), or the reason a step failed with at."""
+    so it needs no block to build its next step with. Where the next step is over a pit, fills it, with a block dug out
+    of the wall beside or behind it where it carries none (#546). Gives result(): ok, no_surface in a dimension with a
+    roof over it (surface gives None there), no_blocks where it has none and no wall gives one, or the reason a step
+    failed with at."""
     step = FACING[facing]
     here = pos()
     if surface(here) is None:
@@ -181,12 +205,16 @@ def dig_up(facing):
         cells = [here.up(2), up, up.up()]
         ahead = here + step
         if lib.find.is_air(ahead) and is_floor(ahead.down()):
-            # ponytail: a long cave floor is walked to its end; a pit ahead still needs a block to bridge with
+            # ponytail: a long cave floor is walked to its end
             up = ahead
             cells = [ahead.up()]
         opened = opened + cells
         for p in cells:
             failure = cut(p, here, opened)
+            if failure:
+                return failure
+        if not is_floor(up.down()):
+            failure = bridge_block(here, step, opened) or lib.shaft.seal(up.down(), here)
             if failure:
                 return failure
         r = goto(up)

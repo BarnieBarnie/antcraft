@@ -15,6 +15,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -199,12 +200,78 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Carrying no blocks, with the first step up over a pit (#546): the bot stands in a cave 3 tall whose block ahead,
+	 * east, has air under it, and the cells of the first step are air, so digging them gives no block either. It digs one
+	 * out of the wall beside it, fills the pit with it and digs on up to the surface. The area's bottom row is made stone.
+	 */
+	@GameTest(maxTicks = 400, skyAccess = true)
+	public void stairsUpOverAPitWithNoBlocksDigsABlockToBridgeWith(GameTestHelper helper) {
+		stone(helper, 5);
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(1, 1, 3, 2, 3, 3)) {
+			helper.setBlock(pos, Blocks.AIR);
+		}
+		helper.setBlock(2, 0, 3, Blocks.AIR); // the pit, a barrier under it
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			r = lib.dig.stairs_up("east")
+			print(r["ok"], r["reason"], pos().x - s.x, pos().y - s.y)
+			""", List.of("True None 5 5"));
+	}
+
+	/**
 	 * In the Nether the bedrock roof is over every column (#538): surface gives None there, and stairs_up with no
-	 * staircase remembered gives no_surface at once instead of digging up into the roof. At a far Nether spot of its
-	 * own, in a closed stone pocket; the bot is put there once the chunk ticks entities, and its script runs there.
+	 * staircase remembered gives no_surface at once instead of digging up into the roof.
 	 */
 	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 40)
 	public void stairsUpInTheNetherGivesNoSurface(GameTestHelper helper) {
+		inTheNether(helper, (nether, feet) -> pocket(nether, feet.offset(-1, -1, -1), feet.offset(1, 2, 1), feet), """
+			import lib.dig
+			s = pos()
+			print(surface(s))
+			r = lib.dig.stairs_up("east")
+			print(r["ok"], r["reason"], pos() == s)
+			""", List.of("None", "False no_surface True"),
+			(nether, feet) -> helper.assertTrue(nether.getBlockState(feet.offset(1, 1, 0)).is(Blocks.STONE), "dug east"));
+	}
+
+	/**
+	 * ore in the Nether with no staircase remembered (#546): already at y, it digs none, branches 4 north past buried
+	 * coal and walks back to where it started, instead of climbing to a surface the Nether has none of.
+	 */
+	@GameTest(maxTicks = GameTests.PACED_WAIT_TICKS + 400)
+	public void oreInTheNetherWalksBackToWhereItStarted(GameTestHelper helper) {
+		inTheNether(helper, (nether, feet) -> {
+			pocket(nether, feet.offset(-2, -1, -6), feet.offset(2, 2, 1), feet);
+			nether.setBlockAndUpdate(feet.offset(1, 0, -2), Blocks.COAL_ORE.defaultBlockState());
+		}, """
+			import lib.dig
+			s = pos()
+			r = lib.dig.ore("coal", 1, 1, s.y, length=4)
+			print(r["ok"], r["reason"], count("coal"), pos() == s)
+			""", List.of("True None 1 True"), (nether, feet) -> { });
+	}
+
+	/** Fills from to to with stone, then makes feet and the block above it air. */
+	private static void pocket(ServerLevel level, BlockPos from, BlockPos to, BlockPos feet) {
+		for (BlockPos pos : BlockPos.betweenClosed(from, to)) {
+			level.setBlockAndUpdate(pos, Blocks.STONE.defaultBlockState());
+		}
+		level.setBlockAndUpdate(feet, Blocks.AIR.defaultBlockState());
+		level.setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
+	}
+
+	/**
+	 * Runs script on a miner at a far Nether spot of the test's own: once the chunk ticks entities, build makes the
+	 * blocks round feet, the bot is put at feet and its script runs there. Passes once it printed expected and check
+	 * holds.
+	 */
+	private static void inTheNether(GameTestHelper helper, BiConsumer<ServerLevel, BlockPos> build, String script,
+		List<String> expected, BiConsumer<ServerLevel, BlockPos> check) {
 		ServerLevel nether = Objects.requireNonNull(helper.getLevel().getServer().getLevel(Level.NETHER));
 		ChunkPos spot = new ChunkPos(-3000, 3000 + 16 * NETHER_SPOTS.getAndIncrement());
 		BlockPos feet = new BlockPos(spot.getMinBlockX() + 8, 100, spot.getMinBlockZ() + 8);
@@ -220,20 +287,9 @@ public class DigGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			BotChunks.keep(nether, spot);
 			if (run[0] == null && nether.isPositionEntityTicking(feet)) {
-				for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-1, -1, -1), feet.offset(1, 2, 1))) {
-					nether.setBlockAndUpdate(pos, Blocks.STONE.defaultBlockState());
-				}
-				nether.setBlockAndUpdate(feet, Blocks.AIR.defaultBlockState());
-				nether.setBlockAndUpdate(feet.above(), Blocks.AIR.defaultBlockState());
+				build.accept(nether, feet);
 				bot.teleportTo(nether, feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, Set.of(), 0, 0, false);
-				AntBot there = (AntBot) Objects.requireNonNull(nether.getEntity(id));
-				run[0] = BotScripts.run(there, """
-					import lib.dig
-					s = pos()
-					print(surface(s))
-					r = lib.dig.stairs_up("east")
-					print(r["ok"], r["reason"], pos() == s)
-					""");
+				run[0] = BotScripts.run((AntBot) Objects.requireNonNull(nether.getEntity(id)), script);
 			} else if (run[0] != null && run[0].state() == ScriptRun.State.FAILED) {
 				helper.fail("script failed: " + BotScripts.log((AntBot) nether.getEntity(id), Output.Level.DEBUG));
 			}
@@ -241,8 +297,8 @@ public class DigGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(run[0] != null && run[0].state() == ScriptRun.State.FINISHED, "script not done");
 			List<String> printed = BotScripts.log((AntBot) nether.getEntity(id), Output.Level.PRINT);
-			helper.assertTrue(printed.equals(List.of("None", "False no_surface True")), "printed " + printed);
-			helper.assertTrue(nether.getBlockState(feet.offset(1, 1, 0)).is(Blocks.STONE), "dug east");
+			helper.assertTrue(printed.equals(expected), "printed " + printed);
+			check.accept(nether, feet);
 		});
 	}
 
