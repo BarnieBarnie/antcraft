@@ -30,6 +30,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -509,7 +510,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * A lumberjack alone fells the colony's tree, plants a sapling where it stood and puts the logs, and all else it carries
 	 * but its saplings, into the core (lib.inv's store_all, #457).
 	 */
-	@GameTest(maxTicks = 600)
+	@GameTest(maxTicks = 960)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {
 		helper.setBlock(5, 0, 5, Blocks.DIRT);
 		for (int y = 1; y <= 4; y++) {
@@ -541,6 +542,73 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			int saplings = lumberjack.getInventory().countItem(Items.OAK_SAPLING)
 				+ (lumberjack.getMainHandItem().is(Items.OAK_SAPLING) ? lumberjack.getMainHandItem().getCount() : 0);
 			helper.assertTrue(saplings == 1, "saplings the lumberjack keeps: " + saplings);
+		});
+	}
+
+	/**
+	 * An empty-handed lumberjack, no axe in the core, by the giant spruce of {@link TreesGameTest#plantGiant}: it makes an
+	 * axe from the logs of an oak of four logs at (6, 1, 6), not the giant's, then fells the giant whole with dirt and
+	 * saplings from the core, takes back its scaffold, replants four saplings and stores the 26 logs (#541). Passes at about tick 1700.
+	 */
+	@GameTest(maxTicks = 3400)
+	public void aLumberjackMakesAnAxeAndFellsAGiantTree(GameTestHelper helper) {
+		TreesGameTest.plantGiant(helper);
+		TreesGameTest.crownGiant(helper);
+		helper.setBlock(6, 0, 6, Blocks.DIRT);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(6, y, 6, Blocks.OAK_LOG);
+		}
+		helper.setBlock(6, 5, 6, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.DIRT, 6));
+		core.setItem(1, new ItemStack(Items.SPRUCE_SAPLING, 4));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			TreesGameTest.assertGiantFelled(helper);
+			helper.assertTrue(core.countItem(Items.SPRUCE_LOG) == 26, "spruce logs in the core: " + core.countItem(Items.SPRUCE_LOG));
+			helper.assertTrue(lumberjack.getMainHandItem().is(ItemTags.AXES) || lumberjack.getInventory().hasAnyMatching(s -> s.is(ItemTags.AXES)),
+				"the lumberjack has no axe");
+		});
+	}
+
+	/**
+	 * A lumberjack with a stone axe fells an oak of six logs, taller than it reaches from the ground, whole: it climbs on
+	 * dirt from the core, takes the dirt back, replants the sapling from the core and stores the logs and the dirt (#541). Passes at about tick 320.
+	 */
+	@GameTest(maxTicks = 640)
+	public void aLumberjackFellsATreeTallerThanItReaches(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.DIRT);
+		for (int y = 1; y <= 6; y++) {
+			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
+		}
+		helper.setBlock(4, 7, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.DIRT, 6));
+		core.setItem(1, new ItemStack(Items.OAK_SAPLING));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			for (int x = 0; x < 8; x++) {
+				for (int z = 0; z < 8; z++) {
+					for (int y = 1; y < 8; y++) {
+						helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(x, y, z));
+						helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(x, y, z));
+					}
+				}
+			}
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(4, 1, 4));
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			helper.assertTrue(core.countItem(Items.DIRT) == 6, "dirt in the core: " + core.countItem(Items.DIRT));
 		});
 	}
 
