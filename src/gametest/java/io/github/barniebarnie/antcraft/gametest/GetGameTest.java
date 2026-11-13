@@ -72,6 +72,28 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Logs carried and no stone within radius 1 (the floor under it dirt): a stone pickaxe is the cheapest to make but
+	 * fails no_stone, so ensure_tool falls back to the wooden one (#518).
+	 */
+	@GameTest(maxTicks = 250)
+	public void fallsBackToAWoodenPickaxeWithoutStone(GameTestHelper helper) {
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 3; z <= 5; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+				helper.setBlock(x, -1, z, Blocks.DIRT);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		run(helper, bot, """
+			from lib.get import ensure_tool
+			r = ensure_tool("pickaxe", 10, radius=1)
+			print(r["ok"], r["reason"], held().item, count("wooden_pickaxe"))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True None minecraft:wooden_pickaxe 1"));
+	}
+
 	/** An empty bot, no chest: a stone axe for few logs, an iron one for many; nothing is done. */
 	@GameTest(maxTicks = 80)
 	public void chooseStoneForFewUsesIronForMany(GameTestHelper helper) {

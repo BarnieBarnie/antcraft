@@ -38,9 +38,9 @@ So an empty bot by a tree and some stone gets a stone axe: logs by hand, a woode
 
 ## `ensure_tool(kind, uses=1, tier=None, radius=32)`
 
-Makes the bot hold a tool of `kind` (`"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`) that lasts `uses` more blocks and is at least `tier` (`"wooden"`, `"stone"`, `"iron"`, ...; `None`: any). With `tier="hand"` no tool is needed, as logs and dirt break by hand: it gets one only where it is cheaper than the hand. It takes the cheapest of `options(kind, uses, tier, radius)` (below): the carried ones where they last, [`hold`](tools.md)ing the best; a chest's tool that lasts on its own, borrowed; or the cheapest tier to make, made with `get` and held. So felling a few trees takes a stone axe, a forest an iron one, and a chest's iron axe beats making either. Only the cheapest tier to make is tried: where it fails, `ensure_tool` gives its reason.
+Makes the bot hold a tool of `kind` (`"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`) that lasts `uses` more blocks and is at least `tier` (`"wooden"`, `"stone"`, `"iron"`, ...; `None`: any). With `tier="hand"` no tool is needed, as logs and dirt break by hand: it gets one only where it is cheaper than the hand. It takes the cheapest of `options(kind, uses, tier, radius)` (below): the carried ones where they last, [`hold`](tools.md)ing the best; a chest's tool that lasts on its own, borrowed; or the cheapest tier to make, made with `get` and held. So felling a few trees takes a stone axe, a forest an iron one, and a chest's iron axe beats making either. Where a way fails it tries the next: a bot with logs and no stone in reach makes a wooden pickaxe once the stone one fails `no_stone`.
 
-- **Returns** a [`result()`](result.md) dict: `ok`, `no_tool` with `missing` where there is no way (a tier no source can get the raw items of, or one whose recipe waits on an item being got), or the reason `get` failed with.
+- **Returns** a [`result()`](result.md) dict: `ok`, `no_tool` with `missing` where there is no way (a tier no source can get the raw items of, or one whose recipe waits on an item being got), or the reason `get` failed with for the last tier it tried to make.
 - **Pauses** yes, while it walks to a chest or makes the tool; not where a carried tool lasts, or the hand is cheapest.
 
 ## `choose(kind, uses=1, tier=None, radius=32)`

@@ -198,8 +198,9 @@ def choose(kind, uses=1, tier=None, radius=32):
 def ensure_tool(kind, uses=1, tier=None, radius=32):
     """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword") that lasts uses more blocks and
     is at least tier (None: any; "hand": none needed, so a tool only where it is cheaper than the hand), by the cheapest
-    of options: carried, borrowed from a chest of lib.stock, or made with get. Only the cheapest tier to make is tried.
-    Gives result(): ok, no_tool where there is no way, or the reason borrowing or get failed with."""
+    of options: carried, borrowed from a chest of lib.stock, or made with get; where one fails it tries the next.
+    Gives result(): ok, no_tool where there is no way, or the reason the last tier to make failed with."""
+    failed = None
     for ticks, how, t, at in options(kind, uses, tier, radius):
         if how == "hand":
             return result()
@@ -213,5 +214,7 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
                 return lib.tools.hold(kind)
         else:
             r = get(f"{t}_{kind}", at, radius)
-            return lib.tools.hold(kind) if r["ok"] else r
-    return result("no_tool", None, {f"{tier if tier not in (None, 'hand') else 'wooden'}_{kind}": 1})
+            if r["ok"]:
+                return lib.tools.hold(kind)
+            failed = r
+    return failed or result("no_tool", None, {f"{tier if tier not in (None, 'hand') else 'wooden'}_{kind}": 1})
