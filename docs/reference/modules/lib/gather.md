@@ -1,6 +1,6 @@
 # `lib/gather`
 
-Gathering the raw items of early tools and making an item from nothing. A module of the mod's default library: `import lib.gather`, then `lib.gather.make("stone_axe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/gather.py`, written with [`lib/craft`](craft.md), [`lib/trees`](trees.md), [`scan`](../../world/scan.md), [`mine`](../../blocks/mine.md) and [`goto`](../../movement/goto.md).
+Gathering the raw items of early tools and making an item from nothing. A module of the mod's default library: `import lib.gather`, then `lib.gather.make("stone_axe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/gather.py`, written with [`lib/craft`](craft.md), [`lib/trees`](trees.md), [`lib/dig`](dig.md), [`scan`](../../world/scan.md), [`mine`](../../blocks/mine.md) and [`goto`](../../movement/goto.md).
 
 Where [`lib/craft`](craft.md)'s `obtain` takes raw items from chests, this module gets them from the world, so a bot with an empty inventory near a tree and some stone can make a stone axe.
 
@@ -33,14 +33,14 @@ Any other item fails at once with `no_recipe`.
 
 ## `stone(n, radius=32)`
 
-Mines stone or cobblestone within `radius` until the bot carries `n` more cobblestone, the nearest at or above its feet first so it digs no pit where it need not (`exposed_stone`). Where it carries no pickaxe it first makes a wooden one with `make`. A block it cannot mine is skipped. Then it walks back to where it started with [`goto(start, keep="minecraft:cobblestone")`](../../movement/goto.md), out of a pit it may have dug, without pillaring with the cobblestone it came for.
+[`lib.dig.stone(n, radius)`](dig.md#stonen-radius32), making a wooden pickaxe first with `make` where the bot carries no pickaxe.
 
-- **Returns** a dict: `ok`, `reason` (`None`, `no_stone` with `missing` once no stone it can mine is left, `no_space` with `at` where its inventory is full, or that of `make` for the pickaxe).
+- **Returns** a dict: `ok`, `reason` (`None`, that of `make` for the pickaxe, or that of `lib.dig.stone`), `at` and `missing`.
 - **Pauses** yes, while it walks and mines.
 
 ## `exposed_stone(radius=32, skip=None)`
 
-The nearest stone or cobblestone within `radius` at or above the bot's feet, else the nearest at all, leaving out the positions in the dict `skip`; `None` if there is none.
+[`lib.find.exposed`](find.md#exposedwhat-radius32-skipnone) for stone or cobblestone: the nearest with air beside or above it, at or above the bot's feet first, leaving out the positions in the dict `skip`; `None` if there is none.
 
 ## `is_log(item)`
 

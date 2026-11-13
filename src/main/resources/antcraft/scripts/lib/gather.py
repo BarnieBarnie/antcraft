@@ -6,12 +6,12 @@
 # delete it and the default comes back when the server starts.
 
 import lib.craft
+import lib.dig
+import lib.find
 import lib.trees
 from lib.result import result
 
-COBBLESTONE = "minecraft:cobblestone"
-# What mining gives cobblestone from.
-STONE = ["minecraft:stone", "minecraft:cobblestone"]
+from lib.dig import COBBLESTONE, STONE
 # How often make plans and gathers again before it crafts with what it has.
 ROUNDS = 5
 
@@ -33,41 +33,19 @@ def gather(item, n=1, radius=32):
 
 
 def exposed_stone(radius=32, skip=None):
-    """The nearest stone within radius at or above the bot's feet, which it mines sideways without digging a pit; else
-    the nearest stone at all; None if there is none. Leaves out the positions in the dict skip."""
-    feet = pos().y
-    rocks = [p for p in scan(STONE, radius=radius, limit=256) if skip is None or p not in skip]
-    for rock in rocks:  # nearest first
-        if rock.y >= feet:
-            return rock
-    return rocks[0] if rocks else None
+    """The nearest exposed stone within radius, at or above the bot's feet first (lib.find.exposed); None if there is
+    none. Leaves out the positions in the dict skip."""
+    return lib.find.exposed(STONE, radius, skip)
 
 
 def stone(n, radius=32):
-    """Mines stone until the bot carries n more cobblestone, making a wooden pickaxe first where it carries no pickaxe,
-    then walks back to where it started without building with the cobblestone, out of a pit it may have dug. Gives
-    result(): ok, make's result for the pickaxe, no_space, or no_stone with missing once no stone it can mine is left."""
+    """lib.dig.stone(n, radius), making a wooden pickaxe first where the bot carries no pickaxe. Gives result(): ok,
+    make's result for the pickaxe, or lib.dig.stone's."""
     if not count("#minecraft:pickaxes"):
         r = make("wooden_pickaxe")
         if not r["ok"]:
             return r
-    target = count(COBBLESTONE) + n
-    start = pos()
-    skip = {}
-    r = result()
-    while count(COBBLESTONE) < target:
-        rock = exposed_stone(radius, skip)
-        if rock is None:
-            r = result("no_stone", None, {COBBLESTONE: target - count(COBBLESTONE)})
-            break
-        m = mine(rock)
-        if not m:
-            if m.reason == "no_space":
-                r = result("no_space", rock)
-                break
-            skip[rock] = True  # out of reach or stuck: try another
-    goto(start, keep=COBBLESTONE)
-    return r
+    return lib.dig.stone(n, radius)
 
 
 def make(item, n=1, radius=32):

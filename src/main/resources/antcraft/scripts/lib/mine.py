@@ -102,15 +102,16 @@ def fluids(cells):
     return wet
 
 
-def veins(cells, opened, stand, chest):
-    """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up."""
+def veins(cells, opened, stand, chest=None):
+    """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up. With
+    a chest, it empties the bot into it (room) when its inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
             if p in opened:
                 continue
             vein = ore_vein(p)
             for b in vein:
-                failure = room(chest) or dig(b, opened + vein, stand)
+                failure = (room(chest) if chest is not None else None) or dig(b, opened + vein, stand)
                 if failure:
                     return failure
     return None
