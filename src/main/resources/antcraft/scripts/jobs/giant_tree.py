@@ -19,14 +19,20 @@ def fell():
     if base is None:
         return result("no_tree", at)
     logs = lib.trees.tree_blocks(base)
-    r = ensure_tool("axe", len(logs), None, radius)
-    if not r["ok"]:
-        return r
-    # Dirt to climb as high as the tree, and saplings to replant; where there are none it replants nothing.
-    r = get("dirt", max([p.y for p in logs]) - base.y + 1, radius)
-    if not r["ok"]:
-        return r
-    get(block(base).id.replace("_log", "_sapling"), 4, radius)
+    # The logs for an axe come from another tree, not this one (#520).
+    for p in logs:
+        lib.trees.KEEP[p] = True
+    try:
+        r = ensure_tool("axe", len(logs), None, radius)
+        if not r["ok"]:
+            return r
+        # Dirt to climb as high as the tree, and saplings to replant; where there are none it replants nothing.
+        r = get("dirt", max([p.y for p in logs]) - base.y + 1, radius)
+        if not r["ok"]:
+            return r
+        get(block(base).id.replace("_log", "_sapling"), 4, radius)
+    finally:
+        lib.trees.KEEP.clear()
     before = count(lib.trees.LOGS)
     r = lib.trees.fell_whole(base)
     if r["ok"]:

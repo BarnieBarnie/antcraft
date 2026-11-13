@@ -50,9 +50,10 @@ def crowned(base):
 def next_tree(radius=32, where=None, remnants=False, around=None):
     """The base of the nearest tree within radius of around (None: the bot) whose base passes where (a function, None:
     any), or None. With remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
-    for log in scan(LOGS, radius=radius, around=around):
-        base = trunk_base(log)
-        if (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
+    # Only a log with no log under it is a base, so each trunk costs one is_tree; the limit reaches past a forest's
+    # nearer logs (#520).
+    for base in scan(LOGS, radius=radius, limit=4096, around=around):
+        if not is_log(base.down()) and (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
             return base
     return None
 
@@ -244,6 +245,10 @@ def fell_whole(base, replant=True):
     return result()
 
 
+# Positions logs leaves alone: a script that means to fell a tree itself puts its logs here while it gets other things.
+KEEP = {}
+
+
 def logs(n, radius=32, kind=LOGS):
     """Gets logs that kind selects from the nearest trees within radius, one tree at a time, until the bot carries n
     more: fells (and replants) a tree all of whose logs (tree_blocks) it needs with fell_whole, else mines only the bottom
@@ -254,7 +259,7 @@ def logs(n, radius=32, kind=LOGS):
     target = count(kind) + n
     skip = {}
     while count(kind) < target:
-        base = next_tree(radius, lambda b: b not in skip and is_kind(b, kind), True)
+        base = next_tree(radius, lambda b: b not in skip and b not in KEEP and is_kind(b, kind), True)
         if base is None:
             return result("no_logs", None, {kind: target - count(kind)})
         before = count(kind)

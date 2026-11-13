@@ -4,7 +4,7 @@ Finding and felling trees. A module of the mod's default library: `import lib.tr
 
 ## `next_tree(radius=32, where=None, remnants=False, around=None)`
 
-The base, the lowest log, of the nearest tree within `radius` blocks of `around` (a [`Pos`](../../types/pos.md); `None`: the bot), or `None`. `where` is a function a base must pass, such as `in_colony` from `colony.common`; `None` takes any. With `remnants`, what is left of a tree whose bottom logs were taken (`is_remnant`) counts as a tree too. It pauses only while its [`scan`](../../world/scan.md) does.
+The base, the lowest log, of the nearest tree within `radius` blocks of `around` (a [`Pos`](../../types/pos.md); `None`: the bot), or `None`. `where` is a function a base must pass, such as `in_colony` from `colony.common`; `None` takes any. With `remnants`, what is left of a tree whose bottom logs were taken (`is_remnant`) counts as a tree too. It looks at up to 4096 logs, nearest first, so a tree behind a dense forest's nearer logs is found too. It pauses only while its [`scan`](../../world/scan.md) does.
 
 ```python
 import lib.trees
@@ -29,7 +29,18 @@ Mines the trunk at `base` from the ground up, picks up the logs and saplings tha
 
 ## `logs(n, radius=32, kind=LOGS)`
 
-Gets logs that `kind` selects (a block id such as `"spruce_log"`, or a tag; any log by default) from trees within `radius` blocks until the bot carries `n` more, one tree at a time, the nearest first, so it does not walk to and fro between trees. Where it needs all of a tree's logs (`tree_blocks`), it fells the whole tree with `fell_whole`, replanting it; where it needs fewer, it mines only the bottom ones of one trunk column it needs, from the ground, and leaves the rest standing. What is left of such a tree it takes first the next time (`next_tree(remnants=True)`), before it starts on another tree. A log wall or cabin is no tree, so it is left alone; a tree it cannot get a log from is skipped. Of a 2x2 tree it needs only part of, it takes a column at a time.
+Gets logs that `kind` selects (a block id such as `"spruce_log"`, or a tag; any log by default) from trees within `radius` blocks until the bot carries `n` more, one tree at a time, the nearest first, so it does not walk to and fro between trees. Where it needs all of a tree's logs (`tree_blocks`), it fells the whole tree with `fell_whole`, replanting it; where it needs fewer, it mines only the bottom ones of one trunk column it needs, from the ground, and leaves the rest standing. What is left of such a tree it takes first the next time (`next_tree(remnants=True)`), before it starts on another tree. A log wall or cabin is no tree, so it is left alone; a tree it cannot get a log from is skipped, and so is a tree with its base in `KEEP`. Of a 2x2 tree it needs only part of, it takes a column at a time.
+
+`KEEP` is a dict of positions `logs` leaves alone, empty by default. A script that means to fell a tree itself puts the tree's logs in it while it gets its tools, so [`get`](get.md) or [`ensure_tool`](get.md) do not take the logs for an axe from that tree, and clears it after:
+
+```python
+for p in lib.trees.tree_blocks(base):
+    lib.trees.KEEP[p] = True
+try:
+    ensure_tool("axe", 30)
+finally:
+    lib.trees.KEEP.clear()
+```
 
 - **Returns** a dict: `ok`, `reason` (`None`, `no_logs` once no tree it can take from is left, or `no_space` with a full inventory), `at` (where `no_space` struck) and `missing` (`{kind: k}`, the logs it still lacks, with `no_logs`).
 - **Pauses** yes, while it walks, mines and picks up.

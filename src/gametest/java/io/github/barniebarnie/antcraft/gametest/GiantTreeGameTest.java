@@ -15,6 +15,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
@@ -50,6 +51,26 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getInventory().countItem(Items.STONE_AXE) == 1, "no stone axe made");
 			helper.assertTrue(chest.countItem(Items.DIRT) == 6 && chest.countItem(Items.SPRUCE_SAPLING) == 0,
 				"the chest holds " + chest.countItem(Items.DIRT) + " dirt, " + chest.countItem(Items.SPRUCE_SAPLING) + " saplings");
+		});
+	}
+
+	/**
+	 * An empty bot by the giant tree, nearer to it than to an oak of four logs at (6, 1, 6) crowned with one leaf: the logs
+	 * for its axe come from the oak, not the giant, which it fells whole (#520). Passes at about tick 1360.
+	 */
+	@GameTest(maxTicks = 2800)
+	public void anEmptyBotTakesTheLogsForItsAxeFromAnotherTree(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.DIRT, 6), new ItemStack(Items.SPRUCE_SAPLING, 4));
+		helper.setBlock(6, 0, 6, Blocks.DIRT);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(6, y, 6, Blocks.OAK_LOG);
+		}
+		helper.setBlock(6, 5, 6, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, "8");
+		helper.succeedWhen(() -> {
+			felled(helper, bot);
+			helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(6, 1, 6));
 		});
 	}
 

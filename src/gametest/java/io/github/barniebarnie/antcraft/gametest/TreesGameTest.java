@@ -94,6 +94,22 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			+ at(helper, 6, 1, 6) + ") == " + tree(helper) + ")\n", List.of("None True"));
 	}
 
+	/** A wall of 73 logs on stone, all nearer the bot than the oak, does not hide the oak (#520). */
+	@GameTest(maxTicks = 40)
+	public void nextTreeFindsATreeBehindMoreThan64NearerLogs(GameTestHelper helper) {
+		for (int x = 0; x <= 4; x++) {
+			for (int z = 0; z <= 2; z++) {
+				for (int y = 1; y <= 5; y++) {
+					if (x != 0 || z != 0 || y > 2) {
+						helper.setBlock(x, y, z, Blocks.OAK_LOG);
+					}
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 0);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree(9) == " + tree(helper) + ")\n", List.of("True"));
+	}
+
 	/** Felling leaves no log standing, the four logs in the bot's inventory and the sapling it carried where the tree stood. */
 	@GameTest(maxTicks = 560)
 	public void fellLeavesNoLogsPicksThemUpAndPlantsASapling(GameTestHelper helper) {
