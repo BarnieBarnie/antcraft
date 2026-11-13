@@ -252,8 +252,7 @@ def options(kind, uses=1, tier=None, radius=32):
     lib.craft.MADE) with at how many to carry in all. ticks is cost.breaking for the uses, plus the walk to a chest or
     make_cost(tool, n, radius). ponytail: the uses of carried tools of another tier do not count toward making one."""
     material = MATERIAL.get(kind)
-    tiers = lib.tools.TIERS
-    ok = [t for t in tiers if tier in (None, "hand") or tiers.index(t) <= tiers.index(tier)]
+    ok, carried, need = lasting(kind, uses, tier)
 
     def work(t):
         return lib.cost.breaking(uses, material, t) if material else 0
@@ -261,9 +260,6 @@ def options(kind, uses=1, tier=None, radius=32):
     found = []
     if tier == "hand":
         found.append((work(None), "hand", None, None))
-    carried = [s for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok]
-    # The uses the carried tools leave to the rest: a worn tool is used up first.
-    need = uses - sum([lib.tools.uses_left(s) for s in carried])
     if carried and need <= 0:
         found.append((work(lib.tools.tier(carried[0])), "carried", lib.tools.tier(carried[0]), None))
     for chest, t in in_chests(kind, ok, need, radius):
@@ -279,6 +275,15 @@ def options(kind, uses=1, tier=None, radius=32):
         if ticks is not None:
             found.append((ticks + work(t), "make", t, n))
     return sorted(found, key=lambda o: o[0])
+
+
+def lasting(kind, uses, tier):
+    """(ok, carried, need): the tiers in ok are at least tier (all for None and "hand"), carried the tools of kind of
+    those the bot carries, best first, and need the uses they leave to the rest (a worn tool is used up first)."""
+    tiers = lib.tools.TIERS
+    ok = [t for t in tiers if tier in (None, "hand") or tiers.index(t) <= tiers.index(tier)]
+    carried = [s for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok]
+    return ok, carried, uses - sum([lib.tools.uses_left(s) for s in carried])
 
 
 def in_chests(kind, ok, uses, radius):
@@ -303,7 +308,17 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
     """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword") that lasts uses more blocks and
     is at least tier (None: any; "hand": none needed, so a tool only where it is cheaper than the hand), by the cheapest
     of options: carried, borrowed from a chest of lib.stock, or made with get; where one fails it tries the next.
+    Carried ones that last, else (tier not "hand") one that lasts in the nearest chest, it takes before costing the
+    options, which scans for each tier it could make.
     Gives result(): ok, no_tool where there is no way, or the reason the last tier to make failed with."""
+    ok, carried, need = lasting(kind, uses, tier)
+    if carried and need <= 0:
+        return lib.tools.hold(kind)
+    if tier != "hand":
+        # ponytail: the nearest chest's, however far within radius; making one may be cheaper (options weighs that).
+        for chest, t in in_chests(kind, ok, need, radius):
+            if take(chest, f"{t}_{kind}"):
+                return lib.tools.hold(kind)
     failed = None
     for ticks, how, t, at in options(kind, uses, tier, radius):
         if how == "hand":
@@ -311,10 +326,7 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
         if how == "carried":
             return lib.tools.hold(kind)
         if how == "chest":
-            tool = f"{t}_{kind}"
-            before = count(tool)
-            lib.stock.take_from(at, tool, 1)
-            if count(tool) > before:
+            if take(at, f"{t}_{kind}"):
                 return lib.tools.hold(kind)
         else:
             r = get(f"{t}_{kind}", at, radius)
@@ -322,3 +334,10 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
                 return lib.tools.hold(kind)
             failed = r
     return failed or result("no_tool", None, {f"{tier if tier not in (None, 'hand') else 'wooden'}_{kind}": 1})
+
+
+def take(chest, tool):
+    """Whether lib.stock.take_from took one tool from chest."""
+    before = count(tool)
+    lib.stock.take_from(chest, tool, 1)
+    return count(tool) > before

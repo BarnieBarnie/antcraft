@@ -89,6 +89,43 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A wooden and a stone pickaxe carried that last (#551): ensure_tool holds the stone one at once, without costing
+	 * options (replaced here by one that prints "costed").
+	 */
+	@GameTest(maxTicks = 20)
+	public void holdsALastingCarriedToolWithoutCosting(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			import lib.get
+			lib.get.options = lambda *a: print("costed") or []
+			r = lib.get.ensure_tool("pickaxe", 50, "stone", radius=8)
+			print(r["ok"], held().item)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True minecraft:stone_pickaxe"));
+	}
+
+	/** An iron pickaxe in a chest, none carried (#551): ensure_tool borrows it without costing options. */
+	@GameTest(maxTicks = 40)
+	public void borrowsALastingChestToolWithoutCosting(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.IRON_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		run(helper, bot, """
+			import lib.get
+			from lib.borrow import borrowed
+			lib.get.options = lambda *a: print("costed") or []
+			r = lib.get.ensure_tool("pickaxe", 50, radius=8)
+			print(r["ok"], held().item, [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True minecraft:iron_pickaxe [('iron_pickaxe', 1)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
 	 * Logs carried and no stone within radius 1 (the floor under it dirt): a stone pickaxe is the cheapest to make but
 	 * fails no_stone, so ensure_tool falls back to the wooden one (#518).
 	 */

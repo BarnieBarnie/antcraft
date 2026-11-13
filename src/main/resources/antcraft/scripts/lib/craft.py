@@ -74,10 +74,8 @@ def plan(item, n=1):
 
 
 def ensure_tool(kind, chests=None, upgrade=False):
-    """Kept for old scripts: holds the best tool of kind carried, else lib.get.ensure_tool(kind), the cheapest one
-    borrowed or made; chests and upgrade are not used."""
-    if count(f"#minecraft:{kind}s"):
-        return hold(kind)  # at once: lib.get.ensure_tool costs every way to make one first
+    """Kept for old scripts: lib.get.ensure_tool(kind), the best carried, else one borrowed or made; chests and upgrade
+    are not used."""
     import lib.get
     return lib.get.ensure_tool(kind)
 

@@ -28,7 +28,6 @@ import lib.shaft
 import lib.tools
 from lib.borrow import give_back
 import lib.stock
-from lib.result import result
 
 # The heights to mine at unless colony_memory["mineshaft"] says otherwise: iron, then diamonds.
 LEVELS = [16, -16, -54]
@@ -96,8 +95,7 @@ def supply(more, uses):
     Gives result(): ok, or the first that failed."""
     short = take_more(more)
     short.pop(PICKAXES, None)
-    # ensure_tool only where the carried ones do not last: costing every way to make one scans a lot.
-    r = result() if lib.tools.enough("pickaxe", uses) else lib.get.ensure_tool("pickaxe", uses, TIER)
+    r = lib.get.ensure_tool("pickaxe", uses, TIER)
     for item, n in short.items():
         if not r["ok"]:
             break

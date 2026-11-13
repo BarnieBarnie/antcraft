@@ -2,9 +2,9 @@
 # farms and stores the harvest in the Colony Core. It farms every building in
 # colony_memory["buildings"] whose blueprint has the role "farm" (colony.builder
 # adds what it builds there), and grows wheat, carrots, potatoes and beetroot from
-# the seeds the core holds. With soil to till and no hoe it takes the core's best;
-# with none there it gets one with lib.get.ensure_tool: borrowed from another chest
-# of the colony, or made, felling the colony's trees for it.
+# the seeds the core holds. With soil to till it gets a hoe with lib.get.ensure_tool:
+# carried, from the core or borrowed from another chest of the colony, or made,
+# felling the colony's trees for it.
 # What it harvests it replants with the same crop, and it keeps one of each
 # harvest that is its own seed; spare seeds and poisonous potatoes go into the
 # core. Run it on a colony member with `/antcraft bot run colony.farmer`.
@@ -62,13 +62,8 @@ from lib.get import ensure_tool
 while True:
     spots = farm_spots()
     till = len([s for s in spots if block(s).id in SOIL])
-    if till and not has("#minecraft:hoes"):
-        # The core's best hoe first, as lib.get costs every tier it could make, some 130 ticks.
-        for hoe in ["minecraft:iron_hoe", "minecraft:stone_hoe", "minecraft:wooden_hoe"]:
-            if take_up_to(hoe, 1, chests=[core()])["ok"]:
-                break
-        if not has("#minecraft:hoes"):
-            ensure_tool("hoe", till)
+    if till:
+        ensure_tool("hoe", till)
     bare = len([s for s in spots if block(s.up()).is_air])
     for c in CROPS:
         if bare > 0:
