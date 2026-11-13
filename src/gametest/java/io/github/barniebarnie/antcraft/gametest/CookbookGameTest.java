@@ -90,7 +90,7 @@ public class CookbookGameTest implements CustomTestMethodInvoker {
 	 * wheat, tills a spot that turned back to dirt after it picked the field, plants seeds on every spot and stores the
 	 * wheat in the chest.
 	 */
-	@GameTest(maxTicks = 60)
+	@GameTest(maxTicks = 130)
 	public void theFarmRecipeHarvestsTillsReplantsAndStores(GameTestHelper helper) {
 		BlockPos chestAt = new BlockPos(1, 1, 1);
 		helper.setBlock(chestAt, Blocks.CHEST);

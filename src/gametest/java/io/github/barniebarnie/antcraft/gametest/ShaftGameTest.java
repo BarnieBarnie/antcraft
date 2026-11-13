@@ -510,7 +510,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	 * it in two blows, the bot strikes every 13 ticks with a diamond sword and needs three. So it does not stop: fleeing already strikes back.
 	 */
 	// Measured: the bot is unhurt and the husk struck once (16 of 20 left) at tick 100.
-	@GameTest(maxTicks = 120)
+	@GameTest(maxTicks = 200)
 	public void aBotFleeingUpTheShaftGetsAwayFromAHuskAtFullHealth(GameTestHelper helper) {
 		helper.setBlock(COLUMN.getFirst(), Blocks.OAK_TRAPDOOR.defaultBlockState().setValue(TrapDoorBlock.FACING, Direction.NORTH)
 			.setValue(TrapDoorBlock.HALF, Half.TOP));

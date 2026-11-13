@@ -91,7 +91,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A {@code where} that rejects every base finds no tree; one that takes the oak's base finds it. */
-	@GameTest(maxTicks = 60)
+	@GameTest(maxTicks = 40)
 	public void nextTreeTakesOnlyABaseWherePasses(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, """
@@ -112,7 +112,6 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			+ at(helper, 6, 1, 6) + ") == " + tree(helper) + ")\n", List.of("None True"));
 	}
 
-	/** A wall of 73 logs on stone, all nearer the bot than the oak, does not hide the oak (#520). */
 	/** SCAFFOLD is read from the item tag the walks pillar and bridge with, so a data pack that changes the tag changes it. */
 	@GameTest(maxTicks = 40)
 	public void scaffoldIsTheScaffoldTagsItems(GameTestHelper helper) {
@@ -120,6 +119,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.SCAFFOLD == tag_items('#antcraft:scaffold_blocks'))\n", List.of("True"));
 	}
 
+	/** A wall of 73 logs on stone, all nearer the bot than the oak, does not hide the oak (#520). */
 	@GameTest(maxTicks = 40)
 	public void nextTreeFindsATreeBehindMoreThan64NearerLogs(GameTestHelper helper) {
 		for (int x = 0; x <= 4; x++) {
@@ -258,7 +258,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * tree_blocks of the giant spruce gives its 24 trunk logs and two branch logs, and not the spruce of three logs a block
 	 * west of it; is_giant says its trunk is 2x2 and the small one's not (#510).
 	 */
-	@GameTest(maxTicks = 100)
+	@GameTest(maxTicks = 40)
 	public void treeBlocksGivesTheLogsOfOneGiantTree(GameTestHelper helper) {
 		plantGiant(helper);
 		for (int y = 1; y <= 3; y++) {

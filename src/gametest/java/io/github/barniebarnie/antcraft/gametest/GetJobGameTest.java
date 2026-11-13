@@ -59,7 +59,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The item asked for, taken from a chest, is kept: only what was borrowed on the way goes back. */
-	@GameTest(maxTicks = 60)
+	@GameTest(maxTicks = 40)
 	public void keepsTheItemItTookFromAChest(GameTestHelper helper) {
 		BlockPos at = new BlockPos(6, 1, 3);
 		helper.setBlock(at, Blocks.CHEST);

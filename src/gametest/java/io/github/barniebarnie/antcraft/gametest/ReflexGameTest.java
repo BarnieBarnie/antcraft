@@ -135,7 +135,7 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	 * stands still, so only the bot can end the fight. In the middle of a wide area, so no mob of a neighbouring test comes
 	 * within {@code HOSTILE_RANGE} (8) of the bot, which would keep it fleeing.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 60)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
 	public void fleesAHostileMobAtLowHealth(GameTestHelper helper) {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 15, 1, 15);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);

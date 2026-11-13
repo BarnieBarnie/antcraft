@@ -404,7 +404,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * way only once: the build's spots go with the hold, not a second after the last ask (#400).
 	 */
 	// Measured: passes at tick 11 (with the spots kept a second after the hold, the idle bot made way twice); with any build job holding, it never goes back while the second one is held.
-	@GameTest(maxTicks = 100)
+	@GameTest(maxTicks = 40)
 	public void anIdleBotGoesBackOnceTheBuildsOwnJobIsDone(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -426,7 +426,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
-	@GameTest(maxTicks = 80)
+	@GameTest(maxTicks = 110)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);

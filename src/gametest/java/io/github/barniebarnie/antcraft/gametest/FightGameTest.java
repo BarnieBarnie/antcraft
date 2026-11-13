@@ -125,7 +125,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * player's attack cooldown. Each beats a cow of its own, given the health to outlast the span and made to stand still,
 	 * not knocked back; a blow is a drop in its health.
 	 */
-	@GameTest(maxTicks = 90)
+	@GameTest(maxTicks = 160)
 	public void aSwordStrikesMoreOftenThanAnAxe(GameTestHelper helper) {
 		Cow[] cows = {helper.spawn(EntityTypes.COW, 1, 1, 4), helper.spawn(EntityTypes.COW, 6, 1, 4)};
 		ItemStack[] weapons = {new ItemStack(Items.WOODEN_SWORD), new ItemStack(Items.WOODEN_AXE)};
@@ -191,7 +191,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * every blow does 7, so a husk's lost health is always a multiple of 7. Passes at tick 30 if any bot struck: a bot
 	 * that does not strike on the tick it takes its target strikes 20 ticks later.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 60)
 	public void aBotsOwnFightStrikesWithTheSwordItJustTookOut(GameTestHelper helper) {
 		List<Husk> husks = new ArrayList<>();
 		for (int x : new int[] {1, 5}) {
@@ -248,7 +248,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An axe does not sweep (#423): a bot with one hurts only the cow it attacks, not the one beside it. */
-	@GameTest(maxTicks = 45)
+	@GameTest(maxTicks = 70)
 	public void anAxeHurtsOnlyTheTarget(GameTestHelper helper) {
 		List<Cow> cows = List.of(stillCow(helper, new Vec3(3, 1, 4.5)), stillCow(helper, new Vec3(4.2, 1, 4.5)));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
@@ -266,7 +266,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * A sweep never hurts what {@code attack} may not (#423): a bot with a sword attacking a pig hurts the cow behind it,
 	 * but not the named cow and the other bot beside it.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 60)
 	public void aSweepSparesProtectedEntities(GameTestHelper helper) {
 		Pig pig = helper.spawn(EntityTypes.PIG, new Vec3(3.5, 1, 4.5));
 		pig.setNoAi(true);

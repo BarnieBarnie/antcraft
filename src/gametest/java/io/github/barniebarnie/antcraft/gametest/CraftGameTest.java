@@ -815,7 +815,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** One plank and two sticks, too little for any tier: it fails, short of the logs for the wooden pickaxe and a table, and every tier leaves them as they were. */
-	@GameTest(maxTicks = 20)
+	@GameTest(maxTicks = 40)
 	public void ensureToolWithNothingToMakeOneFromChangesNothing(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 1));

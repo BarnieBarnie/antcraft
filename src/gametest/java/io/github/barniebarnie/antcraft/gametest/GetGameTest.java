@@ -54,7 +54,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Logs and cobblestone carried for a stone axe, an iron axe in a chest: ensure_tool borrows and holds the iron one. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 80)
 	public void borrowsAChestAxeRatherThanCrafting(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.IRON_AXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);

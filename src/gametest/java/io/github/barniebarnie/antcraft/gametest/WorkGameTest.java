@@ -695,7 +695,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertItemEntityPresent(Items.NAUTILUS_SHELL));
 	}
 
-	@GameTest(maxTicks = 60)
+	@GameTest(maxTicks = 40)
 	public void pickUpTakesWhatAnotherBotDropped(GameTestHelper helper) {
 		AntBot dropper = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
@@ -984,7 +984,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 * As {@link #buildWalksKeepTheBlocksInPlace}, without dirt: no walk reaches the second cobblestone's spot without
 	 * breaking a block in place, so the bot breaks the stairs as a last resort, places them again and finishes.
 	 */
-	@GameTest(maxTicks = 80)
+	@GameTest(maxTicks = 50)
 	public void buildShutInByItsBlueprintWithoutDirtBreaksThroughAndFinishes(GameTestHelper helper) {
 		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
 		helper.setBlock(3, 2, 3, Blocks.OAK_STAIRS.defaultBlockState().setValue(StairBlock.FACING, Direction.EAST));
@@ -1066,7 +1066,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A second bot idling where the step's second cobblestone goes is asked to step aside, and the build finishes. */
-	@GameTest(maxTicks = 80)
+	@GameTest(maxTicks = 40)
 	public void buildMovesABotIdlingOnTheSite(GameTestHelper helper) {
 		helper.spawn(ModEntities.ANT_BOT, 4, 1, 3);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
@@ -1094,7 +1094,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The building bot standing where the step's second cobblestone goes, beside the first moves off it and finishes. */
-	@GameTest(maxTicks = 80)
+	@GameTest(maxTicks = 40)
 	public void buildMovesTheBuilderOffTheSite(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 3);
 		carryCobbleStep(bot, 2);

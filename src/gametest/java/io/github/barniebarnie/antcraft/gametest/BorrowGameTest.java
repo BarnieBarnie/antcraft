@@ -163,7 +163,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** One script borrows, the next gives back: the record is kept in memory between them. */
-	@GameTest(maxTicks = 60)
+	@GameTest(maxTicks = 40)
 	public void theRecordSurvivesARestart(GameTestHelper helper) {
 		Container chest = chest(helper, CHEST, new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.OAK_PLANKS, 10));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
