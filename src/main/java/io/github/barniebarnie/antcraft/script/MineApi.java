@@ -115,7 +115,7 @@ public final class MineApi {
 			long[] reads = {0};
 			LoadedWorldView world = new LoadedWorldView(new LevelWorldView(this.bot.level(), this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()),
 				pos -> ++reads[0] > 0 && loaded.loaded(pos) != null);
-			boolean done = step(this.search, world, reads, SenseApi.SCAN_BUDGET, this.bot.level().getGameTime());
+			boolean done = step(this.search, world, reads, SenseApi.SCAN_BUDGET, this.bot.level().getGameTime(), this.bot);
 			this.run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);
 			this.reads += reads[0];
 			return done;
@@ -139,12 +139,13 @@ public final class MineApi {
 	}
 
 	/**
-	 * Goes on with {@code search} in {@code world}, which counts its reads in {@code reads}, while {@code budget} has blocks
-	 * left in {@code tick}, and spends them; true once done. A found site also counts {@link #DESCRIBE_READS} for its dict,
-	 * and waits for a tick with that left.
+	 * Goes on with {@code search} in {@code world}, which counts its reads in {@code reads}, while {@code who}'s share of
+	 * {@code budget} in {@code tick} lasts (see PathBudget#share), and spends them; true once done. A found site also counts
+	 * {@link #DESCRIBE_READS} for its dict, and waits for a tick with that left.
 	 */
-	static boolean step(Mineshaft.SiteSearch search, WorldView world, long[] reads, PathBudget budget, long tick) {
-		boolean done = search.step(world, () -> reads[0] < budget.available(tick));
+	static boolean step(Mineshaft.SiteSearch search, WorldView world, long[] reads, PathBudget budget, long tick, Object who) {
+		int share = budget.share(tick, who);
+		boolean done = search.step(world, () -> reads[0] < share);
 		if (done && search.found().isPresent()) {
 			if (reads[0] + DESCRIBE_READS > budget.available(tick)) {
 				done = false;
@@ -153,6 +154,9 @@ public final class MineApi {
 			}
 		}
 		budget.spend(tick, (int) Math.min(reads[0], Integer.MAX_VALUE));
+		if (!done) {
+			budget.pause(tick, who);
+		}
 		return done;
 	}
 

@@ -6,6 +6,8 @@ import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.expect;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
+import io.github.barniebarnie.antcraft.script.SenseApi;
 import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -70,6 +72,22 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree() == " + tree(helper) + ", lib.trees.is_tree(Pos("
 			+ at(helper, 1, 1, 1) + ")))\n", List.of("True False"));
+	}
+
+	/**
+	 * A tree near the bot is found without reading the whole sphere of radius 32 (some 137,000 blocks of the block search
+	 * budget every bot shares): next_tree looks within 8 blocks first, then 16, then its radius (#527).
+	 */
+	@GameTest(maxTicks = 40)
+	public void nextTreeLooksNearTheBotFirst(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree() == " + tree(helper) + ")\n", List.of("True"));
+		ScriptRun run = bot.getScript();
+		helper.onEachTick(() -> {
+			if (run.executed() > 20_000 / SenseApi.BLOCKS_PER_INSTRUCTION) {
+				helper.fail("read too much: " + run.executed() + " instructions, " + run.action());
+			}
+		});
 	}
 
 	/** A {@code where} that rejects every base finds no tree; one that takes the oak's base finds it. */

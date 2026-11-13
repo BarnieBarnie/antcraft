@@ -49,19 +49,28 @@ def crowned(base):
 def next_tree(radius=32, where=None, remnants=False, around=None):
     """The base of the nearest tree within radius of around (None: the bot) whose base passes where (a function, None:
     any), or None. With remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
-    # Only a log with no log under it is a base, so each trunk costs one is_tree. The nearest 64 logs first: a scan reads
-    # the whole sphere unless it reaches its limit, from a block budget every bot shares, so only where all 64 are no tree
-    # does it look again, up to 4096, past a forest's nearer logs (#520).
+    # Only a log with no log under it is a base, so each trunk costs one is_tree. A scan reads the whole sphere unless it
+    # reaches its limit, from a block budget every bot shares (some 2,000 blocks at radius 8, 137,000 at 32), so it looks
+    # within 8 blocks first, then 16, then radius (#527), and at the nearest 64 logs first: only where all 64 are no tree
+    # does it look again, up to 4096, past a forest's nearer logs (#520). Each scan's logs begin with the last one's, as
+    # every scan reads blocks in the same order, so only the new ones are checked.
     done = 0
-    for limit in [64, 4096]:
-        found = scan(LOGS, radius=radius, limit=limit, around=around)
+    r = 8 if radius > 8 else radius
+    limit = 64
+    while True:
+        found = scan(LOGS, radius=r, limit=limit, around=around)
         for base in found[done:]:
             if not is_log(base.down()) and (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
                 return base
-        if len(found) < limit:
-            return None
         done = len(found)
-    return None
+        if len(found) == limit:
+            if limit == 4096:
+                return None
+            limit = 4096
+        elif r == radius:
+            return None
+        else:
+            r = radius if r * 2 > radius else r * 2
 
 
 def fell(base, replant=True):

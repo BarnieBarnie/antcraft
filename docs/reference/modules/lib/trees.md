@@ -4,7 +4,7 @@ Finding and felling trees. A module of the mod's default library: `import lib.tr
 
 ## `next_tree(radius=32, where=None, remnants=False, around=None)`
 
-The base, the lowest log, of the nearest tree within `radius` blocks of `around` (a [`Pos`](../../types/pos.md); `None`: the bot), or `None`. `where` is a function a base must pass, such as `in_colony` from `colony.common`; `None` takes any. With `remnants`, what is left of a tree whose bottom logs were taken (`is_remnant`) counts as a tree too. It looks at the nearest 64 logs and, only where none of them is a tree that passes, at up to 4096, so a tree behind a dense forest's nearer logs is found too without every search reading the whole radius. It pauses only while its [`scan`](../../world/scan.md) does.
+The base, the lowest log, of the nearest tree within `radius` blocks of `around` (a [`Pos`](../../types/pos.md); `None`: the bot), or `None`. `where` is a function a base must pass, such as `in_colony` from `colony.common`; `None` takes any. With `remnants`, what is left of a tree whose bottom logs were taken (`is_remnant`) counts as a tree too. It looks within 8 blocks first, then 16, then `radius`, so a tree near by costs a few thousand blocks of the [block search budget](../../world/scan.md) rather than the 137,000 of the whole radius of 32; where there is none, it reads some 14% more than one search of the whole radius. Within each, it looks at the nearest 64 logs and, only where none of them is a tree that passes, at up to 4096, so a tree behind a dense forest's nearer logs is found too without every search reading the whole radius. It pauses only while its [`scan`](../../world/scan.md) does.
 
 ```python
 import lib.trees

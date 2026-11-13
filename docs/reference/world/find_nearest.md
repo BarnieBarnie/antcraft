@@ -20,7 +20,7 @@ The [`Pos`](../types/pos.md) of the matching block nearest to the bot (or to `ar
 
 ## Pauses
 
-Only when the search cannot finish this tick: it shares a server-wide budget of 32768 blocks read a tick with every other block search (`scan`, `mineshaft`), and goes on over the next ticks while the script waits. A full search of radius 32 reads some 137,000 blocks.
+Only when the search cannot finish this tick: it shares a server-wide budget of 32768 blocks read a tick with every other block search (`scan`, `mineshaft`), and goes on over the next ticks while the script waits. A search that goes on gets an even part of each next tick with the others that go on, so another bot's big search does not hold a small one up for more than a tick. A full search of radius 32 reads some 137,000 blocks.
 
 ## Cost
 

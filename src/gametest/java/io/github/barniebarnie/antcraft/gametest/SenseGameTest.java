@@ -207,6 +207,30 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * One bot's whole-sphere scan does not hold up another bot's small search: the bots searching share each tick's
+	 * scan budget, so the small one is done while the big one still reads (#527).
+	 */
+	@GameTest(maxTicks = 10)
+	public void aSmallSearchIsNotHeldUpByAnotherBotsBigScan(GameTestHelper helper) {
+		AntBot big = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		AntBot small = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		helper.setBlock(5, 1, 6, Blocks.EMERALD_BLOCK);
+		ScriptRun scan = run(helper, big, "print(len(scan('sponge', radius=32)))\n");
+		ScriptRun find = run(helper, small, "print(find_nearest('emerald_block', radius=1))\n");
+		helper.onEachTick(() -> {
+			String action = scan.action();
+			if (helper.getTick() >= 2 && (action == null || !action.startsWith("scan"))) {
+				helper.fail("the big scan was done first; the small search: " + find.state() + " " + find.action());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(find.state() == ScriptRun.State.FINISHED, "find_nearest " + find.state() + " " + find.action());
+			helper.assertTrue(BotScripts.log(small, Output.Level.PRINT).equals(List.of(printed(helper, 5, 1, 6))),
+				"printed " + BotScripts.log(small, Output.Level.PRINT));
+		});
+	}
+
 	@GameTest(maxTicks = 10)
 	public void aBadSelectorFailsTheScriptAtItsLine(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

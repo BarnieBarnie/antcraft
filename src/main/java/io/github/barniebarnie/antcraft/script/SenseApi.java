@@ -41,7 +41,8 @@ import org.jspecify.annotations.Nullable;
 public final class SenseApi {
 	/**
 	 * How many blocks all scripts together may read in block searches in one server tick, shared like
-	 * {@link PathBudget#SERVER}. A search of radius 16 reads about 17,000 blocks, one of radius 32 about 137,000. Measured
+	 * {@link PathBudget#SERVER}, but a search that goes on gets an even part of the next tick with the others that do
+	 * ({@link PathBudget#share}), so one bot's big search cannot hold the others up until it is done (#527). A search of radius 16 reads about 17,000 blocks, one of radius 32 about 137,000. Measured
 	 * with the bot benchmark (#322): all of it, used by 30 bots searching without end, costs about 2 ms a tick.
 	 */
 	public static final int BLOCKS_PER_TICK = 32_768;
@@ -318,11 +319,13 @@ public final class SenseApi {
 			long time = this.bot.level().getGameTime();
 			this.loaded = new LoadedBlocks(this.bot.level());
 			int before = this.scan.reads();
-			boolean done = this.scan.step(SCAN_BUDGET.available(time));
+			boolean done = this.scan.step(SCAN_BUDGET.share(time, this.bot));
 			int reads = this.scan.reads() - before;
 			SCAN_BUDGET.spend(time, reads);
-			this.run.charge((reads + BLOCKS_PER_INSTRUCTION - 1) / BLOCKS_PER_INSTRUCTION);
-			return done;
+			if (!done) {
+				SCAN_BUDGET.pause(time, this.bot);
+			}
+			this.run.charge((reads + BLOCKS_PER_INSTRUCTION - 1) / BLOCKS_PER_INSTRUCTION);			return done;
 		}
 
 		@Override

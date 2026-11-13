@@ -21,7 +21,7 @@ A list of [`Pos`](../types/pos.md), nearest first (to `around` when given), at m
 
 ## Pauses
 
-Only when the search cannot finish this tick: it shares a server-wide budget of 32768 blocks read a tick with every other block search (`find_nearest`, `mineshaft`), and goes on over the next ticks while the script waits. A search of radius 16 reads about 17,000 blocks, one of radius 32 about 137,000.
+Only when the search cannot finish this tick: it shares a server-wide budget of 32768 blocks read a tick with every other block search (`find_nearest`, `mineshaft`), and goes on over the next ticks while the script waits. A search that goes on gets an even part of each next tick with the others that go on, so another bot's big search does not hold a small one up for more than a tick. A search of radius 16 reads about 17,000 blocks, one of radius 32 about 137,000.
 
 ## Cost
 

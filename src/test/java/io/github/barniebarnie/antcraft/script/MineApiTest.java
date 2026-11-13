@@ -146,18 +146,18 @@ class MineApiTest {
 		int plenty = 1_000_000;
 		PathBudget budget = new PathBudget(plenty);
 		Mineshaft.SiteSearch search = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
-		assertTrue(MineApi.step(search, world, reads, budget, 0));
+		assertTrue(MineApi.step(search, world, reads, budget, 0, "bot"));
 		long searched = reads[0] - MineApi.DESCRIBE_READS;
 		assertEquals(plenty - searched - MineApi.DESCRIBE_READS, budget.available(0));
 
 		reads[0] = 0;
 		budget.spend(1, (int) (plenty - searched - MineApi.DESCRIBE_READS + 1));
 		Mineshaft.SiteSearch short_ = new Mineshaft.SiteSearch(NEAR, LEVELS, Mineshaft.DEFAULT_BRANCHES_PER_SIDE, Mineshaft.DEFAULT_BRANCH_LENGTH, List.of());
-		assertFalse(MineApi.step(short_, world, reads, budget, 1), "found with too little budget left for its dict");
+		assertFalse(MineApi.step(short_, world, reads, budget, 1, "bot"), "found with too little budget left for its dict");
 		assertTrue(short_.found().isPresent());
 		assertEquals(searched, reads[0]);
 		reads[0] = 0;
-		assertTrue(MineApi.step(short_, world, reads, budget, 2));
+		assertTrue(MineApi.step(short_, world, reads, budget, 2, "bot"));
 		assertEquals(MineApi.DESCRIBE_READS, reads[0]);
 		assertEquals(plenty - MineApi.DESCRIBE_READS, budget.available(2));
 	}
