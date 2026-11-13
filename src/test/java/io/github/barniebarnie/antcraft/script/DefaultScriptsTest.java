@@ -99,4 +99,9 @@ class DefaultScriptsTest {
 			assertTrue(bundled.containsKey("colony/" + role + ".py"), "bundled " + bundled.keySet());
 		}
 	}
+
+	@Test
+	void theGiantTreeJobIsBundled() {
+		assertTrue(DefaultScripts.bundled().containsKey("jobs/giant_tree.py"), "bundled " + DefaultScripts.bundled().keySet());
+	}
 }

@@ -2,9 +2,9 @@
 
 Finding and felling trees. A module of the mod's default library: `import lib.trees`, then `lib.trees.fell(lib.trees.next_tree())` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/trees.py`, written with [`scan`](../../world/scan.md), [`block`](../../world/block.md), [`mine`](../../blocks/mine.md), [`pick_up`](../../inventory/pick_up.md) and [`place`](../../blocks/place.md). The colony lumberjack (`colony.lumberjack`) is built on it.
 
-## `next_tree(radius=32, where=None, remnants=False)`
+## `next_tree(radius=32, where=None, remnants=False, around=None)`
 
-The base, the lowest log, of the nearest tree within `radius` blocks, or `None`. `where` is a function a base must pass, such as `in_colony` from `colony.common`; `None` takes any. With `remnants`, what is left of a tree whose bottom logs were taken (`is_remnant`) counts as a tree too. It pauses only while its [`scan`](../../world/scan.md) does.
+The base, the lowest log, of the nearest tree within `radius` blocks of `around` (a [`Pos`](../../types/pos.md); `None`: the bot), or `None`. `where` is a function a base must pass, such as `in_colony` from `colony.common`; `None` takes any. With `remnants`, what is left of a tree whose bottom logs were taken (`is_remnant`) counts as a tree too. It pauses only while its [`scan`](../../world/scan.md) does.
 
 ```python
 import lib.trees
@@ -13,6 +13,7 @@ def near_home(p):
     return p.distance(home()) < 16
 
 tree = lib.trees.next_tree(where=near_home)
+giant = lib.trees.next_tree(where=lib.trees.is_giant, around=Pos(100, 64, -20))
 ```
 
 ## `is_tree(base)`

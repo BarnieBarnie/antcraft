@@ -86,6 +86,14 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			""".formatted(tree(helper), tree(helper)), List.of("None True"));
 	}
 
+	/** Within 2 blocks of the bot there is no tree; within 2 of a position by the oak, the oak (#513). */
+	@GameTest(maxTicks = 40)
+	public void nextTreeSearchesAroundAPosition(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree(2), lib.trees.next_tree(2, around=Pos"
+			+ at(helper, 6, 1, 6) + ") == " + tree(helper) + ")\n", List.of("None True"));
+	}
+
 	/** Felling leaves no log standing, the four logs in the bot's inventory and the sapling it carried where the tree stood. */
 	@GameTest(maxTicks = 560)
 	public void fellLeavesNoLogsPicksThemUpAndPlantsASapling(GameTestHelper helper) {
@@ -184,7 +192,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * dirt, with a branch of two logs that each touch the last only at a corner: (5, 4, 2) and (6, 5, 1). No leaves, so
 	 * nothing hides a log.
 	 */
-	private static void plantGiant(GameTestHelper helper) {
+	static void plantGiant(GameTestHelper helper) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				helper.setBlock(x, 0, z, Blocks.STONE);
@@ -243,7 +251,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
-	private static void assertGiantFelled(GameTestHelper helper) {
+	static void assertGiantFelled(GameTestHelper helper) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				for (int y = 1; y < 8; y++) {
@@ -267,16 +275,21 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 1400)
 	public void logsFellsAGiantTreeItNeedsAllOfWhole(GameTestHelper helper) {
 		plantGiant(helper);
-		for (int x = 2; x <= 5; x++) {
-			for (int z = 2; z <= 5; z++) {
-				helper.setBlock(x, 7, z, Blocks.SPRUCE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
-			}
-		}
+		crownGiant(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 6));
 		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING, 4));
 		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(26, kind='spruce_log')\nprint(r['ok'], count('spruce_log'), count('dirt'))\n",
 			List.of("True 26 6"), () -> assertGiantFelled(helper));
+	}
+
+	/** Persistent spruce leaves over the giant spruce of {@link #plantGiant}, so it is a tree. */
+	static void crownGiant(GameTestHelper helper) {
+		for (int x = 2; x <= 5; x++) {
+			for (int z = 2; z <= 5; z++) {
+				helper.setBlock(x, 7, z, Blocks.SPRUCE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+			}
+		}
 	}
 }

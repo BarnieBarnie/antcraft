@@ -78,6 +78,7 @@ nav = [
     "cookbook/mining-loop.md",
     "cookbook/stock-chest.md",
     "cookbook/memory.md",
+    "cookbook/giant-tree.md",
   ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md", "design/library.md"] },

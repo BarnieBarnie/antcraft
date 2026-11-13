@@ -47,10 +47,10 @@ def crowned(base):
     return False
 
 
-def next_tree(radius=32, where=None, remnants=False):
-    """The base of the nearest tree within radius whose base passes where (a function, None: any), or None. With
-    remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
-    for log in scan(LOGS, radius=radius):
+def next_tree(radius=32, where=None, remnants=False, around=None):
+    """The base of the nearest tree within radius of around (None: the bot) whose base passes where (a function, None:
+    any), or None. With remnants, what is left of a tree whose bottom logs were taken (is_remnant) counts as a tree too."""
+    for log in scan(LOGS, radius=radius, around=around):
         base = trunk_base(log)
         if (where is None or where(base)) and (is_tree(base) or remnants and is_remnant(base)):
             return base
