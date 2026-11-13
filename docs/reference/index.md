@@ -165,7 +165,19 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`.
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/gather`](modules/lib/gather.md): `make(item, n=1, radius=32)`, `gather(item, n=1, radius=32)`, `stone(n, radius=32)`, `exposed_stone(radius=32, skip=None)`.
+- [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
+
+### Writing library functions
+
+The library follows a few rules, so that its functions chain into bigger ones (the plan is on [The script library](../design/library.md)). Keep to them in a module of your own too.
+
+- **One function, one job.** A function does one thing and says in its docstring what it needs and what it gives: `fell(base)` fells a tree; it does not fetch an axe.
+- **Finders and doers.** As with senses and actions, a *finder* takes no ticks and gives a value or `None`, such as `next_tree()`. A *doer* takes ticks and gives a [`result()`](modules/lib/result.md) dict: `ok`, `reason`, `at`, `missing`.
+- **Preconditions are the caller's.** A doer assumes what it needs (an axe held, a pickaxe of the right tier, room in the inventory) and fails with a reason when it is not there, instead of fetching it. Fetching what is needed is left to one place, the caller or a resolver, so each function stays small.
+- **Doers that obtain things ensure totals.** "Get one stone pickaxe" means "carry at least one": called again, it does nothing, so running it twice (after a reload, a death or a [`retry`](modules/lib/retry.md)) is safe. Low-level gatherers such as `logs(n)` take "n more", as they are only called through one that ensures totals.
+- **Layers import downwards.** The modules form layers, from primitives such as `lib/result`, `lib/area` and `lib/retry` up to skills such as `lib/trees` and `lib/shaft`. A module imports only modules of a layer below its own, never one of its own layer or above, so there are no import cycles (a cycle fails the script, see [When an import fails](../language/modules.md#when-an-import-fails)).
+- **Tested and documented.** Each function has a game test or a unit test, and each module a page under `reference/modules/lib/`.
 
 ## Notes on actions
 

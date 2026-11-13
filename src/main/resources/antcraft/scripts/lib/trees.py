@@ -5,7 +5,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-from lib.shaft import result
+from lib.result import result
 
 LOGS = "#minecraft:logs"
 SAPLINGS = "#minecraft:saplings"

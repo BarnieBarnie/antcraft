@@ -6,7 +6,7 @@
 # delete it and the default comes back when the server starts.
 
 import lib.retry
-from lib.shaft import result
+from lib.result import result
 
 
 def box(a, b):

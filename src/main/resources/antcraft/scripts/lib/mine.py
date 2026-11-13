@@ -10,7 +10,8 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-from lib.shaft import dig, seal, put_block, result, FILL, TORCHES
+from lib.result import result
+from lib.shaft import dig, seal, put_block, FILL, TORCHES
 
 # What mining ore gives, which goes into the landing chest.
 ORES = ["minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecraft:raw_gold", "minecraft:redstone",
@@ -36,7 +37,7 @@ def site(r=0):
 
 
 def report(reason=None, at=None, missing=None, sealed=None):
-    """What mine_level gives: lib.shaft's result, and sealed, the fluid blocks it sealed, where a branch stopped."""
+    """What mine_level gives: lib.result's result, and sealed, the fluid blocks it sealed, where a branch stopped."""
     r = result(reason, at, missing)
     r["sealed"] = sealed or []
     return r

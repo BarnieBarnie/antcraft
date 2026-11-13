@@ -9,7 +9,7 @@
 # delete it and the default comes back when the server starts.
 
 from lib.inv import take_all
-from lib.shaft import result
+from lib.result import result
 
 # smelt loads at most a stack a call.
 STACK = 64

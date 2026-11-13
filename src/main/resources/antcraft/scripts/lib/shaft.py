@@ -12,6 +12,8 @@
 # delete it and the default comes back when the server starts.
 
 import lib.retry
+# What dig_shaft gives; scripts may still import it from here (from lib.shaft import result).
+from lib.result import result
 
 LADDER = "minecraft:ladder"
 # What shuts the hatch, so mobs and players do not fall in: bots open it to climb through. It sits in the top half
@@ -26,11 +28,6 @@ FILL = ["cobblestone", "cobbled_deepslate", "dirt", "stone", "deepslate", "andes
 AGAIN = ("interrupted", "timeout", "blocked")
 # How often a block is tried, as gravel may keep falling in.
 TRIES = 8
-
-
-def result(reason=None, at=None, missing=None):
-    """What dig_shaft gives: ok, the reason it stopped (as actions give), where, and the items it lacks."""
-    return {"ok": reason is None, "reason": reason, "at": at, "missing": missing or {}}
 
 
 def gave_up(r, p):

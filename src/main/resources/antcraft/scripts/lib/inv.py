@@ -5,7 +5,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-from lib.shaft import result
+from lib.result import result
 
 # What store_all never puts away: tools and food.
 KEPT = ["#minecraft:pickaxes", "#minecraft:axes", "#minecraft:shovels", "#minecraft:hoes", "#minecraft:swords", "#c:foods"]

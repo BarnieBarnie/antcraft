@@ -7,7 +7,7 @@
 
 import lib.craft
 import lib.trees
-from lib.shaft import result
+from lib.result import result
 
 COBBLESTONE = "minecraft:cobblestone"
 # What mining gives cobblestone from.
