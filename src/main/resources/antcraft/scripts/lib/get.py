@@ -286,11 +286,11 @@ def lasting(kind, uses, tier):
     return ok, carried, uses - sum([lib.tools.uses_left(s) for s in carried])
 
 
-def in_chests(kind, ok, uses, radius):
+def in_chests(kind, ok, uses, radius, scanning=True):
     """(chest, tier) for each tool of kind of a tier in ok that lasts uses in the chests of lib.stock within radius,
-    nearest chest first."""
+    nearest chest first; without scanning only the core and memory["chests"] (lib.stock.chests)."""
     found = []
-    for chest in lib.stock.chests(radius):
+    for chest in lib.stock.chests(radius, scanning):
         for s in container(chest) or []:
             t = lib.tools.tier(s)
             if t in ok and matches(s, f"#minecraft:{kind}s") and lib.tools.uses_left(s) >= uses:
@@ -316,9 +316,11 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
         return lib.tools.hold(kind)
     if tier != "hand":
         # ponytail: the nearest chest's, however far within radius; making one may be cheaper (options weighs that).
-        for chest, t in in_chests(kind, ok, need, radius):
-            if take(chest, f"{t}_{kind}"):
-                return lib.tools.hold(kind)
+        # The core and memory["chests"] first, which need no scan: a scan of the sphere waits on a budget all bots share.
+        for scanning in (False, True):
+            for chest, t in in_chests(kind, ok, need, radius, scanning):
+                if take(chest, f"{t}_{kind}"):
+                    return lib.tools.hold(kind)
     failed = None
     for ticks, how, t, at in options(kind, uses, tier, radius):
         if how == "hand":
