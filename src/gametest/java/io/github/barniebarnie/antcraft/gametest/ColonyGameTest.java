@@ -729,11 +729,40 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * With no hoe in the core, a farmer by a small oak fells it, makes a hoe with lib.get and tills and plants its farm
+	 * (#544).
+	 */
+	@GameTest(maxTicks = 1100)
+	public void aFarmerWithNoHoeMakesOne(GameTestHelper helper) {
+		helper.setBlock(7, 0, 1, Blocks.DIRT);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(7, y, 1, Blocks.OAK_LOG);
+		}
+		helper.setBlock(7, 4, 1, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		List<BlockPos> spots = farm(helper, false, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
+				new ItemStack(Items.WHEAT_SEEDS, 24));
+		AntBot farmer = helper.findOneEntity(ModEntities.ANT_BOT);
+		helper.succeedWhen(() -> {
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.FARMLAND, spot);
+				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
+			}
+			helper.assertTrue(farmer.getInventory().countItem(Items.WOODEN_HOE) + (farmer.getMainHandItem().is(Items.WOODEN_HOE) ? 1 : 0) > 0,
+					"the farmer has no wooden hoe");
+		});
+	}
+
+	private static List<BlockPos> farm(GameTestHelper helper, BlockState ripe, int ripeSpots, ItemStack... items) {
+		return farm(helper, true, ripe, ripeSpots, items);
+	}
+
+	/**
 	 * Lays a 5 by 5 farm of dirt with water in its middle at (1, 0, 1), with {@code ripe} on farmland on its first
 	 * {@code ripeSpots} work spots (row by row from (1, 0, 1)), notes it in colony_memory["buildings"] of a colony with its
-	 * core at (7, 1, 7), puts a wooden hoe and {@code items} in the core and starts colony.farmer; gives the work spots.
+	 * core at (7, 1, 7), puts a wooden hoe (where {@code hoe}) and {@code items} in the core and starts colony.farmer; gives
+	 * the work spots.
 	 */
-	private static List<BlockPos> farm(GameTestHelper helper, BlockState ripe, int ripeSpots, ItemStack... items) {
+	private static List<BlockPos> farm(GameTestHelper helper, boolean hoe, BlockState ripe, int ripeSpots, ItemStack... items) {
 		List<BlockPos> spots = new ArrayList<>();
 		for (int z = 1; z <= 5; z++) {
 			for (int x = 1; x <= 5; x++) {
@@ -758,7 +787,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		buildings.items.add(farm);
 		colony.memory().put("buildings", buildings);
 		Container core = container(helper, 7, 1, 7);
-		core.setItem(0, new ItemStack(Items.WOODEN_HOE));
+		if (hoe) {
+			core.setItem(0, new ItemStack(Items.WOODEN_HOE));
+		}
 		for (int i = 0; i < items.length; i++) {
 			core.setItem(i + 1, items[i]);
 		}

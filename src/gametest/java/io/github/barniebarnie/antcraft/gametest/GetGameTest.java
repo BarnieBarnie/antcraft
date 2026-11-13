@@ -53,6 +53,22 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "True 1", "True True"));
 	}
 
+	/**
+	 * A hoe for 20 tilled blocks from two oak logs carried (#544): ensure_tool makes and holds a wooden one. colony.farmer's
+	 * game tests take one from the core.
+	 */
+	@GameTest(maxTicks = 240)
+	public void ensuresAHoe(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		run(helper, bot, """
+			from lib.get import ensure_tool
+			r = ensure_tool("hoe", 20, radius=8)
+			print(r["ok"], held().item)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True minecraft:wooden_hoe"));
+	}
+
 	/** Logs and cobblestone carried for a stone axe, an iron axe in a chest: ensure_tool borrows and holds the iron one. */
 	@GameTest(maxTicks = 80)
 	public void borrowsAChestAxeRatherThanCrafting(GameTestHelper helper) {
