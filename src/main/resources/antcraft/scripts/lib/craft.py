@@ -181,7 +181,7 @@ def smelt_here(item, n=1, fuel=None):
         stations = ["furnace"] if table_near() else ["crafting_table", "furnace"]
         k = min(n, count(carried[0]))
         # The fuel smelt burns: fuel, else the best carried, as smelt picks it.
-        for f in [fuel] if fuel else ["coal", "charcoal", "#minecraft:logs"]:
+        for f in [fuel] if fuel else ["coal", "charcoal", "#minecraft:logs", "#minecraft:planks"]:
             burnt = [s.item for s in inventory() if matches(s, f)]
             if burnt:
                 # ponytail: one for each 1.5 smelted, as wood burns, the only fuel a table or furnace takes; at most what is carried, so a short fuel is smelt's to report.

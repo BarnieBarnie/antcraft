@@ -413,8 +413,8 @@ public final class CraftApi {
 	/**
 	 * {@code smelt(item, n=1, furnace=None, fuel=None)}: loads up to {@code n} of a carried item {@code item} selects into
 	 * the furnace, blast furnace or smoker at {@code furnace}, walked to, or one within reach with a recipe for it; burns
-	 * the fuel {@code fuel} selects, or else the best carried fuel (coal, charcoal, then logs), adding one at a time as
-	 * the fire goes out; waits by it until the input is smelted and takes the output. Its value is how many items it took
+	 * the fuel {@code fuel} selects, or else the best carried fuel (coal, charcoal, then logs and planks), adding one at a time as
+	 * the fire goes out, the best still carried each time; waits by it until the input is smelted and takes the output. Its value is how many items it took
 	 * out.
 	 */
 	private static Object smelt(ScriptRun run, AntBot bot, Selector selector, long n, @Nullable Pos furnace, @Nullable Selector fuelSelector,
@@ -453,10 +453,7 @@ public final class CraftApi {
 				return type != null && !cooked(level, type, new ItemStack(input)).isEmpty();
 			});
 			if (at != null) {
-				// Only now: bestFuel reads the inventory once for each fuel item (#347).
-				Predicate<ItemStack> fuel = given == null ? bestFuel(level, bot) : given;
-				return run.start(new Smelt(run, bot, at, input, (int) Math.min(n, input.getDefaultMaxStackSize()),
-					fuel.and(burnable -> burnable.has(DataComponents.COOKING_FUEL)), describe), call);
+				return run.start(new Smelt(run, bot, at, input, (int) Math.min(n, input.getDefaultMaxStackSize()), given, describe), call);
 			}
 		}
 		if (smeltable) {
@@ -519,13 +516,15 @@ public final class CraftApi {
 		/** What this furnace makes of the input, known once the bot is at it. */
 		private Item output = Items.AIR;
 		private final int n;
-		private final Predicate<ItemStack> fuel;
+		/** What to burn; null: the best fuel carried, looked up again each time the fire goes out. */
+		private final @Nullable Predicate<ItemStack> fuel;
 		private final String describe;
+		private @Nullable Item lastFuel;
 		private boolean loaded;
 		private int outputSeen;
 		private int idle;
 
-		Smelt(ScriptRun run, AntBot bot, Pos furnace, Item input, int n, Predicate<ItemStack> fuel, String describe) {
+		Smelt(ScriptRun run, AntBot bot, Pos furnace, Item input, int n, @Nullable Predicate<ItemStack> fuel, String describe) {
 			super(run, bot, furnace);
 			this.input = input;
 			this.n = n;
@@ -566,7 +565,7 @@ public final class CraftApi {
 			if (amount <= 0) {
 				return Result.fail(Result.BLOCKED);
 			}
-			if (!isLit(furnace) && furnace.getItem(FUEL).isEmpty() && BotHands.find(this.bot, this.fuel) == null) {
+			if (!isLit(furnace) && furnace.getItem(FUEL).isEmpty() && BotHands.find(this.bot, this.fuel()) == null) {
 				return Result.fail(Result.MISSING_INGREDIENTS);
 			}
 			int taken = Storage.take(carried, this.input, amount);
@@ -596,21 +595,37 @@ public final class CraftApi {
 			return null;
 		}
 
-		/** Puts one more fuel item in when the fire is out and the fuel slot empty; false when the bot has none left. */
+		/**
+		 * What to burn now: the fuel asked for, else the best fuel carried, so once one runs out the next goes in. Only
+		 * when the fire is out: bestFuel reads the inventory once for each fuel item (#347).
+		 */
+		private Predicate<ItemStack> fuel() {
+			Predicate<ItemStack> fuel = this.fuel != null ? this.fuel : bestFuel(this.level, this.bot);
+			return fuel.and(burnable -> burnable.has(DataComponents.COOKING_FUEL));
+		}
+
+		/**
+		 * Puts one more fuel item in when the fuel slot is empty and the fire is out or on its last tick, so the furnace
+		 * lights it as the fire goes out and the smelting loses no progress (a plan's fuel is counted to the tick); false
+		 * when the fire is out and the bot has none left.
+		 */
 		private boolean refuel(AbstractFurnaceBlockEntity furnace) {
-			if (isLit(furnace) || !furnace.getItem(FUEL).isEmpty()) {
+			boolean lit = isLit(furnace) && furnace.litTimeRemaining > 1;
+			if (lit || !furnace.getItem(FUEL).isEmpty()) {
 				return true;
 			}
 			Container carried = BotHands.carried(this.bot);
+			Predicate<ItemStack> fuel = this.fuel();
 			for (int i = 0; i < carried.getContainerSize(); i++) {
 				ItemStack stack = carried.getItem(i);
-				if (!stack.isEmpty() && this.fuel.test(stack)) {
+				if (!stack.isEmpty() && fuel.test(stack)) {
+					this.lastFuel = stack.getItem();
 					furnace.setItem(FUEL, carried.removeItem(i, 1));
 					furnace.setChanged();
 					return true;
 				}
 			}
-			return false;
+			return isLit(furnace);
 		}
 
 		/** Takes the output out, and on a failure what is left of the input; the result fails with {@code reason} if given. */
@@ -627,6 +642,10 @@ public final class CraftApi {
 			}
 			if (reason != null && furnace.getItem(INPUT).is(this.input)) {
 				furnace.setItem(INPUT, HopperBlockEntity.addItem(null, BotHands.carried(this.bot), furnace.getItem(INPUT).copy(), null));
+			}
+			// The fuel put in ahead that the fire did not need.
+			if (this.lastFuel != null && furnace.getItem(FUEL).is(this.lastFuel)) {
+				furnace.setItem(FUEL, HopperBlockEntity.addItem(null, BotHands.carried(this.bot), furnace.getItem(FUEL).copy(), null));
 			}
 			furnace.setChanged();
 			swing(this.bot, this.pos);

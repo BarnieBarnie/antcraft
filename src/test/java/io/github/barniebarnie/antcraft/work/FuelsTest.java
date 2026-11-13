@@ -19,18 +19,18 @@ class FuelsTest {
 	}
 
 	@Test
-	void coalFirstThenCharcoalThenLogs() {
-		List<TaskPlanner.Fuel<Item>> order = Fuels.order(Set.of(Items.OAK_LOG, Items.BIRCH_LOG));
+	void coalFirstThenCharcoalThenLogsAndPlanks() {
+		List<TaskPlanner.Fuel<Item>> order = Fuels.order(Set.of(Items.OAK_LOG, Items.BIRCH_LOG), Set.of(Items.OAK_PLANKS));
 
 		assertEquals(List.of(
 			new TaskPlanner.Fuel<>(Set.of(Items.COAL), 1600),
 			new TaskPlanner.Fuel<>(Set.of(Items.CHARCOAL), 1600),
-			new TaskPlanner.Fuel<>(Set.of(Items.OAK_LOG, Items.BIRCH_LOG), 300)), order);
+			new TaskPlanner.Fuel<>(Set.of(Items.OAK_LOG, Items.BIRCH_LOG, Items.OAK_PLANKS), 300)), order);
 	}
 
 	@Test
 	void oneCoalSmeltsEightItems() {
-		TaskPlanner.Fuel<Item> coal = Fuels.order(Set.of()).getFirst();
+		TaskPlanner.Fuel<Item> coal = Fuels.order(Set.of(), Set.of()).getFirst();
 
 		assertEquals(1, coal.itemsFor(8));
 		assertEquals(2, coal.itemsFor(9));

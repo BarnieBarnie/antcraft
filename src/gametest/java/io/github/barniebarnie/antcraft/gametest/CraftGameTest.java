@@ -883,6 +883,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True 1 1 2 0 2"), () -> helper.assertTrue(furnace.getItem(2).isEmpty(), "output left in the furnace"));
 	}
 
+	/** One log and one plank burn three items: once the log is out, the plank, the next best fuel carried, goes in (#512). */
+	@GameTest(maxTicks = 1300)
+	public void smeltBurnsTheNextFuelWhenTheBestRunsOut(GameTestHelper helper) {
+		furnace(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 3));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 1));
+		expect(helper, bot, "r = smelt('raw_iron', 3, furnace=" + furnaceAt(helper) + ")\n"
+				+ "print(r.ok, r.value, count('iron_ingot'), count('oak_log'), count('birch_planks'))\n",
+			List.of("True 3 3 0 0"));
+	}
+
 	/** {@code fuel} picks what to burn; without {@code furnace}, one within reach does. */
 	@GameTest(maxTicks = 450)
 	public void smeltBurnsTheFuelAskedForInAFurnaceWithinReach(GameTestHelper helper) {

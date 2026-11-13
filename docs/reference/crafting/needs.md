@@ -53,7 +53,7 @@ No, it is done at once. It only plans: it crafts and gathers nothing.
 
 It works through the game's recipes, data packs included, down to raw items: those of the item tag `antcraft:gatherable` (logs, cobblestone, raw iron, coal, sand and the like), and anything no recipe makes. What the bot carries is used first at every level, so with two sticks carried a stone pickaxe needs only the cobblestone, and the steps are only the pickaxe. Where a recipe takes any of several items (any planks for sticks), it picks the one that needs the least gathering, then the fewest crafts, and the first of them on a tie (oak).
 
-A smelting step also needs fuel: it counts on burning what the bot carries (coal, then charcoal, then logs), and what is short is in `gather`, as coal, unless making charcoal from carried logs uses up less, which adds that smelting step. `smelt` loads at most a stack a call, so a `"smelt"` step of more than 64 takes several calls.
+A smelting step also needs fuel: it counts on burning what the bot carries (coal, then charcoal, then logs and planks), and what is short is in `gather`, as coal, unless making charcoal from carried logs uses up less, which adds that smelting step. `smelt` loads at most a stack a call, so a `"smelt"` step of more than 64 takes several calls.
 
 An item no recipe makes and that is not in the tag, such as an elytra, is in `gather` itself. An `n` outside 1 to 1000000, or an item the game does not know, in `item` or `also`, stops the script with an error.
 

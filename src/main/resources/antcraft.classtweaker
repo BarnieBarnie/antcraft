@@ -3,3 +3,5 @@ classTweaker	v1	official
 accessible	field	net/minecraft/world/level/levelgen/structure/templatesystem/StructureTemplate	palettes	Ljava/util/List;
 # BotHands.strike brings a weapon equipped on the tick of a blow into the bot's attributes before it lands (#425).
 accessible	method	net/minecraft/world/entity/LivingEntity	detectEquipmentUpdates	()V
+# smelt puts the next fuel in on the fire's last tick, so the furnace relights without losing progress (#512).
+accessible	field	net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity	litTimeRemaining	I

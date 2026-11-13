@@ -13,7 +13,7 @@ Smelts carried items in a furnace, blast furnace or smoker, waits by it and take
 | `item` | [selector](../types/selectors.md) | | the carried input, such as `"raw_iron"` or `"#minecraft:logs"` |
 | `n` | int | `1` | how many to load, at most a stack (64 for most items) |
 | `furnace` | [`Pos`](../types/pos.md) or tuple | `None` | the furnace, blast furnace or smoker to walk to; `None` uses one within reach that cooks `item` |
-| `fuel` | [selector](../types/selectors.md) | `None` | what to burn; `None` burns the best fuel carried: coal, then charcoal, then logs |
+| `fuel` | [selector](../types/selectors.md) | `None` | what to burn; `None` burns the best fuel carried: coal, then charcoal, then logs and planks, and once that runs out the next best carried |
 
 ## Returns
 

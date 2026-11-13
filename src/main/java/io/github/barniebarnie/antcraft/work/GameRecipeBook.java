@@ -14,6 +14,7 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.tags.ItemTags;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingInput;
@@ -81,8 +82,12 @@ public final class GameRecipeBook implements TaskPlanner.RecipeBook<Item> {
 					.add(new TaskPlanner.Recipe<>(result.getItem(), result.getCount(), Map.of(options, 1), true));
 			}
 		}
-		this.fuels = Fuels.order(StreamSupport.stream(BuiltInRegistries.ITEM.getTagOrEmpty(ItemTags.LOGS).spliterator(), false)
-			.map(Holder::value).collect(Collectors.toCollection(LinkedHashSet::new)));
+		this.fuels = Fuels.order(tag(ItemTags.LOGS), tag(ItemTags.PLANKS));
+	}
+
+	private static Set<Item> tag(TagKey<Item> tag) {
+		return StreamSupport.stream(BuiltInRegistries.ITEM.getTagOrEmpty(tag).spliterator(), false)
+			.map(Holder::value).collect(Collectors.toCollection(LinkedHashSet::new));
 	}
 
 	private static Set<Item> options(Ingredient ingredient) {

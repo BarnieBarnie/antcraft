@@ -81,6 +81,7 @@ nav = [
     "cookbook/memory.md",
     "cookbook/giant-tree.md",
     "cookbook/bootstrap.md",
+    "cookbook/get.md",
   ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md", "design/library.md"] },
