@@ -264,6 +264,24 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	}
 
 	@GameTest(maxTicks = 10)
+	public void stacksGiveTheDamageAndMaxDamageOfATool(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ItemStack pickaxe = new ItemStack(Items.STONE_PICKAXE);
+		pickaxe.setDamageValue(10);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, pickaxe);
+		helper.setBlock(5, 1, 3, Blocks.CHEST);
+		Container chest = (Container) helper.getBlockEntity(new BlockPos(5, 1, 3), net.minecraft.world.level.block.entity.ChestBlockEntity.class);
+		ItemStack axe = new ItemStack(Items.WOODEN_AXE);
+		axe.setDamageValue(3);
+		chest.setItem(0, axe);
+		chest.setItem(1, new ItemStack(Items.OAK_LOG, 2));
+		ScriptRun run = run(helper, bot, "print(held().damage, held().max_damage)\n"
+			+ "print([(s.item, s.damage, s.max_damage) for s in container(" + at(helper, 5, 1, 3) + ")])\n");
+		succeedWhenPrinted(helper, bot, run, List.of("10 131",
+			"[('minecraft:wooden_axe', 3, 59), ('minecraft:oak_log', 0, 0)]"));
+	}
+
+	@GameTest(maxTicks = 10)
 	public void timeAndIsDayReadTheWorldsTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		ScriptRun run = run(helper, bot, "t = time()\nprint(isinstance(t, int) and 0 <= t < 24000, is_day())\n");

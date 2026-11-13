@@ -224,7 +224,8 @@ public final class SenseApi {
 	}
 
 	static Stack stack(ItemStack stack) {
-		return new Stack(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount());
+		return new Stack(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), stack.getDamageValue(),
+			stack.getMaxDamage());
 	}
 
 	private static BlockInfo block(BlockState state, Pos pos) {

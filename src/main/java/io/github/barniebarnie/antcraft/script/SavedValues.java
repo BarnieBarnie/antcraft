@@ -45,7 +45,7 @@ public final class SavedValues implements VmState.HostCodec {
 		return switch (value) {
 			case Pos p -> p.dimension() == null ? PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z())
 				: PyTuple.of(Pos.TYPE, p.x(), p.y(), p.z(), p.dimension());
-			case Stack s -> PyTuple.of(Stack.TYPE, s.item(), s.count());
+			case Stack s -> PyTuple.of(Stack.TYPE, s.item(), s.count(), s.damage(), s.maxDamage());
 			case BlockInfo b -> PyTuple.of(BlockInfo.TYPE, b.id(), b.pos(), b.air(), b.fluid(), new PyTuple(new ArrayList<>(b.tags())),
 				new PyTuple(b.state().entrySet().stream().<Object>map(e -> PyTuple.of(e.getKey(), e.getValue())).toList()));
 			case Result r -> r.detail() == null ? PyTuple.of(Result.TYPE, r.ok(), r.reason() == null ? PyNone.NONE : r.reason(), r.value())
@@ -71,7 +71,9 @@ public final class SavedValues implements VmState.HostCodec {
 		List<Object> f = ((PyTuple) saved).items();
 		return switch ((String) f.getFirst()) {
 			case Pos.TYPE -> new Pos((Long) f.get(1), (Long) f.get(2), (Long) f.get(3), f.size() > 4 ? (String) f.get(4) : null);
-			case Stack.TYPE -> new Stack((String) f.get(1), (Long) f.get(2));
+			// a Stack saved before #503 has no damage
+			case Stack.TYPE -> f.size() > 3 ? new Stack((String) f.get(1), (Long) f.get(2), (Long) f.get(3), (Long) f.get(4))
+				: new Stack((String) f.get(1), (Long) f.get(2));
 			case BlockInfo.TYPE -> new BlockInfo((String) f.get(1), (Pos) f.get(2), (Boolean) f.get(3), (Boolean) f.get(4),
 					((PyTuple) f.get(5)).items().stream().map(String.class::cast).toList(), f.size() > 6 ? state((PyTuple) f.get(6)) : Map.of());
 			case Result.TYPE -> new Result((Boolean) f.get(1), f.get(2) instanceof String reason ? reason : null, f.get(3), f.size() > 4 ? (String) f.get(4) : null);
