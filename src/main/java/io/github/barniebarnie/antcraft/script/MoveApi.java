@@ -158,8 +158,8 @@ public final class MoveApi {
 	/** A path being planned for {@code reachable}, a slice of nodes at a time. */
 	public interface Plan {
 		/**
-		 * Runs the search for as many nodes as this tick has left in the server's path budget, which every bot's path
-		 * follower shares (see PathBudget); returns how many it expanded.
+		 * Runs the search for the bot's share of the nodes this tick has left in the server's path budget, which every
+		 * bot's path follower shares (see PathBudget#share); returns how many it expanded.
 		 */
 		int run();
 

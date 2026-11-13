@@ -281,21 +281,24 @@ public class PathFollower {
 	}
 
 	/**
-	 * Runs the search begun for as many nodes as this tick has left for paths (see {@link PathBudget}): with many bots
-	 * planning at once, the bot waits where it stands for the next tick's. Once found, follows the path. Returns false
-	 * when the search found no way at all.
+	 * Runs the search begun for the bot's share of the nodes this tick has left for paths (see {@link PathBudget#share}):
+	 * with many bots planning at once, the bot waits where it stands for the next tick's. Once found, follows the path.
+	 * Returns false when the search found no way at all.
 	 */
 	private boolean search(ServerLevel level) {
 		PathFinder.Search search = this.search;
 		LevelWorldView world = this.searchWorld;
 		long tick = level.getServer().getTickCount();
-		int nodes = PathBudget.SERVER.available(tick);
-		if (search == null || world == null || nodes <= 0) {
+		if (search == null || world == null) {
 			return true;
 		}
-		PathBudget.SERVER.spend(tick, TickProfiler.time("path.find", () -> search.run(nodes)));
+		int nodes = PathBudget.SERVER.share(tick, this.bot);
+		if (nodes > 0) {
+			PathBudget.SERVER.spend(tick, TickProfiler.time("path.find", () -> search.run(nodes)));
+		}
 		Optional<Path> found = search.path();
 		if (found.isEmpty()) {
+			PathBudget.SERVER.pause(tick, this.bot);
 			return true;
 		}
 		this.search = null;

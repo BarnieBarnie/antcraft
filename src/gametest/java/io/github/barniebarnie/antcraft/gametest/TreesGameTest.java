@@ -90,6 +90,41 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** low_log finds the oak's base near the bot without reading the whole sphere of radius 32, as next_tree does (#532). */
+	@GameTest(maxTicks = 40)
+	public void lowLogLooksNearTheBotFirst(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.low_log() == " + tree(helper) + ")\n", List.of("True"));
+		ScriptRun run = bot.getScript();
+		helper.onEachTick(() -> {
+			if (run.executed() > 20_000 / SenseApi.BLOCKS_PER_INSTRUCTION) {
+				helper.fail("read too much: " + run.executed() + " instructions, " + run.action());
+			}
+		});
+	}
+
+	/** The oak's logs are in KEEP, so low_log passes over its base by the bot for a log further off (#532). */
+	@GameTest(maxTicks = 40)
+	public void lowLogSkipsATreeInKeep(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.OAK_LOG);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		expect(helper, bot, "import lib.trees\nfirst = lib.trees.low_log() == " + tree(helper) + "\n"
+			+ "for p in lib.trees.tree_blocks(" + tree(helper) + "):\n    lib.trees.KEEP[p] = True\n"
+			+ "print(first, lib.trees.low_log() == Pos" + at(helper, 1, 1, 1) + ")\n", List.of("True True"));
+	}
+
+	/**
+	 * fell_whole looks for the scaffold it placed in a sphere around the middle of the tree's logs and 3 blocks round them,
+	 * not around the base out to the top log: for a trunk 22 high, radius 15 instead of 24, some 14,000 blocks instead of
+	 * 58,000 a scan (#532).
+	 */
+	@GameTest(maxTicks = 40)
+	public void theScaffoldAreaOfATallTrunkIsAroundItsMiddle(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "import lib.trees\nc, r = lib.trees.scaffold_area([Pos(10, 64, 10) + (0, y, 0) for y in range(22)])\n"
+			+ "print(c == Pos(10, 74, 10), r)\n", List.of("True 15"));
+	}
+
 	/** A {@code where} that rejects every base finds no tree; one that takes the oak's base finds it. */
 	@GameTest(maxTicks = 40)
 	public void nextTreeTakesOnlyABaseWherePasses(GameTestHelper helper) {

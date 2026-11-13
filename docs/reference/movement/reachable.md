@@ -19,7 +19,7 @@ Whether the bot could walk from where it stands to within `near` blocks of `pos`
 
 ## Pauses
 
-Only when the server's pathfinding budget of 2000 nodes a tick, which every bot's walking shares, runs out before the plan is done: the plan goes on over the next ticks and the script waits.
+Only when the server's pathfinding budget of 2000 nodes a tick, which every bot's walking shares, runs out before the plan is done: the plan goes on over the next ticks and the script waits. A plan that goes on gets an even part of each next tick with the others that go on, so another bot's long plan does not hold a short one up for more than a tick.
 
 ## Cost
 

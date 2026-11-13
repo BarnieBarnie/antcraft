@@ -156,12 +156,15 @@ final class BotBody implements MoveApi.Body {
 			public int run() {
 				// The follower's clock: the budget is the one every bot's path follower shares.
 				long tick = BotBody.this.level().getServer().getTickCount();
-				int nodes = PathBudget.SERVER.available(tick);
-				if (nodes <= 0 || this.done()) {
+				if (this.done()) {
 					return 0;
 				}
-				int expanded = TickProfiler.time("path.plan", () -> search.run(nodes));
+				int nodes = PathBudget.SERVER.share(tick, BotBody.this.bot);
+				int expanded = nodes <= 0 ? 0 : TickProfiler.time("path.plan", () -> search.run(nodes));
 				PathBudget.SERVER.spend(tick, expanded);
+				if (!this.done()) {
+					PathBudget.SERVER.pause(tick, BotBody.this.bot);
+				}
 				return expanded;
 			}
 

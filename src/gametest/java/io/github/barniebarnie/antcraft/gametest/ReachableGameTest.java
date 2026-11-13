@@ -97,6 +97,41 @@ public class ReachableGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * One bot's long plan does not hold up another bot's short one: the plans that go on share each next tick, so the short
+	 * one is done while the long one still plans (#532). The long one, with blocks to climb and bridge with, to the pocket
+	 * from across an area 24 wide, searches the most nodes a plan may (4000), two ticks of the whole path budget.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 20)
+	public void aShortPlanIsNotHeldUpByAnotherBotsLongOne(GameTestHelper helper) {
+		for (int x = 0; x < 24; x++) {
+			for (int z = 0; z < 24; z++) {
+				if (x >= 8 || z >= 8) {
+					helper.setBlock(x, 0, z, Blocks.STONE);
+				}
+			}
+		}
+		AntBot far = helper.spawn(ModEntities.ANT_BOT, 20, 1, 20);
+		far.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 64));
+		AntBot near = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ScriptRun longPlan = run(helper, far, "print(reachable(" + at(helper, 5, 1, 5) + "))\n");
+		ScriptRun shortPlan = run(helper, near, "print(reachable(" + at(helper, 2, 1, 1) + "))\n");
+		boolean[] planning = {false};
+		helper.onEachTick(() -> {
+			String action = longPlan.action();
+			if (action != null && action.startsWith("reachable")) {
+				planning[0] = true;
+			} else if (planning[0] && shortPlan.state() != ScriptRun.State.FINISHED) {
+				helper.fail("the long plan was done first; the short plan: " + shortPlan.state() + " " + shortPlan.action());
+			}
+		});
+		helper.succeedWhen(() -> {
+			assertPrinted(helper, near, shortPlan, List.of("True"));
+			String action = longPlan.action();
+			helper.assertTrue(action != null && action.startsWith("reachable"), "the long plan is still planning: " + action);
+		});
+	}
+
+	/**
 	 * A plan the server's path budget cannot finish this tick goes on over the next ticks, pausing the script, and costs
 	 * the script an instruction per node. The test area is walled in, so no plan in it runs long: the test spends the
 	 * budget of the bot's first tick itself. With blocks to climb and bridge with, the plan to the pocket searches some

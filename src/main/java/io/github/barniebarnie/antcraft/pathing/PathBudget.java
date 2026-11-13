@@ -6,8 +6,9 @@ import java.util.Set;
 /**
  * How many path nodes all bots together may expand in one server tick, so many bots planning at once, such as each
  * failing to reach an item no bot can get to, spread their searches over the next ticks rather than stall one
- * (see {@link PathFinder.Search#run}). A bot whose search is cut short waits where it stands for the next tick's nodes.
- * Server thread only.
+ * (see {@link PathFinder.Search#run}). A bot whose search is cut short waits where it stands for the next tick's nodes,
+ * and gets an even part of them with the other searches that go on ({@link #share}, #532), so one bot's long plan cannot
+ * hold up another's short one until it is done. Server thread only.
  */
 public final class PathBudget {
 	/**

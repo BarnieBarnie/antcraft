@@ -31,7 +31,7 @@ Mines the trunk at `base` from the ground up, picks up the logs and saplings tha
 
 Gets logs that `kind` selects (a block id such as `"spruce_log"`, or a tag; any log by default) from trees within `radius` blocks until the bot carries `n` more, one tree at a time, the nearest first, so it does not walk to and fro between trees. Where it needs all of a tree's logs (`tree_blocks`), it fells the whole tree with `fell_whole`, replanting it; where it needs fewer, it mines only the bottom ones of one trunk column it needs, from the ground, and leaves the rest standing. What is left of such a tree it takes first the next time (`next_tree(remnants=True)`), before it starts on another tree. A log wall or cabin is no tree, so it is left alone; a tree it cannot get a log from is skipped, and so is a tree with its base in `KEEP`. Of a 2x2 tree it needs only part of, it takes a column at a time.
 
-`KEEP` is a dict of positions `logs` leaves alone, empty by default. A script that means to fell a tree itself puts the tree's logs in it while it gets its tools, so [`get`](get.md) or [`ensure_tool`](get.md) do not take the logs for an axe from that tree, and clears it after:
+`KEEP` is a dict of positions `logs` and `low_log` leave alone, empty by default. A script that means to fell a tree itself puts the tree's logs in it while it gets its tools, so [`get`](get.md) or [`ensure_tool`](get.md) do not take the logs for an axe from that tree, and clears it after:
 
 ```python
 for p in lib.trees.tree_blocks(base):
@@ -70,7 +70,7 @@ Where to stand to mine the logs in the list `blocks`: few spots that together re
 
 Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (a `spruce_sapling` for spruce logs, else any it carries) on each spot of the trunk's bottom that is air over dirt: four for a 2x2 trunk, so a giant tree grows again.
 
-It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes those back, but only of the kinds it carried when it started (`SCAFFOLD`).
+It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes those back, but only of the kinds it carried when it started (`SCAFFOLD`), and only within `scaffold_area` of the tree's logs, which it scans before and after.
 
 - **Returns** a dict: `ok`, `reason` (`None`, `out_of_reach` with `at` a log it could not mine, or `no_space` with `at` a log whose drops did not fit).
 - **Pauses** yes, while it walks, mines, picks up and plants.
@@ -89,7 +89,11 @@ if base is not None and lib.trees.is_giant(base):
 
 ## `low_log(radius=32, skip=None)`
 
-The lowest log within `radius`, the nearest among those, leaving out the positions in the dict `skip`; `None` if there is none.
+The lowest log within 8 blocks, else within 16, else within `radius`, the nearest among those, leaving out the positions in the dict `skip` and in `KEEP`; `None` if there is none. Looking near first, a log by the bot costs some 2,000 blocks of the [block search budget](../../world/scan.md) rather than the 137,000 of the whole radius of 32.
+
+## `scaffold_area(blocks)`
+
+The middle (a [`Pos`](../../types/pos.md)) and radius, at most 32, of a sphere that holds the box around the positions in `blocks`, 3 blocks wider on each side: where `fell_whole` looks for the scaffold it placed. For a trunk 22 high it is a radius of 15 around the trunk's middle, some 14,000 blocks a scan, where one around the base out to the top log reads 58,000. Done at once.
 
 ## `is_remnant(base)`, `crowned(base)`
 

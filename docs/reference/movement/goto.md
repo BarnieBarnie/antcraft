@@ -24,7 +24,7 @@ Yes, until the bot gets there or gives up.
 
 ## Cost
 
-One instruction, the call itself. Planning the way draws on the server's pathfinding budget of 2000 nodes a tick, which every bot's walking shares, not on the script's budget.
+One instruction, the call itself. Planning the way draws on the server's pathfinding budget of 2000 nodes a tick, which every bot's walking shares, not on the script's budget; a plan that goes on to the next tick gets an even part of it with the others that go on.
 
 ## Description
 
