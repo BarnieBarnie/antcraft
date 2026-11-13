@@ -158,6 +158,21 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * placed_scaffold() gives where the run's walks placed scaffold, the cobblestone goto pillared out of the pit with, and
+	 * takes it, so a second call gives none (#533).
+	 */
+	@GameTest(maxTicks = 60)
+	public void placedScaffoldGivesWhatGotoPlacedOnce(GameTestHelper helper) {
+		AntBot bot = inABedrockPit(helper);
+		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
+		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, placed_scaffold() == [Pos" + pos(helper.absolutePos(new BlockPos(2, 1, 2)))
+			+ "], placed_scaffold())\n");
+		failOnError(helper, bot);
+
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True []")), "printed " + printed(bot)));
+	}
+
+	/**
 	 * Far from every other test, on a bridge high in the air:the bot's own chunk ticket keeps the three chunks around it
 	 * loaded, and the target lies in the fourth chunk on, which nothing loads until {@code goto} does. The bot crosses the
 	 * last three blocks on cobblestone of its own. The bot's entities load in the background once it is put on the far spot,

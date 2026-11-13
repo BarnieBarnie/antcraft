@@ -38,7 +38,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code tag_items}, {@code held},
  * {@code block}, {@code surface}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
- * {@code time}, {@code is_day}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
+ * {@code time}, {@code is_day}, {@code placed_scaffold}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
  */
 public final class SenseApi {
@@ -200,6 +200,10 @@ public final class SenseApi {
 		natives.register("is_day", call -> {
 			Args.bind("is_day", call, 0);
 			return bot(run, call).level().isBrightOutside();
+		});
+		natives.register("placed_scaffold", 10, call -> {
+			Args.bind("placed_scaffold", call, 0);
+			return new PyList(new ArrayList<>(run.takePlaced()));
 		});
 	}
 

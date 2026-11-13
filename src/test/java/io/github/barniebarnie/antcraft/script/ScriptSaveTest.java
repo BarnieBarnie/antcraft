@@ -196,11 +196,28 @@ class ScriptSaveTest {
 		ScriptLibrary library = library("w.py", "print(ARGS)\nwait(10)\n");
 		FakeHost host = new FakeHost();
 		BotLog log = new BotLog(100);
-		ScriptRun.Saved old = new ScriptRun.Saved("w", List.of("a", "b"), null, 0, new long[0], null, null);
+		ScriptRun.Saved old = new ScriptRun.Saved("w", List.of("a", "b"), null, 0, new long[0], null, null, new long[0]);
 		ScriptRun run = ScriptRun.resume(roundTrip(old), library.load("w"), host, log, Memory.create(), library);
 		runFor(run, host, 1, 2000);
 		assertEquals(List.of("[0 info] w starts again from the top", "[0 print] ['a', 'b']"), lines(log));
 		assertEquals(List.of("a", "b"), run.args());
+	}
+
+	/**
+	 * The scaffold the run's walks placed ({@code placed_scaffold()}, #533) outlives a save, so a fell_whole resumed after a
+	 * reload still takes back what it placed before; taking it leaves none.
+	 */
+	@Test
+	void theScaffoldARunPlacedOutlivesASave() throws IOException {
+		ScriptLibrary library = library("w.py", "wait(10)\n");
+		FakeHost host = new FakeHost();
+		BotLog log = new BotLog(100);
+		ScriptRun run = runFor(new ScriptRun("w", library.load("w"), List.of(), host, log, Memory.create(), library), host, 2, 2000);
+		run.notePlaced(new Pos(1, 2, 3, "minecraft:overworld"));
+		run.notePlaced(new Pos(1, 3, 3, "minecraft:overworld"));
+		ScriptRun resumed = ScriptRun.resume(roundTrip(run.save()), library.load("w"), host, log, Memory.create(), library);
+		assertEquals(List.of(new Pos(1, 2, 3), new Pos(1, 3, 3)), resumed.takePlaced());
+		assertEquals(List.of(), resumed.takePlaced());
 	}
 
 	@Test

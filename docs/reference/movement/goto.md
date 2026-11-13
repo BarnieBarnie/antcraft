@@ -28,7 +28,7 @@ One instruction, the call itself. Planning the way draws on the server's pathfin
 
 ## Description
 
-The bot plans its way as it walks, and digs through, pillars up and bridges over what is in the way, with what it carries; what it digs goes into its inventory. It pillars and bridges with the blocks of the item tag `antcraft:scaffold_blocks` it carries, but none that `keep` selects: the pathfinder plans with the rest only, so with nothing else to build with it digs its way or fails with `unreachable`. Only `goto` takes `keep`: the actions that walk to their target first (`mine`, `put`, `take`...) take short walks, so a script that must keep its blocks can `goto` near the target first. It never walks into a nether portal or digs at its frame: going through a portal is [`travel`](travel.md).
+The bot plans its way as it walks, and digs through, pillars up and bridges over what is in the way, with what it carries; what it digs goes into its inventory. It pillars and bridges with the blocks of the item tag `antcraft:scaffold_blocks` it carries, but none that `keep` selects: the pathfinder plans with the rest only, so with nothing else to build with it digs its way or fails with `unreachable`. Only `goto` takes `keep`: the actions that walk to their target first (`mine`, `put`, `take`...) take short walks, so a script that must keep its blocks can `goto` near the target first. It never walks into a nether portal or digs at its frame: going through a portal is [`travel`](travel.md). Where its walks placed blocks, [`placed_scaffold`](placed_scaffold.md) tells, so a script can take them back.
 
 Before each stretch of 48 blocks, `goto` loads the chunks the straight line towards `pos` crosses, and those within three of them, and waits for them to load (see [Chunk loading](../../features/scripts.md#chunk-loading)); chunks never generated are generated, as for a player walking there. If they are not loaded within a minute, or with the config option `botsLoadChunks` off one is not loaded, it fails with `not_loaded`.
 
@@ -66,4 +66,4 @@ r = goto(home(), keep="cobblestone")
 
 ## See also
 
-[`reachable`](reachable.md), [`travel`](travel.md), [`pos`](pos.md), [`home`](home.md), [`Result` and reason codes](../types/result.md#reason-codes), [Chunk loading](../../features/scripts.md#chunk-loading).
+[`reachable`](reachable.md), [`travel`](travel.md), [`placed_scaffold`](placed_scaffold.md), [`pos`](pos.md), [`home`](home.md), [`Result` and reason codes](../types/result.md#reason-codes), [Chunk loading](../../features/scripts.md#chunk-loading).

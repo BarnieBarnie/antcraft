@@ -10,6 +10,7 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.SenseApi;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -19,6 +20,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@code lib/trees.py} (#450): {@code next_tree} finds the base of an oak at (5, 1, 5), four logs on dirt under persistent
@@ -111,18 +113,6 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		expect(helper, bot, "import lib.trees\nfirst = lib.trees.low_log() == " + tree(helper) + "\n"
 			+ "for p in lib.trees.tree_blocks(" + tree(helper) + "):\n    lib.trees.KEEP[p] = True\n"
 			+ "print(first, lib.trees.low_log() == Pos" + at(helper, 1, 1, 1) + ")\n", List.of("True True"));
-	}
-
-	/**
-	 * fell_whole looks for the scaffold it placed in a sphere around the middle of the tree's logs and 3 blocks round them,
-	 * not around the base out to the top log: for a trunk 22 high, radius 15 instead of 24, some 14,000 blocks instead of
-	 * 58,000 a scan (#532).
-	 */
-	@GameTest(maxTicks = 40)
-	public void theScaffoldAreaOfATallTrunkIsAroundItsMiddle(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
-		expect(helper, bot, "import lib.trees\nc, r = lib.trees.scaffold_area([Pos(10, 64, 10) + (0, y, 0) for y in range(22)])\n"
-			+ "print(c == Pos(10, 74, 10), r)\n", List.of("True 15"));
 	}
 
 	/** A {@code where} that rejects every base finds no tree; one that takes the oak's base finds it. */
@@ -326,14 +316,47 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			() -> assertGiantFelled(helper));
 	}
 
+	/**
+	 * A dirt block another player puts next to the giant spruce while the bot fells it is left standing: fell_whole takes
+	 * back only the scaffold its walks placed (placed_scaffold()), not every new block of the scaffold kinds (#533).
+	 */
+	@GameTest(maxTicks = 1400)
+	public void fellWholeLeavesDirtSomeoneElsePlacedMeanwhile(GameTestHelper helper) {
+		plantGiant(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 6));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING, 4));
+		BlockPos theirs = new BlockPos(7, 1, 7);
+		// Once the bot placed its first scaffold block, so after anything fell_whole looks at before it walks.
+		AtomicBoolean placed = new AtomicBoolean();
+		helper.onEachTick(() -> {
+			if (bot.getInventory().countItem(Items.DIRT) < 6 && !placed.getAndSet(true)) {
+				helper.setBlock(theirs, Blocks.DIRT);
+			}
+		});
+		expect(helper, bot, "import lib.trees\nr = lib.trees.fell_whole(Pos" + at(helper, 3, 1, 3) + ")\n"
+			+ "print(r['ok'], count('spruce_log'), count('dirt'), count('spruce_sapling'))\n", List.of("True 26 6 0"), () -> {
+				helper.assertBlockPresent(Blocks.DIRT, theirs);
+				assertGiantFelled(helper, theirs);
+			});
+	}
+
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
 	static void assertGiantFelled(GameTestHelper helper) {
+		assertGiantFelled(helper, null);
+	}
+
+	/** As {@link #assertGiantFelled(GameTestHelper)}, but the dirt at {@code dirt} stays. */
+	static void assertGiantFelled(GameTestHelper helper, @Nullable BlockPos dirt) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				for (int y = 1; y < 8; y++) {
 					BlockPos p = new BlockPos(x, y, z);
 					helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, p);
-					helper.assertBlockNotPresent(Blocks.DIRT, p);
+					if (!p.equals(dirt)) {
+						helper.assertBlockNotPresent(Blocks.DIRT, p);
+					}
 				}
 			}
 		}

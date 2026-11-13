@@ -321,9 +321,16 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.opened;
 	}
 
-	/** Records a block placed while following a path, so other bots leave it alone while this bot is near it. */
+	/**
+	 * Records a block placed while following a path, so other bots leave it alone while this bot is near it, and for the
+	 * running script's {@code placed_scaffold()} (#533).
+	 */
 	public void addPathScaffold(BlockPos pos) {
 		this.pathScaffold.add(pos.immutable());
+		ScriptRun running = this.isRunningScript() ? this.script : null;
+		if (running != null) {
+			running.notePlaced(new Pos(pos.getX(), pos.getY(), pos.getZ(), this.level().dimension().identifier().toString()));
+		}
 	}
 
 	/**

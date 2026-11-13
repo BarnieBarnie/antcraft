@@ -247,21 +247,6 @@ def stands(blocks):
     return out
 
 
-def scaffold_area(blocks):
-    """The middle and radius (at most 32) of a sphere that holds the box around the positions blocks lists, 3 blocks
-    wider on each side: where fell_whole looks for the scaffold it placed."""
-    # Around the middle rather than the base: for a trunk 22 high radius 15, not 24 (some 14,000 blocks a scan, not
-    # 58,000, #532).
-    xs = [p.x for p in blocks]
-    ys = [p.y for p in blocks]
-    zs = [p.z for p in blocks]
-    middle = Pos((min(xs) + max(xs)) // 2, (min(ys) + max(ys)) // 2, (min(zs) + max(zs)) // 2)
-    dx = 3 + max(middle.x - min(xs), max(xs) - middle.x)
-    dy = 3 + max(middle.y - min(ys), max(ys) - middle.y)
-    dz = 3 + max(middle.z - min(zs), max(zs) - middle.z)
-    return middle, min(32, int(middle.distance(middle + (dx, dy, dz))) + 1)
-
-
 def fell_whole(base, replant=True):
     """Fells the whole tree at base, branches and 2x2 trunk too: stands at each of stands(tree_blocks(base)), the highest
     first so each stands on logs not yet mined, mines the logs it reaches there, the highest first, then takes back the
@@ -276,15 +261,9 @@ def fell_whole(base, replant=True):
     left = {}
     for p in blocks:
         left[p] = True
-    # What the walks place, under the stands and wherever else they pillar or bridge, is what of SCAFFOLD the bot carries
-    # that was not there before.
-    # ponytail: a scan, so a block of those kinds someone else put near the tree meanwhile goes too; no walk (goto, nor
-    # mine's) reports what it placed (#521).
-    ids = [b for b in SCAFFOLD if has(b)]
-    middle, radius = scaffold_area(blocks)
-    before = {}
-    for q in scan(ids, radius=radius, limit=4096, around=middle) if ids else []:
-        before[q] = True
+    # What the walks place, under the stands and wherever else they pillar or bridge, placed_scaffold() gives (#533); what
+    # earlier walks placed is not this tree's to take back.
+    placed_scaffold()
     for i, s in enumerate(plan):
         goto(s)  # where it gets nowhere, mine walks for each log
         later = plan[i + 1:]
@@ -299,9 +278,11 @@ def fell_whole(base, replant=True):
         r = mine(p)
         if not r and r.reason != "target_gone":
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)
-    placed = [q for q in (scan(ids, radius=radius, limit=4096, around=middle) if ids else []) if q not in before]
-    for q in sorted(placed, key=lambda q: -q.y):
-        mine(q)
+    # Only what is still a scaffold block: one mined or replaced since is someone else's now.
+    for q in sorted(placed_scaffold(), key=lambda q: -q.y):
+        b = block(q)
+        if b is not None and b.id in SCAFFOLD:
+            mine(q)
     pick_up([LOGS, SAPLINGS])
     if replant:
         for p in spots:

@@ -16,11 +16,13 @@ import io.github.barniebarnie.antcraft.script.lang.VmState;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -144,10 +146,11 @@ public final class ScriptRun {
 	 * its VM ({@link VmState}) and how far its action got. Without a VM state (the script held a value that cannot be
 	 * saved, and {@code problem} tells which), it starts again from the top when the bot loads. {@code lastResult} is
 	 * its last action's result, which {@code /antcraft bot status} shows. {@code progressData} is what the action saves
-	 * beside its progress ({@link Action#progressData}), empty in saves from before it.
+	 * beside its progress ({@link Action#progressData}), empty in saves from before it. {@code placed} is where the run's
+	 * walks placed scaffold ({@link #takePlaced}), as {@link BlockPos#asLong}.
 	 */
 	public record Saved(String name, List<String> args, byte @Nullable [] vm, long progress, long[] progressData, @Nullable String problem,
-			@Nullable String lastResult) {
+			@Nullable String lastResult, long[] placed) {
 		private static final String KEY = "Script";
 
 		public Saved {
@@ -174,6 +177,9 @@ public final class ScriptRun {
 			if (lastResult != null) {
 				tag.putString("lastResult", lastResult);
 			}
+			if (placed.length > 0) {
+				tag.putLongArray("placed", placed);
+			}
 			output.store(KEY, CompoundTag.CODEC, tag);
 		}
 
@@ -187,7 +193,7 @@ public final class ScriptRun {
 				}
 				return new Saved(tag.getStringOr("name", ""), args, tag.getByteArray("vm").orElse(null),
 						tag.getLongOr("progress", 0), tag.getLongArray("progressData").orElse(new long[0]), tag.getString("problem").orElse(null),
-						tag.getString("lastResult").orElse(null));
+						tag.getString("lastResult").orElse(null), tag.getLongArray("placed").orElse(new long[0]));
 			});
 		}
 	}
@@ -218,6 +224,10 @@ public final class ScriptRun {
 	/** The progress of the action the run was resumed in, which it hands to the action it starts again. */
 	private long progress;
 	private long[] progressData = new long[0];
+	/** Where the run's walks placed scaffold, oldest first, until {@code placed_scaffold()} takes them ({@link #takePlaced}). Saved. */
+	private final LinkedHashSet<Pos> placed = new LinkedHashSet<>();
+	/** How many {@link #placed} positions a run keeps, the last placed, for a script that never takes them. */
+	static final int PLACED_MAX = 4096;
 
 	public ScriptRun(String name, Code code, List<String> args, Host host, BotLog log) {
 		this(name, code, args, host, log, Memory.create());
@@ -278,6 +288,9 @@ public final class ScriptRun {
 			run = new ScriptRun(saved.name(), code, saved.args(), host, log, memory, library);
 		}
 		run.lastResult = saved.lastResult();
+		for (long at : saved.placed()) {
+			run.placed.add(new Pos(BlockPos.getX(at), BlockPos.getY(at), BlockPos.getZ(at)));
+		}
 		return run;
 	}
 
@@ -285,12 +298,33 @@ public final class ScriptRun {
 	public Saved save() {
 		long saveProgress = this.recall ? this.progress : this.action == null ? 0 : this.action.progress();
 		long[] saveData = this.recall ? this.progressData : this.action == null ? new long[0] : this.action.progressData();
+		// ponytail: saved without their dimension, as the bot's when it loads; a walk does not cross dimensions.
+		long[] savePlaced = this.placed.stream().mapToLong(p -> BlockPos.asLong((int) p.x(), (int) p.y(), (int) p.z())).toArray();
 		try {
 			return new Saved(this.name, this.args, VmState.save(this.vm, new SavedValues(this.host::entity, this.host::colonyMemory)), saveProgress, saveData,
-					null, this.lastResult);
+					null, this.lastResult, savePlaced);
 		} catch (VmState.NotSaveable e) {
-			return new Saved(this.name, this.args, null, 0, new long[0], e.getMessage(), this.lastResult);
+			return new Saved(this.name, this.args, null, 0, new long[0], e.getMessage(), this.lastResult, savePlaced);
 		}
+	}
+
+	/**
+	 * Notes that one of the run's walks placed scaffold at {@code pos}, for {@code placed_scaffold()} ({@link #takePlaced}).
+	 * Keeps the last {@link #PLACED_MAX}.
+	 */
+	public void notePlaced(Pos pos) {
+		this.placed.remove(pos);
+		this.placed.add(pos);
+		if (this.placed.size() > PLACED_MAX) {
+			this.placed.removeFirst();
+		}
+	}
+
+	/** Where the run's walks placed scaffold since the last call, oldest first; none noted after. */
+	public List<Pos> takePlaced() {
+		List<Pos> out = List.copyOf(this.placed);
+		this.placed.clear();
+		return out;
 	}
 
 	/** The script's {@code memory}: the bot's, or the one a resumed run was saved with, with the run's own references into it. */
