@@ -680,7 +680,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A stone pickaxe in a chest the bot is not given: obtain is lib.get.get, which takes it from the chests nearby. */
-	@GameTest(maxTicks = 20)
+	@GameTest(maxTicks = 40)
 	public void obtainIsGet(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.STONE_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);

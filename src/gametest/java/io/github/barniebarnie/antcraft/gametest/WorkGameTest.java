@@ -1124,4 +1124,13 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			+ "print(blueprint('antcraft:cobble_step')['materials'])\n",
 			List.of("False no_blueprint None", "{'minecraft:cobblestone': 2, 'minecraft:oak_stairs': 1}"));
 	}
+
+	/** Given where it goes, blueprint() gives what is still missing there: a cobble step with one cobblestone in place lacks the other and the stairs (#554). */
+	@GameTest(maxTicks = 20)
+	public void blueprintAtGivesWhatIsMissingThere(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "print(blueprint('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")['missing'])\n",
+			List.of("{'minecraft:cobblestone': 1, 'minecraft:oak_stairs': 1}"));
+	}
 }

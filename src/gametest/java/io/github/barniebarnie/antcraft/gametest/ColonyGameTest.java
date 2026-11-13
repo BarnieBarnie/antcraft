@@ -457,6 +457,55 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A builder with an empty core and nothing in the colony to make the cobble step from (no tree for a pickaxe or
+	 * planks) asks a hauler for both its materials at once (#554): lib.get fails fast, not after costing every tool.
+	 */
+	// Measured: both posted by tick 33 alone, 50 in the colony group; before #554 neither by tick 60 alone (the
+	// cobblestone's get took some 160 ticks), so maxTicks is the deadline.
+	@GameTest(maxTicks = 100)
+	public void aBuilderAsksAHaulerAtOnceWhereNothingCanBeGot(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		AntBot builder = member(helper, colony, 4, 1, 5);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		data.put("at", pos(helper, 3, 1, 3));
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		runDefault(helper, builder, "colony.builder");
+		failOnWarning(helper, builder);
+		helper.succeedWhen(() -> helper.assertValueEqual(hauls(colony), List.of("minecraft:cobblestone 2", "minecraft:oak_stairs 1"), "haul jobs"));
+	}
+
+	/**
+	 * A half-built cobble step (one of its two cobblestones in place) gets and hauls only what is left (#554): the haul
+	 * job asks for one cobblestone, not the blueprint's two.
+	 */
+	// Measured: tick 35 alone, 44 in the colony group.
+	@GameTest(maxTicks = 100)
+	public void aHalfBuiltBlueprintAsksOnlyForWhatIsLeft(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
+		container(helper, 6, 1, 1).setItem(0, new ItemStack(Items.OAK_STAIRS));
+		AntBot builder = member(helper, colony, 4, 1, 5);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		data.put("at", pos(helper, 3, 1, 3));
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		runDefault(helper, builder, "colony.builder");
+		failOnWarning(helper, builder);
+		helper.succeedWhen(() -> helper.assertValueEqual(hauls(colony), List.of("minecraft:cobblestone 1"), "haul jobs"));
+	}
+
+	/** The colony's haul jobs as "item n", in the order posted. */
+	private static List<String> hauls(Colony colony) {
+		return colony.jobs().jobs("haul").stream().map(job -> {
+			PyDict data = (PyDict) Memory.decode(job.data());
+			return data.get("item") + " " + data.get("n");
+		}).toList();
+	}
+
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
 	@GameTest(maxTicks = 110)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {

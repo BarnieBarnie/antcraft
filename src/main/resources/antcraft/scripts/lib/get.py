@@ -43,14 +43,21 @@ GETTING = []
 class Source:
     """How get gathers a raw item: do(n, radius) gets n more of it within radius and gives result(), with a tool of
     kind tool held (None: no tool) of at least tier ("hand": the bare hand drops it too, so a tool is made only where it
-    pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for cost."""
+    pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for cost; near
+    the block or tag do gets it from, where none within radius means there is nothing to get (None: not known)."""
 
-    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None):
+    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None):
         self.do = do
         self.tool = tool
         self.tier = tier
         self.estimate = ESTIMATE if estimate is None else estimate
         self.ore = ore
+        self.near = near
+
+    def there(self, radius):
+        """Whether do may find something within radius: False where near is set and none of it is (#554), so get gives
+        up at once instead of costing the tools to gather nothing with. make_cost still costs it, as if there were some."""
+        return self.near is None or lib.find.nearest(self.near, radius) is not None
 
     def cost(self, n, radius):
         """(ticks, tier) to get n: estimate each, and DEEP once more where none of ore is exposed within radius (one
@@ -87,10 +94,13 @@ def ore(item, block, estimate):
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =
 # Source(my_clay, tool="shovel", tier="hand"). ponytail: the estimates are rough guesses of mining plus walking.
 SOURCES = {
-    LOGS: Source(lambda n, radius: lib.trees.logs(n, radius), "axe", "hand", lib.cost.BREAK["wood"]["stone"] + 8 * lib.cost.WALK),
+    LOGS: Source(lambda n, radius: lib.trees.logs(n, radius), "axe", "hand", lib.cost.BREAK["wood"]["stone"] + 8 * lib.cost.WALK,
+                 near=LOGS),
     COBBLESTONE: Source(lib.dig.stone, "pickaxe", None, lib.cost.BREAK["stone"]["wooden"] + 2 * lib.cost.WALK),
-    "minecraft:dirt": Source(dig_up("minecraft:dirt"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK),
-    "minecraft:sand": Source(dig_up("minecraft:sand"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK),
+    "minecraft:dirt": Source(dig_up("minecraft:dirt"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK,
+                             near="minecraft:dirt"),
+    "minecraft:sand": Source(dig_up("minecraft:sand"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK,
+                             near="minecraft:sand"),
 }
 for item, block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
                               ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 400),
@@ -178,9 +188,12 @@ def charcoal(k, radius):
 
 
 def gather(source, n, radius):
-    """source.do(n, radius) with its tool held, of the tier source.cost gives: n more of its item. Where do gives a tier
-    too, as lib.dig.ore's no_ore for the veins it left (#555), it ensures a tool of that tier and does it once more for
-    the rest. ponytail: once; a vein left on the second try needs a third get."""
+    """source.do(n, radius) with its tool held, of the tier source.cost gives: n more of its item. Where there is nothing
+    to gather (not source.there), no tool: do fails at once, with its own reason (#554). Where do gives a tier too, as
+    lib.dig.ore's no_ore for the veins it left (#555), it ensures a tool of that tier and does it once more for the rest.
+    ponytail: once; a vein left on the second try needs a third get."""
+    if not source.there(radius):
+        return source.do(n, radius)
     tier = source.cost(n, radius)[1]
     if source.tool:
         r = ensure_tool(source.tool, n, tier, radius)

@@ -75,8 +75,20 @@ public final class BuildApi {
 			if (blueprint.isEmpty()) {
 				return PyNone.NONE;
 			}
-			Optional<StructureTemplate> template = Blueprints.template(((ServerLevel) bot.level()).getServer(), blueprint.get());
-			return describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template), at, turn, mirror);
+			ServerLevel level = (ServerLevel) bot.level();
+			Optional<StructureTemplate> template = Blueprints.template(level.getServer(), blueprint.get());
+			PyDict dict = describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template), at, turn, mirror);
+			if (at != null) {
+				// What the world there does not match yet (#554); a block not loaded counts as missing.
+				// ponytail: read in the bot's level, whatever the dimension of at.
+				LoadedBlocks loaded = new LoadedBlocks(level);
+				PyDict missing = new PyDict();
+				plan(level, Values.str(id), WorkApi.blockPos(at), turn, mirror).ifPresent(planned -> planned.plan()
+					.materials(pos -> Optional.ofNullable(loaded.loaded(pos)).orElse(Blocks.AIR.defaultBlockState()))
+					.forEach((item, count) -> missing.put(BuiltInRegistries.ITEM.getKey(item).toString(), (long) count)));
+				dict.put("missing", missing);
+			}
+			return dict;
 		});
 		natives.register("build", call -> {
 			Object[] args = Args.bind("build", call, 2, "blueprint", "at", "turn", "mirror", "job");

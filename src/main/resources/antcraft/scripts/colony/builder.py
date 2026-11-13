@@ -1,10 +1,13 @@
 # A colony builder: takes "build" jobs off the colony's job board, fetches the
-# materials from the Colony Core and builds. What the core lacks it gets itself
-# with lib.get (cobblestone, planks, logs, dirt: gathered or crafted within the
-# colony, chests in it borrowed from); what get fails on it asks a hauler for
-# with a "haul" job (see colony.hauler), and it waits until the materials are
-# there: alone, it waits for a player to fill the core. Run it on a colony
-# member with `/antcraft bot run colony.builder`.
+# materials from the Colony Core and builds. It asks only for what the site
+# still lacks (blueprint(...)["missing"]), so a half-built one costs only the
+# rest. What the core lacks it gets itself with lib.get (cobblestone, planks,
+# logs, dirt: gathered or crafted within the colony, chests in it borrowed
+# from, within a radius that just covers the colony, so get fails fast where
+# the colony has none); what get fails on it asks a hauler for with a "haul"
+# job (see colony.hauler), and it waits until the materials are there: alone,
+# it waits for a player to fill the core. Run it on a colony member with
+# `/antcraft bot run colony.builder`.
 #
 # A build job's data is a dict:
 #   "blueprint"  the blueprint's id, such as "antcraft:cobble_step"
@@ -30,8 +33,10 @@ def get_or_haul(job, short, need):
     # Imported here: lib.get loads most of the library, which a bot in no colony need not wait for.
     from lib.get import get
     asked = [h["data"]["item"] for h in jobs("haul") if h["data"].get("for") == job["id"]]
+    # Within the colony (lib.find.WHERE) anyway: a radius that covers it from here, not get's 32, scans less (#554).
+    radius = colony()["radius"] + int(pos().distance(core())) + 1
     for item in short:
-        if item not in asked and not get(item, need[item])["ok"]:
+        if item not in asked and not get(item, need[item], radius)["ok"]:
             post_job("haul", {"item": item, "n": need[item] - count(item), "for": job["id"]})
 
 
@@ -43,7 +48,9 @@ def build_job(job):
         finish_job(job["id"])
         return
     while True:
-        short = [item for item, n in plan["materials"].items() if not take_up_to(item, n, chests=[core()])["ok"]]
+        # What the site still lacks, not the whole blueprint's materials (#554).
+        left = blueprint(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False))["missing"]
+        short = [item for item, n in left.items() if not take_up_to(item, n, chests=[core()])["ok"]]
         r = build(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False), job=job["id"])
         if r:
             break
@@ -53,7 +60,7 @@ def build_job(job):
             drop_job(job["id"])  # back on the board, to try again later
             wait(200)
             return
-        get_or_haul(job, short, plan["materials"])
+        get_or_haul(job, short, left)
         wait(40)
     # The haul jobs no hauler took are moot now (#557): a hauler would find their items used up.
     for h in jobs("haul"):

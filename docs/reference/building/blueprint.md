@@ -4,7 +4,7 @@
 blueprint(id, at=None, turn=0, mirror=False)
 ```
 
-A blueprint's size, role, materials and spots, as plain data.
+A blueprint's size, role, materials and spots, and given where it goes, what is still missing there, as plain data.
 
 ## Parameters
 
@@ -24,6 +24,7 @@ A dict, or `None` for an id the server has no blueprint for:
 - `materials`: a dict of item id to how many of it `build` places, most first.
 - `chests`: a list of [`Pos`](../types/pos.md), the blueprint's chest spots.
 - `work_spots`: a list of `Pos`, the spots a bot stands on or works at, such as farm plots.
+- `missing` (only given `at`): a dict of item id to how many of it the copy at `at` still needs, for the blocks the world there does not match yet, so a half-built copy lacks only the rest. A block in a chunk that is not loaded counts as missing.
 
 Without `at`, `chests` and `work_spots` are relative to the blueprint's origin, unturned, with no dimension. Given `at` (and `turn` and `mirror`), they are where a copy built there has them, in the dimension of `at`.
 
