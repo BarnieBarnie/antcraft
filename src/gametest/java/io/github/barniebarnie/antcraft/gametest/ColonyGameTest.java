@@ -898,6 +898,34 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A miner with an empty core and no pickaxe gets one and a torch with lib.get (#542): an oak on the stone and a coal
+	 * ore in it give the planks, sticks and coal, the stone the cobblestone. It carries the ladders, trapdoor and chest, so
+	 * what it gets is the pickaxe and the torch; it digs the shaft at (3, 6, 3) down to its level at y 1, the torch on the
+	 * landing at (4, 1, 3) and the chest north of it.
+	 */
+	@GameTest(maxTicks = 2800)
+	public void aMinerWithAnEmptyCoreGetsAPickaxeAndTorchesAndDigsTheShaft(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		TreesGameTest.plantTree(helper, new BlockPos(1, 6, 5), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		helper.setBlock(6, 5, 1, Blocks.COAL_ORE);
+		AntBot bot = member(helper, colony, 1, 6, 1);
+		bot.getInventory().addItem(new ItemStack(Items.LADDER, 4));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_TRAPDOOR));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST));
+		runDefault(helper, bot, "colony.miner");
+		failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(Values.repr(pos(helper, 3, 6, 3)).equals(sharedTop(colony)), "shaft top " + sharedTop(colony));
+			for (int y = 1; y <= 4; y++) {
+				helper.assertBlockPresent(Blocks.LADDER, new BlockPos(3, y, 3));
+			}
+			helper.assertBlockPresent(Blocks.OAK_TRAPDOOR, new BlockPos(3, 5, 3));
+			helper.assertBlockPresent(Blocks.TORCH, new BlockPos(4, 1, 3));
+			helper.assertBlockPresent(Blocks.CHEST, new BlockPos(4, 1, 2));
+		});
+	}
+
+	/**
 	 * Two miners started on the same tick share the colony's one shaft (#393): neither picks a second site, one shaft job
 	 * is posted, and with a level each both take a mine job and mine a round. In a wide area, as the two halls go opposite
 	 * ways: stone up to y 5 from (0, 0, 0) to (15, 5, 15), the core at (4, 6, 4), the shaft's top at (7, 6, 7), the hall of

@@ -45,11 +45,12 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	/** A tree of four {@code log} at {@code base}, on dirt, under persistent {@code leaves}. */
 	static void plantTree(GameTestHelper helper, BlockPos base, Block log, Block leaves) {
 		helper.setBlock(base.below(), Blocks.DIRT);
-		for (int y = 1; y <= 4; y++) {
+		int b = base.getY();
+		for (int y = b; y <= b + 3; y++) {
 			helper.setBlock(base.getX(), y, base.getZ(), log);
 		}
-		for (int y = 3; y <= 5; y++) {
-			int r = y == 5 ? 1 : 2;
+		for (int y = b + 2; y <= b + 4; y++) {
+			int r = y == b + 4 ? 1 : 2;
 			for (int x = base.getX() - r; x <= base.getX() + r; x++) {
 				for (int z = base.getZ() - r; z <= base.getZ() + r; z++) {
 					boolean corner = Math.abs(x - base.getX()) == r && Math.abs(z - base.getZ()) == r;

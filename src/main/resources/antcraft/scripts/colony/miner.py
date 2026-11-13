@@ -5,7 +5,9 @@
 # takes one, mines a round of that level's branches (lib.mine), brings the ore
 # from the landing chest to the core and posts the level again, so the miners
 # take turns, the level mined least first. Ladders, a wooden trapdoor for the
-# hatch, torches, chests and pickaxes come from the core. Run it on a colony
+# hatch, torches, chests and pickaxes come from the core; what the core lacks
+# the miner gets with lib.get, from the colony's chests, trees, stone and ore,
+# and gives back what it borrowed once each job is done. Run it on a colony
 # member with `/antcraft bot run colony.miner`.
 #
 # The shaft is kept in colony_memory["mineshaft"]: top and levels once picked.
@@ -17,15 +19,27 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-import lib.craft
+from colony.common import core, store
+
+core()  # a bot in no colony says so and stops, before the imports below spend its player's instruction budget
+import lib.get
 import lib.mine
 import lib.shaft
-from colony.common import core, fetch, store
+import lib.tools
+from lib.borrow import give_back
 from lib.inv import take_all
+from lib.result import result
 
 # The heights to mine at unless colony_memory["mineshaft"] says otherwise: iron, then diamonds.
 LEVELS = [16, -16, -54]
 ORES = lib.mine.ORES
+PICKAXES = "#minecraft:pickaxes"
+# What lib.get makes where the core holds none of a tag the shaft takes.
+# ponytail: an oak trapdoor, which takes oak logs; the trapdoor of the logs at hand if a colony has no oaks.
+MAKE = {lib.shaft.HATCH[0]: "minecraft:oak_trapdoor"}
+# The pickaxe tier a level takes: what drops its iron and coal.
+# ponytail: one tier for every level, so diamonds at deep levels are left; the level's ore (lib.tools.tier_for) per level once that matters.
+TIER = lib.tools.tier_for("minecraft:iron_ore")
 
 
 def claim():
@@ -74,20 +88,39 @@ def take_more(more):
     return take_all(core(), need)
 
 
+def supply(more, uses):
+    """Makes the bot hold a pickaxe that lasts uses more blocks (lib.get.ensure_tool: carried, from a chest, else made)
+    and carry what it lacks of more (item to how many more than it carries): from the core, the rest with lib.get.get.
+    Gives result(): ok, or the first that failed."""
+    short = take_more(more)
+    short.pop(PICKAXES, None)
+    # ensure_tool only where the carried ones do not last: costing every way to make one scans a lot.
+    r = result() if lib.tools.enough("pickaxe", uses) else lib.get.ensure_tool("pickaxe", uses, TIER)
+    for item, n in short.items():
+        if not r["ok"]:
+            break
+        k = MAKE.get(item, item)
+        r = lib.get.get(k, count(k) + n)
+    return r
+
+
 def dig(job):
     """Digs the shared shaft; once dug, posts a mine job for each level."""
     m = lib.shaft.shaft()
-    take_more(lib.shaft.missing(m))
-    r = lib.shaft.dig_shaft(m["levels"])
+    # The blocks the shaft breaks: its column, and at each level the landing, the cell over it and the chest's.
+    uses = len(lib.shaft.column(m)) + 3 * len(m["levels"])
+    r = supply(lib.shaft.missing(m), uses)
+    if r["ok"]:
+        r = lib.shaft.dig_shaft(m["levels"])
     if r["ok"]:
         finish_job(job["id"])
         for y in m["levels"]:
             post_job("mine", {"level": y})
         return
-    if r["reason"] == "missing_ingredients" and not take_more(r["missing"]):
-        return  # the core had it: dig on at once
+    if r["reason"] == "missing_ingredients" and supply(r["missing"], uses)["ok"]:
+        return  # it got them: dig on at once
     warn(f"the shaft stopped at {r['at']}: {r['reason']} {r['missing']}")
-    wait(200)  # the job stays this bot's: it tries again once the core has more
+    wait(200)  # the job stays this bot's: it tries again once the colony has more
 
 
 def mine(job):
@@ -99,12 +132,19 @@ def mine(job):
         warn(f"the shaft has no level at {y}")
         finish_job(job["id"])
         return
-    lib.craft.ensure_tool("pickaxe")  # the best carried, else the best in the core, else one made from what it holds
-    fetch("minecraft:torch", len(m["level"][y]["torches"]))
+    here = m["level"][y]
+    # The blocks the round breaks: both cells of the hall, its branches and a few ore. ponytail: the veins are a guess.
+    uses = 2 * len(here["hall"]) + sum([len(cells) for cells in here["branches"]]) + 8
+    r = supply({"minecraft:torch": max(len(here["torches"]) - count("minecraft:torch"), 0)}, uses)
+    # Short of torches it mines on: mine_level lights what it can.
+    if not has(PICKAXES):
+        warn(f"mining level {y} waits for a pickaxe: {r['reason']} {r['missing']}")
+        wait(200)  # the job stays this bot's: it tries again once the colony has more
+        return
     memory["mine"] = {y: r0}
     lib.shaft.to_level(y)
     r = lib.mine.mine_level(y)
-    take(m["level"][y]["chest"], ORES)
+    take(here["chest"], ORES)
     lib.shaft.to_surface()
     store(ORES)
     finish_job(job["id"])
@@ -114,7 +154,6 @@ def mine(job):
         wait(200)
 
 
-core()  # a bot in no colony says so and stops
 while True:
     if site() is None:
         warn("there is no spot near the core to dig a shaft")
@@ -123,7 +162,11 @@ while True:
     job = take_job("shaft") or take_job("mine")
     if job is None:
         wait(40)
-    elif job["kind"] == "shaft":
-        dig(job)
-    else:
-        mine(job)
+        continue
+    try:
+        if job["kind"] == "shaft":
+            dig(job)
+        else:
+            mine(job)
+    finally:
+        give_back()  # what lib.get borrowed from chests in the colony; what it takes from the core is the colony's
