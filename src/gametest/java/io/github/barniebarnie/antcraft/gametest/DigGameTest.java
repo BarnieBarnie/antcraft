@@ -242,6 +242,35 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A remembered staircase the bot is not on (#556), far away or in another dimension, is forgotten: stairs_up digs up
+	 * east from where the bot is, as with none remembered, instead of walking to the old one's top.
+	 */
+	@GameTest(maxTicks = 500, skyAccess = true)
+	public void stairsUpForgetsAFarStaircase(GameTestHelper helper) {
+		stairsUpForgets(helper, "Pos(s.x + 100, s.y + 4, s.z)", "Pos(s.x + 100, s.y, s.z)");
+	}
+
+	@GameTest(maxTicks = 500, skyAccess = true)
+	public void stairsUpForgetsAStaircaseInAnotherDimension(GameTestHelper helper) {
+		stairsUpForgets(helper, "Pos(s.x, s.y + 4, s.z, \"minecraft:the_nether\")",
+			"Pos(s.x, s.y, s.z, \"minecraft:the_nether\")");
+	}
+
+	private static void stairsUpForgets(GameTestHelper helper, String top, String bottom) {
+		stone(helper, 5);
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			memory["stairs"] = {"top": %s, "bottom": %s}
+			r = lib.dig.stairs_up("east")
+			print(r["ok"], r["reason"], pos().x - s.x, pos().y - s.y, memory.get("stairs"))
+			""".formatted(top, bottom), List.of("True None 5 5 None"));
+	}
+
+	/**
 	 * Out of a cave 17 blocks tall (#534): air ahead and 16 blocks of it overhead are not the surface while the cave's
 	 * roof is over the bot. Carrying no blocks to bridge with (#538), stairs_up walks on along the cave's floor to the
 	 * wall of stone 4 high east of it and digs up through it, out from under the roof, to its top. The area has sky
@@ -393,6 +422,26 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], count("coal"), pos() == s)
 			""", List.of("True 1 True"),
 			() -> helper.assertBlockPresent(Blocks.AIR, 4, -2, 2));
+	}
+
+	/**
+	 * ore at y with a staircase remembered far away (#556): it digs none, branches 4 north past coal beside the tunnel
+	 * and walks back to where it started instead of to the old staircase.
+	 */
+	@GameTest(maxTicks = 400)
+	public void oreWithAFarStaircaseRememberedWalksBackToWhereItStarted(GameTestHelper helper) {
+		stone(helper, 2);
+		helper.setBlock(3, 1, 7, Blocks.AIR);
+		helper.setBlock(3, 2, 7, Blocks.AIR);
+		helper.setBlock(4, 1, 4, Blocks.COAL_ORE);
+		AntBot bot = miner(helper, 3, 1, 7);
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			memory["stairs"] = {"top": Pos(s.x + 100, s.y + 4, s.z), "bottom": Pos(s.x + 100, s.y, s.z)}
+			r = lib.dig.ore("coal", 1, 1, s.y, length=4)
+			print(r["ok"], r["reason"], count("coal"), pos() == s, memory.get("stairs"))
+			""", List.of("True None 1 True None"));
 	}
 
 	/** Emerald has no best_y (it is only in mountains): without y, and no exposed vein, ore gives no_ore at once. */

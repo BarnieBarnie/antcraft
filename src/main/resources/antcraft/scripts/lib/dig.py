@@ -103,9 +103,9 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
         r = branch(length, facing=facing)
     if r["reason"] == "outside":
         r = result()  # ponytail: no other facing is tried; it gives no_ore below
-    # Where it dug no staircase, as at y already, it walks back to start: digging up would look for a surface, which
-    # the Nether has none of.
-    up = stairs_up() if memory.get("stairs") is not None else back(start)
+    # Where it dug no staircase, as at y already, or remembers one it is not on (#556), it walks back to start: digging
+    # up would look for a surface, which the Nether has none of.
+    up = stairs_up() if stairs() is not None else back(start)
     if not r["ok"]:
         return r
     if count(key) < target:
@@ -137,16 +137,30 @@ def outside(cells):
     return None
 
 
+def stairs():
+    """memory["stairs"] where the bot stands on or next to its bottom, or where a branch from there brought it ("at"),
+    in its dimension; else forgets it (#556), as one from before the bot was moved, died or did another job, and gives
+    None."""
+    kept = memory.get("stairs")
+    if kept is None:
+        return None
+    at = kept.get("at", kept["bottom"])
+    if at.dimension in (None, dimension()) and pos().distance(at) <= 2:
+        return kept
+    memory.pop("stairs")
+    return None
+
+
 def stairs_to(y, facing="north"):
     """Digs a 1-wide staircase from the bot's feet down to y, one block towards facing for each block down, and walks
     down it. Each step is three blocks tall, so the bot walks back up it; it never digs straight down. Remembers the top
-    in memory["stairs"] for stairs_up, also where it goes on from the bottom of a staircase it dug before. Gives
+    in memory["stairs"] for stairs_up, also where it goes on from the bottom of a staircase it dug before (stairs()). Gives
     result(): ok, outside with at where the next step has a block lib.find.WHERE leaves out, or the reason a step failed
     with at."""
     step = FACING[facing]
     here = pos()
-    kept = memory.get("stairs")
-    top = kept["top"] if kept is not None and kept["bottom"] == here else here
+    kept = stairs()
+    top = kept["top"] if kept is not None else here
     opened = [here, here.up(), here.up(2)]
     while here.y > y:
         down = here + (step[0], -1, step[2])
@@ -168,9 +182,10 @@ def stairs_to(y, facing="north"):
 
 
 def stairs_up(facing="north"):
-    """Walks back up the staircase stairs_to dug, to its top; where it remembers none, digs one up towards facing to the
-    surface. Gives result(): ok, no_surface in the Nether, or goto's reason or the reason a step failed with at."""
-    kept = memory.get("stairs")
+    """Walks back up the staircase stairs_to dug, to its top; where it remembers none the bot is on (stairs()), digs one
+    up towards facing to the surface. Gives result(): ok, no_surface in the Nether, or goto's reason or the reason a step
+    failed with at."""
+    kept = stairs()
     if kept is None:
         return dig_up(facing)
     r = goto(kept["top"])
@@ -246,10 +261,12 @@ def branch(length, every=8, facing="north"):
     """Digs a tunnel two blocks tall length blocks on from the bot's feet towards facing and walks it, mining each ore
     vein in its walls and ceiling that its pickaxe drops (lib.mine.veins) and putting a torch on the floor every every blocks while it carries one. Walls off a
     fluid or falling block beside it as lib.shaft does. Gives result(): ok, outside with at where the next block is one
-    lib.find.WHERE leaves out, or the reason it stopped with at."""
+    lib.find.WHERE leaves out, or the reason it stopped with at. Branching from a staircase stairs() gives, it remembers
+    where it got to there, so stairs_up still climbs that staircase."""
     step = FACING[facing]
     stand = pos()
     opened = [stand, stand.up()]
+    kept = stairs()
     for i in range(1, length + 1):
         feet = stand + step
         head = feet.up()
@@ -269,6 +286,10 @@ def branch(length, every=8, facing="north"):
         if not failure and i % every == 0 and has("torch"):
             # Once the veins are out, so it hangs on no ore it then mines.
             failure = lib.shaft.put_block(feet, "torch", lib.shaft.TORCHES)
+        if kept is not None:
+            # So stairs() still takes the staircase it branched from as the one the bot is on (#556).
+            kept = {"top": kept["top"], "bottom": kept["bottom"], "at": pos()}
+            memory["stairs"] = kept
         if failure:
             return failure
     return result()

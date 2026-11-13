@@ -55,7 +55,7 @@ def strip_mine():
         r = ensure_tool("pickaxe", USES, tier(), radius)
         if r["ok"]:
             r = lib.dig.branch(LENGTH, facing=facing)
-    if memory.get("stairs") is not None:
+    if lib.dig.stairs() is not None:
         up = lib.dig.stairs_up()
         r = r if not r["ok"] else up
     go_home()
