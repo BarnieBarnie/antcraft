@@ -36,7 +36,7 @@ GETTING = []
 class Source:
     """How get gathers a raw item: do(n, radius) gets n more of it within radius and gives result(), with a tool of
     kind tool held (None: no tool) of at least tier ("hand": the bare hand drops it too, so a tool is made only where it
-    pays; None: any tier); estimate is the ticks one takes, for choose; ore the block or tag it digs, for ticks."""
+    pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for ticks."""
 
     def __init__(self, do, tool=None, tier=None, estimate=None, ore=None):
         self.do = do
@@ -173,17 +173,46 @@ def gather(source, n, radius):
     return source.do(n, radius)
 
 
-def make_cost(item, n):
-    """The estimated ticks to make n of item in total from what the bot carries: the estimate of each raw item
-    lib.craft.plan lists and SMELT for each item smelted; None where a raw item has no source or is being got."""
-    p = lib.craft.plan(item, n)
-    ticks = sum([lib.cost.SMELT * k for step, k, how in p["crafts"] if how == "smelt"])
-    for raw, k in p["gather"].items():
-        s = SOURCES.get(key(raw))
-        if s is None or key(raw) in GETTING:
-            return None
-        ticks += s.estimate * k
-    return ticks
+def make_cost(item, n, radius=32, tools=None):
+    """The estimated ticks to make n of item in total from what the bot carries: the ticks(radius) of each raw item
+    lib.craft.plan lists, SMELT for each item smelted, and for each kind of tool their sources need the make cost of
+    the highest tier any needs where the bot carries none that lasts them all; None where a raw item has no source, or
+    it or that tool is being got or costed. tools holds the tool costs found so far, by tool id, for one options."""
+    if key(item) in GETTING:
+        return None
+    GETTING.append(key(item))
+    try:
+        p = lib.craft.plan(item, n)
+        ticks = sum([lib.cost.SMELT * k for step, k, how in p["crafts"] if how == "smelt"])
+        need = {}
+        for raw, k in p["gather"].items():
+            s = SOURCES.get(key(raw))
+            if s is None or key(raw) in GETTING:
+                return None
+            ticks += s.ticks(radius) * k
+            if s.tool and s.tier != "hand":
+                t, uses = need.get(s.tool, ("wooden", 0))
+                need[s.tool] = (min([t, s.tier or "wooden"], key=lib.tools.TIERS.index), uses + k)
+        for kind, (t, uses) in need.items():
+            c = tool_cost(kind, t, uses, radius, {} if tools is None else tools)
+            if c is None:
+                return None
+            ticks += c
+        return ticks
+    finally:
+        GETTING.pop()
+
+
+def tool_cost(kind, tier, uses, radius, tools):
+    """0 where the bot carries tools of kind of at least tier that last uses, else make_cost of one of tier.
+    ponytail: one tool, made; a chest's is not looked for."""
+    ok = lib.tools.TIERS[:lib.tools.TIERS.index(tier) + 1]
+    if sum([lib.tools.uses_left(s) for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok]) >= uses:
+        return 0
+    tool = f"minecraft:{tier}_{kind}"
+    if tool not in tools:
+        tools[tool] = make_cost(tool, 1, radius, tools)
+    return tools[tool]
 
 
 def options(kind, uses=1, tier=None, radius=32):
@@ -191,7 +220,7 @@ def options(kind, uses=1, tier=None, radius=32):
     (ticks, how, tier, at): ("hand", None) where tier is "hand"; ("carried", its tier) where the carried ones last;
     ("chest", its tier) with at the chest, for a chest tool that lasts with the carried ones; ("make", a tier of
     lib.craft.MADE) with at how many to carry in all. ticks is cost.breaking for the uses, plus the walk to a chest or
-    make_cost. ponytail: the uses of carried tools of another tier do not count toward making one."""
+    make_cost(tool, n, radius). ponytail: the uses of carried tools of another tier do not count toward making one."""
     material = MATERIAL.get(kind)
     tiers = lib.tools.TIERS
     ok = [t for t in tiers if tier in (None, "hand") or tiers.index(t) <= tiers.index(tier)]
@@ -212,13 +241,14 @@ def options(kind, uses=1, tier=None, radius=32):
             t = lib.tools.tier(s)
             if t in ok and matches(s, f"#minecraft:{kind}s") and lib.tools.uses_left(s) >= need:
                 found.append((lib.cost.walk(pos(), chest) + work(t), "chest", t, chest))
+    costs = {}
     for t in lib.craft.MADE:
         tool = f"minecraft:{t}_{kind}"
         if t not in ok or tool in GETTING:
             continue
         have = sum([lib.tools.uses_left(s) for s in inventory() if s.item == tool])
         n = count(tool) + -(-max(uses - have, 1) // lib.cost.USES[t])
-        ticks = make_cost(tool, n)
+        ticks = make_cost(tool, n, radius, costs)
         if ticks is not None:
             found.append((ticks + work(t), "make", t, n))
     return sorted(found, key=lambda o: o[0])

@@ -130,9 +130,14 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** An empty bot, no chest: a stone axe for few logs, an iron one for many; nothing is done. */
-	@GameTest(maxTicks = 80)
+	/**
+	 * An empty bot, no chest, exposed iron and coal ore in sight: a stone axe for few logs, an iron one for many; nothing
+	 * is done. Without the ore in sight the make cost digs stairs for it (#529), and the stone axes win.
+	 */
+	@GameTest(maxTicks = 140)
 	public void chooseStoneForFewUsesIronForMany(GameTestHelper helper) {
+		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
+		helper.setBlock(6, 1, 6, Blocks.COAL_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
@@ -142,20 +147,50 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
-	 * of it lib.craft.plan of each tier's tool (needs costs 3000); the limit keeps it there.
+	 * The make cost of an iron axe counts the pickaxe raw iron needs and whether iron ore is in sight (#529): an empty bot
+	 * with no iron ore within radius 2 pays for a stone pickaxe and DEEP for each raw iron, more than a bot that carries a
+	 * stone pickaxe and sees exposed iron ore within radius 8.
 	 */
 	@GameTest(maxTicks = 40)
+	public void ironCostsMoreWithoutAPickaxeOrOreInSight(GameTestHelper helper) {
+		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
+		AntBot bare = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		AntBot ready = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		ready.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		String choose = "from lib.get import choose\nprint(choose('axe', 30, 'iron', radius=%d)[0])\n";
+		run(helper, bare, choose.formatted(2));
+		run(helper, ready, choose.formatted(8));
+		helper.succeedWhen(() -> {
+			List<String> far = BotScripts.log(bare, Output.Level.PRINT);
+			List<String> near = BotScripts.log(ready, Output.Level.PRINT);
+			helper.assertTrue(far.size() == 1 && near.size() == 1, "printed " + far + " and " + near);
+			helper.assertTrue(Integer.parseInt(far.get(0)) > Integer.parseInt(near.get(0)),
+				"without a pickaxe or ore in sight " + far + ", with them " + near);
+		});
+	}
+
+	/**
+	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
+	 * of it lib.craft.plan of each tier's tool (needs costs 3000); 45,600 (24 ticks) since the make cost counts the pickaxe
+	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks. The
+	 * limit keeps it there.
+	 */
+	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
 			List.of("('make', 'stone')"), "choose", 60_000);
 	}
 
-	/** An iron axe in a chest: it beats making one for 30 logs, but for 400 it is not enough and an iron one is made. */
-	@GameTest(maxTicks = 80)
+	/**
+	 * An iron axe in a chest: it beats making one for 30 logs, but for 400 it is not enough and an iron one is made, with
+	 * iron and coal ore in sight (see chooseStoneForFewUsesIronForMany).
+	 */
+	@GameTest(maxTicks = 110)
 	public void chooseAChestToolThatIsEnough(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.IRON_AXE));
+		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
+		helper.setBlock(6, 1, 6, Blocks.COAL_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
