@@ -30,7 +30,8 @@ public final class DefaultScripts {
 	 */
 	private static final List<String> FILES = List.of(IDLE + ".py", "lib/home.py", "lib/shaft.py", "lib/mine.py", "lib/craft.py", "lib/retry.py", "lib/inv.py", "lib/trees.py", "lib/area.py", "lib/gather.py", "lib/result.py", "lib/cost.py", "lib/tools.py", "lib/borrow.py", "lib/find.py", "lib/dig.py", "lib/stock.py", "lib/get.py", "colony/common.py", "colony/lumberjack.py",
 		"colony/hauler.py", "colony/builder.py", "colony/farmer.py", "colony/miner.py",
-		"jobs/giant_tree.py");
+		"jobs/giant_tree.py",
+		"lib/bootstrap.py", "jobs/bootstrap.py");
 	/** Holds, per script, the hash of the version last copied. */
 	static final String RECORD = ".antcraft-defaults";
 

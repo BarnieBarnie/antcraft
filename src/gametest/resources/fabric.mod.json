@@ -28,6 +28,7 @@
 			"io.github.barniebarnie.antcraft.gametest.BorrowGameTest",
 			"io.github.barniebarnie.antcraft.gametest.StockGameTest",
 			"io.github.barniebarnie.antcraft.gametest.GetGameTest",
+			"io.github.barniebarnie.antcraft.gametest.BootstrapGameTest",
 			"io.github.barniebarnie.antcraft.gametest.TreesGameTest",
 			"io.github.barniebarnie.antcraft.gametest.GiantTreeGameTest",
 			"io.github.barniebarnie.antcraft.gametest.GatherGameTest",

@@ -173,6 +173,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/dig`](modules/lib/dig.md): `stone(n, radius=32)`, `ore(item, n, radius=32, y=None, facing="north")`, `best_y(item)`, `stairs_to(y, facing="north")`, `stairs_up()`, `branch(length, every=8, facing="north")`.
 - [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `fetch_all(more, chests)`.
 - [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None)`, the resolver.
+- [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32)`, the things a job starts with.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, `fetch(item, n)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 ### Writing library functions
