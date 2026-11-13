@@ -72,7 +72,7 @@ nav = [
     "cookbook/memory.md",
   ] },
   { "Development" = ["development/index.md"] },
-  { "Design" = ["design/index.md"] },
+  { "Design" = ["design/index.md", "design/library.md"] },
 ]
 
 [project.theme]
