@@ -53,6 +53,17 @@ if tree is not None:
 
 A module's top level runs once per bot run, the first time any module imports it; later imports bind the module already loaded. Each module has its own globals, and a function sees the globals of the module that defined it, wherever it is called from: in the example, `fell` counts in `lib.trees.felled`, not in a `felled` of the script. The builtins, the bot API and `memory` are visible in every module; `ARGS` is a global of the script the bot runs, so pass what a module needs of it as arguments.
 
+A module's attributes are its globals, so assigning one sets that global, as in Python, and the module's functions see the new value. A script can tune a library constant or swap one of its functions, for a run or in a test:
+
+```python
+import lib.trees
+
+lib.trees.LOGS = "#minecraft:oak_logs"   # is_log, and so fell, now take only oak
+lib.trees.felled += 1
+```
+
+`from lib.trees import LOGS` copies the value into the script's own globals, so assigning that `LOGS` changes nothing in the module. The change lasts for the bot's run, saved and loaded with it, and every module that imported `lib.trees` sees it.
+
 ## When an import fails
 
 A module that is not there fails the script at the line of the import (`No module named 'lib.trees'`), and so does a name a module does not have (`cannot import name 'fel' from 'lib.trees'`). A module that does not compile fails the script with its own file and line (`lib/trees.py:4: ...`), and an error while a module runs names that module's file. Circular imports fail with the cycle: `circular import: lib.a -> lib.b -> lib.a`.

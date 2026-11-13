@@ -452,6 +452,8 @@ public final class Vm {
 				switch (target) {
 					case PyInstance instance -> instance.attributes.put(code.names()[arg], value);
 					case PyClass c -> c.attributes.put(code.names()[arg], value);
+					// A module's attributes are its globals, so its functions see the new value (docs/language/modules.md).
+					case PyModule m -> m.globals().put(code.names()[arg], value);
 					default -> throw new ScriptError("'" + Values.typeName(target) + "' object has no attribute '"
 							+ code.names()[arg] + "'");
 				}

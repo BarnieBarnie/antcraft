@@ -96,6 +96,33 @@ class ImportTest {
 	}
 
 	@Test
+	void assigningAModuleAttributeSetsTheGlobalItsFunctionsSee() {
+		Map<String, String> modules = Map.of("lib.dig", """
+				LENGTH = 8
+				def length():
+				    return LENGTH
+				def stairs_to(p):
+				    return 'stairs to ' + str(p)
+				def go(p):
+				    return stairs_to(p)
+				""");
+		assertEquals("4 4\n6\nfake 3\nnew", run("""
+				import lib.dig
+				lib.dig.LENGTH = 4
+				print(lib.dig.length(), lib.dig.LENGTH)
+				lib.dig.LENGTH += 2
+				print(lib.dig.length())
+				def fake(p):
+				    return 'fake ' + str(p)
+				lib.dig.stairs_to = fake
+				print(lib.dig.go(3))
+				lib.dig.extra = 'new'
+				from lib.dig import extra
+				print(extra)
+				""", modules));
+	}
+
+	@Test
 	void aModuleSeesTheNativesAndTheBuiltinValuesOfTheRun() {
 		List<String> printed = new ArrayList<>();
 		Vm vm = vm("import helper\nhelper.show()", Map.of("helper", "def show():\n    print(len(memory), memory['a'])\n"),

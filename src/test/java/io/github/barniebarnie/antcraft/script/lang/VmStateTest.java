@@ -250,6 +250,16 @@ class VmStateTest {
 						""", Map.of(
 						"lib.trees", "SIZE = 4\ndef grow(n):\n    return [SIZE * i for i in range(n)]\n",
 						"lib.words", "from lib.trees import grow\nCOUNT = len(grow(5))\ndef word(n):\n    return 'w' * n + str(grow(n))\n")),
+				new Case("assigned module attributes", """
+						import lib.dig
+						lib.dig.LENGTH = 4
+						def fake(p):
+						    return 'fake ' + str(p)
+						lib.dig.stairs_to = fake
+						for i in range(3):
+						    lib.dig.LENGTH += 1
+						    print(lib.dig.length(), lib.dig.go(i))
+						""", Map.of("lib.dig", "LENGTH = 8\ndef length():\n    return LENGTH\ndef stairs_to(p):\n    return p\ndef go(p):\n    return stairs_to(p)\n")),
 				new Case("host values, memory and slices", """
 						x = thing(4)
 						memory['n'] = 1
