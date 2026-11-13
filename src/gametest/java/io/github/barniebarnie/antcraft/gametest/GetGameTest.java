@@ -291,6 +291,24 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * 1 coal in a chest covers one of the 2 coal of 8 torches (#555): make_cost counts the walk to it and the other coal
+	 * as with no chest, so it lies between the walk and sticks alone and the cost with no chest within radius.
+	 */
+	@GameTest(maxTicks = 20)
+	public void chestCoalCoversOnlyWhatTheChestHolds(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.COAL));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.cost, lib.stock
+			from lib.get import make_cost
+			far, near = make_cost("torch", 8, radius=2), make_cost("torch", 8, radius=8)
+			walk = make_cost("stick", 2, radius=8) + lib.cost.walk(pos(), lib.stock.where("coal", 8)[0])
+			print(walk < near, near < far)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
 	 * A source's cost counts DEEP once for all it gets, as one flight of stairs reaches a vein, and takes the pickaxe tier
 	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
 	 */
@@ -440,6 +458,41 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A stone pickaxe and a branch east past a lodestone vein in its wall, which the game test tags put in needs_iron_tool
+	 * and c:ores; an iron pickaxe in a chest by the start (#555). The branch leaves the vein and lib.dig.ore gives no_ore
+	 * with the tier it left it for; get takes the iron pickaxe and tries once more, mining the vein now exposed.
+	 * lib.find.WHERE stops a second branch at the area's east edge.
+	 */
+	@GameTest(maxTicks = 600)
+	public void getRetriesAVeinLeftForItsTierWithABetterPickaxe(GameTestHelper helper) {
+		// From y=0: the template's floor is below it, so a bot in the pocket would fall into the branch's floor.
+		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 4, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		helper.setBlock(5, 2, 4, Blocks.LODESTONE);
+		Container chest = chest(helper, new BlockPos(1, 1, 2), new ItemStack(Items.IRON_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			import lib.dig, lib.find
+			from lib.get import get, Source, SOURCES
+			lib.find.WHERE = lambda p: p.x <= %d
+			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
+			dig = lambda n, radius: lib.dig.ore("lodestone", n, radius, y=pos().y, facing="east", length=6)
+			SOURCES["minecraft:lodestone"] = Source(dig, "pickaxe", "wooden", 60, "minecraft:lodestone")
+			r = get("lodestone", radius=8)
+			print(r["ok"], r["reason"], count("lodestone"), held().item)
+			""".formatted(helper.absolutePos(new BlockPos(7, 0, 0)).getX()));
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 1 minecraft:iron_pickaxe");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+			helper.assertBlockPresent(Blocks.AIR, 5, 2, 4);
+		});
+	}
+
+	/**
 	 * A bot with a stone pickaxe and a furnace, no wood or coal, by the oak of {@link TreesGameTest} and eight exposed iron
 	 * ore: eight smelts plan a coal, but with no coal ore within radius get fells the oak for fuel and digs no stairs
 	 * (#519). The coal source fails, so digging for coal fails the test at once.
@@ -472,8 +525,12 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static Container chest(GameTestHelper helper, ItemStack... stacks) {
-		helper.setBlock(CHEST, Blocks.CHEST);
-		Container chest = helper.getBlockEntity(CHEST, ChestBlockEntity.class);
+		return chest(helper, CHEST, stacks);
+	}
+
+	private static Container chest(GameTestHelper helper, BlockPos at, ItemStack... stacks) {
+		helper.setBlock(at, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
 		for (int i = 0; i < stacks.length; i++) {
 			chest.setItem(i, stacks[i]);
 		}

@@ -73,18 +73,21 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
     staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where ROUNDS branches found
     too little, where its staircase or branches reach the edge of lib.find.WHERE, or there is no y to dig to (emerald),
-    or where a step failed."""
+    or where a step failed. A no_ore where it left veins also has tier, the lowest pickaxe tier that drops them all
+    (#555), for lib.get to try again with."""
     key = short(item)
     if key not in ORES:
         return result("no_recipe", None, {"minecraft:" + key: n})
     target = count(key) + n
     skip = {}
+    left = []
     while count(key) < target:
         p = lib.find.exposed(ORES[key], radius, skip)
         if p is None:
             break
         skip[p] = True  # once tried, whether its vein came out or not
         if not lib.tools.drops(p):
+            left.append(lib.tools.tier_for(p))
             continue  # a vein its pickaxe does not drop is left (#547)
         for b in ore_vein(p):
             r = mine(b)
@@ -94,13 +97,13 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
         return result()
     y = best_y(key) if y is None else y
     if y is None:
-        return result("no_ore", None, {"minecraft:" + key: target - count(key)})
+        return no_ore(key, target, left)
     start = pos()
     r = stairs_to(y, facing)
     for _ in range(ROUNDS):
         if not r["ok"] or count(key) >= target:
             break
-        r = branch(length, facing=facing)
+        r = branch(length, facing=facing, left=left)
     if r["reason"] == "outside":
         r = result()  # ponytail: no other facing is tried; it gives no_ore below
     # Where it dug no staircase, as at y already, or remembers one it is not on (#556), it walks back to start: digging
@@ -109,8 +112,16 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     if not r["ok"]:
         return r
     if count(key) < target:
-        return result("no_ore", None, {"minecraft:" + key: target - count(key)})
+        return no_ore(key, target, left)
     return up
+
+
+def no_ore(key, target, left):
+    """ore's no_ore, with tier the lowest of the tiers in left that drops every vein it left, where it left any."""
+    r = result("no_ore", None, {"minecraft:" + key: target - count(key)})
+    if left:
+        r["tier"] = min(left, key=lib.tools.TIERS.index)
+    return r
 
 
 def back(p):
@@ -257,12 +268,13 @@ def dig_up(facing):
     return result()
 
 
-def branch(length, every=8, facing="north"):
+def branch(length, every=8, facing="north", left=None):
     """Digs a tunnel two blocks tall length blocks on from the bot's feet towards facing and walks it, mining each ore
     vein in its walls and ceiling that its pickaxe drops (lib.mine.veins) and putting a torch on the floor every every blocks while it carries one. Walls off a
     fluid or falling block beside it as lib.shaft does. Gives result(): ok, outside with at where the next block is one
-    lib.find.WHERE leaves out, or the reason it stopped with at. Branching from a staircase stairs() gives, it remembers
-    where it got to there, so stairs_up still climbs that staircase."""
+    lib.find.WHERE leaves out, or the reason it stopped with at. The tier each vein it left needs is added to the list
+    left where given (#555). Branching from a staircase stairs() gives, it remembers where it got to there, so stairs_up
+    still climbs that staircase."""
     step = FACING[facing]
     stand = pos()
     opened = [stand, stand.up()]
@@ -282,7 +294,7 @@ def branch(length, every=8, facing="north"):
         if not r:
             return result(r.reason, feet)
         stand = feet
-        failure = lib.mine.veins([feet, head], opened, stand)
+        failure = lib.mine.veins([feet, head], opened, stand, left=left)
         if not failure and i % every == 0 and has("torch"):
             # Once the veins are out, so it hangs on no ore it then mines.
             failure = lib.shaft.put_block(feet, "torch", lib.shaft.TORCHES)

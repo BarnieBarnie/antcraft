@@ -17,7 +17,7 @@ Mines stone or cobblestone within `radius` until the bot carries `n` more cobble
 
 Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md). A vein its pickaxe does not drop ([`lib.tools.drops`](tools.md)), such as a modded ore in `#minecraft:needs_iron_tool` next to iron ore it mines with a stone pickaxe, it leaves, here and in the branches. Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to 4 branches of `length` blocks on from there until it carries enough, and climbs back with `stairs_up()`. Where it dug no staircase, as for a bot already at `y`, or remembers one it is not on (see [`stairs()`](#stairs)), it walks back to where it started instead, so a bot in the Nether, which has no surface to dig up to, comes back too. Emerald has no `best_y`: pass `y`, or `ore` gives `no_ore` once the exposed veins are out. Where the staircase or a branch reaches the edge of [`lib.find.WHERE`](find.md#where), as in a colony, it digs no further, tries no other facing, and gives `no_ore`.
 
-- **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` with `missing` for an item that is no ore, `no_ore` with `missing` where the branches found too little or there is no `y` to dig to, `no_space` with `at`, or the reason a step failed with `at`).
+- **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` with `missing` for an item that is no ore, `no_ore` with `missing` where the branches found too little or there is no `y` to dig to, and `tier` where it left veins its pickaxe does not drop: the lowest pickaxe tier ([`lib.tools.tier_for`](tools.md#tier_forwhat)) that drops them all, which [`lib.get`](get.md) gets and tries again with, `no_space` with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.
 
 ```python
@@ -50,9 +50,9 @@ Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `
 - **Returns** a dict: `ok`, `reason` (`None`, `no_surface`, `no_blocks` where it has no block for a pit and no wall gives one, that of [`goto`](../../movement/goto.md) with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.
 
-## `branch(length, every=8, facing="north")`
+## `branch(length, every=8, facing="north", left=None)`
 
-Digs a tunnel two blocks tall `length` blocks on from the bot's feet towards `facing` and walks it, mining each ore vein in its walls and ceiling that its pickaxe drops (through `lib.mine.veins`; it leaves the others in the wall) and putting a torch on the floor every `every` blocks while it carries one. It stops before a block [`lib.find.WHERE`](find.md#where) leaves out, so the tunnel stays within it. Branching from the bottom of a staircase `stairs_to` dug, it remembers in `memory["stairs"]` how far it got, so `stairs_up()` at its end still climbs that staircase.
+Digs a tunnel two blocks tall `length` blocks on from the bot's feet towards `facing` and walks it, mining each ore vein in its walls and ceiling that its pickaxe drops (through `lib.mine.veins`; it leaves the others in the wall, and adds the tier each needs to the list `left` where given) and putting a torch on the floor every `every` blocks while it carries one. It stops before a block [`lib.find.WHERE`](find.md#where) leaves out, so the tunnel stays within it. Branching from the bottom of a staircase `stairs_to` dug, it remembers in `memory["stairs"]` how far it got, so `stairs_up()` at its end still climbs that staircase.
 
 - **Returns** a dict: `ok`, `reason` (`None`, `outside` with `at` the next block `WHERE` leaves out, or the reason it stopped, with `at`).
 - **Pauses** yes, while it digs and walks.

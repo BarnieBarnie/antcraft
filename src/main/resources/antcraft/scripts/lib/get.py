@@ -28,9 +28,13 @@ MATERIAL = {"pickaxe": "stone", "axe": "wood", "shovel": "dirt"}
 # Ticks to get one of a raw item, where its Source gives no estimate.
 ESTIMATE = 100
 # Ticks more to get an ore's raw items where none of the ore is exposed within radius, so lib.dig.ore digs stairs down,
-# branches and climbs back: once for the trip, however many it gets. More than the coal of 16 torches costs as charcoal
+# branches and climbs back: once for the trip, however many it gets. Up to 7 coal (28 torches) cost less as charcoal
 # from logs (wood_for_coal), so a bot with no coal ore in sight burns wood for them.
-# ponytail: one guess for every ore and depth; the length of the stairs if the choices it sways prove wrong.
+# Measured (#555, DigGameTest aTripDownABranchAndBackUp, stone pickaxe through stone): some 48 ticks a step down, 37 a
+# block of branch and 10 a step back up. From sea level (64) with one branch of lib.dig.LENGTH (32) that is about 1500
+# for coal (BEST_Y 96: no stairs), 4300 for iron (16) and 8600 for diamond (-59).
+# ponytail: one number for every ore, between coal's trip and iron's; per ore from its BEST_Y and the bot's height if the
+# choices it sways prove wrong. At 1000 the bootstrap tests dug for coal and failed.
 DEEP = 2000
 # The items being got, outermost first: a tool whose recipe needs one of them is not made for it.
 GETTING = []
@@ -174,20 +178,26 @@ def charcoal(k, radius):
 
 
 def gather(source, n, radius):
-    """source.do(n, radius) with its tool held, of the tier source.cost gives: n more of its item.
-    ponytail: only the nearest exposed block's tier; lib.dig.ore leaves a later vein that needs more."""
+    """source.do(n, radius) with its tool held, of the tier source.cost gives: n more of its item. Where do gives a tier
+    too, as lib.dig.ore's no_ore for the veins it left (#555), it ensures a tool of that tier and does it once more for
+    the rest. ponytail: once; a vein left on the second try needs a third get."""
     tier = source.cost(n, radius)[1]
     if source.tool:
         r = ensure_tool(source.tool, n, tier, radius)
         if not r["ok"]:
             return r
-    return source.do(n, radius)
+    r = source.do(n, radius)
+    if r["ok"] or not source.tool or r.get("tier") is None:
+        return r
+    rest = sum(r["missing"].values())
+    t = ensure_tool(source.tool, rest, r["tier"], radius)
+    return source.do(rest, radius) if t["ok"] else t
 
 
 def make_cost(item, n, radius=32, tools=None):
     """The estimated ticks to make n of item in total from what the bot carries: the cost of each raw item
     lib.craft.plan lists from its source (coal the walk to the nearest chest of lib.stock within radius that holds some,
-    else from logs as charcoal where that is cheaper, as get does), SMELT for each
+    for as much as the chests hold, the rest from its source or from logs as charcoal where that is cheaper), SMELT for each
     item smelted, and for each kind of tool their sources need the tool_cost of the highest tier any needs; None where a
     raw item has no source, or it or that tool is being got or costed. tools holds the tool costs found so far, by tool
     id, for one options."""
@@ -203,11 +213,13 @@ def make_cost(item, n, radius=32, tools=None):
             if s is None or key(raw) in GETTING:
                 return None
             if key(raw) == COAL:
-                # get takes coal from a chest first: the walk there, however much it holds, as wood_for_coal.
+                # get takes coal from the chests first: the walk to the nearest, for as much as they hold (#555).
                 chests = lib.stock.where(COAL, radius)
                 if chests:
                     ticks += lib.cost.walk(pos(), chests[0])
-                    continue
+                    k -= sum([s.count for c in chests for s in container(c) or [] if matches(s, COAL)])
+                    if k <= 0:
+                        continue
             c, tier = s.cost(k, radius)
             if key(raw) == COAL and LOGS not in GETTING:
                 wood = charcoal(k, radius)[1]

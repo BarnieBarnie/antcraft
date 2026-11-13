@@ -27,6 +27,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code lib/dig.py} and {@code lib/find.py} (#509): ore from an exposed vein, a staircase down and back up, and a 1x2
@@ -35,6 +37,7 @@ import net.minecraft.world.level.block.Blocks;
  */
 public class DigGameTest implements CustomTestMethodInvoker {
 	private static final AtomicInteger NETHER_SPOTS = new AtomicInteger();
+	private static final Logger LOGGER = LoggerFactory.getLogger("AntCraft game tests");
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -137,6 +140,32 @@ public class DigGameTest implements CustomTestMethodInvoker {
 				}
 				helper.assertBlockPresent(Blocks.STONE, 1, 5, 3);
 			});
+	}
+
+	/**
+	 * The trip lib.get.DEEP costs (#555): stairs 4 down east, a branch of 2 on and back up, with a stone pickaxe through
+	 * stone. It logs the tick each part ends on, as {@code Deep trip: <part> at tick <n>}, for DEEP's comment.
+	 */
+	@GameTest(maxTicks = 700)
+	public void aTripDownABranchAndBackUp(GameTestHelper helper) {
+		stone(helper, 5);
+		AntBot bot = miner(helper, 1, 6, 3);
+		String[] parts = {"stairs_to", "branch", "stairs_up"};
+		int[] logged = {0};
+		helper.onEachTick(() -> {
+			int n = BotScripts.log(bot, Output.Level.PRINT).size();
+			for (; logged[0] < Math.min(n, parts.length); logged[0]++) {
+				LOGGER.info("Deep trip: {} at tick {}", parts[logged[0]], helper.getTick());
+			}
+		});
+		expect(helper, bot, """
+			import lib.dig
+			s = pos()
+			print(lib.dig.stairs_to(s.y - 4, "east")["ok"])
+			print(lib.dig.branch(2, facing="east")["ok"])
+			r = lib.dig.stairs_up()
+			print(r["ok"], pos() == s)
+			""", List.of("True", "True", "True True"));
 	}
 
 	/** A branch of 6 east, torches every 3, takes the two coal veins beside it (three ore). */

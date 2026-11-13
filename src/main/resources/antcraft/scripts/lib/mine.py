@@ -114,16 +114,19 @@ def fluids(cells):
     return wet
 
 
-def veins(cells, opened, stand, chest=None):
+def veins(cells, opened, stand, chest=None, left=None):
     """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up; a
-    vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547). With a chest, it empties the bot into it
-    (room) when its inventory is nearly full."""
+    vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547), and the tier that drops it
+    (lib.tools.tier_for) is added to the list left where given (#555). With a chest, it empties the bot into it (room)
+    when its inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
             if p in opened:
                 continue
             vein = ore_vein(p)
             if vein and not lib.tools.drops(p):
+                if left is not None:
+                    left.append(lib.tools.tier_for(p))
                 continue
             for b in vein:
                 failure = (room(chest) if chest is not None else None) or dig(b, opened + vein, stand)
