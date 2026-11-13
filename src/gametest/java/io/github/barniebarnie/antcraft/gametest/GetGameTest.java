@@ -141,6 +141,17 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "('make', 'stone') ('make', 'iron') ('make', 'iron')"));
 	}
 
+	/**
+	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
+	 * of it lib.craft.plan of each tier's tool (needs costs 3000); the limit keeps it there.
+	 */
+	@GameTest(maxTicks = 40)
+	public void chooseCost(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
+			List.of("('make', 'stone')"), "choose", 60_000);
+	}
+
 	/** An iron axe in a chest: it beats making one for 30 logs, but for 400 it is not enough and an iron one is made. */
 	@GameTest(maxTicks = 80)
 	public void chooseAChestToolThatIsEnough(GameTestHelper helper) {

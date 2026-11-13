@@ -56,7 +56,7 @@ r = lib.trees.logs(6, kind="spruce_log")
 
 ## `tree_blocks(base)`
 
-The logs of the tree at `base`, `base` first: those of `base`'s block (a spruce log for a spruce) reached from it log by log, diagonal steps too, as acacia and jungle branches touch only at a corner, at most 512. A tree of another kind next to it is left out; one of the same kind whose logs touch it is taken as the same tree. Done at once, in some 30 instructions a log (about 15 ticks for a 2x2 spruce).
+The logs of the tree at `base`, `base` first: those of `base`'s block (a spruce log for a spruce) reached from it log by log, diagonal steps too, as acacia and jungle branches touch only at a corner, at most 512. A tree of another kind next to it is left out; one of the same kind whose logs touch it is taken as the same tree. Done at once, in some 580 instructions a log (a `block` read is 30): 29 ticks of a bot's budget for a jungle giant of 100 logs.
 
 ## `is_giant(base)`, `square(base)`
 
@@ -64,7 +64,7 @@ Whether the trunk `base` is a bottom log of is 2x2, as a giant spruce's, jungle 
 
 ## `stands(blocks)`
 
-Where to stand to mine the logs in the list `blocks`: few spots that together reach every log, chosen greedily, each the spot that reaches the most logs not yet reached less the blocks the bot must place to stand there, a spot on one of the logs first on a tie. The spots looked at are the air above and beside each log; a log none reaches is left out. A spot reaches a log as `mine` measures it: 4 blocks from the bot's eyes to the log's centre. Done at once; for a 2x2 spruce some 30 ticks of instructions.
+Where to stand to mine the logs in the list `blocks`: few spots that together reach every log, chosen greedily, each the spot that reaches the most logs not yet reached less the blocks the bot must place to stand there, a spot on one of the logs first on a tie. The spots looked at are the air above and beside each log; a log none reaches is left out. A spot reaches a log as `mine` measures it: 4 blocks from the bot's eyes to the log's centre. Done at once; for a jungle giant of 100 logs (232 spots looked at) some 450,000 instructions, 225 ticks of a bot's budget at the default 2000 a tick: a few percent of the thousands of ticks felling it takes (#522).
 
 ## `fell_whole(base, replant=True)`
 

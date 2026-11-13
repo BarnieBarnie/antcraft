@@ -325,6 +325,50 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			List.of("True 26 6"), () -> assertGiantFelled(helper));
 	}
 
+	/**
+	 * A jungle giant of 100 logs: a 2x2 trunk 22 high at (3..4, 1..22, 3..4) on dirt, and from each corner of its top a
+	 * branch of three logs that touch only at a corner, out to the area's corners at y=22. It stands up past the 8x8x8 area,
+	 * so the air over the area up to y=30 is cleared.
+	 */
+	static void plantJungleGiant(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				helper.setBlock(x, 0, z, Blocks.STONE);
+				for (int y = 1; y <= 30; y++) {
+					helper.setBlock(x, y, z, Blocks.AIR);
+				}
+			}
+		}
+		for (int x = 3; x <= 4; x++) {
+			for (int z = 3; z <= 4; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+				for (int y = 1; y <= 22; y++) {
+					helper.setBlock(x, y, z, Blocks.JUNGLE_LOG);
+				}
+			}
+		}
+		for (int sx : new int[] {-1, 1}) {
+			for (int sz : new int[] {-1, 1}) {
+				for (int i = 1; i <= 3; i++) {
+					helper.setBlock((sx < 0 ? 3 : 4) + sx * i, 20 + i - 1, (sz < 0 ? 3 : 4) + sz * i, Blocks.JUNGLE_LOG);
+				}
+			}
+		}
+	}
+
+	/**
+	 * What tree_blocks and stands cost on a jungle giant of 100 logs (#522), and the seven stands they give. Measured at
+	 * 1,793,000 instructions (897 ticks) before #522 and 507,000 (254 ticks) after; the limit keeps it there.
+	 */
+	@GameTest(maxTicks = 600)
+	public void treeBlocksAndStandsOfAHundredLogTree(GameTestHelper helper) {
+		plantJungleGiant(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		GameTests.cost(helper, bot, "import lib.trees\n", "b = lib.trees.tree_blocks(Pos" + at(helper, 3, 1, 3) + ")\n"
+			+ "s = lib.trees.stands(b)\nprint(len(b), sorted([(c.x - b[0].x, c.y - b[0].y, c.z - b[0].z) for c in s]))\n", List.of("100 [(-1, 20, -1), (-1, 20, 2), (1, 2, 2), (1, 9, 2), (1, 13, 2), (2, 20, -1), (2, 20, 2)]"),
+			"tree_blocks and stands of 100 logs", 700_000);
+	}
+
 	/** Persistent spruce leaves over the giant spruce of {@link #plantGiant}, so it is a tree. */
 	static void crownGiant(GameTestHelper helper) {
 		for (int x = 2; x <= 5; x++) {

@@ -2,8 +2,11 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.LockSupport;
@@ -166,6 +169,42 @@ public final class GameTests {
 		BotScripts.run(bot, "print(goto((" + target.getX() + ", " + target.getY() + ", " + target.getZ() + "), near=" + near + ").ok)\n"
 			+ "while True:\n    wait(1000)\n");
 	}
+
+	/**
+	 * Runs {@code setup} then {@code measured} on {@code bot}, both script source, and succeeds once the script finished
+	 * having printed {@code expected} after a line "measure" that comes between the two, with {@code measured} run within
+	 * {@code limit} instructions; fails at once past that. Logs what it cost, as {@code Script cost <what>: <n> instructions
+	 * over <t> ticks}, to the antcraft logger. The count starts on the tick "measure" is first seen, so it may leave out up to
+	 * a tick's budget run before it. Registers an {@code onEachTick} listener: call it up front.
+	 */
+	public static void cost(GameTestHelper helper, AntBot bot, String setup, String measured, List<String> expected, String what, long limit) {
+		ScriptRun run = BotScripts.run(bot, setup + "print('measure')\n" + measured);
+		List<String> want = new ArrayList<>(List.of("measure"));
+		want.addAll(expected);
+		long[] start = {-1, 0};
+		helper.onEachTick(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			if (run.state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+			if (start[0] < 0 && !printed.isEmpty()) {
+				start[0] = run.executed();
+				start[1] = helper.getTick();
+			}
+			if (start[0] >= 0 && run.executed() - start[0] > limit) {
+				helper.fail(what + " ran more than " + limit + " instructions");
+			}
+			if (run.state() == ScriptRun.State.FINISHED) {
+				if (!printed.equals(want)) {
+					helper.fail("printed " + printed + ", expected " + want);
+				}
+				COST.info("Script cost {}: {} instructions over {} ticks", what, run.executed() - start[0], helper.getTick() - start[1]);
+				helper.succeed();
+			}
+		});
+	}
+
+	private static final Logger COST = LoggerFactory.getLogger("antcraft");
 
 	/** Whether the walk {@link #walkTo} started has ended, there or given up. */
 	public static boolean walked(AntBot bot) {

@@ -45,7 +45,7 @@ Makes the bot hold a tool of `kind` (`"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` o
 
 ## `choose(kind, uses=1, tier=None, radius=32)`
 
-The cheapest of `options(kind, uses, tier, radius)`, a tuple `(ticks, how, tier, at)`; `None` where there is none. A finder: it takes and makes nothing, so a script can ask what `ensure_tool` would do.
+The cheapest of `options(kind, uses, tier, radius)`, a tuple `(ticks, how, tier, at)`; `None` where there is none. A finder: it takes and makes nothing, so a script can ask what `ensure_tool` would do. One call costs some 27,000 instructions (14 ticks at the default budget) for an empty bot with no chest near, most of it [`lib.craft.plan`](craft.md) of each tier's tool, each of which asks `needs` (3000); each tier plans another item, so nothing is planned twice (#522).
 
 ```python
 from lib.get import choose

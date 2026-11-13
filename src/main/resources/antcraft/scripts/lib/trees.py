@@ -115,10 +115,14 @@ def trunk(base):
     return logs
 
 
+# The 26 blocks around one, faces, edges and corners.
+AROUND = [(dx, dy, dz) for dx in [-1, 0, 1] for dy in [-1, 0, 1] for dz in [-1, 0, 1] if dx or dy or dz]
+
+
 def tree_blocks(base):
     """The logs of the tree at base: those of base's block reached from it log by log, diagonal steps too (acacia and
     jungle branches touch at a corner), base first, at most 512."""
-    # ponytail: about 30 block() reads a log, some 15 ticks for a 2x2 spruce; a Java sense, as ore_vein, if that proves slow.
+    # Some 580 instructions a log (a block() read is 30): 29 ticks of a bot's budget for a jungle giant of 100 logs (#522).
     kind = block(base).id
     seen = {base: True}
     todo = [base]
@@ -126,15 +130,13 @@ def tree_blocks(base):
     while todo and len(out) < 512:
         p = todo.pop()
         out.append(p)
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                for dz in [-1, 0, 1]:
-                    q = p + (dx, dy, dz)
-                    if q not in seen:
-                        seen[q] = True
-                        b = block(q)
-                        if b is not None and b.id == kind:
-                            todo.append(q)
+        for d in AROUND:
+            q = p + d
+            if q not in seen:
+                seen[q] = True
+                b = block(q)
+                if b is not None and b.id == kind:
+                    todo.append(q)
     return out
 
 
@@ -181,33 +183,61 @@ def stands(blocks):
     """Where to stand to mine the logs blocks lists: few spots, together within reach of each log, chosen greedily, each
     the spot that reaches the most logs not yet reached less the blocks placed to stand there, a spot on one of the logs
     first where that is a tie. Spots are the air above and beside the logs. A log no spot reaches is left out."""
-    # ponytail: greedy and ~20 instructions a spot and log, some 30 ticks for a 2x2 spruce; a Java sense if that is slow.
+    # Greedy. A spot reaches only logs 2 below to 5 above its feet, so it tries those layers alone, and counts what each
+    # spot still reaches as logs are reached rather than again each round: for a jungle giant of 100 logs (232 spots)
+    # some 450,000 instructions, 225 ticks of a bot's budget, down from 1,700,000 (#522).
+    # ponytail: felling that tree takes thousands of ticks, so a Java sense only if bigger trees make this slow.
     logs = {}
+    layers = {}
     for p in blocks:
         logs[p] = True
+        layers.setdefault(p.y, []).append(p)
     cost = {}
     for p in blocks:
         for c in [p.up(), p.north(), p.south(), p.east(), p.west()]:
             if c not in logs and c not in cost and block(c).is_air:
-                cost[c] = pillar(c)
+                cost[c] = None
+    # Lowest first, so a spot over another (air) has one more to place than that one, without reading down again.
+    for c in sorted(list(cost), key=lambda c: c.y):
+        under = cost.get(c.down())
+        cost[c] = pillar(c) if under is None else (99 if under >= 16 else under + 1)
     cover = {}
+    left = {}  # each log not yet reached: the spots that reach it
+    for p in blocks:
+        left[p] = []
+    n = {}
+    bonus = {}
     for c in cost:
-        cover[c] = [p for p in blocks if reaches(c, p)]
-    left = dict(logs)
+        x, z, up = c.x, c.z, c.up()
+        reached = []
+        for y in range(c.y - 2, c.y + 6):
+            if y in layers:
+                dy = c.y + 1.12 - y
+                r = 16 - dy * dy
+                for p in layers[y]:
+                    dx = x - p.x
+                    dz = z - p.z
+                    if dx * dx + dz * dz <= r and p != up:  # as reaches(c, p); p is a log, so not c
+                        reached.append(p)
+                        left[p].append(c)
+        cover[c] = reached
+        n[c] = len(reached)
+        bonus[c] = 1 if c.down() in logs else 0
     out = []
     while left:
         best = None
         score = 0
         for c in cost:
-            s = 2 * (len([p for p in cover[c] if p in left]) - cost[c]) + (1 if c.down() in logs else 0)
+            s = 2 * (n[c] - cost[c]) + bonus[c]
             if best is None or s > score:
                 best, score = c, s
-        if best is None or not [p for p in cover[best] if p in left]:
+        if best is None or not n[best]:
             break
         out.append(best)
         for p in cover[best]:
             if p in left:
-                left.pop(p)
+                for c in left.pop(p):
+                    n[c] -= 1
     return out
 
 
