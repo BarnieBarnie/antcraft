@@ -42,6 +42,8 @@ if not r["ok"]:
 
 Strikes `n` of `item` off what is borrowed, newest first, or all of it when `n` is `None`, for a job that keeps what it took: `give_back` then leaves it with the bot. `item` is matched against the item `borrow` was given, with or without `minecraft:`; a selector also matches each item id it [selects](../../inventory/matches.md), so `keep("#minecraft:planks", 2)` keeps 2 of borrowed `oak_planks`. A record borrowed by a selector is matched only by the same selector.
 
+What the bot owns of the item counts towards `n`: `give_back` leaves it what it carried before its oldest matching record (`had`), so `keep` strikes off only `n` less that many. A bot that owned 1 plank and borrowed 3 ends with 2 after `keep("oak_planks", 2)` and `give_back()`, not 3. Where a selector matches records of several items, only the oldest one's item counts as owned.
+
 - **Returns** `None`.
 - **Pauses** no.
 

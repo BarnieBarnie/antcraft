@@ -58,9 +58,17 @@ def give_back(radius=16, since=0):
 def keep(item, n=None):
     """Strikes n of item (all when None) off what is borrowed, newest first, for a job that keeps them: give_back then
     leaves them with the bot. item matches a record's item as borrow was given it, with or without "minecraft:", and a
-    selector also each item id it selects."""
+    selector also each item id it selects. What the bot owns of it counts towards n: give_back leaves the bot what it
+    carried before its oldest matching record (had), so only n less that many are struck off."""
+    out = borrowed()
+    if n is not None:
+        mine = [b for b in out if same(b["item"], item)]
+        # ponytail: the oldest record's had is of its own item, so a selector over records of several items counts only
+        # that item's own as owned.
+        if mine:
+            n = max(0, n - min(count(item), mine[0].get("had", 0)))
     left = []
-    for b in reversed(borrowed()):
+    for b in reversed(out):
         k = b["n"] if n is None else min(n, b["n"])
         if k == 0 or not same(b["item"], item):
             left = [b] + left

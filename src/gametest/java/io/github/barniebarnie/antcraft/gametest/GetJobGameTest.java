@@ -109,6 +109,42 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot that owns 1 oak plank and borrowed 3 in an earlier script, then jobs.get of 2: it ends with 2, its own and 1
+	 * kept, and gives 2 back (#537).
+	 */
+	@GameTest(maxTicks = 40)
+	public void keepsOnlyWhatItLacksBesidesItsOwn(GameTestHelper helper) {
+		BlockPos at = new BlockPos(6, 1, 3);
+		helper.setBlock(at, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.OAK_PLANKS, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS));
+		BlockPos p = helper.absolutePos(at);
+		String borrow = BotScripts.libraryScript(helper, "get_job_", "from lib.borrow import borrow\nborrow(Pos(%d, %d, %d), \"oak_planks\", 3)\n"
+			.formatted(p.getX(), p.getY(), p.getZ()));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + borrow);
+		boolean[] started = {false};
+		helper.onEachTick(() -> {
+			ScriptRun run = bot.getScript();
+			if (run != null && run.state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+			if (!started[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
+				started[0] = true;
+				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get oak_planks 2 8");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(started[0] && BotScripts.log(bot, Output.Level.PRINT).equals(List.of("got 2 oak_planks")),
+				"said " + BotScripts.log(bot, Output.Level.PRINT));
+			int planks = bot.getInventory().countItem(Items.OAK_PLANKS);
+			helper.assertTrue(planks == 2, "planks " + planks);
+			helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 3, "planks in the chest " + chest.countItem(Items.OAK_PLANKS));
+		});
+	}
+
+	/**
 	 * Runs jobs.get with args by the command; the test succeeds once the bot said {@code says} and {@code then} holds, and
 	 * fails at once when the script fails or says something else.
 	 */
