@@ -15,7 +15,7 @@ Mines stone or cobblestone within `radius` until the bot carries `n` more cobble
 
 ## `ore(item, n, radius=32, y=None, facing="north", length=32)`
 
-Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md). A vein its pickaxe does not drop ([`lib.tools.drops`](tools.md)), such as a modded ore in `#minecraft:needs_iron_tool` next to iron ore it mines with a stone pickaxe, it leaves, here and in the branches. Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to 4 branches of `length` blocks on from there until it carries enough, and climbs back with `stairs_up()`. Where it dug no staircase, as for a bot already at `y`, it walks back to where it started instead, so a bot in the Nether, which has no surface to dig up to, comes back too. Emerald has no `best_y`: pass `y`, or `ore` gives `no_ore` once the exposed veins are out.
+Makes the bot carry `n` more of `item`, a raw item: `coal`, `raw_iron`, `raw_copper`, `raw_gold`, `redstone`, `lapis_lazuli`, `diamond` or `emerald` (`minecraft:` may be left out). First it mines the exposed veins of its ore (the block tag `#c:ores/...`) within `radius`, nearest first, each whole through [`ore_vein`](../../mining/ore_vein.md). A vein its pickaxe does not drop ([`lib.tools.drops`](tools.md)), such as a modded ore in `#minecraft:needs_iron_tool` next to iron ore it mines with a stone pickaxe, it leaves, here and in the branches. Where they give too few, it digs `stairs_to(y)` towards `facing` (`y` is `best_y(item)` where `None`), digs up to 4 branches of `length` blocks on from there until it carries enough, and climbs back with `stairs_up()`. Where it dug no staircase, as for a bot already at `y`, it walks back to where it started instead, so a bot in the Nether, which has no surface to dig up to, comes back too. Emerald has no `best_y`: pass `y`, or `ore` gives `no_ore` once the exposed veins are out. Where the staircase or a branch reaches the edge of [`lib.find.WHERE`](find.md#where), as in a colony, it digs no further, tries no other facing, and gives `no_ore`.
 
 - **Returns** a dict: `ok`, `reason` (`None`, `no_recipe` with `missing` for an item that is no ore, `no_ore` with `missing` where the branches found too little or there is no `y` to dig to, `no_space` with `at`, or the reason a step failed with `at`).
 - **Pauses** yes, while it walks and digs.
@@ -34,9 +34,9 @@ The height where the ore of the raw item `item` is most common: coal 96, raw iro
 
 ## `stairs_to(y, facing="north")`
 
-Digs a staircase one block wide from the bot's feet down to `y`, one block towards `facing` for each block down, and walks down it. Each step is three blocks tall, so the bot walks back up it, and it never digs straight down: the block under each step stays. It remembers the top in `memory["stairs"]`, and called again at the bottom of that staircase it goes on down and keeps the top. Where the bot stands at or below `y` it does nothing.
+Digs a staircase one block wide from the bot's feet down to `y`, one block towards `facing` for each block down, and walks down it. Each step is three blocks tall, so the bot walks back up it, and it never digs straight down: the block under each step stays. It remembers the top in `memory["stairs"]`, and called again at the bottom of that staircase it goes on down and keeps the top. Where the bot stands at or below `y` it does nothing. It stops before a step with a block [`lib.find.WHERE`](find.md#where) leaves out.
 
-- **Returns** a dict: `ok`, `reason` (`None`, or the reason a step failed, with `at`).
+- **Returns** a dict: `ok`, `reason` (`None`, `outside` with `at` the first block of the next step `WHERE` leaves out, or the reason a step failed, with `at`).
 - **Pauses** yes, while it digs and walks.
 
 ## `stairs_up(facing="north")`
@@ -48,9 +48,9 @@ Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `
 
 ## `branch(length, every=8, facing="north")`
 
-Digs a tunnel two blocks tall `length` blocks on from the bot's feet towards `facing` and walks it, mining each ore vein in its walls and ceiling that its pickaxe drops (through `lib.mine.veins`; it leaves the others in the wall) and putting a torch on the floor every `every` blocks while it carries one.
+Digs a tunnel two blocks tall `length` blocks on from the bot's feet towards `facing` and walks it, mining each ore vein in its walls and ceiling that its pickaxe drops (through `lib.mine.veins`; it leaves the others in the wall) and putting a torch on the floor every `every` blocks while it carries one. It stops before a block [`lib.find.WHERE`](find.md#where) leaves out, so the tunnel stays within it.
 
-- **Returns** a dict: `ok`, `reason` (`None`, or the reason it stopped, with `at`).
+- **Returns** a dict: `ok`, `reason` (`None`, `outside` with `at` the next block `WHERE` leaves out, or the reason it stopped, with `at`).
 - **Pauses** yes, while it digs and walks.
 
 ```python

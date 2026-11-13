@@ -4,12 +4,12 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-# How many blocks a finder looks through, nearest first.
+# How many blocks a finder looks through, nearest first; where WHERE leaves out every one, it looks through 8 times as
+# many, and so on, until one passes or none are left within its radius (#552).
 LIMIT = 256
 # Where the library may look, a function of a Pos (None: anywhere): the finders here, lib.trees.next_tree and
 # lib.stock.chests leave out each position it is false for, so lib.get neither takes from nor gathers outside it, nor
-# counts on it in a cost. colony.common sets it to in_colony. ponytail: the LIMIT nearest blocks are looked through
-# before it, so a bot far outside it may find none of the blocks within.
+# counts on it in a cost. colony.common sets it to in_colony.
 WHERE = None
 
 
@@ -18,13 +18,31 @@ def allowed(p):
     return WHERE is None or WHERE(p)
 
 
+def found(what, radius, keep, first=False):
+    """The blocks what selects within radius, nearest first, that keep(p) and WHERE allow, from the LIMIT nearest;
+    where WHERE is set and leaves out each of those, from 8 times as many, and so on (ponytail: a bot far outside WHERE
+    reads up to the whole radius, and rereads the nearest each time). With first, only the first one."""
+    limit = LIMIT
+    done = 0
+    while True:
+        ps = scan(what, radius=radius, limit=limit)
+        out = []
+        for p in ps[done:]:
+            if allowed(p) and keep(p):
+                out.append(p)
+                if first:
+                    return out
+        if out or WHERE is None or len(ps) < limit:
+            return out
+        done = limit
+        limit = limit * 8
+
+
 def nearest(what, radius=32, where=None):
     """The nearest block what selects within radius for which where(p) is true (any, where is None) and WHERE allows;
     None if there is none."""
-    for p in scan(what, radius=radius, limit=LIMIT):
-        if (where is None or where(p)) and allowed(p):
-            return p
-    return None
+    ps = found(what, radius, lambda p: where is None or where(p), True)
+    return ps[0] if ps else None
 
 
 def is_air(p):
@@ -43,9 +61,8 @@ def exposed(what, radius=32, skip=None):
     which it mines sideways without digging a pit; else the nearest exposed one below; None if there is none. Leaves out
     the positions in the dict skip and those WHERE leaves out."""
     feet = pos().y
-    found = [p for p in scan(what, radius=radius, limit=LIMIT)
-             if (skip is None or p not in skip) and allowed(p) and is_open(p)]
-    for p in found:  # nearest first
+    ps = found(what, radius, lambda p: (skip is None or p not in skip) and is_open(p))
+    for p in ps:  # nearest first
         if p.y >= feet:
             return p
-    return found[0] if found else None
+    return ps[0] if ps else None

@@ -72,7 +72,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     within radius, nearest first, but for those its pickaxe does not drop (lib.tools.drops); where they give too few, digs stairs down to y (best_y(item) where None) towards
     facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
     staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where ROUNDS branches found
-    too little or there is no y to dig to (emerald), or where a step failed."""
+    too little, where its staircase or branches reach the edge of lib.find.WHERE, or there is no y to dig to (emerald),
+    or where a step failed."""
     key = short(item)
     if key not in ORES:
         return result("no_recipe", None, {"minecraft:" + key: n})
@@ -100,6 +101,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
         if not r["ok"] or count(key) >= target:
             break
         r = branch(length, facing=facing)
+    if r["reason"] == "outside":
+        r = result()  # ponytail: no other facing is tried; it gives no_ore below
     # Where it dug no staircase, as at y already, it walks back to start: digging up would look for a surface, which
     # the Nether has none of.
     up = stairs_up() if memory.get("stairs") is not None else back(start)
@@ -126,11 +129,20 @@ def cut(p, stand, opened):
     return lib.shaft.dig(p, opened + air, stand)
 
 
+def outside(cells):
+    """result("outside") at the first of cells lib.find.WHERE leaves out, None where it allows them all (#552)."""
+    for p in cells:
+        if not lib.find.allowed(p):
+            return result("outside", p)
+    return None
+
+
 def stairs_to(y, facing="north"):
     """Digs a 1-wide staircase from the bot's feet down to y, one block towards facing for each block down, and walks
     down it. Each step is three blocks tall, so the bot walks back up it; it never digs straight down. Remembers the top
     in memory["stairs"] for stairs_up, also where it goes on from the bottom of a staircase it dug before. Gives
-    result(): ok, or the reason a step failed with at."""
+    result(): ok, outside with at where the next step has a block lib.find.WHERE leaves out, or the reason a step failed
+    with at."""
     step = FACING[facing]
     here = pos()
     kept = memory.get("stairs")
@@ -139,6 +151,9 @@ def stairs_to(y, facing="north"):
     while here.y > y:
         down = here + (step[0], -1, step[2])
         cells = [down.up(2), down.up(), down]
+        failure = outside(cells)
+        if failure:
+            return failure
         opened = opened + cells
         for p in cells:
             failure = cut(p, here, opened)
@@ -230,13 +245,17 @@ def dig_up(facing):
 def branch(length, every=8, facing="north"):
     """Digs a tunnel two blocks tall length blocks on from the bot's feet towards facing and walks it, mining each ore
     vein in its walls and ceiling that its pickaxe drops (lib.mine.veins) and putting a torch on the floor every every blocks while it carries one. Walls off a
-    fluid or falling block beside it as lib.shaft does. Gives result(): ok, or the reason it stopped with at."""
+    fluid or falling block beside it as lib.shaft does. Gives result(): ok, outside with at where the next block is one
+    lib.find.WHERE leaves out, or the reason it stopped with at."""
     step = FACING[facing]
     stand = pos()
     opened = [stand, stand.up()]
     for i in range(1, length + 1):
         feet = stand + step
         head = feet.up()
+        failure = outside([feet, head])
+        if failure:
+            return failure
         opened = opened + [feet, head]
         for p in (head, feet):
             failure = cut(p, stand, opened)

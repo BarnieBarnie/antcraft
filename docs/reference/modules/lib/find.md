@@ -2,7 +2,7 @@
 
 Finders over [`scan`](../../world/scan.md): they take no ticks of their own and give a position or `None`. A module of the mod's default library: `import lib.find` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/find.py`, and a primitive: it imports nothing, and every skill may import it (see [Writing library functions](../../index.md#writing-library-functions)).
 
-Each looks through the 256 blocks nearest the bot that `what` selects (`LIMIT`), so a search may pause as `scan` does.
+Each looks through the 256 blocks nearest the bot that `what` selects (`LIMIT`), so a search may pause as `scan` does. Where [`WHERE`](#where) is set and leaves out every one of those (or the finder's own filter does), it looks through 8 times as many, then 8 times that, until one passes or no more are within `radius`: a bot far outside the area still finds a block within it, at the cost of reading up to the whole radius.
 
 ## `nearest(what, radius=32, where=None)`
 
@@ -32,7 +32,7 @@ if ore is not None:
 
 ## `WHERE`
 
-Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` (the default) for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. [`colony/common`](../colony/common.md) sets it to `in_colony`. Each finder looks through the `LIMIT` nearest blocks before it, so a bot far outside the area may find none of the blocks within.
+Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` (the default) for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. [`colony/common`](../colony/common.md) sets it to `in_colony`. Where the `LIMIT` nearest blocks are all outside it, the finders look further (see above). [`lib.dig`](dig.md)'s `stairs_to` and `branch` dig nothing it is false for.
 
 ```python
 import lib.find

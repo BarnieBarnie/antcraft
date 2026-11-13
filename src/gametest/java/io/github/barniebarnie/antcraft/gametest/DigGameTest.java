@@ -78,6 +78,28 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			List.of("True", "True", "True", "None"));
 	}
 
+	/**
+	 * With lib.find.LIMIT 8, ten gold blocks next to the bot outside lib.find.WHERE and one inside it across the area: the
+	 * finders widen the scan past the 8 nearest and find the one inside (#552).
+	 */
+	@GameTest(maxTicks = 40)
+	public void findersLookPastTheLimitForOneWhereAllows(GameTestHelper helper) {
+		for (int z = 0; z < 5; z++) {
+			helper.setBlock(0, 1, z, Blocks.GOLD_BLOCK);
+			helper.setBlock(1, 1, z, Blocks.GOLD_BLOCK);
+		}
+		helper.setBlock(7, 1, 7, Blocks.GOLD_BLOCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		String inside = at(helper, 7, 1, 7);
+		expect(helper, bot, """
+			import lib.find
+			lib.find.LIMIT = 8
+			lib.find.WHERE = lambda p: p.x >= %d
+			print(lib.find.nearest("gold_block", 16) == Pos%s, lib.find.exposed("gold_block", 16) == Pos%s)
+			""".formatted(helper.absolutePos(new BlockPos(6, 0, 0)).getX(), inside, inside),
+			List.of("True True"));
+	}
+
 	/** An exposed iron vein of two blocks gives two raw iron. */
 	@GameTest(maxTicks = 150)
 	public void oreFromAnExposedVein(GameTestHelper helper) {
@@ -142,6 +164,33 @@ public class DigGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.TORCH, 7, 1, 3);
 				helper.assertBlockPresent(Blocks.AIR, 4, 2, 2);
 				helper.assertBlockPresent(Blocks.AIR, 5, 2, 4);
+			});
+	}
+
+	/**
+	 * With lib.find.WHERE true only up to x 4, a branch of 6 east stops at its edge with outside, digging nothing past it;
+	 * ore, already at its y, branches no further and gives no_ore (#552).
+	 */
+	@GameTest(maxTicks = 260)
+	public void branchStaysWhereAllowed(GameTestHelper helper) {
+		stone(helper, 4);
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			import lib.find
+			lib.find.WHERE = lambda p: p.x <= %d
+			r = lib.dig.branch(6, 3, "east")
+			print(r["ok"], r["reason"], r["at"] == Pos%s)
+			r = lib.dig.ore("coal", 1, radius=2, y=pos().y, facing="east")
+			print(r["ok"], r["reason"], r["missing"])
+			""".formatted(helper.absolutePos(new BlockPos(4, 0, 0)).getX(), at(helper, 5, 1, 3)),
+			List.of("False outside True", "False no_ore {'minecraft:coal': 1}"),
+			() -> {
+				helper.assertBlockPresent(Blocks.AIR, 4, 1, 3);
+				helper.assertBlockPresent(Blocks.STONE, 5, 1, 3);
+				helper.assertBlockPresent(Blocks.STONE, 5, 2, 3);
 			});
 	}
 
