@@ -306,9 +306,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * Milestone 7's acceptance: a builder takes a posted build of the cobble step, finds the core empty and asks for its
-	 * materials with haul jobs; a hauler brings them from a chest in the colony to the core, and the builder fetches them
-	 * there and builds.
+	 * Milestone 7's acceptance: a builder takes a posted build of the cobble step and finds the core empty; the materials
+	 * are in a chest in the colony, which the builder borrows them from with lib.get (#543) or a hauler brings to the
+	 * core, and the builder builds.
 	 */
 	@GameTest(maxTicks = 200)
 	public void aBuilderAndAHaulerBuildAPostedCobbleStepFromAChest(GameTestHelper helper) {
@@ -336,10 +336,11 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * An idle bot homed where the cobble step's second cobblestone goes, standing over the edge where the first goes, is
-	 * asked to make way once (#388): the builder finds one cobblestone in the core, stops with missing_ingredients and
-	 * builds on once the second is put there, and the idle bot keeps off the site in between instead of going back home.
+	 * asked to make way once (#388): the builder finds one cobblestone in the core, stops with missing_ingredients, fails
+	 * to get the second with lib.get (no tree for a pickaxe) and posts a haul job for it (#543), builds on once the second
+	 * is put there, and the idle bot keeps off the site in between instead of going back home.
 	 */
-	@GameTest(maxTicks = 200)
+	@GameTest(maxTicks = 420)
 	public void anIdleBotMakesWayOnceForABuildThatGoesOnAfterMissingIngredients(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -423,6 +424,33 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(printed(builder), List.of("missing_ingredients"), "printed");
 			helper.assertValueEqual(idle.blockPosition(), helper.absolutePos(new BlockPos(4, 1, 3)), "where the idle bot stands");
 			helper.assertValueEqual(idle.getWaysMade(), 1, "times the idle bot made way");
+		});
+	}
+
+	/**
+	 * A lone builder with only the stairs in the core gets the cobble step's cobblestone itself with lib.get (#543): logs
+	 * from the oak of {@link TreesGameTest}, a wooden pickaxe, then the stone; no haul job is posted.
+	 */
+	@GameTest(maxTicks = 1100)
+	public void aLoneBuilderGathersTheCobblestoneTheCoreLacks(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		for (int z = 4; z <= 6; z++) {
+			helper.setBlock(1, 1, z, Blocks.STONE);
+		}
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		container(helper, 6, 1, 1).setItem(0, new ItemStack(Items.OAK_STAIRS));
+		AntBot builder = member(helper, colony, 2, 1, 1);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		data.put("at", pos(helper, 3, 1, 3));
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		runDefault(helper, builder, "colony.builder");
+		failOnWarning(helper, builder);
+		helper.onEachTick(() -> helper.assertTrue(colony.jobs().jobs("haul").isEmpty(), "haul jobs: " + colony.jobs().jobs("haul")));
+		helper.succeedWhen(() -> {
+			WorkGameTest.assertCobbleStep(helper, 0);
+			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
 		});
 	}
 
