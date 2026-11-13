@@ -126,7 +126,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			    return False
 			def here(p):
 			    return p == %s
-			print(lib.trees.next_tree(where=nowhere), lib.trees.next_tree(radius=8, where=here) == %s)
+			print(lib.trees.next_tree(radius=8, where=nowhere), lib.trees.next_tree(radius=8, where=here) == %s)
 			""".formatted(tree(helper), tree(helper)), List.of("None True"));
 	}
 
