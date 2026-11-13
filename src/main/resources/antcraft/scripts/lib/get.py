@@ -17,6 +17,7 @@ from lib.result import result
 
 LOGS = lib.trees.LOGS
 COBBLESTONE = lib.dig.COBBLESTONE
+COAL = "minecraft:coal"
 # How often get plans and gets the raw items again before it crafts with what it has.
 ROUNDS = 5
 # How many gets may wait on each other, the outermost included, before get gives up with cycle.
@@ -25,6 +26,9 @@ DEPTH = 8
 MATERIAL = {"pickaxe": "stone", "axe": "wood", "shovel": "dirt"}
 # Ticks to get one of a raw item, where its Source gives no estimate.
 ESTIMATE = 100
+# Ticks to get one of an ore's raw item where none of the ore is exposed within radius, so lib.dig digs stairs for it.
+# ponytail: one guess for every ore and depth; the length of the stairs if the choices it sways prove wrong.
+DEEP = 1000
 # The items being got, outermost first: a tool whose recipe needs one of them is not made for it.
 GETTING = []
 
@@ -32,13 +36,20 @@ GETTING = []
 class Source:
     """How get gathers a raw item: do(n, radius) gets n more of it within radius and gives result(), with a tool of
     kind tool held (None: no tool) of at least tier ("hand": the bare hand drops it too, so a tool is made only where it
-    pays; None: any tier); estimate is the ticks one takes, for choose."""
+    pays; None: any tier); estimate is the ticks one takes, for choose; ore the block or tag it digs, for ticks."""
 
-    def __init__(self, do, tool=None, tier=None, estimate=None):
+    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None):
         self.do = do
         self.tool = tool
         self.tier = tier
         self.estimate = ESTIMATE if estimate is None else estimate
+        self.ore = ore
+
+    def ticks(self, radius):
+        """estimate, or DEEP where none of ore is exposed within radius."""
+        if self.ore is not None and lib.find.exposed(self.ore, radius) is None:
+            return DEEP
+        return self.estimate
 
 
 def dig_up(what):
@@ -60,7 +71,8 @@ def dig_up(what):
 
 def ore(item, block, estimate):
     """The Source of a raw item lib.dig.ore digs, with a pickaxe that drops block."""
-    return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate)
+    return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate,
+                  lib.dig.ORES[item])
 
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =
@@ -124,11 +136,25 @@ def resolve(item, n, radius):
             continue
         if not p["gather"]:
             break
+        logs = wood_for_coal(p["gather"].get(COAL, 0), radius)
+        if logs and get(LOGS, count(LOGS) + logs, radius)["ok"]:
+            continue
         for raw, k in p["gather"].items():
             r = get(raw, count(key(raw)) + k, radius)
             if not r["ok"]:
                 return r
     return lib.craft.craft_here(item, n)
+
+
+def wood_for_coal(k, radius):
+    """The logs to get instead of k coal, where they cost less than the coal source and no chest within radius holds
+    coal: k to smelt into charcoal and two thirds as many burnt doing it, which as planks also burn as long as k coal.
+    0 where the coal is cheaper."""
+    logs = k + -(-2 * k // 3)
+    if not k or lib.stock.where(COAL, radius):
+        return 0
+    wood = SOURCES[LOGS].ticks(radius) * logs + lib.cost.SMELT * k
+    return logs if wood < SOURCES[COAL].ticks(radius) * k else 0
 
 
 def gather(source, n, radius):
@@ -156,9 +182,9 @@ def make_cost(item, n):
 def options(kind, uses=1, tier=None, radius=32):
     """The ways ensure_tool can give a tool of kind for uses blocks of at least tier, cheapest first, each a tuple
     (ticks, how, tier, at): ("hand", None) where tier is "hand"; ("carried", its tier) where the carried ones last;
-    ("chest", its tier) with at the chest, for a chest tool that lasts on its own; ("make", a tier of lib.craft.MADE)
-    with at how many to carry in all. ticks is cost.breaking for the uses, plus the walk to a chest or make_cost.
-    ponytail: a carried or chest tool that does not last on its own is left out, not used up first."""
+    ("chest", its tier) with at the chest, for a chest tool that lasts with the carried ones; ("make", a tier of
+    lib.craft.MADE) with at how many to carry in all. ticks is cost.breaking for the uses, plus the walk to a chest or
+    make_cost. ponytail: the uses of carried tools of another tier do not count toward making one."""
     material = MATERIAL.get(kind)
     tiers = lib.tools.TIERS
     ok = [t for t in tiers if tier in (None, "hand") or tiers.index(t) <= tiers.index(tier)]
@@ -170,12 +196,14 @@ def options(kind, uses=1, tier=None, radius=32):
     if tier == "hand":
         found.append((work(None), "hand", None, None))
     carried = [s for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok]
-    if carried and sum([lib.tools.uses_left(s) for s in carried]) >= uses:
+    # The uses the carried tools leave to the rest: a worn tool is used up first.
+    need = uses - sum([lib.tools.uses_left(s) for s in carried])
+    if carried and need <= 0:
         found.append((work(lib.tools.tier(carried[0])), "carried", lib.tools.tier(carried[0]), None))
     for chest in lib.stock.chests(radius):
         for s in container(chest) or []:
             t = lib.tools.tier(s)
-            if t in ok and matches(s, f"#minecraft:{kind}s") and lib.tools.uses_left(s) >= uses:
+            if t in ok and matches(s, f"#minecraft:{kind}s") and lib.tools.uses_left(s) >= need:
                 found.append((lib.cost.walk(pos(), chest) + work(t), "chest", t, chest))
     for t in lib.craft.MADE:
         tool = f"minecraft:{t}_{kind}"

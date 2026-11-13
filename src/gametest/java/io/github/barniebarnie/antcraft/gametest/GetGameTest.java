@@ -154,6 +154,24 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A stone pickaxe with 20 uses left counts toward a 30-use job: with it, a chest's stone pickaxe with 20 more is
+	 * enough and is borrowed rather than one made; for 50 uses the two are not and one is made (#519).
+	 */
+	@GameTest(maxTicks = 80)
+	public void chooseCountsAWornToolTowardTheJob(GameTestHelper helper) {
+		ItemStack worn = new ItemStack(Items.STONE_PICKAXE);
+		worn.setDamageValue(worn.getMaxDamage() - 20);
+		chest(helper, worn.copy());
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(worn);
+		run(helper, bot, """
+			from lib.get import choose
+			print(choose("pickaxe", 30, radius=8)[1:3], choose("pickaxe", 50, radius=8)[1:3])
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "('chest', 'stone') ('make', 'stone')"));
+	}
+
+	/**
 	 * A script's own source for clay balls, from a clay block, is used to get a clay block (four balls, crafted); dirt
 	 * comes from the default source, by hand.
 	 */
@@ -177,6 +195,38 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], count("dirt"))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True 1 0 [4]", "True 1"));
+	}
+
+	/**
+	 * A bot with a stone pickaxe and a furnace, no wood or coal, by the oak of {@link TreesGameTest} and eight exposed iron
+	 * ore: eight smelts plan a coal, but with no coal ore within radius get fells the oak for fuel and digs no stairs
+	 * (#519). The coal source fails, so digging for coal fails the test at once.
+	 */
+	@GameTest(maxTicks = 4500)
+	public void smeltsWithWoodWhereCoalIsDeep(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		for (int z = 0; z <= 3; z++) {
+			for (int y = 1; y <= 2; y++) {
+				helper.setBlock(7, y, z, Blocks.IRON_ORE);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 2);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		run(helper, bot, """
+			from lib.get import get, SOURCES
+			from lib.result import result
+			SOURCES["minecraft:coal"].do = lambda n, radius: result("dug_for_coal")
+			r = get("iron_ingot", 8, radius=8)
+			print(r["ok"], r["reason"], count("iron_ingot"), count("coal"))
+			""");
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (!log.isEmpty() && !log.equals(List.of("True None 8 0"))) {
+				helper.fail("printed " + log + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> printed(helper, bot, "True None 8 0"));
 	}
 
 	private static Container chest(GameTestHelper helper, ItemStack... stacks) {

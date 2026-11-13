@@ -30,7 +30,7 @@ The default kit, a list of `(item, n)` in the order `kit` gets them, the tools f
 
 Makes the bot carry each of `items`, a list of `(item, n)`, in order, with what is within `radius`: [`get(item, n, radius)`](get.md#getitem-n1-radius32) for each. A tool, an item named `<tier>_<kind>` such as `"stone_pickaxe"`, it gets with [`ensure_tool(kind, 1, tier, radius)`](get.md) instead, so a carried or chest tool of that kind and at least that tier does: with an iron pickaxe in a chest, `("stone_pickaxe", 1)` borrows it rather than making a stone one.
 
-An item whose recipe burns coal, such as a torch, gets charcoal first, smelted from logs, unless a chest within `radius` holds coal: the recipe plans coal, which [`lib.dig.ore`](dig.md) digs far down, while logs are at hand.
+An item whose recipe burns coal, such as a torch, gets charcoal smelted from logs where `get` finds that cheaper than coal: with no coal ore exposed within `radius` and none in a chest (see [`get`](get.md#getitem-n1-radius32)).
 
 - **Returns** a [`result()`](result.md) dict: `ok` once the bot carries every item; else the reason the first item that failed gave, with `missing`. What it got before it keeps.
 - **Pauses** yes, while it gathers, crafts and smelts.

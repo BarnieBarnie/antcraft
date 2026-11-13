@@ -5,10 +5,8 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
-import lib.craft
-import lib.stock
 import lib.tools
-from lib.get import get, ensure_tool, LOGS
+from lib.get import get, ensure_tool
 from lib.result import result
 
 # What kit() gets, in order: the tools first, so the rest is gathered with them.
@@ -26,20 +24,8 @@ def kit(items=KIT, radius=32):
         if tier in lib.tools.TIERS and kind in KINDS:
             r = ensure_tool(kind, 1, tier, radius)
         else:
-            r = charcoal_for(item, n, radius)
-            if r["ok"]:
-                r = get(item, n, radius)
+            r = get(item, n, radius)
         if not r["ok"]:
             return r
     return result()
 
-
-def charcoal_for(item, n, radius):
-    """Charcoal for the coal that n of item needs, smelted from logs, where no chest within radius holds coal: needs
-    plans coal, which lib.dig digs deep, while logs are at hand. Gives result()."""
-    k = lib.craft.plan(item, n)["gather"].get("minecraft:coal", 0)
-    if not k or lib.stock.where("coal", radius):
-        return result()
-    # A log burns 1.5 smelts, so k logs smelted take k * 2 / 3 more as fuel.
-    r = get(LOGS, count(LOGS) + k + -(-k * 2 // 3), radius)
-    return get("charcoal", count("charcoal") + k, radius) if r["ok"] else r
