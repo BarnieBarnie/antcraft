@@ -182,6 +182,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/farm`](modules/lib/farm.md): `CROPS`, `ripe(pos)`, `field(low, high)`, `till(spots)`, `plant(spots, seed=None)`, `harvest(spots)`, `tend(low, high, seed=None)`, a field harvested, tilled and replanted.
 - [`lib/storage`](modules/lib/storage.md): `KEEP_KINDS`, `deposit(keep=None, radius=32)`, `sort(chests)`, putting away loot and sorting chests.
 - [`lib/explore`](modules/lib/explore.md): `spiral(centre, step=32, rings=4)`, `look(radius=64, around=16)`, `explore(rings=4, step=32, until=None)`, `seen(what)`, `report()`, the biomes and structures a bot has seen, kept in `memory["seen"]`.
+- [`lib/build`](modules/lib/build.md): `materials(id, at, turn=0, mirror=False)`, `build_here(id, at, turn=0, mirror=False, radius=32)`, a blueprint built end to end: what its site lacks got, built, the borrowed given back.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 Kept for old scripts, each now a wrapper of the library function after it; new scripts call that one:

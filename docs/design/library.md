@@ -22,8 +22,8 @@ The library is written the Unix way: small functions that each do one thing well
 ## Layers
 
 ```text
- jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py   run with bot run jobs.<job> [args]
- kits         lib/bootstrap  lib/gather  lib/project                                   a set of things a job starts with; make and gather over get; resumable steps
+ jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py   run with bot run jobs.<job> [args]
+ kits         lib/bootstrap  lib/gather  lib/project  lib/build                        a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore  lib/farm  lib/storage     one skill each, preconditions assumed
  primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/retry  lib/home             no ticks, or a single action
@@ -75,6 +75,10 @@ New modules are marked *new*; the others exist and grow.
 
 `run(name, steps)` does a list of `Step(name, do, args=(), tries=1, optional=False)` in order and keeps the names of those done in `memory["projects"][name]`, so a project (settle a base, build a house, mine out a level) run again after a reload, a death or a stop goes on at the step it was on (#569). Each step goes through `lib.retry` up to `tries`; an optional step that fails is noted in `failed` and passed, a required one stops the project with its reason. It ends with `borrow.give_back()`, also on a failure, and gives `result()` with `missing` the list of the steps not done. `status(name)` and `reset(name)` read and forget it.
 
+### Kits: `lib/build`
+
+`materials(id, at, turn=0, mirror=False)` is what a blueprint's site still lacks (`blueprint(...)["missing"]`, #554); `build_here(id, at, turn=0, mirror=False, radius=32)` gets each of it with `get`, stopping at the first failure with its reason and what the bot lacks in `missing`, then `build`s, again while each round leaves less missing, and gives back what it borrowed, also on a failure (#571). `colony.builder` takes from the core first and posts haul jobs for what `get` fails on, so it uses `materials` and builds itself.
+
 ## Engine gaps
 
 What the library needs from the API:
@@ -84,7 +88,7 @@ What the library needs from the API:
 
 ## Example jobs
 
-Seven jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
+Eight jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
 
 1. **`jobs/bootstrap.py`**: an empty-handed bot gets `lib.bootstrap.KIT` from what is around: logs, a crafting table, a wooden pickaxe, cobblestone, the stone tools, a furnace, charcoal and torches; tools in a nearby chest are borrowed instead of made. Test: an empty bot by trees and stone; again with an iron pickaxe in a chest, which it uses and gives back.
 2. **`jobs/get.py <item> [n]`**: `get(ARGS[0], n)`, the resolver alone. Test: `iron_pickaxe` from nothing, with trees, stone and iron ore in the area.
@@ -93,5 +97,6 @@ Seven jobs in `jobs/`, each a few lines over the library, each with a game test.
 5. **`jobs/explore.py [what] [rings] [step]`**: `lib.explore.explore` until `seen(what)`, then home and `report()`. Tests: a village put in the area, found by `explore` with 2-block steps; the job walking a whole spiral of them for what is not there.
 6. **`jobs/farm.py <x1> <y1> <z1> <x2> <y2> <z2> [crop]`**: `ensure_tool("hoe")`, the seeds with `get`, `lib.farm.tend`, the harvest into the nearest chest, `give_back()`. Test: a 3 by 3 field with a hoe and seeds in a chest.
 7. **`jobs/store.py [radius]`**: `lib.storage.deposit`, then home. Test: dirt carried, a chest in the area.
+8. **`jobs/build.py <blueprint> x y z [turn] [radius]`**: `lib.build.build_here`, then says whether it built it. Tests: a one-cobblestone blueprint built from stone with a borrowed pickaxe, given back; oak stairs with no wood about failing with them in `missing` and the borrowed cobblestone given back.
 
 A test area is 8x8x8 blocks: tests build small trees and seed ore close, and set `best_y` through an argument rather than dig to y=16.

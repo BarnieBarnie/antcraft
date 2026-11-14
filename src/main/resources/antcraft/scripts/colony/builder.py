@@ -1,6 +1,6 @@
 # A colony builder: takes "build" jobs off the colony's job board, fetches the
 # materials from the Colony Core and builds. It asks only for what the site
-# still lacks (blueprint(...)["missing"]), so a half-built one costs only the
+# still lacks (lib.build.materials), so a half-built one costs only the
 # rest. What the core lacks it gets itself with lib.get (cobblestone, planks,
 # logs, dirt: gathered or crafted within the colony, chests in it borrowed
 # from, within a radius that just covers the colony, so get fails fast where
@@ -23,6 +23,7 @@
 # delete it and the default comes back when the server starts.
 from colony.common import core, store
 from lib.borrow import give_back
+from lib.build import materials
 from lib.stock import take_up_to
 
 
@@ -49,7 +50,7 @@ def build_job(job):
         return
     while True:
         # What the site still lacks, not the whole blueprint's materials (#554).
-        left = blueprint(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False))["missing"]
+        left = materials(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False))
         short = [item for item, n in left.items() if not take_up_to(item, n, chests=[core()])["ok"]]
         r = build(d["blueprint"], d["at"], d.get("turn", 0), d.get("mirror", False), job=job["id"])
         if r:
