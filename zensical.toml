@@ -91,6 +91,7 @@ nav = [
     "cookbook/strip-mine.md",
     "cookbook/explore.md",
     "cookbook/build.md",
+    "cookbook/settle.md",
   ] },
   { "Development" = ["development/index.md"] },
   { "Design" = ["design/index.md", "design/library.md"] },

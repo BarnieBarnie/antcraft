@@ -89,7 +89,7 @@ What the library needs from the API:
 
 ## Example jobs
 
-Nine jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
+Ten jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
 
 1. **`jobs/bootstrap.py`**: an empty-handed bot gets `lib.bootstrap.KIT` from what is around: logs, a crafting table, a wooden pickaxe, cobblestone, the stone tools, a furnace, charcoal and torches; tools in a nearby chest are borrowed instead of made. Test: an empty bot by trees and stone; again with an iron pickaxe in a chest, which it uses and gives back.
 2. **`jobs/get.py <item> [n]`**: `get(ARGS[0], n)`, the resolver alone. Test: `iron_pickaxe` from nothing, with trees, stone and iron ore in the area.
@@ -100,5 +100,6 @@ Nine jobs in `jobs/`, each a few lines over the library, each with a game test. 
 7. **`jobs/store.py [radius]`**: `lib.storage.deposit`, then home. Test: dirt carried, a chest in the area.
 8. **`jobs/build.py <blueprint> x y z [turn] [radius]`**: `lib.build.build_here`, then says whether it built it. Tests: a one-cobblestone blueprint built from stone with a borrowed pickaxe, given back; oak stairs with no wood about failing with them in `missing` and the borrowed cobblestone given back.
 9. **`jobs/flatten.py <x1> <z1> <x2> <z2> [y]`**: `ensure_tool` for each kind `lib.terrain.needs` lists, `lib.terrain.flatten` with dirt, `get` the dirt it fell short of, `give_back()`. Test: a 4 by 4 plot with a bump and a hole, levelled at its median height.
+10. **`jobs/settle.py [x y z [radius]]`**: one `lib.project.run("settle", ...)`: `kit` (stone tools, a crafting table, a chest, dirt), `lib.terrain.flatten`, `lib.build.build_here` of `antcraft:starter_house`, `place` the chest and crafting table, `lib.farm.tend` a 3 by 3 field (optional), `lib.storage.deposit` (optional), `set_home` inside. Test (wide area): stopped as it starts the house and run again, the kit and flatten are not done again; the house stands, the field is planted, the borrowed tools are back ([cookbook](../cookbook/settle.md)).
 
 A test area is 8x8x8 blocks: tests build small trees and seed ore close, and set `best_y` through an argument rather than dig to y=16.
