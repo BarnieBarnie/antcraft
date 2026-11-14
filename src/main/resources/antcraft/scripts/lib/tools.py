@@ -60,12 +60,24 @@ def enough(kind, uses):
     return sum([uses_left(s) for s in carried(kind)]) >= uses
 
 
+_BY_TAGS = {}  # tier_for of the block ids NEEDS leaves out, read once from their tags
+
+
 def tier_for(what):
     """The lowest pickaxe tier that drops what ("iron" for "minecraft:diamond_ore"); "wooden" for a block any pickaxe
-    drops. what is a block id, looked up in NEEDS, or a Pos, whose block's needs_*_tool tags tell, modded blocks too."""
+    drops. what is a block id, looked up in NEEDS, else in its block's needs_*_tool tags (block_tags), or a Pos, whose
+    block's tags tell; so modded blocks have their tier too."""
     if isinstance(what, str):
-        return NEEDS.get(what.replace("minecraft:", ""), "wooden")
-    tags = block(what).tags
+        name = what.replace("minecraft:", "")
+        if name in NEEDS:
+            return NEEDS[name]
+        if what not in _BY_TAGS:
+            _BY_TAGS[what] = _tier_of(block_tags(what))
+        return _BY_TAGS[what]
+    return _tier_of(block(what).tags)
+
+
+def _tier_of(tags):
     for t in ["diamond", "iron", "stone"]:
         if f"#minecraft:needs_{t}_tool" in tags:
             return t

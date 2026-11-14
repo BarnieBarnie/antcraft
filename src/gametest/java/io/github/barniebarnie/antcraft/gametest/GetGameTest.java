@@ -465,6 +465,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A source's cost counts DEEP once for all it gets, as one flight of stairs reaches a vein, and takes the pickaxe tier
 	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
+	 * NEEDS says "wooden" for it, so the source's own tier by id (which reads the tags too since #566) differs.
 	 */
 	@GameTest(maxTicks = 40)
 	public void aSourceCostCountsDeepOnceAndTheBlocksTier(GameTestHelper helper) {
@@ -473,7 +474,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			import lib.dig
 			from lib.get import ore, DEEP
+			import lib.tools
 			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
+			lib.tools.NEEDS["lodestone"] = "wooden"
 			s = ore("lodestone", "minecraft:lodestone", 60)
 			print(s.cost(3, 8), s.cost(3, 1)[0] - DEEP, s.cost(3, 1)[1])
 			""");

@@ -216,7 +216,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "tag_items", "held", "entities",
 		"items_near", "structures", "deaths", "last_death", "colony", "time", "is_day", "placed_scaffold", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
-		"drop_job", "health", "max_health", "attack", "needs", "cooks_in", "build_placement");
+		"drop_job", "block_tags", "health", "max_health", "attack", "needs", "cooks_in", "build_placement");
 
 	/**
 	 * Every native that takes a position refuses one from another dimension (a home in the Nether over a chest in the
@@ -1133,5 +1133,17 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, "print(blueprint('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")['missing'])\n",
 			List.of("{'minecraft:cobblestone': 1, 'minecraft:oak_stairs': 1}"));
+	}
+
+	/**
+	 * missing is read in the level of at's dimension, not the bot's (#566): the cobblestone in place in the Overworld
+	 * does not count for a copy at the same coordinates in the Nether, where nothing is built.
+	 */
+	@GameTest(maxTicks = 20)
+	public void blueprintAtInAnotherDimensionReadsThatDimension(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.COBBLESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		expect(helper, bot, "print(blueprint('antcraft:cobble_step', Pos" + at(helper, 3, 1, 3).replace(")", ", 'minecraft:the_nether')") + ")['missing'])\n",
+			List.of("{'minecraft:cobblestone': 2, 'minecraft:oak_stairs': 1}"));
 	}
 }

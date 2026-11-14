@@ -75,7 +75,8 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * tier_for of a position reads the block's needs_*_tool tags (#515): a lodestone, which the game test
-	 * data pack adds to #minecraft:needs_iron_tool and lib.tools.NEEDS leaves out, gives "iron" there and "wooden" by id.
+	 * data pack adds to #minecraft:needs_iron_tool and lib.tools.NEEDS leaves out, gives "iron" there, and by id too, as
+	 * tier_for of an id NEEDS leaves out reads the block's tags (#566).
 	 */
 	@GameTest(maxTicks = 40)
 	public void tierForAPositionReadsTheBlocksTags(GameTestHelper helper) {
@@ -91,7 +92,7 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, name);
 		helper.succeedWhen(() -> {
 			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
-			helper.assertTrue(log.equals(List.of("iron diamond wooden", "wooden")), "printed " + log);
+			helper.assertTrue(log.equals(List.of("iron diamond wooden", "iron")), "printed " + log);
 		});
 	}
 

@@ -22,7 +22,7 @@ A `kind` is `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`; its tools ar
 ## `tier_for(what)`
 
 - **Returns** the lowest pickaxe tier that drops a block: `"stone"` for iron, copper and lapis ore, `"iron"` for gold, redstone, emerald and diamond ore, `"diamond"` for obsidian and ancient debris (and the blocks made of each), `"wooden"` for any other block.
-- `what` is a [`Pos`](../../types/pos.md) (or a tuple) or a block id (`"diamond_ore"` or `"minecraft:diamond_ore"`). At a position it reads the block's `#minecraft:needs_stone_tool`, `needs_iron_tool` and `needs_diamond_tool` tags ([`block(pos).tags`](../../types/block.md)), so a modded ore a data pack puts in those tags gives its tier. For an id it reads a table of the vanilla blocks of those tags (`NEEDS`), so a modded block gives `"wooden"` unless you add it to `lib.tools.NEEDS` in your script; pass its position where you know it.
+- `what` is a [`Pos`](../../types/pos.md) (or a tuple) or a block id (`"diamond_ore"` or `"minecraft:diamond_ore"`). At a position it reads the block's `#minecraft:needs_stone_tool`, `needs_iron_tool` and `needs_diamond_tool` tags ([`block(pos).tags`](../../types/block.md)), so a modded ore a data pack puts in those tags gives its tier. For an id it reads a table of the vanilla blocks of those tags (`NEEDS`) and, for an id not in it, the same tags of the block by its id ([`block_tags`](../../world/block_tags.md)), read once per id, so a modded ore gives its tier by id too.
 - **Pauses** no.
 
 ## `drops(p)`

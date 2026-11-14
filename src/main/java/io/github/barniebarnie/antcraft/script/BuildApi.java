@@ -28,8 +28,10 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.InteractionHand;
@@ -79,12 +81,14 @@ public final class BuildApi {
 			Optional<StructureTemplate> template = Blueprints.template(level.getServer(), blueprint.get());
 			PyDict dict = describe(blueprint.get(), BlueprintSummary.of(parsed, blueprint.get(), template), at, turn, mirror);
 			if (at != null) {
-				// What the world there does not match yet (#554); a block not loaded counts as missing.
-				// ponytail: read in the bot's level, whatever the dimension of at.
-				LoadedBlocks loaded = new LoadedBlocks(level);
+				// What the world there does not match yet (#554), read in at's dimension (#566); a block not loaded, or in
+				// a dimension the server does not have, counts as missing.
+				ServerLevel there = at.dimension() == null ? level
+					: level.getServer().getLevel(ResourceKey.create(Registries.DIMENSION, Identifier.parse(at.dimension())));
+				LoadedBlocks loaded = there == null ? null : new LoadedBlocks(there);
 				PyDict missing = new PyDict();
 				plan(level, Values.str(id), WorkApi.blockPos(at), turn, mirror).ifPresent(planned -> planned.plan()
-					.materials(pos -> Optional.ofNullable(loaded.loaded(pos)).orElse(Blocks.AIR.defaultBlockState()))
+					.materials(pos -> Optional.ofNullable(loaded == null ? null : loaded.loaded(pos)).orElse(Blocks.AIR.defaultBlockState()))
 					.forEach((item, count) -> missing.put(BuiltInRegistries.ITEM.getKey(item).toString(), (long) count)));
 				dict.put("missing", missing);
 			}

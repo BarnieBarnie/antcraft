@@ -30,15 +30,18 @@ def haul(job):
     item = d["item"]
     n = d.get("n")
     sources = [d["from"]] if d.get("from") is not None else holders(item)
+    why = "no_item"  # no container holds it
     for p in sources:
         if n is not None and count(item) >= n:
             break
-        take(p, item, None if n is None else n - count(item))
+        r = take(p, item, None if n is None else n - count(item))
+        if not r:
+            why = r.reason
     if has(item):
         to = d.get("to")
         put(core() if to is None else to, item, n)
     elif d.get("for") is None or any([j["id"] == d["for"] for j in jobs()]):
-        warn(f"no {item} to haul in the colony")
+        warn(f"no {item} to haul in the colony: {why}")
     # else the job it was for is done: its poster got the items another way (#557), so there is nothing to say.
     finish_job(job["id"])
 

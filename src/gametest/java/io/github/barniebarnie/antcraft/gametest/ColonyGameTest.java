@@ -551,6 +551,23 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null)));
 	}
 
+	/** A haul that finds nothing says why its take failed (#566): from an empty chest, no_item. */
+	@GameTest(maxTicks = 100)
+	public void aHaulThatFindsNothingWarnsWithTheReason(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		helper.setBlock(1, 1, 1, Blocks.CHEST);
+		BlockPos chest = helper.absolutePos(new BlockPos(1, 1, 1));
+		AntBot hauler = member(helper, colony, 6, 1, 4);
+		PyDict data = new PyDict();
+		data.put("item", "minecraft:cobblestone");
+		data.put("from", new Pos(chest.getX(), chest.getY(), chest.getZ()));
+		colony.jobs().post("haul", Memory.encode(data), hauler.getUUID());
+		runDefault(helper, hauler, "colony.hauler");
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(hauler, Output.Level.WARN),
+			List.of("no minecraft:cobblestone to haul in the colony: no_item"), "warnings"));
+	}
+
 	/**
 	 * Importing {@code colony.common} keeps the library within the colony (#540): {@code lib.find.WHERE} is
 	 * {@code in_colony}, so {@code lib.stock.chests} gives the core but not a chest just outside the colony's radius.

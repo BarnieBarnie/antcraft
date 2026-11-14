@@ -32,7 +32,7 @@ The shaft in `memory["shaft"]` with its branches of round `r`, as `mineshaft_at`
 
 ## `tier_at(y)`
 
-The pickaxe tier the ores common at height `y` need: the best [`lib.tools.tier_for`](tools.md) of the ores of `SPREAD` (each ore block with the heights it is common at, from the game's ore spread) at `y`, `"wooden"` where none is. `"stone"` at 16, where iron is the best of them; `"iron"` below -8, where gold, redstone and diamonds are. A modded ore is not in `SPREAD`; `colony.miner` takes a tier per level from `colony_memory["mineshaft"]["tiers"]` where this is not right.
+The pickaxe tier the ores common at height `y` need: the best [`lib.tools.tier_for`](tools.md) of the ores of `SPREAD` (each ore block with the heights it is common at, from the game's ore spread) at `y`, `"wooden"` where none is. `"stone"` at 16, where iron is the best of them; `"iron"` below -8, where gold, redstone and diamonds are. A modded ore is not in `SPREAD`; add it with its heights in your script and `tier_for` gives its tier from its `needs_*_tool` tags. Else `colony.miner` takes a tier per level from `colony_memory["mineshaft"]["tiers"]` where this is not right.
 
 ## Example
 

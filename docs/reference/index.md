@@ -36,6 +36,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | Builtin | Signature | Does |
 |---|---|---|
 | [`block`](world/block.md) | `block(pos)` | the [`Block`](types/block.md) at `pos`, or `None` where it is not loaded |
+| [`block_tags`](world/block_tags.md) | `block_tags(block)` | the tags of a block id, such as `"#minecraft:needs_iron_tool"` |
 | [`surface`](world/surface.md) | `surface(pos)` | the open spot on top of `pos`'s column, under the sky, or `None` where it is not loaded or in the Nether |
 | [`biome`](world/biome.md) | `biome(pos=None)` | the id of the biome at `pos` (the bot's feet), or `None` where it is not loaded |
 | [`structures`](world/structures.md) | `structures(radius=64)` | the structures (villages, mineshafts, ...) whose box is near, nearest first, in loaded chunks |

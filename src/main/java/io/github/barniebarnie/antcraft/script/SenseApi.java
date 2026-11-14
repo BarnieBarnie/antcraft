@@ -12,11 +12,13 @@ import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
+import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongSet;
@@ -27,6 +29,7 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -111,6 +114,13 @@ public final class SenseApi {
 			return Selector.matches(args[0], args[1]);
 		});
 		natives.register("tag_items", 20, call -> Selector.tagItems(Args.bind("tag_items", call, 1, "tag")[0]));
+		natives.register("block_tags", 20, call -> {
+			Identifier id = Identifier.tryParse(Values.str(Args.bind("block_tags", call, 1, "block")[0]));
+			PyList tags = new PyList();
+			Optional.ofNullable(id).flatMap(BuiltInRegistries.BLOCK::getOptional).ifPresent(block -> block.defaultBlockState().tags()
+				.map(tag -> "#" + tag.location()).sorted().forEach(tags.items::add));
+			return tags;
+		});
 		natives.register("held", call -> {
 			Args.bind("held", call, 0);
 			ItemStack hand = bot(run, call).getMainHandItem();
