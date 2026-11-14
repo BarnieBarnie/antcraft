@@ -170,6 +170,7 @@ public class BotsScreen extends Screen {
 		private EditBox search;
 		private EditBox args;
 		private int scroll;
+		private int fit = 1;
 
 		PickScript(BotsScreen parent, BotNetworking.BotEntry bot) {
 			super(Component.translatable("screen.antcraft.bots.pick", bot.name()));
@@ -209,7 +210,7 @@ public class BotsScreen extends Screen {
 			this.matches.forEach(this::removeWidget);
 			this.matches.clear();
 			int top = TOP + 2 * (BUTTON_HEIGHT + 4);
-			int fit = Math.max(1, (this.height - MARGIN - BAR_HEIGHT - 4 - top + 2) / (BUTTON_HEIGHT + 2));
+			int fit = this.fit = Math.max(1, (this.height - MARGIN - BAR_HEIGHT - 4 - top + 2) / (BUTTON_HEIGHT + 2));
 			List<String> found = this.found();
 			this.scroll = Math.clamp(this.scroll, 0, Math.max(0, found.size() - fit));
 			int y = top;
@@ -267,6 +268,11 @@ public class BotsScreen extends Screen {
 			graphics.text(this.font, this.title, MARGIN, 8, WHITE);
 			if (this.found().isEmpty()) {
 				graphics.text(this.font, Component.translatable("screen.antcraft.bots.no_match"), MARGIN, TOP + 2 * (BUTTON_HEIGHT + 4), GREY);
+			}
+			int[] shown = ScriptSearch.shown(this.scroll, this.fit, this.found().size());
+			if (shown != null) {
+				graphics.text(this.font, Component.translatable("screen.antcraft.bots.shown", shown[0], shown[1], this.found().size()),
+					MARGIN, this.height - MARGIN - BAR_HEIGHT + (BAR_HEIGHT - this.font.lineHeight) / 2, GREY);
 			}
 		}
 	}

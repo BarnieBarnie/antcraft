@@ -28,6 +28,14 @@ public final class ScriptSearch {
 	}
 
 	/**
+	 * The first and last match shown, counted from 1, when {@code fit} matches from the {@code scroll}th on are shown of
+	 * {@code total}; null when they all fit.
+	 */
+	public static int[] shown(int scroll, int fit, int total) {
+		return total > fit ? new int[] {scroll + 1, Math.min(total, scroll + fit)} : null;
+	}
+
+	/**
 	 * Whether {@code name} is a module other scripts import, not one to run: the {@code lib} package and the
 	 * {@code common} module of a package such as {@code colony.common}. Listed last rather than left out, so the picker
 	 * shows every script {@code script list} does, and a script this guess gets wrong only moves down.

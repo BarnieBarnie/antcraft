@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.script.editor;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.util.List;
 import java.util.Set;
@@ -23,5 +25,13 @@ class ScriptSearchTest {
 			ScriptSearch.matching("", names));
 		assertEquals(List.of("jobs.forester", "lib.trees"), ScriptSearch.matching("es", Set.of("lib.trees", "jobs.forester")));
 		assertEquals(List.of("jobs.cook", "colony.common"), ScriptSearch.matching("co", Set.of("colony.common", "jobs.cook")));
+	}
+
+	@Test
+	void theShownRangeIsCountedFromOneAndOnlyWhenNotAllMatchesFit() {
+		assertArrayEquals(new int[] {1, 12}, ScriptSearch.shown(0, 12, 40));
+		assertArrayEquals(new int[] {29, 40}, ScriptSearch.shown(28, 12, 40));
+		assertNull(ScriptSearch.shown(0, 12, 12));
+		assertNull(ScriptSearch.shown(0, 12, 3));
 	}
 }

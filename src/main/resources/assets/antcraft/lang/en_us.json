@@ -101,6 +101,7 @@
 	"screen.antcraft.bots.search": "Search scripts",
 	"screen.antcraft.bots.args": "Args (optional)",
 	"screen.antcraft.bots.no_match": "No script matches",
+	"screen.antcraft.bots.shown": "%s-%s of %s",
 	"screen.antcraft.bots.inventory": "Inventory",
 	"screen.antcraft.bots.inventory.empty": "Empty"
 }
