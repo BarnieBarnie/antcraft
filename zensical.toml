@@ -73,6 +73,7 @@ nav = [
       "reference/modules/lib/farm.md",
       "reference/modules/lib/storage.md",
       "reference/modules/lib/build.md",
+      "reference/modules/lib/terrain.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },
