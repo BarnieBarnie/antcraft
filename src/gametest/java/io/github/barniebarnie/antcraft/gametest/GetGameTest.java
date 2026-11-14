@@ -162,8 +162,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A copper axe carried, a tool of no lib.tools.TIERS tier as a modded one is (#562): tools.best counts it, and
-	 * ensure_tool holds it without costing where no tier is asked; for at least stone it does not count.
+	 * A copper axe carried, made a tool of no lib.tools.TIERS tier as a modded one is by taking copper out of TIERS for
+	 * this run (#562, #578): tools.best counts it, and ensure_tool holds it without costing where no tier is asked; for
+	 * at least stone it does not count.
 	 */
 	@GameTest(maxTicks = 10)
 	public void anUnknownTierToolIsUsedWhereNoTierIsAsked(GameTestHelper helper) {
@@ -172,6 +173,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			import lib.get
 			import lib.tools
+			lib.tools.TIERS.remove("copper")
 			lib.get.options = lambda *a: print("costed") or []
 			print(lib.tools.best("axe").item, len(lib.get.lasting("axe", 1, "stone")[1]))
 			r = lib.get.ensure_tool("axe", 30, radius=8)
@@ -360,6 +362,24 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Three copper ingots and two sticks carried, a crafting table by the bot (#578): ensure_tool for at least copper makes
+	 * a copper pickaxe, a tier of lib.craft.MADE, from them, cheaper than an iron one whose raw iron it would dig.
+	 */
+	@GameTest(maxTicks = 70)
+	public void ensureToolMakesACopperPickaxeFromCopperIngots(GameTestHelper helper) {
+		helper.setBlock(3, 1, 5, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COPPER_INGOT, 3));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import ensure_tool
+			r = ensure_tool("pickaxe", 1, "copper", radius=8)
+			print(r["ok"], r["reason"], held().item, count("copper_ingot"))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True None minecraft:copper_pickaxe 0"));
+	}
+
+	/**
 	 * Two sticks carried, no log or chest in the area (#580): the sticks cover a stick's plan, but every tool still needs
 	 * logs, for a wooden one's planks or the pickaxe a stone one's cobblestone takes, so ensure_tool fails no_logs without
 	 * costing options.
@@ -398,8 +418,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A copper axe in a chest, a tool of no lib.tools.TIERS tier as a modded one is, an empty bot (#580): where no tier is
-	 * asked ensure_tool borrows it, as it uses a carried one (#562).
+	 * A copper axe in a chest, made a tool of no lib.tools.TIERS tier as a modded one is by taking copper out of TIERS for
+	 * this run (#578), an empty bot (#580): where no tier is asked ensure_tool borrows it, as it uses a carried one (#562).
 	 */
 	@GameTest(maxTicks = 30)
 	public void aChestToolOfUnknownTierIsTakenWhereNoTierIsAsked(GameTestHelper helper) {
@@ -407,6 +427,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, where(helper, 7) + """
 			import lib.get
+			import lib.tools
+			lib.tools.TIERS.remove("copper")
 			lib.get.options = lambda *a: print("costed") or []
 			r = lib.get.ensure_tool("axe", 30, radius=8)
 			print(r["ok"], held().item)
@@ -601,13 +623,15 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
 	 * of it lib.craft.plan of each tier's tool (needs costs 3000); 45,600 (24 ticks) since the make cost counts the pickaxe
 	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks; 48,200
-	 * (26 ticks) since that tool may come from a chest (#536), a chest scan for each tool costed. The limit keeps it there.
+	 * (26 ticks) since that tool may come from a chest (#536), a chest scan for each tool costed; 61,000-64,400 (32-35
+	 * ticks, 52,000-56,000 before) since copper is a tier it makes (#578): 5,600 more, 3,600 of it its
+	 * plan. The limit keeps it there.
 	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
-			List.of("('make', 'stone')"), "choose", 60_000);
+			List.of("('make', 'stone')"), "choose", 70_000);
 	}
 
 	/**

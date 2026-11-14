@@ -21,7 +21,7 @@ STACK = 64
 REACH = 4
 
 # The tool tiers lib.get.ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
-MADE = ["diamond", "iron", "stone", "wooden"]
+MADE = ["diamond", "iron", "copper", "stone", "wooden"]
 
 
 def craft_all(item, n=1, table=None, furnace=None):

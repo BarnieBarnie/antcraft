@@ -13,14 +13,14 @@ WALK = 5
 # (3, pickaxe), wood (2, axe) and dirt (0.5, shovel), as the game times a tool that drops the block. With a pickaxe too
 # low a tier for an ore the block breaks slower and drops nothing (see lib.tools.tier_for).
 BREAK = {
-    "stone": {"hand": 150, "wooden": 23, "stone": 12, "iron": 8, "diamond": 6, "netherite": 5, "golden": 4},
-    "ore": {"hand": 300, "wooden": 45, "stone": 23, "iron": 15, "diamond": 12, "netherite": 10, "golden": 8},
-    "wood": {"hand": 60, "wooden": 30, "stone": 15, "iron": 10, "diamond": 8, "netherite": 7, "golden": 5},
-    "dirt": {"hand": 15, "wooden": 8, "stone": 4, "iron": 3, "diamond": 2, "netherite": 2, "golden": 2},
+    "stone": {"hand": 150, "wooden": 23, "stone": 12, "copper": 9, "iron": 8, "diamond": 6, "netherite": 5, "golden": 4},
+    "ore": {"hand": 300, "wooden": 45, "stone": 23, "copper": 18, "iron": 15, "diamond": 12, "netherite": 10, "golden": 8},
+    "wood": {"hand": 60, "wooden": 30, "stone": 15, "copper": 12, "iron": 10, "diamond": 8, "netherite": 7, "golden": 5},
+    "dirt": {"hand": 15, "wooden": 8, "stone": 4, "copper": 3, "iron": 3, "diamond": 2, "netherite": 2, "golden": 2},
 }
 
 # The blocks a tool of a tier breaks before it is used up.
-USES = {"wooden": 59, "stone": 131, "iron": 250, "diamond": 1561, "golden": 32, "netherite": 2031}
+USES = {"wooden": 59, "stone": 131, "copper": 190, "iron": 250, "diamond": 1561, "golden": 32, "netherite": 2031}
 
 # Ticks a furnace takes to smelt an item.
 SMELT = 200
@@ -34,5 +34,5 @@ def walk(a, b):
 
 def breaking(n, material, tier):
     """The ticks the bot takes to break n blocks of material ("stone", "ore", "wood" or "dirt") with a tool of tier
-    ("wooden", "stone", "iron", "diamond", "netherite", "golden", or "hand" or None for none)."""
+    ("wooden", "stone", "copper", "iron", "diamond", "netherite", "golden", or "hand" or None for none)."""
     return n * BREAK[material][tier or "hand"]

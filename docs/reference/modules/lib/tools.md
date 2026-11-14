@@ -2,7 +2,7 @@
 
 The tools the bot carries: which is best, how long they last, and which pickaxe a block needs. A module of the mod's default library: `import lib.tools` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/tools.py`, and a skill: `hold` is a doer, the rest are finders that take no ticks (see [Writing library functions](../../index.md#writing-library-functions)).
 
-A `kind` is `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`; its tools are those of the item tag `#minecraft:<kind>s`. Tools rank by the tier in their id, best first: netherite, diamond, iron, stone, golden, wooden (`TIERS`); a tool of another tier (from a mod, or a copper one) ranks below these. `best`, `carried`, `enough` and `hold` count it, and [`lib.get.ensure_tool`](get.md#ensure_toolkind-uses1-tiernone-radius32) uses a carried one where no tier is asked, but not for a tier, as its tier is not known.
+A `kind` is `"pickaxe"`, `"axe"`, `"shovel"`, `"hoe"` or `"sword"`; its tools are those of the item tag `#minecraft:<kind>s`. Tools rank by the tier in their id, best first: netherite, diamond, iron, copper, stone, golden, wooden (`TIERS`). Copper drops what stone does (the game's `incorrect_for_copper_tool` is that of stone, so a copper pickaxe mines iron ore) but mines faster and lasts 190 blocks (#578). A tool of another tier (from a mod) ranks below these. `best`, `carried`, `enough` and `hold` count it, and [`lib.get.ensure_tool`](get.md#ensure_toolkind-uses1-tiernone-radius32) uses a carried one where no tier is asked, but not for a tier, as its tier is not known.
 
 ## `uses_left(stack)`
 

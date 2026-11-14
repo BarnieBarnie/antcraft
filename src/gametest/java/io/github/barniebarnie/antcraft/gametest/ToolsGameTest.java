@@ -74,6 +74,32 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A copper pickaxe is of the copper tier, between stone and iron (#578): best picks it over a stone one, it drops
+	 * iron ore at (1, 1, 1) as the game's incorrect_for_copper_tool leaves needs_stone_tool out, and lib.cost has the
+	 * game's 190 uses and its mining speed 5 (stone 1.5 hardness: 9 ticks, between stone's 12 and iron's 8).
+	 */
+	@GameTest(maxTicks = 10)
+	public void aCopperPickaxeIsOfTheCopperTier(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.COPPER_PICKAXE));
+		String name = BotScripts.libraryScript(helper, "tools_", """
+			import lib.tools
+			import lib.cost
+			b = lib.tools.best("pickaxe")
+			print(b.item, lib.tools.tier(b), lib.tools.drops(Pos%s), lib.tools.TIERS.index("stone") > lib.tools.TIERS.index("copper") > lib.tools.TIERS.index("iron"))
+			print(lib.tools.hold("pickaxe")["ok"], held().item, lib.cost.USES["copper"], lib.cost.BREAK["stone"]["copper"])
+			""".formatted(at(helper, 1, 1, 1)));
+		run(helper, bot, name);
+		helper.succeedWhen(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(log.equals(List.of("minecraft:copper_pickaxe copper True True",
+				"True minecraft:copper_pickaxe 190 9")), "printed " + log);
+		});
+	}
+
+	/**
 	 * tier_for of a position reads the block's needs_*_tool tags (#515): a lodestone, which the game test
 	 * data pack adds to #minecraft:needs_iron_tool and lib.tools.NEEDS leaves out, gives "iron" there, and by id too, as
 	 * tier_for of an id NEEDS leaves out reads the block's tags (#566).

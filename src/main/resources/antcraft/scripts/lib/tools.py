@@ -8,9 +8,9 @@
 
 from lib.result import result
 
-# Tool tiers from best to worst. ponytail: ranked by the tier in the id, golden after stone; a modded tool of no listed
-# tier counts as worse than these.
-TIERS = ["netherite", "diamond", "iron", "stone", "golden", "wooden"]
+# Tool tiers from best to worst. ponytail: ranked by the tier in the id; copper drops what stone does but mines faster
+# and lasts longer (#578), golden comes after stone; a modded tool of no listed tier counts as worse than these.
+TIERS = ["netherite", "diamond", "iron", "copper", "stone", "golden", "wooden"]
 
 # The lowest pickaxe tier each block needs to drop anything, by the game's needs_*_tool block tags; any other block
 # drops with a wooden one. Only for a block id: tier_for of a Pos reads the block's tags, which modded blocks are in too.
