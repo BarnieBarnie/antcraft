@@ -38,25 +38,86 @@ def trunk_base(log):
     return log
 
 
+# What a tree stands on: dirt, or nylium for a huge fungus (#563).
+GROUND = ["#minecraft:dirt", "#minecraft:nylium"]
+# What crowns a tree: leaves, or a huge fungus's wart blocks (#563).
+CROWN = ["#minecraft:leaves", "#minecraft:wart_blocks"]
+
+
+def on_ground(p):
+    """Whether the block at p is GROUND, where a tree grows."""
+    tags = block(p).tags
+    return any([t in tags for t in GROUND])
+
+
 def is_tree(base):
-    """A trunk standing on dirt with leaves at its top, so a log wall or a cabin is left alone."""
-    return "#minecraft:dirt" in block(base.down()).tags and crowned(base)
+    """A trunk standing on GROUND with a CROWN at its top, so a log wall or a cabin is left alone."""
+    return on_ground(base.down()) and crowned(base)
 
 
 def is_remnant(base):
-    """A trunk over air with leaves at its top: what is left of a tree logs took the bottom logs of."""
-    return block(base.down()).is_air and crowned(base)
+    """A trunk over air with a CROWN at its top, and no log of its block under it at a corner (so no branch): what is
+    left of a tree logs took the bottom logs of."""
+    return block(base.down()).is_air and below(base) is None and crowned(base)
+
+
+# The block under one, then the eight under its edges and corners; and those over one.
+UNDER = [(0, -1, 0)] + [(dx, -1, dz) for dx in [-1, 0, 1] for dz in [-1, 0, 1] if dx or dz]
+OVER = [(0, 1, 0)] + [(dx, 1, dz) for dx in [-1, 0, 1] for dz in [-1, 0, 1] if dx or dz]
+
+
+def below(p):
+    """The block of p's kind under p, straight under first, else at an edge or corner under it (an acacia's trunk bends
+    so), or None."""
+    return _step(p, UNDER)
+
+
+def _step(p, ds):
+    kind = block(p).id
+    for d in ds:
+        q = p + d
+        b = block(q)
+        if b is not None and b.id == kind:
+            return q
+    return None
 
 
 def crowned(base):
-    """Whether the trunk with its lowest log at base has leaves at its top."""
+    """Whether the trunk with its lowest log at base has a CROWN at its top: the top reached log by log up, straight up
+    first, else at an edge or corner over it, as an acacia's trunk bends."""
     top = base
-    while is_log(top.up()):
-        top = top.up()
+    while True:
+        q = _step(top, OVER)
+        if q is None:
+            break
+        top = q
     for p in [top.up(), top.north(), top.south(), top.east(), top.west()]:
-        if "#minecraft:leaves" in block(p).tags:
+        tags = block(p).tags
+        if any([t in tags for t in CROWN]):
             return True
     return False
+
+
+def tree_logs(logs):
+    """The logs of logs (a list of positions) that are part of a tree: whose trunk, followed down log by log (below),
+    stands as a tree (is_tree) or is what is left of one (is_remnant). A log wall or a cabin's logs are left out."""
+    # Each log down to its base is read once: those passed on the way share the answer.
+    tree = {}
+    out = []
+    for p in logs:
+        if p not in tree:
+            path = [p]
+            q = below(p)
+            while q is not None and q not in tree:
+                path.append(q)
+                q = below(q)
+            base = path[-1]
+            t = tree[q] if q is not None else (is_tree(base) or is_remnant(base))
+            for r in path:
+                tree[r] = t
+        if tree[p]:
+            out.append(p)
+    return out
 
 
 def next_tree(radius=32, where=None, remnants=False, around=None):
@@ -247,10 +308,13 @@ def stands(blocks):
         best = None
         score = 0
         for c in cost:
-            s = 2 * (n[c] - cost[c]) + bonus[c]
-            if best is None or s > score:
-                best, score = c, s
-        if best is None or not n[best]:
+            # Only a spot that reaches a log left: one that reaches none on bare ground (score 0) beat a pillar to the
+            # top of a tree too tall to reach from the ground, so that tree got no stand by its top (#563).
+            if n[c]:
+                s = 2 * (n[c] - cost[c]) + bonus[c]
+                if best is None or s > score:
+                    best, score = c, s
+        if best is None:
             break
         out.append(best)
         for p in cover[best]:
@@ -267,17 +331,19 @@ def take_back():
         mine(q)
 
 
-def fell_whole(base, replant=True):
+def fell_whole(base, replant=True, blocks=None, plan=None):
     """Fells the whole tree at base, branches and 2x2 trunk too: stands at each of stands(tree_blocks(base)), the highest
     first so each stands on logs not yet mined, mines the logs it reaches there, the highest first, then takes back the
     scaffold blocks its walks placed around the tree and picks up what fell. With replant, plants a sapling of the tree's
-    kind (else any) where each log of the trunk's bottom stood, four for a 2x2 trunk. Assumes the bot holds an axe or goes
+    kind (else any) where each log of the trunk's bottom stood on GROUND, four for a 2x2 trunk: a fungus on nylium too.
+    blocks and plan, where given, are tree_blocks(base) and stands(blocks), so a caller that worked them out already
+    does not again. Assumes the bot holds an axe or goes
     without one, and carries scaffold blocks for a tree taller than it reaches. Gives result(): ok, out_of_reach at a log
     it could not mine, or no_space at one whose drops did not fit; it takes back its scaffold either way."""
-    blocks = tree_blocks(base)
+    blocks = blocks or tree_blocks(base)
     spots = square(base) or [base]
     kind = sapling(block(base).id)
-    plan = sorted(stands(blocks), key=lambda s: -s.y)
+    plan = sorted(stands(blocks) if plan is None else plan, key=lambda s: -s.y)
     left = {}
     for p in blocks:
         left[p] = True
@@ -304,7 +370,7 @@ def fell_whole(base, replant=True):
     pick_up([LOGS, SAPLINGS])
     if replant:
         for p in spots:
-            if block(p).is_air and "#minecraft:dirt" in block(p.down()).tags:
+            if block(p).is_air and on_ground(p.down()):
                 if kind and has(kind):
                     place(p, kind)
                 elif has(SAPLINGS):

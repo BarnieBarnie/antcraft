@@ -90,6 +90,25 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * tree_logs keeps the logs that are part of a tree: the oak's four and a branch log touching its top only at a
+	 * corner, and leaves out a wall of two logs on stone, so the lumberjack weighs an axe for trees alone (#563).
+	 */
+	@GameTest(maxTicks = 40)
+	public void treeLogsLeavesOutALogWall(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.OAK_LOG);
+		helper.setBlock(1, 2, 1, Blocks.OAK_LOG);
+		helper.setBlock(6, 5, 6, Blocks.OAK_LOG);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		// The logs of this area alone: a scan reaches the logs of tests running beside it.
+		StringBuilder logs = new StringBuilder("logs = [");
+		for (int[] p : new int[][] {{1, 1, 1}, {1, 2, 1}, {5, 1, 5}, {5, 2, 5}, {5, 3, 5}, {5, 4, 5}, {6, 5, 6}}) {
+			logs.append("Pos(").append(at(helper, p[0], p[1], p[2])).append("), ");
+		}
+		expect(helper, bot, "import lib.trees\n" + logs + "]\nprint(sorted([(p.x, p.y, p.z) for p in lib.trees.tree_logs(logs)]) == "
+			+ "sorted([(p.x, p.y, p.z) for p in logs[2:]]))\n", List.of("True"));
+	}
+
+	/**
 	 * A tree near the bot is found without reading the whole sphere of radius 32 (some 137,000 blocks of the block search
 	 * budget every bot shares): next_tree looks within 8 blocks first, then 16, then its radius (#527).
 	 */

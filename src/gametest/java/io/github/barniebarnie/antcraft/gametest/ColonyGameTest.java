@@ -27,6 +27,7 @@ import org.jspecify.annotations.Nullable;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
@@ -782,6 +783,116 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
 			helper.assertTrue(lumberjack.getMainHandItem().is(ItemTags.AXES) || lumberjack.getInventory().hasAnyMatching(s -> s.is(ItemTags.AXES)),
 				"the lumberjack has no axe");
+		});
+	}
+
+	/**
+	 * A lumberjack with a stone axe by a huge crimson fungus, four stems on crimson nylium under nether wart blocks, the
+	 * core holding a crimson fungus: it is a tree, so the lumberjack fells it, plants the fungus on the nylium and stores
+	 * the four stems (#563). Passes at about tick 130, 175 with the other colony tests.
+	 */
+	@GameTest(maxTicks = 400)
+	public void aLumberjackFellsAHugeFungusAndReplantsIt(GameTestHelper helper) {
+		helper.setBlock(5, 0, 5, Blocks.CRIMSON_NYLIUM);
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(5, y, 5, Blocks.CRIMSON_STEM);
+		}
+		helper.setBlock(5, 5, 5, Blocks.NETHER_WART_BLOCK);
+		for (Direction d : Direction.Plane.HORIZONTAL) {
+			helper.setBlock(new BlockPos(5, 4, 5).relative(d), Blocks.NETHER_WART_BLOCK);
+		}
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.CRIMSON_FUNGUS));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.CRIMSON_FUNGUS, new BlockPos(5, 1, 5));
+			helper.assertTrue(core.countItem(Items.CRIMSON_STEM) == 4, "stems in the core: " + core.countItem(Items.CRIMSON_STEM));
+		});
+	}
+
+	/**
+	 * A lumberjack with a stone axe by an oak of seven logs, the top one out of reach from the ground (its leaves just above
+	 * the area), the core holding no blocks to climb on and a chest by the lumberjack six dirt: it borrows the chest's dirt to climb on, takes it back from around the tree and gives it back to
+	 * the chest, not the core (#563). Passes at about tick 280.
+	 */
+	@GameTest(maxTicks = 600)
+	public void aLumberjackBorrowsBlocksToClimbOnFromAChest(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.DIRT);
+		for (int y = 1; y <= 7; y++) {
+			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
+		}
+		helper.setBlock(4, 8, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.OAK_SAPLING));
+		helper.setBlock(4, 1, 1, Blocks.CHEST);
+		Container chest = container(helper, 4, 1, 1);
+		chest.setItem(0, new ItemStack(Items.DIRT, 6));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			for (int y = 1; y <= 7; y++) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(4, y, 4));
+			}
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(4, 1, 4));
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 7, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			helper.assertTrue(chest.countItem(Items.DIRT) == 6 && core.countItem(Items.DIRT) == 0,
+				"dirt in the chest and the core: " + chest.countItem(Items.DIRT) + " " + core.countItem(Items.DIRT));
+		});
+	}
+
+	/**
+	 * A lumberjack with a stone axe, in a wide area, by an acacia as the game grows one: a trunk of three logs at
+	 * (12, 1..3, 12) on dirt that bends, its logs touching only at a corner, east up to (15, 6, 12) and north-west up to
+	 * (10, 5, 10), leaves only around those two ends. The core holds six dirt and an acacia sapling: it fells all eight
+	 * logs, takes its scaffold back, replants the sapling at the trunk's base and stores the logs (#563). Passes at about tick 380, 420 with the other colony tests.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 900)
+	public void aLumberjackFellsAWideAcacia(GameTestHelper helper) {
+		helper.setBlock(12, 0, 12, Blocks.DIRT);
+		List<BlockPos> logs = List.of(new BlockPos(12, 1, 12), new BlockPos(12, 2, 12), new BlockPos(12, 3, 12),
+			new BlockPos(13, 4, 12), new BlockPos(14, 5, 12), new BlockPos(15, 6, 12), new BlockPos(11, 4, 11), new BlockPos(10, 5, 10));
+		for (BlockPos p : logs) {
+			helper.setBlock(p, Blocks.ACACIA_LOG);
+		}
+		for (BlockPos end : List.of(new BlockPos(15, 6, 12), new BlockPos(10, 5, 10))) {
+			for (BlockPos p : BlockPos.betweenClosed(end.offset(-2, 0, -2), end.offset(2, 1, 2))) {
+				boolean far = Math.abs(p.getX() - end.getX()) == 2 || Math.abs(p.getZ() - end.getZ()) == 2;
+				if (!(far && p.getY() == end.getY()) && helper.getBlockState(p).isAir()) {
+					helper.setBlock(p, Blocks.ACACIA_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+				}
+			}
+		}
+		Colony colony = colonyAt(helper, 4, 1, 12);
+		colony.setRadius(15);
+		Container core = container(helper, 4, 1, 12);
+		core.setItem(0, new ItemStack(Items.DIRT, 6));
+		core.setItem(1, new ItemStack(Items.ACACIA_SAPLING));
+		AntBot lumberjack = member(helper, colony, 2, 1, 12);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			for (BlockPos p : logs) {
+				helper.assertBlockNotPresent(Blocks.ACACIA_LOG, p);
+			}
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 7, 23)) {
+				helper.assertBlockNotPresent(Blocks.DIRT, p);
+			}
+			helper.assertBlockPresent(Blocks.ACACIA_SAPLING, new BlockPos(12, 1, 12));
+			helper.assertTrue(core.countItem(Items.ACACIA_LOG) == 8, "logs in the core: " + core.countItem(Items.ACACIA_LOG));
+			helper.assertTrue(core.countItem(Items.DIRT) == 6, "dirt in the core: " + core.countItem(Items.DIRT));
 		});
 	}
 
