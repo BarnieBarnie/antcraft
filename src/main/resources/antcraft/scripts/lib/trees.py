@@ -138,10 +138,11 @@ def next_tree(radius=32, where=None, remnants=False, around=None):
     done = 0
     r = 8 if radius > 8 else radius
     limit = 64
+    allowed = lib.find.resolve()
     while True:
         found = scan(LOGS, radius=r, limit=limit, around=around)
         for base in found[done:]:
-            if not is_log(base.down()) and (where is None or where(base)) and lib.find.allowed(base) and (is_tree(base) or remnants and is_remnant(base)):
+            if not is_log(base.down()) and (where is None or where(base)) and (allowed is None or allowed(base)) and (is_tree(base) or remnants and is_remnant(base)):
                 return base
         done = len(found)
         if len(found) == limit:

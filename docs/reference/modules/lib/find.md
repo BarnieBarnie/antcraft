@@ -36,13 +36,24 @@ Whether the position `p` lies within the colony's radius of its core, measured a
 
 ## `WHERE`
 
-Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. It starts as `colony_edge`: `in_colony` for a bot in a colony, `True` for any other, checked each time it is used, so every job a member runs keeps to the colony (#594) and a bot that joins or leaves a colony mid-run keeps to its new edge or none (#621). [`colony/common`](../colony/common.md) leaves it so (#625). The finders ask [`colony()`](../../colony/colony.md) once a search for it, not twice a block: keeping to the colony costs a member's search some 26 instructions a block, against some 129 when each block asked (`colony()` costs 35 instructions, though it takes about the time of 8, #625). Where the `LIMIT` nearest blocks are all outside it, the finders look further (see above). [`lib.dig`](dig.md)'s `stairs_to` and `branch` dig nothing it is false for.
+Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. It starts as `colony_edge`: `in_colony` for a bot in a colony, `True` for any other, checked each time it is used, so every job a member runs keeps to the colony (#594) and a bot that joins or leaves a colony mid-run keeps to its new edge or none (#621). [`colony/common`](../colony/common.md) leaves it so (#625). The finders ask [`colony()`](../../colony/colony.md) once a search for it, not twice a block: keeping to the colony costs a member's search some 26 instructions a block, against some 129 when each block asked (#625); [`lib.stock.chests`](stock.md#chestsradius32) and [`lib.trees.next_tree`](trees.md) ask it once a call too, so some 26 instructions a chest or log, against some 88 (#631). `colony()` costs 35 instructions, timed with 30 members (#380, #631). Where the `LIMIT` nearest blocks are all outside it, the finders look further (see above). [`lib.dig`](dig.md)'s `stairs_to` and `branch` dig nothing it is false for.
 
 ```python
 import lib.find
 
 home = pos()
 lib.find.WHERE = lambda p: home.distance(p) <= 16
+```
+
+## `resolve()`
+
+`WHERE` for one search: `None` for anywhere, `WHERE` itself if a script set its own, and for `colony_edge` a check against the colony the bot is in now (`None` for a bot in none), so a script that checks many positions asks [`colony()`](../../colony/colony.md) once, as the finders, `chests` and `next_tree` do (#631).
+
+```python
+import lib.find
+
+ok = lib.find.resolve()
+mine_these = [p for p in scan("stone", radius=8) if ok is None or ok(p)]
 ```
 
 ## `is_open(p)`

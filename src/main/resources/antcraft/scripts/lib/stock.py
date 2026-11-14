@@ -17,8 +17,9 @@ def chests(radius=32, scanning=True):
     c = colony()
     found = []
     here = dimension()
+    allowed = lib.find.resolve()
     for p in ([c["core"]] if c else []) + list(memory.get("chests", [])) + (scan(CHESTS, radius=radius) if scanning else []):
-        if p.dimension in (None, here) and p not in found and lib.find.allowed(p):
+        if p.dimension in (None, here) and p not in found and (allowed is None or allowed(p)):
             found.append(p)
     return sorted(found, key=distance)
 

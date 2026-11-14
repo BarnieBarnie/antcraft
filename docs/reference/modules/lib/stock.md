@@ -6,7 +6,7 @@ What it takes from a chest is borrowed: [`lib/borrow`](borrow.md) records it, an
 
 ## `chests(radius=32)`
 
-The chests the bot may take from, nearest first: its colony's core (none for a bot in no colony), the positions listed in [`memory`](../../types/memory.md)`["chests"]`, and the chests, trapped chests and barrels within `radius` blocks. Each is listed once, and one in another [dimension](../../types/pos.md#dimension) than the bot's is left out, as is one [`lib.find.WHERE`](find.md#where) is false for (outside the colony, for a bot in one). With `scanning=False` it gives only the core and `memory["chests"]`, without the scan, which reads the sphere from a block budget all bots share; [`lib.get.ensure_tool`](get.md) looks there first.
+The chests the bot may take from, nearest first: its colony's core (none for a bot in no colony), the positions listed in [`memory`](../../types/memory.md)`["chests"]`, and the chests, trapped chests and barrels within `radius` blocks. Each is listed once, and one in another [dimension](../../types/pos.md#dimension) than the bot's is left out, as is one [`lib.find.WHERE`](find.md#where) is false for (outside the colony, for a bot in one), asking [`colony()`](../../colony/colony.md) for it once a call, not once a chest (#631). With `scanning=False` it gives only the core and `memory["chests"]`, without the scan, which reads the sphere from a block budget all bots share; [`lib.get.ensure_tool`](get.md) looks there first.
 
 - **Returns** a list of [`Pos`](../../types/pos.md); `[]` when there is none.
 - **Pauses** no.

@@ -650,15 +650,55 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(maxTicks = 10)
 	public void keepingToTheColonyCostsFoundLittle(GameTestHelper helper) {
+		keepingToTheColonyCosts(helper, "import lib.find\n", "print(len(lib.find.found('stone', 8, lambda p: True)))\n", 64);
+	}
+
+	/**
+	 * So does lib.stock.chests: 64 chests in memory, all within the colony, cost a member less than 35 instructions each
+	 * over the same call with WHERE None, as colony() is asked once a call, not once a chest (#631). Measured: some 89
+	 * instructions a chest before, some 26 now.
+	 */
+	@GameTest(maxTicks = 10)
+	public void keepingToTheColonyCostsChestsLittle(GameTestHelper helper) {
+		String call = """
+			c = colony()["core"]
+			memory["chests"] = [c + (i % 8, 0, i // 8 + 1) for i in range(64)]
+			print(len(lib.stock.chests(scanning=False)))
+			""";
+		keepingToTheColonyCosts(helper, "import lib.stock\n", call, 64);
+	}
+
+	/**
+	 * So does lib.trees.next_tree: bare logs on the floor, all within the colony and none a tree, cost a member less than
+	 * 35 instructions each over the same call with WHERE None, as colony() is asked once a call, not once a log (#631).
+	 * Measured: some 88 instructions a log before, some 26 now; it ends on tick 9, as next_tree takes some 16,000.
+	 */
+	@GameTest(maxTicks = 20)
+	public void keepingToTheColonyCostsNextTreeLittle(GameTestHelper helper) {
+		int logs = 0;
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				if (x == 3 && (z == 1 || z == 3) || x == 5 && z == 5) {
+					continue; // the core and the bots
+				}
+				helper.setBlock(x, 1, z, Blocks.OAK_LOG);
+				logs++;
+			}
+		}
+		keepingToTheColonyCosts(helper, "import lib.trees\n", "print(lib.trees.next_tree(radius=8))\n", logs);
+	}
+
+	/** A member's call costs less than 35 instructions a candidate over the same call with WHERE None. */
+	private static void keepingToTheColonyCosts(GameTestHelper helper, String imports, String call, int candidates) {
 		Colony colony = colonyAt(helper, 3, 1, 1);
 		colony.setRadius(16);
-		String find = "print(len(lib.find.found('stone', 8, lambda p: True)))\n";
-		ScriptRun kept = BotScripts.run(member(helper, colony, 3, 1, 3), "import lib.find\n" + find);
-		ScriptRun free = BotScripts.run(member(helper, colony, 5, 1, 5), "import lib.find\nlib.find.WHERE = None\n" + find);
+		ScriptRun kept = BotScripts.run(member(helper, colony, 3, 1, 3), imports + call);
+		ScriptRun free = BotScripts.run(member(helper, colony, 5, 1, 5), imports + "import lib.find\nlib.find.WHERE = None\n" + call);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(kept.state() == ScriptRun.State.FINISHED && free.state() == ScriptRun.State.FINISHED, "scripts " + kept.state() + " " + free.state());
 			long extra = kept.executed() - free.executed();
-			helper.assertTrue(extra < 35 * 64, "keeping to the colony cost " + extra + " instructions (" + kept.executed() + " vs " + free.executed() + ")");
+			helper.assertTrue(extra < 35L * candidates, "keeping to the colony cost " + extra + " instructions over " + candidates
+				+ " (" + kept.executed() + " vs " + free.executed() + ")");
 		});
 	}
 

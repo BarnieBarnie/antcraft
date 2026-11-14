@@ -41,19 +41,24 @@ def allowed(p):
     return WHERE is None or WHERE(p)
 
 
+def resolve():
+    """WHERE for one search: None for anywhere, and colony_edge as a check of the colony it is in now, so a search that
+    checks many positions asks colony() once, not once a position (#625, #631)."""
+    if WHERE != colony_edge:
+        return WHERE
+    c = colony()
+    if c is None:
+        return None
+    x, z, r = c["core"].x, c["core"].z, c["radius"] * c["radius"]
+    return lambda p: (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) <= r
+
+
 def found(what, radius, keep, first=False):
     """The blocks what selects within radius, nearest first, that keep(p) and WHERE allow, from the LIMIT nearest;
     where WHERE is set and leaves out each of those, from 8 times as many, and so on (ponytail: a bot far outside WHERE
-    reads up to the whole radius, and rereads the nearest each time). With first, only the first one. For colony_edge it
-    asks colony() (35 instructions) once, not twice a block (#625)."""
-    where = WHERE
-    if where == colony_edge:
-        c = colony()
-        if c is None:
-            where = None
-        else:
-            x, z, r = c["core"].x, c["core"].z, c["radius"] * c["radius"]
-            where = lambda p: (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) <= r
+    reads up to the whole radius, and rereads the nearest each time). With first, only the first one. WHERE is resolved
+    once a call."""
+    where = resolve()
     limit = LIMIT
     done = 0
     while True:

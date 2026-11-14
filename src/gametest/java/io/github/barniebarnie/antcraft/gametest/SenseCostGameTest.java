@@ -53,6 +53,10 @@ public class SenseCostGameTest {
 		helper.setBlock(1, 1, 1, ModBlocks.COLONY_CORE);
 		ColonyManager colonies = ColonyManager.get(level);
 		colonies.join(bot, colonies.byCore(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow());
+		// colony() lists its members, so it is timed with 30, as #380 measured it (#631).
+		for (int i = 1; i < 30; i++) {
+			colonies.join(helper.spawn(ModEntities.ANT_BOT, 1 + i % 6, 1, 6), bot.getColony().orElseThrow().colony());
+		}
 		ScriptRun run = BotScripts.run(bot, "wait(1000)\n");
 		helper.runAfterDelay(2, () -> {
 			// Every chunk structures(128) reads loaded, its worst case.
@@ -98,6 +102,10 @@ public class SenseCostGameTest {
 			times.forEach((name, t) -> log.append(String.format(Locale.ROOT, "\n  %-15s %8.3f µs a call (rounds %s), cost %5.1f at block_tags' rate, %5.1f at 20 ns",
 				name, median(t) / 1000.0, Arrays.toString(Arrays.stream(t).map(n -> n / CALLS).toArray()), median(t) / base, median(t) / 20.0)));
 			LOGGER.info("Sense costs, {} calls a round, median of {} rounds:{}", CALLS, ROUNDS, log);
+			// colony() is priced at what it measures, within a factor 2 at block_tags' rate (#631).
+			double colony = median(times.get("colony")) / base;
+			helper.assertTrue(natives.cost("colony") <= 2 * colony && natives.cost("colony") >= colony / 2,
+				String.format(Locale.ROOT, "colony() costs %d, measured %.1f", natives.cost("colony"), colony));
 			helper.succeed();
 		});
 	}
