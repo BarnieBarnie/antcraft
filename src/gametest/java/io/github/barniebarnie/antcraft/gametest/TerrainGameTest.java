@@ -17,6 +17,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * {@code lib/terrain.py} and {@code jobs/flatten.py} (#573; docs/reference/modules/lib/terrain.md). The plot is the 4 by 4
@@ -97,13 +99,92 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** Every column of the plot is solid at y 1 and 2 and air above. */
+	/**
+	 * flatten fills a hole of water: a source at the top of the hole, (3, 2, 3), flowing down to (3, 1, 3), is filled
+	 * level like a hole of air (#586).
+	 */
+	// Measured: passes at tick 61.
+	@GameTest(maxTicks = 130)
+	public void flattenFillsAWaterHole(GameTestHelper helper) {
+		helper.setBlock(3, 2, 3, Blocks.WATER);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		expect(helper, bot, header(helper) + """
+				r = lib.terrain.flatten(o + (1, 1, 1), o + (4, 4, 4), y)
+				print(r["ok"], count("dirt"))
+				""", List.of("True 0"), () -> level(helper));
+	}
+
+	/**
+	 * jobs.flatten on a plot with a hole and nothing to dig, from a bot that carries no dirt, gets the two dirt it lacks
+	 * from a chest by the plot and flattens again (#586). The chest stands on a step of dirt one lower than the plot, so the
+	 * bot can climb back onto it.
+	 */
+	// Measured: passes at tick 24; the chest scan waits on a budget all bots share.
+	@GameTest(maxTicks = 120, skyAccess = true)
+	public void theJobGetsTheFillItLacksAndFlattensAgain(GameTestHelper helper) {
+		helper.setBlock(2, 3, 2, Blocks.AIR);
+		helper.setBlock(2, 4, 2, Blocks.AIR);
+		helper.setBlock(1, 3, 1, Blocks.AIR);
+		for (int x = 5; x <= 7; x++) {
+			for (int z = 0; z <= 7; z++) {
+				helper.setBlock(x, 1, z, Blocks.DIRT);
+			}
+		}
+		helper.setBlock(6, 2, 1, Blocks.CHEST);
+		ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(6, 2, 1), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.DIRT, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		runJob(helper, bot, "", () -> helper.assertTrue(chest.countItem(Items.DIRT) == 3, "dirt in the chest: " + chest.countItem(Items.DIRT)));
+	}
+
+	/** jobs.flatten with a fill after the corners fills the hole with it, here the cobblestone the bot carries (#586). */
+	// Measured: passes at tick 6.
+	@GameTest(maxTicks = 30, skyAccess = true)
+	public void theJobFillsWithTheFillItIsGiven(GameTestHelper helper) {
+		helper.setBlock(2, 3, 2, Blocks.AIR);
+		helper.setBlock(2, 4, 2, Blocks.AIR);
+		helper.setBlock(1, 3, 1, Blocks.AIR);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 2));
+		runJob(helper, bot, " 2 cobblestone", () -> {
+			helper.assertBlockPresent(Blocks.COBBLESTONE, new BlockPos(3, 1, 3));
+			helper.assertBlockPresent(Blocks.COBBLESTONE, new BlockPos(3, 2, 3));
+		});
+	}
+
+	/**
+	 * Runs jobs.flatten on the plot with args after its corners (a leading " 2" is y 2), failing at once on a warning, and
+	 * succeeds once it finished with the plot level and then holds.
+	 */
+	private static void runJob(GameTestHelper helper, AntBot bot, String args, Runnable then) {
+		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 1));
+		BlockPos high = helper.absolutePos(new BlockPos(4, 0, 4));
+		String y = args.startsWith(" 2") ? " " + (low.getY() + 2) + args.substring(2) : args;
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.flatten " + low.getX() + " " + low.getZ() + " "
+			+ high.getX() + " " + high.getZ() + y);
+		helper.onEachTick(() -> {
+			ScriptRun run = bot.getScript();
+			if (run != null && run.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
+				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished: "
+				+ (bot.getScript() == null ? "no script" : bot.getScript().state()) + " " + BotScripts.log(bot, Output.Level.DEBUG));
+			level(helper);
+			then.run();
+		});
+	}
+
+	/** Every column of the plot is solid (neither air nor fluid) at y 1 and 2 and air above. */
 	private static void level(GameTestHelper helper) {
 		for (int x = 1; x <= 4; x++) {
 			for (int z = 1; z <= 4; z++) {
 				for (int y = 1; y <= 4; y++) {
-					boolean air = helper.getBlockState(new BlockPos(x, y, z)).isAir();
-					helper.assertTrue(air == y > 2, (air ? "air" : "a block") + " at " + x + " " + y + " " + z);
+					BlockState state = helper.getBlockState(new BlockPos(x, y, z));
+					boolean solid = !state.isAir() && state.getFluidState().isEmpty();
+					helper.assertTrue(solid == y <= 2, state + " at " + x + " " + y + " " + z);
 				}
 			}
 		}

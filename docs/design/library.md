@@ -52,7 +52,7 @@ New modules are marked *new*; the others exist and grow.
 - `lib/explore` (#568): `spiral(centre, step, rings)` the waypoints of a square spiral, `look()` records `biome` and `structures` in `memory["seen"]` (one position per biome per chunk, one per structure), `explore(rings, step, until)` walks the spiral looking until `until(seen)`, `seen(what)` and `report()`.
 - `lib/farm` (#570): `CROPS`, `ripe(pos)`, `field(low, high)` the soil of a box, `till(spots)`, `plant(spots, seed)`, `harvest(spots)` (ripe only, replanted) and `tend(low, high, seed)`; `colony.farmer` is built on it.
 - `lib/storage` (#572): `KEEP_KINDS` (tools, weapons, torches, food), `deposit(keep)` gives back what is borrowed and puts the rest into the chests of `lib/stock`, each item first where it already is, and `sort(chests)` gathers each item into the chest that holds most of it.
-- `lib/terrain` (#573): `needs(low, high, y)` the fill and digging it takes, `flatten(low, high, y, fill)` mines above `y` and fills the holes at `y` down to solid ground, over `lib/area`.
+- `lib/terrain` (#573): `needs(low, high, y)` the fill and digging it takes, `flatten(low, high, y, fill)` mines above `y` and fills the holes at `y` (air, water or lava, sources first) down to solid ground, over `lib/area`.
 - Existing: `lib/inv`, `lib/shaft`, `lib/mine`.
 
 ### The resolver: `lib/get`
@@ -99,7 +99,7 @@ Ten jobs in `jobs/`, each a few lines over the library, each with a game test. A
 6. **`jobs/farm.py <x1> <y1> <z1> <x2> <y2> <z2> [crop] [rounds]`**: `ensure_tool("hoe")`, the seeds with `get`, `lib.farm.tend`, `give_back()` (#583: before the harvest is stored, as carrots and potatoes are their own seed), the harvest into the nearest chest; `rounds` rounds (0: until one fails), waiting for the crops to ripen between them. Test: a 3 by 3 field with a hoe and seeds in a chest.
 7. **`jobs/store.py [radius]`**: `lib.storage.deposit`, then home. Test: dirt carried, a chest in the area.
 8. **`jobs/build.py <blueprint> x y z [turn] [radius]`**: `lib.build.build_here`, then says whether it built it. Tests: a one-cobblestone blueprint built from stone with a borrowed pickaxe, given back; oak stairs with no wood about failing with them in `missing` and the borrowed cobblestone given back.
-9. **`jobs/flatten.py <x1> <z1> <x2> <z2> [y]`**: `ensure_tool` for each kind `lib.terrain.needs` lists, `lib.terrain.flatten` with dirt, `get` the dirt it fell short of, `give_back()`. Test: a 4 by 4 plot with a bump and a hole, levelled at its median height.
+9. **`jobs/flatten.py <x1> <z1> <x2> <z2> [y] [fill]`**: `ensure_tool` for each kind `lib.terrain.needs` lists, `lib.terrain.flatten` with `fill` (dirt by default), `get` the fill it fell short of and flatten again, `give_back()`. Test: a 4 by 4 plot with a bump and a hole, levelled at its median height; a given fill; the dirt it lacks from a chest.
 10. **`jobs/settle.py [x y z [radius]]`**: one `lib.project.run("settle", ...)`: `kit` (stone tools, a crafting table, a chest, dirt), `lib.terrain.flatten`, `lib.build.build_here` of `antcraft:starter_house`, `place` the chest and crafting table, `lib.farm.tend` a 3 by 3 field (optional), `lib.storage.deposit` (optional), `set_home` inside. Test (wide area): stopped as it starts the house and run again, the kit and flatten are not done again; the house stands, the field is planted, the borrowed tools are back ([cookbook](../cookbook/settle.md)).
 
 A test area is 8x8x8 blocks: tests build small trees and seed ore close, and set `best_y` through an argument rather than dig to y=16.

@@ -7,22 +7,30 @@
 # delete it and the default comes back when the server starts.
 
 import lib.area
+import lib.retry
 from lib.result import result
 
 # The tools whose #minecraft:mineable/<kind> tag needs counts.
 KINDS = ["shovel", "pickaxe", "axe"]
+# The fluids a hole may hold; fill replaces them. A waterlogged block is no hole.
+FLUIDS = ["minecraft:water", "minecraft:lava"]
+
+
+def _open(k):
+    """Whether fill goes at the block k: air, water or lava."""
+    return k is not None and (k.is_air or k.id in FLUIDS)
 
 
 def holes(low, high, y):
     """The holes to fill, one (bottom, top) per column of the box from low to high (any two opposite corners) that is
-    air at y: top at y, bottom the lowest air under it, down to solid ground or the box's low y."""
+    air, water or lava at y: top at y, bottom the lowest such block under it, down to solid ground or the box's low y."""
     low = Pos(low)
     high = Pos(high)
     spans = []
     for z in range(min(low.z, high.z), max(low.z, high.z) + 1):
         for x in range(min(low.x, high.x), max(low.x, high.x) + 1):
             h = y
-            while h >= min(low.y, high.y) and block(Pos(x, h, z)) is not None and block(Pos(x, h, z)).is_air:
+            while h >= min(low.y, high.y) and _open(block(Pos(x, h, z))):
                 h -= 1
             if h < y:
                 spans.append((Pos(x, h + 1, z), Pos(x, y, z)))
@@ -53,21 +61,28 @@ def needs(low, high, y):
 
 
 def flatten(low, high, y, fill="minecraft:dirt"):
-    """Mines every block of the box above y (lib.area.clear), then fills each hole at y down to solid ground with fill
-    (lib.area.fill), so the plot's top is level at y. Gives result(): ok, the reason of the mine or place that failed
-    with at, or missing_ingredients with missing {fill: blocks left to place} once the bot runs out of fill."""
+    """Mines every block of the box above y (lib.area.clear), then fills each hole at y down to solid ground with fill,
+    layer by layer bottom up, water and lava sources first in each layer, so the plot's top is level at y. Gives result():
+    ok, the reason of the mine or place that failed with at, or missing_ingredients with missing {fill: blocks left to
+    place} once the bot runs out of fill."""
     low = Pos(low)
     high = Pos(high)
     if max(low.y, high.y) > y:
         r = lib.area.clear(Pos(low.x, y + 1, low.z), Pos(high.x, max(low.y, high.y), high.z))
         if not r["ok"]:
             return r
-    spans = holes(low, high, y)
-    for i in range(len(spans)):
-        r = lib.area.fill(spans[i][0], spans[i][1], fill)
-        if not r["ok"]:
-            if r["reason"] == "missing_ingredients":
-                left = r["missing"][fill] + sum([t2.y - b2.y + 1 for b2, t2 in spans[i + 1:]])
-                return result("missing_ingredients", r["at"], {fill: left})
-            return r
+    ps = []
+    for b, t in holes(low, high, y):
+        ps.extend(lib.area.box(b, t))
+    # A source filled first stops feeding the flowing water around it.
+    ps = sorted(ps, key=lambda p: (p.y, 0 if block(p).state.get("level", 1) == 0 else 1))
+    for i in range(len(ps)):
+        # Read again: flowing water comes and goes as the holes fill.
+        if not _open(block(ps[i])):
+            continue
+        if not has(fill):
+            return result("missing_ingredients", ps[i], {fill: len(ps) - i})
+        r = lib.retry.retry(place, (ps[i], fill))
+        if not r:
+            return result(r.reason, ps[i])
     return result()
