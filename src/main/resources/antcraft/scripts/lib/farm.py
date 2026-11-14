@@ -99,9 +99,11 @@ def harvest(spots):
     return n
 
 
-def water(radius=32):
-    """The nearest water source block within radius (lib.find.nearest), where an empty bucket fills; None if there is none."""
-    return lib.find.nearest(WATER, radius, lambda p: block(p).state["level"] == 0)
+def water(radius=32, keep=None):
+    """The nearest water source block within radius (lib.find.nearest), where an empty bucket fills, but for those at
+    keep, a list of positions (a field's own sources); None if there is none."""
+    keep = keep or []
+    return lib.find.nearest(WATER, radius, lambda p: block(p).state["level"] == 0 and p not in keep)
 
 
 def near_water(soil, wet):
@@ -125,11 +127,22 @@ def dry(spots):
     return [s for s in spots if not near_water(s, wet)]
 
 
-def fill_bucket(radius=32):
-    """Fills an empty bucket the bot carries at the nearest water source within radius (water). Gives result(): ok;
+def source(spots):
+    """The spot of spots where a water source wets the most of dry(spots), the one nearest the middle spot of a tie; None
+    where none is dry. ponytail: greedy, so a field may get a source more than the fewest that wet it."""
+    left = dry(spots)
+    if not left:
+        return None
+    mid = spots[len(spots) // 2]
+    return max(spots, key=lambda s: (len([d for d in left if near_water(d, [s])]), -s.distance(mid)))
+
+
+def fill_bucket(radius=32, keep=None):
+    """Fills an empty bucket the bot carries at the nearest water source within radius but for those at keep (water).
+    Gives result(): ok;
     no_water where there is none; no_item with missing where the bot carries no empty bucket; or the reason use failed,
     at the source."""
-    p = water(radius)
+    p = water(radius, keep)
     if p is None:
         return result("no_water")
     if not has(BUCKET):

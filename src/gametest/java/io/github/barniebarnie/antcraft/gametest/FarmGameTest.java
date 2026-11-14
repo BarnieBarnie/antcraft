@@ -258,6 +258,67 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A dry field with a water bucket, a hoe and seeds in a chest at (6, 1, 2) and no pool (#629): jobs.farm borrows the
+	 * water bucket, pours it in the middle of the field and gives the empty bucket back to the chest, with no warning.
+	 */
+	// Measured: passes at tick 86 (red: no bucket in the chest, the bot kept it).
+	@GameTest(maxTicks = 160)
+	public void theJobGivesTheBorrowedWaterBucketBackEmpty(GameTestHelper helper) {
+		List<BlockPos> spots = field(helper);
+		helper.setBlock(2, 0, 2, Blocks.DIRT);
+		Container chest = chest(helper, 6, 1, 2, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 8),
+			new ItemStack(Items.WATER_BUCKET));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
+		ScriptRun job = runJob(helper, bot, "wheat");
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			helper.assertTrue(helper.getBlockState(new BlockPos(2, 0, 2)).getFluidState().is(Fluids.WATER), "no water in the middle of the field");
+			planted(helper, spots);
+			helper.assertTrue(chest.countItem(Items.BUCKET) == 1, "buckets in the chest: " + chest.countItem(Items.BUCKET)
+				+ ", on the bot: " + GameTests.carried(bot, Items.BUCKET));
+		});
+	}
+
+	/**
+	 * A dry row of soil 11 long from (3, 0, 4) to (13, 0, 4) in the wide area, a 2 by 2 pool at (10, 1, 12), which a
+	 * filled source refills, and a hoe, 11 seeds and an empty bucket in a chest at (18, 1, 4) (#629): one source wets at
+	 * most 9 by 9, so jobs.farm pours one per dry patch, never filling the bucket at a source it poured, until every
+	 * spot is wet, and plants them all.
+	 */
+	// Measured: passes at tick 537 (red: dry at (3, 0, 4) with the one source at (8, 0, 4)).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1100)
+	public void theJobWatersAFieldWiderThanNine(GameTestHelper helper) {
+		for (int x = 3; x <= 13; x++) {
+			helper.setBlock(x, 0, 4, Blocks.DIRT);
+		}
+		for (int z = 11; z <= 14; z++) {
+			for (int x = 9; x <= 12; x++) {
+				boolean pool = x >= 10 && x <= 11 && z >= 12 && z <= 13;
+				helper.setBlock(x, 1, z, pool ? Blocks.WATER : Blocks.STONE);
+			}
+		}
+		Container chest = chest(helper, 18, 1, 4, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 11),
+			new ItemStack(Items.BUCKET));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 9, 1, 8);
+		ScriptRun job = runJob(helper, bot, new BlockPos(3, 0, 4), new BlockPos(13, 0, 4), "wheat");
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			List<BlockPos> water = new java.util.ArrayList<>();
+			List<BlockPos> soil = new java.util.ArrayList<>();
+			for (int x = 3; x <= 13; x++) {
+				BlockPos p = new BlockPos(x, 0, 4);
+				(helper.getBlockState(p).getFluidState().is(Fluids.WATER) ? water : soil).add(p);
+			}
+			for (BlockPos s : soil) {
+				helper.assertTrue(water.stream().anyMatch(w -> Math.abs(w.getX() - s.getX()) <= 4 && Math.abs(w.getZ() - s.getZ()) <= 4),
+					"dry at " + s + ", water at " + water);
+			}
+			planted(helper, soil);
+			helper.assertTrue(chest.countItem(Items.BUCKET) == 1, "no bucket in the chest");
+		});
+	}
+
 	/** The job finished (the bot runs idle.py once it has). */
 	private static void jobFinished(GameTestHelper helper, AntBot bot, ScriptRun job) {
 		helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state() + " " + BotScripts.log(bot, Output.Level.DEBUG));
@@ -278,8 +339,13 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	 * warning. Gives the job's run.
 	 */
 	private static ScriptRun runJob(GameTestHelper helper, AntBot bot, String args) {
-		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 1));
-		BlockPos high = helper.absolutePos(new BlockPos(3, 0, 3));
+		return runJob(helper, bot, new BlockPos(1, 0, 1), new BlockPos(3, 0, 3), args);
+	}
+
+	/** Runs jobs.farm over the field from from to to with args after the corners, as runJob above. */
+	private static ScriptRun runJob(GameTestHelper helper, AntBot bot, BlockPos from, BlockPos to, String args) {
+		BlockPos low = helper.absolutePos(from);
+		BlockPos high = helper.absolutePos(to);
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.farm " + low.getX() + " "
 			+ low.getY() + " " + low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " " + args);
 		ScriptRun job = bot.getScript();

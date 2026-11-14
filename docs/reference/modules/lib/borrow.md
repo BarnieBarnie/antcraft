@@ -1,6 +1,6 @@
 # `lib/borrow`
 
-Borrowing tools and items from chests and giving them back when the job is done, used or not. A module of the mod's default library: `from lib.borrow import borrow, borrowed, give_back, keep` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/borrow.py`, written with `take`, `put`, `count` and `scan`; read it to see how.
+Borrowing tools and items from chests and giving them back when the job is done, used or not. A module of the mod's default library: `from lib.borrow import borrow, borrowed, give_back, keep, turned` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/borrow.py`, written with `take`, `put`, `count` and `scan`; read it to see how.
 
 What is out is kept in [`memory`](../../types/memory.md)`["borrowed"]`, so the record survives a script restart, a reload and a respawn: a job that borrowed and stopped halfway can give back from its next run. Library functions that take from a chest go through `borrow` (see [Writing library functions](../../index.md#writing-library-functions)).
 
@@ -55,6 +55,10 @@ borrow(chest, "oak_planks", 4)
 keep("iron_pickaxe")  # the job's result
 give_back()            # the planks go back, the pickaxe stays
 ```
+
+## `turned(item, into, n=1)`
+
+Says that `n` of a borrowed `item` turned into `into` in the bot's hands, newest record first, as a borrowed water bucket turns into an empty bucket once poured: those records are for `into` now, so `give_back` puts `into` back in their chest. Call it once the bot carries `into`; what else it carries of `into` counts as its own. `jobs.farm`'s `pour` calls `turned("water_bucket", "bucket")` after it pours ([Auto-farm](../../../cookbook/farm.md#the-bundled-job)).
 
 ## See also
 

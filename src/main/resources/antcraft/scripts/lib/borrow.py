@@ -1,4 +1,4 @@
-# Borrowing from chests and giving back, for any script: `from lib.borrow import borrow, borrowed, give_back, keep`.
+# Borrowing from chests and giving back, for any script: `from lib.borrow import borrow, borrowed, give_back, keep, turned`.
 # A module of the mod's default library (lib/), a primitive: it imports only lib.result. What it lent out is kept in
 # memory["borrowed"], so it survives restarts, reloads and respawns.
 #
@@ -79,6 +79,24 @@ def keep(item, n=None):
         if k < b["n"]:
             # The kept ones are the bot's own now.
             left = [record(b["chest"], b["item"], b["n"] - k, b.get("had", 0) + k)] + left
+    memory["borrowed"] = left
+
+
+def turned(item, into, n=1):
+    """n of borrowed item turned into into in the bot's hands (a water bucket poured: an empty bucket), newest record
+    first: those records are for into now, so give_back puts into back in their chest. Call it once into is carried:
+    what the bot carries of into besides counts as its own (had)."""
+    out = borrowed()
+    left = []
+    for b in reversed(out):
+        k = min(n, b["n"])
+        if k == 0 or not same(b["item"], item):
+            left = [b] + left
+            continue
+        n = n - k
+        left = [record(b["chest"], into, k, count(into) - k)] + left
+        if k < b["n"]:
+            left = [record(b["chest"], b["item"], b["n"] - k, b.get("had", 0))] + left
     memory["borrowed"] = left
 
 
