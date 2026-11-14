@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.StringJoiner;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -294,6 +295,16 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	private static Container container(GameTestHelper helper, int x, int y, int z) {
 		return (Container) Objects.requireNonNull(helper.getBlockEntity(new BlockPos(x, y, z), BlockEntity.class));
+	}
+
+	private static String contents(Container container) {
+		StringJoiner out = new StringJoiner(", ", "[", "]");
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			if (!container.getItem(i).isEmpty()) {
+				out.add(container.getItem(i).toString());
+			}
+		}
+		return out.toString();
 	}
 
 	private static Pos pos(GameTestHelper helper, int x, int y, int z) {
@@ -813,7 +824,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A lumberjack with a stone axe by a huge crimson fungus, four stems on crimson nylium under nether wart blocks, the
 	 * core holding a crimson fungus: it is a tree, so the lumberjack fells it, plants the fungus on the nylium and stores
-	 * the four stems (#563). Passes at about tick 130, 175 with the other colony tests.
+	 * the four stems (#563). The test keeps the nylium from turning to netherrack under the stem (#575). Passes at about
+	 * tick 130, 175 with the other colony tests.
 	 */
 	@GameTest(maxTicks = 400)
 	public void aLumberjackFellsAHugeFungusAndReplantsIt(GameTestHelper helper) {
@@ -834,9 +846,22 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
 		failOnError(helper, lumberjack);
+		// Nylium under a block that keeps out all light, the bottom stem, turns to netherrack on a random tick
+		// (NyliumBlock.randomTick), in about 1 run in 10 before the lumberjack mines that stem, and no fungus grows on
+		// netherrack (#575). ponytail: the test keeps the nylium; a huge fungus on netherrack is left to its own issue.
+		helper.onEachTick(() -> {
+			if (helper.getBlockState(new BlockPos(5, 0, 5)).is(Blocks.NETHERRACK)) {
+				helper.setBlock(5, 0, 5, Blocks.CRIMSON_NYLIUM);
+			}
+		});
 		helper.succeedWhen(() -> {
-			helper.assertBlockPresent(Blocks.CRIMSON_FUNGUS, new BlockPos(5, 1, 5));
-			helper.assertTrue(core.countItem(Items.CRIMSON_STEM) == 4, "stems in the core: " + core.countItem(Items.CRIMSON_STEM));
+			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.CRIMSON_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4) {
+				helper.fail("at (5, 1, 5): " + helper.getBlockState(new BlockPos(5, 1, 5)) + " on " + helper.getBlockState(new BlockPos(5, 0, 5))
+					+ ", core: " + contents(core)
+					+ ", bot at " + TestPositions.relative(helper, lumberjack.blockPosition()).toShortString() + " holding "
+					+ lumberjack.getMainHandItem() + ", inventory " + contents(lumberjack.getInventory())
+					+ ", log: " + BotScripts.log(lumberjack, Output.Level.DEBUG));
+			}
 		});
 	}
 
