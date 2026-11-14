@@ -51,6 +51,9 @@ public class BlueprintGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(helper.getLevel().getServer().getStructureTemplateManager().get(blueprint.get().structure()).isPresent(),
 				"no structure " + blueprint.get().structure());
 		}
+		// jobs/settle sets home at the house's work spot, inside behind its door (#601).
+		helper.assertValueEqual(Blueprints.get(AntCraft.id("starter_house")).orElseThrow().workSpots(), List.of(new BlockPos(2, 1, 1)),
+			"the starter house's work spots");
 		helper.succeed();
 	}
 

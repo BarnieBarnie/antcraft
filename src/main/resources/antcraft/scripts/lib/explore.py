@@ -84,18 +84,18 @@ def explore(rings=4, step=32, until=None):
     return result(None if until is None else "not_found", pos())
 
 
-# The biome_tags of each id asked about, so seen() pays the native once per id.
+# The tags of each (kind, id) asked about, so seen() pays the native once per id.
 _TAGS = {}
 
 
-def matches(id, what):
-    """Whether the biome or structure id is what: the same id, a biome tag of it ("#minecraft:is_forest"), or what,
-    without a namespace, is part of its name, so "village" matches every village and "ocean" every ocean.
-    ponytail: tags are biome tags only; a structure's tags are not read."""
+def matches(id, what, kind="biomes"):
+    """Whether the biome or structure id (kind "biomes" or "structures") is what: the same id, a tag of it
+    ("#minecraft:is_forest" for a biome, "#minecraft:village" for a structure), or what, without a namespace, is part of
+    its name, so "village" matches every village and "ocean" every ocean."""
     if what.startswith("#"):
-        if id not in _TAGS:
-            _TAGS[id] = biome_tags(id)
-        return what in _TAGS[id]
+        if (kind, id) not in _TAGS:
+            _TAGS[(kind, id)] = biome_tags(id) if kind == "biomes" else structure_tags(id)
+        return what in _TAGS[(kind, id)]
     return id == what or (":" not in what and what in id.split(":")[-1])
 
 
@@ -106,7 +106,7 @@ def seen(what):
     out = []
     for kind in ("biomes", "structures"):
         for id, ps in s[kind].items():
-            if matches(id, what):
+            if matches(id, what, kind):
                 out = out + ps
     return sorted(out, key=lambda p: here.distance(p))
 

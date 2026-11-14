@@ -143,7 +143,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		return chest;
 	}
 
-	/** The cobble step at (4, 1, 4), the bump gone, the chest and table placed, home set and the pickaxe back in its chest. */
+	/** The cobble step at (4, 1, 4), the bump gone, the chest and table placed, the bot home and the pickaxe back in its chest. */
 	private static void assertBase(GameTestHelper helper, AntBot bot, Container chest, BlockPos at) {
 		helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 4);
 		helper.assertBlockPresent(Blocks.COBBLESTONE, 5, 1, 4);
@@ -151,7 +151,10 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(helper.getBlockState(new BlockPos(12, 1, 9)).isAir() && helper.getBlockState(new BlockPos(12, 2, 9)).isAir(), "the bump is left");
 		helper.assertBlockPresent(Blocks.CHEST, 10, 1, 4);
 		helper.assertBlockPresent(Blocks.CRAFTING_TABLE, 10, 1, 5);
-		helper.assertValueEqual(bot.getHome(), at.offset(2, 1, 1), "home");
+		// The cobble step has no work spot to take home from (the starter house's is inside, behind its door): home is
+		// beside the chest, where the bot stands once it is home.
+		helper.assertValueEqual(bot.getHome(), at.offset(5, 0, 0), "home");
+		helper.assertValueEqual(bot.blockPosition(), at.offset(5, 0, 0), "where the bot stands");
 		helper.assertTrue(chest.countItem(Items.STONE_PICKAXE) == 1 && bot.getInventory().countItem(Items.STONE_PICKAXE) == 0,
 			"the borrowed pickaxe is not back");
 	}

@@ -91,6 +91,12 @@ public final class BotScripts {
 			.filter(entry -> entry.level() != Output.Level.PRINT).map(BotLog.Entry::text).toList();
 	}
 
+	/** The texts of {@code bot}'s errors, without its warnings or what it said or printed. */
+	public static List<String> errors(AntBot bot) {
+		return bot.getLog().last(BotLog.CAPACITY, Output.Level.ERROR).stream()
+			.filter(entry -> entry.level() == Output.Level.ERROR).map(BotLog.Entry::text).toList();
+	}
+
 	/** A message a {@link RecordingPlayer} got, at the game time it got it. */
 	public record Message(long tick, String text) {
 	}

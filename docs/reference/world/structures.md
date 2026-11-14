@@ -51,4 +51,4 @@ for s in structures():
 
 ## See also
 
-[`biome`](biome.md), [`scan`](scan.md), [`find_nearest`](find_nearest.md).
+[`biome`](biome.md), [`structure_tags`](structure_tags.md), [`scan`](scan.md), [`find_nearest`](find_nearest.md).

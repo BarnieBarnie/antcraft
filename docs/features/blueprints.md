@@ -1,6 +1,6 @@
 # Blueprints
 
-**Blueprints.** The mod keeps a library of buildings: blueprints, loaded with the server's data and again on `/reload`. The mod bundles `antcraft:starter_house` (a small house), `antcraft:cobble_step` (a cobblestone step), `antcraft:warehouse` (a storage building), `antcraft:farm` (a crop farm) and `antcraft:cobble_generator` (a cobblestone generator), and a data pack can add more. A blueprint is a file `data/<namespace>/blueprint/<name>.json`, and its id is that of the file (`<namespace>:<name>`):
+**Blueprints.** The mod keeps a library of buildings: blueprints, loaded with the server's data and again on `/reload`. The mod bundles `antcraft:starter_house` (a small house, its work spot inside behind the door), `antcraft:cobble_step` (a cobblestone step), `antcraft:warehouse` (a storage building), `antcraft:farm` (a crop farm) and `antcraft:cobble_generator` (a cobblestone generator), and a data pack can add more. A blueprint is a file `data/<namespace>/blueprint/<name>.json`, and its id is that of the file (`<namespace>:<name>`):
 
 ```json
 {

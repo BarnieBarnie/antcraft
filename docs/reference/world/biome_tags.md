@@ -38,4 +38,4 @@ if b is not None and "#minecraft:is_forest" in biome_tags(b):
 
 ## See also
 
-[`biome`](biome.md), [`block_tags`](block_tags.md), [`lib/explore`](../modules/lib/explore.md).
+[`biome`](biome.md), [`block_tags`](block_tags.md), [`structure_tags`](structure_tags.md), [`lib/explore`](../modules/lib/explore.md).

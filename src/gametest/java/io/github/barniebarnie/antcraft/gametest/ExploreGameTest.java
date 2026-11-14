@@ -70,6 +70,20 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, List.of("[1, 3] []", "True []"));
 	}
 
+	/** seen("#minecraft:village") gives the remembered structures of that structure tag (structure_tags), not the others. */
+	@GameTest(maxTicks = 10)
+	public void seenTakesAStructureTag(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		run(helper, bot, """
+			import lib.explore
+			memory["seen"] = {"biomes": {"minecraft:plains": [Pos(4, 64, 4)]}, "structures": {"minecraft:village_plains": [Pos(1, 64, 1)],
+			    "minecraft:mineshaft": [Pos(2, 64, 2)], "minecraft:village_desert": [Pos(3, 64, 3)]}}
+			print(sorted([p.x for p in lib.explore.seen("#minecraft:village")]), lib.explore.seen("#minecraft:is_forest"))
+			print("#minecraft:village" in structure_tags("minecraft:village_plains"), structure_tags("minecraft:nothing"))
+			""");
+		succeedWhenPrinted(helper, bot, List.of("[1, 3] []", "True []"));
+	}
+
 	/**
 	 * A waypoint whose column is not loaded yet (surface() gives None the first time it is asked about each column) goes
 	 * to the surface once its chunk loads: the third waypoint, (5, 1, 5), is a dirt block, so the bot stands on it at y 2

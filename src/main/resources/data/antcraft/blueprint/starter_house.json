@@ -1,4 +1,5 @@
 {
 	"structure": "antcraft:starter_house",
-	"name": "blueprint.antcraft.starter_house"
+	"name": "blueprint.antcraft.starter_house",
+	"work_spots": [[2, 1, 1]]
 }

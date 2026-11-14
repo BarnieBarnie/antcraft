@@ -136,6 +136,14 @@ public final class SenseApi {
 				.map(tag -> "#" + tag.location()).sorted().forEach(tags.items::add));
 			return tags;
 		});
+		natives.register("structure_tags", 15, call -> {
+			Identifier id = Identifier.tryParse(Values.str(Args.bind("structure_tags", call, 1, "structure")[0]));
+			PyList tags = new PyList();
+			Optional.ofNullable(id).flatMap(i -> bot(run, call).level().registryAccess().lookupOrThrow(Registries.STRUCTURE)
+				.get(ResourceKey.create(Registries.STRUCTURE, i))).ifPresent(structure -> structure.tags()
+				.map(tag -> "#" + tag.location()).sorted().forEach(tags.items::add));
+			return tags;
+		});
 		natives.register("held", call -> {
 			Args.bind("held", call, 0);
 			ItemStack hand = bot(run, call).getMainHandItem();

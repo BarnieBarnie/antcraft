@@ -68,6 +68,7 @@ public class SenseCostGameTest {
 			calls.put("biome", call("biome"));
 			calls.put("biome pos", call("biome", feet));
 			calls.put("biome_tags", call("biome_tags", "minecraft:plains"));
+			calls.put("structure_tags", call("structure_tags", "minecraft:village_plains"));
 			calls.put("room", call("room", box, "stone"));
 			calls.put("structures 16", call("structures", 16L));
 			calls.put("structures 64", call("structures", 64L));

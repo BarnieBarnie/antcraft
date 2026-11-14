@@ -8,7 +8,7 @@ The job `jobs/settle` settles a base with an empty-handed bot: it gets a kit, le
 /antcraft bot run jobs.settle 10 64 10 16 my:hut
 ```
 
-The arguments are the lowest corner of the house `x y z` (by default where the bot stands, or where a stopped run started) how far to look for what it needs, in blocks (default 32), and the house's blueprint (default `antcraft:starter_house`; another blueprint that fits in 5 by 5 will do, with home still at `(2, 1, 1)`). The bot says one line per step it starts, `settle 3/7: hut`, then `settled`, or why not, such as `not settled: no_logs at hut, left ['hut', 'furnish', 'field', 'store', 'home']`.
+The arguments are the lowest corner of the house `x y z` (by default where the bot stands, or where a stopped run started) how far to look for what it needs, in blocks (default 32), and the house's blueprint (default `antcraft:starter_house`; another blueprint that fits in 5 by 5 will do, with home at its first work spot, or beside the chest where it has none). The bot says one line per step it starts, `settle 3/7: hut`, then `settled`, or why not, such as `not settled: no_logs at hut, left ['hut', 'furnish', 'field', 'store', 'home']`.
 
 The plot, from the corner `x y z` east and south:
 
@@ -18,7 +18,7 @@ The plot, from the corner `x y z` east and south:
 | a chest and a crafting table | `(6, 0, 0)` and `(6, 0, 1)` |
 | the field, 3 by 3 soil | `(6, -1, 2)` to `(8, -1, 4)` |
 | its water source, in the middle | `(7, -1, 3)` |
-| home, inside behind the door | `(2, 1, 1)` |
+| home, inside behind the door (the house's first [work spot](../features/blueprints.md); beside the chest, `(5, 0, 0)`, for a house with none) | `(2, 1, 1)` |
 | the levelled plot, a block round all of it | `(-1, -1, -1)` to `(9, -1, 5)`, cleared 6 high |
 
 The steps, from `config/antcraft/scripts/jobs/settle.py`:
@@ -42,7 +42,7 @@ r = lib.project.run("settle", steps)
 - **furnish**: [`place`](../reference/blocks/place.md)s the chest and the crafting table.
 - **field** (optional): first a water bucket by `get` (from a chest; none is crafted or filled): the bot digs the middle of the field and pours the water into the hole, so the 8 blocks of farmland round it stay wet. Without a water bucket the field is planted dry: wheat keeps its farmland, but a block left bare dries out and turns back into dirt, and the wheat grows slowly. Then a hoe by `ensure_tool`, wheat seeds by `get`, and [`lib.farm.tend`](../reference/modules/lib/farm.md) tills and plants it. Where a block is left bare though the bot still carries seeds (it failed to till it, or stood in the way), the step is tried once more. A field that fails does not stop the base.
 - **store** (optional): [`lib.storage.deposit`](../reference/modules/lib/storage.md) gives back what was borrowed and puts the rest but tools, torches and food into the chests, the new one too.
-- **home**: [`set_home`](../reference/movement/set_home.md) inside the house, and goes there.
+- **home**: [`set_home`](../reference/movement/set_home.md) at the house's first work spot, inside the starter house, or beside the chest for a house without one, and goes there.
 - `lib.project.run` keeps the names of the steps done in `memory["projects"]["settle"]` and gives back what was borrowed at the end, also when a step failed. Once settled, the job forgets the project, so the next run settles anew; to start a stopped one over instead, `lib.project.reset("settle")`.
 
-`SettleGameTest` runs the job with `antcraft:cobble_step` as the house, to keep it short, and the kit, seeds, a water bucket and the cobble step's materials in a chest: stopped as it starts the house and run again, it does not do the kit and the flattening a second time, and ends with the house standing, the field planted round its water on wet farmland and the borrowed tools back in the chest. With no seeds and no water bucket, the field step fails and the bot still settles. Settling from nothing (no chest, gathering and crafting it all) is not tested: it takes far longer than a game test should.
+`SettleGameTest` runs the job with `antcraft:cobble_step` as the house, to keep it short, and the kit, seeds, a water bucket and the cobble step's materials in a chest: stopped as it starts the house and run again, it does not do the kit and the flattening a second time, and ends with the house standing, the bot home beside the chest (the cobble step has no work spot), the field planted round its water on wet farmland and the borrowed tools back in the chest. With no seeds and no water bucket, the field step fails and the bot still settles. Settling from nothing (no chest, gathering and crafting it all) is not tested: it takes far longer than a game test should.

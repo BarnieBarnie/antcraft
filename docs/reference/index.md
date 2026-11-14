@@ -40,6 +40,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`surface`](world/surface.md) | `surface(pos)` | the open spot on top of `pos`'s column, under the sky, or `None` where it is not loaded or in the Nether |
 | [`biome`](world/biome.md) | `biome(pos=None)` | the id of the biome at `pos` (the bot's feet), or `None` where it is not loaded |
 | [`biome_tags`](world/biome_tags.md) | `biome_tags(biome)` | the tags of a biome id, such as `"#minecraft:is_forest"` |
+| [`structure_tags`](world/structure_tags.md) | `structure_tags(structure)` | the tags of a structure id, such as `"#minecraft:village"` |
 | [`structures`](world/structures.md) | `structures(radius=64)` | the structures (villages, mineshafts, ...) whose box is near, nearest first, in loaded chunks |
 | [`find_nearest`](world/find_nearest.md) | `find_nearest(what, radius=32, around=None)` | the nearest matching block's position (to the bot or `around`), or `None` (may pause) |
 | [`scan`](world/scan.md) | `scan(what, radius=16, limit=64, around=None)` | the positions of matching blocks, nearest first (to the bot or `around`) (may pause) |

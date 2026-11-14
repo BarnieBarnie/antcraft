@@ -4,7 +4,6 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.BotLog;
 import io.github.barniebarnie.antcraft.script.DefaultScripts;
 import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
@@ -58,8 +57,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	/** Fails at once when the script fails, rather than waiting out the test. */
 	private static void failOnError(GameTestHelper helper, AntBot bot) {
 		helper.onEachTick(() -> {
-			List<String> errors = bot.getLog().last(BotLog.CAPACITY, Output.Level.ERROR).stream()
-				.filter(entry -> entry.level() == Output.Level.ERROR).map(BotLog.Entry::text).toList();
+			List<String> errors = BotScripts.errors(bot);
 			if (!errors.isEmpty()) {
 				helper.fail("script error: " + errors);
 			}

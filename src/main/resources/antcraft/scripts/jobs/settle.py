@@ -18,6 +18,7 @@ from lib.get import ensure_tool, get
 from lib.project import Step
 
 HUT = "antcraft:starter_house"  # 5 by 4 by 5, a floor, its door at (2, 1, 0); any blueprint that fits in 5 by 5 will do
+# Home is the hut's first work spot, or beside the chest where it has none.
 # The tools first, then what is placed, and dirt to climb on while building.
 KIT = [("stone_pickaxe", 1), ("stone_axe", 1), ("stone_shovel", 1), ("stone_hoe", 1), ("crafting_table", 1),
        ("chest", 1), ("dirt", 16)]
@@ -80,7 +81,9 @@ def plant():
 
 
 def home_in():
-    set_home(at + (2, 1, 1))  # inside, behind the door, over the floor
+    """Home at the house's first work spot (the starter house's is inside, behind the door), else beside the chest."""
+    spots = blueprint(hut, at)["work_spots"]
+    set_home(spots[0] if spots else at + (5, 0, 0))
     goto(home())
 
 

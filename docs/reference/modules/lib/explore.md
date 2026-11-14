@@ -35,7 +35,7 @@ Walks [`spiral`](#spiralcentre-step32-rings4)`(pos(), step, rings)` and [`look`]
 
 ## `seen(what)`
 
-The positions remembered of the biomes and structures `what` matches, nearest the bot first; `[]` if none. `what` matches an id itself, such as `"minecraft:desert"`, or is a part of its name, without a namespace: `"village"` matches every village and `"ocean"` every ocean biome, or is a biome tag with its `#`: `"#minecraft:is_forest"` matches every biome [`biome_tags`](../../world/biome_tags.md) puts in that tag (forest, birch forest, dark forest...). Structure tags are not read. A finder, done at once.
+The positions remembered of the biomes and structures `what` matches, nearest the bot first; `[]` if none. `what` matches an id itself, such as `"minecraft:desert"`, or is a part of its name, without a namespace: `"village"` matches every village and `"ocean"` every ocean biome, or is a biome tag with its `#`: `"#minecraft:is_forest"` matches every biome [`biome_tags`](../../world/biome_tags.md) puts in that tag (forest, birch forest, dark forest...), or a structure tag: `"#minecraft:village"` matches every village [`structure_tags`](../../world/structure_tags.md) puts in it. A finder, done at once.
 
 ## `report()`
 
@@ -43,4 +43,4 @@ Prints one line for each biome and structure remembered: its id and its position
 
 ## See also
 
-[`biome`](../../world/biome.md), [`biome_tags`](../../world/biome_tags.md), [`structures`](../../world/structures.md), [Explore and find a village](../../../cookbook/explore.md), [`memory`](../../types/memory.md), [The script library](../../../design/library.md).
+[`biome`](../../world/biome.md), [`biome_tags`](../../world/biome_tags.md), [`structures`](../../world/structures.md), [`structure_tags`](../../world/structure_tags.md), [Explore and find a village](../../../cookbook/explore.md), [`memory`](../../types/memory.md), [The script library](../../../design/library.md).

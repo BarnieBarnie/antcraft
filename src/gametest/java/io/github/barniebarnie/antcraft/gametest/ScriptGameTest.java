@@ -920,8 +920,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			if (bot == null) {
 				return;
 			}
-			List<String> errors = bot.getLog().last(BotLog.CAPACITY, Output.Level.ERROR).stream()
-				.filter(entry -> entry.level() == Output.Level.ERROR).map(BotLog.Entry::text).toList();
+			List<String> errors = BotScripts.errors(bot);
 			if (!errors.isEmpty()) {
 				helper.fail("script error: " + errors);
 			}
