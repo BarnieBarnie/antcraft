@@ -98,12 +98,17 @@ def harvest(spots):
 
 def tend(low, high, seed=None):
     """Harvests, tills and plants the field from low to high (field) with seed (None: what the bot carries, wheat first).
-    Gives result(): ok, or no_item with missing, the seeds still lacking for the farmland left bare."""
+    Gives result(): ok; blocked at the first spot left untilled, or left bare though the bot still carries its seed, which
+    is worth another try (lib.retry); or no_item with missing, the seeds still lacking for the farmland left bare."""
     spots = field(low, high)
     harvest(spots)
     till(spots)
     plant(spots, seed)
-    bare = len([s for s in spots if block(s).id == FARMLAND and block(s.up()).is_air])
+    seeds = [seed] if seed is not None else [c[1] for c in CROPS]
+    bare = [s for s in spots if block(s).id == FARMLAND and block(s.up()).is_air]
+    stuck = [s for s in spots if block(s).id in SOIL] + (bare if any([has(s) for s in seeds]) else [])
+    if stuck:
+        return result("blocked", stuck[0])
     if bare:
-        return result("no_item", None, {seed or CROPS[0][1]: bare})
+        return result("no_item", None, {seed or CROPS[0][1]: len(bare)})
     return result()

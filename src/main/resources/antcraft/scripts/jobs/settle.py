@@ -16,7 +16,6 @@ import lib.terrain
 from lib.build import build_here
 from lib.get import ensure_tool, get
 from lib.project import Step
-from lib.result import result
 
 HUT = "antcraft:starter_house"  # 5 by 4 by 5, a floor, its door at (2, 1, 0); any blueprint that fits in 5 by 5 will do
 # The tools first, then what is placed, and dirt to climb on while building.
@@ -77,11 +76,9 @@ def plant():
         return r
     if count(SEED) < len(spots):
         get(SEED, len(spots), radius)  # ponytail: a field short of seeds is planted as far as they go; tend says what lacked
-    r = lib.farm.tend(field[0], field[1], SEED)
-    # tend gives ok past soil it failed to till, and no_item where a seed it still carries did not go in (the bot stood
-    # there, say): blocked tries the step once more (tries=2). Bare farmland with no water near turns back into dirt.
-    bare = [s for s in spots if block(s.up()).is_air]
-    return result("blocked", bare[0]) if bare and (r["ok"] or count(SEED)) else r
+    # tend gives blocked where soil is left untilled or a seed it still carries did not go in (the bot stood there, say):
+    # the step tries once more (tries=2). Bare farmland with no water near turns back into dirt.
+    return lib.farm.tend(field[0], field[1], SEED)
 
 
 def home_in():

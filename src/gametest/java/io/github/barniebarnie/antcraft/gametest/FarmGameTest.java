@@ -105,6 +105,30 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The field with no hoe carried (#590): tend harvests and replants the wheat at (1, 0, 1) but cannot till the dirt, so
+	 * it fails blocked at the first spot left untilled, (2, 0, 1), rather than giving ok.
+	 */
+	// Measured: passes at tick 15.
+	@GameTest(maxTicks = 30)
+	public void tendFailsWhereSoilIsLeftUntilled(GameTestHelper helper) {
+		field(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 8));
+		// The run, as the bot goes on to idle.py once the script ends.
+		ScriptRun job = BotScripts.run(bot, """
+			import lib.farm
+			r = lib.farm.tend(%s, %s)
+			print(r["ok"], r["reason"], r["at"])
+			""".formatted(printed(helper, 1, 0, 1), printed(helper, 3, 0, 3)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("False blocked " + printed(helper, 2, 0, 1))), "printed " + printed);
+		});
+	}
+
+	/**
 	 * jobs.farm over the field, with a wooden hoe and 8 wheat seeds in a chest at (6, 1, 6): it borrows the hoe and seeds,
 	 * tends the field, stores the wheat in the chest and gives the hoe back.
 	 */

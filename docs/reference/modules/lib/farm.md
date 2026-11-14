@@ -42,6 +42,6 @@ Harvests the ripe crop over each of `spots` and replants it with its own seed wh
 
 ## `tend(low, high, seed=None)`
 
-`harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`. **Returns** a dict: `ok`, `reason` (`None`, or `no_item` where farmland was left bare for want of seeds), `at` (`None`) and `missing` (`{seed: n}`, the bare spots). **Pauses** yes.
+`harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`. **Returns** a dict: `ok`, `reason` (`None`; `blocked` where a spot of soil was left untilled, such as with no hoe, or farmland left bare though the bot still carries the seed, a passing failure that [`lib/retry`](retry.md) tries again; or `no_item` where farmland was left bare for want of seeds), `at` (the first spot left so for `blocked`, else `None`) and `missing` (`{seed: n}`, the bare spots, for `no_item`). **Pauses** yes.
 
-`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water, and the job: once, twice as the crops ripen, and giving borrowed carrots back.
+`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water and failing `blocked` where it has no hoe to till with, and the job: once, twice as the crops ripen, and giving borrowed carrots back.
