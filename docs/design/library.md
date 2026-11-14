@@ -22,7 +22,7 @@ The library is written the Unix way: small functions that each do one thing well
 ## Layers
 
 ```text
- jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py  jobs/wood_farm.py   run with bot run jobs.<job> [args]
+ jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py  jobs/wood_farm.py  jobs/forester.py   run with bot run jobs.<job> [args]
  kits         lib/bootstrap  lib/gather  lib/project  lib/build  lib/depot  lib/treefarm         a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end; a storage row that grows; tree cells
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore  lib/farm  lib/storage  lib/terrain     one skill each, preconditions assumed

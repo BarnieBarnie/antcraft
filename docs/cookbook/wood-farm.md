@@ -53,6 +53,24 @@ most() == GROWTH // HARVEST # 47 cells
 
 A sapling grows on random ticks: each tick, the game gives one to `randomTickSpeed` (3) blocks of each 16 by 16 by 16 section, 4096 blocks, and a sapling with light 9 or more over it moves up a stage on 1 in 7 of those, from stage 0 to 1, then from 1 to a tree. Every sapling of `KINDS` grows the same way. `HARVEST` is measured in `WoodFarmGameTest`, where felling, replanting and storing a birch takes some 150 to 1000 ticks; pass the most cells as an argument for a farm of another size.
 
+## A forester
+
+The job `jobs/forester` picks the tree kind itself and starts its farm where the bot stands:
+
+```
+/antcraft bot run jobs.forester
+/antcraft bot run jobs.forester 16
+```
+
+The argument is how far to look, in blocks (32 by default); the farm gets the same radius. Its candidates are the kinds of `lib.treefarm.KINDS`:
+
+1. kinds whose saplings a chest within the radius holds (`lib.stock`), as the farm can start on them at once;
+2. then kinds of a tree within the radius (`lib.trees.next_tree`), whose leaves give the saplings.
+
+Within each, the simplest cell comes first: a 1x1 trunk before the 2x2 of dark oak, no roof before the roof of oak, a smaller cell, then a shorter clear; ties go to the nearest. So spruce saplings in a chest beat a birch tree nearby, and among trees birch comes before jungle, spruce, oak and dark oak. It says its choice and why, such as `forester: spruce_sapling, saplings in a chest 3 blocks away`, then runs `jobs.wood_farm.run` for that kind, which farms until stopped. With no candidate it warns `no_saplings` and stops. Imported, it runs nothing: `jobs.forester.candidates(radius)` gives the ranked `(kind, why)` pairs and `jobs.forester.run(radius)` starts the farm.
+
+`ForesterGameTest` checks that it chooses stored spruce saplings over a birch nearby, a birch without stored saplings, and warns `no_saplings` with nothing around.
+
 ## Use it from a script
 
 Imported, the job runs nothing, so another job starts a farm with its `run`:

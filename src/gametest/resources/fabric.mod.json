@@ -34,6 +34,7 @@
 			"io.github.barniebarnie.antcraft.gametest.CellsGameTest",
 			"io.github.barniebarnie.antcraft.gametest.TreeFarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.WoodFarmGameTest",
+			"io.github.barniebarnie.antcraft.gametest.ForesterGameTest",
 			"io.github.barniebarnie.antcraft.gametest.SettleGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ToolsGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BorrowGameTest",
