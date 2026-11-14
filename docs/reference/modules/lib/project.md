@@ -30,7 +30,7 @@ One step of a project, a [class](../../../language/classes.md) instance.
 
 ## `run(name, steps)`
 
-Does `steps`, a list of `Step`, in order, skipping the steps of the project `name` that are done. Before each step it starts it [`say`](../../bot/say.md)s one line, such as `house 3/3: walls`. At the end, also when a step failed, it gives back what the bot [borrowed](borrow.md) (`give_back()`).
+Does `steps`, a list of `Step`, in order, skipping the steps of the project `name` that are done. Before each step it starts it [`say`](../../bot/say.md)s one line, such as `house 3/3: walls`. At the end, also when a step failed, it gives back what the bot [borrowed](borrow.md) (`give_back()`): a tool a step took from a chest goes back to that chest, so a step that needs it after a rerun takes it again.
 
 - **Returns** a [`result()`](result.md) dict: `ok`, or the `reason` of the first required step that failed, with its name as `at`. `missing` is a list of the names of the steps not done, an optional step that failed among them.
 - **Pauses** yes, while the steps run.
