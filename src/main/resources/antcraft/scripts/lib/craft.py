@@ -17,8 +17,8 @@ from lib.tools import hold
 STACK = 64
 
 # How far craft_here looks for a crafting table or furnace it need not craft. ponytail: find_nearest's sphere stands in for
-# the reach of craft and smelt, so a station just outside reach is not planned for; a table craft does not see from where
-# the bot stands is walked to.
+# the reach of craft and smelt, so a station just outside reach is not planned for; a station within it that craft or
+# smelt does not see from where the bot stands is walked to, so every station plan counts is one they use (#630).
 REACH = 4
 
 # The tool tiers lib.get.ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
@@ -130,6 +130,11 @@ def smelt_here(item, n=1, fuel=None):
     r = smelt(item, n, fuel=fuel)
     if r or r.reason != "no_furnace":
         return result(r.reason)
+    # A station within REACH, as plan counts it, that smelt did not see from where the bot stands: smelt walks to it when
+    # named (#630), as craft_here does to a table.
+    near = furnace_at([[s.item for s in inventory() if matches(s, item)]])
+    if near is not None:
+        return result(smelt(item, n, furnace=near, fuel=fuel).reason)
     # No station within reach cooks item, so only a pickaxe brings a placed furnace back.
     if not count("#minecraft:pickaxes"):
         return result("no_tool")
@@ -172,14 +177,22 @@ def can_take_back_furnace(inputs):
 
 
 def furnace_in_reach(inputs):
-    """Whether a station within REACH cooks each of inputs (lists of items, one of each to smelt, as smelt_inputs gives
-    them): a furnace, or a smoker or blast furnace where every input has an item cooks_in names it for."""
-    if find_nearest("furnace", radius=REACH) is not None:
-        return True
+    """Whether a station within REACH cooks each of inputs (furnace_at)."""
+    return furnace_at(inputs) is not None
+
+
+def furnace_at(inputs):
+    """The Pos of a station within REACH that cooks each of inputs (lists of items, one of each to smelt, as smelt_inputs
+    gives them): a furnace, or a smoker or blast furnace where every input has an item cooks_in names it for; else None."""
+    near = find_nearest("furnace", radius=REACH)
+    if near is not None:
+        return near
     for station in ("minecraft:smoker", "minecraft:blast_furnace"):
-        if all([any([station in cooks_in(i) for i in items]) for items in inputs]) and find_nearest(station, radius=REACH) is not None:
-            return True
-    return False
+        if all([any([station in cooks_in(i) for i in items]) for items in inputs]):
+            near = find_nearest(station, radius=REACH)
+            if near is not None:
+                return near
+    return None
 
 
 def smelt_inputs(p):

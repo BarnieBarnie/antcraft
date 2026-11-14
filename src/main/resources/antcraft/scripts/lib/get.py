@@ -290,7 +290,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     chests of lib.stock within radius hold, as get takes them, and the raw items those cover left out (stored); the cost
     of each other raw item lib.craft.plan lists from its source (coal the walk to the nearest chest of lib.stock within
     radius that holds some, for as much as the chests hold, the rest from its source or from logs as charcoal where that
-    is cheaper), SMELT for each item smelted, and for each kind of tool their sources need the tool_cost of the highest
+    is cheaper), SMELT for each item smelted, the walk to or the mining back of its crafting table and furnace (stations),
+    and for each kind of tool their sources need the tool_cost of the highest
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed. tools holds the tool
     costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
     limit, None as soon as the cost is sure to be over it: a source costs at least its estimate each, so the ore scans
@@ -301,7 +302,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     GETTING.append(key(item))
     try:
         p = lib.craft.plan(item, n)
-        ticks = sum([lib.cost.SMELT * k for step, k, how in p["crafts"] if how == "smelt"])
+        ticks = sum([lib.cost.SMELT * k for step, k, how in p["crafts"] if how == "smelt"]) + stations(p)
         gather = dict(p["gather"])
         if gather:
             ticks += stored(p, item, gather, radius, tools)
@@ -343,6 +344,30 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         return ticks
     finally:
         GETTING.pop()
+
+
+def stations(p):
+    """The ticks the stations of p, a plan, add (#630): for its crafting table and its furnace (or smoker or blast furnace)
+    each, the walk to the one lib.craft.plan counts within lib.craft.REACH, as craft_here walks to one craft or smelt does
+    not see, else the ticks to mine back the one craft_here puts down, with the best axe or pickaxe carried (a furnace at
+    least with a wooden pickaxe, which get gets before it smelts); what makes one is in p already. ponytail: a table breaks as a log and a furnace as an ore (hardness 2.5 and 3.5 against 2 and 3),
+    and a furnace counts once, though smelt_here puts one down for each stack."""
+    ticks = 0
+    if p["table"]:
+        ticks += station(find_nearest("crafting_table", radius=lib.craft.REACH), "axe", "wood", None)
+    inputs = lib.craft.smelt_inputs(p)
+    if inputs:
+        ticks += station(lib.craft.furnace_at(inputs), "pickaxe", "ore", "wooden")
+    return ticks
+
+
+def station(at, kind, material, least):
+    """The walk to at, a station's Pos; where it is None, the ticks to break one of material with the best tool of kind
+    carried, else with one of tier least (None: the hand)."""
+    if at is not None:
+        return lib.cost.walk(pos(), at)
+    tool = lib.tools.best(kind)
+    return lib.cost.breaking(1, material, least if tool is None else lib.tools.tier(tool))
 
 
 def stored(p, item, gather, radius, tools):

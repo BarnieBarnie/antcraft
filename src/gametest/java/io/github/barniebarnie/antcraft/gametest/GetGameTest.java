@@ -105,6 +105,28 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Planks and sticks carried for a wooden pickaxe and its table, no table near, a stone pickaxe in a chest 4 blocks off
+	 * (#630): making the wooden one costs the table put down and mined back by hand, more than the walk, so ensure_tool
+	 * takes the chest's.
+	 */
+	@GameTest(maxTicks = 20)
+	public void theTableToMineBackMakesAChestToolCheaper(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.STONE_PICKAXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 7));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		run(helper, bot, """
+			from lib.get import ensure_tool
+			r = ensure_tool("pickaxe", 1)
+			print(r["ok"], held().item, count("oak_planks"))
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True minecraft:stone_pickaxe 7");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
 	 * A wooden and a stone pickaxe carried that last (#551): ensure_tool holds the stone one at once, without costing
 	 * options (replaced here by one that prints "costed").
 	 */
@@ -457,7 +479,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * An empty bot, no chest, exposed iron ore in sight: a stone axe for few logs, an iron one for many; nothing is done.
+	 * An empty bot, no chest, exposed iron ore in sight: a stone axe for few logs, an iron one for many (500: for 400 the
+	 * two were some 50 ticks apart, and the stations each tool's tables and furnace add tipped it to stone, #630); nothing
+	 * is done.
 	 * Without the ore in sight the make cost digs stairs for it (#529), and the stone axes win; without coal ore it burns
 	 * wood for the fuel, as get would (#536).
 	 */
@@ -467,7 +491,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
-			print(choose("axe", 30)[1:3], choose("axe", 400)[1:3], choose("axe", 30, "iron")[1:3])
+			print(choose("axe", 30)[1:3], choose("axe", 500)[1:3], choose("axe", 30, "iron")[1:3])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "('make', 'stone') ('make', 'iron') ('make', 'iron')"));
 	}
@@ -642,8 +666,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks; 48,200
 	 * (26 ticks) since that tool may come from a chest (#536), a chest scan for each tool costed; 61,000-64,400 (32-35
 	 * ticks, 52,000-56,000 before) since copper is a tier it makes (#578): 5,600 more, 3,600 of it its
-	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far (#595).
-	 * The limit keeps it there.
+	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far (#595); 46,500 (26 ticks)
+	 * since make_cost finds each plan's crafting table and furnace within reach (#630). The limit keeps it there.
 	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
@@ -686,7 +710,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * An iron axe in a chest: it beats making one for 30 logs, but for 400 it is not enough and an iron one is made, with
+	 * An iron axe in a chest: it beats making one for 30 logs, but for 500 it is not enough and an iron one is made, with
 	 * iron ore in sight (see chooseStoneForFewUsesIronForMany).
 	 */
 	@GameTest(maxTicks = 110)
@@ -696,7 +720,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
-			print(choose("axe", 30)[1:3], choose("axe", 400)[1:3])
+			print(choose("axe", 30)[1:3], choose("axe", 500)[1:3])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "('chest', 'iron') ('make', 'iron')"));
 	}

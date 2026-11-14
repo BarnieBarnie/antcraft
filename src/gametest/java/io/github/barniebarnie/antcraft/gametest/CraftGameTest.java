@@ -629,6 +629,26 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			inTheArea(helper, Blocks.FURNACE, 0));
 	}
 
+	/**
+	 * A furnace 3 blocks off behind a wall, inside the sphere plan counts but out of sight of the bot's eyes, and no
+	 * pickaxe or cobblestone (#630): smelt sees none from where the bot stands, so craft_here walks round to the one plan
+	 * counted and smelts there, as it does to a table (#623).
+	 */
+	@GameTest(maxTicks = 460)
+	public void craftHereWalksToAFurnaceThePlanCountedOutOfSight(GameTestHelper helper) {
+		helper.setBlock(5, 1, 2, Blocks.FURNACE);
+		for (int y = 1; y <= 2; y++) {
+			for (int z = 1; z <= 3; z++) {
+				helper.setBlock(4, y, z, Blocks.STONE);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, craftHere("'iron_ingot'", "iron_ingot", "raw_iron"), List.of("True None {} 1 0"),
+			inTheArea(helper, Blocks.FURNACE, 1));
+	}
+
 	/** Kelp, in no food tag, has a smoking recipe: craft_here cooks it in the smoker within reach and places no furnace. */
 	@GameTest(maxTicks = 220)
 	public void craftHereCooksKelpInASmokerWithinReach(GameTestHelper helper) {
