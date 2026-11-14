@@ -28,8 +28,13 @@ public final class LoadedWorldView implements WorldView {
 	}
 
 	@Override
-	public boolean jumpsShort(BlockPos pos) {
-		return this.loaded.test(pos) && this.world.jumpsShort(pos);
+	public float floorTop(BlockPos pos) {
+		return this.loaded.test(pos) ? this.world.floorTop(pos) : 1;
+	}
+
+	@Override
+	public float jumpTop(BlockPos pos) {
+		return this.loaded.test(pos) ? this.world.jumpTop(pos) : WorldView.super.jumpTop(pos);
 	}
 
 	@Override

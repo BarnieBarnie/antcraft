@@ -76,18 +76,23 @@ public class LevelWorldView implements WorldView {
 	}
 
 	@Override
-	public boolean jumpsShort(BlockPos pos) {
+	public float floorTop(BlockPos pos) {
 		VoxelShape shape = this.blocks.get(pos).getCollisionShape(this.level, pos);
-		return isLowFloor(shape) && shape.max(Direction.Axis.Y) < 0.75;
+		return isLowFloor(shape) ? (float) shape.max(Direction.Axis.Y) : 1;
+	}
+
+	@Override
+	public float jumpTop(BlockPos pos) {
+		return this.floorTop(pos) + (float) WorldView.jumpHeight(this.blocks.get(pos).getBlock().getJumpFactor());
 	}
 
 	/**
 	 * A block lower than a full one that is as wide as one, give or take a sixteenth, such as farmland, a dirt path, a
 	 * chest, a bed, snow two layers deep or more, or a bottom slab (#642): walked on as on a full block, but one lower than
-	 * three quarters of a block is too low to jump a block up from ({@link #jumpsShort}, #647). A bot standing on one
+	 * three quarters of a block is too low to jump a block up from ({@link #jumpTop}, #647). A bot standing on one
 	 * is in the block over it, as paths count it (see {@code PathFollower.feet}).
 	 */
-	static boolean isLowFloor(VoxelShape shape) {
+	public static boolean isLowFloor(VoxelShape shape) {
 		if (shape.isEmpty()) {
 			return false;
 		}

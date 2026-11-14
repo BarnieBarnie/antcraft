@@ -2,6 +2,8 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
+import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -862,5 +864,21 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(WorkGameTest.printed(bot), List.of("True"), "printed");
 			helper.assertBlockPresent(Blocks.OAK_SLAB, 2, 1, 3);
 		});
+	}
+
+	/**
+	 * A bot in the air over a bottom slab, just spawned or mid-jump, is in the slab's block but its feet count in the
+	 * block over it, so a path planned then starts there, not a block low (#659).
+	 */
+	@GameTest(maxTicks = 20)
+	public void aPathPlannedInTheAirOverALowFloorStartsOverIt(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(2, 1, 3, Blocks.OAK_SLAB);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1.8, 3.5));
+		helper.assertFalse(bot.onGround(), "on the ground at spawn");
+		PathFinder.Search search = new PathFollower(bot).plan(new Goal.Near(helper.absolutePos(new BlockPos(5, 1, 3)), 0));
+		search.run(10_000);
+		helper.assertValueEqual(search.path().orElseThrow().start(), helper.absolutePos(new BlockPos(2, 2, 3)), "path start");
+		helper.succeed();
 	}
 }

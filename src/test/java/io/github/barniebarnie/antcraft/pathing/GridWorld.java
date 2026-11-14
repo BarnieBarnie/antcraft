@@ -14,7 +14,8 @@ import net.minecraft.core.Direction;
  * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis),
  * 'H' = a ladder (climbed, unbreakable), 'T' = a trapdoor over a ladder (stood on shut, climbed through open),
  * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal),
- * 'l' = a bottom slab (stood on, but too low to jump a full block up from).
+ * 'l' = a bottom slab (stood on, but too low to jump a full block up from), 's' = snow two layers deep (an eighth high),
+ * 'h' = a honey block (stood on, but halves the jump).
  */
 public final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
@@ -88,12 +89,22 @@ public final class GridWorld implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		char c = this.at(pos);
-		return c == '#' || c == 'D' || c == 'B' || c == 'S' || c == 'T' || c == 'l';
+		return c == '#' || c == 'D' || c == 'B' || c == 'S' || c == 'T' || c == 'l' || c == 's' || c == 'h';
 	}
 
 	@Override
-	public boolean jumpsShort(BlockPos pos) {
-		return this.at(pos) == 'l';
+	public float floorTop(BlockPos pos) {
+		return switch (this.at(pos)) {
+			case 'l' -> 0.5f;
+			case 's' -> 0.125f;
+			case 'h' -> 0.9375f;
+			default -> 1;
+		};
+	}
+
+	@Override
+	public float jumpTop(BlockPos pos) {
+		return this.floorTop(pos) + (float) WorldView.jumpHeight(this.at(pos) == 'h' ? 0.5f : 1);
 	}
 
 	@Override
@@ -131,7 +142,8 @@ public final class GridWorld implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		return switch (this.at(pos)) {
-			case '#', 'S', 'l' -> 30;
+			case '#', 'S', 'l', 'h' -> 30;
+			case 's' -> 1;
 			case 'D' -> 10;
 			default -> -1;
 		};

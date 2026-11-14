@@ -1,11 +1,14 @@
 package io.github.barniebarnie.antcraft.pathing;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -46,6 +49,14 @@ class LevelWorldViewTest {
 	void otherBlocksDoNotOpen() {
 		assertFalse(LevelWorldView.canOpen(Blocks.OAK_TRAPDOOR.defaultBlockState(), Direction.EAST));
 		assertFalse(LevelWorldView.canOpen(Blocks.OAK_FENCE.defaultBlockState(), Direction.EAST));
+	}
+
+	/** Honey is a low floor whose jump, at half speed, lifts a bot well under a block (#659); stone's about 1.25. */
+	@Test
+	void aJumpFromHoneyFallsShortOfABlock() {
+		assertTrue(LevelWorldView.isLowFloor(Blocks.HONEY_BLOCK.defaultBlockState().getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO)));
+		assertTrue(WorldView.jumpHeight(Blocks.HONEY_BLOCK.getJumpFactor()) < 0.5);
+		assertEquals(1.25, WorldView.jumpHeight(Blocks.STONE.getJumpFactor()), 0.01);
 	}
 
 	@Test

@@ -80,6 +80,18 @@ class CachedWorldViewTest {
 		}
 
 		@Override
+		public float floorTop(BlockPos pos) {
+			this.ask("floorTop", pos);
+			return this.world.floorTop(pos);
+		}
+
+		@Override
+		public float jumpTop(BlockPos pos) {
+			this.ask("jumpTop", pos);
+			return this.world.jumpTop(pos);
+		}
+
+		@Override
 		public boolean mayPlace(BlockPos pos) {
 			this.ask("mayPlace", pos);
 			return this.world.mayPlace(pos);
@@ -101,7 +113,7 @@ class CachedWorldViewTest {
 
 	@Test
 	void theViewAnswersAsTheWorldDoes() {
-		GridWorld grid = GridWorld.flat(4).set(1, 1, 0, 'D').set(2, 1, 0, 'L').set(3, 1, 0, 'W').stair(0, 1, 1, Direction.EAST).door(1, 1, 1, Direction.Axis.X)
+		GridWorld grid = GridWorld.flat(4).set(1, 1, 0, 'D').set(2, 1, 0, 'L').set(3, 1, 0, 'W').set(4, 1, 0, 'h').set(4, 1, 1, 'l').stair(0, 1, 1, Direction.EAST).door(1, 1, 1, Direction.Axis.X)
 			.forbidPlacing(new BlockPos(0, 2, 0));
 		CachedWorldView view = new CachedWorldView(grid);
 		for (BlockPos pos : BlockPos.betweenClosed(-1, 0, -1, 4, 3, 2)) {
@@ -115,6 +127,8 @@ class CachedWorldViewTest {
 				assertEquals(grid.isClimbable(pos), view.isClimbable(pos), "climbable " + pos);
 				assertEquals(grid.isBedrock(pos), view.isBedrock(pos), "bedrock " + pos);
 				assertEquals(grid.mayPlace(pos), view.mayPlace(pos), "mayPlace " + pos);
+				assertEquals(grid.floorTop(pos), view.floorTop(pos), "floorTop " + pos);
+				assertEquals(grid.jumpTop(pos), view.jumpTop(pos), "jumpTop " + pos);
 				for (Direction dir : Direction.values()) {
 					assertEquals(grid.canOpen(pos, dir), view.canOpen(pos, dir), "canOpen " + dir + " " + pos);
 					assertEquals(grid.stairUp(pos, dir), view.stairUp(pos, dir), "stairUp " + dir + " " + pos);

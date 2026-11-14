@@ -4,6 +4,7 @@ import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import java.util.List;
 import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 
@@ -27,12 +28,13 @@ final class CachedWorldView implements WorldView {
 	/** {@code canOpen} and {@code stairUp}, one per horizontal direction. */
 	private static final int CAN_OPEN = 7;
 	private static final int STAIR_UP = 11;
-	private static final int JUMPS_SHORT = 15;
 
 	private final WorldView world;
 	/** Per block, the answers so far, two bits per question. */
 	private final Long2IntOpenHashMap answers = new Long2IntOpenHashMap();
 	private final Long2FloatOpenHashMap breakTicks = new Long2FloatOpenHashMap();
+	private final Long2FloatOpenHashMap floorTop = new Long2FloatOpenHashMap();
+	private final Long2FloatOpenHashMap jumpTop = new Long2FloatOpenHashMap();
 	/** The block asked about last and its answers, as a search asks several questions about a block in a row. */
 	private long lastKey = Long.MIN_VALUE;
 	private int lastKnown;
@@ -44,7 +46,6 @@ final class CachedWorldView implements WorldView {
 	private final Predicate<BlockPos> climbable;
 	private final Predicate<BlockPos> bedrock;
 	private final Predicate<BlockPos> mayPlace;
-	private final Predicate<BlockPos> jumpsShort;
 	/** {@code canOpen} and {@code stairUp}, by {@link Direction#get2DDataValue}. */
 	private final List<Predicate<BlockPos>> canOpen;
 	private final List<Predicate<BlockPos>> stairUp;
@@ -52,6 +53,8 @@ final class CachedWorldView implements WorldView {
 	CachedWorldView(WorldView world) {
 		this.world = world;
 		this.breakTicks.defaultReturnValue(Float.NaN);
+		this.floorTop.defaultReturnValue(Float.NaN);
+		this.jumpTop.defaultReturnValue(Float.NaN);
 		this.passable = world::isPassable;
 		this.standOn = world::canStandOn;
 		this.hazard = world::isHazard;
@@ -59,7 +62,6 @@ final class CachedWorldView implements WorldView {
 		this.climbable = world::isClimbable;
 		this.bedrock = world::isBedrock;
 		this.mayPlace = world::mayPlace;
-		this.jumpsShort = world::jumpsShort;
 		this.canOpen = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
 			.<Predicate<BlockPos>>map(dir -> pos -> world.canOpen(pos, dir)).toList();
 		this.stairUp = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
@@ -93,8 +95,13 @@ final class CachedWorldView implements WorldView {
 	}
 
 	@Override
-	public boolean jumpsShort(BlockPos pos) {
-		return this.answer(pos, JUMPS_SHORT, this.jumpsShort);
+	public float floorTop(BlockPos pos) {
+		return number(this.floorTop, pos, this.world::floorTop);
+	}
+
+	@Override
+	public float jumpTop(BlockPos pos) {
+		return number(this.jumpTop, pos, this.world::jumpTop);
 	}
 
 	@Override
@@ -115,13 +122,18 @@ final class CachedWorldView implements WorldView {
 
 	@Override
 	public float breakTicks(BlockPos pos) {
+		return number(this.breakTicks, pos, this.world::breakTicks);
+	}
+
+	/** The number {@code ask} gives for {@code pos}, asking the world the first time. */
+	private static float number(Long2FloatOpenHashMap known, BlockPos pos, ToDoubleFunction<BlockPos> ask) {
 		long key = pos.asLong();
-		float ticks = this.breakTicks.get(key);
-		if (Float.isNaN(ticks)) {
-			ticks = this.world.breakTicks(pos);
-			this.breakTicks.put(key, ticks);
+		float value = known.get(key);
+		if (Float.isNaN(value)) {
+			value = (float) ask.applyAsDouble(pos);
+			known.put(key, value);
 		}
-		return ticks;
+		return value;
 	}
 
 	@Override

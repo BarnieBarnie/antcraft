@@ -12,11 +12,32 @@ public interface WorldView {
 	boolean canStandOn(BlockPos pos);
 
 	/**
-	 * A floor lower than three quarters of a block, such as a bottom slab, a bed or thin snow: a bot's jump from its top,
-	 * at most about 1.25 blocks, falls short of a full block one higher, and of a block placed under it (#647).
+	 * The top of the floor this block is, above its bottom: 1 for a full block, 0.5 for a bottom slab, 0.125 for snow
+	 * two layers deep (#647, #659).
 	 */
-	default boolean jumpsShort(BlockPos pos) {
-		return false;
+	default float floorTop(BlockPos pos) {
+		return 1;
+	}
+
+	/**
+	 * How high above this block's bottom a bot standing on it lifts its feet with a jump: the floor's top plus about
+	 * 1.25, or about 0.38 from honey, which halves a jump's speed. A step up or a pillar needs it to clear the top of
+	 * what it lands on (#647, #659).
+	 */
+	default float jumpTop(BlockPos pos) {
+		return this.floorTop(pos) + (float) jumpHeight(1);
+	}
+
+	/**
+	 * How high a jump lifts a mob's feet from the ground, by vanilla's physics: 0.42 blocks a tick up times the block's
+	 * jump factor (0.5 for honey), less 0.08 gravity a tick and 2% drag, until it falls; about 1.25 for a factor of 1.
+	 */
+	static double jumpHeight(float factor) {
+		double height = 0;
+		for (double speed = 0.42 * factor; speed > 0; speed = (speed - 0.08) * 0.98) {
+			height += speed;
+		}
+		return height;
 	}
 
 	/** Never enter, stand on, or open up next to this block (lava, fire, any fluid), except to swim in it if {@link #isWater}. */

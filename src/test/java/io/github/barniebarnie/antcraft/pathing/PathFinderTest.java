@@ -124,6 +124,34 @@ class PathFinderTest {
 		assertEquals(List.of(MoveType.WALK, MoveType.WALK, MoveType.STEP_UP), types(path));
 	}
 
+	/**
+	 * From honey a jump goes half as fast, about 0.38 blocks high (#659): no step up onto a full block or a slab one
+	 * higher, nor a pillar; from thin snow, 0.125 high, a slab one up is 1.375 over it, past a jump's 1.25.
+	 */
+	@Test
+	void stepsUpFromNeitherHoneyNorThinSnowWhereTheJumpFallsShort() {
+		for (char from : new char[] {'h', 's'}) {
+			for (char onto : from == 'h' ? new char[] {'#', 'l', 'h'} : new char[] {'l'}) {
+				GridWorld world = GridWorld.flat(10).set(0, 0, 0, from).set(1, 1, 0, onto);
+				Path path = find(world, new BlockPos(1, 2, 0), WALK_ONLY);
+
+				assertTrue(path.complete(), from + " onto " + onto);
+				assertEquals(List.of(MoveType.WALK, MoveType.WALK, MoveType.STEP_UP), types(path), from + " onto " + onto);
+			}
+		}
+		Path pillar = find(GridWorld.flat(10).set(0, 0, 0, 'h'), new BlockPos(0, 2, 0), new PathFinder.Options(false, true, 10_000, 3));
+		assertEquals(MoveType.WALK, types(pillar).getFirst());
+	}
+
+	/** A slab one up from another slab is a block over its top, which a jump makes. */
+	@Test
+	void stepsUpFromASlabOntoASlab() {
+		GridWorld world = GridWorld.flat(10).set(0, 0, 0, 'l').set(1, 1, 0, 'l');
+		Path path = find(world, new BlockPos(1, 2, 0), WALK_ONLY);
+
+		assertEquals(List.of(MoveType.STEP_UP), types(path));
+	}
+
 	/** Nor does it pillar up from a bottom slab: a jump from its top does not clear the block placed over it (#647). */
 	@Test
 	void pillarsFromNoLowFloor() {

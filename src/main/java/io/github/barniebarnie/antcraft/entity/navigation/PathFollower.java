@@ -441,11 +441,16 @@ public class PathFollower {
 	/**
 	 * The block the bot's feet are in, as paths count it: the one over the block it stands on. On a block a little lower
 	 * than a full one, such as farmland, snow or a bottom slab, its block position is that block itself, which a path
-	 * never steps to (#634, #642).
+	 * never steps to (#634, #642); so too in the air over one, just spawned or mid-jump (#659), but not while climbing
+	 * inside scaffolding, whose shape out of context is a floor.
 	 */
 	public static BlockPos feet(AntBot bot) {
 		BlockPos at = bot.blockPosition();
-		return bot.onGround() && bot.getY() - at.getY() > 1e-3 ? at.above() : at;
+		if (bot.getY() - at.getY() <= 1e-3) {
+			return at;
+		}
+		return bot.onGround() || !bot.onClimbable() && LevelWorldView.isLowFloor(bot.level().getBlockState(at).getCollisionShape(bot.level(), at))
+			? at.above() : at;
 	}
 
 	/** Where the current step starts: the end of the step before it, or the start of the path. */
