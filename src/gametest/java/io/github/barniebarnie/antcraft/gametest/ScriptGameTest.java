@@ -849,7 +849,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			if (build[0] == null && helper.getBlockState(new BlockPos(2, 1, 6)).isAir()) {
 				helper.assertBlockPresent(Blocks.AIR, 2, 2, 6);
 				helper.assertBlockPresent(Blocks.DIRT, 6, 1, 1);
-				helper.assertValueEqual(loaded.getInventory().countItem(Items.DIRT), 2, "dirt carried");
+				helper.assertValueEqual(GameTests.carried(loaded, Items.DIRT), 2, "dirt carried");
 				helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "the dirt out of reach is forgotten: " + saved(helper, loaded));
 				WorkGameTest.carryCobbleStep(loaded, 2);
 				build[0] = BotScripts.run(loaded, "r = build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n");

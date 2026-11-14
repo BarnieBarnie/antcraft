@@ -901,7 +901,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
 			helper.assertTrue(WorkGameTest.printed(bot).equals(List.of("pickaxe!")), "printed " + WorkGameTest.printed(bot));
-			helper.assertTrue(bot.getInventory().countItem(Items.WOODEN_PICKAXE) + (bot.getMainHandItem().is(Items.WOODEN_PICKAXE) ? 1 : 0) == 1,
+			helper.assertTrue(GameTests.carried(bot, Items.WOODEN_PICKAXE) == 1,
 				"no wooden pickaxe");
 		});
 	}

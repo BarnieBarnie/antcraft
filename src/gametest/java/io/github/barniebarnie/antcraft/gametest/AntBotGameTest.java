@@ -79,7 +79,7 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		helper.spawnItem(Items.OAK_LOG, 3, 1, 3);
 
-		helper.succeedWhen(() -> helper.assertTrue(bot.getInventory().countItem(Items.OAK_LOG) == 1, "log not in inventory"));
+		helper.succeedWhen(() -> helper.assertTrue(GameTests.carried(bot, Items.OAK_LOG) == 1, "log not in inventory"));
 	}
 
 	@GameTest(maxTicks = 20)

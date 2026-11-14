@@ -36,7 +36,6 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -709,8 +708,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		int[] gained = {0};
 		int[] last = {2};
 		helper.onEachTick(() -> {
-			int now = lumberjack.getInventory().countItem(Items.OAK_SAPLING)
-				+ (lumberjack.getMainHandItem().is(Items.OAK_SAPLING) ? lumberjack.getMainHandItem().getCount() : 0);
+			int now = GameTests.carried(lumberjack, Items.OAK_SAPLING);
 			gained[0] += Math.max(0, now - last[0]);
 			last[0] = now;
 		});
@@ -718,8 +716,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(5, 1, 5));
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "logs in the core: " + core.countItem(Items.OAK_LOG));
 			helper.assertTrue(core.countItem(Items.DIRT) == 1, "dirt in the core: " + core.countItem(Items.DIRT));
-			int saplings = lumberjack.getInventory().countItem(Items.OAK_SAPLING)
-				+ (lumberjack.getMainHandItem().is(Items.OAK_SAPLING) ? lumberjack.getMainHandItem().getCount() : 0);
+			int saplings = GameTests.carried(lumberjack, Items.OAK_SAPLING);
 			helper.assertTrue(saplings == 2 + gained[0] - 1, "saplings the lumberjack keeps: " + saplings + ", picked up " + gained[0]);
 		});
 	}
@@ -883,7 +880,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.CRIMSON_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4
-				|| core.countItem(Items.WARPED_FUNGUS) != 0 || carried(lumberjack, Items.WARPED_FUNGUS) != 1) {
+				|| core.countItem(Items.WARPED_FUNGUS) != 0 || GameTests.carried(lumberjack, Items.WARPED_FUNGUS) != 1) {
 				helper.fail(fungusState(helper, core, lumberjack));
 			}
 		});
@@ -909,15 +906,10 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.WARPED_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4
-				|| carried(lumberjack, Items.OAK_SAPLING) != 1) {
+				|| GameTests.carried(lumberjack, Items.OAK_SAPLING) != 1) {
 				helper.fail(fungusState(helper, core, lumberjack));
 			}
 		});
-	}
-
-	/** How many of item the bot carries, in its hand too. */
-	private static int carried(AntBot bot, Item item) {
-		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
 	}
 
 	/**
@@ -1199,7 +1191,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			}
 			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
 			for (var item : List.of(Items.WHEAT_SEEDS, Items.BEETROOT_SEEDS, Items.POISONOUS_POTATO)) {
-				helper.assertTrue(farmer.getInventory().countItem(item) == 0, item + " kept: " + farmer.getInventory().countItem(item));
+				helper.assertTrue(GameTests.carried(farmer, item) == 0, item + " kept: " + GameTests.carried(farmer, item));
 			}
 			helper.assertTrue(core.countItem(Items.POISONOUS_POTATO) == 1, "no poisonous potato in the core");
 			helper.assertTrue(core.countItem(Items.BEETROOT_SEEDS) == 10, "beetroot seeds in the core: " + core.countItem(Items.BEETROOT_SEEDS));
@@ -1225,7 +1217,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.FARMLAND, spot);
 				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
 			}
-			helper.assertTrue(farmer.getInventory().countItem(Items.WOODEN_HOE) + (farmer.getMainHandItem().is(Items.WOODEN_HOE) ? 1 : 0) > 0,
+			helper.assertTrue(GameTests.carried(farmer, Items.WOODEN_HOE) > 0,
 					"the farmer has no wooden hoe");
 		});
 	}
@@ -1424,7 +1416,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		container(helper, 0, 6, 0).setItem(5, new ItemStack(Items.IRON_PICKAXE));
 		succeedWhenMined(helper, colony, () -> {
 			helper.assertTrue(helper.getBlockState(new BlockPos(7, 2, 4)).isAir(), "lodestone left in the branch");
-			helper.assertTrue(bot.getInventory().countItem(Items.IRON_PICKAXE) == 1, "no iron pickaxe carried");
+			helper.assertTrue(GameTests.carried(bot, Items.IRON_PICKAXE) == 1, "no iron pickaxe carried");
 		});
 	}
 

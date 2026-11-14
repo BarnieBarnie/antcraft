@@ -201,8 +201,8 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.CARROTS, spot.above());
 			}
 			helper.assertTrue(source.countItem(Items.CARROT) == 5, "carrots in their chest: " + source.countItem(Items.CARROT)
-				+ ", in the near one: " + near.countItem(Items.CARROT) + ", on the bot: " + carrots(bot));
-			helper.assertTrue(carrots(bot) == 0, "carrots left on the bot");
+				+ ", in the near one: " + near.countItem(Items.CARROT) + ", on the bot: " + GameTests.carried(bot, Items.CARROT));
+			helper.assertTrue(GameTests.carried(bot, Items.CARROT) == 0, "carrots left on the bot");
 		});
 	}
 
@@ -225,14 +225,8 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			jobFinished(helper, bot, job);
 			helper.assertTrue(chest.countItem(Items.CARROT) > 0, "no harvest in the chest");
-			helper.assertTrue(carrots(bot) == 3, "carrots on the bot: " + carrots(bot) + ", in the chest: " + chest.countItem(Items.CARROT));
+			helper.assertTrue(GameTests.carried(bot, Items.CARROT) == 3, "carrots on the bot: " + GameTests.carried(bot, Items.CARROT) + ", in the chest: " + chest.countItem(Items.CARROT));
 		});
-	}
-
-	/** The carrots the bot carries, in its hand too. */
-	private static int carrots(AntBot bot) {
-		ItemStack hand = bot.getMainHandItem();
-		return bot.getInventory().countItem(Items.CARROT) + (hand.is(Items.CARROT) ? hand.getCount() : 0);
 	}
 
 	/** The job finished (the bot runs idle.py once it has). */
@@ -306,9 +300,8 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	/** Fails the test as soon as the bot's script fails. */
 	private static void failOnError(GameTestHelper helper, AntBot bot) {
 		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			if (!BotScripts.errors(bot).isEmpty()) {
+				helper.fail("script error: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});
 	}

@@ -121,8 +121,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 				}
 			}
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, spot);
-			helper.assertTrue(bot.getInventory().countItem(Items.OAK_LOG) >= 4,
-				"the bot carries " + bot.getInventory().countItem(Items.OAK_LOG) + " oak logs");
+			helper.assertTrue(GameTests.carried(bot, Items.OAK_LOG) >= 4,
+				"the bot carries " + GameTests.carried(bot, Items.OAK_LOG) + " oak logs");
 			AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).expandTowards(24, 12, 24);
 			helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class, area, e -> e.getItem().is(Items.OAK_LOG)).isEmpty(),
 				"oak logs left lying");

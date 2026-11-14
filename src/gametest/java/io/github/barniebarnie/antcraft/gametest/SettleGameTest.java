@@ -277,7 +277,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		// beside the chest, where the bot stands once it is home.
 		helper.assertValueEqual(bot.getHome(), at.offset(5, 0, 0), "home");
 		helper.assertValueEqual(bot.blockPosition(), at.offset(5, 0, 0), "where the bot stands");
-		helper.assertTrue(chest.countItem(Items.STONE_PICKAXE) == 1 && bot.getInventory().countItem(Items.STONE_PICKAXE) == 0,
+		helper.assertTrue(chest.countItem(Items.STONE_PICKAXE) == 1 && GameTests.carried(bot, Items.STONE_PICKAXE) == 0,
 			"the borrowed pickaxe is not back");
 	}
 

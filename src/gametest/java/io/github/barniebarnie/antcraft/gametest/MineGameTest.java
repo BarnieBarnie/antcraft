@@ -289,10 +289,10 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0")), "not done");
 			assertLevelDug(helper);
-			int carried = bot.getInventory().countItem(Items.GRAVEL) + bot.getInventory().countItem(Items.FLINT)
-				+ bot.getInventory().countItem(Items.GRANITE);
+			int carried = GameTests.carried(bot, Items.GRAVEL) + GameTests.carried(bot, Items.FLINT)
+				+ GameTests.carried(bot, Items.GRANITE);
 			helper.assertTrue(carried == 0, "still carries " + carried + " junk");
-			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 64, "kept " + bot.getInventory().countItem(Items.COBBLESTONE));
+			helper.assertTrue(GameTests.carried(bot, Items.COBBLESTONE) == 64, "kept " + GameTests.carried(bot, Items.COBBLESTONE));
 		});
 	}
 

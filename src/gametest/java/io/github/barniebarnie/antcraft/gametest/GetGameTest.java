@@ -143,9 +143,10 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A stone axe in a chest across the wide area (walk 190 ticks) and 3 logs carried (#562): the chest is past NEAR, so
-	 * ensure_tool weighs it against making one and makes a wooden axe (30 ticks of work) rather than walk there.
+	 * ensure_tool weighs it against making one and makes a wooden axe (30 ticks of work) rather than walk there. Passes at
+	 * tick 164 in a full run (#619), 179-195 before #618; maxTicks is twice the slowest.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 360)
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 400)
 	public void aFarChestToolLosesToMakingOne(GameTestHelper helper) {
 		Container chest = chest(helper, new BlockPos(21, 1, 21), new ItemStack(Items.STONE_AXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);

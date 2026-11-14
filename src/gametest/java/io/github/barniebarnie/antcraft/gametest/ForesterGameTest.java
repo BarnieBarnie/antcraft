@@ -18,8 +18,8 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
  * The job {@code jobs/forester.py} (#607; docs/cookbook/wood-farm.md, A forester): the bot in the middle of the 24x16x24
- * {@code wide_tall} structure at (12, 1, 12), radius 8, so a neighbouring test's chests and trees stay out of reach. The
- * farm runs forever, so the tests end once the farm's first step has started.
+ * {@code wide_tall} structure at (12, 1, 12), farming radius 8 (a neighbouring test's chests and trees stay out anyway: a
+ * bot's scans see only its test area, {@link GameTests#hides}). The farm runs forever, so the tests end once the farm's first step has started.
  */
 public class ForesterGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(9, 1, 12);

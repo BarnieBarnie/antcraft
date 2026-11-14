@@ -52,7 +52,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(GameTests.walked(bot), "still walking");
-			int cobble = bot.getInventory().countItem(Items.COBBLESTONE) + (bot.getMainHandItem().is(Items.COBBLESTONE) ? 1 : 0);
+			int cobble = GameTests.carried(bot, Items.COBBLESTONE);
 			helper.assertTrue(cobble > 0, "mined stone did not drop cobblestone");
 		});
 	}
@@ -118,10 +118,6 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	private static int carried(AntBot bot, Item item) {
-		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
-	}
-
 	private static int dropped(GameTestHelper helper, Item item) {
 		AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).inflate(16);
 		return helper.getLevel().getEntitiesOfClass(ItemEntity.class, area, entity -> entity.getItem().is(item)).stream()
@@ -132,7 +128,7 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 600)
 	public void woodenPickaxeGetsNoRawIron(GameTestHelper helper) {
 		breakTwice(helper, Items.WOODEN_PICKAXE, Blocks.IRON_ORE, bot -> {
-			helper.assertTrue(carried(bot, Items.RAW_IRON) == 0, "bot got raw iron with a wooden pickaxe");
+			helper.assertTrue(GameTests.carried(bot, Items.RAW_IRON) == 0, "bot got raw iron with a wooden pickaxe");
 			helper.assertTrue(dropped(helper, Items.RAW_IRON) == 0, "raw iron dropped for a wooden pickaxe");
 		});
 	}
@@ -141,8 +137,8 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	public void stonePickaxeGetsRawIron(GameTestHelper helper) {
 		breakTwice(helper, Items.STONE_PICKAXE, Blocks.IRON_ORE, bot -> {
 			// The one dropped in the world may have been picked up since.
-			helper.assertTrue(carried(bot, Items.RAW_IRON) >= 1, "bot did not collect raw iron");
-			helper.assertTrue(carried(bot, Items.RAW_IRON) + dropped(helper, Items.RAW_IRON) == 2, "no raw iron dropped");
+			helper.assertTrue(GameTests.carried(bot, Items.RAW_IRON) >= 1, "bot did not collect raw iron");
+			helper.assertTrue(GameTests.carried(bot, Items.RAW_IRON) + dropped(helper, Items.RAW_IRON) == 2, "no raw iron dropped");
 		});
 	}
 
@@ -150,8 +146,8 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 240)
 	public void logsDropWithoutATool(GameTestHelper helper) {
 		breakTwice(helper, null, Blocks.OAK_LOG, bot -> {
-			helper.assertTrue(carried(bot, Items.OAK_LOG) >= 1, "bot did not collect the log");
-			helper.assertTrue(carried(bot, Items.OAK_LOG) + dropped(helper, Items.OAK_LOG) == 2, "no log dropped");
+			helper.assertTrue(GameTests.carried(bot, Items.OAK_LOG) >= 1, "bot did not collect the log");
+			helper.assertTrue(GameTests.carried(bot, Items.OAK_LOG) + dropped(helper, Items.OAK_LOG) == 2, "no log dropped");
 		});
 	}
 }

@@ -21,6 +21,8 @@ import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -280,5 +282,11 @@ public final class GameTests {
 	/** Whether the walk {@link #walkTo} started has ended, there or given up. */
 	public static boolean walked(AntBot bot) {
 		return !BotScripts.log(bot, Output.Level.PRINT).isEmpty();
+	}
+
+	/** How many of item the bot carries, in its main hand too: the bot holds the tool or block it last used there. */
+	public static int carried(AntBot bot, Item item) {
+		ItemStack hand = bot.getMainHandItem();
+		return bot.getInventory().countItem(item) + (hand.is(item) ? hand.getCount() : 0);
 	}
 }

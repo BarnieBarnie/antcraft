@@ -163,7 +163,7 @@ public class CookbookGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot != null && bot != first, "not respawned");
 			List<String> printed = BotScripts.log(Objects.requireNonNull(bot), Output.Level.PRINT);
 			helper.assertTrue(printed.contains("picked up 5 items where I died"), "printed " + printed);
-			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 5, "carries " + bot.getInventory().getItems());
+			helper.assertTrue(GameTests.carried(bot, Items.COBBLESTONE) == 5, "carries " + bot.getInventory().getItems());
 		});
 	}
 

@@ -15,7 +15,6 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -142,9 +141,9 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, "coal 3 %d");
 		helper.succeedWhen(() -> {
 			mined(helper, bot, START, 3);
-			helper.assertTrue(carried(bot, Items.STONE_PICKAXE) == 1, "carries " + carried(bot, Items.STONE_PICKAXE)
+			helper.assertTrue(GameTests.carried(bot, Items.STONE_PICKAXE) == 1, "carries " + GameTests.carried(bot, Items.STONE_PICKAXE)
 				+ " stone pickaxes: " + bot.getMainHandItem() + " in hand, " + bot.getInventory().getItems());
-			helper.assertTrue(carried(bot, Items.STICK) == 0, "the sticks are left: no pickaxe was made");
+			helper.assertTrue(GameTests.carried(bot, Items.STICK) == 0, "the sticks are left: no pickaxe was made");
 		});
 	}
 
@@ -175,7 +174,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(log.equals(List.of("strip mined " + n + " coal")), "printed " + log);
 		helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
 		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(start)), "the bot is at " + helper.relativePos(bot.blockPosition()));
-		helper.assertTrue(carried(bot, Items.COAL) == n, "carries " + carried(bot, Items.COAL) + " coal");
+		helper.assertTrue(GameTests.carried(bot, Items.COAL) == n, "carries " + GameTests.carried(bot, Items.COAL) + " coal");
 	}
 
 	/**
@@ -198,11 +197,5 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 				helper.fail("job failed: " + log + ", carries " + bot.getInventory().getItems() + " and " + bot.getMainHandItem());
 			}
 		});
-	}
-
-	/** How many of item the bot carries, in its hand too. */
-	private static int carried(AntBot bot, Item item) {
-		ItemStack hand = bot.getMainHandItem();
-		return bot.getInventory().countItem(item) + (hand.is(item) ? hand.getCount() : 0);
 	}
 }

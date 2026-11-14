@@ -78,7 +78,7 @@ public class BootstrapGameTest implements CustomTestMethodInvoker {
 			finished(helper, bot);
 			ItemStack pickaxe = chest.getItem(0);
 			helper.assertTrue(pickaxe.is(Items.IRON_PICKAXE) && pickaxe.getDamageValue() > 0, "the chest holds " + pickaxe);
-			helper.assertTrue(carried(bot, Items.STONE_PICKAXE) == 0, "a stone pickaxe was made");
+			helper.assertTrue(GameTests.carried(bot, Items.STONE_PICKAXE) == 0, "a stone pickaxe was made");
 		});
 	}
 
@@ -101,13 +101,7 @@ public class BootstrapGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static void hasKit(GameTestHelper helper, AntBot bot) {
-		KIT.forEach((item, n) -> helper.assertTrue(carried(bot, item) >= n,
-			"carries " + carried(bot, item) + " " + item + ", log " + BotScripts.log(bot, Output.Level.DEBUG)));
-	}
-
-	/** How many of item the bot carries, in its hand too. */
-	private static int carried(AntBot bot, Item item) {
-		ItemStack hand = bot.getMainHandItem();
-		return bot.getInventory().countItem(item) + (hand.is(item) ? hand.getCount() : 0);
+		KIT.forEach((item, n) -> helper.assertTrue(GameTests.carried(bot, item) >= n,
+			"carries " + GameTests.carried(bot, item) + " " + item + ", log " + BotScripts.log(bot, Output.Level.DEBUG)));
 	}
 }

@@ -132,7 +132,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(printed(bot).equals(List.of("False unreachable")), "printed " + printed(bot));
-			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 4, "carries " + bot.getInventory().getItems());
+			helper.assertTrue(GameTests.carried(bot, Items.COBBLESTONE) == 4, "carries " + bot.getInventory().getItems());
 		});
 	}
 
@@ -146,7 +146,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(printed(bot).equals(List.of("True None")), "printed " + printed(bot));
-			helper.assertTrue(bot.getInventory().countItem(Items.COBBLESTONE) == 3, "carries " + bot.getInventory().getItems());
+			helper.assertTrue(GameTests.carried(bot, Items.COBBLESTONE) == 3, "carries " + bot.getInventory().getItems());
 		});
 	}
 

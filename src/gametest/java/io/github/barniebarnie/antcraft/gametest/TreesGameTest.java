@@ -394,7 +394,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		// Once the bot placed its first scaffold block, so after anything fell_whole looks at before it walks.
 		AtomicBoolean placed = new AtomicBoolean();
 		helper.onEachTick(() -> {
-			if (bot.getInventory().countItem(Items.DIRT) < 6 && !placed.getAndSet(true)) {
+			if (GameTests.carried(bot, Items.DIRT) < 6 && !placed.getAndSet(true)) {
 				helper.setBlock(theirs, Blocks.DIRT);
 			}
 		});
@@ -418,7 +418,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.SPRUCE_SAPLING, 4));
 		BlockPos[] theirs = new BlockPos[1];
 		helper.onEachTick(() -> {
-			if (theirs[0] == null && bot.getInventory().countItem(Items.DIRT) < 6) {
+			if (theirs[0] == null && GameTests.carried(bot, Items.DIRT) < 6) {
 				theirs[0] = BlockPos.betweenClosedStream(0, 1, 0, 7, 7, 7)
 					.filter(p -> helper.getBlockState(p).is(Blocks.DIRT)).findFirst().orElseThrow().immutable();
 				helper.setBlock(theirs[0], Blocks.AIR);

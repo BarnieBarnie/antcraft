@@ -48,7 +48,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(6, 1, 2, Blocks.IRON_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
 		run(helper, bot, "iron_pickaxe 1", "got 1 iron_pickaxe",
-			() -> helper.assertTrue(bot.getInventory().countItem(Items.IRON_PICKAXE) == 1, "no iron pickaxe"));
+			() -> helper.assertTrue(GameTests.carried(bot, Items.IRON_PICKAXE) == 1, "no iron pickaxe"));
 	}
 
 	/** Feathers come from no source and no recipe: no_recipe, with what is missing. */
@@ -67,7 +67,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		chest.setItem(0, new ItemStack(Items.IRON_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		run(helper, bot, "iron_pickaxe 1", "got 1 iron_pickaxe", () -> {
-			helper.assertTrue(bot.getInventory().countItem(Items.IRON_PICKAXE) == 1, "no iron pickaxe");
+			helper.assertTrue(GameTests.carried(bot, Items.IRON_PICKAXE) == 1, "no iron pickaxe");
 			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
 		});
 	}
@@ -102,7 +102,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(started[0] && BotScripts.log(bot, Output.Level.PRINT).equals(List.of(says)),
 				"said " + BotScripts.log(bot, Output.Level.PRINT));
-			int planks = bot.getInventory().countItem(Items.OAK_PLANKS);
+			int planks = GameTests.carried(bot, Items.OAK_PLANKS);
 			helper.assertTrue(planks == 2, "planks " + planks);
 			helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 3, "planks in the chest " + chest.countItem(Items.OAK_PLANKS));
 		});
@@ -138,7 +138,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(started[0] && BotScripts.log(bot, Output.Level.PRINT).equals(List.of("got 2 oak_planks")),
 				"said " + BotScripts.log(bot, Output.Level.PRINT));
-			int planks = bot.getInventory().countItem(Items.OAK_PLANKS);
+			int planks = GameTests.carried(bot, Items.OAK_PLANKS);
 			helper.assertTrue(planks == 2, "planks " + planks);
 			helper.assertTrue(chest.countItem(Items.OAK_PLANKS) == 3, "planks in the chest " + chest.countItem(Items.OAK_PLANKS));
 		});

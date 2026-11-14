@@ -19,7 +19,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
  * {@code lib/build.py} and the job {@code jobs/build.py} (#571): get what a blueprint's site lacks, build it, give back
- * what was borrowed. Each run passes a radius of 8, so a neighbouring test's stone or chest is not one of its own.
+ * what was borrowed.
  */
 public class BuildGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -47,7 +47,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, "antcraft-gametest:two_palettes " + coords(helper, 4, 1, 3) + " 0 8", "built antcraft-gametest:two_palettes", () -> {
 			helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 3);
 			helper.assertTrue(chest.countItem(Items.WOODEN_PICKAXE) == 1, "the pickaxe is not back");
-			helper.assertTrue(bot.getInventory().countItem(Items.WOODEN_PICKAXE) == 0, "the bot kept the pickaxe");
+			helper.assertTrue(GameTests.carried(bot, Items.WOODEN_PICKAXE) == 0, "the bot kept the pickaxe");
 		});
 	}
 
@@ -68,7 +68,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			from lib.build import build_here, materials
 			from lib.borrow import borrowed
 			print(materials("antcraft:cobble_step", %s))
-			r = build_here("antcraft:cobble_step", %s, radius=8)
+			r = build_here("antcraft:cobble_step", %s)
 			print(r["ok"], r["reason"], r["missing"], borrowed(), count("cobblestone"))
 			""".formatted(at(helper, 4, 1, 3), at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
@@ -107,7 +107,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			    got.append(item)
 			    return real(item, n, radius)
 			lib.get.get = recorded
-			r = lib.build.build_here("antcraft-gametest:capped_step", %s, radius=8)
+			r = lib.build.build_here("antcraft-gametest:capped_step", %s)
 			print(r["ok"], r["reason"], r["missing"], "minecraft:cobblestone" in got, "minecraft:dirt" in got)
 			""".formatted(at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
@@ -144,7 +144,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			        most[0] = max(most[0], n)
 			    return real(item, n, radius)
 			lib.get.get = recorded
-			r = lib.build.build_here("antcraft-gametest:cobble_between", %s, radius=8)
+			r = lib.build.build_here("antcraft-gametest:cobble_between", %s)
 			print(r["ok"], r["reason"], r["missing"], most[0])
 			""".formatted(at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
@@ -163,7 +163,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		String name = BotScripts.libraryScript(helper, "build_", """
 			from lib.build import build_here
-			r = build_here("antcraft-gametest:no_such_blueprint", %s, radius=8)
+			r = build_here("antcraft-gametest:no_such_blueprint", %s)
 			print(r["ok"], r["reason"], r["at"] == %s, r["missing"])
 			""".formatted(at(helper, 4, 1, 3), at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
@@ -194,7 +194,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			    put(%s, "cobblestone", 64)
 			    return real(id, at, turn, mirror)
 			lib.build.build = robbed
-			r = lib.build.build_here("antcraft-gametest:two_palettes", %s, radius=8)
+			r = lib.build.build_here("antcraft-gametest:two_palettes", %s)
 			print(r["ok"], r["reason"], r["missing"], len(builds))
 			""".formatted(at(helper, 1, 1, 6), at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);

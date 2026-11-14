@@ -48,7 +48,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, "");
 		helper.succeedWhen(() -> {
 			felled(helper, bot);
-			helper.assertTrue(bot.getInventory().countItem(Items.STONE_AXE) == 1, "no stone axe made");
+			helper.assertTrue(GameTests.carried(bot, Items.STONE_AXE) == 1, "no stone axe made");
 			helper.assertTrue(chest.countItem(Items.DIRT) == 6 && chest.countItem(Items.SPRUCE_SAPLING) == 0,
 				"the chest holds " + chest.countItem(Items.DIRT) + " dirt, " + chest.countItem(Items.SPRUCE_SAPLING) + " saplings");
 		});
@@ -84,7 +84,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
 		helper.succeedWhen(() -> {
 			felled(helper, bot);
-			helper.assertTrue(bot.getInventory().countItem(Items.IRON_AXE) == 0, "the bot kept the iron axe");
+			helper.assertTrue(GameTests.carried(bot, Items.IRON_AXE) == 0, "the bot kept the iron axe");
 			ItemStack axe = ItemStack.EMPTY;
 			for (int i = 0; i < chest.getContainerSize(); i++) {
 				if (chest.getItem(i).is(Items.IRON_AXE)) {
@@ -102,8 +102,8 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		ScriptRun run = bot.getScript();
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(log.equals(List.of("felled a giant tree: 26 logs")), "printed " + log);
-		helper.assertTrue(bot.getInventory().countItem(Items.SPRUCE_LOG) == 26,
-			"the bot carries " + bot.getInventory().countItem(Items.SPRUCE_LOG) + " spruce logs");
+		helper.assertTrue(GameTests.carried(bot, Items.SPRUCE_LOG) == 26,
+			"the bot carries " + GameTests.carried(bot, Items.SPRUCE_LOG) + " spruce logs");
 		TreesGameTest.assertGiantFelled(helper);
 		helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
 	}
