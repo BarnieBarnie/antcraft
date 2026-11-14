@@ -112,23 +112,11 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 270)
 	public void theJobTendsTheFieldAndStoresTheHarvest(GameTestHelper helper) {
 		List<BlockPos> spots = field(helper);
-		helper.setBlock(6, 1, 6, Blocks.CHEST);
-		Container chest = (Container) Objects.requireNonNull(helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(6, 1, 6))));
-		chest.setItem(0, new ItemStack(Items.WOODEN_HOE));
-		chest.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 8));
+		Container chest = chest(helper, 6, 1, 6, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 8));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
-		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 1));
-		BlockPos high = helper.absolutePos(new BlockPos(3, 0, 3));
-		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.farm " + low.getX() + " " + low.getY() + " "
-			+ low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " wheat");
-		failOnError(helper, bot);
-		helper.onEachTick(() -> {
-			if (!BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		ScriptRun job = runJob(helper, bot, "wheat");
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+			jobFinished(helper, bot, job);
 			planted(helper, spots);
 			helper.assertTrue(chest.countItem(Items.WHEAT) == 1, "wheat in the chest: " + chest.countItem(Items.WHEAT));
 			helper.assertTrue(chest.countItem(Items.WOODEN_HOE) == 1, "no hoe in the chest");
