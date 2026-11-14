@@ -15,8 +15,9 @@ Recipes: complete scripts that combine builtins into useful bots, each with how 
 - [Explore and find a village](explore.md): `jobs.explore village` walks a spiral with `lib/explore` until it sees a village, goes home and reports the biomes and structures it saw.
 - [Build a blueprint](build.md): `jobs.build <blueprint> x y z` gets what the site lacks with `lib/build`, builds it and gives back what it borrowed.
 - [Settle a new base](settle.md): `jobs.settle` is one `lib/project` of kit, flatten, starter house, chest and crafting table, field, store and home, which a stopped run resumes.
+- [Grow a wood farm](wood-farm.md): `jobs.wood_farm birch_sapling` builds tree cells with `lib/treefarm` on a `lib/cells` grid, stores the wood in a `lib/depot` and adds a cell whenever the chests hold one's materials, farming until it is stopped.
 
-Each recipe's script also runs as it is in a game test (`CraftGameTest` for the chest, `CookbookGameTest` for the farm, the item recovery and the tunnel, and `BootstrapGameTest`, `GetJobGameTest`, `GiantTreeGameTest`, `StripMineGameTest`, `ExploreGameTest`, `FarmGameTest`, `BuildGameTest`, `SettleGameTest` and `StorageGameTest` for the jobs, which are the bundled `jobs/` scripts), so a change of the API that breaks one shows. The mining loop only compiles: its shaft and levels go far deeper than a test area of 8 by 8 by 8 blocks, and `ShaftGameTest` and `MineGameTest` test `lib/shaft` and `lib/mine` that it runs on.
+Each recipe's script also runs as it is in a game test (`CraftGameTest` for the chest, `CookbookGameTest` for the farm, the item recovery and the tunnel, and `BootstrapGameTest`, `GetJobGameTest`, `GiantTreeGameTest`, `StripMineGameTest`, `ExploreGameTest`, `FarmGameTest`, `BuildGameTest`, `SettleGameTest`, `WoodFarmGameTest` and `StorageGameTest` for the jobs, which are the bundled `jobs/` scripts), so a change of the API that breaks one shows. The mining loop only compiles: its shaft and levels go far deeper than a test area of 8 by 8 by 8 blocks, and `ShaftGameTest` and `MineGameTest` test `lib/shaft` and `lib/mine` that it runs on.
 
 Two short examples:
 

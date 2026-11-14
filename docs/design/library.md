@@ -22,7 +22,7 @@ The library is written the Unix way: small functions that each do one thing well
 ## Layers
 
 ```text
- jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py   run with bot run jobs.<job> [args]
+ jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py  jobs/wood_farm.py   run with bot run jobs.<job> [args]
  kits         lib/bootstrap  lib/gather  lib/project  lib/build  lib/depot  lib/treefarm         a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end; a storage row that grows; tree cells
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore  lib/farm  lib/storage  lib/terrain     one skill each, preconditions assumed
@@ -82,6 +82,16 @@ New modules are marked *new*; the others exist and grow.
 
 `materials(id, at, turn=0, mirror=False)` is what a blueprint's site still lacks (`blueprint(...)["missing"]`, #554); `build_here(id, at, turn=0, mirror=False, radius=32)` gets each of it with `get`, then `build`s what it has (where a `get` failed, as far as it can, then fails with that reason and what the bot lacks in `missing`, #585), again while each round leaves less missing, and gives back what it borrowed, also on a failure (#571). `colony.builder` takes from the core first and posts haul jobs for what `get` fails on, so it uses `materials` and builds itself.
 
+## Farms
+
+A farm is a job that runs until a player stops it, grows itself as it earns its materials, and picks up where it was after a stop, a reload or a death. `jobs/wood_farm.py` (#606, [cookbook](../cookbook/wood-farm.md)) is the first; a later farmer, such as a cobblestone generator or a sugar cane farm, follows the same pattern:
+
+1. **Cells** (`lib/cells`): the farm is a grid of identical cells laid out once from an origin; it builds `next` and marks it `add`ed, so what is built survives a rerun. The farm's own kit builds, checks and harvests one cell (`lib/treefarm` for trees).
+2. **Depot** (`lib/depot`): a row of chests by the farm, a category each, that adds a chest as one fills, so the farm never stops on a full chest. The bot keeps what it needs for its cells and stores the rest.
+3. **Project** (`lib/project`): the setup (kit, first materials, first cell) as steps, and the loop as its last step, which never returns. A rerun skips the steps done and goes straight back to the loop; as `give_back` never runs, the farm keeps what it took (it strikes it off `lib/borrow` each round).
+4. **Loop**: each round harvests what is ready, stores it, puts back what a cell lacks (a sapling, a torch), builds the next cell where the farm is below its most and the chests hold a cell's materials, and `wait`s where nothing was ready. Its most is the size at which the bot is always busy: how long a cell takes to be ready again over how long the bot takes for one, from the game's numbers (random ticks for growth) and a measured harvest time.
+5. **Imported, it runs nothing**: the job reads `ARGS` in a `try` (an imported module has none) and exposes `run(...)`, so another job, such as a forester that picks the kind (#607), starts the farm with its own arguments.
+
 ## Engine gaps
 
 What the library needs from the API:
@@ -91,7 +101,7 @@ What the library needs from the API:
 
 ## Example jobs
 
-Ten jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
+Eleven jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
 
 1. **`jobs/bootstrap.py`**: an empty-handed bot gets `lib.bootstrap.KIT` from what is around: logs, a crafting table, a wooden pickaxe, cobblestone, the stone tools, a furnace, charcoal and torches; tools in a nearby chest are borrowed instead of made. Test: an empty bot by trees and stone; again with an iron pickaxe in a chest, which it uses and gives back.
 2. **`jobs/get.py <item> [n]`**: `get(ARGS[0], n)`, the resolver alone. Test: `iron_pickaxe` from nothing, with trees, stone and iron ore in the area.
@@ -103,5 +113,6 @@ Ten jobs in `jobs/`, each a few lines over the library, each with a game test. A
 8. **`jobs/build.py <blueprint> x y z [turn] [radius]`**: `lib.build.build_here`, then says whether it built it. Tests: a one-cobblestone blueprint built from stone with a borrowed pickaxe, given back; the cobble step with no wood about built as far as its oak stairs, failing with them in `missing`; `no_blueprint`; `no_progress`.
 9. **`jobs/flatten.py <x1> <z1> <x2> <z2> [y] [fill]`**: `ensure_tool` for each kind `lib.terrain.needs` lists, `lib.terrain.flatten` with `fill` (dirt by default), `get` the fill it fell short of and flatten again, `give_back()`. Test: a 4 by 4 plot with a bump and a hole, levelled at its median height; a given fill; the dirt it lacks from a chest.
 10. **`jobs/settle.py [x y z [radius]]`**: one `lib.project.run("settle", ...)`: `kit` (stone tools, a crafting table, a chest, dirt), `lib.terrain.flatten`, `lib.build.build_here` of `antcraft:starter_house`, `place` the chest and crafting table, `lib.farm.tend` a 3 by 3 field (optional), `lib.storage.deposit` (optional), `set_home` inside. Test (wide area): stopped as it starts the house and run again, the kit and flatten are not done again; the house stands, the field is planted, the borrowed tools are back ([cookbook](../cookbook/settle.md)).
+11. **`jobs/wood_farm.py <sapling> [x y z [cells [radius]]]`**: one `lib.project.run` of `kit` (a stone axe, dirt), two saplings a spot by `get`, the first `lib.treefarm` cell on a `lib.cells` grid, then a loop that never ends (see [Farms](#farms)). Tests (24 by 16 by 24 area): the first cell built, its birch grown by the test, felled, replanted and the logs stored in the depot; a second cell from the materials in a chest; stopped and run again, the same farm goes on; `most()` ([cookbook](../cookbook/wood-farm.md)).
 
 A test area is 8x8x8 blocks: tests build small trees and seed ore close, and set `best_y` through an argument rather than dig to y=16.

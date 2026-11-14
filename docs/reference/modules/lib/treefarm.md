@@ -65,7 +65,7 @@ Whether the cell's tree has grown: a log at its sapling spot. Done at once.
 
 ## `harvest(kind, low, high)`
 
-Fells the cell's tree whole and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about.
+Fells the cell's tree whole and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). The [wood farm](../../../cookbook/wood-farm.md) runs on it.
 
 - **Returns** `fell_whole`'s [`result()`](result.md).
 - **Pauses** yes.

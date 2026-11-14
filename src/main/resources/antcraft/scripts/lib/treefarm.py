@@ -139,5 +139,7 @@ def harvest(kind, low, high):
     """Fells the cell's tree whole and replants (lib.trees.fell_whole), then picks up the sticks and apples lying about.
     Gives fell_whole's result()."""
     r = lib.trees.fell_whole(spots(kind, low, high)[0], True)
-    pick_up(DROPS)
+    # A torch a pillar up to the leaves took the place of lies about too; the pillars to drops on the leaves come down.
+    pick_up(DROPS + [TORCH])
+    lib.trees.take_back()
     return r

@@ -373,8 +373,9 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
         if not r and r.reason != "target_gone":
             take_back()
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)
-    take_back()
+    # Picks up first: logs that fell on the leaves it may pillar up to, and that scaffold comes down too.
     pick_up([LOGS, SAPLINGS])
+    take_back()
     if replant:
         for p in spots:
             if block(p).is_air and on_ground(p.down()):
