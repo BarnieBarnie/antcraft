@@ -17,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
+import net.minecraft.world.level.material.Fluids;
 
 /**
  * {@code lib/farm.py} and {@code jobs/farm.py} (#570): harvest takes only the ripe crops and replants them, tend harvests,
@@ -226,6 +227,34 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 			jobFinished(helper, bot, job);
 			helper.assertTrue(chest.countItem(Items.CARROT) > 0, "no harvest in the chest");
 			helper.assertTrue(GameTests.carried(bot, Items.CARROT) == 3, "carrots on the bot: " + GameTests.carried(bot, Items.CARROT) + ", in the chest: " + chest.countItem(Items.CARROT));
+		});
+	}
+
+	/**
+	 * A field with no water, a one-block pool at (6, 1, 6) and a hoe, seeds and an empty bucket in a chest at (6, 1, 2)
+	 * (#623): jobs.farm fills the bucket at the pool, pours it in the middle of the field, plants the 8 spots round it and
+	 * gives the bucket back.
+	 */
+	// Measured: passes at tick 78 (red: no water in the middle of the field by tick 402).
+	@GameTest(maxTicks = 160)
+	public void theJobWatersADryFieldFromAPool(GameTestHelper helper) {
+		List<BlockPos> spots = field(helper);
+		helper.setBlock(2, 0, 2, Blocks.DIRT);
+		helper.setBlock(6, 1, 6, Blocks.WATER);
+		for (BlockPos rim : List.of(new BlockPos(5, 1, 6), new BlockPos(7, 1, 6), new BlockPos(6, 1, 5), new BlockPos(6, 1, 7))) {
+			helper.setBlock(rim, Blocks.STONE);
+		}
+		Container chest = chest(helper, 6, 1, 2, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 8),
+			new ItemStack(Items.BUCKET));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
+		ScriptRun job = runJob(helper, bot, "wheat");
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			helper.assertTrue(helper.getBlockState(new BlockPos(2, 0, 2)).getFluidState().isSource()
+				&& helper.getBlockState(new BlockPos(2, 0, 2)).getFluidState().is(Fluids.WATER), "no water in the middle of the field");
+			helper.assertTrue(helper.getBlockState(new BlockPos(6, 1, 6)).isAir(), "the pool is left");
+			planted(helper, spots);
+			helper.assertTrue(chest.countItem(Items.BUCKET) == 1, "no bucket in the chest");
 		});
 	}
 

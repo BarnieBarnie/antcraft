@@ -44,9 +44,13 @@ Harvests the ripe crop over each of `spots` and replants it with its own seed wh
 
 The nearest water source block within `radius` (through [`lib/find`](find.md), so `WHERE` applies), where an empty bucket fills; flowing water is left out. `None` if there is none. A finder.
 
+## `dry(spots)`
+
+The spots of `spots` with no water within 4 blocks across, level with them or one up, where farmland dries out and turns back into dirt. It reads the box round the spots once, 4 blocks wider each way and two high. `[]` for a field that is all wet. A finder, done at once.
+
 ## `fill_bucket(radius=32)`
 
-Fills an empty bucket the bot carries at `water(radius)`: [`use`](../../blocks/use.md) with the bucket, so the bot walks there first. As a skill it assumes the bucket; [`lib/get`](get.md) gets one, from a chest or made of three iron ingots, as `jobs.settle` does to water its field ([Settle a base](../../../cookbook/settle.md)). **Returns** a dict: `ok`, `reason` (`None`; `no_water` where no source is within `radius`; `no_item` with `missing` `{"minecraft:bucket": 1}` where the bot carries no empty bucket; or the reason `use` failed with, `at` the source). **Pauses** yes.
+Fills an empty bucket the bot carries at `water(radius)`: [`use`](../../blocks/use.md) with the bucket, so the bot walks there first. As a skill it assumes the bucket; [`lib/get`](get.md) gets one, from a chest or made of three iron ingots, as `jobs.farm`'s `pour` does to water a field where `dry` gives spots ([Auto-farm](../../../cookbook/farm.md#the-bundled-job)), and `jobs.settle` through it ([Settle a base](../../../cookbook/settle.md)). `bucket_at_hand(radius)` of `jobs.farm` says whether an empty bucket is carried, in a chest, or made from a chest's iron for at most `BUCKET_TICKS` (1000), so watering never digs for ore. **Returns** a dict: `ok`, `reason` (`None`; `no_water` where no source is within `radius`; `no_item` with `missing` `{"minecraft:bucket": 1}` where the bot carries no empty bucket; or the reason `use` failed with, `at` the source). **Pauses** yes.
 
 ```python
 import lib.farm
@@ -60,4 +64,4 @@ if lib.farm.water(16) is not None and get("bucket", 1, 16)["ok"]:
 
 `harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`. **Returns** a dict: `ok`, `reason` (`None`; `blocked` where a spot of soil was left untilled, such as with no hoe, or farmland left bare though the bot still carries the seed, a passing failure that [`lib/retry`](retry.md) tries again; or `no_item` where farmland was left bare for want of seeds), `at` (the first spot left so for `blocked`, else `None`) and `missing` (`{seed: n}`, the bare spots, for `no_item`). **Pauses** yes.
 
-`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water and failing `blocked` where it has no hoe to till with, and the job: once, twice as the crops ripen, and giving borrowed carrots back.
+`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water and failing `blocked` where it has no hoe to till with, and the job: once, twice as the crops ripen, giving borrowed carrots back, and watering a dry field from a pool with an empty bucket from a chest.

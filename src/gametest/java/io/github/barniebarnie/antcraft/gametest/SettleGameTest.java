@@ -142,6 +142,37 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * With three iron ingots in the chest instead of a bucket and the pool at (16, 1, 10), the bot makes a bucket of the
+	 * iron (lib.get, within BUCKET_TICKS) at the table it placed, fills it at the pool and pours it in the middle of the
+	 * field (#623).
+	 */
+	// Measured: passes at tick 385 (red: iron left in the chest, craft gave no_table 4 blocks from the table).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 770)
+	public void craftsABucketFromChestIronToWaterTheField(GameTestHelper helper) {
+		Container chest = plot(helper, new ItemStack(Items.WHEAT_SEEDS, 9), new ItemStack(Items.IRON_INGOT, 3));
+		pool(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12 antcraft:cobble_step");
+		helper.onEachTick(() -> {
+			ScriptRun script = bot.getScript();
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
+				|| !said.isEmpty() && said.getLast().startsWith("not settled")) {
+				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settled"), "not settled yet");
+			assertBase(helper, bot, chest, at);
+			helper.assertTrue(chest.countItem(Items.IRON_INGOT) == 0, "iron left in the chest: " + chest.countItem(Items.IRON_INGOT));
+			helper.assertTrue(helper.getBlockState(new BlockPos(16, 1, 10)).isAir(), "the pool is left: " + BotScripts.log(bot, Output.Level.DEBUG));
+			assertWateredField(helper);
+		});
+	}
+
+	/**
 	 * With a water pool in reach but no bucket and no iron stored, the field is planted dry at once: the bot does not dig
 	 * for iron to make a bucket (#615). Going under the floor (digging for ore)
 	 * fails the test at once.

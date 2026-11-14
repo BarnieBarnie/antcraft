@@ -17,7 +17,8 @@ from lib.tools import hold
 STACK = 64
 
 # How far craft_here looks for a crafting table or furnace it need not craft. ponytail: find_nearest's sphere stands in for
-# the reach of craft and smelt, so a station just outside reach is not planned for.
+# the reach of craft and smelt, so a station just outside reach is not planned for; a table craft does not see from where
+# the bot stands is walked to.
 REACH = 4
 
 # The tool tiers lib.get.ensure_tool makes, best first: netherite takes a smithing table, golden is worse than stone.
@@ -90,11 +91,12 @@ def fetch(more, chests):
 
 
 def craft_here(item, n=1):
-    """craft_all(item, n), and where a step finds no crafting table within reach, one placed beside the bot for it: the
-    carried one, else one crafted from carried planks or logs. The placed table is mined back after, also when a step
-    fails. Gives craft_all's result, missing_ingredients with missing where plan(item, n) lacks raw items, before it
-    crafts anything, so a table or furnace is not made from what the item needs, no_tool, also before it crafts
-    anything, where a step smelts in a furnace it could not mine back, or no_table where no table could be placed."""
+    """craft_all(item, n), and where a step finds no crafting table within reach, the one within REACH walked to, else
+    one placed beside the bot for it: the carried one, else one crafted from carried planks or logs. The placed table is
+    mined back after, also when a step fails. Gives craft_all's result, missing_ingredients with missing where plan(item,
+    n) lacks raw items, before it crafts anything, so a table or furnace is not made from what the item needs, no_tool,
+    also before it crafts anything, where a step smelts in a furnace it could not mine back, or no_table where no table
+    could be placed."""
     p = plan(item, n)
     if p["gather"]:
         return result("missing_ingredients", None, p["gather"])
@@ -103,6 +105,10 @@ def craft_here(item, n=1):
     r = craft_all(item, n)
     if r["reason"] != "no_table":
         return r
+    # A table within REACH that craft did not see from where the bot stands: craft walks to it when named (#623).
+    near = find_nearest("crafting_table", radius=REACH)
+    if near is not None:
+        return craft_all(item, n, table=near)
     if count("crafting_table") == 0 and not craft_all("crafting_table")["ok"]:
         return r
     spot = place_beside("crafting_table")

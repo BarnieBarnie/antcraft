@@ -104,6 +104,27 @@ def water(radius=32):
     return lib.find.nearest(WATER, radius, lambda p: block(p).state["level"] == 0)
 
 
+def near_water(soil, wet):
+    """Whether one of wet, positions of water, is within 4 blocks of soil across and level with it or one up."""
+    return any([abs(w.x - soil.x) <= 4 and abs(w.z - soil.z) <= 4 and 0 <= w.y - soil.y <= 1 for w in wet])
+
+
+def dry(spots):
+    """The spots of spots no water is near, within 4 blocks across, level or one up, where farmland dries out. Reads
+    the box round the spots once, 4 blocks wider each way and two high."""
+    if not spots:
+        return []
+    wet = []
+    for y in range(min([s.y for s in spots]), max([s.y for s in spots]) + 2):
+        for z in range(min([s.z for s in spots]) - 4, max([s.z for s in spots]) + 5):
+            for x in range(min([s.x for s in spots]) - 4, max([s.x for s in spots]) + 5):
+                p = Pos(x, y, z, spots[0].dimension)
+                b = block(p)
+                if b is not None and b.id == WATER:
+                    wet.append(p)
+    return [s for s in spots if not near_water(s, wet)]
+
+
 def fill_bucket(radius=32):
     """Fills an empty bucket the bot carries at the nearest water source within radius (water). Gives result(): ok;
     no_water where there is none; no_item with missing where the bot carries no empty bucket; or the reason use failed,
