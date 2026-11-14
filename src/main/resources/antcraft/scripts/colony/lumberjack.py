@@ -34,17 +34,22 @@ def ready(base):
         # Where it can neither carry, take nor make one, it fells by hand.
         ensure_tool("axe", len(logs) + len(near), "hand")
         # Blocks to climb on: the pillars under every stand fell_whole stands on to reach every log, branches too, a block
-        # under two stands counted once, as fell_whole takes none back before the last stand (#596); at least the climb to
-        # the highest stand from the ground under base, which is in the air for a remnant (#582), for a stand on a log.
-        # ponytail: a stand on a high log away from the pillars is short of its climb; take_back between stands if it matters.
+        # under two stands counted once, as fell_whole takes none back before the last stand (#596), and the climb from the
+        # ground under base, which is in the air for a remnant (#582), to the highest stand on a log: the walk there climbs
+        # on its own blocks, away from the pillars (#622). At least the climb to the highest stand of all.
+        # ponytail: one climb, to the highest stand on a log; a walk to a lower one mostly reuses or digs down that climb.
         plan = stands(logs)
         ground = base.y - pillar(base)
         under = {}
+        on_log = [ground]
         for s in plan:
-            for i in range(1, pillar(s) + 1):
+            k = pillar(s)
+            if k == 0:
+                on_log.append(s.y - 1)  # the walk steps up onto the log's top from a block below it
+            for i in range(1, k + 1):
                 under[s.down(i)] = True
         climb = max([s.y for s in plan] + [ground]) - ground
-        n = max(climb, len(under))
+        n = max(climb, len(under) + max(on_log) - ground)
         if n > 0:
             scaffold(n)
         kind = sapling(block(base).id)
