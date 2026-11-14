@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
@@ -388,7 +389,12 @@ public class PathFollower {
 	}
 
 	private void moveTo(BlockPos to) {
-		this.bot.getMoveControl().setWantedPosition(to.getX() + 0.5, to.getY(), to.getZ() + 0.5, SPEED);
+		// Aimed at the top of the floor under it: the move control jumps for a wanted height more than a step above the
+		// bot, so on snow a quarter of a block high it would jump at every block (#642).
+		BlockPos below = to.below();
+		VoxelShape floor = this.bot.level().getBlockState(below).getCollisionShape(this.bot.level(), below);
+		double y = floor.isEmpty() || floor.max(Direction.Axis.Y) > 1 ? to.getY() : below.getY() + floor.max(Direction.Axis.Y);
+		this.bot.getMoveControl().setWantedPosition(to.getX() + 0.5, y, to.getZ() + 0.5, SPEED);
 	}
 
 	/**
@@ -433,11 +439,12 @@ public class PathFollower {
 
 	/**
 	 * The block the bot's feet are in, as paths count it: the one over the block it stands on. On a block a little lower
-	 * than a full one, such as farmland, its block position is that block itself, which a path never steps to (#634).
+	 * than a full one, such as farmland, snow or a bottom slab, its block position is that block itself, which a path
+	 * never steps to (#634, #642).
 	 */
 	public static BlockPos feet(AntBot bot) {
 		BlockPos at = bot.blockPosition();
-		return bot.onGround() && bot.getY() - at.getY() > 0.5 ? at.above() : at;
+		return bot.onGround() && bot.getY() - at.getY() > 1e-3 ? at.above() : at;
 	}
 
 	/** Where the current step starts: the end of the step before it, or the start of the path. */

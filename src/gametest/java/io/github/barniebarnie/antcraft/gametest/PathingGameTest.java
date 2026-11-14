@@ -26,6 +26,7 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.ScaffoldingBlock;
+import net.minecraft.world.level.block.SnowLayerBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -755,5 +756,67 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt by the fall"));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 2, 3));
+	}
+
+	/**
+	 * A band of blocks lower than a full one, from x 2 to 5 across the room on its floor (#642): the bot walks onto it,
+	 * along it and off it to a goal past it, and breaks none of it.
+	 */
+	private static void walksAcross(GameTestHelper helper, BlockState band) {
+		room(helper, 0);
+		for (int x = 2; x <= 5; x++) {
+			for (int z = 1; z <= 6; z++) {
+				helper.setBlock(x, 1, z, band);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 3));
+		GameTests.walkTo(bot, target);
+		helper.succeedWhen(() -> {
+			for (int x = 2; x <= 5; x++) {
+				for (int z = 1; z <= 6; z++) {
+					helper.assertValueEqual(helper.getBlockState(new BlockPos(x, 1, z)), band, "block of the band at " + x + ", " + z);
+				}
+			}
+			helper.assertTrue(GameTests.walked(bot), "still walking, at " + bot.position().subtract(Vec3.atLowerCornerOf(helper.absolutePos(BlockPos.ZERO))));
+			helper.assertValueEqual(bot.blockPosition(), target, "where it stopped");
+		});
+	}
+
+	// Measured: passes at tick 47.
+	@GameTest(maxTicks = 100)
+	public void walksAcrossSoulSand(GameTestHelper helper) {
+		walksAcross(helper, Blocks.SOUL_SAND.defaultBlockState());
+	}
+
+	// Measured: passes at tick 33.
+	@GameTest(maxTicks = 70)
+	public void walksAcrossMud(GameTestHelper helper) {
+		walksAcross(helper, Blocks.MUD.defaultBlockState());
+	}
+
+	// Measured: passes at tick 33 (red: stopped at x 1, a chest neither stood on nor broken).
+	@GameTest(maxTicks = 70)
+	public void walksAcrossChests(GameTestHelper helper) {
+		walksAcross(helper, Blocks.CHEST.defaultBlockState());
+	}
+
+	/** Snow three layers deep: a quarter of a block high. */
+	// Measured: passes at tick 27 (red: broke the snow; then, walked on, a jump at every block until tick 92).
+	@GameTest(maxTicks = 70)
+	public void walksAcrossThickSnow(GameTestHelper helper) {
+		walksAcross(helper, Blocks.SNOW.defaultBlockState().setValue(SnowLayerBlock.LAYERS, 3));
+	}
+
+	// Measured: passes at tick 33 (red: broke the dirt path).
+	@GameTest(maxTicks = 70)
+	public void walksAcrossADirtPath(GameTestHelper helper) {
+		walksAcross(helper, Blocks.DIRT_PATH.defaultBlockState());
+	}
+
+	// Measured: passes at tick 27 (red: broke the slab; then, walked on, still walking at tick 100).
+	@GameTest(maxTicks = 70)
+	public void walksAcrossBottomSlabs(GameTestHelper helper) {
+		walksAcross(helper, Blocks.OAK_SLAB.defaultBlockState());
 	}
 }
