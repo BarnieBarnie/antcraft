@@ -27,10 +27,10 @@ def short(left):
 
 
 def build_here(id, at, turn=0, mirror=False, radius=32):
-    """Gets each item the site lacks with lib.get within radius, in the blueprint's order, then builds, and again while
-    each round leaves less missing. Gives result(): ok once it stands; no_blueprint; the reason of the first get that
-    failed, of the build, or no_progress, at at, with missing what the bot lacks to finish. Gives back what it borrowed
-    during the call (lib.borrow.give_back), also on a failure."""
+    """Gets each item the site lacks with lib.get within radius, in the blueprint's order, then builds what it has, and
+    again while each round leaves less missing. Gives result(): ok once it stands; no_blueprint; the reason of the
+    build, of the first get that failed (after building what it got), or no_progress, at at, with missing what the bot
+    lacks to finish. Gives back what it borrowed during the call (lib.borrow.give_back), also on a failure."""
     since = len(lib.borrow.borrowed())
     try:
         r = rounds(id, at, turn, mirror, radius)
@@ -53,12 +53,16 @@ def rounds(id, at, turn, mirror, radius):
         if before is not None and sum(left.values()) >= before:
             return result("no_progress", at)
         before = sum(left.values())
+        failed = None
         for item, n in left.items():
             r = get(item, n, radius)
-            if not r["ok"]:
-                return result(r["reason"], at)
+            if not r["ok"] and failed is None:
+                failed = r["reason"]
+        # Builds what it has also when a get failed: build goes on to the first step it lacks a block for (#585).
         b = build(id, at, turn, mirror)
         if b:
             return result()
         if b.reason != "missing_ingredients":
             return result(b.reason, at)
+        if failed is not None:
+            return result(failed, at)

@@ -52,11 +52,12 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The cobble step with its two cobblestone in a chest and no wood for its oak stairs: build_here borrows the
-	 * cobblestone, fails on the stairs with them in missing, builds nothing and gives the cobblestone back.
+	 * The cobble step with its two cobblestone in a chest and no wood for its oak stairs (#585): build_here borrows the
+	 * cobblestone, fails to get the stairs, builds what it has (the two cobblestone of the bottom layer) and fails with
+	 * the stairs in missing. The cobblestone is used up, so nothing is left to give back.
 	 */
-	// Measured: passes at tick 18.
-	@GameTest(maxTicks = 40)
+	// Measured: passes at tick 25.
+	@GameTest(maxTicks = 60)
 	public void anUnobtainableItemFailsWithItInMissing(GameTestHelper helper) {
 		BlockPos at = new BlockPos(1, 1, 6);
 		helper.setBlock(at, Blocks.CHEST);
@@ -75,9 +76,62 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
 				"{'minecraft:cobblestone': 2, 'minecraft:oak_stairs': 1}",
-				"False no_logs {'minecraft:cobblestone': 2, 'minecraft:oak_stairs': 1} [] 0"), "printed");
-			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 2, "cobblestone in the chest " + chest.countItem(Items.COBBLESTONE));
+				"False no_logs {'minecraft:oak_stairs': 1} [] 0"), "printed");
+			helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 3);
+			helper.assertBlockPresent(Blocks.COBBLESTONE, 5, 1, 3);
+			helper.assertBlockNotPresent(Blocks.OAK_STAIRS, 4, 2, 3);
+			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 0, "cobblestone in the chest " + chest.countItem(Items.COBBLESTONE));
+		});
+	}
+
+	/** A blueprint id the server does not know: build_here fails at once with no_blueprint, at at, nothing missing. */
+	// Measured: passes at tick 2.
+	@GameTest(maxTicks = 20)
+	public void anUnknownBlueprintFailsWithNoBlueprint(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		String name = BotScripts.libraryScript(helper, "build_", """
+			from lib.build import build_here
+			r = build_here("antcraft-gametest:no_such_blueprint", %s, radius=8)
+			print(r["ok"], r["reason"], r["at"] == %s, r["missing"])
+			""".formatted(at(helper, 4, 1, 3), at(helper, 4, 1, 3)));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
+			List.of("False no_blueprint True {}"), "printed"));
+	}
+
+	/**
+	 * A build that loses what the bot got (the test's build puts the cobblestone back in its chest before building, as
+	 * a thief would take it): the round places nothing, so the next would lack as much, and build_here fails with
+	 * no_progress, the cobblestone in missing.
+	 */
+	// Measured: passes at tick 15.
+	@GameTest(maxTicks = 40)
+	public void aRoundThatPlacesNothingFailsWithNoProgress(GameTestHelper helper) {
+		BlockPos at = new BlockPos(1, 1, 6);
+		helper.setBlock(at, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		String name = BotScripts.libraryScript(helper, "build_", """
+			import lib.build
+			real = build
+			builds = []
+			def robbed(id, at, turn, mirror):
+			    builds.append(id)
+			    put(%s, "cobblestone", 64)
+			    return real(id, at, turn, mirror)
+			lib.build.build = robbed
+			r = lib.build.build_here("antcraft-gametest:two_palettes", %s, radius=8)
+			print(r["ok"], r["reason"], r["missing"], len(builds))
+			""".formatted(at(helper, 1, 1, 6), at(helper, 4, 1, 3)));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
+				List.of("False no_progress {'minecraft:cobblestone': 1} 1"), "printed");
 			helper.assertBlockNotPresent(Blocks.COBBLESTONE, 4, 1, 3);
+			helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 1, "cobblestone in the chest " + chest.countItem(Items.COBBLESTONE));
 		});
 	}
 
