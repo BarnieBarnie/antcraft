@@ -26,7 +26,7 @@ The crop block id at `pos`, such as `"minecraft:wheat"`, where a crop of `CROPS`
 
 ## `field(low, high)`
 
-The spots of the box from `low` to `high` (any two opposite corners) to farm: farmland, dirt or grass with air or a crop of `CROPS` over it, row by row. Give the box of the soil, one block high; it reads two blocks a column of the box. A finder, done at once.
+The spots of the box from `low` to `high` (any two opposite corners) to farm, row by row: in each column, its top block that is neither air nor a crop, where that is farmland, dirt or grass with air or a crop of `CROPS` over it. It reads each column from the top of the box down to that block, so give the box of the soil, one block high, where the field is flat (two blocks a column), or a taller box over uneven ground. A finder, done at once.
 
 ## `till(spots)`
 
@@ -44,4 +44,4 @@ Harvests the ripe crop over each of `spots` and replants it with its own seed wh
 
 `harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`. **Returns** a dict: `ok`, `reason` (`None`, or `no_item` where farmland was left bare for want of seeds), `at` (`None`) and `missing` (`{seed: n}`, the bare spots). **Pauses** yes.
 
-`FarmGameTest` tests `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water, and the job.
+`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water, and the job: once, twice as the crops ripen, and giving borrowed carrots back.

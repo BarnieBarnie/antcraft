@@ -64,6 +64,25 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * field over a box three blocks high on the field with a dirt block raised at (3, 1, 3) and stone at (2, 1, 1): it
+	 * lists the top soil of each column, row by row, so (3, 1, 3) and not the dirt under it, and nothing under the stone.
+	 */
+	@GameTest(maxTicks = 15)
+	public void fieldListsTheTopSoilOfEachColumn(GameTestHelper helper) {
+		field(helper);
+		helper.setBlock(3, 1, 3, Blocks.DIRT);
+		helper.setBlock(2, 1, 1, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
+		run(helper, bot, """
+			import lib.farm
+			print(lib.farm.field(%s, %s))
+			""".formatted(printed(helper, 1, 0, 1), printed(helper, 3, 2, 3)));
+		String expected = "[" + String.join(", ", printed(helper, 1, 0, 1), printed(helper, 3, 0, 1), printed(helper, 1, 0, 2),
+			printed(helper, 3, 0, 2), printed(helper, 1, 0, 3), printed(helper, 2, 0, 3), printed(helper, 3, 1, 3)) + "]";
+		helper.succeedWhen(() -> finished(helper, bot, List.of(expected)));
+	}
+
+	/**
 	 * A field of dirt with ripe wheat on farmland at (1, 0, 1): tend harvests it, tills the other seven spots and plants
 	 * all eight with the bot's wheat seeds.
 	 */
@@ -114,6 +133,100 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(chest.countItem(Items.WHEAT) == 1, "wheat in the chest: " + chest.countItem(Items.WHEAT));
 			helper.assertTrue(chest.countItem(Items.WOODEN_HOE) == 1, "no hoe in the chest");
 		});
+	}
+
+	/**
+	 * jobs.farm with 2 rounds over the field, a hoe and seeds in the chest: once the first round has planted the field and
+	 * stored its wheat, the test ripens every crop, and the job waits for that, tends the field again and stores the 8
+	 * wheat of the second harvest too.
+	 */
+	// Measured: passes at tick 210.
+	@GameTest(maxTicks = 420)
+	public void theJobTendsAgainOnceTheCropsRipen(GameTestHelper helper) {
+		List<BlockPos> spots = field(helper);
+		Container chest = chest(helper, 6, 1, 6, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 8));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
+		ScriptRun job = runJob(helper, bot, "wheat 2");
+		boolean[] ripened = {false};
+		helper.onEachTick(() -> {
+			// Ripens the field once the first round planted it and stored its harvest (one listener, registered up front).
+			if (!ripened[0] && chest.countItem(Items.WHEAT) == 1 && spots.stream().allMatch(s -> helper.getBlockState(s.above()).is(Blocks.WHEAT))) {
+				ripened[0] = true;
+				for (BlockPos spot : spots) {
+					helper.setBlock(spot.above(), Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7));
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			planted(helper, spots);
+			helper.assertTrue(chest.countItem(Items.WHEAT) == 9, "wheat in the chest: " + chest.countItem(Items.WHEAT));
+		});
+	}
+
+	/**
+	 * A field of ripe carrots on farmland but for bare farmland at (3, 0, 3), 5 carrots in a chest at (6, 1, 6) and an
+	 * empty chest at (1, 1, 5), nearer the field: jobs.farm borrows a carrot for the bare spot, harvests and replants, and
+	 * gives that carrot back to the chest it came from before it stores the harvest in the nearest chest.
+	 */
+	// Measured: passes at tick 56.
+	@GameTest(maxTicks = 120)
+	public void theJobGivesBorrowedCarrotsBackToTheirChest(GameTestHelper helper) {
+		List<BlockPos> spots = field(helper);
+		for (BlockPos spot : spots) {
+			helper.setBlock(spot, Blocks.FARMLAND);
+			if (!spot.equals(new BlockPos(3, 0, 3))) {
+				helper.setBlock(spot.above(), Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, 7));
+			}
+		}
+		Container source = chest(helper, 6, 1, 6, new ItemStack(Items.CARROT, 5));
+		Container near = chest(helper, 1, 1, 5);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		ScriptRun job = runJob(helper, bot, "carrot");
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.CARROTS, spot.above());
+			}
+			helper.assertTrue(source.countItem(Items.CARROT) == 5, "carrots in their chest: " + source.countItem(Items.CARROT)
+				+ ", in the near one: " + near.countItem(Items.CARROT) + ", on the bot: " + bot.getInventory().countItem(Items.CARROT));
+			helper.assertTrue(bot.getInventory().countItem(Items.CARROT) == 0, "carrots left on the bot");
+		});
+	}
+
+	/** The job finished (the bot runs idle.py once it has). */
+	private static void jobFinished(GameTestHelper helper, AntBot bot, ScriptRun job) {
+		helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state() + " " + BotScripts.log(bot, Output.Level.DEBUG));
+	}
+
+	/** A chest at (x, y, z) holding items. */
+	private static Container chest(GameTestHelper helper, int x, int y, int z, ItemStack... items) {
+		helper.setBlock(x, y, z, Blocks.CHEST);
+		Container chest = (Container) Objects.requireNonNull(helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(x, y, z))));
+		for (int i = 0; i < items.length; i++) {
+			chest.setItem(i, items[i]);
+		}
+		return chest;
+	}
+
+	/**
+	 * Runs jobs.farm over the field from (1, 0, 1) to (3, 0, 3) with args after the corners, and fails on an error or
+	 * warning. Gives the job's run.
+	 */
+	private static ScriptRun runJob(GameTestHelper helper, AntBot bot, String args) {
+		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 1));
+		BlockPos high = helper.absolutePos(new BlockPos(3, 0, 3));
+		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.farm " + low.getX() + " "
+			+ low.getY() + " " + low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " " + args);
+		ScriptRun job = bot.getScript();
+		helper.assertTrue(job != null, "not run: " + said);
+		failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			if (!BotScripts.warnings(bot).isEmpty()) {
+				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		return job;
 	}
 
 	/** Lays the field: dirt from (1, 0, 1) to (3, 0, 3), water in its middle and ripe wheat on farmland at (1, 0, 1). */

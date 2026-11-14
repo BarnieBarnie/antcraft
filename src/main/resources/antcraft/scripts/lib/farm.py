@@ -40,18 +40,23 @@ def ripe(p):
 
 
 def field(low, high):
-    """The spots of the box from low to high (two corners) to farm, row by row: farmland, dirt or grass with air or a
-    crop over it. ponytail: reads every block of the box, two a column; a box of soil one block high is cheap."""
+    """The spots of the box from low to high (two corners) to farm, row by row: in each column, its top block that is
+    neither air nor a crop where that is farmland, dirt or grass. Reads each column from the top of the box down to that
+    block, so a box of soil one block high reads two blocks a column."""
+    crops = [c[0] for c in CROPS]
     spots = []
-    for y in range(min(low.y, high.y), max(low.y, high.y) + 1):
-        for z in range(min(low.z, high.z), max(low.z, high.z) + 1):
-            for x in range(min(low.x, high.x), max(low.x, high.x) + 1):
-                p = Pos(x, y, z, low.dimension)
+    for z in range(min(low.z, high.z), max(low.z, high.z) + 1):
+        for x in range(min(low.x, high.x), max(low.x, high.x) + 1):
+            p = Pos(x, max(low.y, high.y), z, low.dimension)
+            up = block(p.up())
+            if up is None or not (up.is_air or up.id in crops):
+                continue
+            b = block(p)
+            while b is not None and (b.is_air or b.id in crops) and p.y > min(low.y, high.y):
+                p = p.down()
                 b = block(p)
-                if b is not None and (b.id == FARMLAND or b.id in SOIL):
-                    up = block(p.up())
-                    if up is not None and (up.is_air or up.id in [c[0] for c in CROPS]):
-                        spots.append(p)
+            if b is not None and (b.id == FARMLAND or b.id in SOIL):
+                spots.append(p)
     return spots
 
 

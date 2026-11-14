@@ -1,8 +1,10 @@
-# A job: tends a field once and stores the harvest. Run it as /antcraft bot run jobs.farm <x1> <y1> <z1> <x2> <y2> <z2> [crop],
-# such as jobs.farm 10 63 10 18 63 18 carrot: the two corners of the field's soil, crop the one to plant (a crop, seed or
-# harvest of lib.farm.CROPS, wheat by default). It gets a hoe for the soil to till and the seeds for the bare spots with
-# lib.get, harvests, tills and plants (lib.farm.tend), puts the harvest in the nearest chest and gives back what it
-# borrowed (docs/cookbook/farm.md).
+# A job: tends a field and stores the harvest, round after round as the crops ripen. Run it as
+# /antcraft bot run jobs.farm <x1> <y1> <z1> <x2> <y2> <z2> [crop] [rounds], such as jobs.farm 10 63 10 18 63 18 carrot 0:
+# the two corners of the field's soil, crop the one to plant (a crop, seed or harvest of lib.farm.CROPS, wheat by
+# default) and rounds how often to tend it (1 by default, 0 until a round fails or the bot is stopped). Each round it gets
+# a hoe for the soil to till and the seeds for the bare spots with lib.get, harvests, tills and plants (lib.farm.tend),
+# gives back what it borrowed and puts the harvest in the nearest chest; between rounds it waits for the crops to ripen
+# (docs/cookbook/farm.md).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -15,10 +17,12 @@ from lib.get import ensure_tool, get
 low = Pos(int(ARGS[0]), int(ARGS[1]), int(ARGS[2]))
 high = Pos(int(ARGS[3]), int(ARGS[4]), int(ARGS[5]))
 c = lib.farm.crop(ARGS[6] if len(ARGS) > 6 else "wheat")
+rounds = int(ARGS[7]) if len(ARGS) > 7 else 1
+WAIT = 100  # ticks between looks at the field while the crops grow
 
 
 def farm():
-    """Gets the hoe and seeds, tends the field and stores the harvest. Gives result()."""
+    """Gets the hoe and seeds, tends the field, gives back what it borrowed and stores the harvest. Gives result()."""
     spots = lib.farm.field(low, high)
     till = len([s for s in spots if block(s).id in lib.farm.SOIL and block(s.up()).is_air])
     if till:
@@ -31,6 +35,9 @@ def farm():
         # what it lacked.
         get(c[1], bare)
     r = lib.farm.tend(low, high, c[1])
+    # Carrots and potatoes are their own seed: give the borrowed ones back from the harvest before storing it, or the
+    # chest they came from loses them.
+    give_back()
     chests = lib.stock.chests()
     for item in [c[2], lib.farm.POISON]:
         if chests and has(item):
@@ -38,13 +45,28 @@ def farm():
     return r
 
 
+def ripened():
+    """Waits until every crop of the field is ripe; at once where none grows. ponytail: looks every WAIT ticks."""
+    while True:
+        crops = [s.up() for s in lib.farm.field(low, high) if not block(s.up()).is_air]
+        if all([lib.farm.ripe(p) for p in crops]):
+            return
+        wait(WAIT)
+
+
 if c is None:
     warn("farm: no crop", ARGS[6])
 else:
     try:
-        r = farm()
-        if not r["ok"]:
-            warn("farm:", r["reason"], r["missing"])
+        n = 0
+        while rounds == 0 or n < rounds:
+            if n > 0:
+                ripened()
+            r = farm()
+            n += 1
+            if not r["ok"]:
+                warn("farm:", r["reason"], r["missing"])
+                break
     finally:
         give_back()
         if borrowed():
