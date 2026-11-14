@@ -118,6 +118,45 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** tend plants no sapling under a log a failed harvest left of the cell's tree (#644): the log would stop it growing. */
+	// Measured: passes at tick 3.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 10)
+	public void tendPlantsNoSaplingUnderLogsLeft(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT.above(3), Blocks.BIRCH_LOG);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, 2));
+		script(helper, bot, "jobs.wood_farm.tend(kind, cell, 12)\nprint(block(spot).id)\n");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("minecraft:air"), "printed"));
+	}
+
+	/**
+	 * A birch whose top logs the bot cannot reach without dirt to pillar with (#644): reap says the harvest failed and why,
+	 * gets dirt from the chest and harvests again, then tend replants the cell, its tree gone.
+	 */
+	// Measured: passes at tick 599.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 1200)
+	public void aFailedHarvestIsRetriedBeforeTheCellIsReplanted(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		for (int y = 0; y < 9; y++) {
+			helper.setBlock(SPOT.above(y), Blocks.BIRCH_LOG);
+		}
+		helper.setBlock(3, 1, 8, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 16));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, 2));
+		script(helper, bot, "r = jobs.wood_farm.reap(kind, cell, 12, {})\njobs.wood_farm.tend(kind, cell, 12)\nprint(r['ok'], block(spot).id)\n");
+		helper.succeedWhen(() -> {
+			List<String> said = said(bot);
+			helper.assertTrue(said.size() == 2 && said.get(0).startsWith("harvest: out_of_reach at "), "said " + said);
+			helper.assertValueEqual(said.get(1), "True minecraft:birch_sapling", "printed");
+			for (int y = 1; y < 12; y++) {
+				helper.assertBlockNotPresent(Blocks.BIRCH_LOG, SPOT.getX(), y, SPOT.getZ());
+			}
+		});
+	}
+
 	/**
 	 * most(harvest): the cells at which the bot is always busy, a sapling's mean growth time (2 stages of 1 in 7 random
 	 * ticks, 3 a tick in a section of 4096 blocks) over the ticks a tree takes; at least 1. Imported, the job runs nothing.
@@ -161,6 +200,17 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm birch_sapling "
 			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 2 12");
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
+	}
+
+	/** Runs body after importing jobs.wood_farm, with kind birch, cell 1's box as cell and its sapling spot as spot. */
+	private static void script(GameTestHelper helper, AntBot bot, String body) {
+		BlockPos l = helper.absolutePos(new BlockPos(6, 0, 2));
+		BlockPos h = helper.absolutePos(new BlockPos(10, 0, 6));
+		BlockPos s = helper.absolutePos(SPOT);
+		BotScripts.run(bot, "import jobs.wood_farm\nkind = 'minecraft:birch_sapling'\ncell = (Pos(" + l.getX() + ", " + l.getY() + ", "
+			+ l.getZ() + "), Pos(" + h.getX() + ", " + h.getY() + ", " + h.getZ() + "))\nspot = Pos(" + s.getX() + ", " + s.getY()
+			+ ", " + s.getZ() + ")\n" + body);
+		BotScripts.failOnError(helper, bot);
 	}
 
 	/** A built cell round the sapling spot: dirt under it, the sapling planted, torches at two opposite corners. */

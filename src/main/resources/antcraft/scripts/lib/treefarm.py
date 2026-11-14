@@ -147,15 +147,31 @@ def build_cell(kind, low, high):
     return result()
 
 
+def standing(kind, low, high):
+    """The lowest log of the cell's tree still standing: the first log up the column over a sapling spot, up to clear
+    blocks over the floor, so also one a failed harvest left over the sapling (#644); None where there is none."""
+    # ponytail: the trunk columns only; a branch an acacia or cherry harvest left off them is not seen.
+    for p in spots(kind, low, high):
+        for y in range(spec(kind)["clear"]):
+            if lib.trees.is_log(p.up(y)):
+                return p.up(y)
+    return None
+
+
 def grown(kind, low, high):
-    """Whether the cell's tree has grown: a log at its sapling spot."""
-    return lib.trees.is_log(spots(kind, low, high)[0])
+    """Whether the cell has a tree to fell: a log at its sapling spot, or one a failed harvest left over it, which stops
+    the sapling growing (standing)."""
+    return standing(kind, low, high) is not None
 
 
 def harvest(kind, low, high):
-    """Fells the cell's tree whole and replants (lib.trees.fell_whole), then picks up the sticks and apples lying about.
-    Gives fell_whole's result()."""
-    r = lib.trees.fell_whole(spots(kind, low, high)[0], True)
+    """Fells the cell's tree whole from its lowest log standing and replants (lib.trees.fell_whole), then picks up the
+    sticks and apples lying about. Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space
+    with at, the log left, which grown still sees."""
+    base = standing(kind, low, high)
+    if base is None:
+        return result()
+    r = lib.trees.fell_whole(base, True)
     # A torch a pillar up to the leaves took the place of lies about too; the pillars to drops on the leaves come down.
     pick_up(DROPS + [TORCH])
     lib.trees.take_back()

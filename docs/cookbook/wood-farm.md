@@ -34,11 +34,11 @@ r = lib.project.run(name, steps)
 - **sapling**: two saplings a spot (four spots for dark oak), one to plant and one to replant with, by `get`: from a chest, else broken out of the leaves of a tree of the kind.
 - **cell**: what [`lib.treefarm.materials`](../reference/modules/lib/treefarm.md) lists for a cell (dirt, the sapling, 2 torches, oak slabs for an oak's roof) by `get`, the tools [`lib.terrain.needs`](../reference/modules/lib/terrain.md) names for its ground by `ensure_tool`, then `lib.treefarm.build_cell` at cell 1.
 - **farm**, round after round, for ever:
-    1. fells each grown tree with `lib.treefarm.harvest`, which replants it;
+    1. fells each grown tree with `lib.treefarm.harvest`, which replants it; where a felling leaves a log (out of reach, or no room for the drops), it says so once, such as `harvest: out_of_reach at Pos(8, 70, 4)`, gets the kit's 16 dirt to pillar with and an axe, and fells it again. A cell whose logs still stand counts as grown, so a felling that fails again is tried again next round;
     2. stores what it felled with `lib.depot.store`: logs, saplings of other kinds, sticks and apples each in their own chests, the rest in `other`; the bot keeps its saplings, dirt, torches, slabs and the crafting table it makes chests with;
-    3. tends each cell: a sapling on a spot that holds none (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands breaks it with its drop, and the bot picks the torch up to put back);
+    3. tends each cell: a sapling on a spot that holds none, but never under logs of the cell's tree left standing (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands breaks it with its drop, and the bot picks the torch up to put back);
     4. builds the next cell when the farm has fewer than its most and the bot carries, or takes from the chests within the radius, what a cell takes and a spare sapling;
-    5. waits 100 ticks where nothing had grown.
+    5. waits 100 ticks where it felled nothing.
 - `lib.project.run` keeps the steps done in `memory["projects"]`, `lib.cells` the cells built in `memory["cells"]`, `lib.depot` the chests in `memory["depots"]` and the job the corner in `memory["wood_farms"]`, so a farm run again goes on farming: it does not build its first cell a second time. To start over, `lib.project.reset("birch_farm")` and pop the farm from those.
 
 ## How big

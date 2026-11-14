@@ -246,6 +246,32 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A birch cell of 5x5 from (2, 0, 2) whose sapling stands under two logs a failed harvest left (#644): grown, as those
+	 * logs stop the sapling growing; harvest fells them and leaves the sapling.
+	 */
+	// Measured: passes at tick 184 to 185.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 370)
+	public void logsLeftOverTheSaplingAreATreeToFell(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.DIRT);
+		helper.setBlock(4, 1, 4, Blocks.BIRCH_SAPLING);
+		helper.setBlock(4, 4, 4, Blocks.BIRCH_LOG);
+		helper.setBlock(4, 5, 4, Blocks.BIRCH_LOG);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 8, 1, 8);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 8));
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			print(lib.treefarm.grown(kind, low, high))
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], lib.treefarm.grown(kind, low, high))
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True", "True False"), "printed");
+			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 4, 4);
+			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 5, 4);
+			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 4, 1, 4);
+		});
+	}
+
+	/**
 	 * Once the bot has printed printed lines, grows the tree at spot with grow (given the absolute position) each tick
 	 * the spot holds a sapling, until a log stands there; gives whether it grew.
 	 */

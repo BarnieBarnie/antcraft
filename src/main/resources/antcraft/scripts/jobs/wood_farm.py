@@ -101,7 +101,10 @@ def unplanted(kind, b):
 def tend(kind, b, radius):
     """Puts back what cell b lacks: a sapling on each spot without one (mining what stands there first, such as a
     scaffold block a felling left) and its torches (a walk that pillars where a torch stands breaks it, and the bot
-    picks it up), as far as the bot has them."""
+    picks it up), as far as the bot has them. Nothing while logs of the cell's tree stand, as a sapling under them never
+    grows (#644)."""
+    if lib.treefarm.grown(kind, b[0], b[1]):
+        return
     torches = lib.treefarm.torches(b[0], b[1])
     for p in unplanted(kind, b):
         if count(kind):
@@ -115,18 +118,40 @@ def tend(kind, b, radius):
             place(t, lib.treefarm.TORCH)
 
 
+def tell(told, what):
+    """Says what once: not where told, a dict of what was said, holds it already."""
+    if what not in told:
+        told[what] = True
+        say(what)
+
+
+def reap(kind, b, radius, told):
+    """Fells the tree of cell b with an axe (lib.treefarm.harvest). Where that leaves a log, says why once (tell), gets
+    the kit's dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
+    ensure_tool("axe", 16, "hand", radius)
+    r = lib.treefarm.harvest(kind, b[0], b[1])
+    if not r["ok"]:
+        tell(told, f"harvest: {r['reason']} at {r['at']}")
+        get(lib.treefarm.DIRT, dict(KIT)["dirt"], radius)
+        ensure_tool("axe", 16, "hand", radius)
+        r = lib.treefarm.harvest(kind, b[0], b[1])
+    return r
+
+
 def farm(kind, name, size, radius):
-    """Farms forever: each round fells every grown tree, stores what it fell, tends each cell (replants it with saplings
-    from the chests, else from the leaves of the kind with lib.get), builds the next cell where the farm is below size
-    and the chests hold what one takes, and waits where nothing had grown."""
+    """Farms forever: each round fells every grown tree (reap, so logs a failed felling left are felled again), stores
+    what it fell, tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
+    lib.get), builds the next cell where the farm is below size and the chests hold what one takes, and waits where it
+    felled nothing."""
     full = False
+    told = {}
     while True:
         own()
         boxes = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
         grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
+        felled = False
         for b in grown:
-            ensure_tool("axe", 16, "hand", radius)
-            lib.treefarm.harvest(kind, b[0], b[1])
+            felled = reap(kind, b, radius, told)["ok"] or felled
         if grown:
             r = lib.depot.store(name, KEEP + [kind], radius)
             if not r["ok"]:
@@ -143,7 +168,7 @@ def farm(kind, name, size, radius):
         elif not full:
             say("farm full")
             full = True
-        if not grown:
+        if not felled:
             wait(WAIT)
 
 

@@ -66,13 +66,13 @@ Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over 
 
 ## `grown(kind, low, high)`
 
-Whether the cell's tree has grown: a log at its sapling spot. Done at once.
+Whether the cell has a tree to fell: a log at its sapling spot, or one a failed `harvest` left in the column over a sapling spot, up to `clear` blocks over the floor, as a sapling under it never grows. Logs a failed harvest left off those columns, such as an acacia's or cherry's branch, it does not see. Done at once.
 
 ## `harvest(kind, low, high)`
 
-Fells the cell's tree whole and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). The [wood farm](../../../cookbook/wood-farm.md) runs on it.
+Fells the cell's tree whole from the lowest log `grown` sees and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). The [wood farm](../../../cookbook/wood-farm.md) runs on it.
 
-- **Returns** `fell_whole`'s [`result()`](result.md).
+- **Returns** `fell_whole`'s [`result()`](result.md): ok (also where no log stands), or `out_of_reach` or `no_space` with `at`, the log it left, which `grown` still sees, so the next harvest fells it.
 - **Pauses** yes.
 
 ## See also
