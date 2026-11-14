@@ -204,6 +204,31 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A vein past the edge of lib.find.WHERE along a branch's wall, met again from each block of the branch, is named once
+	 * in outside (#632): with the edge at x 5, the iron east of both blocks of the south branch stays and outside lists
+	 * each of its blocks once.
+	 */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aVeinPastTheEdgeAlongABranchIsInOutsideOnce(GameTestHelper helper) {
+		List<BlockPos> vein = List.of(new BlockPos(6, 1, 4), new BlockPos(6, 1, 5));
+		vein.forEach(pos -> helper.setBlock(pos, Blocks.IRON_ORE));
+		AntBot bot = mine(helper, LANDING, 1, """
+			import lib.find
+			EDGE = pos().x + 3
+			def inside(p):
+			    return p.x <= EDGE
+			lib.find.WHERE = inside
+			start = pos()
+			""", ", len(r[\"outside\"]), len([p for p in r[\"outside\"] if p == start + (4, 0, 1)]), len([p for p in r[\"outside\"] if p == start + (4, 0, 2)])");
+		failOnError(helper, () -> bot, "True None 0 2 1 1");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0 2 1 1")), "not done");
+			assertLevelDug(helper);
+			vein.forEach(pos -> helper.assertTrue(helper.getBlockState(pos).is(Blocks.IRON_ORE), "ore past the edge mined at " + pos.toShortString()));
+		});
+	}
+
+	/**
 	 * A branch stops at the edge of lib.find.WHERE as lib.dig.branch does (#593): with the edge between the north branch's
 	 * two blocks (z 2 inside, z 1 out), the bot digs its first block only and goes on with the south branch. Its result's
 	 * outside names the block the branch stopped at (#620).

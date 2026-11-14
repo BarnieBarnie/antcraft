@@ -134,7 +134,7 @@ def veins(cells, opened, stand, chest=None, left=None, out=None):
     """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up; a
     vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547), and the tier that drops it
     (lib.tools.tier_for) is added to the list left where given (#555). The blocks of a vein lib.find.WHERE leaves out
-    stay too, and are added to the list out where given (#561), so a colony miner's veins end at the colony's edge, a
+    stay too, and are added to the list out where given (#561), each once (#632), so a colony miner's veins end at the colony's edge, a
     column (in_colony, #576). With a chest, it empties the bot into it (room) when its inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
@@ -147,7 +147,7 @@ def veins(cells, opened, stand, chest=None, left=None, out=None):
                 continue
             for b in vein:
                 if not lib.find.allowed(b):
-                    if out is not None:
+                    if out is not None and b not in out:
                         out.append(b)
                     continue
                 failure = (room(chest) if chest is not None else None) or dig(b, opened + vein, stand)
@@ -160,7 +160,8 @@ def tunnel(cells, stand, opened, level, sealed, outside):
     """Digs cells (feet and head, from stand outwards), mining the veins it uncovers and putting torches at the
     level's torch spots. Where a fluid is in or beside the next block, it seals it, adds it to sealed and stops
     there: short of a fluid in the next block, past the block beside the fluid. It stops short of the first block
-    lib.find.WHERE leaves out too, as lib.dig.branch does (#593), and adds that block to outside (#620)."""
+    lib.find.WHERE leaves out too, as lib.dig.branch does (#593), and adds that block to outside (#620) unless it is
+    there already: a vein met again from each block of a hall lists its blocks past the edge once (#632)."""
     for i in range(0, len(cells), 2):
         feet = cells[i]
         head = cells[i + 1]
@@ -168,7 +169,9 @@ def tunnel(cells, stand, opened, level, sealed, outside):
             stand = feet
             continue
         if not (lib.find.allowed(feet) and lib.find.allowed(head)):
-            outside.append(feet if not lib.find.allowed(feet) else head)
+            edge = feet if not lib.find.allowed(feet) else head
+            if edge not in outside:
+                outside.append(edge)
             return None
         failure = room(level["chest"])
         if failure:
