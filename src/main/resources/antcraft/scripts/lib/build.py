@@ -27,7 +27,7 @@ def short(left):
 
 
 def build_here(id, at, turn=0, mirror=False, radius=32):
-    """Gets each item the site lacks with lib.get within radius, in the blueprint's order up to the first it cannot get,
+    """Gets what the site lacks with lib.get within radius, for the steps up to the first item it cannot get (fetch),
     then builds what it has, and again while each round leaves less missing. Gives result(): ok once it stands; no_blueprint; the reason of the
     build, of the first get that failed (after building what it got), or no_progress, at at, with missing what the bot
     lacks to finish. Gives back what it borrowed during the call (lib.borrow.give_back), also on a failure."""
@@ -47,21 +47,13 @@ def rounds(id, at, turn, mirror, radius):
     from lib.get import get
     before = None
     while True:
-        left = materials(id, at, turn, mirror)
-        if left is None:
+        p = blueprint(id, at, turn, mirror)
+        if p is None:
             return result("no_blueprint", at)
-        if before is not None and sum(left.values()) >= before:
+        if before is not None and len(p["steps"]) >= before:
             return result("no_progress", at)
-        before = sum(left.values())
-        failed = None
-        # missing is in build order (by an item's first step), and build stops at the first step it lacks a block for,
-        # so what comes after the first item it cannot get waits for a later call (#599).
-        # ponytail: an item used before and after that step is got in full; count it per step if that ever matters.
-        for item, n in left.items():
-            r = get(item, n, radius)
-            if not r["ok"]:
-                failed = r["reason"]
-                break
+        before = len(p["steps"])
+        failed = fetch(p["steps"], radius, get)
         # Builds what it has also when a get failed: build goes on to the first step it lacks a block for (#585).
         b = build(id, at, turn, mirror)
         if b:
@@ -70,3 +62,38 @@ def rounds(id, at, turn, mirror, radius):
             return result(b.reason, at)
         if failed is not None:
             return result(failed, at)
+
+
+def fetch(steps, radius, get):
+    """Gets with get the items of steps, one for each step still to build in build order (blueprint's steps), as far as
+    build gets with them: build stops at the first step it lacks a block for, so the steps after the first item it
+    cannot get wait for a later call (#599). It gets each item in the order of its first step, as many as the steps
+    before the next item's first step take, then the rest of what the steps before the first item it could not get
+    take, so an item placed both before and after that one is got only for the steps before (#620). Gives the reason
+    of the first get that failed, or None.
+    ponytail: an item placed on both sides of another's first step is got in two trips; fine while chests are near."""
+    seen = {}
+    end = len(steps)
+    last = None
+    for i in range(len(steps) + 1):
+        if i < len(steps) and steps[i] in seen:
+            seen[steps[i]] = seen[steps[i]] + 1
+            continue
+        if last is not None:
+            r = get(last, seen[last], radius)
+            if not r["ok"]:
+                end = first
+                break
+        if i < len(steps):
+            last = steps[i]
+            first = i
+            seen[last] = 1
+    failed = None if end == len(steps) else r["reason"]
+    need = {}
+    for item in steps[:end]:
+        need[item] = need.get(item, 0) + 1
+    for item, n in need.items():
+        r = get(item, n, radius)
+        if not r["ok"]:
+            return failed or r["reason"]
+    return failed

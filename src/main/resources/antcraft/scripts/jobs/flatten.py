@@ -16,8 +16,9 @@ from lib.get import ensure_tool, get
 
 TALL = 16  # ponytail: a hillside higher than this over y is left standing; flatten it in steps
 
-# The fill without one given, dirt first: what the bot carries or digs before it gets dirt (#597).
-FILLS = ["minecraft:dirt", "minecraft:cobblestone", "minecraft:stone"]
+# The fill without one given, dirt first: what the bot carries or digs before it gets dirt (#597), cobbled deepslate on
+# a deep plot (#620).
+FILLS = ["minecraft:dirt", "minecraft:cobblestone", "minecraft:cobbled_deepslate", "minecraft:stone"]
 
 
 def flatten(low, high, y, fill):

@@ -48,7 +48,7 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		y = pos().y
 		memory["shaft"] = {"top": pos() + (-1, 5, 0), "levels": [y], "branches": 1, "length": 2}
 		r = lib.mine.mine_level(y, rounds=%d)
-		print(r["ok"], r["reason"], len(r["sealed"]))
+		print(r["ok"], r["reason"], len(r["sealed"])%s)
 		""";
 
 	@Override
@@ -72,12 +72,17 @@ public class MineGameTest implements CustomTestMethodInvoker {
 
 	/** As {@link #mine(GameTestHelper, BlockPos, int)}, running {@code before} ahead of {@link #SCRIPT}. */
 	private static AntBot mine(GameTestHelper helper, BlockPos landing, int rounds, String before) {
+		return mine(helper, landing, rounds, before, "");
+	}
+
+	/** As {@link #mine(GameTestHelper, BlockPos, int, String)}, printing {@code more} (from a comma) after the result. */
+	private static AntBot mine(GameTestHelper helper, BlockPos landing, int rounds, String before, String more) {
 		helper.setBlock(landing, Blocks.AIR);
 		helper.setBlock(landing.above(), Blocks.AIR);
 		helper.setBlock(landing.north(), Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, Direction.SOUTH));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, landing.getX(), landing.getY(), landing.getZ());
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
-		String name = BotScripts.libraryScript(helper, "mine_", before + SCRIPT.formatted(rounds));
+		String name = BotScripts.libraryScript(helper, "mine_", before + SCRIPT.formatted(rounds, more));
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 		return bot;
@@ -202,7 +207,8 @@ public class MineGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A branch stops at the edge of lib.find.WHERE as lib.dig.branch does (#593): with the edge between the north branch's
-	 * two blocks (z 2 inside, z 1 out), the bot digs its first block only and goes on with the south branch.
+	 * two blocks (z 2 inside, z 1 out), the bot digs its first block only and goes on with the south branch. Its result's
+	 * outside names the block the branch stopped at (#620).
 	 */
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aBranchAcrossTheEdgeOfWhereStopsAtIt(GameTestHelper helper) {
@@ -212,10 +218,11 @@ public class MineGameTest implements CustomTestMethodInvoker {
 			def inside(p):
 			    return p.z >= EDGE
 			lib.find.WHERE = inside
-			""");
-		failOnError(helper, () -> bot, "True None 0");
+			start = pos()
+			""", ", r[\"outside\"] == [start + (3, 0, -2)]");
+		failOnError(helper, () -> bot, "True None 0 True");
 		helper.succeedWhen(() -> {
-			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0")), "not done");
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0 True")), "not done");
 			assertDug(helper, HALL, "hall");
 			assertDug(helper, SOUTH, "south branch");
 			assertDug(helper, List.of(NORTH.get(0)), "north branch");

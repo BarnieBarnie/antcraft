@@ -8,7 +8,7 @@ It works on the shaft in `memory["shaft"]`. How many rounds of a level are done 
 
 Digs the hall of the level at height `level` and its next `rounds` rounds of branches, mines every ore vein it uncovers that its pickaxe drops ([`lib.tools.drops`](tools.md)), up to the edge of [`lib.find.WHERE`](find.md#where) (`veins`), puts torches at the level's torch spots, and puts the ore into the landing chest, also whenever its inventory fills. The stone and other junk it does not keep it drops where it stands rather than store it, so the chest never fills with junk and the level can be mined round after round; dropped items vanish after 5 minutes, as a player's do. Where water or lava is in or beside the next block, it seals it, stops that hall or branch and goes on with the next. A hall or branch stops short of the first block `lib.find.WHERE` leaves out too, as [`lib.dig.branch`](dig.md#branchlength-every8-facingnorth-leftnone-outnone) does, and it goes on with the next (#593), so a colony miner's tunnels end at the colony's edge.
 
-- **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives (`ok`, `reason`, `at`, `missing`) and `sealed`, the fluid blocks where a hall or branch stopped.
+- **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives (`ok`, `reason`, `at`, `missing`) `sealed`, the fluid blocks where a hall or branch stopped, and `outside`, the first block `lib.find.WHERE` leaves out of each hall or branch that stopped at its edge (#620), empty where none did.
 - **Pauses** yes, while it digs, walks and puts away.
 
 Without a shaft in memory that has such a level, it stops the script with an assertion error: call `lib.shaft.dig_shaft` first.

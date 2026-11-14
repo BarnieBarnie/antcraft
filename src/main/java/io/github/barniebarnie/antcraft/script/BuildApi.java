@@ -87,10 +87,18 @@ public final class BuildApi {
 					: level.getServer().getLevel(ResourceKey.create(Registries.DIMENSION, Identifier.parse(at.dimension())));
 				LoadedBlocks loaded = there == null ? null : new LoadedBlocks(there);
 				PyDict missing = new PyDict();
+				PyList steps = new PyList();
 				plan(level, Values.str(id), WorkApi.blockPos(at), turn, mirror).ifPresent(planned -> planned.plan()
-					.materials(pos -> Optional.ofNullable(loaded == null ? null : loaded.loaded(pos)).orElse(Blocks.AIR.defaultBlockState()))
-					.forEach((item, count) -> missing.put(BuiltInRegistries.ITEM.getKey(item).toString(), (long) count)));
+					.items(pos -> Optional.ofNullable(loaded == null ? null : loaded.loaded(pos)).orElse(Blocks.AIR.defaultBlockState()))
+					.forEach(item -> {
+						String key = BuiltInRegistries.ITEM.getKey(item).toString();
+						steps.items.add(key);
+						Object had = missing.get(key);
+						missing.put(key, had == null ? 1L : (Long) had + 1);
+					}));
 				dict.put("missing", missing);
+				// The same items one for each step, in build order, so a script can get what the steps before one need (#620).
+				dict.put("steps", steps);
 			}
 			return dict;
 		});

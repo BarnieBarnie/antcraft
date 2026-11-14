@@ -146,6 +146,21 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** jobs.flatten with no fill fills the hole with the cobbled deepslate the bot carries, as a deep plot gives (#620). */
+	// Measured: passes at tick 7.
+	@GameTest(maxTicks = 30, skyAccess = true)
+	public void theJobFillsWithTheCobbledDeepslateItCarries(GameTestHelper helper) {
+		helper.setBlock(2, 3, 2, Blocks.AIR);
+		helper.setBlock(2, 4, 2, Blocks.AIR);
+		helper.setBlock(1, 3, 1, Blocks.AIR);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLED_DEEPSLATE, 2));
+		runJob(helper, bot, " 2", () -> {
+			helper.assertBlockPresent(Blocks.COBBLED_DEEPSLATE, new BlockPos(3, 1, 3));
+			helper.assertBlockPresent(Blocks.COBBLED_DEEPSLATE, new BlockPos(3, 2, 3));
+		});
+	}
+
 	/**
 	 * jobs.flatten on a plot with a hole and nothing to dig, from a bot that carries no dirt, gets the two dirt it lacks
 	 * from a chest by the plot and flattens again (#586). The chest stands on a step of dirt one lower than the plot, so the

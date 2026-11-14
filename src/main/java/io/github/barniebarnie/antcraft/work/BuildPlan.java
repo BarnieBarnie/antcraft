@@ -951,6 +951,19 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 	 */
 	public Map<Item, Integer> materials(Function<BlockPos, BlockState> world, Predicate<Step> possible) {
 		Map<Item, Integer> materials = new LinkedHashMap<>();
+		for (Item item : this.items(world, possible)) {
+			materials.merge(item, 1, Integer::sum);
+		}
+		return materials;
+	}
+
+	/** {@link #materials(Function)} as a list in build order, one item for each a step still takes (#620). */
+	public List<Item> items(Function<BlockPos, BlockState> world) {
+		return this.items(world, step -> true);
+	}
+
+	private List<Item> items(Function<BlockPos, BlockState> world, Predicate<Step> possible) {
+		List<Item> items = new ArrayList<>();
 		for (Step step : this.steps) {
 			if (!possible.test(step)) {
 				continue;
@@ -958,18 +971,24 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			BlockState current = world.apply(step.pos());
 			if (step.isLit() && !step.isPlaced(current)) {
 				// A tool, not used up: one lights every fire.
-				materials.put(Items.FLINT_AND_STEEL, 1);
+				once(items, Items.FLINT_AND_STEEL);
 			} else if (step.item() != Items.AIR && !step.isPlaced(current)) {
-				materials.merge(step.item(), 1, Integer::sum);
+				items.add(step.item());
 			}
 			if (step.isWaterlogged() && !step.isDone(current)) {
-				materials.merge(Items.WATER_BUCKET, 1, Integer::sum);
+				items.add(Items.WATER_BUCKET);
 			} else if (step.item(current) == Items.BUCKET) {
 				// A tool, not used up: one bucket scoops the water out of every block.
-				materials.put(Items.BUCKET, 1);
+				once(items, Items.BUCKET);
 			}
 		}
-		return materials;
+		return items;
+	}
+
+	private static void once(List<Item> items, Item tool) {
+		if (!items.contains(tool)) {
+			items.add(tool);
+		}
 	}
 
 	/**

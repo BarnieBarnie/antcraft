@@ -62,10 +62,12 @@ def tier_at(y, ores=()):
     return lib.tools.TIERS[min(tiers)] if tiers else "wooden"
 
 
-def report(reason=None, at=None, missing=None, sealed=None):
-    """What mine_level gives: lib.result's result, and sealed, the fluid blocks it sealed, where a branch stopped."""
+def report(reason=None, at=None, missing=None, sealed=None, outside=None):
+    """What mine_level gives: lib.result's result, sealed, the fluid blocks it sealed, where a branch stopped, and
+    outside, the first block lib.find.WHERE leaves out of each hall or branch stopped at its edge (#620)."""
     r = result(reason, at, missing)
     r["sealed"] = sealed or []
+    r["outside"] = outside or []
     return r
 
 
@@ -154,11 +156,11 @@ def veins(cells, opened, stand, chest=None, left=None, out=None):
     return None
 
 
-def tunnel(cells, stand, opened, level, sealed):
+def tunnel(cells, stand, opened, level, sealed, outside):
     """Digs cells (feet and head, from stand outwards), mining the veins it uncovers and putting torches at the
     level's torch spots. Where a fluid is in or beside the next block, it seals it, adds it to sealed and stops
     there: short of a fluid in the next block, past the block beside the fluid. It stops short of the first block
-    lib.find.WHERE leaves out too, as lib.dig.branch does (#593)."""
+    lib.find.WHERE leaves out too, as lib.dig.branch does (#593), and adds that block to outside (#620)."""
     for i in range(0, len(cells), 2):
         feet = cells[i]
         head = cells[i + 1]
@@ -166,6 +168,7 @@ def tunnel(cells, stand, opened, level, sealed):
             stand = feet
             continue
         if not (lib.find.allowed(feet) and lib.find.allowed(head)):
+            outside.append(feet if not lib.find.allowed(feet) else head)
             return None
         failure = room(level["chest"])
         if failure:
@@ -202,8 +205,9 @@ def mine_level(level, rounds=1):
     """Digs the hall of level of the shaft in memory (dug by lib.shaft) and the next rounds of branches off it,
     mines every ore vein it uncovers, puts torches at the torch spots and the ore into the landing chest (dropping
     the junk), also when its inventory fills. Where a fluid is in or beside the next block of a hall or branch, it
-    seals it and goes on with the next branch; so too at the edge of lib.find.WHERE (#593). Gives report(): ok, or the reason it stopped (missing_ingredients without a pickaxe or
-    something to seal with, no_space when the chest is full of ore, or an action's reason) with at, and sealed."""
+    seals it and goes on with the next branch; so too at the edge of lib.find.WHERE (#593). Gives report(): ok, or the
+    reason it stopped (missing_ingredients without a pickaxe or something to seal with, no_space when the chest is full
+    of ore, or an action's reason) with at, sealed and outside."""
     m = site()
     assert m is not None and level in m["level"], f"no shaft with a level at {level}: dig_shaft first"
     if not has("#minecraft:pickaxes"):
@@ -215,6 +219,7 @@ def mine_level(level, rounds=1):
         hall = hall + [h, h.up()]
     base = [here["landing"], here["landing"].up(), chest] + hall
     sealed = []
+    outside = []
     done = memory.get("mine", {})
     for _ in range(rounds):
         r = done.get(level, 0)
@@ -227,19 +232,19 @@ def mine_level(level, rounds=1):
         opened = base + before
         for cells in here["branches"]:
             opened = opened + cells
-        failure = tunnel(hall, here["landing"], opened, here, sealed)
+        failure = tunnel(hall, here["landing"], opened, here, sealed, outside)
         for cells in here["branches"]:
             if failure:
                 break
             stands = [p for p in before if p.distance(cells[0]) == 1 and p.y == cells[0].y]
             # A branch whose way in stopped short at a fluid is left alone.
             if stands and dug(stands[0]):
-                failure = tunnel(cells, stands[0], opened, here, sealed)
+                failure = tunnel(cells, stands[0], opened, here, sealed, outside)
         if failure:
-            return report(failure["reason"], failure["at"], failure["missing"], sealed)
+            return report(failure["reason"], failure["at"], failure["missing"], sealed, outside)
         done[level] = r + 1
         memory["mine"] = done
     failure = unload(chest)
     if failure:
-        return report(failure["reason"], failure["at"], None, sealed)
-    return report(sealed=sealed)
+        return report(failure["reason"], failure["at"], None, sealed, outside)
+    return report(sealed=sealed, outside=outside)

@@ -280,6 +280,16 @@ class BuildPlanTest {
 	}
 
 	@Test
+	void listsTheItemOfEachStepStillToPlaceInBuildOrder() {
+		assertEquals(List.of(Items.COBBLESTONE, Items.COBBLESTONE, Items.OAK_STAIRS), plan().items(at(world())));
+		assertEquals(List.of(Items.COBBLESTONE, Items.OAK_STAIRS), plan().items(at(world(B, Blocks.COBBLESTONE.defaultBlockState()))));
+		// One flint and steel for every fire, as materials orders it.
+		BuildPlan fires = new BuildPlan(List.of(new BuildPlan.Step(A, Blocks.FIRE.defaultBlockState()),
+			new BuildPlan.Step(B, Blocks.COBBLESTONE.defaultBlockState()), new BuildPlan.Step(C, Blocks.FIRE.defaultBlockState())));
+		assertEquals(List.of(Items.FLINT_AND_STEEL, Items.COBBLESTONE), fires.items(at(world())));
+	}
+
+	@Test
 	void fluidSourcesArePlacedFromABucketAndOtherBlocksWithoutAnItemNotAtAll() {
 		BuildPlan.Step water = new BuildPlan.Step(A, Blocks.WATER.defaultBlockState());
 		BuildPlan.Step lava = new BuildPlan.Step(B, Blocks.LAVA.defaultBlockState());

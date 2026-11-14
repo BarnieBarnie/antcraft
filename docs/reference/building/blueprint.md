@@ -25,6 +25,7 @@ A dict, or `None` for an id the server has no blueprint for:
 - `chests`: a list of [`Pos`](../types/pos.md), the blueprint's chest spots.
 - `work_spots`: a list of `Pos`, the spots a bot stands on or works at, such as farm plots.
 - `missing` (only given `at`): a dict of item id to how many of it the copy at `at` still needs, for the blocks the world there does not match yet, so a half-built copy lacks only the rest. It is read in `at`'s dimension, so a site in the Nether is read there wherever the bot is. A block in a chunk that is not loaded, or in a dimension the server does not have, counts as missing.
+- `steps` (only given `at`): the same items as a list in build order, one for each block still to place (a waterlogged one also a water bucket after it; one flint and steel and one bucket for the whole copy, as in `missing`), so a script can get what the blocks before one take ([`lib.build.build_here`](../modules/lib/build.md#build_hereid-at-turn0-mirrorfalse-radius32) does).
 
 Without `at`, `chests` and `work_spots` are relative to the blueprint's origin, unturned, with no dimension. Given `at` (and `turn` and `mirror`), they are where a copy built there has them, in the dimension of `at`.
 
