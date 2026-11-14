@@ -8,7 +8,7 @@ The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms i
 /antcraft bot run jobs.wood_farm spruce_sapling 10 64 10 12 16
 ```
 
-The arguments are the sapling, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md) (oak, birch, spruce, jungle or dark oak), the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that sapling started), the most cells it grows to (by default `most()`, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells.
+The arguments are the sapling, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md) (oak, birch, spruce, jungle, dark oak, pale oak, acacia or cherry), the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that sapling started), the most cells it grows to (by default `most(HARVEST[kind])`, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells.
 
 The farm, from the corner `x y z` (the cells' floor is the block under it):
 
@@ -32,12 +32,12 @@ r = lib.project.run(name, steps)
 
 - **kit**: [`lib.bootstrap.kit`](../reference/modules/lib/bootstrap.md) of a stone axe and 16 dirt, to put under the saplings and to climb a tall tree with. Each comes through [`lib.get`](../reference/modules/lib/get.md): from a chest within the radius, else gathered and crafted. The farm keeps what it takes.
 - **sapling**: two saplings a spot (four spots for dark oak), one to plant and one to replant with, by `get`: from a chest, else broken out of the leaves of a tree of the kind.
-- **cell**: what [`lib.treefarm.materials`](../reference/modules/lib/treefarm.md) lists for a cell (dirt, the sapling, 2 torches, oak slabs for an oak's roof) by `get`, the tools [`lib.terrain.needs`](../reference/modules/lib/terrain.md) names for its ground by `ensure_tool`, then `lib.treefarm.build_cell` at cell 1.
+- **cell**: what [`lib.treefarm.materials`](../reference/modules/lib/treefarm.md) lists for a cell (dirt, the sapling, 2 torches, slabs for an oak's roof) by `get`, the tools [`lib.terrain.needs`](../reference/modules/lib/terrain.md) names for its ground and for the ground under each sapling spot that is not dirt (a pickaxe on stone, where the dirt goes) by `ensure_tool`, then `lib.treefarm.build_cell` at cell 1. The roof takes any wooden slabs the chests within the radius hold, such as birch slabs for an oak farm; those they lack it makes as oak slabs, as `get` takes an item, not a tag.
 - **farm**, round after round, for ever:
     1. fells each grown tree with `lib.treefarm.harvest`, which replants it; where a felling leaves a log (out of reach, or no room for the drops), it says so once, such as `harvest: out_of_reach at Pos(8, 70, 4)`, gets the kit's 16 dirt to pillar with and an axe, and fells it again. A cell whose logs still stand counts as grown, so a felling that fails again is tried again next round;
     2. stores what it felled with `lib.depot.store`: logs, saplings of other kinds, sticks and apples each in their own chests, the rest in `other`; the bot keeps its saplings, dirt, torches, slabs and the crafting table it makes chests with;
     3. tends each cell: a sapling on a spot that holds none, but never under logs of the cell's tree left standing (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands breaks it with its drop, and the bot picks the torch up to put back);
-    4. builds the next cell when the farm has fewer than its most and the bot has what a cell takes and a spare sapling: what it lacks it takes from the chests within the radius, else gets with `get` as for the first cell (torches crafted from coal or charcoal of its logs, dirt dug, saplings from leaves, oak slabs). Where `get` fails, it says once what it lacks, such as `next cell: no_item, lacks {'minecraft:torch': 2}`;
+    4. builds the next cell when the farm has fewer than its most and the bot has what a cell takes and a spare sapling: what it lacks it takes from the chests within the radius, else gets with `get` as for the first cell (torches crafted from coal or charcoal of its logs, dirt dug, saplings from leaves, oak slabs where the chests hold no wooden slabs). Where `get` fails, it says once what it lacks, such as `next cell: no_item, lacks {'minecraft:torch': 2}`;
     5. where it felled nothing, picks up the saplings, sticks and apples lying in the farm (the leaves of a felled tree decay over the next minutes and drop them then), then waits 100 ticks.
 - `lib.project.run` keeps the steps done in `memory["projects"]`, `lib.cells` the cells built in `memory["cells"]`, `lib.depot` the chests in `memory["depots"]` and the job the corner in `memory["wood_farms"]`, so a farm run again goes on farming: it does not build its first cell a second time. To start over, `lib.project.reset("birch_farm")` and pop the farm from those.
 
@@ -46,12 +46,24 @@ r = lib.project.run(name, steps)
 A farm is as big as it is useful: one cell more than the bot can harvest while the first one grows back would only stand waiting. So the most cells is a sapling's growth time over the time the bot takes for one tree:
 
 ```python
-GROWTH = 2 * 7 * 4096 / 3   # some 19,115 ticks, 16 minutes
-HARVEST = 400               # fell, replant and store one birch
-most() == GROWTH // HARVEST # 47 cells
+GROWTH = 2 * 7 * 4096 / 3                        # some 19,115 ticks, 16 minutes
+HARVEST["minecraft:birch_sapling"] == 400        # fell, replant and store one birch
+most(HARVEST[kind]) == GROWTH // HARVEST[kind]   # 47 cells of birch
 ```
 
-A sapling grows on random ticks: each tick, the game gives one to `randomTickSpeed` (3) blocks of each 16 by 16 by 16 section, 4096 blocks, and a sapling with light 9 or more over it moves up a stage on 1 in 7 of those, from stage 0 to 1, then from 1 to a tree. Every sapling of `KINDS` grows the same way. `HARVEST` is measured in `WoodFarmGameTest`, where felling, replanting and storing a birch takes some 150 to 1000 ticks; pass the most cells as an argument for a farm of another size.
+A sapling grows on random ticks: each tick, the game gives one to `randomTickSpeed` (3) blocks of each 16 by 16 by 16 section, 4096 blocks, and a sapling with light 9 or more over it moves up a stage on 1 in 7 of those, from stage 0 to 1, then from 1 to a tree. Every sapling of `KINDS` grows the same way. `HARVEST` gives the ticks for one tree of each kind. The birch's is measured in `WoodFarmGameTest`, where felling, replanting and storing a birch took some 150 to 1000 ticks. The others are the birch's ticks per log times the kind's mean logs, from the trunks and branches its trees grow, so they are estimates, not measurements:
+
+| Kind | Mean logs | `HARVEST` | `most` |
+|---|---|---|---|
+| oak | 5.5 | 350 | 54 |
+| birch | 6 | 400 | 47 |
+| spruce | 6.5 | 450 | 42 |
+| jungle | 8 | 550 | 34 |
+| acacia | 9 | 600 | 31 |
+| cherry | 13.5 | 900 | 21 |
+| dark oak, pale oak | 34 | 2250 | 8 |
+
+Pass the most cells as an argument for a farm of another size.
 
 ## A forester
 
@@ -83,4 +95,4 @@ jobs.wood_farm.run("minecraft:spruce_sapling", Pos(10, 64, 10), 12)
 
 `run(kind, at=None, size=None, radius=32)` never returns but when a setup step fails: it gives `lib.project.run`'s `result()` then. `most(harvest)` gives the most cells for a harvest time of `harvest` ticks.
 
-`WoodFarmGameTest` runs the job for birch in a 24 by 16 by 24 area with a stone axe, dirt and torches in a chest and a small birch whose leaves give the saplings: the bot builds and plants the first cell, the test grows its sapling, and the bot fells the birch, replants and stores the logs in a chest of the depot. With two more saplings and torches in the chest it builds a second cell, and with a coal and a log instead of the torches it makes them for it; stopped as it starts farming and run again, it goes on with the same farm.
+`WoodFarmGameTest` runs the job for birch in a 24 by 16 by 24 area with a stone axe, dirt, saplings and torches in a chest: the bot builds and plants the first cell, the test puts a small birch in its sapling's place, and the bot fells the birch, replants and stores the logs in a chest of the depot. On the area's stone floor it makes a pickaxe to put the dirt under the sapling, and an oak farm roofs its cell with birch slabs from the chest. With two more saplings and torches in the chest it builds a second cell, and with a coal and a log instead of the torches it makes them for it; stopped as it starts farming and run again, it goes on with the same farm.

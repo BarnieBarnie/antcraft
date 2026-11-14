@@ -292,7 +292,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A stone axe in a chest across the wide area (walk 190 ticks) and 3 logs carried (#562): the chest is past NEAR, so
 	 * ensure_tool weighs it against making one and makes a wooden axe (30 ticks of work) rather than walk there. Passes at
-	 * tick 164 in a full run (#619), 179-195 before #618; maxTicks is twice the slowest.
+	 * tick 164 in a full run (#619), 173-181 with the Get, WoodFarm, TreeFarm, Forester and Depot tests (#612), 179-195
+	 * before #618 (and 269-362 under load before #618, #612); maxTicks is twice the slowest since #618.
 	 */
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 400)
 	public void aFarChestToolLosesToMakingOne(GameTestHelper helper) {

@@ -16,14 +16,12 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * The job {@code jobs/wood_farm.py} (#606; docs/cookbook/wood-farm.md): a birch farm at (6, 1, 2) in the 24x16x24
- * {@code wide_tall} structure, its cells on a dirt floor from (6, 0, 2) (cell 1 from (6, 0, 2) to (10, 0, 6), cell 2
- * from (12, 0, 2)), its depot a row of chests from (6, 1, 0) east, a chest of supplies at (3, 1, 8) and a small birch at
+ * {@code wide_tall} structure, its cells on a dirt floor (the area's stone in the stone floor test) from (6, 0, 2)
+ * (cell 1 from (6, 0, 2) to (10, 0, 6), cell 2 from (12, 0, 2)), its depot a row of chests from (6, 1, 0) east, a chest of supplies at (3, 1, 8) and a small birch at
  * (3, 1, 12) whose leaves give the saplings (the game test data pack makes birch leaves always drop one). Radius 12 keeps
  * a neighbouring test's chests out of reach.
  */
@@ -31,6 +29,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos AT = new BlockPos(6, 1, 2);
 	private static final BlockPos SPOT = new BlockPos(8, 1, 4);
 	private static final BlockPos SPOT_2 = new BlockPos(14, 1, 4);
+	private static final BlockPos OAK_SPOT = new BlockPos(9, 1, 5);
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -40,28 +39,25 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * An empty bot, a stone axe, 16 dirt and 2 torches in the chest: it gets the kit, two saplings from the birch's
-	 * leaves, builds and plants the first cell; the test grows its sapling, and the bot fells the birch, replants and
-	 * stores the logs in a chest of the depot, and the cell keeps its torches (a pillar up to drops on the leaves can take
-	 * one's place: the bot picks the torch up and puts it back, with no spare, #608). A farm of one cell, as for a second
-	 * the bot makes torches of the birch's logs (#643).
+	 * An empty bot, a stone axe, 16 dirt, 2 saplings and 2 torches in the chest: it gets the kit and the saplings, builds
+	 * and plants the first cell; the test puts a small birch (4 logs) in its sapling's place, and the bot fells it,
+	 * replants and stores the logs in a chest of the depot, and the cell keeps its torches (a pillar up to drops on the
+	 * leaves can take one's place: the bot picks the torch up and puts it back, with no spare, #608). A farm of one cell,
+	 * as for a second the bot makes torches of the birch's logs (#643). Saplings from leaves (GetGameTest) and a tall
+	 * tree's climb (aFailedHarvestIsRetriedBeforeTheCellIsReplanted) are left to other tests (#612): with them this took
+	 * 363 to 1700 ticks.
 	 */
-	// Measured: passes at tick 363 to 1187 alone or with the tree tests, up to 1700 with 7 copies at once.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 3000)
+	// Measured: passes at tick 282 to 348 with 7 copies at once.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 700)
 	public void buildsTheFirstCellHarvestsAndStoresTheLogs(GameTestHelper helper) {
-		AntBot bot = farm(helper, 0, 2);
+		AntBot bot = farm(helper, 2, 2);
 		run(helper, bot, 1);
 		boolean[] grew = new boolean[1];
 		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			if (!grew[0] && said(bot).contains("birch_farm 4/4: farm")) {
-				BlockPos at = helper.absolutePos(SPOT);
-				BlockState sapling = helper.getLevel().getBlockState(at);
-				if (sapling.is(Blocks.BIRCH_SAPLING)) {
-					((SaplingBlock) Blocks.BIRCH_SAPLING).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1),
-						helper.getLevel().getRandom());
-				}
-				grew[0] = helper.getBlockState(SPOT).is(Blocks.BIRCH_LOG);
+			if (!grew[0] && said(bot).contains("birch_farm 4/4: farm") && helper.getBlockState(SPOT).is(Blocks.BIRCH_SAPLING)) {
+				TreesGameTest.plantTree(helper, SPOT, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
+				grew[0] = true;
 			}
 		});
 		helper.succeedWhen(() -> {
@@ -79,6 +75,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(stored > 0, "no birch logs in the depot");
 		});
 	}
+
 
 	/** With 4 saplings and 4 torches in the chest, 2 of each more than the first cell takes, the farm builds its second cell. */
 	// Measured: passes at tick 146 to 148.
@@ -152,6 +149,47 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * On the area's stone floor, with no pickaxe in the kit or the chest, the farm builds its first cell (#612): the stone
+	 * under the sapling spot gives way to dirt, mined with a pickaxe it makes of the logs it carries.
+	 */
+	// Measured: passes at tick 138 to 156.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 320)
+	public void buildsTheFirstCellOnAStoneFloor(GameTestHelper helper) {
+		AntBot bot = farm(helper, 2, 2, false);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		run(helper, bot, 1);
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
+			assertCell(helper, bot, SPOT);
+		});
+	}
+
+	/** An oak farm roofs its cell with the birch slabs a chest holds (#612): any wooden slabs do, not only oak ones. */
+	// Measured: passes at tick 236 to 253.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 500)
+	public void roofsAnOakCellWithBirchSlabsFromTheChest(GameTestHelper helper) {
+		AntBot bot = farm(helper, 0, 2);
+		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class);
+		chest.setItem(3, new ItemStack(Items.OAK_SAPLING, 2));
+		chest.setItem(4, new ItemStack(Items.BIRCH_SLAB, 9));
+		BlockPos at = helper.absolutePos(AT);
+		List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm oak_sapling "
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 1 12");
+		helper.assertTrue(bot.getScript() != null, "not run: " + out);
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, OAK_SPOT);
+			for (int x = -1; x <= 1; x++) {
+				for (int z = -1; z <= 1; z++) {
+					helper.assertBlockPresent(Blocks.BIRCH_SLAB, OAK_SPOT.offset(x, 8, z));
+				}
+			}
+		});
+	}
+
 	/** Stopped once it farms and run again, it goes on farming the same farm: no second first cell. */
 	// Measured: passes at tick 91 to 94.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 200)
@@ -185,7 +223,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(SPOT.above(3), Blocks.BIRCH_LOG);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, 2));
-		script(helper, bot, "jobs.wood_farm.tend(kind, cell, 12)\nprint(block(spot).id)\n");
+		script(helper, bot, "jobs.wood_farm.tend(kind, cell)\nprint(block(spot).id)\n");
 		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("minecraft:air"), "printed"));
 	}
 
@@ -205,7 +243,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, 2));
-		script(helper, bot, "r = jobs.wood_farm.reap(kind, cell, 12, {})\njobs.wood_farm.tend(kind, cell, 12)\nprint(r['ok'], block(spot).id)\n");
+		script(helper, bot, "r = jobs.wood_farm.reap(kind, cell, 12, {})\njobs.wood_farm.tend(kind, cell)\nprint(r['ok'], block(spot).id)\n");
 		helper.succeedWhen(() -> {
 			List<String> said = said(bot);
 			helper.assertTrue(said.size() == 2 && said.get(0).startsWith("harvest: out_of_reach at "), "said " + said);
@@ -223,11 +261,17 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 10)
 	public void mostIsTheGrowthTimeOverTheHarvestTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
-		BotScripts.run(bot, "import jobs.wood_farm\nprint(int(jobs.wood_farm.GROWTH), jobs.wood_farm.most(400), jobs.wood_farm.most(10 ** 6))\n");
+		BotScripts.run(bot, """
+			import jobs.wood_farm
+			import lib.treefarm
+			h = jobs.wood_farm.HARVEST
+			print(int(jobs.wood_farm.GROWTH), jobs.wood_farm.most(400), jobs.wood_farm.most(10 ** 6), sorted(h) == sorted(lib.treefarm.KINDS))
+			print(jobs.wood_farm.most(h["minecraft:birch_sapling"]), jobs.wood_farm.most(h["minecraft:dark_oak_sapling"]))
+			""");
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
-			helper.assertValueEqual(said(bot), List.of("19114 47 1"), "printed");
+			helper.assertValueEqual(said(bot), List.of("19114 47 1 True", "47 8"), "printed");
 		});
 	}
 
@@ -236,8 +280,13 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * given, the birch; gives the bot, empty, by the chest.
 	 */
 	private static AntBot farm(GameTestHelper helper, int saplings, int torches) {
-		for (int x = 6; x <= 16; x++) {
-			for (int z = 2; z <= 6; z++) {
+		return farm(helper, saplings, torches, true);
+	}
+
+	/** As farm(helper, saplings, torches), the cells' floor of dirt (up to z 8, an oak cell's) or else the area's stone. */
+	private static AntBot farm(GameTestHelper helper, int saplings, int torches, boolean dirt) {
+		for (int x = 6; dirt && x <= 16; x++) {
+			for (int z = 2; z <= 8; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
 			}
 		}

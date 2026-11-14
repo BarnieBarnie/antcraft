@@ -1,8 +1,8 @@
 # A job: grows a wood farm from nothing and farms it until a player stops it. Run it as
 # /antcraft bot run jobs.wood_farm <sapling> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a sapling of
 # lib.treefarm.KINDS, the farm's first corner, by default where the bot stands (or where a stopped run of the kind
-# started), the most cells it grows to (most() by default) and how far to look for what it needs, in blocks (32 by
-# default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
+# started), the most cells it grows to (most(HARVEST[kind]) by default) and how far to look for what it needs, in
+# blocks (32 by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
 # logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
 # what one takes (docs/cookbook/wood-farm.md). Another job starts a farm with run(kind, at); imported, this runs nothing.
@@ -28,8 +28,14 @@ from lib.result import result
 # and SaplingBlock.randomTick advances a sapling on 1 in 7 of those (with light 9 or more over it), from stage 0 to 1,
 # then from 1 to a tree. So a tree takes 2 * 7 * 4096 / 3 ticks on average, some 16 minutes.
 GROWTH = 2 * 7 * 4096 / 3
-# The ticks the bot takes for one tree: fell a birch, replant and store the logs, some 150 to 1050 in WoodFarmGameTest.
-HARVEST = 400
+# The ticks the bot takes for one tree of each kind: fell it, replant and store the logs. Birch is measured, some 150 to
+# 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs; the others are that per log times their mean logs from
+# lib.treefarm.KINDS's trunks and branches: oak 5.5, spruce 6.5, jungle 8, acacia 9, cherry 13.5, dark and pale oak 34
+# (four trunks and branches).
+# ponytail: scaled by logs, not measured per kind; time the farm's own rounds if a kind's farm comes out too big or small.
+HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
+           "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
+           "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250}
 WAIT = 100  # ticks between looks at the farm while nothing has grown
 KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
@@ -39,9 +45,9 @@ CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"]
 KEEP = [lib.treefarm.DIRT, lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
 
 
-def most(harvest=HARVEST):
-    """The cells at which the bot is always busy: a tree's mean growth ticks over the ticks it takes for one; at least
-    one."""
+def most(harvest=HARVEST["minecraft:birch_sapling"]):
+    """The cells at which the bot is always busy: a tree's mean growth ticks over the ticks it takes for one, harvest
+    (HARVEST[kind] for a farm of kind); at least one."""
     return max(1, int(GROWTH // harvest))
 
 
@@ -60,12 +66,17 @@ def own():
 
 
 def build(kind, name, size, radius):
-    """Builds the next cell of the farm name with the tools lib.terrain.needs for its ground, marks it built and says so.
-    Gives result()."""
+    """Builds the next cell of the farm name with the tools lib.terrain.needs for its ground and for the ground under
+    its sapling spots, marks it built and says so. Gives result()."""
     i = lib.cells.next(name)
     low, high = lib.cells.cell(name, i)
-    n = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)
-    for k, uses in n["tools"].items():
+    tools = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)["tools"]
+    # build_cell mines the ground under each sapling spot that is not dirt to put dirt there, such as stone (#612).
+    for p in lib.treefarm.spots(kind, low, high):
+        if not lib.trees.is_kind(p.down(), "#minecraft:dirt"):
+            for k, uses in lib.terrain.needs(p.down(), p.down(), p.y - 2)["tools"].items():
+                tools[k] = tools.get(k, 0) + uses
+    for k, uses in tools.items():
         r = ensure_tool(k, uses, None if k == "pickaxe" else "hand", radius)
         if not r["ok"]:
             return r
@@ -77,26 +88,32 @@ def build(kind, name, size, radius):
     return r
 
 
+def gets(item, n, radius):
+    """get(item, n, radius), but the roof's slabs (lib.treefarm.SLABS, a tag) are any wooden slabs the chests within
+    radius hold (lib.stock.take_up_to takes a tag), and those they lack are made as oak slabs (#612). Gives result()."""
+    if item != lib.treefarm.SLABS:
+        return get(item, n, radius)
+    if lib.stock.take_up_to(item, n, radius)["ok"]:
+        return result()
+    # ponytail: lib.get takes an item, not a tag; oak is the one kind of slab it makes, a tag-aware get would make any.
+    return get("minecraft:oak_slab", count("minecraft:oak_slab") + n - count(item), radius)
+
+
 def first_cell(kind, name, size, radius):
-    """Gets what the first cell takes with lib.get and builds it. Gives result()."""
+    """Gets what the first cell takes (gets) and builds it. Gives result()."""
     for item, n in lib.treefarm.materials(kind).items():
-        # ponytail: lib.get takes an item, not a tag, so the roof is of oak slabs; any wooden slabs in a chest do later.
-        r = get("minecraft:oak_slab" if item == lib.treefarm.SLABS else item, n, radius)
+        r = gets(item, n, radius)
         if not r["ok"]:
             return r
     return build(kind, name, size, radius)
 
 
 def stocked(kind, radius):
-    """Makes the bot carry materials(kind): what it lacks from the chests within radius, else by lib.get (torches
-    crafted, dirt dug, saplings from leaves, oak slabs for the roof), as first_cell does (#643). Gives result(): ok, or
-    the failed get's for the first item it could not get."""
+    """Makes the bot carry materials(kind) by gets, as first_cell does (#643): what it lacks from the chests within
+    radius, else torches crafted, dirt dug, saplings from leaves, oak slabs for the roof. Gives result(): ok, or the
+    failed get's for the first item it could not get."""
     for item, n in materials(kind).items():
-        if item == lib.treefarm.SLABS and not lib.stock.take_up_to(item, n, radius)["ok"]:
-            # ponytail: lib.get takes an item, not a tag, so the slabs the chests lack are oak, as in first_cell.
-            r = get("minecraft:oak_slab", count("minecraft:oak_slab") + n - count(item), radius)
-        else:
-            r = get(item, n, radius)
+        r = gets(item, n, radius)
         if not r["ok"]:
             return r
     return result()
@@ -126,7 +143,7 @@ def unplanted(kind, b):
     return [p for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id != kind and not lib.trees.is_log(p)]
 
 
-def tend(kind, b, radius):
+def tend(kind, b):
     """Puts back what cell b lacks: a sapling on each spot without one (mining what stands there first, such as a
     scaffold block a felling left) and its torches (a walk that pillars where a torch stands breaks it, and the bot
     picks it up), as far as the bot has them. Nothing while logs of the cell's tree stand, as a sapling under them never
@@ -189,7 +206,7 @@ def farm(kind, name, size, radius):
         if n and count(kind) < n and not lib.stock.take_up_to(kind, n, radius)["ok"]:
             get(kind, n, radius)
         for b in boxes:
-            tend(kind, b, radius)
+            tend(kind, b)
         if lib.cells.count(name) < size:
             r = stocked(kind, radius)
             if r["ok"]:
@@ -206,15 +223,15 @@ def farm(kind, name, size, radius):
 
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a wood farm of kind (a sapling of lib.treefarm.KINDS) with its first corner at at (where the bot
-    stands, or where the last farm of kind started), up to size cells (most()). Never returns but on a failed setup step:
-    gives lib.project.run's result() then."""
+    stands, or where the last farm of kind started), up to size cells (most(HARVEST[kind])). Never returns but on a
+    failed setup step: gives lib.project.run's result() then."""
     kind = kind if ":" in kind else "minecraft:" + kind
     name = kind.split(":")[1].replace("_sapling", "") + "_farm"
     farms = memory.get("wood_farms", {})
     at = Pos(at) if at is not None else farms.get(kind, pos())
     farms[kind] = at
     memory["wood_farms"] = farms
-    size = size or most()
+    size = size or most(HARVEST[kind])
     w = lib.treefarm.spec(kind)["size"]
     lib.cells.layout(name, at.down(), (w, w))
     # The depot north of the farm, a path's width off its first row, going east along it.
