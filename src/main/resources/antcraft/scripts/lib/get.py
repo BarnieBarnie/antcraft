@@ -36,6 +36,10 @@ ESTIMATE = 100
 # ponytail: one number for every ore, between coal's trip and iron's; per ore from its BEST_Y and the bot's height if the
 # choices it sways prove wrong. At 1000 the bootstrap tests dug for coal and failed.
 DEEP = 2000
+# The walk (lib.cost.walk ticks) to a chest within which ensure_tool takes a lasting tool from it before costing the
+# options; a farther one options weighs against making one (#562). ponytail: one number, about 16 blocks; the walk
+# against the make cost of each tier is what options does, at some 17 ticks of make_cost a tier.
+NEAR = 16 * lib.cost.WALK
 # The items being got, outermost first: a tool whose recipe needs one of them is not made for it.
 GETTING = []
 
@@ -323,10 +327,12 @@ def options(kind, uses=1, tier=None, radius=32):
 
 def lasting(kind, uses, tier):
     """(ok, carried, need): the tiers in ok are at least tier (all for None and "hand"), carried the tools of kind of
-    those the bot carries, best first, and need the uses they leave to the rest (a worn tool is used up first)."""
+    those the bot carries, best first, and need the uses they leave to the rest (a worn tool is used up first). For None
+    and "hand" carried counts a tool of no listed tier too, such as a modded one (#562)."""
     tiers = lib.tools.TIERS
-    ok = [t for t in tiers if tier in (None, "hand") or tiers.index(t) <= tiers.index(tier)]
-    carried = [s for s in lib.tools.carried(kind) if lib.tools.tier(s) in ok]
+    any_tier = tier in (None, "hand")
+    ok = [t for t in tiers if any_tier or tiers.index(t) <= tiers.index(tier)]
+    carried = [s for s in lib.tools.carried(kind) if any_tier or lib.tools.tier(s) in ok]
     return ok, carried, uses - sum([lib.tools.uses_left(s) for s in carried])
 
 
@@ -352,19 +358,22 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
     """Makes the bot hold a tool of kind ("pickaxe", "axe", "shovel", "hoe" or "sword") that lasts uses more blocks and
     is at least tier (None: any; "hand": none needed, so a tool only where it is cheaper than the hand), by the cheapest
     of options: carried, borrowed from a chest of lib.stock, or made with get; where one fails it tries the next.
-    Carried ones that last, else (tier not "hand") one that lasts in the nearest chest, it takes before costing the
-    options, which scans for each tier it could make.
+    Carried ones that last, else (tier not "hand") one that lasts in the nearest chest within a walk of NEAR, it takes
+    before costing the options, which scans for each tier it could make; where no tool can be made for want of a raw
+    item (no_wood), it fails at once with that source's reason, as no_logs.
     Gives result(): ok, no_tool where there is no way, or the reason the last tier to make failed with."""
     ok, carried, need = lasting(kind, uses, tier)
     if carried and need <= 0:
         return lib.tools.hold(kind)
     if tier != "hand":
-        # ponytail: the nearest chest's, however far within radius; making one may be cheaper (options weighs that).
         # The core and memory["chests"] first, which need no scan: a scan of the sphere waits on a budget all bots share.
         for scanning in (False, True):
             for chest, t in in_chests(kind, ok, need, radius, scanning):
-                if take(chest, f"{t}_{kind}"):
+                if lib.cost.walk(pos(), chest) <= NEAR and take(chest, f"{t}_{kind}"):
                     return lib.tools.hold(kind)
+        r = no_wood(radius)
+        if r is not None:
+            return r
     failed = None
     for ticks, how, t, at in options(kind, uses, tier, radius):
         if how == "hand":
@@ -380,6 +389,20 @@ def ensure_tool(kind, uses=1, tier=None, radius=32):
                 return lib.tools.hold(kind)
             failed = r
     return failed or result("no_tool", None, {f"{tier if tier not in (None, 'hand') else 'wooden'}_{kind}": 1})
+
+
+def no_wood(radius):
+    """The failure of the source of a raw item a stick needs where none of it is within radius (Source.there) and no chest
+    of lib.stock within radius holds it or a step on the way, so no tool of lib.craft.MADE can be made (#562); else None.
+    ponytail: every tool made takes sticks, so one plan of a stick stands for all; a tier's other raw items options finds."""
+    p = lib.craft.plan("minecraft:stick", 1)
+    for raw, k in p["gather"].items():
+        s = SOURCES.get(key(raw))
+        if s is not None and not s.there(radius):
+            steps = [raw] + [step for step, n, how in p["crafts"]]
+            if not any([lib.stock.holds(c, step) for c in lib.stock.chests(radius) for step in steps]):
+                return s.do(k, radius)
+    return None
 
 
 def take(chest, tool):

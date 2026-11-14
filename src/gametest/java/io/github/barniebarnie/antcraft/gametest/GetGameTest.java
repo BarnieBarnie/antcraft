@@ -126,6 +126,69 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A stone axe in a chest across the wide area (walk 190 ticks) and 3 logs carried (#562): the chest is past NEAR, so
+	 * ensure_tool weighs it against making one and makes a wooden axe (30 ticks of work) rather than walk there.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 360)
+	public void aFarChestToolLosesToMakingOne(GameTestHelper helper) {
+		Container chest = chest(helper, new BlockPos(21, 1, 21), new ItemStack(Items.STONE_AXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		run(helper, bot, where(helper, 23) + """
+			from lib.get import ensure_tool
+			r = ensure_tool("axe", radius=30)
+			print(r["ok"], held().item)
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True minecraft:wooden_axe");
+			helper.assertTrue(chest.countItem(Items.STONE_AXE) == 1, "the stone axe left the chest");
+		});
+	}
+
+	/**
+	 * An empty bot, no log and no chest in its area (#562): ensure_tool fails no_logs, the reason of the log source,
+	 * without costing options (replaced here by one that prints "costed"): tick 4 alone and 7 in a group run, 114 before.
+	 */
+	@GameTest(maxTicks = 15)
+	public void ensureToolFailsFastWithoutLogs(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, where(helper, 7) + """
+			import lib.get
+			lib.get.options = lambda *a: print("costed") or []
+			r = lib.get.ensure_tool("axe", 30, radius=8)
+			print(r["ok"], r["reason"])
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "False no_logs"));
+	}
+
+	/**
+	 * A copper axe carried, a tool of no lib.tools.TIERS tier as a modded one is (#562): tools.best counts it, and
+	 * ensure_tool holds it without costing where no tier is asked; for at least stone it does not count.
+	 */
+	@GameTest(maxTicks = 10)
+	public void anUnknownTierToolIsUsedWhereNoTierIsAsked(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COPPER_AXE));
+		run(helper, bot, """
+			import lib.get
+			import lib.tools
+			lib.get.options = lambda *a: print("costed") or []
+			print(lib.tools.best("axe").item, len(lib.get.lasting("axe", 1, "stone")[1]))
+			r = lib.get.ensure_tool("axe", 30, radius=8)
+			print(r["ok"], held().item)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "minecraft:copper_axe 0", "True minecraft:copper_axe"));
+	}
+
+	/** A line that sets lib.find.WHERE to the test's area, size blocks along x and z from its corner. */
+	private static String where(GameTestHelper helper, int size) {
+		BlockPos a = helper.absolutePos(BlockPos.ZERO);
+		BlockPos b = helper.absolutePos(new BlockPos(size, 0, size));
+		return "import lib.find\nlib.find.WHERE = lambda p: %d <= p.x <= %d and %d <= p.z <= %d\n".formatted(
+			Math.min(a.getX(), b.getX()), Math.max(a.getX(), b.getX()), Math.min(a.getZ(), b.getZ()), Math.max(a.getZ(), b.getZ()));
+	}
+
+	/**
 	 * Logs carried and no stone within radius 1 (the floor under it dirt): a stone pickaxe is the cheapest to make but
 	 * fails no_stone, so ensure_tool falls back to the wooden one (#518).
 	 */
