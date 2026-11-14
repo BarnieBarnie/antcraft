@@ -18,11 +18,20 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import it.unimi.dsi.fastutil.longs.LongIterator;
+import it.unimi.dsi.fastutil.longs.LongSet;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
+import net.minecraft.core.Registry;
 import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
@@ -38,7 +47,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code tag_items}, {@code held},
- * {@code block}, {@code surface}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
+ * {@code block}, {@code surface}, {@code biome}, {@code structures}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
  * {@code time}, {@code is_day}, {@code placed_scaffold}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
  */
@@ -59,6 +68,8 @@ public final class SenseApi {
 	public static final int BLOCKS_PER_INSTRUCTION = 8;
 	/** The largest radius {@code entities} and {@code items_near} look in. */
 	public static final int MAX_ENTITY_RADIUS = 64;
+	/** The largest radius {@code structures} looks in: at most 17 by 17 loaded chunks read. */
+	public static final int MAX_STRUCTURE_RADIUS = 128;
 
 	private SenseApi() {
 	}
@@ -132,6 +143,23 @@ public final class SenseApi {
 			return chunk == null ? PyNone.NONE
 				: new Pos(pos.x(), chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX() & 15, at.getZ() & 15) + 1, pos.z(),
 					pos.dimension());
+		});
+		natives.register("biome", 30, call -> {
+			Object[] args = Args.bind("biome", call, 0, "pos");
+			AntBot bot = bot(run, call);
+			Pos pos = Args.absent(args[0]) ? null : Pos.of(args[0]);
+			if (run.elsewhere(pos)) {
+				return PyNone.NONE;
+			}
+			BlockPos at = pos == null ? bot.blockPosition() : blockPos(pos);
+			Level level = bot.level();
+			return level.getChunkSource().getChunkNow(SectionPos.blockToSectionCoord(at.getX()), SectionPos.blockToSectionCoord(at.getZ())) == null
+				? PyNone.NONE : level.getBiome(at).getRegisteredName();
+		});
+		natives.register("structures", 60, call -> {
+			Object[] args = Args.bind("structures", call, 0, "radius");
+			AntBot bot = bot(run, call);
+			return structures((ServerLevel) bot.level(), bot.blockPosition(), radius(args[0], 64, MAX_STRUCTURE_RADIUS));
 		});
 		natives.register("find_nearest", call -> {
 			Object[] args = Args.bind("find_nearest", call, 1, "what", "radius", "around");
@@ -281,6 +309,64 @@ public final class SenseApi {
 
 	private static int clamp(long value) {
 		return (int) Math.max(Integer.MIN_VALUE, Math.min(Integer.MAX_VALUE, value));
+	}
+
+	/**
+	 * {@code structures(radius)}: the structure starts whose box is within {@code radius} of {@code from}, nearest first,
+	 * found as the game does, by the references the loaded chunks within radius keep to the chunk each start is in; a
+	 * start in a chunk that is not loaded is left out, and no chunk is loaded. At most 17 by 17 chunks are read.
+	 */
+	private static PyList structures(ServerLevel level, BlockPos from, int radius) {
+		Registry<Structure> registry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+		String dimension = level.dimension().identifier().toString();
+		Map<StructureStart, Long> found = new HashMap<>(); // a start's squared distance, by identity
+		long r2 = (long) radius * radius;
+		for (int cx = SectionPos.blockToSectionCoord(from.getX() - radius); cx <= SectionPos.blockToSectionCoord(from.getX() + radius); cx++) {
+			for (int cz = SectionPos.blockToSectionCoord(from.getZ() - radius); cz <= SectionPos.blockToSectionCoord(from.getZ() + radius); cz++) {
+				LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
+				if (chunk == null) {
+					continue;
+				}
+				for (Map.Entry<Structure, LongSet> references : chunk.getAllReferences().entrySet()) {
+					for (LongIterator it = references.getValue().iterator(); it.hasNext(); ) {
+						long packed = it.nextLong();
+						LevelChunk home = level.getChunkSource().getChunkNow(ChunkPos.getX(packed), ChunkPos.getZ(packed));
+						StructureStart start = home == null ? null : home.getStartForStructure(references.getKey());
+						if (start == null || !start.isValid() || found.containsKey(start)) {
+							continue;
+						}
+						BoundingBox box = box(start);
+						long dx = Math.max(0, Math.max(box.minX() - from.getX(), from.getX() - box.maxX()));
+						long dy = Math.max(0, Math.max(box.minY() - from.getY(), from.getY() - box.maxY()));
+						long dz = Math.max(0, Math.max(box.minZ() - from.getZ(), from.getZ() - box.maxZ()));
+						long d2 = dx * dx + dy * dy + dz * dz;
+						if (d2 <= r2) {
+							found.put(start, d2);
+						}
+					}
+				}
+			}
+		}
+		PyList structures = new PyList();
+		found.entrySet().stream().sorted(Map.Entry.comparingByValue()).forEach(entry -> {
+			BoundingBox box = box(entry.getKey());
+			BlockPos at = box.getCenter();
+			PyDict dict = new PyDict();
+			dict.put("id", registry.getKey(entry.getKey().getStructure()).toString());
+			dict.put("at", new Pos(at.getX(), at.getY(), at.getZ(), dimension));
+			dict.put("low", new Pos(box.minX(), box.minY(), box.minZ(), dimension));
+			dict.put("high", new Pos(box.maxX(), box.maxY(), box.maxZ(), dimension));
+			structures.items.add(dict);
+		});
+		return structures;
+	}
+
+	/**
+	 * The box around the pieces of {@code start}, what it is built of; {@link StructureStart#getBoundingBox} is grown by
+	 * the margin the structure adapts the terrain in (12 blocks around a village).
+	 */
+	private static BoundingBox box(StructureStart start) {
+		return BoundingBox.encapsulatingBoxes(start.getPieces().stream().map(StructurePiece::getBoundingBox).toList()).orElseThrow();
 	}
 
 	private static <T extends Entity> PyList near(AntBot bot, Class<T> type, Predicate<? super T> what, int radius) {

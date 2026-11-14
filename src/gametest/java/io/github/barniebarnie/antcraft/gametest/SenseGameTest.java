@@ -7,10 +7,29 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.SenseApi;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.WorldGenLevel;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.structure.BoundingBox;
+import net.minecraft.world.level.levelgen.structure.BuiltinStructures;
+import net.minecraft.world.level.levelgen.structure.Structure;
+import net.minecraft.world.level.levelgen.structure.StructurePiece;
+import net.minecraft.world.level.levelgen.structure.StructureStart;
+import net.minecraft.world.level.levelgen.structure.pieces.PiecesContainer;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceSerializationContext;
+import net.minecraft.world.level.levelgen.structure.pieces.StructurePieceType;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.Container;
@@ -327,6 +346,59 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		ScriptRun run = run(helper, bot, "print(surface(%s))\nprint(surface(%s))\nprint(surface(%s))\n"
 			.formatted(at(helper, 2, 1, 2), at(helper, 5, 6, 5), at(helper, 6, 1, 6)));
 		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 2, 4, 2), printed(helper, 5, 1, 5), printed(helper, 6, 1, 6)));
+	}
+
+	/** biome() is the biome at the bot's feet, biome(pos) the one at pos, and None where pos is not loaded (#567). */
+	@GameTest(maxTicks = 10)
+	public void biomeIsTheBiomeAtAPosOrNoneWhereNotLoaded(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BlockPos far = helper.absolutePos(new BlockPos(3, 1, 3)).offset(1_000_000, 0, 0);
+		ScriptRun run = run(helper, bot, "print(biome())\nprint(biome(%s))\nprint(biome((%d, %d, %d)))\n"
+			.formatted(at(helper, 6, 1, 6), far.getX(), far.getY(), far.getZ()));
+		String biome = helper.getLevel().getBiome(helper.absolutePos(new BlockPos(3, 1, 3))).getRegisteredName();
+		succeedWhenPrinted(helper, bot, run, List.of(biome, biome, "None"));
+	}
+
+	/**
+	 * structures(radius) lists the structure starts whose box is within radius of the bot (#567): a plains village start
+	 * put in the area's chunks, its box from (5, 1, 5) to (7, 3, 7), some 5.7 blocks from the bot at (1, 1, 1), is not
+	 * within 4 but is within 16. The start is taken out again once the script is done.
+	 */
+	@GameTest(maxTicks = 10)
+	public void structuresListsTheStartsWithinRadius(GameTestHelper helper) {
+		ServerLevel level = helper.getLevel();
+		BlockPos low = helper.absolutePos(new BlockPos(5, 1, 5));
+		BlockPos high = helper.absolutePos(new BlockPos(7, 3, 7));
+		BoundingBox box = BoundingBox.fromCorners(low, high);
+		Structure village = level.registryAccess().lookupOrThrow(Registries.STRUCTURE).getValueOrThrow(BuiltinStructures.VILLAGE_PLAINS);
+		StructurePiece piece = new StructurePiece(StructurePieceType.JIGSAW, 0, box) {
+			@Override
+			protected void addAdditionalSaveData(StructurePieceSerializationContext context, CompoundTag tag) {
+			}
+
+			@Override
+			public void postProcess(WorldGenLevel world, StructureManager structures, ChunkGenerator generator, RandomSource random,
+				BoundingBox chunkBox, ChunkPos chunk, BlockPos pivot) {
+			}
+		};
+		ChunkPos start = ChunkPos.containing(low);
+		level.getChunk(start.x(), start.z()).setStartForStructure(village, new StructureStart(village, start, 0, new PiecesContainer(List.of(piece))));
+		box.intersectingChunks().forEach(chunk -> level.getChunk(chunk.x(), chunk.z()).addReferenceForStructure(village, start.pack()));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ScriptRun run = run(helper, bot, "s = structures(16)\nprint(len(structures(4)), len(s))\n"
+			+ "print(s[0]['id'], s[0]['at'], s[0]['low'], s[0]['high'])\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			LevelChunk startChunk = level.getChunk(start.x(), start.z());
+			Map<Structure, StructureStart> starts = new HashMap<>(startChunk.getAllStarts());
+			starts.remove(village);
+			startChunk.setAllStarts(starts);
+			box.intersectingChunks().forEach(chunk -> level.getChunk(chunk.x(), chunk.z()).getReferencesForStructure(village).remove(start.pack()));
+			List<String> expected = List.of("0 1",
+				"minecraft:village_plains " + printed(helper, 6, 2, 6) + " " + printed(helper, 5, 1, 5) + " " + printed(helper, 7, 3, 7));
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
+		});
 	}
 
 	@GameTest(maxTicks = 10)

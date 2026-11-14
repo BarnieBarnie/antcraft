@@ -199,6 +199,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("smelt", "smelt('dirt', furnace=h).reason"),
 		Map.entry("build", "build('antcraft:cobble_step', h).reason"),
 		Map.entry("block", "block(h)"),
+		Map.entry("biome", "biome(h)"),
 		Map.entry("surface", "surface(h)"),
 		Map.entry("container", "container(h)"),
 		Map.entry("mineshaft", "mineshaft([0], near=h)"),
@@ -213,7 +214,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 */
 	private static final Set<String> TAKE_NO_POSITION = Set.of("pos", "say", "wait", "stop", "home", "home_dimension",
 		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "tag_items", "held", "entities",
-		"items_near", "deaths", "last_death", "colony", "time", "is_day", "placed_scaffold", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
+		"items_near", "structures", "deaths", "last_death", "colony", "time", "is_day", "placed_scaffold", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
 		"drop_job", "health", "max_health", "attack", "needs", "cooks_in", "build_placement");
 
@@ -233,7 +234,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			source.append("print('").append(name).append("', ").append(call).append(")\n");
 			expected.add(name + " " + switch (name) {
 				case "reachable" -> "False";
-				case "block", "surface", "container", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
+				case "block", "biome", "surface", "container", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
 				case "ore_vein", "scan" -> "[]";
 				default -> Result.WRONG_DIMENSION;
 			});
