@@ -190,11 +190,11 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		int y = helper.absolutePos(new BlockPos(0, -2, 0)).getY();
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + script + " " + args.formatted(y));
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + script + ", 1]")), "run answered " + started);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
 			List<String> log = BotScripts.log(bot, Output.Level.DEBUG);
-			if (run != null && run.state() == ScriptRun.State.FAILED || log.stream().anyMatch(l -> l.startsWith("strip mine:"))) {
-				helper.fail("job failed: " + log + ", carries " + bot.getInventory().getItems() + " and " + bot.getMainHandItem());
+			if (log.stream().anyMatch(l -> l.startsWith("strip mine:"))) {
+				helper.fail("job failed: " + log + ", " + BotScripts.carries(bot));
 			}
 		});
 	}

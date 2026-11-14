@@ -128,7 +128,7 @@ public final class BotScripts {
 		helper.onEachTick(() -> {
 			for (AntBot bot : bots) {
 				if (!warnings(bot).isEmpty()) {
-					helper.fail("failed or warned: " + log(bot, Output.Level.DEBUG));
+					helper.fail("failed or warned: " + log(bot, Output.Level.DEBUG) + ", " + carries(bot));
 				}
 			}
 		});
@@ -136,8 +136,13 @@ public final class BotScripts {
 
 	private static void failIfError(GameTestHelper helper, AntBot bot) {
 		if (!errors(bot).isEmpty()) {
-			helper.fail("script error: " + log(bot, Output.Level.DEBUG));
+			helper.fail("script error: " + log(bot, Output.Level.DEBUG) + ", " + carries(bot));
 		}
+	}
+
+	/** What {@code bot} carries, for a failure message: {@code carries [inventory] and main hand}. */
+	public static String carries(AntBot bot) {
+		return "carries " + bot.getInventory().getItems() + " and " + bot.getMainHandItem();
 	}
 
 	/** A message a {@link RecordingPlayer} got, at the game time it got it. */
