@@ -38,6 +38,7 @@ HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecr
            "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
            "giant_spruce": 5600, "giant_jungle": 6500}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
+WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
 WAIT = 100  # ticks between looks at the farm while nothing has grown
 # Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
 # be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
@@ -57,18 +58,18 @@ def most(harvest=HARVEST["minecraft:birch_sapling"]):
 
 
 def harvest(kind):
-    """The ticks a tree of kind takes the bot: the mean of those memory["wood_harvest"] keeps for kind (learn), once it
+    """The ticks a tree of kind takes the bot: the mean of those memory["wood_ticks"] keeps for kind (learn), once it
     has SAMPLES trees, else HARVEST[kind]."""
-    ticks, trees = memory.get("wood_harvest", {}).get(kind, [0, 0])
-    return ticks / trees if trees >= SAMPLES else HARVEST[kind]
+    ticks = memory.get("wood_ticks", {}).get(kind, [])
+    return sum(ticks) / len(ticks) if len(ticks) >= SAMPLES else HARVEST[kind]
 
 
 def learn(kind, ticks, trees):
-    """Adds trees felled of kind in ticks, game ticks, to memory["wood_harvest"]: [ticks, trees] for each kind."""
-    h = memory.get("wood_harvest", {})
-    total, n = h.get(kind, [0, 0])
-    h[kind] = [total + ticks, n + trees]
-    memory["wood_harvest"] = h
+    """Adds trees felled of kind in ticks, game ticks, to memory["wood_ticks"]: for each kind the ticks of its last
+    WINDOW trees, each of a round's trees its mean (#662)."""
+    h = memory.get("wood_ticks", {})
+    h[kind] = (h.get(kind, []) + [ticks / trees] * trees)[-WINDOW:]
+    memory["wood_ticks"] = h
 
 
 def limit(kind, size):
@@ -265,6 +266,9 @@ def farm(kind, name, size, radius):
             learn(kind, game_time() - start, trees)
             backoff = 0
         most_cells = limit(kind, size)
+        if full and lib.cells.count(name) < most_cells:
+            say(f"cells {lib.cells.count(name)}/{most_cells}")  # it learnt it may grow (#662); "farm full" again once it is
+            full = False
         if lib.cells.count(name) < most_cells and backoff:
             backoff -= 1
         elif lib.cells.count(name) < most_cells:

@@ -237,7 +237,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * The farm keeps the ticks it spends per felled tree in memory and, from SAMPLES trees on, sizes itself from their
-	 * mean instead of HARVEST (#653). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 400; a
+	 * mean instead of HARVEST (#653; memory["wood_ticks"], a list of the last WINDOW, #662). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 400; a
 	 * third felled in the farm's first round makes the mean over GROWTH, so most() is 1 and the farm of one cell, run
 	 * with no size, is full. With HARVEST it would have gone on to a second cell.
 	 */
@@ -253,15 +253,15 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			import lib.result
 			import lib.treefarm
 			tree = [True]
-			memory["wood_harvest"] = {kind: [4 * int(jobs.wood_farm.GROWTH), 2]}
+			memory["wood_ticks"] = {kind: [2 * jobs.wood_farm.GROWTH, 2 * jobs.wood_farm.GROWTH]}
 			print(jobs.wood_farm.harvest(kind))
 			def reaped(k, b, radius, told):
 			    tree[0] = False
 			    wait(3)
 			    return lib.result.result()
 			def waited(ticks):
-			    h = memory["wood_harvest"][kind]
-			    print(h[1], h[0] > 4 * int(jobs.wood_farm.GROWTH), jobs.wood_farm.harvest(kind) > jobs.wood_farm.GROWTH)
+			    h = memory["wood_ticks"][kind]
+			    print(len(h), jobs.wood_farm.harvest(kind) > jobs.wood_farm.GROWTH)
 			    stop()
 			jobs.wood_farm.reap = reaped
 			jobs.wood_farm.wait = waited
@@ -273,7 +273,63 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			lib.cells.count = lambda name: 1
 			jobs.wood_farm.farm(kind, "birch_farm", None, 12)
 			""");
-		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("400", "farm full", "3 True True"), "said"));
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("400", "farm full", "3 True"), "said"));
+	}
+
+	/**
+	 * harvest() is the mean of the last WINDOW trees only (#662): after three slow trees of 2 GROWTH, WINDOW quick ones
+	 * of 100 ticks (one round of two, the rest one a round) make it 100. A mean over every tree would still be some
+	 * 9000.
+	 */
+	// Measured: passes at tick 3.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 10)
+	public void harvestTimeIsTheMeanOfTheLastTrees(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			w = jobs.wood_farm
+			w.learn(kind, 6 * w.GROWTH, 3)
+			w.learn(kind, 200, 2)
+			for _ in range(w.WINDOW - 2):
+			    w.learn(kind, 100, 1)
+			print(len(memory["wood_ticks"][kind]), w.harvest(kind) == 100)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("10 True"), "said"));
+	}
+
+	/**
+	 * A full farm that learns its trees are quicker says its new limit and builds again (#662): three trees of 2 GROWTH
+	 * in memory make it full at one cell; after its first wait the test puts three of 1000 ticks there, so the limit is
+	 * 19, the farm says so and tries the next cell (gets fails, so it says what it lacks).
+	 */
+	// Measured: passes at tick 4.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void aFullFarmSaysWhenItsLimitGrows(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			import lib.result
+			import lib.treefarm
+			slow = 2 * jobs.wood_farm.GROWTH
+			memory["wood_ticks"] = {kind: [slow, slow, slow]}
+			rounds = [0]
+			def waited(ticks):
+			    rounds[0] += 1
+			    if rounds[0] > 1:
+			        stop()
+			    memory["wood_ticks"] = {kind: [1000, 1000, 1000]}
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.grown = lambda k, low, high: False
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", None, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot),
+			List.of("farm full", "cells 1/19", "next cell: no_item, lacks {'minecraft:dirt': 1}"), "said"));
 	}
 
 	/**
