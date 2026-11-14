@@ -56,17 +56,32 @@ class DocExampleTest {
 		}
 	}
 
+	/** The bundled job {@code name}, below its header comment. */
+	private static String job(String name) throws IOException {
+		return Files.readString(Path.of("src/main/resources/antcraft/scripts/jobs/" + name.replace('-', '_') + ".py")).lines()
+			.dropWhile(line -> line.startsWith("#") || line.isBlank()).collect(Collectors.joining("\n", "", "\n"));
+	}
+
 	/**
 	 * Each job's cookbook page shows the bundled job, below its header comment: docs/cookbook/get.md shows jobs/get.py,
-	 * which GetJobGameTest runs, and so on for the jobs BootstrapGameTest, GiantTreeGameTest and StripMineGameTest run.
+	 * which GetJobGameTest runs, and so on for the jobs BootstrapGameTest, GiantTreeGameTest, StripMineGameTest,
+	 * BuildGameTest, ExploreGameTest and StorageGameTest run. farm.md shows its job under "The bundled job", after the
+	 * recipe CookbookGameTest runs.
 	 */
 	@Test
 	void theJobRecipesAreTheBundledJobs() throws IOException {
-		for (String page : List.of("get", "bootstrap", "giant-tree", "strip-mine")) {
-			String job = Files.readString(Path.of("src/main/resources/antcraft/scripts/jobs/" + page.replace('-', '_') + ".py"));
-			assertEquals(example(Files.readString(Path.of("docs/cookbook/" + page + ".md")), "```python"),
-				job.lines().dropWhile(line -> line.startsWith("#") || line.isBlank()).collect(Collectors.joining("\n", "", "\n")), page);
+		for (String page : List.of("get", "bootstrap", "giant-tree", "strip-mine", "build", "explore", "store", "farm")) {
+			String heading = page.equals("farm") ? "## The bundled job" : "```python";
+			assertEquals(example(Files.readString(Path.of("docs/cookbook/" + page + ".md")), heading), job(page), page);
 		}
+	}
+
+	/** docs/cookbook/settle.md shows the steps of jobs/settle.py, as they stand in its run(...), one indent in. */
+	@Test
+	void theSettleStepsAreTheJobs() throws IOException {
+		String steps = example(Files.readString(Path.of("docs/cookbook/settle.md")), "The steps,");
+		String indented = steps.lines().map(line -> "    " + line).collect(Collectors.joining("\n", "", "\n"));
+		assertTrue(job("settle").contains(indented), "settle.md's steps are not in jobs/settle.py:\n" + steps);
 	}
 
 	/** A python block: its fence's indent (inside an admonition), then its lines up to a closing fence at that indent. */
