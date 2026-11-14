@@ -21,7 +21,7 @@ No, it is done at once.
 
 ## Cost
 
-35 instructions besides the call.
+9 instructions besides the call, and 1 for each member it lists: 10 for a colony of one, 39 for 30. Timed with 1 and 30 members (#636).
 
 ## Description
 

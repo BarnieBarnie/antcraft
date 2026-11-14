@@ -645,7 +645,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * What keeping to the colony costs a member's found(): the 64 blocks of the floor, all within the colony, cost less
-	 * than one colony() call (35 instructions) each over the same found() with WHERE None, as colony() is asked once a
+	 * than 35 instructions each over the same found() with WHERE None, as colony() is asked once a
 	 * call of found, not twice a block (#625). Measured: some 129 instructions a block before, some 26 now.
 	 */
 	@GameTest(maxTicks = 10)

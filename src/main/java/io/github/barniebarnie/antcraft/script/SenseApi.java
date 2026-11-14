@@ -84,6 +84,9 @@ public final class SenseApi {
 	private SenseApi() {
 	}
 
+	/** What {@code colony()} charges a member it lists, on top of its registered cost (#636). */
+	public static final long COLONY_MEMBER_COST = 1;
+
 	/** {@code colony()}: plain data, with the core in the dimension of its level, which need not be the bot's (#353). */
 	private static PyDict colony(ColonyManager.Found found) {
 		Colony colony = found.colony();
@@ -254,9 +257,12 @@ public final class SenseApi {
 			Container container = HopperBlockEntity.getContainerAt(bot.level(), at);
 			return container == null ? PyNone.NONE : Storage.room(container, stack);
 		});
-		natives.register("colony", 35, call -> {
+		natives.register("colony", 9, call -> {
 			Args.bind("colony", call, 0);
-			return bot(run, call).getColony().<Object>map(SenseApi::colony).orElse(PyNone.NONE);
+			return bot(run, call).getColony().<Object>map(found -> {
+				run.charge(COLONY_MEMBER_COST * found.colony().members().size());
+				return colony(found);
+			}).orElse(PyNone.NONE);
 		});
 		natives.register("deaths", call -> {
 			Args.bind("deaths", call, 0);

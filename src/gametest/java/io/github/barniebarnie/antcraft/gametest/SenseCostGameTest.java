@@ -57,7 +57,12 @@ public class SenseCostGameTest {
 		for (int i = 1; i < 30; i++) {
 			colonies.join(helper.spawn(ModEntities.ANT_BOT, 1 + i % 6, 1, 6), bot.getColony().orElseThrow().colony());
 		}
+		// And with 1, as its charge is a base and a part a member (#636).
+		AntBot alone = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		helper.setBlock(7, 1, 1, ModBlocks.COLONY_CORE);
+		colonies.join(alone, colonies.byCore(helper.absolutePos(new BlockPos(7, 1, 1))).orElseThrow());
 		ScriptRun run = BotScripts.run(bot, "wait(1000)\n");
+		ScriptRun aloneRun = BotScripts.run(alone, "wait(1000)\n");
 		helper.runAfterDelay(2, () -> {
 			// Every chunk structures(128) reads loaded, its worst case.
 			BlockPos at = bot.blockPosition();
@@ -68,6 +73,8 @@ public class SenseCostGameTest {
 			}
 			Natives natives = new Natives();
 			SenseApi.register(natives, run);
+			Natives aloneNatives = new Natives();
+			SenseApi.register(aloneNatives, aloneRun);
 			Pos feet = new Pos(at.getX(), at.getY(), at.getZ());
 			Pos box = new Pos(chest.getX(), chest.getY(), chest.getZ());
 			Map<String, NativeCall> calls = new LinkedHashMap<>();
@@ -80,6 +87,7 @@ public class SenseCostGameTest {
 			calls.put("structure_tags", call("structure_tags", "minecraft:village_plains"));
 			calls.put("room", call("room", box, "stone"));
 			calls.put("colony", call("colony"));
+			calls.put("colony 1", call("colony"));
 			calls.put("structures 16", call("structures", 16L));
 			calls.put("structures 64", call("structures", 64L));
 			calls.put("structures 128", call("structures", 128L));
@@ -87,7 +95,7 @@ public class SenseCostGameTest {
 			calls.keySet().forEach(name -> times.put(name, new long[ROUNDS]));
 			for (int round = -1; round < ROUNDS; round++) { // round -1 warms up
 				for (Map.Entry<String, NativeCall> entry : calls.entrySet()) {
-					NativeFunction function = natives.function(entry.getValue().name());
+					NativeFunction function = (entry.getKey().equals("colony 1") ? aloneNatives : natives).function(entry.getValue().name());
 					long begin = System.nanoTime();
 					for (int i = 0; i < CALLS; i++) {
 						function.call(entry.getValue());
@@ -102,10 +110,13 @@ public class SenseCostGameTest {
 			times.forEach((name, t) -> log.append(String.format(Locale.ROOT, "\n  %-15s %8.3f µs a call (rounds %s), cost %5.1f at block_tags' rate, %5.1f at 20 ns",
 				name, median(t) / 1000.0, Arrays.toString(Arrays.stream(t).map(n -> n / CALLS).toArray()), median(t) / base, median(t) / 20.0)));
 			LOGGER.info("Sense costs, {} calls a round, median of {} rounds:{}", CALLS, ROUNDS, log);
-			// colony() is priced at what it measures, within a factor 2 at block_tags' rate (#631).
-			double colony = median(times.get("colony")) / base;
-			helper.assertTrue(natives.cost("colony") <= 2 * colony && natives.cost("colony") >= colony / 2,
-				String.format(Locale.ROOT, "colony() costs %d, measured %.1f", natives.cost("colony"), colony));
+			// colony() is priced at what it measures with 1 and 30 members, within a factor 2 at block_tags' rate (#631, #636).
+			for (int members : new int[] {1, 30}) {
+				double colony = median(times.get(members == 1 ? "colony 1" : "colony")) / base;
+				long charge = natives.cost("colony") + SenseApi.COLONY_MEMBER_COST * members;
+				helper.assertTrue(charge <= 2 * colony && charge >= colony / 2,
+					String.format(Locale.ROOT, "colony() with %d members costs %d, measured %.1f", members, charge, colony));
+			}
 			helper.succeed();
 		});
 	}
