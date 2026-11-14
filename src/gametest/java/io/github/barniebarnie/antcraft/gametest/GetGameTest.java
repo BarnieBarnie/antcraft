@@ -200,6 +200,46 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** 6 spruce planks in a chest, a crafting table by the bot, no log or tree: get borrows the planks for a spruce trapdoor (#560). */
+	@GameTest(maxTicks = 30)
+	public void borrowsPlanksFromAChestForATrapdoor(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.SPRUCE_PLANKS, 6));
+		helper.setBlock(3, 1, 5, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("spruce_trapdoor", radius=8)
+			print(r["ok"], r["reason"], count("spruce_trapdoor"), [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 2 [('minecraft:spruce_planks', 6)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
+	 * 2 sticks in a chest, one oak log carried, a crafting table by the bot, no tree: get borrows the sticks for a wooden
+	 * pickaxe, so the log's 4 planks do, instead of the 2 logs of planks it needs without them (#560).
+	 */
+	@GameTest(maxTicks = 30)
+	public void borrowsSticksFromAChestForAPickaxe(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.STICK, 2));
+		helper.setBlock(3, 1, 5, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG));
+		run(helper, bot, """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("wooden_pickaxe", radius=8)
+			print(r["ok"], r["reason"], count("wooden_pickaxe"), [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 1 [('minecraft:stick', 2)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
 	/**
 	 * An empty bot, no chest, exposed iron ore in sight: a stone axe for few logs, an iron one for many; nothing is done.
 	 * Without the ore in sight the make cost digs stairs for it (#529), and the stone axes win; without coal ore it burns

@@ -120,8 +120,9 @@ def key(item):
 
 def get(item, n=1, radius=32):
     """Makes the bot carry at least n of item, by the first of: what it carries; the chests of lib.stock within radius,
-    borrowed, as many as they hold, the rest by what follows; SOURCES[item], with ensure_tool first; crafting, getting
-    each raw item lib.craft.plan lists, then lib.craft.craft_here. Gives result(): ok, no_recipe with missing for an item
+    borrowed, as many as they hold, the rest by what follows; SOURCES[item], with ensure_tool first; crafting, taking
+    what the plan crafts on the way from those chests (intermediate), then getting each raw item lib.craft.plan still
+    lists, then lib.craft.craft_here. Gives result(): ok, no_recipe with missing for an item
     it can neither gather nor craft, cycle where getting it waits on itself, or the reason a step failed with. Where it
     fails it gives back what it borrowed during this call (lib.borrow.give_back), not what was borrowed before it."""
     item = key(item)
@@ -142,7 +143,9 @@ def get(item, n=1, radius=32):
 
 
 def resolve(item, n, radius):
-    if lib.stock.take_up_to(item, n, radius)["ok"]:
+    # One list of chests for the item and its intermediates: a scan waits on a budget all bots share.
+    chests = lib.stock.chests(radius)
+    if lib.stock.take_up_to(item, n, chests=chests)["ok"]:
         return result()
     s = SOURCES.get(item)
     if s is not None:
@@ -151,6 +154,8 @@ def resolve(item, n, radius):
         return result("no_recipe", None, {item: n - count(item)})
     for _ in range(ROUNDS):
         p = lib.craft.plan(item, n)
+        while p["gather"] and intermediate(p, item, chests):
+            p = lib.craft.plan(item, n)
         if item in p["gather"]:
             return result("no_recipe", None, {item: n - count(item)})
         if p["no_tool"]:
@@ -169,6 +174,20 @@ def resolve(item, n, radius):
             if not r["ok"]:
                 return r
     return lib.craft.craft_here(item, n)
+
+
+def intermediate(p, item, chests):
+    """Takes one step's item of p, a plan for item, from chests, the last step first (sticks before the planks they are
+    made of): as many as the step makes, borrowed (lib.stock.take_from). Whether the bot carries more of it (#560).
+    ponytail: the exact item of the step, so oak planks the plan picked are not birch planks in a chest."""
+    for step, k, how in reversed(p["crafts"]):
+        if step == item:
+            continue
+        before = count(step)
+        lib.stock.take_up_to(step, before + k, chests=chests)
+        if count(step) > before:
+            return True
+    return False
 
 
 def wood_for_coal(k, radius):
