@@ -84,7 +84,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** No chest left within 3 blocks (a neighbouring test's chest may be within 16): the bot keeps the items, names them in missing and still lists them as borrowed. */
+	/** No chest left (a neighbouring test's chests are out of every scan): the bot keeps the items, names them in missing and still lists them as borrowed. */
 	@GameTest(maxTicks = 50)
 	public void keepsWhatNoChestTakes(GameTestHelper helper) {
 		chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 4));
@@ -94,7 +94,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			a = %s
 			borrow(a, "oak_planks", 4)
 			mine(a)
-			r = give_back(radius=3)
+			r = give_back()
 			print(r["ok"], r["reason"], r["missing"], len(borrowed()), count("oak_planks"))
 			""".formatted(pos(helper, CHEST)));
 		failOnError(helper, bot);

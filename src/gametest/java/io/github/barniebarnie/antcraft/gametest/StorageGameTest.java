@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * {@code lib/storage.py} and {@code jobs/store.py} (#572): deposit puts each item with its kind and keeps the tools, full
  * chests leave the items carried and named in missing, sort gathers each item into one chest, and the job deposits and
- * goes home; room lets deposit and sort skip a full chest without walking to it (#584). Each script passes radius 8 so a neighbouring test's chest is never one of its chests.
+ * goes home; room lets deposit and sort skip a full chest without walking to it (#584). Each script passes radius 8 so its chest scans end in a tick or two of the scan budget all bots share; a neighbouring test's chests are out of every scan anyway (GameTests.hidesContainer).
  */
 public class StorageGameTest implements CustomTestMethodInvoker {
 	@Override

@@ -21,8 +21,8 @@ import net.minecraft.world.level.block.state.properties.ChestType;
 
 /**
  * {@code lib/depot.py} (#604): a row of chests from (1, 1, 1) east, one category each. store puts each item in a chest of
- * its category and, when they are full, places a new chest at the next slot of the row. Radius 8 keeps a neighbouring
- * test's chests out of lib.get.
+ * its category and, when they are full, places a new chest at the next slot of the row. A neighbouring test's
+ * chests are out of every scan (GameTests.hidesContainer).
  */
 public class DepotGameTest implements CustomTestMethodInvoker {
 	private static final String DEPOT = """
@@ -52,7 +52,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.APPLE, 2));
 		bot.getInventory().addItem(new ItemStack(Items.CHEST, 4));
 		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
-			r = lib.depot.store("wood", radius=8)
+			r = lib.depot.store("wood")
 			print(r["ok"], len(inventory()), len(lib.depot.chests("wood")), len(lib.depot.chests("wood", "sticks")))
 			""");
 		helper.succeedWhen(() -> {
@@ -85,7 +85,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 10));
 		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
-			r = lib.depot.store("wood", radius=8)
+			r = lib.depot.store("wood")
 			print(r["ok"], count("oak_log"), len(lib.depot.chests("wood", "logs")))
 			""");
 		helper.succeedWhen(() -> {

@@ -6,6 +6,7 @@
 		"AutosaveAccessor",
 		"BenchmarkSelectionMixin",
 		"GameTestSelectionMixin",
+		"ScanAreaMixin",
 		"SpawnProtectionMixin"
 	],
 	"injectors": {

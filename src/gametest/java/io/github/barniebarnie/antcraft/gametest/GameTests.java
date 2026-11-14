@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,6 +19,8 @@ import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -64,6 +67,23 @@ public final class GameTests {
 		// A bot that died in the test would otherwise come back at its home in the test's area after the test, into
 		// whatever test runs there next. Every level: a bot waits in the level of its home, not of where it died.
 		onEnd(helper, () -> forgetRespawns(helper.getLevel().getServer(), bounds));
+		AREAS.add(bounds);
+		onEnd(helper, () -> AREAS.remove(bounds));
+	}
+
+	/** The areas, in absolute positions, of the tests that {@link #start} started and that have not ended. */
+	private static final Set<AABB> AREAS = ConcurrentHashMap.newKeySet();
+
+	/**
+	 * Whether a scan by {@code bot} leaves out the container (chest, barrel...) at the absolute {@code pos}: one outside
+	 * the area of the bot's test, the running test's area that holds the bot, else the nearest (#598). So {@code lib.get}
+	 * and {@code lib.stock} never take from a neighbouring test's chests, whatever radius a test passes. A scan's other
+	 * blocks are left alone. See ScanAreaMixin.
+	 */
+	public static boolean hidesContainer(Entity bot, BlockPos pos) {
+		Vec3 at = bot.position();
+		AABB area = AREAS.stream().min(Comparator.comparingDouble(a -> a.contains(at) ? -1 : a.distanceToSqr(at))).orElse(null);
+		return area != null && !area.contains(Vec3.atCenterOf(pos)) && bot.level().getBlockEntity(pos) instanceof Container;
 	}
 
 	/** Forgets every bot waiting to respawn at a home in {@code bounds}, in every level: what {@link #start} does at a test's end. */

@@ -20,7 +20,8 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
  * {@code lib/stock.py} (#506): fetch from the chests at (6, 1, 3) (near) and (1, 1, 1) (far); the bot starts at (5, 1, 5).
- * Each test passes radius=8 so a neighbouring test's chest is never one of its chests.
+ * Each test passes radius=8 so its scans read few blocks of the budget all bots share and end in a tick or two; a
+ * neighbouring test's chests are out of every scan anyway (GameTests.hidesContainer).
  */
 public class StockGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos NEAR = new BlockPos(6, 1, 3);
@@ -126,6 +127,27 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			""".formatted(pos(helper, NEAR), far.getX(), far.getY(), far.getZ(), far.getX() + 1, far.getY(), far.getZ()));
 		failOnError(helper, bot);
 		helper.succeedWhen(() -> printed(helper, bot, "True"));
+	}
+
+	/**
+	 * A chest just outside the test's area (#598), within the radius, is not one of the bot's chests, so a test never
+	 * takes from a neighbouring test's chest; fetch takes from the one inside only.
+	 */
+	@GameTest(maxTicks = 50)
+	public void leavesOutAChestOutsideTheTestArea(GameTestHelper helper) {
+		Container near = chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 2));
+		Container out = chest(helper, new BlockPos(8, 1, 5), new ItemStack(Items.OAK_PLANKS, 6));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
+		run(helper, bot, IMPORT + """
+			print(chests(radius=8) == [%s])
+			r = fetch("oak_planks", 4, radius=8)
+			print(r["ok"], r["missing"], count("oak_planks"))
+			""".formatted(pos(helper, NEAR)));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True", "False {'oak_planks': 2} 0");
+			helper.assertTrue(count(near, Items.OAK_PLANKS) == 2 && count(out, Items.OAK_PLANKS) == 6, "planks taken");
+		});
 	}
 
 	private static Container chest(GameTestHelper helper, BlockPos at, ItemStack... stacks) {

@@ -24,8 +24,8 @@ import net.minecraft.world.level.block.Blocks;
  * {@code jobs/strip_mine.py} (#514): a bot at the south edge of the area stairs three blocks
  * down north, through stone filled under the floor, and branches north under the area, past its north edge, for the coal
  * seeded beside the tunnel; then it climbs back up. The bot carries the MINER kit (a stone pickaxe, a crafting table and
- * 16 torches) so the run does not bootstrap one, and each run passes radius 8 so a neighbouring test's chest is not one
- * of its own.
+ * 16 torches) so the run does not bootstrap one; a neighbouring test's chests are out of every scan
+ * (GameTests.hidesContainer).
  */
 public class StripMineGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos START = new BlockPos(3, 1, 7);
@@ -49,7 +49,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 1000)
 	public void minesTheSeededCoalAndComesBackUp(GameTestHelper helper) {
 		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
-		run(helper, bot, "coal 3 %d 8");
+		run(helper, bot, "coal 3 %d");
 		helper.succeedWhen(() -> mined(helper, bot, START, 3));
 	}
 
@@ -64,7 +64,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		}
 		BlockPos start = new BlockPos(0, 1, 3);
 		AntBot bot = miner(helper, start, new ItemStack(Items.STONE_PICKAXE));
-		run(helper, bot, "coal 2 %d 8 east");
+		run(helper, bot, "coal 2 %d 32 east");
 		helper.succeedWhen(() -> {
 			mined(helper, bot, start, 2);
 			helper.assertBlockPresent(Blocks.AIR, 4, -2, 2);
@@ -90,7 +90,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 			import lib.find
 			import jobs.strip_mine
 			lib.find.WHERE = lambda p: %d <= p.x <= %d and p.z >= %d
-			jobs.strip_mine.run("coal", 2, int(ARGS[0]), 8)
+			jobs.strip_mine.run("coal", 2, int(ARGS[0]))
 			""".formatted(corner.getX(), corner.getX() + 7, corner.getZ() + 3));
 		run(helper, bot, name, "%d");
 		helper.succeedWhen(() -> {
@@ -120,7 +120,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		colony.setRadius(5);
 		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		run(helper, bot, "coal 2 %d 8");
+		run(helper, bot, "coal 2 %d");
 		helper.succeedWhen(() -> {
 			mined(helper, bot, START, 2);
 			helper.assertBlockPresent(Blocks.STONE, 3, -2, 3);
@@ -139,7 +139,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		worn.setDamageValue(worn.getMaxDamage() - 10);
 		AntBot bot = miner(helper, START, worn);
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
-		run(helper, bot, "coal 3 %d 8");
+		run(helper, bot, "coal 3 %d");
 		helper.succeedWhen(() -> {
 			mined(helper, bot, START, 3);
 			helper.assertTrue(carried(bot, Items.STONE_PICKAXE) == 1, "carries " + carried(bot, Items.STONE_PICKAXE)
