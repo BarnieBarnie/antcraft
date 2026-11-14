@@ -70,6 +70,7 @@ nav = [
       "reference/modules/lib/bootstrap.md",
       "reference/modules/lib/project.md",
       "reference/modules/lib/explore.md",
+      "reference/modules/lib/farm.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

@@ -179,6 +179,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None)`, `DEEP`, `wood_for_coal(k, radius)`, `key(item)`, the resolver.
 - [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32)`, the things a job starts with.
 - [`lib/project`](modules/lib/project.md): `Step(name, do, args=(), tries=1, optional=False)`, `run(name, steps)`, `status(name)`, `reset(name)`, a list of steps that resumes where it stopped.
+- [`lib/farm`](modules/lib/farm.md): `CROPS`, `ripe(pos)`, `field(low, high)`, `till(spots)`, `plant(spots, seed=None)`, `harvest(spots)`, `tend(low, high, seed=None)`, a field harvested, tilled and replanted.
 - [`lib/explore`](modules/lib/explore.md): `spiral(centre, step=32, rings=4)`, `look(radius=64, around=16)`, `explore(rings=4, step=32, until=None)`, `seen(what)`, `report()`, the biomes and structures a bot has seen, kept in `memory["seen"]`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
@@ -204,6 +205,6 @@ The library follows a few rules, so that its functions chain into bigger ones (t
 
 The block actions (`mine`, `place`, `use`, `put`, `take`, and `craft` and `smelt` at a station given by position) walk, like `goto`, to where the bot sees the block within 4 blocks of its eyes, then work on it. Placing and using go through the game's own code with a stand-in player at the bot, so blocks and items behave as for a player: a bucket fills, a hoe wears down.
 
-A farm needs no helpers of its own: `use(soil, "#minecraft:hoes")` tills, `place(soil.up(), "wheat_seeds")` plants, `block(soil.up()).state["age"]` tells ripe wheat (7) and `mine` harvests it (see `colony.farmer`).
+A farm needs no helpers of its own: `use(soil, "#minecraft:hoes")` tills, `place(soil.up(), "wheat_seeds")` plants, `block(soil.up()).state["age"]` tells ripe wheat (7) and `mine` harvests it; [`lib/farm`](modules/lib/farm.md) does that over a field.
 
 [Writing a reference page](template.md) describes how a page is laid out and where it goes.

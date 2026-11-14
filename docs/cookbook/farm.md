@@ -57,8 +57,61 @@ while True:
 - [`place`](../reference/blocks/place.md) plants seeds on bare farmland.
 - [`take`](../reference/crafting/take.md) and [`put`](../reference/crafting/put.md) keep about one seed per spot on the bot and store the rest, and the wheat, in the chest. Both fail with `no_item` when there is nothing to move; the farm goes on without.
 
-For carrots, potatoes and beetroot, and for colonies, see the default `colony.farmer` script ([Default colony scripts](../features/colony-scripts.md)), which grows all four.
+For carrots, potatoes and beetroot, and for colonies, see the default `colony.farmer` script ([Default colony scripts](../features/colony-scripts.md)), which grows all four, or the bundled job below.
 
 ## Used here
 
 [`find_nearest`](../reference/world/find_nearest.md), [`scan`](../reference/world/scan.md), [`block`](../reference/world/block.md), [`memory`](../reference/types/memory.md), [`mine`](../reference/blocks/mine.md), [`use`](../reference/blocks/use.md), [`place`](../reference/blocks/place.md), [`has`](../reference/inventory/has.md), [`count`](../reference/inventory/count.md), [`take`](../reference/crafting/take.md), [`put`](../reference/crafting/put.md), [`say`](../reference/bot/say.md), [`wait`](../reference/bot/wait.md), [`stop`](../reference/bot/stop.md), [`len`](../reference/python/len.md).
+
+## The bundled job
+
+The mod bundles a farm job over [`lib/farm`](../reference/modules/lib/farm.md) as `jobs/farm.py`. It tends a field once: start it with `/antcraft bot run jobs.farm 10 63 10 14 63 14 carrot`, the two corners of the field's soil and the crop to plant (a crop, seed or harvest such as `wheat`, `carrot`, `potato` or `beetroot`; wheat by default). Run it again, or from a loop of your own, as the crops grow.
+
+```python
+import lib.farm
+import lib.stock
+from lib.borrow import borrowed, give_back
+from lib.get import ensure_tool, get
+
+low = Pos(int(ARGS[0]), int(ARGS[1]), int(ARGS[2]))
+high = Pos(int(ARGS[3]), int(ARGS[4]), int(ARGS[5]))
+c = lib.farm.crop(ARGS[6] if len(ARGS) > 6 else "wheat")
+
+
+def farm():
+    spots = lib.farm.field(low, high)
+    till = len([s for s in spots if block(s).id in lib.farm.SOIL and block(s.up()).is_air])
+    if till:
+        r = ensure_tool("hoe", till)
+        if not r["ok"]:
+            return r
+    bare = len([s for s in spots if block(s.up()).is_air])
+    if bare and count(c[1]) < bare:
+        get(c[1], bare)
+    r = lib.farm.tend(low, high, c[1])
+    chests = lib.stock.chests()
+    for item in [c[2], lib.farm.POISON]:
+        if chests and has(item):
+            put(chests[0], item)
+    return r
+
+
+if c is None:
+    warn("farm: no crop", ARGS[6])
+else:
+    try:
+        r = farm()
+        if not r["ok"]:
+            warn("farm:", r["reason"], r["missing"])
+    finally:
+        give_back()
+        if borrowed():
+            warn("could not give back", borrowed())
+```
+
+- [`field`](../reference/modules/lib/farm.md) lists the soil of the box: farmland, dirt or grass with air or a crop over it.
+- [`ensure_tool("hoe", till)`](../reference/modules/lib/get.md) gets a hoe only where there is soil to till: carried, borrowed from a chest, or made. [`get`](../reference/modules/lib/get.md) brings the seeds for the bare spots; where there are too few, the field is still tended and its ripe crops are replanted from their own drops.
+- [`tend`](../reference/modules/lib/farm.md) harvests the ripe crops and replants them, tills the dirt and plants the rest; it says `no_item` where farmland was left bare.
+- The harvest goes into the nearest chest of [`lib/stock`](../reference/modules/lib/stock.md), and [`give_back`](../reference/modules/lib/borrow.md) returns the hoe and the seeds left over.
+
+`FarmGameTest` runs the bundled job over a 3 by 3 field around water, with a wooden hoe and seeds in a chest beside it.

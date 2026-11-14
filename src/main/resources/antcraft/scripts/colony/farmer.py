@@ -2,7 +2,7 @@
 # farms and stores the harvest in the Colony Core. It farms every building in
 # colony_memory["buildings"] whose blueprint has the role "farm" (colony.builder
 # adds what it builds there), and grows wheat, carrots, potatoes and beetroot from
-# the seeds the core holds. With soil to till it gets a hoe with lib.get.ensure_tool:
+# the seeds the core holds, with lib.farm. With soil to till it gets a hoe with lib.get.ensure_tool:
 # carried, from the core or borrowed from another chest of the colony, or made,
 # felling the colony's trees for it.
 # What it harvests it replants with the same crop, and it keeps one of each
@@ -13,18 +13,8 @@
 # delete it and the default comes back when the server starts.
 from colony.common import core, store
 from lib.borrow import give_back
+from lib.farm import CROPS, POISON, SOIL, harvest, plant, till
 from lib.stock import take_up_to
-
-# (crop block, seed item, harvest item, ripe age); wheat first, so it is planted
-# where the bot carries several kinds of seed.
-CROPS = [
-    ("minecraft:wheat", "minecraft:wheat_seeds", "minecraft:wheat", 7),
-    ("minecraft:carrots", "minecraft:carrot", "minecraft:carrot", 7),
-    ("minecraft:potatoes", "minecraft:potato", "minecraft:potato", 7),
-    ("minecraft:beetroots", "minecraft:beetroot_seeds", "minecraft:beetroot", 3),
-]
-POISON = "minecraft:poisonous_potato"
-SOIL = ["minecraft:dirt", "minecraft:grass_block"]
 
 
 def farm_spots():
@@ -38,22 +28,11 @@ def farm_spots():
 
 
 def tend(soil):
-    """Harvests the crop on soil when it is ripe, tills the soil and plants the
-    seeds of the crop it harvested, or else of the first crop it has seeds of."""
-    crop = block(soil.up())
-    seeds = [c[1] for c in CROPS]
-    for c in CROPS:
-        if crop.id == c[0] and crop.state["age"] >= c[3]:
-            mine(soil.up())
-            crop = block(soil.up())
-            seeds = [c[1]] + seeds
-    if block(soil).id in SOIL and crop.is_air:
-        use(soil, "#minecraft:hoes")
-    if block(soil).id == "minecraft:farmland" and block(soil.up()).is_air:
-        for seed in seeds:
-            if has(seed):
-                place(soil.up(), seed)
-                break
+    """Harvests the crop on soil when it is ripe and replants it, else tills the soil and plants the first crop it has
+    seeds of (lib.farm)."""
+    harvest([soil])
+    till([soil])
+    plant([soil])
 
 
 core()  # a bot in no colony says so and stops
@@ -61,9 +40,9 @@ core()  # a bot in no colony says so and stops
 from lib.get import ensure_tool
 while True:
     spots = farm_spots()
-    till = len([s for s in spots if block(s).id in SOIL])
-    if till:
-        ensure_tool("hoe", till)
+    soil = len([s for s in spots if block(s).id in SOIL])
+    if soil:
+        ensure_tool("hoe", soil)
     bare = len([s for s in spots if block(s.up()).is_air])
     for c in CROPS:
         if bare > 0:
