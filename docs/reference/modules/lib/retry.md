@@ -4,7 +4,7 @@ Trying an action again when it failed for a passing reason, such as a mob in the
 
 ## `retry(action, args, tries=5, again=None, delay=4, kwargs=None)`
 
-Calls `action` with the values of the tuple `args` as its arguments until it succeeds, fails with a reason that is not in `again`, or it was called `tries` times. Waits `delay` ticks between tries, never after a success or the last try. `action` is any function that gives a [`Result`](../../types/result.md): an action such as `place` (a function is a value, see [Functions](../../../language/functions.md#functions-as-values)) or one of your own.
+Calls `action` with the values of the tuple `args` as its arguments until it succeeds, fails with a reason that is not in `again`, or it was called `tries` times. Waits `delay` ticks between tries, never after a success or the last try. `action` is any function that gives a [`Result`](../../types/result.md): an action such as `place` (a function is a value, see [Functions](../../../language/functions.md#functions-as-values)) or one of your own. A library doer that gives a [`result()`](result.md) dict works too: its `ok` and `reason` are read instead.
 
 - **`again`**: the reasons to try again; `None` means `AGAIN`.
 - **`kwargs`**: a dict of keyword arguments for `action`, such as `{"radius": 8}`; `None` means none. `action` is called as `action(*args, **kwargs)` (see [Spreading a list into arguments](../../../language/functions.md#spreading-a-list-into-arguments)).

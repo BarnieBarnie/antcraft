@@ -23,7 +23,7 @@ The library is written the Unix way: small functions that each do one thing well
 
 ```text
  jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py   run with bot run jobs.<job> [args]
- kits         lib/bootstrap  lib/gather                                                a set of things a job starts with; make and gather over get
+ kits         lib/bootstrap  lib/gather  lib/project                                   a set of things a job starts with; make and gather over get; resumable steps
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine     one skill each, preconditions assumed
  primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/retry  lib/home             no ticks, or a single action
@@ -67,6 +67,10 @@ New modules are marked *new*; the others exist and grow.
 ### Kits: `lib/bootstrap`
 
 `kit(items=KIT)` gets each of `KIT`, a list of `(item, n)` in order: `("stone_pickaxe", 1)`, `("stone_axe", 1)`, `("stone_shovel", 1)`, `("stone_sword", 1)`, `("crafting_table", 1)`, `("furnace", 1)`, `("torch", 16)`. A job calls `lib.bootstrap.kit()` first, or `kit(MINER)` with a list of its own, and works with what it got.
+
+### Kits: `lib/project`
+
+`run(name, steps)` does a list of `Step(name, do, args=(), tries=1, optional=False)` in order and keeps the names of those done in `memory["projects"][name]`, so a project (settle a base, build a house, mine out a level) run again after a reload, a death or a stop goes on at the step it was on (#569). Each step goes through `lib.retry` up to `tries`; an optional step that fails is noted in `failed` and passed, a required one stops the project with its reason. It ends with `borrow.give_back()`, also on a failure, and gives `result()` with `missing` the list of the steps not done. `status(name)` and `reset(name)` read and forget it.
 
 ## Engine gaps
 
