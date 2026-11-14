@@ -20,7 +20,8 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * {@code lib/storage.py} and {@code jobs/store.py} (#572): deposit puts each item with its kind and keeps the tools, full
  * chests leave the items carried and named in missing, sort gathers each item into one chest, and the job deposits and
- * goes home; room lets deposit and sort skip a full chest without walking to it (#584). Each script passes radius 8 so its chest scans end in a tick or two of the scan budget all bots share; a neighbouring test's chests are out of every scan anyway (GameTests.hidesContainer).
+ * goes home; room lets deposit and sort skip a full chest without walking to it (#584). A neighbouring test's chests are out of every
+ * scan, which reads no further than the test's area (GameTests.hides).
  */
 public class StorageGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -46,7 +47,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 3));
 		run(helper, bot, """
 			import lib.storage
-			r = lib.storage.deposit(radius=8)
+			r = lib.storage.deposit()
 			print(r["ok"], count("cobblestone"), count("dirt"), has("stone_pickaxe"))
 			""");
 		helper.succeedWhen(() -> {
@@ -69,7 +70,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 5));
 		run(helper, bot, """
 			import lib.storage
-			r = lib.storage.deposit(radius=8)
+			r = lib.storage.deposit()
 			print(r["ok"], r["reason"], r["missing"], count("dirt"))
 			""");
 		helper.succeedWhen(() -> finished(helper, bot, List.of("False no_space {'minecraft:dirt': 5} 5")));
@@ -97,7 +98,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		});
 		run(helper, bot, """
 			import lib.storage
-			r = lib.storage.deposit(radius=8)
+			r = lib.storage.deposit()
 			print(r["ok"], count("stone"))
 			""");
 		helper.succeedWhen(() -> {

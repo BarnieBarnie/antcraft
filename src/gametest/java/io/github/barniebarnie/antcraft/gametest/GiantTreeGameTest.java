@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 /**
  * {@code jobs/giant_tree.py} (#513): the bot fells the giant spruce of {@link TreesGameTest#plantGiant}, crowned with
  * leaves, with an axe from {@code ensure_tool}, scaffold dirt and saplings borrowed from a chest, and gives back what it
- * borrowed. Each run passes radius 8 so a neighbouring test's chest or tree is not one of its own.
+ * borrowed. A neighbouring test's chest or tree is out of every scan (GameTests.hides).
  */
 public class GiantTreeGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(1, 1, 6);
@@ -45,7 +45,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
-		run(helper, bot, "8");
+		run(helper, bot, "");
 		helper.succeedWhen(() -> {
 			felled(helper, bot);
 			helper.assertTrue(bot.getInventory().countItem(Items.STONE_AXE) == 1, "no stone axe made");
@@ -67,7 +67,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		}
 		helper.setBlock(6, 5, 6, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
-		run(helper, bot, "8");
+		run(helper, bot, "");
 		helper.succeedWhen(() -> {
 			felled(helper, bot);
 			helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(6, 1, 6));
@@ -81,7 +81,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 			new ItemStack(Items.SPRUCE_SAPLING, 4));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos tree = helper.absolutePos(new BlockPos(4, 1, 4));
-		run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ() + " 8");
+		run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
 		helper.succeedWhen(() -> {
 			felled(helper, bot);
 			helper.assertTrue(bot.getInventory().countItem(Items.IRON_AXE) == 0, "the bot kept the iron axe");
@@ -119,7 +119,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 
 	/** Runs the job with args on bot and fails the test at once when it fails. */
 	private static void run(GameTestHelper helper, AntBot bot, String args) {
-		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.giant_tree " + args);
+		List<String> started = BotScripts.command(helper, ("antcraft bot " + bot.getStringUUID() + " run jobs.giant_tree " + args).strip());
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.giant_tree, 1]")), "run answered " + started);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();

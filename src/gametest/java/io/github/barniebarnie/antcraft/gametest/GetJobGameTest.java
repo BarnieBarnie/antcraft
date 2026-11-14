@@ -18,8 +18,8 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
- * The default job {@code jobs/get.py} (#512), run by its name {@code jobs.get} as a player would. Each run passes a radius
- * of 8, so a neighbouring test's tree, stone or chest is not one of its own.
+ * The default job {@code jobs/get.py} (#512), run by its name {@code jobs.get} as a player would. A neighbouring test's
+ * tree, stone or chest is out of every scan (GameTests.hides).
  */
 public class GetJobGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -47,7 +47,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(6, 2, 1, Blocks.IRON_ORE);
 		helper.setBlock(6, 1, 2, Blocks.IRON_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
-		run(helper, bot, "iron_pickaxe 1 8", "got 1 iron_pickaxe",
+		run(helper, bot, "iron_pickaxe 1", "got 1 iron_pickaxe",
 			() -> helper.assertTrue(bot.getInventory().countItem(Items.IRON_PICKAXE) == 1, "no iron pickaxe"));
 	}
 
@@ -55,7 +55,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 20)
 	public void unknownRawItemFailsWithNoRecipe(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
-		run(helper, bot, "feather 2 8", "no feather: no_recipe {'minecraft:feather': 2}", () -> { });
+		run(helper, bot, "feather 2", "no feather: no_recipe {'minecraft:feather': 2}", () -> { });
 	}
 
 	/** The item asked for, taken from a chest, is kept: only what was borrowed on the way goes back. */
@@ -66,7 +66,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.IRON_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, "iron_pickaxe 1 8", "got 1 iron_pickaxe", () -> {
+		run(helper, bot, "iron_pickaxe 1", "got 1 iron_pickaxe", () -> {
 			helper.assertTrue(bot.getInventory().countItem(Items.IRON_PICKAXE) == 1, "no iron pickaxe");
 			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
 		});
@@ -96,7 +96,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 			}
 			if (!started[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
 				started[0] = true;
-				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get #minecraft:planks 2 8");
+				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get #minecraft:planks 2");
 			}
 		});
 		helper.succeedWhen(() -> {
@@ -132,7 +132,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 			}
 			if (!started[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
 				started[0] = true;
-				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get oak_planks 2 8");
+				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get oak_planks 2");
 			}
 		});
 		helper.succeedWhen(() -> {

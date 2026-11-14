@@ -90,6 +90,17 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * An oak just outside the test area, nearer the bot than the oak inside, is out of the bot's scans at the default
+	 * radius (GameTests.hides, #618): next_tree finds the inside one.
+	 */
+	@GameTest(maxTicks = 20)
+	public void nextTreeLeavesOutATreeOutsideTheTestArea(GameTestHelper helper) {
+		plantTree(helper, new BlockPos(8, 1, 1), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 1);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree() == " + tree(helper) + ")\n", List.of("True"));
+	}
+
+	/**
 	 * A crimson stem on netherrack under a nether wart block is a tree, as the nylium under a huge fungus's stem turns to
 	 * netherrack (#575, #582); an oak log on netherrack under leaves is not.
 	 */
@@ -133,6 +144,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 20)
 	public void nextTreeLooksNearTheBotFirst(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		GameTests.scansFreely(helper, bot);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree() == " + tree(helper) + ")\n", List.of("True"));
 		ScriptRun run = bot.getScript();
 		helper.onEachTick(() -> {
@@ -146,6 +158,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 20)
 	public void lowLogLooksNearTheBotFirst(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		GameTests.scansFreely(helper, bot);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.low_log() == " + tree(helper) + ")\n", List.of("True"));
 		ScriptRun run = bot.getScript();
 		helper.onEachTick(() -> {

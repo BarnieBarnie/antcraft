@@ -20,8 +20,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
  * {@code lib/stock.py} (#506): fetch from the chests at (6, 1, 3) (near) and (1, 1, 1) (far); the bot starts at (5, 1, 5).
- * Each test passes radius=8 so its scans read few blocks of the budget all bots share and end in a tick or two; a
- * neighbouring test's chests are out of every scan anyway (GameTests.hidesContainer).
+ * A neighbouring test's chests are out of every scan, which reads no further than the test's area (GameTests.hides).
  */
 public class StockGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos NEAR = new BlockPos(6, 1, 3);
@@ -44,8 +43,8 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, IMPORT + """
 			a = %s
 			b = %s
-			print(chests(radius=8) == [a, b], where("oak_planks", radius=8) == [a, b], where("dirt", radius=8))
-			r = fetch("oak_planks", 10, radius=8)
+			print(chests() == [a, b], where("oak_planks") == [a, b], where("dirt"))
+			r = fetch("oak_planks", 10)
 			print(r["ok"], count("oak_planks"), [(x["chest"] == a, x["n"]) for x in borrowed()])
 			""".formatted(pos(helper, NEAR), pos(helper, FAR)));
 		failOnError(helper, bot);
@@ -64,7 +63,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 1));
 		run(helper, bot, IMPORT + """
-			r = fetch("oak_planks", 10, radius=8)
+			r = fetch("oak_planks", 10)
 			print(r["ok"], r["reason"], r["missing"], count("oak_planks"), borrowed())
 			""");
 		failOnError(helper, bot);
@@ -81,7 +80,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 10));
 		run(helper, bot, IMPORT + """
-			r = fetch("oak_planks", 10, radius=8)
+			r = fetch("oak_planks", 10)
 			print(r["ok"], count("oak_planks"), borrowed())
 			""");
 		failOnError(helper, bot);
@@ -123,7 +122,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			a = %s
 			b = Pos(%d, %d, %d, dimension())
 			memory["chests"] = [Pos(%d, %d, %d, "minecraft:the_nether"), b]
-			print(chests(radius=8) == [a, b])
+			print(chests() == [a, b])
 			""".formatted(pos(helper, NEAR), far.getX(), far.getY(), far.getZ(), far.getX() + 1, far.getY(), far.getZ()));
 		failOnError(helper, bot);
 		helper.succeedWhen(() -> printed(helper, bot, "True"));
@@ -139,8 +138,8 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		Container out = chest(helper, new BlockPos(8, 1, 5), new ItemStack(Items.OAK_PLANKS, 6));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
 		run(helper, bot, IMPORT + """
-			print(chests(radius=8) == [%s])
-			r = fetch("oak_planks", 4, radius=8)
+			print(chests() == [%s])
+			r = fetch("oak_planks", 4)
 			print(r["ok"], r["missing"], count("oak_planks"))
 			""".formatted(pos(helper, NEAR)));
 		failOnError(helper, bot);

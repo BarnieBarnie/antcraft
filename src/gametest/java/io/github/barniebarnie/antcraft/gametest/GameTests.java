@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BooleanSupplier;
@@ -19,11 +20,12 @@ import net.minecraft.gametest.framework.GameTestInfo;
 import net.minecraft.gametest.framework.GameTestListener;
 import net.minecraft.gametest.framework.GameTestRunner;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,23 +69,67 @@ public final class GameTests {
 		// A bot that died in the test would otherwise come back at its home in the test's area after the test, into
 		// whatever test runs there next. Every level: a bot waits in the level of its home, not of where it died.
 		onEnd(helper, () -> forgetRespawns(helper.getLevel().getServer(), bounds));
-		AREAS.add(bounds);
-		onEnd(helper, () -> AREAS.remove(bounds));
+		Area area = new Area(helper.getLevel(), bounds);
+		AREAS.add(area);
+		onEnd(helper, () -> AREAS.remove(area));
 	}
 
-	/** The areas, in absolute positions, of the tests that {@link #start} started and that have not ended. */
-	private static final Set<AABB> AREAS = ConcurrentHashMap.newKeySet();
+	/** A test's area, in absolute positions, and its level. */
+	private record Area(Level level, AABB box) {
+	}
+
+	/** The areas of the tests that {@link #start} started and that have not ended. */
+	private static final Set<Area> AREAS = ConcurrentHashMap.newKeySet();
 
 	/**
-	 * Whether a scan by {@code bot} leaves out the container (chest, barrel...) at the absolute {@code pos}: one outside
-	 * the area of the bot's test, the running test's area that holds the bot, else the nearest (#598). So {@code lib.get}
-	 * and {@code lib.stock} never take from a neighbouring test's chests, whatever radius a test passes. A scan's other
-	 * blocks are left alone. See ScanAreaMixin.
+	 * Whether a scan by {@code bot} leaves out the block at the absolute {@code pos}: any block beside the area of the
+	 * bot's test, the running test's area in its level that holds the bot, else the nearest (#598, #618). So a bot never
+	 * finds a neighbouring test's chests, trees or stone, whatever radius a test passes. Blocks above or below the area
+	 * are no other test's, so they are left in, such as the top of a tree taller than the area. See ScanAreaMixin.
 	 */
-	public static boolean hidesContainer(Entity bot, BlockPos pos) {
+	public static boolean hides(Entity bot, BlockPos pos) {
+		AABB area = area(bot);
+		return area != null && (pos.getX() < area.minX || pos.getX() >= area.maxX || pos.getZ() < area.minZ || pos.getZ() >= area.maxZ);
+	}
+
+	/**
+	 * {@code radius} cut down to the farthest block of the bot's test area from {@code center} (#618), so a scan of
+	 * radius 32 reads its few thousand blocks and not some 137,000 of the scan budget all bots share.
+	 */
+	public static int scanRadius(Entity bot, long x, long y, long z, int radius) {
+		AABB area = area(bot);
+		if (area == null) {
+			return radius;
+		}
+		double dx = Math.max(Math.abs(x - area.minX), Math.abs(area.maxX - 1 - x));
+		double dy = Math.max(Math.abs(y - area.minY), Math.abs(area.maxY - 1 - y));
+		double dz = Math.max(Math.abs(z - area.minZ), Math.abs(area.maxZ - 1 - z));
+		return (int) Math.min(radius, Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz)));
+	}
+
+	/** The bots whose scans are not kept to their test's area: {@link #scansFreely}. */
+	private static final Set<UUID> FREE = ConcurrentHashMap.newKeySet();
+
+	/**
+	 * Lets {@code bot}'s scans read their whole radius and find blocks outside its test's area until the test ends: for a
+	 * test of what a scan reads or costs, or of a bot that works away from its area (a portal far off).
+	 */
+	public static void scansFreely(GameTestHelper helper, Entity bot) {
+		FREE.add(bot.getUUID());
+		onEnd(helper, () -> FREE.remove(bot.getUUID()));
+	}
+
+	/**
+	 * The area of {@code bot}'s test: the running test's area in its level that holds it, else the nearest; null when
+	 * none runs there or the bot scans freely.
+	 */
+	private static @Nullable AABB area(Entity bot) {
+		if (FREE.contains(bot.getUUID())) {
+			return null;
+		}
 		Vec3 at = bot.position();
-		AABB area = AREAS.stream().min(Comparator.comparingDouble(a -> a.contains(at) ? -1 : a.distanceToSqr(at))).orElse(null);
-		return area != null && !area.contains(Vec3.atCenterOf(pos)) && bot.level().getBlockEntity(pos) instanceof Container;
+		return AREAS.stream().filter(a -> a.level() == bot.level()).map(Area::box)
+			.min(Comparator.comparingDouble(a -> a.contains(at) ? -1 : a.distanceToSqr(at))).orElse(null);
 	}
 
 	/** Forgets every bot waiting to respawn at a home in {@code bounds}, in every level: what {@link #start} does at a test's end. */

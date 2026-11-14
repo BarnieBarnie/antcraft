@@ -205,6 +205,7 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 30)
 	public void aBigScanSpreadsOverTicksAndCostsInstructions(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		GameTests.scansFreely(helper, bot);
 		ScriptRun run = run(helper, bot, "found = scan('sponge', radius=32)\nprint(isinstance(found, list))\n");
 		int[] scanning = {0};
 		helper.onEachTick(() -> {
@@ -222,12 +223,27 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * In a game test a scan of radius 32 reads only as far as the test's area reaches (GameTests.scanRadius, #618): a
+	 * few thousand blocks, done in the tick it starts, not some 137,000 of the scan budget all bots share.
+	 */
+	@GameTest(maxTicks = 10)
+	public void aScanReadsNoFurtherThanTheTestArea(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = run(helper, bot, "found = scan('sponge', radius=32)\nprint(found)\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("[]")), "printed " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertTrue(run.executed() < 10_000 / SenseApi.BLOCKS_PER_INSTRUCTION, run.executed() + " instructions");
+		});
+	}
+
+	/**
 	 * One bot's whole-sphere scan does not hold up another bot's small search: the bots searching share each tick's
 	 * scan budget, so the small one is done while the big one still reads (#527).
 	 */
 	@GameTest(maxTicks = 10)
 	public void aSmallSearchIsNotHeldUpByAnotherBotsBigScan(GameTestHelper helper) {
 		AntBot big = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		GameTests.scansFreely(helper, big);
 		AntBot small = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
 		helper.setBlock(5, 1, 6, Blocks.EMERALD_BLOCK);
 		ScriptRun scan = run(helper, big, "print(len(scan('sponge', radius=32)))\n");

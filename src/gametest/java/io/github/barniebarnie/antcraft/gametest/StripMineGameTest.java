@@ -25,7 +25,7 @@ import net.minecraft.world.level.block.Blocks;
  * down north, through stone filled under the floor, and branches north under the area, past its north edge, for the coal
  * seeded beside the tunnel; then it climbs back up. The bot carries the MINER kit (a stone pickaxe, a crafting table and
  * 16 torches) so the run does not bootstrap one; a neighbouring test's chests are out of every scan
- * (GameTests.hidesContainer).
+ * (GameTests.hides).
  */
 public class StripMineGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos START = new BlockPos(3, 1, 7);

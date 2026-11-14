@@ -462,6 +462,8 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		BlockPos start = corner.offset(1, 1, -2);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.teleportTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
+		// Its portal is far from the test's area.
+		GameTests.scansFreely(helper, bot);
 		UUID id = bot.getUUID();
 		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));
 		GameTests.onEnd(helper, () -> {
@@ -578,6 +580,8 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		BlockPos home = overworldCorner.offset(1, 1, -2);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.teleportTo(home.getX() + 0.5, home.getY(), home.getZ() + 0.5);
+		// Its portal is far from the test's area.
+		GameTests.scansFreely(helper, bot);
 		bot.setHome(home);
 		UUID id = bot.getUUID();
 		ServerLevel nether = Objects.requireNonNull(level.getServer().getLevel(Level.NETHER));

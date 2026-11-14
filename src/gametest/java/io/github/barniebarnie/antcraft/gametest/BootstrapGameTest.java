@@ -22,7 +22,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
  * {@code lib/bootstrap.py} and {@code jobs/bootstrap.py} (#511): an empty bot gets the kit from what is around, run as
- * {@code jobs.bootstrap 8} so a neighbouring test's chest or tree is not one of its own.
+ * {@code jobs.bootstrap}; a neighbouring test's chest or tree is out of every scan (GameTests.hides).
  */
 public class BootstrapGameTest implements CustomTestMethodInvoker {
 	/** lib.bootstrap.KIT. */
@@ -83,7 +83,7 @@ public class BootstrapGameTest implements CustomTestMethodInvoker {
 	}
 
 	private static void run(GameTestHelper helper, AntBot bot) {
-		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.bootstrap 8");
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.bootstrap");
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.bootstrap, 1]")), "run answered " + started);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();

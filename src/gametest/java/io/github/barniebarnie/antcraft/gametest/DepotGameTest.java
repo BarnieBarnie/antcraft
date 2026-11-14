@@ -22,7 +22,7 @@ import net.minecraft.world.level.block.state.properties.ChestType;
 /**
  * {@code lib/depot.py} (#604): a row of chests from (1, 1, 1) east, one category each. store puts each item in a chest of
  * its category and, when they are full, places a new chest at the next slot of the row. A neighbouring test's
- * chests are out of every scan (GameTests.hidesContainer).
+ * chests are out of every scan (GameTests.hides).
  */
 public class DepotGameTest implements CustomTestMethodInvoker {
 	private static final String DEPOT = """

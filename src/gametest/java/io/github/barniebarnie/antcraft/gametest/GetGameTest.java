@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
  * {@code lib/get.py} (#508): the resolver gets anything by the cheapest of carried, chests, crafting and SOURCES, and
- * picks a tool by cost. Each test passes radius=8 so a neighbouring test's chest or tree is not one of its own.
+ * picks a tool by cost. A neighbouring test's chest or tree is out of every scan (GameTests.hides).
  */
 public class GetGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(6, 1, 3);
@@ -45,10 +45,10 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		run(helper, bot, """
 			from lib.get import get
-			r = get("stone_axe", radius=8)
+			r = get("stone_axe")
 			print(r["ok"], count("stone_axe"))
 			before = [(s.item, s.count) for s in inventory()]
-			r = get("stone_axe", radius=8)
+			r = get("stone_axe")
 			print(r["ok"], [(s.item, s.count) for s in inventory()] == before)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True 1", "True True"));
@@ -64,7 +64,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
 		run(helper, bot, """
 			from lib.get import ensure_tool
-			r = ensure_tool("hoe", 20, radius=8)
+			r = ensure_tool("hoe", 20)
 			print(r["ok"], held().item)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True minecraft:wooden_hoe"));
@@ -79,7 +79,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG));
 		run(helper, bot, """
 			from lib.get import get
-			r = get("bucket", radius=8)
+			r = get("bucket")
 			print(r["ok"], count("bucket"), count("iron_ingot"))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True 1 0"));
@@ -95,7 +95,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import ensure_tool
 			from lib.borrow import borrowed
-			r = ensure_tool("axe", 50, radius=8)
+			r = ensure_tool("axe", 50)
 			print(r["ok"], held().item, count("stone_axe"), count("cobblestone"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -116,7 +116,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			import lib.get
 			lib.get.options = lambda *a: print("costed") or []
-			r = lib.get.ensure_tool("pickaxe", 50, "stone", radius=8)
+			r = lib.get.ensure_tool("pickaxe", 50, "stone")
 			print(r["ok"], held().item)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True minecraft:stone_pickaxe"));
@@ -132,7 +132,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			import lib.get
 			from lib.borrow import borrowed
 			lib.get.options = lambda *a: print("costed") or []
-			r = lib.get.ensure_tool("pickaxe", 50, radius=8)
+			r = lib.get.ensure_tool("pickaxe", 50)
 			print(r["ok"], held().item, [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -171,7 +171,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, where(helper, 7) + """
 			import lib.get
 			lib.get.options = lambda *a: print("costed") or []
-			r = lib.get.ensure_tool("axe", 30, radius=8)
+			r = lib.get.ensure_tool("axe", 30)
 			print(r["ok"], r["reason"])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "False no_logs"));
@@ -192,7 +192,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			lib.tools.TIERS.remove("copper")
 			lib.get.options = lambda *a: print("costed") or []
 			print(lib.tools.best("axe").item, len(lib.get.lasting("axe", 1, "stone")[1]))
-			r = lib.get.ensure_tool("axe", 30, radius=8)
+			r = lib.get.ensure_tool("axe", 30)
 			print(r["ok"], held().item)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "minecraft:copper_axe 0", "True minecraft:copper_axe"));
@@ -237,7 +237,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("oak_planks", 8, radius=8)
+			r = get("oak_planks", 8)
 			print(r["ok"], count("oak_planks"), count("oak_log"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -254,7 +254,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("oak_planks", 8, radius=8)
+			r = get("oak_planks", 8)
 			print(r["ok"], count("oak_planks"), borrowed())
 			""");
 		helper.succeedWhen(() -> {
@@ -272,7 +272,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("oak_planks", 8, radius=8)
+			r = get("oak_planks", 8)
 			print(r["ok"], count("oak_planks") >= 8, [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -290,7 +290,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("spruce_trapdoor", radius=8)
+			r = get("spruce_trapdoor")
 			print(r["ok"], r["reason"], count("spruce_trapdoor"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -312,7 +312,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("wooden_pickaxe", radius=8)
+			r = get("wooden_pickaxe")
 			print(r["ok"], r["reason"], count("wooden_pickaxe"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -332,7 +332,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, where(helper, 7) + """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("crafting_table", radius=8)
+			r = get("crafting_table")
 			print(r["ok"], r["reason"], count("crafting_table"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
@@ -371,7 +371,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, where(helper, 7) + """
 			from lib.get import get
 			from lib.borrow import borrowed
-			r = get("wooden_pickaxe", radius=8)
+			r = get("wooden_pickaxe")
 			print(r["ok"], r["reason"], count("wooden_pickaxe"), count("oak_planks"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True None 1 3 [('minecraft:oak_planks', 4), ('minecraft:oak_planks', 4)]"));
@@ -389,7 +389,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
 		run(helper, bot, where(helper, 7) + """
 			from lib.get import ensure_tool
-			r = ensure_tool("pickaxe", 1, "copper", radius=8)
+			r = ensure_tool("pickaxe", 1, "copper")
 			print(r["ok"], r["reason"], held().item, count("copper_ingot"))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True None minecraft:copper_pickaxe 0"));
@@ -407,7 +407,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, where(helper, 7) + """
 			import lib.get
 			lib.get.options = lambda *a: print("costed") or []
-			r = lib.get.ensure_tool("axe", 30, radius=8)
+			r = lib.get.ensure_tool("axe", 30)
 			print(r["ok"], r["reason"])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "False no_logs"));
@@ -446,7 +446,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			import lib.tools
 			lib.tools.TIERS.remove("copper")
 			lib.get.options = lambda *a: print("costed") or []
-			r = lib.get.ensure_tool("axe", 30, radius=8)
+			r = lib.get.ensure_tool("axe", 30)
 			print(r["ok"], held().item)
 			""");
 		helper.succeedWhen(() -> {
@@ -466,7 +466,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
-			print(choose("axe", 30, radius=8)[1:3], choose("axe", 400, radius=8)[1:3], choose("axe", 30, "iron", radius=8)[1:3])
+			print(choose("axe", 30)[1:3], choose("axe", 400)[1:3], choose("axe", 30, "iron")[1:3])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "('make', 'stone') ('make', 'iron') ('make', 'iron')"));
 	}
@@ -506,7 +506,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		run(helper, bot, """
 			import lib.get
 			lib.get.BRANCH = 1000000
-			print(lib.get.make_cost("iron_axe", 2, radius=8) < 1000000)
+			print(lib.get.make_cost("iron_axe", 2) < 1000000)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True"));
 	}
@@ -580,7 +580,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			from lib.get import get, SOURCES
 			from lib.result import result
 			SOURCES["minecraft:coal"].do = lambda n, radius: result("dug_for_coal")
-			r = get("torch", 8, radius=8)
+			r = get("torch", 8)
 			print(r["ok"], r["reason"], count("torch"))
 			""");
 		helper.onEachTick(() -> {
@@ -672,9 +672,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(choose("axe", 30, radius=8)[1:3], iron.cost(1, 8)[0])
 			lib.find.WHERE = lambda p: here.distance(p) <= 2
 			print(choose("axe", 30, radius=8)[1:3], iron.cost(1, 8)[0])
-			r = ensure_tool("axe", 30, radius=8)
+			r = ensure_tool("axe", 30)
 			print(r["ok"], held().item)
-			r = get("oak_log", 1, radius=8)
+			r = get("oak_log", 1)
 			print(r["ok"], r["reason"])
 			""");
 		helper.succeedWhen(() -> {
@@ -695,7 +695,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			from lib.get import choose
-			print(choose("axe", 30, radius=8)[1:3], choose("axe", 400, radius=8)[1:3])
+			print(choose("axe", 30)[1:3], choose("axe", 400)[1:3])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "('chest', 'iron') ('make', 'iron')"));
 	}
@@ -713,7 +713,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(worn);
 		run(helper, bot, """
 			from lib.get import choose
-			print(choose("pickaxe", 30, radius=8)[1:3], choose("pickaxe", 50, radius=8)[1:3])
+			print(choose("pickaxe", 30)[1:3], choose("pickaxe", 50)[1:3])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "('chest', 'stone') ('make', 'stone')"));
 	}
@@ -736,9 +736,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			    used.append(n)
 			    return result(mine(lib.find.nearest("clay", radius)).reason)
 			SOURCES["minecraft:clay_ball"] = Source(clay, tool="shovel", tier="hand")
-			r = get("clay", radius=8)
+			r = get("clay")
 			print(r["ok"], count("clay"), count("clay_ball"), used)
-			r = get("dirt", radius=8)
+			r = get("dirt")
 			print(r["ok"], count("dirt"))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True 1 0 [4]", "True 1"));
@@ -770,7 +770,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		run(helper, bot, where(helper, 7) + """
 			from lib.get import get
-			r = get("%s", 2, radius=8)
+			r = get("%s", 2)
 			print(r["ok"], count("%s"))
 			""".formatted(item, item));
 		failOnOtherPrint(helper, bot, "True 2");
@@ -787,7 +787,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		run(helper, bot, where(helper, 7) + """
 			from lib.get import get
-			r = get("birch_sapling", radius=8)
+			r = get("birch_sapling")
 			print(r["ok"], r["reason"], r["missing"])
 			""");
 		helper.succeedWhen(() -> {
@@ -812,7 +812,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			from lib.get import get, ore, SOURCES
 			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
 			SOURCES["minecraft:lodestone"] = ore("lodestone", "minecraft:lodestone", 60)
-			r = get("lodestone", radius=8)
+			r = get("lodestone")
 			print(r["ok"], r["reason"], count("lodestone"), held().item)
 			""");
 		helper.succeedWhen(() -> {
@@ -847,7 +847,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
 			dig = lambda n, radius: lib.dig.ore("lodestone", n, radius, y=pos().y, facing="east", length=6)
 			SOURCES["minecraft:lodestone"] = Source(dig, "pickaxe", "wooden", 60, "minecraft:lodestone")
-			r = get("lodestone", radius=8)
+			r = get("lodestone")
 			print(r["ok"], r["reason"], count("lodestone"), held().item)
 			""".formatted(helper.absolutePos(new BlockPos(7, 0, 3)).getX(), helper.absolutePos(new BlockPos(7, 0, 3)).getZ(),
 				helper.absolutePos(new BlockPos(1, 0, 0)).getX()));
@@ -878,7 +878,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			from lib.get import get, SOURCES
 			from lib.result import result
 			SOURCES["minecraft:coal"].do = lambda n, radius: result("dug_for_coal")
-			r = get("iron_ingot", 8, radius=8)
+			r = get("iron_ingot", 8)
 			print(r["ok"], r["reason"], count("iron_ingot"), count("coal"))
 			""");
 		helper.onEachTick(() -> {
