@@ -1,6 +1,7 @@
 # A job: levels a plot before building on it. Run it as /antcraft bot run jobs.flatten <x1> <z1> <x2> <z2> [y] [fill],
 # such as jobs.flatten 10 10 18 18 64 cobblestone: the two corners of the plot, the height of its top, by default the
-# middle (median) height of its ground, and the block to fill with, dirt by default. It digs everything above y, up to
+# middle (median) height of its ground, and the block to fill with, by default whichever of FILLS the bot carries or
+# digs, getting dirt once it has none of them. It digs everything above y, up to
 # the highest ground of the plot but no more than TALL over y, and fills the holes at y (air, water or lava) down to
 # solid ground, getting the tools and the fill it lacks with lib.get, and gives back what it borrowed
 # (docs/reference/modules/lib/terrain.md).
@@ -19,7 +20,9 @@ rest = ARGS[4:]
 y = None
 if rest and rest[0][0] in "-0123456789":
     y = int(rest.pop(0))
-FILL = rest[0] if rest else "minecraft:dirt"
+# The fill without one given, dirt first: what the bot carries or digs before it gets dirt (#597).
+FILLS = ["minecraft:dirt", "minecraft:cobblestone", "minecraft:stone"]
+FILL = rest[0] if rest else FILLS
 ground = []
 for z in range(min(z1, z2), max(z1, z2) + 1):
     for x in range(min(x1, x2), max(x1, x2) + 1):
@@ -43,9 +46,10 @@ def flatten():
             return r
     r = lib.terrain.flatten(low, high, y, FILL)
     if r["reason"] == "missing_ingredients":
-        g = get(FILL, r["missing"][FILL])
-        if not g["ok"]:
-            return g
+        for item, n in r["missing"].items():
+            g = get(item, n)
+            if not g["ok"]:
+                return g
         r = lib.terrain.flatten(low, high, y, FILL)
     return r
 

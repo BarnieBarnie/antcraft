@@ -115,6 +115,37 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 				""", List.of("True 0"), () -> level(helper));
 	}
 
+	/** flatten fills a hole of lava, a source at (3, 2, 3) flowing down to (3, 1, 3), level like one of water (#597). */
+	// Measured: passes at tick 61.
+	@GameTest(maxTicks = 130)
+	public void flattenFillsALavaHole(GameTestHelper helper) {
+		helper.setBlock(3, 2, 3, Blocks.LAVA);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		expect(helper, bot, header(helper) + """
+				r = lib.terrain.flatten(o + (1, 1, 1), o + (4, 4, 4), y)
+				print(r["ok"], count("dirt"))
+				""", List.of("True 0"), () -> level(helper));
+	}
+
+	/**
+	 * jobs.flatten with no fill fills the hole with the cobblestone the bot carries, though it carries no dirt, rather than
+	 * getting dirt (#597).
+	 */
+	// Measured: passes at tick 7.
+	@GameTest(maxTicks = 30, skyAccess = true)
+	public void theJobFillsWithTheCobblestoneItCarries(GameTestHelper helper) {
+		helper.setBlock(2, 3, 2, Blocks.AIR);
+		helper.setBlock(2, 4, 2, Blocks.AIR);
+		helper.setBlock(1, 3, 1, Blocks.AIR);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 2));
+		runJob(helper, bot, " 2", () -> {
+			helper.assertBlockPresent(Blocks.COBBLESTONE, new BlockPos(3, 1, 3));
+			helper.assertBlockPresent(Blocks.COBBLESTONE, new BlockPos(3, 2, 3));
+		});
+	}
+
 	/**
 	 * jobs.flatten on a plot with a hole and nothing to dig, from a bot that carries no dirt, gets the two dirt it lacks
 	 * from a chest by the plot and flattens again (#586). The chest stands on a step of dirt one lower than the plot, so the

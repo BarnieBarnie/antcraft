@@ -62,9 +62,11 @@ def needs(low, high, y):
 
 def flatten(low, high, y, fill="minecraft:dirt"):
     """Mines every block of the box above y (lib.area.clear), then fills each hole at y down to solid ground with fill,
-    layer by layer bottom up, water and lava sources first in each layer, so the plot's top is level at y. Gives result():
-    ok, the reason of the mine or place that failed with at, or missing_ingredients with missing {fill: blocks left to
-    place} once the bot runs out of fill."""
+    layer by layer bottom up, water and lava sources first in each layer, so the plot's top is level at y. fill is an item
+    or a list of items, of which each block takes the first the bot has. Gives result(): ok, the reason of the mine or
+    place that failed with at, or missing_ingredients with missing {fill (the first of a list): blocks left to place}
+    once the bot runs out of fill."""
+    fills = [fill] if isinstance(fill, str) else fill
     low = Pos(low)
     high = Pos(high)
     if max(low.y, high.y) > y:
@@ -80,9 +82,13 @@ def flatten(low, high, y, fill="minecraft:dirt"):
         # Read again: flowing water comes and goes as the holes fill.
         if not _open(block(ps[i])):
             continue
-        if not has(fill):
-            return result("missing_ingredients", ps[i], {fill: len(ps) - i})
-        r = lib.retry.retry(place, (ps[i], fill))
+        item = None
+        for f in fills:
+            if item is None and has(f):
+                item = f
+        if item is None:
+            return result("missing_ingredients", ps[i], {fills[0]: len(ps) - i})
+        r = lib.retry.retry(place, (ps[i], item))
         if not r:
             return result(r.reason, ps[i])
     return result()
