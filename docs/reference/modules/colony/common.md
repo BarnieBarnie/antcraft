@@ -2,7 +2,7 @@
 
 What the default colony scripts share: finding the Colony Core and storing in and fetching from it. A module of the mod's default library: `from colony.common import core, store` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/colony/common.py`, written with [`colony`](../../colony/colony.md), `put` and [`lib/stock`](../lib/stock.md). The colony scripts take from the core with `lib.stock.take_up_to(item, n, chests=[core()])`, not borrowed.
 
-Importing it keeps the library within the colony: it sets [`lib.find.WHERE`](../lib/find.md#where) to `in_colony`, so [`lib/get`](../lib/get.md), [`lib/stock`](../lib/stock.md), [`lib/trees`](../lib/trees.md) and [`lib/dig`](../lib/dig.md) neither take from a chest nor gather a block outside the colony's radius of its core.
+Importing it keeps the library within the colony: it sets [`lib.find.WHERE`](../lib/find.md#where) to `in_colony`, so [`lib/get`](../lib/get.md), [`lib/stock`](../lib/stock.md), [`lib/trees`](../lib/trees.md) and [`lib/dig`](../lib/dig.md) neither take from a chest nor gather a block outside the colony's radius of its core, and [`lib/mine`](../lib/mine.md) mines a vein only up to it.
 
 The colony scripts themselves (`colony.lumberjack`, `colony.hauler`, `colony.builder`, `colony.farmer`, `colony.miner`) are scripts a bot runs, not modules to import; what each does and the data of their jobs is on [Default colony scripts](../../../features/colony-scripts.md).
 
@@ -12,7 +12,7 @@ The position of the colony's Colony Core, where members store what they bring in
 
 ## `in_colony(p)`
 
-Whether the position `p` lies within the colony's radius of its core; `False` for a bot in no colony. Done at once.
+Whether the position `p` lies within the colony's radius of its core, measured across (x and z): the colony's edge is a column, so a block 40 below the core within the radius is in the colony (#576). `False` for a bot in no colony. Done at once.
 
 ## `store(item)`
 

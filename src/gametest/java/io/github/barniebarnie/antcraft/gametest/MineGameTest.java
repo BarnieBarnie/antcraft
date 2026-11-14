@@ -67,12 +67,17 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	 * with a stone pickaxe there, as {@code /antcraft bot run} does.
 	 */
 	private static AntBot mine(GameTestHelper helper, BlockPos landing, int rounds) {
+		return mine(helper, landing, rounds, "");
+	}
+
+	/** As {@link #mine(GameTestHelper, BlockPos, int)}, running {@code before} ahead of {@link #SCRIPT}. */
+	private static AntBot mine(GameTestHelper helper, BlockPos landing, int rounds, String before) {
 		helper.setBlock(landing, Blocks.AIR);
 		helper.setBlock(landing.above(), Blocks.AIR);
 		helper.setBlock(landing.north(), Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, Direction.SOUTH));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, landing.getX(), landing.getY(), landing.getZ());
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
-		String name = BotScripts.libraryScript(helper, "mine_", SCRIPT.formatted(rounds));
+		String name = BotScripts.libraryScript(helper, "mine_", before + SCRIPT.formatted(rounds));
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 		return bot;
@@ -169,6 +174,33 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * mine_level keeps to lib.find.WHERE (#576), as a colony miner's in_colony does now that the colony's edge is a column:
+	 * of the iron vein beside the south branch's end, the block past the edge (x 7) stays in the wall.
+	 */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aVeinAcrossTheEdgeOfWhereIsMinedUpToIt(GameTestHelper helper) {
+		List<BlockPos> vein = List.of(new BlockPos(6, 1, 5), new BlockPos(6, 2, 5), new BlockPos(6, 2, 6));
+		BlockPos past = new BlockPos(7, 2, 5);
+		vein.forEach(pos -> helper.setBlock(pos, Blocks.IRON_ORE));
+		helper.setBlock(past, Blocks.IRON_ORE);
+		AntBot bot = mine(helper, LANDING, 1, """
+			import lib.find
+			EDGE = pos().x + 4
+			def inside(p):
+			    return p.x <= EDGE
+			lib.find.WHERE = inside
+			""");
+		failOnError(helper, () -> bot, "True None 0");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0")), "not done");
+			assertLevelDug(helper);
+			vein.forEach(pos -> helper.assertTrue(helper.getBlockState(pos).isAir(), "ore left at " + pos.toShortString()));
+			helper.assertTrue(helper.getBlockState(past).is(Blocks.IRON_ORE), "the ore past the edge was mined");
+			helper.assertTrue(inChest(helper, Items.RAW_IRON) == 3, "raw iron in the chest: " + inChest(helper, Items.RAW_IRON));
+		});
+	}
+
+	/**
 	 * Lava past the end of the south branch is sealed with a block the bot dug once the branch's end is dug, not dug into,
 	 * and the bot goes on with the north branch.
 	 */
@@ -239,6 +271,22 @@ public class MineGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.run(bot, "import lib.mine\nprint(lib.mine.tier_at(16), lib.mine.tier_at(-16), lib.mine.tier_at(-54))\n");
 		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("stone iron iron")),
+			"printed " + BotScripts.log(bot, Output.Level.PRINT) + " " + BotScripts.log(bot, Output.Level.ERROR)));
+	}
+
+	/**
+	 * SPREAD lists vanilla ores only (#576): spread gives an ore's heights from it, and the default spread, every height
+	 * of the Overworld, for an ore it has no entry for, so tier_at counts such an ore at any height: lodestone, which the
+	 * game test tags put in needs_iron_tool, makes a level at 16 an iron one.
+	 */
+	@GameTest(maxTicks = 20)
+	public void anOreWithNoSpreadIsCommonAtEveryHeight(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.run(bot, """
+			import lib.mine
+			print(lib.mine.spread("minecraft:iron_ore"), lib.mine.spread("lodestone"), lib.mine.tier_at(16, ["minecraft:lodestone"]))
+			""");
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("(-24, 320) (-64, 320) iron")),
 			"printed " + BotScripts.log(bot, Output.Level.PRINT) + " " + BotScripts.log(bot, Output.Level.ERROR)));
 	}
 

@@ -593,6 +593,24 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True")), "printed " + printed(bot)));
 	}
 
+	/**
+	 * The colony's edge is a column (#576): {@code in_colony} measures across, so a block 40 below the core within the
+	 * radius is in the colony, and one beside it just past the radius is not, however high.
+	 */
+	@GameTest(maxTicks = 20)
+	public void inColonyMeasuresTheEdgeAsAColumn(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 3, 1, 1);
+		colony.setRadius(3);
+		AntBot bot = member(helper, colony, 3, 1, 3);
+		BotScripts.run(bot, """
+			from colony.common import core, in_colony
+			c = core()
+			print(in_colony(c.down(40) + (2, 0, 2)), in_colony(c.down(40) + (3, 0, 0)), in_colony(c + (3, 0, 1)), in_colony(c.up(40) + (0, 0, 4)))
+			""");
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True False False")), "printed " + printed(bot)));
+	}
+
 	/** {@code fetch} takes a selector: one for {@code #minecraft:planks} takes birch planks from the core and leaves the dirt (#383). */
 	@GameTest(maxTicks = 20)
 	public void fetchForATagTakesMatchingItemsFromTheCore(GameTestHelper helper) {
@@ -1155,10 +1173,14 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		return mineColony(helper, 0, 1);
 	}
 
-	/** A colony at (o, 6, o) whose colony_memory["mineshaft"] asks for a level at each of {@code levels} (test-area heights). */
+	/**
+	 * A colony at (o, 6, o) whose colony_memory["mineshaft"] asks for a level at each of {@code levels} (test-area heights).
+	 * Its radius of 10 holds the whole 8x8 area from the core at its corner, so the veins of the halls and branches are in
+	 * the colony (lib.mine keeps to its edge, #576).
+	 */
 	private static Colony mineColony(GameTestHelper helper, int o, int... levels) {
 		Colony colony = colonyAt(helper, o, 6, o);
-		colony.setRadius(7);
+		colony.setRadius(10);
 		PyDict shaft = new PyDict();
 		PyList heights = new PyList();
 		for (int y : levels) {

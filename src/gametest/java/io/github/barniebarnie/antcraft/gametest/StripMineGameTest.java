@@ -5,7 +5,11 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -70,6 +74,33 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * At the edge of lib.find.WHERE the job turns square to it (#561, #576): with WHERE the area's columns from z 3 south,
+	 * the branch north stops after one block and the job branches east, along the edge, to the area's east edge (x 7),
+	 * mining the two coal in its south wall; then it turns again, has its coal and climbs back up. Nothing north of the
+	 * edge is dug, the seeded coal there neither.
+	 */
+	@GameTest(maxTicks = 1000)
+	public void turnsAtTheEdgeOfWhere(GameTestHelper helper) {
+		helper.setBlock(5, -2, 4, Blocks.COAL_ORE);
+		helper.setBlock(6, -1, 4, Blocks.COAL_ORE);
+		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
+		BlockPos corner = helper.absolutePos(BlockPos.ZERO);
+		// A copy of the job with WHERE set first: a script importing the job does not hand it its ARGS.
+		String name = BotScripts.libraryScript(helper, "strip_", """
+			import lib.find
+			lib.find.WHERE = lambda p: %d <= p.x <= %d and p.z >= %d
+			""".formatted(corner.getX(), corner.getX() + 7, corner.getZ() + 3) + job());
+		run(helper, bot, name, "coal 2 %d 8");
+		helper.succeedWhen(() -> {
+			mined(helper, bot, START, 2);
+			helper.assertBlockPresent(Blocks.AIR, 7, -2, 3);
+			helper.assertBlockPresent(Blocks.STONE, 3, -2, 2);
+			helper.assertBlockPresent(Blocks.STONE, 3, -1, 2);
+			helper.assertBlockPresent(Blocks.COAL_ORE, 4, -2, 2);
+		});
+	}
+
+	/**
 	 * The kit's pickaxe has 10 uses left, enough for the stairs but not for a branch: before the branch the job makes a
 	 * new stone one from the cobblestone the stairs gave and the two sticks it carries, and the old one breaks.
 	 */
@@ -123,9 +154,14 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	 * warns.
 	 */
 	private static void run(GameTestHelper helper, AntBot bot, String args) {
+		run(helper, bot, "jobs.strip_mine", args);
+	}
+
+	/** As {@link #run(GameTestHelper, AntBot, String)}, running the script {@code script} that runs the job. */
+	private static void run(GameTestHelper helper, AntBot bot, String script, String args) {
 		int y = helper.absolutePos(new BlockPos(0, -2, 0)).getY();
-		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.strip_mine " + args.formatted(y));
-		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.strip_mine, 1]")), "run answered " + started);
+		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + script + " " + args.formatted(y));
+		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + script + ", 1]")), "run answered " + started);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
 			List<String> log = BotScripts.log(bot, Output.Level.DEBUG);
@@ -133,6 +169,15 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 				helper.fail("job failed: " + log + ", carries " + bot.getInventory().getItems() + " and " + bot.getMainHandItem());
 			}
 		});
+	}
+
+	/** The text of the bundled jobs/strip_mine.py. */
+	private static String job() {
+		try (InputStream in = StripMineGameTest.class.getResourceAsStream("/antcraft/scripts/jobs/strip_mine.py")) {
+			return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
 	}
 
 	/** How many of item the bot carries, in its hand too. */

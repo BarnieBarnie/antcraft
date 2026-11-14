@@ -21,10 +21,12 @@ ORES = ["minecraft:coal", "minecraft:raw_iron", "minecraft:raw_copper", "minecra
 # What digging gives that it has no use for, which it drops whole: kept in the chest it would fill it.
 JUNK = ["minecraft:gravel", "minecraft:flint", "minecraft:dirt", "minecraft:granite", "minecraft:diorite", "minecraft:andesite",
         "minecraft:tuff", "minecraft:calcite", "minecraft:sand", "minecraft:red_sand", "minecraft:clay_ball"]
-# The ore blocks common at a height: (block, lowest y, highest y), from the game's ore spread.
-# ponytail: where each is common, not every height it can be (diamonds are rare at 16); a modded ore is left out.
+# The vanilla ore blocks common at a height: (block, lowest y, highest y), from the game's ore spread.
+# ponytail: where each is common, not every height it can be (diamonds are rare at 16).
 SPREAD = [("coal_ore", 0, 320), ("iron_ore", -24, 320), ("copper_ore", -16, 112), ("lapis_ore", -64, 64),
           ("gold_ore", -64, -8), ("redstone_ore", -64, -8), ("diamond_ore", -64, -8)]
+# The heights of an ore SPREAD has no entry for, such as a modded one: every height of the Overworld.
+DEFAULT_SPREAD = (-64, 320)
 # How much of the rest of what it digs it keeps to wall fluid off with; it drops the rest too.
 KEEP = 64
 # How many blocks to wall fluid off with it keeps at least, of the junk if it has nothing else.
@@ -42,10 +44,21 @@ def site(r=0):
     return mineshaft_at(kept["top"], kept["levels"], round=r, branches=kept.get("branches", 4), length=kept.get("length", 16))
 
 
-def tier_at(y):
-    """The pickaxe tier the ores common at height y need (lib.tools.tier_for of each in SPREAD): "stone" at 16, "iron"
-    at -16, where gold, redstone and diamonds are."""
-    tiers = [lib.tools.TIERS.index(lib.tools.tier_for(b)) for b, low, high in SPREAD if low <= y <= high]
+def spread(ore):
+    """(lowest y, highest y) where the ore block ore (an id, with or without minecraft:) is common: its SPREAD entry,
+    else DEFAULT_SPREAD."""
+    for b, low, high in SPREAD:
+        if b == ore.replace("minecraft:", ""):
+            return (low, high)
+    return DEFAULT_SPREAD
+
+
+def tier_at(y, ores=()):
+    """The pickaxe tier the ores common at height y need (lib.tools.tier_for of each in SPREAD and of each of ores, ore
+    block ids such as modded ones, at their spread): "stone" at 16, "iron" at -16, where gold, redstone and diamonds
+    are."""
+    blocks = [b for b, low, high in SPREAD] + list(ores)
+    tiers = [lib.tools.TIERS.index(lib.tools.tier_for(b)) for b in blocks if spread(b)[0] <= y <= spread(b)[1]]
     return lib.tools.TIERS[min(tiers)] if tiers else "wooden"
 
 
@@ -115,14 +128,12 @@ def fluids(cells):
     return wet
 
 
-def veins(cells, opened, stand, chest=None, left=None, out=None, anywhere=False):
+def veins(cells, opened, stand, chest=None, left=None, out=None):
     """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up; a
     vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547), and the tier that drops it
     (lib.tools.tier_for) is added to the list left where given (#555). The blocks of a vein lib.find.WHERE leaves out
-    stay too, and are added to the list out where given (#561), but for anywhere, which mine_level passes: the shaft is
-    the site its caller chose, whose halls and branches WHERE does not limit either, and a deep level is outside a
-    colony's in_colony, which measures from the core in 3D. With a chest, it empties the bot into it (room) when its
-    inventory is nearly full."""
+    stay too, and are added to the list out where given (#561), so a colony miner's veins end at the colony's edge, a
+    column (in_colony, #576). With a chest, it empties the bot into it (room) when its inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
             if p in opened:
@@ -133,7 +144,7 @@ def veins(cells, opened, stand, chest=None, left=None, out=None, anywhere=False)
                     left.append(lib.tools.tier_for(p))
                 continue
             for b in vein:
-                if not anywhere and not lib.find.allowed(b):
+                if not lib.find.allowed(b):
                     if out is not None:
                         out.append(b)
                     continue
@@ -173,7 +184,7 @@ def tunnel(cells, stand, opened, level, sealed):
         if wet:
             sealed.append(wet[0])
             return None
-        failure = veins([feet, head], opened, feet, level["chest"], anywhere=True)
+        failure = veins([feet, head], opened, feet, level["chest"])
         if failure:
             return failure
         if feet in level["torches"]:
