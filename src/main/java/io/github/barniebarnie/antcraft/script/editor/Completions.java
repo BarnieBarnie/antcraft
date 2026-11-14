@@ -24,8 +24,8 @@ public final class Completions {
 
 	/**
 	 * The names in {@code names} starting with {@code prefix}, in any case, ordered as {@link #suggest} orders them, the
-	 * name itself first; with nothing typed, every name alphabetically. The bots screen's script search
-	 * (docs/features/scripts.md, The bots screen).
+	 * name itself first; with nothing typed, every name alphabetically. The bots screen's picker uses
+	 * {@link ScriptSearch#matching} instead.
 	 */
 	public static List<String> matching(String prefix, Collection<String> names) {
 		if (prefix.isEmpty()) {

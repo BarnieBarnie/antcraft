@@ -3,8 +3,8 @@ package io.github.barniebarnie.antcraft.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import io.github.barniebarnie.antcraft.network.BotNetworking;
 import io.github.barniebarnie.antcraft.script.ScriptEdits;
-import io.github.barniebarnie.antcraft.script.editor.Completions;
 import io.github.barniebarnie.antcraft.script.editor.Page;
+import io.github.barniebarnie.antcraft.script.editor.ScriptSearch;
 import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -160,8 +160,8 @@ public class BotsScreen extends Screen {
 	}
 
 	/**
-	 * Picks a script for {@code bot} from the library's names, matched as the editor's completion matches them
-	 * ({@link Completions#matching}), with optional args; picking one asks the server to run it ({@link BotNetworking.Action#RUN}).
+	 * Picks a script for {@code bot} from the library's names, found by any part ({@link ScriptSearch#matching}) and
+	 * scrolled with the mouse wheel or Up and Down, with optional args; picking one asks the server to run it ({@link BotNetworking.Action#RUN}).
 	 */
 	static class PickScript extends Screen {
 		private final BotsScreen parent;
@@ -169,6 +169,7 @@ public class BotsScreen extends Screen {
 		private final List<Button> matches = new ArrayList<>();
 		private EditBox search;
 		private EditBox args;
+		private int scroll;
 
 		PickScript(BotsScreen parent, BotNetworking.BotEntry bot) {
 			super(Component.translatable("screen.antcraft.bots.pick", bot.name()));
@@ -182,7 +183,10 @@ public class BotsScreen extends Screen {
 			this.search = this.addRenderableWidget(new EditBox(this.font, MARGIN, TOP, width, BUTTON_HEIGHT, Component.translatable("screen.antcraft.bots.search")));
 			this.search.setHint(Component.translatable("screen.antcraft.bots.search"));
 			this.search.setMaxLength(128);
-			this.search.setResponder(value -> this.showMatches());
+			this.search.setResponder(value -> {
+				this.scroll = 0;
+				this.showMatches();
+			});
 			this.args = this.addRenderableWidget(new EditBox(this.font, MARGIN, TOP + BUTTON_HEIGHT + 4, width, BUTTON_HEIGHT,
 				Component.translatable("screen.antcraft.bots.args")));
 			this.args.setHint(Component.translatable("screen.antcraft.bots.args"));
@@ -194,23 +198,38 @@ public class BotsScreen extends Screen {
 		}
 
 		private List<String> found() {
-			return Completions.matching(this.search.getValue().trim(), this.parent.list.scripts());
+			return ScriptSearch.matching(this.search.getValue().trim(), this.parent.list.scripts());
 		}
 
-		/** One button per matching script, as many as fit, replacing the last ones without touching the text boxes. */
+		/**
+		 * One button per matching script, as many as fit from the {@code scroll}th on, replacing the last ones without
+		 * touching the text boxes.
+		 */
 		private void showMatches() {
 			this.matches.forEach(this::removeWidget);
 			this.matches.clear();
-			int y = TOP + 2 * (BUTTON_HEIGHT + 4);
+			int top = TOP + 2 * (BUTTON_HEIGHT + 4);
+			int fit = Math.max(1, (this.height - MARGIN - BAR_HEIGHT - 4 - top + 2) / (BUTTON_HEIGHT + 2));
+			List<String> found = this.found();
+			this.scroll = Math.clamp(this.scroll, 0, Math.max(0, found.size() - fit));
+			int y = top;
 			int width = Math.min(300, this.width - 2 * MARGIN);
-			for (String name : this.found()) {
-				if (y + BUTTON_HEIGHT > this.height - MARGIN - BAR_HEIGHT - 4) {
-					break;
-				}
+			for (String name : found.subList(this.scroll, Math.min(found.size(), this.scroll + fit))) {
 				this.matches.add(this.addRenderableWidget(Button.builder(Component.literal(name), b -> this.run(name))
 					.bounds(MARGIN, y, width, BUTTON_HEIGHT).build()));
 				y += BUTTON_HEIGHT + 2;
 			}
+		}
+
+		private void scrollBy(int rows) {
+			this.scroll += rows;
+			this.showMatches();
+		}
+
+		@Override
+		public boolean mouseScrolled(double x, double y, double scrollX, double scrollY) {
+			this.scrollBy(-(int) Math.signum(scrollY));
+			return true;
 		}
 
 		private void run(String name) {
@@ -223,6 +242,10 @@ public class BotsScreen extends Screen {
 			// Enter runs the first match.
 			if (event.isConfirmation() && !this.found().isEmpty()) {
 				this.run(this.found().getFirst());
+				return true;
+			}
+			if (event.key() == InputConstants.KEY_UP || event.key() == InputConstants.KEY_DOWN) {
+				this.scrollBy(event.key() == InputConstants.KEY_UP ? -1 : 1);
 				return true;
 			}
 			return super.keyPressed(event);
