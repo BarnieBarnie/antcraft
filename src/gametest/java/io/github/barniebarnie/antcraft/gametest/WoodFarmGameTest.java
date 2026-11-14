@@ -12,12 +12,15 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
  * The job {@code jobs/wood_farm.py} (#606; docs/cookbook/wood-farm.md): a birch farm at (6, 1, 2) in the 24x16x24
@@ -397,6 +400,67 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			for (int y = 1; y < 12; y++) {
 				helper.assertBlockNotPresent(Blocks.BIRCH_LOG, SPOT.getX(), y, SPOT.getZ());
 			}
+		});
+	}
+
+	/**
+	 * A giant spruce farm run end to end in the 24x40x24 {@code giant} structure (#658): the job gets its kit, 8 spruce
+	 * saplings and the cell's materials from the chest, builds its 10x10 cell of four saplings from (6, 0, 4) on dirt,
+	 * the test grows them as the game does with seed 6, a 2x2 trunk of 24 (of 13 to 29), and the farm fells it whole,
+	 * replants all four spots and stores logs in its depot. The kit carries 31 dirt for a giant, its cell's clear height
+	 * (scaffold): with the 16 of other kinds the walks to its top stands got nowhere, the falls off the leaves left the
+	 * bot at 1 health and it died on the retry. Seed 6 rather than a random tree: the tallest, 28 and 29, take some 8000
+	 * ticks (seed 15) or never get their top log (seed 58: goto to a stand 28 up beside the trunk gives unreachable).
+	 */
+	// Measured: passes at tick 5185 to 5258 (red: died at 4496).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10500)
+	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
+		for (int x = 6; x <= 15; x++) {
+			for (int z = 4; z <= 13; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+			}
+		}
+		helper.setBlock(3, 1, 16, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.STONE_AXE));
+		chest.setItem(1, new ItemStack(Items.DIRT, 31));
+		chest.setItem(2, new ItemStack(Items.TORCH, 2));
+		chest.setItem(3, new ItemStack(Items.SPRUCE_SAPLING, 8));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
+		BlockPos at = helper.absolutePos(new BlockPos(6, 1, 4));
+		List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm giant_spruce "
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 1 20");
+		helper.assertTrue(bot.getScript() != null, "not run: " + out);
+		BotScripts.failOnWarning(helper, bot);
+		List<BlockPos> spots = List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9));
+		boolean[] grew = new boolean[1];
+		helper.onEachTick(() -> {
+			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("said " + said(bot));
+			}
+			if (!grew[0] && said(bot).contains("giant_spruce_farm 4/4: farm") && helper.getBlockState(spots.get(0)).is(Blocks.SPRUCE_SAPLING)) {
+				BlockPos a = helper.absolutePos(spots.get(0));
+				BlockState sapling = helper.getLevel().getBlockState(a);
+				((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), a, sapling.setValue(SaplingBlock.STAGE, 1),
+					RandomSource.create(6));
+				grew[0] = helper.getBlockState(spots.get(0)).is(Blocks.SPRUCE_LOG);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grew[0], "the giant never grew; said " + said(bot));
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
+				helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, p);
+			}
+			for (BlockPos p : spots) {
+				helper.assertBlockPresent(Blocks.SPRUCE_SAPLING, p);
+			}
+			int stored = 0;
+			for (int x = 6; x < 16; x++) {
+				if (helper.getBlockState(new BlockPos(x, 1, 2)).is(Blocks.CHEST)) {
+					stored += helper.getBlockEntity(new BlockPos(x, 1, 2), ChestBlockEntity.class).countItem(Items.SPRUCE_LOG);
+				}
+			}
+			helper.assertTrue(stored > 0, "no spruce logs in the depot; said " + said(bot));
 		});
 	}
 

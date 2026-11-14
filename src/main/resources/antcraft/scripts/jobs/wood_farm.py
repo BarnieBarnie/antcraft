@@ -42,7 +42,7 @@ WAIT = 100  # ticks between looks at the farm while nothing has grown
 # Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
 # be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
 BACKOFF = 10
-KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings
+KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings; more for a giant (kit)
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
               "sticks": ["minecraft:stick"]}
 # What the farm keeps on the bot instead of storing it, besides its own saplings: what a cell takes and the crafting
@@ -198,16 +198,27 @@ def tell(told, what):
         say(what)
 
 
+def scaffold(kind):
+    """The dirt the bot carries to pillar up a tree of kind with: the kit's 16, or the cell's clear height where that is
+    more, as a giant's trunk of up to 29 (#658)."""
+    return max(dict(KIT)["dirt"], lib.treefarm.spec(kind)["clear"])
+
+
+def kit(kind):
+    """KIT for a farm of kind: its dirt scaffold(kind)."""
+    return [(item, scaffold(kind) if item == "dirt" else n) for item, n in KIT]
+
+
 def reap(kind, b, radius, told):
     """Fells the tree of cell b with an axe (lib.treefarm.harvest). Where that leaves a log, says why once (tell), gets
-    the kit's dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
+    scaffold(kind) dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
     ensure_tool("axe", 16, "hand", radius)
     # harvest starts with placed_scaffold(), which drops what earlier walks placed: those come down first (#654).
     lib.trees.take_back()
     r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     if not r["ok"]:
         tell(told, f"harvest: {r['reason']} at {r['at']}")
-        get(lib.treefarm.DIRT, dict(KIT)["dirt"], radius)
+        get(lib.treefarm.DIRT, scaffold(kind), radius)
         ensure_tool("axe", 16, "hand", radius)
         lib.trees.take_back()
         r = lib.treefarm.harvest(kind, b[0], b[1], radius)
@@ -289,7 +300,7 @@ def run(kind, at=None, size=None, radius=32):
     # The depot north of the farm, a path's width off its first row, going east along it.
     lib.depot.depot(name, at + (0, 0, -2), "east", CATEGORIES)
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
-    steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
+    steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius)),
              Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]
