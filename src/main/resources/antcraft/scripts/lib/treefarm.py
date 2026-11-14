@@ -208,10 +208,14 @@ def harvest(kind, low, high, radius=32):
     if base is None:
         return result()
     r = lib.trees.fell_whole(base, False)
-    # A torch a pillar up to the leaves took the place of lies about too; the pillars to drops on the leaves come down.
-    pick_up(DROPS + [TORCH])
+    # A torch a pillar up to the leaves took the place of lies about too. Only what lies on the floor or a step over it:
+    # pillaring or digging up to each drop on the decaying leaves took most of a dark oak's harvest, and jobs.wood_farm's
+    # sweep picks those up later (#655).
+    for e in items_near(DROPS + [TORCH], 8):
+        if e.valid and e.pos.y <= Pos(low).y + 2 and goto(e.pos, keep="#antcraft:scaffold_blocks"):
+            pick_up(DROPS + [TORCH], 1)
     lib.trees.take_back()
-    # Planted last: a pillar up to drops on the leaves took a sapling's place (#652).
+    # Planted last: a pillar up to the leaves fell_whole climbed took a sapling's place (#652).
     if r["ok"]:
         empty = [p for p in spots(kind, low, high) if block(p).is_air and lib.trees.is_kind(p.down(), "#minecraft:dirt")]
         if empty and lib.get.get(sapling(kind), len(empty), radius)["ok"]:

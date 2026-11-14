@@ -22,6 +22,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -183,8 +184,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * replant. Its top logs stand past its reach from the ground, so it carries the 16 dirt to climb with that
 	 * jobs.wood_farm's kit holds (#652): with none, a tree whose leaves it could not climb kept a log out_of_reach.
 	 */
-	// Measured: passes at tick 1893 to 3963 in 10 runs (#652); a random tree may be the slow shape below, so its limit.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 8500)
+	// Measured: passes at tick 1376 to 1743 in 3 runs, since harvest leaves the drops on the leaves to the sweep (#655).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
 	public void aDarkOakCellOfFourSaplingsIsGrownAndHarvested(GameTestHelper helper) {
 		darkOak(helper, at -> advance(helper, at));
 	}
@@ -192,10 +193,10 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * The dark oak four saplings grow with seed 36 (#652): its one stand, below the crown, is in reach of a top log of the
 	 * trunk that lower logs and leaves hid from it, and once those were mined no walk got in sight of it. Felled whole too.
-	 * Most of its time is harvest's pick_up of the sticks and apples the leaves drop as they decay, pillaring up to them.
+	 * harvest no longer pillars up to the sticks and apples the decaying leaves drop (#655), which took most of its time.
 	 */
-	// Measured: passes at tick 3250 to 4248 in 10 runs, 4393 with 15 dark oak tests at once.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 8500)
+	// Measured: passes at tick 1520 to 1933 in 3 runs (3250 to 4248 before #655).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
 	public void aDarkOakWithATopLogHiddenFromItsStandIsFelled(GameTestHelper helper) {
 		darkOak(helper, at -> {
 			BlockState sapling = helper.getLevel().getBlockState(at);
@@ -302,6 +303,33 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 4, 4);
 			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 5, 4);
 			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 4, 1, 4);
+		});
+	}
+
+	/**
+	 * A birch cell of 5x5 from (2, 0, 2) with three logs over its spot, a stick on the floor and one on three persistent
+	 * leaves (#655): harvest picks up the stick on the floor but does not pillar up to the one on the leaves, which
+	 * jobs.wood_farm's sweep leaves for later.
+	 */
+	// Measured: passes at tick 128.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 260)
+	public void harvestDoesNotPillarToADropOnLeaves(GameTestHelper helper) {
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(4, y, 4, Blocks.BIRCH_LOG);
+			helper.setBlock(6, y, 6, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		}
+		ItemEntity high = helper.spawnItem(Items.STICK, new BlockPos(6, 4, 6));
+		helper.spawnItem(Items.STICK, new BlockPos(2, 1, 6));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 8, 1, 8);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 8));
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], count("minecraft:stick"), count("minecraft:dirt"))
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True 1 8"), "printed");
+			helper.assertTrue(high.isAlive(), "the stick on the leaves was picked up");
+			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 1, 4);
 		});
 	}
 
