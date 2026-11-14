@@ -19,6 +19,11 @@ SAPLING = {"minecraft:mangrove_log": "minecraft:mangrove_propagule", "minecraft:
            "minecraft:warped_stem": "minecraft:warped_fungus"}
 
 
+# The fungi that grow a huge fungus on nylium, no saplings; with SAPLINGS, what grows any tree, which a lumberjack keeps.
+FUNGI = ["minecraft:crimson_fungus", "minecraft:warped_fungus"]
+SEEDLINGS = [SAPLINGS] + FUNGI
+
+
 def sapling(log):
     """The item that grows the tree of log, a block id: SAPLING's, else its _log made _sapling where that is in
     #minecraft:saplings, else None."""
@@ -51,8 +56,10 @@ def on_ground(p):
 
 
 def is_tree(base):
-    """A trunk standing on GROUND with a CROWN at its top, so a log wall or a cabin is left alone."""
-    return on_ground(base.down()) and crowned(base)
+    """A trunk standing on GROUND with a CROWN at its top, so a log wall or a cabin is left alone. A huge fungus's stem
+    on netherrack too: the nylium under it turns to netherrack in the dark (#575, #582), though no fungus grows there."""
+    under = base.down()
+    return (on_ground(under) or sapling(block(base).id) in FUNGI and is_kind(under, "netherrack")) and crowned(base)
 
 
 def is_remnant(base):
@@ -335,7 +342,7 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
     """Fells the whole tree at base, branches and 2x2 trunk too: stands at each of stands(tree_blocks(base)), the highest
     first so each stands on logs not yet mined, mines the logs it reaches there, the highest first, then takes back the
     scaffold blocks its walks placed around the tree and picks up what fell. With replant, plants a sapling of the tree's
-    kind (else any) where each log of the trunk's bottom stood on GROUND, four for a 2x2 trunk: a fungus on nylium too.
+    kind (else any sapling, or any fungus on nylium) where each log of the trunk's bottom stood on GROUND, four for a 2x2 trunk: a fungus on nylium too.
     blocks and plan, where given, are tree_blocks(base) and stands(blocks), so a caller that worked them out already
     does not again. Assumes the bot holds an axe or goes
     without one, and carries scaffold blocks for a tree taller than it reaches. Gives result(): ok, out_of_reach at a log
@@ -371,10 +378,12 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
     if replant:
         for p in spots:
             if block(p).is_air and on_ground(p.down()):
+                # No sapling grows on nylium, nor a fungus on dirt: any of the kind that does (#582).
+                other = FUNGI if is_kind(p.down(), "#minecraft:nylium") else SAPLINGS
                 if kind and has(kind):
                     place(p, kind)
-                elif has(SAPLINGS):
-                    place(p, SAPLINGS)
+                elif has(other):
+                    place(p, other)
     return result()
 
 

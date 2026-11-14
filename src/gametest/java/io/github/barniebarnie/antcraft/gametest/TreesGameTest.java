@@ -90,6 +90,24 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A crimson stem on netherrack under a nether wart block is a tree, as the nylium under a huge fungus's stem turns to
+	 * netherrack (#575, #582); an oak log on netherrack under leaves is not.
+	 */
+	@GameTest(maxTicks = 20)
+	public void aStemOnNetherrackIsATree(GameTestHelper helper) {
+		helper.setBlock(1, 0, 1, Blocks.NETHERRACK);
+		helper.setBlock(1, 1, 1, Blocks.CRIMSON_STEM);
+		helper.setBlock(1, 2, 1, Blocks.CRIMSON_STEM);
+		helper.setBlock(1, 3, 1, Blocks.NETHER_WART_BLOCK);
+		helper.setBlock(3, 0, 1, Blocks.NETHERRACK);
+		helper.setBlock(3, 1, 1, Blocks.OAK_LOG);
+		helper.setBlock(3, 2, 1, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.is_tree(Pos(" + at(helper, 1, 1, 1) + ")), lib.trees.is_tree(Pos("
+			+ at(helper, 3, 1, 1) + ")))\n", List.of("True False"));
+	}
+
+	/**
 	 * tree_logs keeps the logs that are part of a tree: the oak's four and a branch log touching its top only at a
 	 * corner, and leaves out a wall of two logs on stone, so the lumberjack weighs an axe for trees alone (#563).
 	 */

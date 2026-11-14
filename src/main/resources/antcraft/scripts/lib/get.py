@@ -256,13 +256,14 @@ def gather(source, n, radius):
     return source.do(rest, radius) if t["ok"] else t
 
 
-def make_cost(item, n, radius=32, tools=None):
+def make_cost(item, n, radius=32, tools=None, limit=None):
     """The estimated ticks to make n of item in total from what the bot carries: the cost of each raw item
     lib.craft.plan lists from its source (coal the walk to the nearest chest of lib.stock within radius that holds some,
     for as much as the chests hold, the rest from its source or from logs as charcoal where that is cheaper), SMELT for each
     item smelted, and for each kind of tool their sources need the tool_cost of the highest tier any needs; None where a
     raw item has no source, or it or that tool is being got or costed. tools holds the tool costs found so far, by tool
-    id, for one options."""
+    id, for one options. With limit, None as soon as the cost is sure to be over it: a source costs at least its estimate
+    each, so the ore scans and tool costs of a dear one are left out (#582)."""
     if key(item) in GETTING:
         return None
     GETTING.append(key(item))
@@ -273,6 +274,9 @@ def make_cost(item, n, radius=32, tools=None):
         for raw, k in p["gather"].items():
             s = SOURCES.get(key(raw))
             if s is None or key(raw) in GETTING:
+                return None
+            # Coal may come from a chest or as charcoal for less than its estimate.
+            if limit is not None and ticks + (0 if key(raw) == COAL else s.estimate * k) > limit:
                 return None
             if key(raw) == COAL:
                 # get takes coal from the chests first: the walk to the nearest, for as much as they hold (#555).
@@ -292,6 +296,8 @@ def make_cost(item, n, radius=32, tools=None):
             if s.tool and tier != "hand":
                 t, uses = need.get(s.tool, ("wooden", 0))
                 need[s.tool] = (min([t, tier or "wooden"], key=lib.tools.TIERS.index), uses + k)
+        if limit is not None and ticks > limit:
+            return None
         for kind, (t, uses) in need.items():
             c = tool_cost(kind, t, uses, radius, {} if tools is None else tools)
             if c is None:
@@ -338,6 +344,9 @@ def options(kind, uses=1, tier=None, radius=32):
         found.append((work(lib.tools.tier(carried[0])), "carried", lib.tools.tier(carried[0]), None))
     for chest, t in in_chests(kind, ok, need, radius):
         found.append((lib.cost.walk(pos(), chest) + work(t), "chest", t, chest))
+    # The hand and the carried tools never fail, so ensure_tool tries nothing after them: a tier dearer to make is left
+    # out, told by its raw items' estimates before their ore scans (a diamond axe for a few logs, #582).
+    sure = min([o[0] for o in found if o[1] in ("hand", "carried")] or [None])
     costs = {}
     for t in lib.craft.MADE:
         tool = f"minecraft:{t}_{kind}"
@@ -345,7 +354,7 @@ def options(kind, uses=1, tier=None, radius=32):
             continue
         have = sum([lib.tools.uses_left(s) for s in inventory() if s.item == tool])
         n = count(tool) + -(-max(uses - have, 1) // lib.cost.USES[t])
-        ticks = make_cost(tool, n, radius, costs)
+        ticks = make_cost(tool, n, radius, costs, None if sure is None else sure - work(t))
         if ticks is not None:
             found.append((ticks + work(t), "make", t, n))
     return sorted(found, key=lambda o: o[0])

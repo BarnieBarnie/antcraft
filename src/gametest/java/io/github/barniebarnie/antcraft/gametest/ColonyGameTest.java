@@ -36,6 +36,7 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -652,9 +653,10 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A lumberjack alone fells the colony's tree, plants a sapling where it stood and puts the logs, and all else it carries
 	 * but its saplings, into the core (lib.inv's store_all, #457): those it had, less the one it plants, and those it picked
-	 * up, a sapling dropped by the tree and any of the leaves it breaks.
+	 * up, a sapling dropped by the tree and any of the leaves it breaks. Passes at about tick 430, alone or with the other
+	 * colony tests: 600 before ensure_tool stopped costing a diamond and an iron axe for its few logs (#582).
 	 */
-	@GameTest(maxTicks = 960)
+	@GameTest(maxTicks = 860)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {
 		helper.setBlock(5, 0, 5, Blocks.DIRT);
 		for (int y = 1; y <= 4; y++) {
@@ -840,13 +842,69 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A lumberjack with a stone axe by a huge crimson fungus, four stems on crimson nylium under nether wart blocks, the
-	 * core holding a crimson fungus: it is a tree, so the lumberjack fells it, plants the fungus on the nylium and stores
-	 * the four stems (#563). The test keeps the nylium from turning to netherrack under the stem (#575). Passes at about
-	 * tick 130, 175 with the other colony tests.
+	 * A lumberjack with a stone axe and a warped fungus by a huge crimson fungus ({@link #hugeFungus}), the core holding a
+	 * crimson fungus: it is a tree, so the lumberjack fells it, plants the core's fungus on the nylium, stores the four
+	 * stems and keeps the warped fungus, as it keeps saplings (#563, #582). Passes at about tick 185.
 	 */
 	@GameTest(maxTicks = 400)
 	public void aLumberjackFellsAHugeFungusAndReplantsIt(GameTestHelper helper) {
+		hugeFungus(helper);
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.CRIMSON_FUNGUS));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		lumberjack.getInventory().addItem(new ItemStack(Items.WARPED_FUNGUS));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.CRIMSON_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4
+				|| core.countItem(Items.WARPED_FUNGUS) != 0 || carried(lumberjack, Items.WARPED_FUNGUS) != 1) {
+				helper.fail(fungusState(helper, core, lumberjack));
+			}
+		});
+	}
+
+	/**
+	 * A lumberjack with a stone axe, an oak sapling and a warped fungus by a huge crimson fungus ({@link #hugeFungus}), no
+	 * crimson fungus anywhere: no sapling grows on nylium, so it plants the warped fungus there and keeps the sapling (#582).
+	 * Passes at about tick 185.
+	 */
+	@GameTest(maxTicks = 400)
+	public void aLumberjackPlantsAnyFungusNotASaplingOnNylium(GameTestHelper helper) {
+		hugeFungus(helper);
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		lumberjack.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		lumberjack.getInventory().addItem(new ItemStack(Items.WARPED_FUNGUS));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> {
+			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.WARPED_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4
+				|| carried(lumberjack, Items.OAK_SAPLING) != 1) {
+				helper.fail(fungusState(helper, core, lumberjack));
+			}
+		});
+	}
+
+	/** How many of item the bot carries, in its hand too. */
+	private static int carried(AntBot bot, Item item) {
+		return bot.getInventory().countItem(item) + (bot.getMainHandItem().is(item) ? bot.getMainHandItem().getCount() : 0);
+	}
+
+	/**
+	 * A huge crimson fungus at (5, 1, 5): four stems on crimson nylium under nether wart blocks. It keeps the nylium from
+	 * turning to netherrack under the stem: nylium under a block that keeps out all light, the bottom stem, does so on a
+	 * random tick (NyliumBlock.randomTick), in about 1 run in 10 before the lumberjack mines that stem, and no fungus grows
+	 * on netherrack (#575). A stem on netherrack TreesGameTest aStemOnNetherrackIsATree checks (#582).
+	 */
+	private static void hugeFungus(GameTestHelper helper) {
 		helper.setBlock(5, 0, 5, Blocks.CRIMSON_NYLIUM);
 		for (int y = 1; y <= 4; y++) {
 			helper.setBlock(5, y, 5, Blocks.CRIMSON_STEM);
@@ -855,31 +913,50 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		for (Direction d : Direction.Plane.HORIZONTAL) {
 			helper.setBlock(new BlockPos(5, 4, 5).relative(d), Blocks.NETHER_WART_BLOCK);
 		}
-		Colony colony = colonyAt(helper, 1, 1, 6);
-		colony.setRadius(7);
-		Container core = container(helper, 1, 1, 6);
-		core.setItem(0, new ItemStack(Items.CRIMSON_FUNGUS));
-		AntBot lumberjack = member(helper, colony, 1, 1, 1);
-		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
-		runDefault(helper, lumberjack, "colony.lumberjack");
-		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
-		// Nylium under a block that keeps out all light, the bottom stem, turns to netherrack on a random tick
-		// (NyliumBlock.randomTick), in about 1 run in 10 before the lumberjack mines that stem, and no fungus grows on
-		// netherrack (#575). ponytail: the test keeps the nylium; a huge fungus on netherrack is left to its own issue.
 		helper.onEachTick(() -> {
 			if (helper.getBlockState(new BlockPos(5, 0, 5)).is(Blocks.NETHERRACK)) {
 				helper.setBlock(5, 0, 5, Blocks.CRIMSON_NYLIUM);
 			}
 		});
+	}
+
+	/** What a huge fungus test fails with: the block at (5, 1, 5) and its ground, the core, the bot and its log. */
+	private static String fungusState(GameTestHelper helper, Container core, AntBot lumberjack) {
+		return "at (5, 1, 5): " + helper.getBlockState(new BlockPos(5, 1, 5)) + " on " + helper.getBlockState(new BlockPos(5, 0, 5))
+			+ ", core: " + contents(core)
+			+ ", bot at " + TestPositions.relative(helper, lumberjack.blockPosition()).toShortString() + " holding "
+			+ lumberjack.getMainHandItem() + ", inventory " + contents(lumberjack.getInventory())
+			+ ", log: " + BotScripts.log(lumberjack, Output.Level.DEBUG);
+	}
+
+	/**
+	 * A lumberjack with a stone axe by what is left of an oak whose bottom logs were taken: three logs at (4, 5..7, 4) over
+	 * air, leaves just above the area, the core holding six dirt. The top log is out of reach from the ground, so it climbs
+	 * on the core's dirt, counted from the ground rather than from the remnant's lowest log, fells all three, takes the
+	 * dirt back and stores the logs and the dirt (#582). Passes at about tick 270.
+	 */
+	@GameTest(maxTicks = 540)
+	public void aLumberjackClimbsToFellARemnant(GameTestHelper helper) {
+		for (int y = 5; y <= 7; y++) {
+			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
+		}
+		helper.setBlock(4, 8, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.DIRT, 6));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
-			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.CRIMSON_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4) {
-				helper.fail("at (5, 1, 5): " + helper.getBlockState(new BlockPos(5, 1, 5)) + " on " + helper.getBlockState(new BlockPos(5, 0, 5))
-					+ ", core: " + contents(core)
-					+ ", bot at " + TestPositions.relative(helper, lumberjack.blockPosition()).toShortString() + " holding "
-					+ lumberjack.getMainHandItem() + ", inventory " + contents(lumberjack.getInventory())
-					+ ", log: " + BotScripts.log(lumberjack, Output.Level.DEBUG));
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, p);
+				helper.assertBlockNotPresent(Blocks.DIRT, p);
 			}
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 3 && core.countItem(Items.DIRT) == 6,
+				"logs and dirt in the core: " + core.countItem(Items.OAK_LOG) + " " + core.countItem(Items.DIRT));
 		});
 	}
 

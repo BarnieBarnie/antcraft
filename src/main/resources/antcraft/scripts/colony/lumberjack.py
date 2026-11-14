@@ -1,5 +1,5 @@
 # A colony lumberjack: fells the trees within the colony's radius whole, branches and 2x2 trunks too, replants a
-# sapling where each stood (four for a 2x2 trunk), and puts the logs, and all else but its tools, food and saplings,
+# sapling where each stood (four for a 2x2 trunk), and puts the logs, and all else but its tools, food, saplings and fungi,
 # into the Colony Core. It weighs an axe against the bare hand for all the colony's logs in sight, not one tree's, and
 # climbs on blocks it carries, takes from the core or borrows from a chest, never on dirt dug from the colony's ground. Run it on a colony member with `/antcraft bot run colony.lumberjack`, or set it on a Bot Core
 # with `/antcraft core script colony.lumberjack`. Importing colony.common keeps lib.get and lib.trees within the colony.
@@ -17,7 +17,7 @@ from lib.borrow import give_back
 from lib.get import ensure_tool, get
 from lib.inv import store_all
 from lib.stock import take_up_to
-from lib.trees import LOGS, SAPLINGS, SCAFFOLD, fell_whole, is_log, next_tree, sapling, square, stands, tree_blocks, tree_logs
+from lib.trees import LOGS, SCAFFOLD, SEEDLINGS, fell_whole, is_log, next_tree, pillar, sapling, square, stands, tree_blocks, tree_logs
 
 
 def ready(base):
@@ -33,9 +33,11 @@ def ready(base):
         near = tree_logs([p for p in scan(LOGS, radius=16, limit=64) if p not in lib.trees.KEEP and lib.find.allowed(p)])
         # Where it can neither carry, take nor make one, it fells by hand.
         ensure_tool("axe", len(logs) + len(near), "hand")
-        # The highest place fell_whole stands to reach every log, branches too: that many blocks to climb on.
+        # The highest place fell_whole stands to reach every log, branches too: that many blocks to climb on, from the
+        # ground under base, which is in the air for a remnant (#582).
         plan = stands(logs)
-        climb = max([s.y for s in plan] + [base.y]) - base.y
+        ground = base.y - pillar(base)
+        climb = max([s.y for s in plan] + [ground]) - ground
         if climb > 0:
             scaffold(climb)
         kind = sapling(block(base).id)
@@ -64,7 +66,7 @@ while True:
     # Remnants too: what lib.trees.logs leaves of a tree it took the bottom logs of for an axe.
     tree = next_tree(remnants=True)
     if tree is None:
-        store_all(core(), keep=[SAPLINGS])
+        store_all(core(), keep=SEEDLINGS)
         wait(200)
     else:
         try:
@@ -72,6 +74,6 @@ while True:
             fell_whole(tree, blocks=logs, plan=plan)
         finally:
             give_back()
-        store_all(core(), keep=[SAPLINGS])
+        store_all(core(), keep=SEEDLINGS)
         if is_log(tree):
             wait(200)  # it could not fell this one (protected, out of reach): not again at once

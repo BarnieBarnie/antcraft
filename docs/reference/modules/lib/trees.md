@@ -18,7 +18,7 @@ giant = lib.trees.next_tree(where=lib.trees.is_giant, around=Pos(100, 64, -20))
 
 ## `is_tree(base)`
 
-Whether the trunk with its lowest log at `base` is a tree: it stands on `GROUND` (dirt, or nylium for a huge fungus) and has a `CROWN` (leaves, or a huge fungus's wart blocks) at its top, so a log wall or a log cabin is not. The top is reached log by log up, straight up first, else at an edge or corner over the last log, so the trunk of an acacia, which bends with its logs touching only at a corner, is a tree too. Done at once.
+Whether the trunk with its lowest log at `base` is a tree: it stands on `GROUND` (dirt, or nylium for a huge fungus) and has a `CROWN` (leaves, or a huge fungus's wart blocks) at its top, so a log wall or a log cabin is not. A huge fungus's stem on netherrack is a tree too: the nylium under a stem turns to netherrack in the dark, though no fungus is replanted there. The top is reached log by log up, straight up first, else at an edge or corner over the last log, so the trunk of an acacia, which bends with its logs touching only at a corner, is a tree too. Done at once.
 
 ## `tree_logs(logs)`
 
@@ -72,7 +72,7 @@ Where to stand to mine the logs in the list `blocks`: few spots that together re
 
 ## `fell_whole(base, replant=True, blocks=None, plan=None)`
 
-Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (`sapling` of its log, else any it carries) on each spot of the trunk's bottom that is air over `GROUND`: four for a 2x2 trunk, so a giant tree grows again, and a crimson or warped fungus on nylium. `blocks` and `plan`, where given, are `tree_blocks(base)` and `stands(blocks)`, so a script that worked them out already, as the colony lumberjack does to know how high it climbs, does not again.
+Fells the whole tree at `base`, branches and 2x2 trunk too: it goes to each of `stands(tree_blocks(base))`, the highest first, so each stand on the tree's own logs is mined last, and mines the logs it reaches from there, the highest first. Then it takes back the scaffold blocks its walks placed around the tree, picks up what fell and, with `replant`, plants a sapling of the tree's kind (`sapling` of its log, else any sapling it carries, or any fungus on nylium, where no sapling grows) on each spot of the trunk's bottom that is air over `GROUND`: four for a 2x2 trunk, so a giant tree grows again, and a crimson or warped fungus on nylium. `blocks` and `plan`, where given, are `tree_blocks(base)` and `stands(blocks)`, so a script that worked them out already, as the colony lumberjack does to know how high it climbs, does not again.
 
 It does not fetch an axe: it uses the best one the bot carries, or its hand (see `lib.tools`). For a tree taller than it reaches from the ground it needs blocks to pillar with, those of the item tag `antcraft:scaffold_blocks` (see [`goto`](../../movement/goto.md)); it takes back exactly the blocks its walks placed that have not changed since, as [`placed_scaffold`](../../movement/placed_scaffold.md) gives them, also when it stops early with `no_space` or `out_of_reach`. A block someone else put by the tree meanwhile stays, even in a spot where its own block was until they mined it, and so does one that walks placed before `fell_whole` began: it calls `placed_scaffold()` first, which forgets those.
 
@@ -114,9 +114,9 @@ Whether the block at `p` is a log, whether the block at `p` is `GROUND`, the blo
 
 The item that grows the tree of `log`, a block id such as `"minecraft:spruce_log"`: `SAPLING`'s for the vanilla logs whose sapling is no `_sapling` (`mangrove_propagule`, `crimson_fungus`, `warped_fungus`), else the log's `_log` made `_sapling` where that item is in `#minecraft:saplings`, else None, as for a log of a mod whose sapling is named otherwise. A script adds its own: `lib.trees.SAPLING["mymod:ebony_log"] = "mymod:ebony_seed"`.
 
-## `LOGS`, `SAPLINGS`, `SCAFFOLD`, `GROUND`, `CROWN`
+## `LOGS`, `SAPLINGS`, `FUNGI`, `SEEDLINGS`, `SCAFFOLD`, `GROUND`, `CROWN`
 
-The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`; `GROUND`, the tags a tree stands on (`#minecraft:dirt`, `#minecraft:nylium`), and `CROWN`, those that crown it (`#minecraft:leaves`, `#minecraft:wart_blocks`), lists a script may add a mod's tags to; and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which walks pillar and bridge with.
+The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`; `FUNGI`, the crimson and warped fungus, and `SEEDLINGS`, `SAPLINGS` and `FUNGI` together, what grows any tree, which the colony lumberjack keeps; `GROUND`, the tags a tree stands on (`#minecraft:dirt`, `#minecraft:nylium`), and `CROWN`, those that crown it (`#minecraft:leaves`, `#minecraft:wart_blocks`), lists a script may add a mod's tags to; and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which walks pillar and bridge with.
 
 ## Example
 
