@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
@@ -562,6 +563,25 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			boolean dropped = !helper.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(helper.absolutePos(BlockPos.ZERO)).inflate(8),
 				item -> item.getItem().is(Items.TORCH)).isEmpty();
 			helper.assertTrue(bot.getInventory().countItem(Items.TORCH) == 1 || dropped, "the torch vanished");
+		});
+	}
+
+	/**
+	 * A bot on a block, its body over the block's edge into the air beside it, steps up onto a block it bridges there
+	 * (#656): it steps back off the edge to place it, as its own body was in the way, where it waited till it gave up
+	 * unreachable, such as beside a felled poplar's trunk.
+	 */
+	// Measured: passes at tick 96, after it falls off as it steps up and climbs back (red: still walking at tick 300).
+	@GameTest(maxTicks = 200)
+	public void bridgesOutFromTheEdgeOfABlock(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.STONE);
+		helper.setBlock(3, 2, 5, Blocks.STONE); // the face the bridged block goes against
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.5, 2, 3.78));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 3, 4)), 0);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True"), "printed");
+			helper.assertValueEqual(bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)), new BlockPos(3, 3, 4), "stopped at");
 		});
 	}
 

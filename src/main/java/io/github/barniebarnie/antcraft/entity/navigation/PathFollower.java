@@ -40,6 +40,7 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -201,8 +202,11 @@ public class PathFollower {
 		if (step.type() != MoveType.PILLAR) {
 			for (BlockPos pos : step.places()) {
 				if (!world.canStandOn(pos)) {
-					if (this.placeBlock(level, pos) == Placed.NO_SCAFFOLD) {
+					Placed placed = this.placeBlock(level, pos);
+					if (placed == Placed.NO_SCAFFOLD) {
 						this.path = null; // out of scaffold blocks: plan again without placing
+					} else if (placed == Placed.OBSTRUCTED && this.bot.getBoundingBox().intersects(new AABB(pos))) {
+						this.moveTo(feet); // its own body over the edge into the block: back to the middle of its own (#656)
 					} // in someone's way: wait for them to leave, or plan again once the step's time is up
 					return Status.RUNNING;
 				}

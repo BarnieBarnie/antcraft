@@ -15,6 +15,7 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -606,5 +607,27 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 				helper.setBlock(x, 7, z, Blocks.SPRUCE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
 			}
 		}
+	}
+
+	/**
+	 * fell_whole picks up a sapling on the floor but does not pillar up to one on three persistent leaves (#656): of a
+	 * poplar, pillaring up to each sapling its decaying leaves let fall on the leaves took up to 800 ticks.
+	 */
+	// Measured: passes at tick 133 (red: True 2 8, it pillared up to the sapling on the leaves).
+	@GameTest(maxTicks = 270)
+	public void fellWholeDoesNotPillarToASaplingOnLeaves(GameTestHelper helper) {
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(1, y, 1, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		}
+		ItemEntity high = helper.spawnItem(Items.OAK_SAPLING, new BlockPos(1, 4, 1));
+		helper.spawnItem(Items.OAK_SAPLING, new BlockPos(1, 1, 6));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 8));
+		expect(helper, bot, "import lib.trees\nr = lib.trees.fell_whole(" + tree(helper) + ", False)\n"
+			+ "print(r['ok'], count('oak_sapling'), count('dirt'))\n", List.of("True 1 8"), () -> {
+				helper.assertTrue(high.isAlive(), "the sapling on the leaves was picked up");
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, TREE.above(3));
+			});
 	}
 }

@@ -198,11 +198,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 1520 to 1933 in 3 runs (3250 to 4248 before #655).
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
 	public void aDarkOakWithATopLogHiddenFromItsStandIsFelled(GameTestHelper helper) {
-		darkOak(helper, at -> {
-			BlockState sapling = helper.getLevel().getBlockState(at);
-			((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1),
-				RandomSource.create(36));
-		});
+		darkOak(helper, at -> advance(helper, at, 36));
 	}
 
 	/**
@@ -359,9 +355,28 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * A poplar cell of 7x7 from (2, 0, 2) (#650): built, grown as the game does (red, orange or yellow poplar), its logs,
 	 * up to 3 out of the trunk, inside the cell; felled whole and replanted.
 	 */
-	// Measured: passes at tick 652 to 2278 (some poplars take long to fell).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4600)
+	// Measured: 48 seeded poplars pass at tick 422 to 1587 (#656).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 3200)
 	public void aPoplarCellIsGrownHarvestedAndReplanted(GameTestHelper helper) {
+		poplar(helper, at -> advance(helper, at));
+	}
+
+	/**
+	 * The poplar grown with seed 6 (#656): its trunk's top log is in its leaves, out of reach from the ground, and its one
+	 * stand is in the trunk under it. The bot, stood by the trunk with its body over the edge of its block into the
+	 * trunk's column, waited for its own body to leave the block it bridged there and gave up out_of_reach.
+	 */
+	// Measured: passes at tick 514 to 516 (red: out_of_reach at the top log, at tick 1370).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 1100)
+	public void aPoplarWithItsTopLogInItsLeavesIsFelled(GameTestHelper helper) {
+		poplar(helper, at -> advance(helper, at, 6));
+	}
+
+	/**
+	 * The poplar cell of 7x7 from (2, 0, 2) built by a bot carrying 16 dirt, its tree grown with grow (given the absolute
+	 * position of (5, 1, 5)), its logs inside the cell, felled whole and replanted. Fails at once on a wrong print.
+	 */
+	private static void poplar(GameTestHelper helper, Consumer<BlockPos> grow) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 14, 1, 14);
 		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 16),
 			new ItemStack(Items.POPLAR_SAPLING, 2), new ItemStack(Items.TORCH, 2));
@@ -373,11 +388,17 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			while not lib.treefarm.grown(kind, low, high):
 			    wait(5)
 			r = lib.treefarm.harvest(kind, low, high)
-			print(r["ok"], r["reason"])
+			print(r["ok"], r["reason"], r["at"])
 			""");
+		List<String> printed = List.of("{'minecraft:dirt': 1, 'minecraft:poplar_sapling': 1, 'minecraft:torch': 2}", "True None",
+			"True None None");
 		boolean[] inside = {true};
-		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.POPLAR_LOG, at -> advance(helper, at));
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.POPLAR_LOG, grow);
 		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (log.size() == printed.size() && !log.equals(printed)) {
+				helper.fail("printed " + log);
+			}
 			if (!grew[0] || !inside[0]) {
 				return;
 			}
@@ -392,8 +413,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
-				"{'minecraft:dirt': 1, 'minecraft:poplar_sapling': 1, 'minecraft:torch': 2}", "True None", "True None"), "printed");
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), printed, "printed");
 			helper.assertTrue(grew[0], "the poplar never grew");
 			helper.assertTrue(inside[0], "a poplar log grew outside the cell");
 			assertFelled(helper, bot, Blocks.POPLAR_LOG, Items.POPLAR_LOG);
@@ -485,9 +505,17 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Grows the sapling at the absolute at as a random tick or bone meal would. */
 	private static void advance(GameTestHelper helper, BlockPos at) {
+		advance(helper, at, helper.getLevel().getRandom());
+	}
+
+	/** Grows the sapling at the absolute at with the random of seed: the same tree each run. */
+	private static void advance(GameTestHelper helper, BlockPos at, long seed) {
+		advance(helper, at, RandomSource.create(seed));
+	}
+
+	private static void advance(GameTestHelper helper, BlockPos at, RandomSource random) {
 		BlockState sapling = helper.getLevel().getBlockState(at);
-		((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1),
-			helper.getLevel().getRandom());
+		((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1), random);
 	}
 
 	/** No log left standing in the area nor lying about, and the bot carries 4 or more. */

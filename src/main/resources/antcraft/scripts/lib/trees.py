@@ -362,7 +362,8 @@ def take_back():
 def fell_whole(base, replant=True, blocks=None, plan=None):
     """Fells the whole tree at base, branches and 2x2 trunk too: stands at each of stands(tree_blocks(base)), the highest
     first so each stands on logs not yet mined, mines the logs it reaches there, the highest first, then takes back the
-    scaffold blocks its walks placed around the tree and picks up what fell. With replant, plants a sapling of the tree's
+    scaffold blocks its walks placed around the tree and picks up the logs that fell and the saplings on the floor or a
+    step over it, not those on leaves. With replant, plants a sapling of the tree's
     kind (else any sapling, or any fungus on nylium) where each log of the trunk's bottom stood on GROUND, four for a 2x2 trunk: a fungus on nylium too.
     blocks and plan, where given, are tree_blocks(base) and stands(blocks), so a caller that worked them out already
     does not again. Assumes the bot holds an axe or goes
@@ -401,8 +402,13 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
         if not r and r.reason != "target_gone":
             take_back()
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)
-    # Picks up first: logs that fell on the leaves it may pillar up to, and that scaffold comes down too.
-    pick_up([LOGS, SAPLINGS])
+    # Picks up first: logs that fell on the leaves it may pillar up to, and that scaffold comes down too. Saplings only
+    # where they lie on the floor or a step over it: pillaring up to each one the decaying leaves let fall on the
+    # leaves took up to 800 ticks of a poplar's felling; a later sweep picks those up, as harvest leaves its drops (#655, #656).
+    pick_up(LOGS)
+    for e in items_near(SAPLINGS, 8):
+        if e.valid and e.pos.y <= base.y + 1 and goto(e.pos, keep="#antcraft:scaffold_blocks"):
+            pick_up(SAPLINGS, 1)
     take_back()
     if replant:
         for p in spots:
