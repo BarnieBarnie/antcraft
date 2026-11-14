@@ -4,6 +4,7 @@ import java.lang.reflect.Method;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
@@ -43,5 +44,22 @@ public class FloorGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 5)
 	public void tallAreaHasAStoneFloor(GameTestHelper helper) {
 		assertFloor(helper);
+	}
+
+	/**
+	 * {@link GameTests#start} fails a test whose area holds a block above the floor (#639), so no test passes on a
+	 * leftover it did not place. Checked on a block put there after start, as start runs before any test can.
+	 */
+	@GameTest(maxTicks = 5)
+	public void startFailsOnABlockAboveTheFloor(GameTestHelper helper) {
+		GameTests.assertEmpty(helper);
+		helper.setBlock(4, 3, 4, Blocks.OAK_LEAVES);
+		try {
+			GameTests.assertEmpty(helper);
+		} catch (GameTestAssertException e) {
+			helper.succeed();
+			return;
+		}
+		helper.fail("an area with oak leaves at (4, 3, 4) passed as empty");
 	}
 }

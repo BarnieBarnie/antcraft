@@ -42,6 +42,7 @@ public final class GameTests {
 	 * Call first in {@code invokeTestMethod}. Logs the tick the test passes or fails on, as
 	 * {@code Game test <id> passed at tick <n> of <maxTicks>}, so {@code maxTicks} can be set from measured runs. Lays the
 	 * stone floor at y=0 that CLAUDE.md promises every test, across the whole area (#558): the framework leaves y=0 air.
+	 * Fails the test if a block stands above the floor ({@link #assertEmpty}).
 	 */
 	public static void start(GameTestHelper helper) {
 		GameTestInfo info = info(helper);
@@ -68,12 +69,24 @@ public final class GameTests {
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, (int) bounds.getXsize() - 1, 0, (int) bounds.getZsize() - 1)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
+		assertEmpty(helper);
 		// A bot that died in the test would otherwise come back at its home in the test's area after the test, into
 		// whatever test runs there next. Every level: a bot waits in the level of its home, not of where it died.
 		onEnd(helper, () -> forgetRespawns(helper.getLevel().getServer(), bounds));
 		Area area = new Area(helper.getLevel(), bounds);
 		AREAS.add(area);
 		onEnd(helper, () -> AREAS.remove(area));
+	}
+
+	/**
+	 * Fails the test unless its whole area above the floor is air (#639). The framework clears an area when it places it,
+	 * so this holds at {@link #start}; it keeps a test from passing on a block it did not place.
+	 */
+	static void assertEmpty(GameTestHelper helper) {
+		AABB bounds = helper.getBounds();
+		for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, (int) bounds.getXsize() - 1, (int) bounds.getYsize() - 1, (int) bounds.getZsize() - 1)) {
+			helper.assertBlockPresent(Blocks.AIR, pos);
+		}
 	}
 
 	/** A test's area, in absolute positions, and its level. */

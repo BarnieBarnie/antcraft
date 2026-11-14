@@ -465,13 +465,12 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			helper.setBlock(x, 1, 5, Blocks.DIRT);
 			spots.append("Pos").append(at(helper, x, 1, 5)).append(", ");
 		}
-		helper.setBlock(4, 3, 4, Blocks.AIR);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 2);
 		expect(helper, bot, "import lib.trees\nspots = [" + spots + "]\ncalls = [0]\n"
 			+ "def one():\n    calls[0] += 1\n    return spots[calls[0] - 1:calls[0]]\n"
 			+ "lib.trees.placed_scaffold = one\nlib.trees.take_back()\nprint(count('dirt'), calls[0])\n"
 			+ "calls[0] = 0\n"
-			+ "def air():\n    calls[0] += 1\n    return [Pos" + at(helper, 4, 3, 4) + "]\n"
+			+ "def air():\n    calls[0] += 1\n    return [Pos" + at(helper, 1, 3, 1) + "]\n"
 			+ "lib.trees.placed_scaffold = air\nlib.trees.take_back()\nprint(calls[0])\n",
 			List.of("6 7", "1"), () -> {
 				for (int x = 1; x <= 6; x++) {
