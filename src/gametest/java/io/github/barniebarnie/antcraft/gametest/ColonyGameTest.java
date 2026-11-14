@@ -961,6 +961,53 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A lumberjack with a stone axe by an oak shaped like a U, in the tall area: two trunks of twelve logs at x 1 and 6,
+	 * joined by four logs along the floor, only (1, 1, 4) on dirt, so that is the base. Each trunk's top is out of reach
+	 * from the ground and from the other trunk, so it climbs at each on its own pillar; the core holds 20 dirt. ready()
+	 * gets scaffold for both pillars, not the highest only, so fell_whole fells the whole tree in one go: no log may reach
+	 * the core while one still stands (#596). With the highest pillar's scaffold only it stored 27 logs and left the top of
+	 * the trunk it climbed second. Passes at about tick 1740.
+	 */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 3500)
+	public void aLumberjackClimbsOnAPillarAtEachOfTwoStands(GameTestHelper helper) {
+		helper.setBlock(1, 0, 4, Blocks.DIRT);
+		for (int y = 1; y <= 12; y++) {
+			helper.setBlock(1, y, 4, Blocks.OAK_LOG);
+			helper.setBlock(6, y, 4, Blocks.OAK_LOG);
+		}
+		for (int x = 2; x <= 5; x++) {
+			helper.setBlock(x, 1, 4, Blocks.OAK_LOG);
+		}
+		helper.setBlock(1, 13, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		helper.setBlock(6, 13, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.DIRT, 20));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		failOnError(helper, lumberjack);
+		helper.onEachTick(() -> {
+			if (core.countItem(Items.OAK_LOG) > 0) {
+				for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 15, 7)) {
+					if (helper.getBlockState(p).is(Blocks.OAK_LOG)) {
+						helper.fail("logs in the core while the log at " + p.toShortString() + " stands: "
+							+ core.countItem(Items.OAK_LOG) + ", log: " + BotScripts.log(lumberjack, Output.Level.DEBUG));
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 15, 7)) {
+				helper.assertBlockNotPresent(Blocks.OAK_LOG, p);
+			}
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 28, "logs in the core: " + core.countItem(Items.OAK_LOG));
+		});
+	}
+
+	/**
 	 * A lumberjack with a stone axe by an oak of seven logs, the top one out of reach from the ground (its leaves just above
 	 * the area), the core holding no blocks to climb on and a chest by the lumberjack six dirt: it borrows the chest's dirt to climb on, takes it back from around the tree and gives it back to
 	 * the chest, not the core (#563). Passes at about tick 280.

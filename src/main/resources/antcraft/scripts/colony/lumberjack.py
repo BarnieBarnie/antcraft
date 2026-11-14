@@ -33,13 +33,20 @@ def ready(base):
         near = tree_logs([p for p in scan(LOGS, radius=16, limit=64) if p not in lib.trees.KEEP and lib.find.allowed(p)])
         # Where it can neither carry, take nor make one, it fells by hand.
         ensure_tool("axe", len(logs) + len(near), "hand")
-        # The highest place fell_whole stands to reach every log, branches too: that many blocks to climb on, from the
-        # ground under base, which is in the air for a remnant (#582).
+        # Blocks to climb on: the pillars under every stand fell_whole stands on to reach every log, branches too, a block
+        # under two stands counted once, as fell_whole takes none back before the last stand (#596); at least the climb to
+        # the highest stand from the ground under base, which is in the air for a remnant (#582), for a stand on a log.
+        # ponytail: a stand on a high log away from the pillars is short of its climb; take_back between stands if it matters.
         plan = stands(logs)
         ground = base.y - pillar(base)
+        under = {}
+        for s in plan:
+            for i in range(1, pillar(s) + 1):
+                under[s.down(i)] = True
         climb = max([s.y for s in plan] + [ground]) - ground
-        if climb > 0:
-            scaffold(climb)
+        n = max(climb, len(under))
+        if n > 0:
+            scaffold(n)
         kind = sapling(block(base).id)
         if kind:
             # From the chests only, not get: get breaks leaves for saplings, this tree's too (#602), and felling drops some.
