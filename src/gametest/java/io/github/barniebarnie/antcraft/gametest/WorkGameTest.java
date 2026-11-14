@@ -197,6 +197,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("biome", "biome(h)"),
 		Map.entry("surface", "surface(h)"),
 		Map.entry("container", "container(h)"),
+		Map.entry("room", "room(h, 'dirt')"),
 		Map.entry("mineshaft", "mineshaft([0], near=h)"),
 		Map.entry("mineshaft_at", "mineshaft_at(h, [0])"),
 		Map.entry("ore_vein", "ore_vein(h)"),
@@ -229,7 +230,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			source.append("print('").append(name).append("', ").append(call).append(")\n");
 			expected.add(name + " " + switch (name) {
 				case "reachable" -> "False";
-				case "block", "biome", "surface", "container", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
+				case "block", "biome", "surface", "container", "room", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
 				case "ore_vein", "scan" -> "[]";
 				default -> Result.WRONG_DIMENSION;
 			});

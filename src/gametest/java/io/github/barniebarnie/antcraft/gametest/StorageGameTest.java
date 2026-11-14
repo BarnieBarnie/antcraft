@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.Blocks;
 /**
  * {@code lib/storage.py} and {@code jobs/store.py} (#572): deposit puts each item with its kind and keeps the tools, full
  * chests leave the items carried and named in missing, sort gathers each item into one chest, and the job deposits and
- * goes home. Each script passes radius 8 so a neighbouring test's chest is never one of its chests.
+ * goes home; room lets deposit and sort skip a full chest without walking to it (#584). Each script passes radius 8 so a neighbouring test's chest is never one of its chests.
  */
 public class StorageGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -58,7 +58,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The one chest is full of stone: deposit keeps the dirt and names it in missing. */
-	// Measured: passes at tick 12.
+	// Measured: passes at tick 1 (12 before room let deposit skip the full chest, #584).
 	@GameTest(maxTicks = 30)
 	public void fullChestsLeaveTheItemsCarried(GameTestHelper helper) {
 		Container full = chest(helper, 6, 1, 6);
@@ -73,6 +73,53 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["missing"], count("dirt"))
 			""");
 		helper.succeedWhen(() -> finished(helper, bot, List.of("False no_space {'minecraft:dirt': 5} 5")));
+	}
+
+	/**
+	 * A chest full of stone at (6, 1, 6) and an empty one at (2, 1, 1) next to the bot: deposit puts the bot's stone in the
+	 * near chest and never walks towards the full one, though it holds stone (#584).
+	 */
+	// Measured: passes at tick 2.
+	@GameTest(maxTicks = 30)
+	public void depositSkipsAFullChestWithoutWalkingToIt(GameTestHelper helper) {
+		Container full = chest(helper, 6, 1, 6);
+		for (int slot = 0; slot < full.getContainerSize(); slot++) {
+			full.setItem(slot, new ItemStack(Items.STONE, 64));
+		}
+		Container near = chest(helper, 2, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.STONE, 5));
+		var start = bot.position();
+		helper.onEachTick(() -> {
+			if (bot.position().distanceTo(start) > 1.5) {
+				helper.fail("walked towards the full chest: at " + bot.blockPosition());
+			}
+		});
+		run(helper, bot, """
+			import lib.storage
+			r = lib.storage.deposit(radius=8)
+			print(r["ok"], count("stone"))
+			""");
+		helper.succeedWhen(() -> {
+			finished(helper, bot, List.of("True 0"));
+			helper.assertTrue(near.countItem(Items.STONE) == 5, "stone in the near chest: " + near.countItem(Items.STONE));
+		});
+	}
+
+	/** room(pos, item): how many of item fit in a container, None where there is none (#584). */
+	// Measured: passes at tick 1.
+	@GameTest(maxTicks = 20)
+	public void roomCountsWhatFits(GameTestHelper helper) {
+		Container chest = chest(helper, 2, 1, 1);
+		for (int slot = 1; slot < chest.getContainerSize(); slot++) {
+			chest.setItem(slot, new ItemStack(Items.STONE, 64));
+		}
+		chest.setItem(0, new ItemStack(Items.STONE, 60));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		run(helper, bot, """
+			print(room(%s, "stone"), room(%s, "dirt"), room(%s, "stone"))
+			""".formatted(printed(helper, 2, 1, 1), printed(helper, 2, 1, 1), printed(helper, 5, 1, 5)));
+		helper.succeedWhen(() -> finished(helper, bot, List.of("4 0 None")));
 	}
 
 	/**

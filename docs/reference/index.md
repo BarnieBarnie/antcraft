@@ -76,6 +76,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | Builtin | Signature | Does |
 |---|---|---|
 | [`container`](crafting/container.md) | `container(pos)` | the `Stack` values in a chest, barrel or furnace, or `None` |
+| [`room`](crafting/room.md) | `room(pos, item)` | how many of an item fit in a container, or `None` |
 | [`put`](crafting/put.md) | `put(container, item, n=None)` | action: put items into a container |
 | [`take`](crafting/take.md) | `take(container, item, n=None)` | action: take items out of a container |
 | [`craft`](crafting/craft.md) | `craft(item, n=1, table=None)` | action: craft from carried items |

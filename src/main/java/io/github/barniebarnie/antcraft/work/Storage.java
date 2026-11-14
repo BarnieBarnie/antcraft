@@ -95,6 +95,21 @@ public final class Storage {
 		return false;
 	}
 
+	/** How many of {@code stack}'s item (with its components) fit in the container, as a hopper fills it. */
+	public static long room(Container container, ItemStack stack) {
+		long room = 0;
+		int max = container.getMaxStackSize(stack);
+		for (int i = 0; i < container.getContainerSize(); i++) {
+			ItemStack slot = container.getItem(i);
+			if (slot.isEmpty() && container.canPlaceItem(i, stack)) {
+				room += max;
+			} else if (ItemStack.isSameItemSameComponents(slot, stack)) {
+				room += Math.max(0, max - slot.getCount());
+			}
+		}
+		return room;
+	}
+
 	/** Whether the container holds every ingredient for {@code times} crafts of the recipe. */
 	public static boolean canCraft(Container container, TaskPlanner.Recipe<Item> recipe, int times) {
 		Map<Item, Integer> stock = stock(container);

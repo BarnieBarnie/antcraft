@@ -12,7 +12,7 @@ Every builtin a script can call has its own page, listed on the [index](index.md
 | `world/` | The world around | `block`, `block_tags`, `surface`, `biome`, `biome_tags`, `structures`, `find_nearest`, `scan`, `entities`, `items_near`, `time`, `is_day` |
 | `inventory/` | Inventory | `inventory`, `held`, `count`, `has`, `free_slots`, `matches`, `tag_items`, `equip`, `drop`, `pick_up` |
 | `blocks/` | Working blocks | `mine`, `place`, `use` |
-| `crafting/` | Containers and crafting | `container`, `put`, `take`, `craft`, `smelt`, `needs`, `cooks_in` |
+| `crafting/` | Containers and crafting | `container`, `room`, `put`, `take`, `craft`, `smelt`, `needs`, `cooks_in` |
 | `building/` | Building | `build`, `build_placement`, `blueprint` |
 | `mining/` | Mining | `mineshaft`, `mineshaft_at`, `ore_vein` |
 | `combat/` | Fighting | `attack` |

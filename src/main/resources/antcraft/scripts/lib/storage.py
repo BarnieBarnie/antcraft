@@ -17,8 +17,9 @@ KEEP_KINDS = KEPT + ["minecraft:bow", "minecraft:crossbow", "minecraft:trident",
 def deposit(keep=None, radius=32):
     """Gives back what the bot borrowed (lib.borrow.give_back), then puts everything else it carries but KEEP_KINDS and
     what keep (a list of item ids or selectors) selects into the chests of lib.stock.chests(radius): each item first into
-    the chests that already hold it, then into any chest with room, nearest first. Gives result(): ok, or no_space with
-    missing, item to how many the bot still carries as no chest took them."""
+    the chests that already hold it, then into any chest with room, nearest first; a chest with no room for it (room) is
+    skipped without walking to it. Gives result(): ok, or no_space with missing, item to how many the bot still carries
+    as no chest took them."""
     give_back()
     kept = KEEP_KINDS + (keep or [])
     chests = lib.stock.chests(radius)
@@ -29,10 +30,8 @@ def deposit(keep=None, radius=32):
     missing = {}
     for item in items:
         holding = [c for c in chests if lib.stock.holds(c, item)]
-        # ponytail: put walks to a full chest before it says no_space; reading each chest's free slots would spare that
-        # walk, once a native gives a container's size.
         for chest in holding + [c for c in chests if c not in holding]:
-            if has(item):
+            if has(item) and room(chest, item):
                 put(chest, item)
         if has(item):
             missing[item] = count(item)
@@ -41,8 +40,9 @@ def deposit(keep=None, radius=32):
 
 def sort(chests):
     """Moves the items of chests (a list of positions) so each item sits in as few of them as it can: all of an item into
-    the chest that holds most of it, as far as that has room; what does not fit goes back where it came from. Gives
-    result(): ok, or no_space with missing, item to how many the bot was left carrying as no chest took them back.
+    the chest that holds most of it, as far as that has room (room): the bot takes only what fits, and walks to no chest
+    once that is full. Gives result(): ok, or no_space with missing, item to how many the bot was left carrying as no
+    chest took them back.
     ponytail: greedy, one target chest per item, so an item that fills its target stays split over the rest; the bot
     needs a free slot or two to carry each item over."""
     items = []
@@ -54,8 +54,11 @@ def sort(chests):
     for item in items:
         holding = sorted([c for c in chests if inside(c, item)], key=lambda c: -inside(c, item))
         for chest in holding[1:]:
+            fits = min(inside(chest, item), room(holding[0], item) or 0)
+            if fits == 0:
+                continue
             had = count(item)
-            take(chest, item, inside(chest, item))
+            take(chest, item, fits)
             n = count(item) - had
             if n > 0:
                 n -= put(holding[0], item, n).value or 0

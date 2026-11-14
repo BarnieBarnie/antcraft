@@ -193,7 +193,7 @@ public final class CraftApi {
 	}
 
 	/** The one item a selector names, such as {@code "oak_planks"}; a tag or a list fails the script. */
-	private static Item oneItem(String function, Object value) {
+	static Item oneItem(String function, Object value) {
 		Selector selector = Selector.parse(value);
 		if (!selector.tags().isEmpty() || selector.ids().size() != 1) {
 			throw new ScriptError(function + "() needs one item, not " + selector);

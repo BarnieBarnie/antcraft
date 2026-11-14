@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
+import io.github.barniebarnie.antcraft.work.Storage;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -222,6 +223,18 @@ public final class SenseApi {
 				}
 			}
 			return stacks;
+		});
+		natives.register("room", 30, call -> {
+			Object[] args = Args.bind("room", call, 2, "pos", "item");
+			AntBot bot = bot(run, call);
+			Pos pos = Pos.of(args[0]);
+			ItemStack stack = new ItemStack(CraftApi.oneItem("room", args[1]));
+			BlockPos at = blockPos(pos);
+			if (run.elsewhere(pos) || new LoadedBlocks(bot.level()).loaded(at) == null) {
+				return PyNone.NONE;
+			}
+			Container container = HopperBlockEntity.getContainerAt(bot.level(), at);
+			return container == null ? PyNone.NONE : Storage.room(container, stack);
 		});
 		natives.register("colony", 35, call -> {
 			Args.bind("colony", call, 0);
