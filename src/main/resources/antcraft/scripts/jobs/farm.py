@@ -3,8 +3,8 @@
 # the two corners of the field's soil, crop the one to plant (a crop, seed or harvest of lib.farm.CROPS, wheat by
 # default) and rounds how often to tend it (1 by default, 0 until a round fails or the bot is stopped). Each round it gets
 # a hoe for the soil to till and the seeds for the bare spots with lib.get, harvests, tills and plants (lib.farm.tend),
-# gives back what it borrowed and puts the harvest in the nearest chest; between rounds it waits for the crops to ripen
-# (docs/cookbook/farm.md).
+# gives back what it borrowed and puts the harvest in the nearest chest, keeping what the bot carried of it before the job;
+# between rounds it waits for the crops to ripen (docs/cookbook/farm.md).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -19,6 +19,8 @@ high = Pos(int(ARGS[3]), int(ARGS[4]), int(ARGS[5]))
 c = lib.farm.crop(ARGS[6] if len(ARGS) > 6 else "wheat")
 rounds = int(ARGS[7]) if len(ARGS) > 7 else 1
 WAIT = 100  # ticks between looks at the field while the crops grow
+# What the bot carried of the harvest before the job: it stores only what it carries beyond that (#600).
+kept = [] if c is None else [(item, count(item)) for item in [c[2], lib.farm.POISON]]
 
 
 def farm():
@@ -39,9 +41,10 @@ def farm():
     # chest they came from loses them.
     give_back()
     chests = lib.stock.chests()
-    for item in [c[2], lib.farm.POISON]:
-        if chests and has(item):
-            put(chests[0], item)
+    for item, held in kept:
+        n = count(item) - held
+        if chests and n > 0:
+            put(chests[0], item, n)
     return r
 
 

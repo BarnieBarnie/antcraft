@@ -46,14 +46,14 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(2, 1, 1, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 3));
 		helper.setBlock(3, 1, 1, Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, 7));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
-		run(helper, bot, """
+		ScriptRun run = run(helper, bot, """
 			import lib.farm
 			spots = [%s, %s, %s]
 			print([lib.farm.ripe(s.up()) for s in spots])
 			print(lib.farm.harvest(spots), count("wheat"))
 			""".formatted(printed(helper, 1, 0, 1), printed(helper, 2, 0, 1), printed(helper, 3, 0, 1)));
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("['minecraft:wheat', None, 'minecraft:carrots']", "2 1"));
+			finished(helper, bot, run, List.of("['minecraft:wheat', None, 'minecraft:carrots']", "2 1"));
 			for (BlockPos crop : List.of(new BlockPos(1, 1, 1), new BlockPos(3, 1, 1))) {
 				helper.assertTrue(helper.getBlockState(crop).getValue(CropBlock.AGE) < 7, "not replanted at " + crop);
 			}
@@ -73,13 +73,13 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(3, 1, 3, Blocks.DIRT);
 		helper.setBlock(2, 1, 1, Blocks.STONE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
-		run(helper, bot, """
+		ScriptRun run = run(helper, bot, """
 			import lib.farm
 			print(lib.farm.field(%s, %s))
 			""".formatted(printed(helper, 1, 0, 1), printed(helper, 3, 2, 3)));
 		String expected = "[" + String.join(", ", printed(helper, 1, 0, 1), printed(helper, 3, 0, 1), printed(helper, 1, 0, 2),
 			printed(helper, 3, 0, 2), printed(helper, 1, 0, 3), printed(helper, 2, 0, 3), printed(helper, 3, 1, 3)) + "]";
-		helper.succeedWhen(() -> finished(helper, bot, List.of(expected)));
+		helper.succeedWhen(() -> finished(helper, bot, run, List.of(expected)));
 	}
 
 	/**
@@ -93,13 +93,13 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
 		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 8));
-		run(helper, bot, """
+		ScriptRun run = run(helper, bot, """
 			import lib.farm
 			r = lib.farm.tend(%s, %s)
 			print(r["ok"], count("wheat"))
 			""".formatted(printed(helper, 1, 0, 1), printed(helper, 3, 0, 3)));
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 1"));
+			finished(helper, bot, run, List.of("True 1"));
 			planted(helper, spots);
 		});
 	}
@@ -201,9 +201,38 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.CARROTS, spot.above());
 			}
 			helper.assertTrue(source.countItem(Items.CARROT) == 5, "carrots in their chest: " + source.countItem(Items.CARROT)
-				+ ", in the near one: " + near.countItem(Items.CARROT) + ", on the bot: " + bot.getInventory().countItem(Items.CARROT));
-			helper.assertTrue(bot.getInventory().countItem(Items.CARROT) == 0, "carrots left on the bot");
+				+ ", in the near one: " + near.countItem(Items.CARROT) + ", on the bot: " + carrots(bot));
+			helper.assertTrue(carrots(bot) == 0, "carrots left on the bot");
 		});
+	}
+
+	/**
+	 * A field of ripe carrots on farmland, an empty chest at (1, 1, 5) and a bot carrying 3 carrots of its own (#600):
+	 * jobs.farm harvests and replants, stores the harvest in the chest and keeps the 3 carrots it held before the job.
+	 */
+	// Measured: passes at tick 42.
+	@GameTest(maxTicks = 120)
+	public void theJobKeepsTheCarrotsTheBotOwned(GameTestHelper helper) {
+		List<BlockPos> spots = field(helper);
+		for (BlockPos spot : spots) {
+			helper.setBlock(spot, Blocks.FARMLAND);
+			helper.setBlock(spot.above(), Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, 7));
+		}
+		Container chest = chest(helper, 1, 1, 5);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.CARROT, 3));
+		ScriptRun job = runJob(helper, bot, "carrot");
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			helper.assertTrue(chest.countItem(Items.CARROT) > 0, "no harvest in the chest");
+			helper.assertTrue(carrots(bot) == 3, "carrots on the bot: " + carrots(bot) + ", in the chest: " + chest.countItem(Items.CARROT));
+		});
+	}
+
+	/** The carrots the bot carries, in its hand too. */
+	private static int carrots(AntBot bot) {
+		ItemStack hand = bot.getMainHandItem();
+		return bot.getInventory().countItem(Items.CARROT) + (hand.is(Items.CARROT) ? hand.getCount() : 0);
 	}
 
 	/** The job finished (the bot runs idle.py once it has). */
@@ -268,9 +297,10 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	private static void run(GameTestHelper helper, AntBot bot, String source) {
-		BotScripts.run(bot, source);
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
+		ScriptRun run = BotScripts.run(bot, source);
 		failOnError(helper, bot);
+		return run;
 	}
 
 	/** Fails the test as soon as the bot's script fails. */
@@ -283,8 +313,9 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	private static void finished(GameTestHelper helper, AntBot bot, List<String> expected) {
-		helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+	/** The run finished and printed expected (the run, as the bot goes on to idle.py once the script ends). */
+	private static void finished(GameTestHelper helper, AntBot bot, ScriptRun run, List<String> expected) {
+		jobFinished(helper, bot, run);
 		List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
 	}
