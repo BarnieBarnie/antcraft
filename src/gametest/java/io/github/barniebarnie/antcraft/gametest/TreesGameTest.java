@@ -44,6 +44,14 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 
 	/** A tree of four {@code log} at {@code base}, on dirt, under persistent {@code leaves}. */
 	static void plantTree(GameTestHelper helper, BlockPos base, Block log, Block leaves) {
+		plantTree(helper, base, log, leaves, true);
+	}
+
+	/**
+	 * As {@link #plantTree(GameTestHelper, BlockPos, Block, Block)}; without {@code persistent} the leaves are a grown
+	 * tree's, which lib.get breaks for saplings (#609), each at its distance from the logs, so none decays while they stand.
+	 */
+	static void plantTree(GameTestHelper helper, BlockPos base, Block log, Block leaves, boolean persistent) {
 		helper.setBlock(base.below(), Blocks.DIRT);
 		int b = base.getY();
 		for (int y = b; y <= b + 3; y++) {
@@ -55,7 +63,9 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 				for (int z = base.getZ() - r; z <= base.getZ() + r; z++) {
 					boolean corner = Math.abs(x - base.getX()) == r && Math.abs(z - base.getZ()) == r;
 					if (!corner && helper.getBlockState(new BlockPos(x, y, z)).isAir()) {
-						helper.setBlock(x, y, z, leaves.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+						int distance = Math.abs(x - base.getX()) + Math.abs(z - base.getZ()) + Math.max(0, y - (b + 3));
+						helper.setBlock(x, y, z, leaves.defaultBlockState().setValue(LeavesBlock.PERSISTENT, persistent)
+							.setValue(LeavesBlock.DISTANCE, distance));
 					}
 				}
 			}

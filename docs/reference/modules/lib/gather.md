@@ -2,7 +2,7 @@
 
 Making an item or gathering a raw item, `n` more than the bot carries. A module of the mod's default library: `import lib.gather`, then `lib.gather.make("stone_axe")` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/gather.py`, a few wrappers of [`lib/get`](get.md).
 
-[`lib.get.get(item, n)`](get.md#getitem-n1-radius32) takes a total: "carry `n`". The functions here take "`n` more", as they did before `lib/get`, and call `get` with what the bot carries plus `n`. The module is kept for old scripts; a new script calls `get` itself, and [`lib.find.exposed`](find.md#exposedwhat-radius32-skipnone) for `exposed_stone`.
+[`lib.get.get(item, n)`](get.md#getitem-n1-radius32) takes a total: "carry `n`". The functions here take "`n` more", as they did before `lib/get`, and call `get` with what the bot carries plus `n`. The module is kept for old scripts; a new script calls `get` itself, and [`lib.find.exposed`](find.md#exposedwhat-radius32-skipnone-keepnone) for `exposed_stone`.
 
 ## `make(item, n=1, radius=32)`
 
@@ -35,7 +35,7 @@ The same as `make`: `n` more of `item` through `get`. For a raw item, that is it
 
 ## `exposed_stone(radius=32, skip=None)`
 
-[`lib.find.exposed`](find.md#exposedwhat-radius32-skipnone) for stone or cobblestone: the nearest with air beside or above it, at or above the bot's feet first, leaving out the positions in the dict `skip`; `None` if there is none.
+[`lib.find.exposed`](find.md#exposedwhat-radius32-skipnone-keepnone) for stone or cobblestone: the nearest with air beside or above it, at or above the bot's feet first, leaving out the positions in the dict `skip`; `None` if there is none.
 
 ## `is_log(item)`
 

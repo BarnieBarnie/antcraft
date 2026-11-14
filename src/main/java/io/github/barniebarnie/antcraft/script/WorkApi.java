@@ -49,8 +49,10 @@ public final class WorkApi {
 
 	static void register(Natives natives, ScriptRun run) {
 		natives.register("mine", call -> {
-			Pos target = Pos.of(Args.bind("mine", call, 1, "pos")[0]);
-			return run.start(new Mine(run, bot(run, call), target), call, target);
+			Object[] args = Args.bind("mine", call, 1, "pos", "hand");
+			Pos target = Pos.of(args[0]);
+			boolean hand = !Args.absent(args[1]) && Values.truthy(args[1]);
+			return run.start(new Mine(run, bot(run, call), target, hand), call, target);
 		});
 		natives.register("place", call -> {
 			Object[] args = Args.bind("place", call, 2, "pos", "item", "facing", "half");
@@ -305,13 +307,18 @@ public final class WorkApi {
 		}
 	}
 
-	/** {@code mine(pos)}: breaks the block with the best tool the bot carries, its drops going into the bot's inventory. */
+	/**
+	 * {@code mine(pos, hand=False)}: breaks the block with the best tool the bot carries, or with {@code hand} as with a
+	 * bare hand, its drops going into the bot's inventory.
+	 */
 	private static final class Mine extends OnBlock {
 		private final BlockBreaker breaker;
+		private final boolean hand;
 
-		Mine(ScriptRun run, AntBot bot, Pos target) {
+		Mine(ScriptRun run, AntBot bot, Pos target, boolean hand) {
 			super(run, bot, target);
 			this.breaker = new BlockBreaker(bot);
+			this.hand = hand;
 		}
 
 		@Override
@@ -322,13 +329,13 @@ public final class WorkApi {
 			if (state.getDestroySpeed(this.level, this.pos) < 0) {
 				return Result.fail(Result.PROTECTED);
 			}
-			ItemStack tool = Tools.bestToolFor(this.bot.getInventory(), this.bot.getMainHandItem(), state);
+			ItemStack tool = this.hand ? ItemStack.EMPTY : Tools.bestToolFor(this.bot.getInventory(), this.bot.getMainHandItem(), state);
 			return Tools.canHarvest(tool, state) ? null : Result.fail(Result.NO_TOOL);
 		}
 
 		@Override
 		@Nullable Result work(BlockState state) {
-			if (!this.breaker.tick(this.level, this.pos, true)) {
+			if (!this.breaker.tick(this.level, this.pos, true, this.hand)) {
 				return null;
 			}
 			return this.breaker.spilled() ? Result.fail(Result.NO_SPACE) : Result.OK;
@@ -341,7 +348,7 @@ public final class WorkApi {
 
 		@Override
 		public String describe() {
-			return "mine(" + this.target + ")";
+			return "mine(" + this.target + (this.hand ? ", hand=True" : "") + ")";
 		}
 	}
 

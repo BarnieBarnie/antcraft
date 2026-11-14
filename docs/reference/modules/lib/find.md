@@ -16,9 +16,9 @@ import lib.find
 chest = lib.find.nearest("chest", 16, lambda p: p.x > pos().x)
 ```
 
-## `exposed(what, radius=32, skip=None)`
+## `exposed(what, radius=32, skip=None, keep=None)`
 
-- **Returns** the `Pos` of the nearest block within `radius` that `what` selects with air beside or above it (`is_open`), one at or above the bot's feet first, which it mines sideways without digging a pit; else the nearest exposed one below; `None` if there is none. Positions in the dict `skip` are left out.
+- **Returns** the `Pos` of the nearest block within `radius` that `what` selects with air beside or above it (`is_open`), one at or above the bot's feet first, which it mines sideways without digging a pit; else the nearest exposed one below; `None` if there is none. Positions in the dict `skip` are left out, and those for which `keep(p)` is false, where `keep` is given.
 - **Pauses** only as `scan` does.
 
 ```python

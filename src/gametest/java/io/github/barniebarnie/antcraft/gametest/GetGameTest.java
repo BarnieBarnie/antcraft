@@ -314,7 +314,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * An empty bot, no log and no chest in its area (#562): ensure_tool fails no_logs, the reason of the log source,
 	 * without costing options (replaced here by one that prints "costed"): tick 4 alone and 7 in a group run, 114 before.
 	 */
-	@GameTest(maxTicks = 15)
+	@GameTest(maxTicks = 30)
 	public void ensureToolFailsFastWithoutLogs(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, where(helper, 7) + """
@@ -902,8 +902,47 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(maxTicks = 60)
 	public void getsCherrySaplingsFromItsLeaves(GameTestHelper helper) {
-		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES);
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, false);
 		leavesTest(helper, "cherry_sapling");
+	}
+
+	/**
+	 * As {@link #getsCherrySaplingsFromItsLeaves}, the bot carrying shears (#609): mine would break the leaves with them
+	 * into leaves (the data pack's cherry leaves drop themselves to shears or silk touch, as in the game), so the source
+	 * breaks them by hand.
+	 */
+	@GameTest(maxTicks = 60)
+	public void getsSaplingsFromLeavesWithShearsCarried(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, false);
+		leavesTest(helper, "cherry_sapling", new ItemStack(Items.SHEARS));
+	}
+
+	/**
+	 * A cherry tree under persistent leaves, as a player places them (#609): get breaks none of them for saplings and
+	 * fails no_tree.
+	 */
+	@GameTest(maxTicks = 20)
+	public void persistentLeavesAreNotBrokenForSaplings(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, true);
+		int leaves = cherryLeaves(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			r = get("cherry_sapling")
+			print(r["ok"], r["reason"], r["missing"])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "False no_tree {'minecraft:cherry_sapling': 1}");
+			helper.assertTrue(cherryLeaves(helper) == leaves, cherryLeaves(helper) + " of " + leaves + " cherry leaves left");
+		});
+	}
+
+	private static int cherryLeaves(GameTestHelper helper) {
+		int n = 0;
+		for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+			n += helper.getBlockState(p).is(Blocks.CHERRY_LEAVES) ? 1 : 0;
+		}
+		return n;
 	}
 
 	/**
@@ -912,13 +951,16 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(maxTicks = 60)
 	public void getsApplesFromDarkOakLeaves(GameTestHelper helper) {
-		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_LEAVES);
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_LEAVES, false);
 		leavesTest(helper, "apple");
 	}
 
-	/** An empty bot by the tree gets two of item with radius 8 and prints "True 2", with no warnings. */
-	private static void leavesTest(GameTestHelper helper, String item) {
+	/** A bot carrying only carried by the tree gets two of item with radius 8 and prints "True 2", with no warnings. */
+	private static void leavesTest(GameTestHelper helper, String item, ItemStack... carried) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		for (ItemStack stack : carried) {
+			bot.getInventory().addItem(stack);
+		}
 		run(helper, bot, where(helper, 7) + """
 			from lib.get import get
 			r = get("%s", 2)

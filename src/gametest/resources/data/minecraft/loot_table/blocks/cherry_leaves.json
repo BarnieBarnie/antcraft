@@ -3,7 +3,19 @@
   "pools": [
     {
       "rolls": 1.0,
-      "entries": [{"type": "minecraft:item", "name": "minecraft:cherry_sapling"}]
+      "entries": [
+        {
+          "type": "minecraft:alternatives",
+          "children": [
+            {
+              "type": "minecraft:item",
+              "condition": {"type": "minecraft:any_of", "terms": ["minecraft:tool/can_shear", "minecraft:tool/can_silk_touch"]},
+              "name": "minecraft:cherry_leaves"
+            },
+            {"type": "minecraft:item", "name": "minecraft:cherry_sapling"}
+          ]
+        }
+      ]
     }
   ]
 }

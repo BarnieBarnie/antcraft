@@ -87,18 +87,19 @@ def dig_up(what):
     return breaking(what, what, "no_block")
 
 
-def breaking(item, what, reason):
-    """A Source's do that mines the exposed blocks what selects within radius, nearest first, until the bot carries n more
-    of item, which they drop; fails reason once none is left."""
+def breaking(item, what, reason, hand=False, keep=None):
+    """A Source's do that mines the exposed blocks what selects within radius (those for which keep(p) is true, where
+    keep is given), nearest first, until the bot carries n more of item, which they drop; fails reason once none is left.
+    With hand, it breaks them as with a bare hand, whatever tool it carries (mine(p, hand=True))."""
     def do(n, radius):
         target = count(item) + n
         skip = {}
         while count(item) < target:
-            p = lib.find.exposed(what, radius, skip)
+            p = lib.find.exposed(what, radius, skip, keep)
             if p is None:
                 return result(reason, None, {item: target - count(item)})
             skip[p] = True
-            r = mine(p)
+            r = mine(p, hand=hand)
             if not r and r.reason == "no_space":
                 return result("no_space", p)
         return result()
@@ -122,15 +123,24 @@ SOURCES = {
     "minecraft:sand": Source(dig_up("minecraft:sand"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK,
                              near="minecraft:sand"),
 }
-for item, block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
-                              ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 400),
-                              ("lapis_lazuli", "lapis_ore", 300), ("diamond", "diamond_ore", 2000),
-                              ("emerald", "emerald_ore", 2000)]:
-    SOURCES["minecraft:" + item] = ore(item, block, estimate)
+for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
+                                  ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 400),
+                                  ("lapis_lazuli", "lapis_ore", 300), ("diamond", "diamond_ore", 2000),
+                                  ("emerald", "emerald_ore", 2000)]:
+    SOURCES["minecraft:" + item] = ore(item, ore_block, estimate)
 # Saplings and apples break from leaves by hand, one in chance leaves broken (the 26.3 loot tables, no fortune); LEAF
-# ticks a leaves block (hardness 0.2: 6 by hand) and the step to the next. The mangrove propagule drops from no leaves.
-# ponytail: mine picks the best tool, so a bot carrying shears breaks leaves into leaves and gets none.
+# ticks a leaves block (hardness 0.2: 6 by hand) and the step to the next. By hand, as shears or a silk touch tool would
+# break them into leaves (#609), and only a grown tree's: persistent leaves are a player's, placed. The mangrove
+# propagule drops from no leaves and has no source. ponytail: a mangrove's hanging propagules are not picked, add them
+# when a script needs mangroves.
 LEAF = 6 + lib.cost.WALK
+
+
+def grown(p):
+    """Whether the leaves at p are a tree's, not placed by a player (persistent)."""
+    return not block(p).state.get("persistent", False)
+
+
 for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapling", ["spruce_leaves"], 20),
                              ("birch_sapling", ["birch_leaves"], 20), ("jungle_sapling", ["jungle_leaves"], 40),
                              ("acacia_sapling", ["acacia_leaves"], 20), ("dark_oak_sapling", ["dark_oak_leaves"], 20),
@@ -138,8 +148,8 @@ for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapli
                              ("azalea", ["azalea_leaves"], 20), ("flowering_azalea", ["flowering_azalea_leaves"], 20),
                              ("poplar_sapling", ["orange_poplar_leaves", "red_poplar_leaves", "yellow_poplar_leaves"], 20),
                              ("apple", ["oak_leaves", "dark_oak_leaves"], 200)]:
-    SOURCES["minecraft:" + item] = Source(breaking("minecraft:" + item, leaves, "no_tree"), estimate=LEAF * chance,
-                                          near=leaves)
+    SOURCES["minecraft:" + item] = Source(breaking("minecraft:" + item, leaves, "no_tree", True, grown),
+                                          estimate=LEAF * chance, near=leaves)
 
 
 def key(item):

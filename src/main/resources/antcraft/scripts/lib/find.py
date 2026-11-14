@@ -93,12 +93,12 @@ def is_open(p):
     return any([is_air(s) for s in (p.north(), p.south(), p.east(), p.west(), p.up())])
 
 
-def exposed(what, radius=32, skip=None):
+def exposed(what, radius=32, skip=None, keep=None):
     """The nearest block what selects within radius with air beside or above it, at or above the bot's feet first,
     which it mines sideways without digging a pit; else the nearest exposed one below; None if there is none. Leaves out
-    the positions in the dict skip and those WHERE leaves out."""
+    the positions in the dict skip, those for which keep(p) is false and those WHERE leaves out."""
     feet = pos().y
-    ps = found(what, radius, lambda p: (skip is None or p not in skip) and is_open(p))
+    ps = found(what, radius, lambda p: (skip is None or p not in skip) and (keep is None or keep(p)) and is_open(p))
     for p in ps:  # nearest first
         if p.y >= feet:
             return p

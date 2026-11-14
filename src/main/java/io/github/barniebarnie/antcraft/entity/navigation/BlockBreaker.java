@@ -37,14 +37,24 @@ public class BlockBreaker {
 
 	/** Like {@link #tick(ServerLevel, BlockPos)}; with {@code collect} the drops go straight into the bot's inventory. */
 	public boolean tick(ServerLevel level, BlockPos pos, boolean collect) {
+		return this.tick(level, pos, collect, false);
+	}
+
+	/**
+	 * Like {@link #tick(ServerLevel, BlockPos, boolean)}; with {@code hand} the block breaks as with a bare hand, whatever
+	 * the bot holds, so leaves drop saplings, not themselves to shears (#609).
+	 */
+	public boolean tick(ServerLevel level, BlockPos pos, boolean collect, boolean hand) {
 		this.bot.getMoveControl().setWait();
 		this.bot.getLookControl().setLookAt(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5);
 		if (!pos.equals(this.target)) {
 			this.reset();
 			this.target = pos;
 			this.progress = 0;
-			Tools.equipBestTool(this.bot, level.getBlockState(pos));
-			this.total = LevelWorldView.breakTicks(level.getBlockState(pos), level, pos, this.bot.getMainHandItem());
+			if (!hand) {
+				Tools.equipBestTool(this.bot, level.getBlockState(pos));
+			}
+			this.total = LevelWorldView.breakTicks(level.getBlockState(pos), level, pos, hand ? ItemStack.EMPTY : this.bot.getMainHandItem());
 			if (this.total < 0) {
 				this.target = null;
 				return false;
@@ -58,7 +68,7 @@ public class BlockBreaker {
 		level.destroyBlockProgress(this.bot.getId(), pos, Math.min(9, this.progress * 10 / Math.max(1, this.total)));
 		if (this.progress >= this.total) {
 			BlockState state = level.getBlockState(pos);
-			ItemStack tool = this.bot.getMainHandItem();
+			ItemStack tool = hand ? ItemStack.EMPTY : this.bot.getMainHandItem();
 			if (!Tools.canHarvest(tool, state)) {
 				// Like a player without the right tool: the block goes, but drops nothing.
 				level.destroyBlock(pos, false, this.bot);

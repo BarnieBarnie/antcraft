@@ -151,7 +151,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		if (saplings > 0) {
 			chest.setItem(3, new ItemStack(Items.BIRCH_SAPLING, saplings));
 		}
-		TreesGameTest.plantTree(helper, new BlockPos(3, 1, 12), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		TreesGameTest.plantTree(helper, new BlockPos(3, 1, 12), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
 		return helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 	}
 

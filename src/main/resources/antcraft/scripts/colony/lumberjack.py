@@ -55,6 +55,7 @@ def ready(base):
         kind = sapling(block(base).id)
         if kind:
             # From the chests only, not get: get breaks leaves for saplings, this tree's too (#602), and felling drops some.
+            # Short of one a spot, it keeps those it took and plants them (#609).
             take_up_to(kind, len(square(base) or [base]))
         return logs, plan
     finally:

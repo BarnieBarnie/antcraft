@@ -97,6 +97,31 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The chest holds two saplings of the four spots (#609): the job keeps the two it took and plants them, rather than
+	 * give them back and plant none, as the get it used before did when it came up short.
+	 */
+	@GameTest(maxTicks = 1250)
+	public void plantsTheSaplingsItHasWhenTheChestHoldsTooFew(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.IRON_AXE), new ItemStack(Items.DIRT, 6),
+			new ItemStack(Items.SPRUCE_SAPLING, 2));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos tree = helper.absolutePos(new BlockPos(4, 1, 4));
+		run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
+		helper.succeedWhen(() -> {
+			ScriptRun run = bot.getScript();
+			helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
+			int planted = 0;
+			for (int x = 3; x <= 4; x++) {
+				for (int z = 3; z <= 4; z++) {
+					planted += helper.getBlockState(new BlockPos(x, 1, z)).is(Blocks.SPRUCE_SAPLING) ? 1 : 0;
+				}
+			}
+			helper.assertTrue(planted == 2 && chest.countItem(Items.SPRUCE_SAPLING) == 0,
+				planted + " saplings planted, " + chest.countItem(Items.SPRUCE_SAPLING) + " in the chest");
+		});
+	}
+
 	/** The job finished, said it felled 26 logs, the bot carries them, and the tree is gone with four saplings planted. */
 	private static void felled(GameTestHelper helper, AntBot bot) {
 		ScriptRun run = bot.getScript();

@@ -1,16 +1,17 @@
 # `mine`
 
 ```text
-mine(pos)
+mine(pos, hand=False)
 ```
 
-Walks into reach of a block and breaks it with the best tool the bot carries.
+Walks into reach of a block and breaks it with the best tool the bot carries, or by hand.
 
 ## Parameters
 
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `pos` | [`Pos`](../types/pos.md) or tuple | | the block to break |
+| `hand` | bool | `False` | break it as with a bare hand, whatever the bot carries or holds |
 
 ## Returns
 
@@ -26,7 +27,7 @@ One instruction, the call itself. The walk plans its path as `goto` does.
 
 ## Description
 
-The bot picks the best tool it carries for the block and holds it; with none, it digs by hand where a hand makes the block drop something. The drops go straight into the inventory; what does not fit lies on the ground.
+The bot picks the best tool it carries for the block and holds it; with none, it digs by hand where a hand makes the block drop something. The drops go straight into the inventory; what does not fit lies on the ground. With `hand=True` it breaks the block as a bare hand would, taking as long and dropping what a hand drops, whatever it holds, and wears no tool: leaves then drop saplings, not themselves, though the bot carries shears or a silk touch tool ([`lib/get`](../modules/lib/get.md)'s leaves source does this, #609). A block a hand gets nothing from, such as stone, fails `no_tool`.
 
 Reach is a matter of sight: the bot sees the block when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the block's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the block as a wall does, so the bot walks to where it sees past them; [`use`](use.md) and [`place`](place.md) judge reach the same way.
 

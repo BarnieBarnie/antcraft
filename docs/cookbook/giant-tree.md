@@ -26,7 +26,8 @@ def fell(at, radius):
         r = get("dirt", max([p.y for p in logs]) - base.y + 1, radius)
         if not r["ok"]:
             return r
-        # From chests only: get would break the leaves of this very tree for them (#602).
+        # From chests only: get would break the leaves of this very tree for them (#602). Short of four, it keeps those
+        # it took and plants them (#609).
         take_up_to(block(base).id.replace("_log", "_sapling"), 4, radius)
     finally:
         lib.trees.KEEP.clear()
