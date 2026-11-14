@@ -93,7 +93,7 @@ if base is not None and lib.trees.is_giant(base):
 
 ## `take_back()`
 
-Mines the blocks the script's walks placed since it last called [`placed_scaffold`](../../movement/placed_scaffold.md), the highest first: only those unchanged since, so a block someone else mined or put there meanwhile stays. Then the blocks its walks to those placed, up to four rounds, so none is left. `fell_whole` ends with it.
+Mines the blocks the script's walks placed since it last called [`placed_scaffold`](../../movement/placed_scaffold.md), the highest first: only those unchanged since, so a block someone else mined or put there meanwhile stays. Then the blocks its walks to those placed, up to four rounds, so none is left; a block it could not reach (`out_of_reach`, once the blocks it was reached from were gone) is tried again in the next round, from where those walks take it. `fell_whole` ends with it.
 
 - **Returns** `None`.
 - **Pauses** yes, while it walks and mines.

@@ -1065,7 +1065,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * (2, 8, 4). The walk to the stand on the log climbs on 6 blocks of its own, away from that pillar's 6. The core
 	 * holds 40 dirt, more than it needs. ready() counts that climb with the pillars, so fell_whole walks to every stand:
 	 * a goto that ends unreachable fails at once, as does a log in the core while one still stands (#622). With the
-	 * highest climb's 7 blocks only, the walk to the pillar stand ended unreachable with none left. Passes at about tick 830.
+	 * highest climb's 7 blocks only, the walk to the pillar stand ended unreachable with none left. Every block of dirt
+	 * comes back to the core: take_back left (3, 6, 4) hanging, out of reach once the blocks it was reached from were gone,
+	 * until it kept it for its next round (#628). Passes at about tick 870.
 	 */
 	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 1700)
 	public void aLumberjackClimbsToAHighStandOnALogAwayFromThePillars(GameTestHelper helper) {
@@ -1108,6 +1110,14 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, p);
 			}
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 23, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			// No scaffold block is left hanging where mine could not reach it once the logs it was reached from were gone (#628).
+			StringBuilder left = new StringBuilder();
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 15, 7)) {
+				if (helper.getBlockState(p).is(Blocks.DIRT)) {
+					left.append(' ').append(p.toShortString());
+				}
+			}
+			helper.assertTrue(core.countItem(Items.DIRT) == 40, "dirt in the core: " + core.countItem(Items.DIRT) + ", left at" + left);
 		});
 	}
 

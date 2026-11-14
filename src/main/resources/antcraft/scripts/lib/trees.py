@@ -337,13 +337,18 @@ def stands(blocks):
 def take_back():
     """Mines the scaffold the script's walks placed since it last asked placed_scaffold(), the highest first: only blocks
     unchanged since, so one someone else mined or put there meanwhile stays. Then what its walks to those blocks placed,
-    up to four rounds (#614)."""
+    up to four rounds (#614). A block mine could not reach, once the blocks it was reached from were gone, stays for the
+    next round, from what that round's walks placed (#628)."""
+    out = {}
     for _ in range(4):
-        placed = placed_scaffold()
+        placed = placed_scaffold() + [q for q in out if block(q).id == out[q]]
         if not placed:
             return
+        out = {}
         for q in sorted(placed, key=lambda q: -q.y):
-            mine(q)
+            was = block(q).id
+            if mine(q).reason == "out_of_reach":
+                out[q] = was
 
 
 def fell_whole(base, replant=True, blocks=None, plan=None):
