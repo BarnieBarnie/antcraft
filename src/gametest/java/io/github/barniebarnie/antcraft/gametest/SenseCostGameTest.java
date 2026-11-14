@@ -28,7 +28,7 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Times senses against each other in one JVM (#588): each native is called straight from Java many times, in rounds that
- * take turns, and its median time a call is logged with the cost it implies at the time {@code block_tags} (cost 20) takes
+ * take turns, and its median time a call is logged with the cost it implies at the time {@code block_tags} (its registered cost) takes
  * an instruction, and at 20 ns an instruction (#380). Ratios, not absolute times, as other builds may share the machine.
  * Manual-only, as the benchmark is: {@code scripts/check.sh runGameTest -Pbenchmark -PgameTest='antcraft-gametest:sense_cost_game_test*'},
  * then {@code grep -A20 'Sense costs' build/check.log}.
@@ -86,7 +86,7 @@ public class SenseCostGameTest {
 					}
 				}
 			}
-			double base = median(times.get("block_tags")) / 20.0;
+			double base = median(times.get("block_tags")) / natives.cost("block_tags");
 			StringBuilder log = new StringBuilder();
 			times.forEach((name, t) -> log.append(String.format(Locale.ROOT, "\n  %-15s %8.3f µs a call (rounds %s), cost %5.1f at block_tags' rate, %5.1f at 20 ns",
 				name, median(t) / 1000.0, Arrays.toString(Arrays.stream(t).map(n -> n / CALLS).toArray()), median(t) / base, median(t) / 20.0)));

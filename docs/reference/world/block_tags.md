@@ -22,7 +22,7 @@ No, it is done at once.
 
 ## Cost
 
-20 instructions besides the call.
+100 instructions besides the call, about its 2 µs (measured with `SenseCostGameTest`, #589).
 
 ## Description
 

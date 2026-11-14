@@ -121,7 +121,7 @@ public final class SenseApi {
 			return Selector.matches(args[0], args[1]);
 		});
 		natives.register("tag_items", 20, call -> Selector.tagItems(Args.bind("tag_items", call, 1, "tag")[0]));
-		natives.register("block_tags", 20, call -> {
+		natives.register("block_tags", 100, call -> {
 			Identifier id = Identifier.tryParse(Values.str(Args.bind("block_tags", call, 1, "block")[0]));
 			PyList tags = new PyList();
 			Optional.ofNullable(id).flatMap(BuiltInRegistries.BLOCK::getOptional).ifPresent(block -> block.defaultBlockState().tags()

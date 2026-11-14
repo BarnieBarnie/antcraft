@@ -384,6 +384,20 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * block_tags costs its measured 2 µs a call, 100 instructions at 20 ns (#589): it runs that many more than len, a
+	 * native of the same shape that costs nothing besides the call.
+	 */
+	@GameTest(maxTicks = 10)
+	public void blockTagsCostsItsMeasuredTime(GameTestHelper helper) {
+		ScriptRun free = run(helper, helper.spawn(ModEntities.ANT_BOT, 1, 1, 1), "len(\"minecraft:stone\")\n");
+		ScriptRun tags = run(helper, helper.spawn(ModEntities.ANT_BOT, 1, 1, 1), "block_tags(\"minecraft:stone\")\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(free.state() == ScriptRun.State.FINISHED && tags.state() == ScriptRun.State.FINISHED, "scripts " + free.state() + " " + tags.state());
+			helper.assertValueEqual(tags.executed() - free.executed(), 100L, "instructions more for block_tags");
+		});
+	}
+
+	/**
 	 * Puts a plains village start with one piece from {@code low} to {@code high} (in the area) in the area's chunks, with
 	 * the references the chunks it reaches keep to it, as world generation would; takes it out again when the test ends.
 	 * A chunk keeps one start per structure type, so two tests that run at once (one batch) must not put a village in the
