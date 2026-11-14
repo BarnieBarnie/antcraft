@@ -29,7 +29,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`home_dimension`](movement/home_dimension.md) | `home_dimension()` | the id of the dimension of the bot's home |
 | [`dimension`](movement/dimension.md) | `dimension()` | the id of the dimension the bot is in, such as `"minecraft:overworld"` |
 | [`portals`](movement/portals.md) | `portals()` | both ends of the nether portals the bot went through, newest first |
-| [`placed_scaffold`](movement/placed_scaffold.md) | `placed_scaffold()` | where the script's walks placed scaffold blocks since it last asked, and forgets them |
+| [`placed_scaffold`](movement/placed_scaffold.md) | `placed_scaffold(forget=True)` | where the script's walks placed scaffold blocks since it last asked, and forgets them unless `forget` is false |
 
 ## The world around
 
@@ -172,7 +172,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/craft`](modules/lib/craft.md): `craft_all(item, n=1, table=None, furnace=None)`, `craft_here(item, n=1)`, `smelt_here(item, n=1, fuel=None)`, `plan(item, n=1)`.
 - [`lib/retry`](modules/lib/retry.md): `retry(action, args, tries=5, again=None, delay=4, kwargs=None)`.
 - [`lib/inv`](modules/lib/inv.md): `store_all(chest, keep=None)`.
-- [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False, around=None)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`, `tree_blocks(base)`, `is_giant(base)`, `stands(blocks)`, `fell_whole(base, replant=True)`, `take_back()`, `LOGS`, `SAPLINGS`, `SCAFFOLD`, `KEEP`.
+- [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False, around=None)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`, `tree_blocks(base)`, `is_giant(base)`, `stands(blocks)`, `fell_whole(base, replant=True)`, `take_back(keep=())`, `LOGS`, `SAPLINGS`, `SCAFFOLD`, `KEEP`.
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/cells`](modules/lib/cells.md): `layout(name, origin, size, row=4, gap=1)`, `cell(name, i)`, `built(name)`, `add(name, i)`, `next(name)`, `count(name)`, a grid of farm cells that grows one cell at a time, kept in `memory["cells"]`.
 - [`lib/treefarm`](modules/lib/treefarm.md): `KINDS`, `sapling(kind)`, `materials(kind)`, `build_cell(kind, low, high)`, `grown(kind, low, high)`, `harvest(kind, low, high, radius=32)`, tree cells per kind (a sapling, or a giant spruce or jungle) for a wood farm.

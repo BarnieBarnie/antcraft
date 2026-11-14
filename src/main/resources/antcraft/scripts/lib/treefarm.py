@@ -154,15 +154,16 @@ def build_cell(kind, low, high):
             r = place(t, TORCH)
             if not r:
                 return result(r.reason, t)
-    # The walks up to the roof pillar; that scaffold comes down before the saplings go in.
-    placed_scaffold()
+    # The walks up to the roof pillar; that scaffold comes down before the saplings go in. What earlier walks placed
+    # stays, listed for the caller (#657).
+    earlier = placed_scaffold(False)
     for q in roof(kind, low, high):
         if block(q).is_air:
             r = place(q, SLABS, half="bottom")
             if not r:
-                lib.trees.take_back()
+                lib.trees.take_back(earlier)
                 return result(r.reason, q)
-    lib.trees.take_back()
+    lib.trees.take_back(earlier)
     for p in ps:
         if block(p).is_air:
             r = place(p, sapling(kind))

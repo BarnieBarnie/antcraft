@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.at;
+
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -1046,6 +1048,35 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
 				helper.assertBlockNotPresent(Blocks.DIRT, p);
 			}
+		});
+	}
+
+	/**
+	 * As {@link #getsSaplingsFromHighLeavesAndTakesItsPillarBack}, but the script first pillars two dirt up itself and
+	 * stands on them (#657): get takes back only what its own climb placed, so the script's pillar stands and is still
+	 * listed by placed_scaffold() after.
+	 */
+	// Measured: passes at tick 107.
+	@GameTest(maxTicks = 220)
+	public void aScriptsOwnPillarSurvivesAGetFromHighLeaves(GameTestHelper helper) {
+		for (int y = 1; y <= 5; y++) {
+			helper.setBlock(4, y, 4, Blocks.STONE);
+		}
+		helper.setBlock(4, 6, 4, Blocks.BIRCH_LOG);
+		helper.setBlock(4, 7, 4, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			goto(Pos%s)
+			r = get("birch_sapling")
+			print(r["ok"], count("birch_sapling"), count("dirt"), len(placed_scaffold()))
+			""".formatted(at(helper, 1, 3, 1)));
+		failOnOtherPrint(helper, bot, "True 1 14 2");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 1 14 2");
+			helper.assertBlockPresent(Blocks.DIRT, new BlockPos(1, 1, 1));
+			helper.assertBlockPresent(Blocks.DIRT, new BlockPos(1, 2, 1));
 		});
 	}
 

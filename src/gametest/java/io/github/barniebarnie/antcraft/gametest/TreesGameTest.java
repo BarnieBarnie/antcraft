@@ -249,6 +249,22 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * Two dirt the script pillared up before fell_whole are not forgotten (#657): fell_whole takes back only what its own
+	 * walks placed, so the script's pillar stands and placed_scaffold() still lists it after.
+	 */
+	// Measured: passes at tick 355.
+	@GameTest(maxTicks = 720)
+	public void fellWholeKeepsTheScaffoldPlacedBeforeIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		expect(helper, bot, "import lib.trees\ngoto(Pos" + at(helper, 1, 3, 1) + ")\nr = lib.trees.fell_whole(" + tree(helper)
+			+ ", False)\nprint(r['ok'], count('oak_log'), count('dirt'), len(placed_scaffold()))\n", List.of("True 4 14 2"), () -> {
+				helper.assertBlockPresent(Blocks.DIRT, new BlockPos(1, 1, 1));
+				helper.assertBlockPresent(Blocks.DIRT, new BlockPos(1, 2, 1));
+			});
+	}
+
 	/** With replant False the sapling stays with the bot and the tree's spot stays air. */
 	@GameTest(maxTicks = 560)
 	public void fellWithoutReplantKeepsTheSapling(GameTestHelper helper) {
@@ -466,8 +482,9 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * take_back goes on while a round takes a block back (#637): placed_scaffold(), stood in for, gives one dirt block a
-	 * round, as walks that each place one more would, six rounds in all; every one is taken back, not the first four. Then
+	 * take_back goes on while a round takes a block back (#637): placed_scaffold(False), stood in for, lists one dirt block
+	 * more a round, as walks that each place one more would, and leaves out those mined (#657), six rounds in all; every
+	 * one is taken back, not the first four. Then
 	 * a round that takes nothing back (a spot left air every round) ends it. Passes at about tick 110.
 	 */
 	@GameTest(maxTicks = 220)
@@ -479,10 +496,10 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 2);
 		expect(helper, bot, "import lib.trees\nspots = [" + spots + "]\ncalls = [0]\n"
-			+ "def one():\n    calls[0] += 1\n    return spots[calls[0] - 1:calls[0]]\n"
+			+ "def one(forget=True):\n    calls[0] += 1\n    return [p for p in spots[:calls[0]] if block(p).id == 'minecraft:dirt']\n"
 			+ "lib.trees.placed_scaffold = one\nlib.trees.take_back()\nprint(count('dirt'), calls[0])\n"
 			+ "calls[0] = 0\n"
-			+ "def air():\n    calls[0] += 1\n    return [Pos" + at(helper, 1, 3, 1) + "]\n"
+			+ "def air(forget=True):\n    calls[0] += 1\n    return [Pos" + at(helper, 1, 3, 1) + "]\n"
 			+ "lib.trees.placed_scaffold = air\nlib.trees.take_back()\nprint(calls[0])\n",
 			List.of("6 7", "1"), () -> {
 				for (int x = 1; x <= 6; x++) {

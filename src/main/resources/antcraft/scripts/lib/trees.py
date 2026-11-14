@@ -336,27 +336,21 @@ def stands(blocks):
     return out
 
 
-def take_back():
-    """Mines the scaffold the script's walks placed since it last asked placed_scaffold(), the highest first: only blocks
-    unchanged since, so one someone else mined or put there meanwhile stays. Then what its walks to those blocks placed,
-    round after round while a round takes some block back, at most 32 (#614, #637). A block mine could not reach, once the blocks it
-    was reached from were gone, stays for the next round, from what that round's walks placed (#628)."""
-    out = {}
+def take_back(keep=()):
+    """Mines the scaffold the script's walks placed since it last asked placed_scaffold(), the highest first, but those in
+    keep (a list from placed_scaffold(False) before the walks, #657): only blocks unchanged since, so one someone else
+    mined or put there meanwhile stays. Then what its walks to those blocks placed, round after round while a round takes
+    some block back, at most 32 (#614, #637). A block mine could not reach, once the blocks it was reached from were gone,
+    stays for the next round, from what that round's walks placed (#628); what no round reached stays listed, as keep does."""
     took = True
     rounds = 0
     # ponytail: a backstop, should each round's walks place a block as it mines one; raise it if a real tree needs more.
     while took and rounds < 32:
         rounds += 1
-        placed = placed_scaffold() + [q for q in out if block(q).id == out[q]]
-        out = {}
         took = False
-        for q in sorted(placed, key=lambda q: -q.y):
-            was = block(q).id
-            r = mine(q)
-            if r:
+        for q in sorted([q for q in placed_scaffold(False) if q not in keep], key=lambda q: -q.y):
+            if mine(q):
                 took = True
-            if r.reason == "out_of_reach":
-                out[q] = was
 
 
 def fell_whole(base, replant=True, blocks=None, plan=None):
@@ -368,7 +362,8 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
     blocks and plan, where given, are tree_blocks(base) and stands(blocks), so a caller that worked them out already
     does not again. Assumes the bot holds an axe or goes
     without one, and carries scaffold blocks for a tree taller than it reaches. Gives result(): ok, out_of_reach at a log
-    it could not mine, or no_space at one whose drops did not fit; it takes back its scaffold either way."""
+    it could not mine, or no_space at one whose drops did not fit; it takes back its scaffold either way, not what
+    earlier walks placed, which placed_scaffold() still lists after."""
     blocks = blocks or tree_blocks(base)
     spots = square(base) or [base]
     kind = sapling(block(base).id)
@@ -377,8 +372,8 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
     for p in blocks:
         left[p] = True
     # What the walks place, under the stands and wherever else they pillar or bridge, placed_scaffold() gives (#533); what
-    # earlier walks placed is not this tree's to take back.
-    placed_scaffold()
+    # earlier walks placed is not this tree's to take back, and stays listed for the caller (#657).
+    earlier = placed_scaffold(False)
     for i, s in enumerate(plan):
         goto(s)  # where it gets nowhere, mine walks for each log
         later = plan[i + 1:]
@@ -388,7 +383,7 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
             if r or r.reason == "target_gone":
                 left.pop(p)
             elif r.reason == "no_space":
-                take_back()
+                take_back(earlier)
                 return result("no_space", p)
     for p in sorted(list(left), key=lambda p: -p.y):
         r = mine(p)
@@ -400,7 +395,7 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
                 goto(s)
                 r = mine(p)
         if not r and r.reason != "target_gone":
-            take_back()
+            take_back(earlier)
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)
     # Picks up first: logs that fell on the leaves it may pillar up to, and that scaffold comes down too. Saplings only
     # where they lie on the floor or a step over it: pillaring up to each one the decaying leaves let fall on the
@@ -409,7 +404,7 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
     for e in items_near(SAPLINGS, 8):
         if e.valid and e.pos.y <= base.y + 1 and goto(e.pos, keep="#antcraft:scaffold_blocks"):
             pick_up(SAPLINGS, 1)
-    take_back()
+    take_back(earlier)
     if replant:
         for p in spots:
             if block(p).is_air and on_ground(p.down()):

@@ -371,6 +371,12 @@ public final class ScriptRun {
 		return out;
 	}
 
+	/** As {@link #takePlaced}, but they stay noted: only those whose block changed since are dropped (#657). */
+	public List<Pos> peekPlaced() {
+		this.placed.removeIf(pos -> !this.owns(pos));
+		return List.copyOf(this.placed);
+	}
+
 	/** Takes the run's scaffold out of {@link #PLACED_BY}, as it ends (#550). */
 	private void ended() {
 		this.placed.forEach(this::disown);

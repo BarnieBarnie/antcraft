@@ -146,12 +146,13 @@ LEAF = 6 + lib.cost.WALK
 
 
 def climbing(do):
-    """A Source's do that takes back, after do, the scaffold the script's walks placed (lib.trees.take_back): the walks to
-    leaves high up pillar (#654). Without a placed_scaffold() first, so what the caller's walks placed and did not take
-    back yet comes down too, not dropped from the list."""
+    """A Source's do that takes back, after do, the scaffold its walks placed (lib.trees.take_back): the walks to leaves
+    high up pillar (#654). What the caller's walks placed before and did not take back yet stands and stays listed, so a
+    script on its own pillar keeps it (#657)."""
     def climbed(n, radius):
+        earlier = placed_scaffold(False)
         r = do(n, radius)
-        lib.trees.take_back()
+        lib.trees.take_back(earlier)
         return r
     return climbed
 

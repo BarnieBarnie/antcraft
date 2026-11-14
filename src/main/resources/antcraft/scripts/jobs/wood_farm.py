@@ -107,7 +107,7 @@ def build(kind, name, size, radius):
         r = ensure_tool(k, uses, None if k == "pickaxe" else "hand", radius)
         if not r["ok"]:
             return r
-    lib.trees.take_back()  # build_cell starts with placed_scaffold() too, as reap's harvest (#654)
+    lib.trees.take_back()  # what earlier walks placed comes down before the cell goes up, as before reap's harvest (#654)
     r = lib.treefarm.build_cell(kind, low, high)
     if r["ok"]:
         lib.cells.add(name, i)
@@ -214,7 +214,7 @@ def reap(kind, b, radius, told):
     """Fells the tree of cell b with an axe (lib.treefarm.harvest). Where that leaves a log, says why once (tell), gets
     scaffold(kind) dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
     ensure_tool("axe", 16, "hand", radius)
-    # harvest starts with placed_scaffold(), which drops what earlier walks placed: those come down first (#654).
+    # What earlier walks placed comes down first, out of the felling's way: harvest leaves it standing, listed (#654, #657).
     lib.trees.take_back()
     r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     if not r["ok"]:
@@ -232,7 +232,7 @@ def farm(kind, name, size, radius):
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
     lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
     where it felled nothing picks up the drops in the farm (sweep) and waits. Each round takes back the scaffold its walks
-    placed (lib.trees.take_back) before it waits, and before each felling and build, which drop the list (#654). Where size is None the farm grows to
+    placed (lib.trees.take_back) before it waits, and before each felling and build (#654). Where size is None the farm grows to
     limit(kind, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
     felled (learn)."""
     full = False

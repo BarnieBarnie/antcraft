@@ -156,6 +156,19 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True []")), "printed " + printed(bot)));
 	}
 
+	/** placed_scaffold(forget=False) gives the same without forgetting it, so the next call gives it again (#657). */
+	@GameTest(maxTicks = 60)
+	public void placedScaffoldWithoutForgetKeepsIt(GameTestHelper helper) {
+		AntBot bot = inABedrockPit(helper);
+		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
+		String pillar = "[Pos" + pos(helper.absolutePos(new BlockPos(2, 1, 2))) + "]";
+		BotScripts.run(bot, "goto(" + pos(target) + ")\nprint(placed_scaffold(forget=False) == " + pillar + ", placed_scaffold() == "
+			+ pillar + ", placed_scaffold(False))\n");
+		BotScripts.failOnError(helper, bot);
+
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True []")), "printed " + printed(bot)));
+	}
+
 	/**
 	 * Far from every other test, on a bridge high in the air:the bot's own chunk ticket keeps the three chunks around it
 	 * loaded, and the target lies in the fourth chunk on, which nothing loads until {@code goto} does. The bot crosses the
