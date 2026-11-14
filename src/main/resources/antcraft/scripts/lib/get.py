@@ -406,11 +406,15 @@ def options(kind, uses=1, tier=None, radius=32):
     # out, told by its raw items' estimates before their ore scans (a diamond axe for a few logs, #582).
     sure = min([o[0] for o in found if o[1] in ("hand", "carried")] or [None])
     costs = {}
-    for t in lib.craft.MADE:
+    # Lowest tier first, each up to the cheapest make so far (#595): a dearer tier would only follow it in the list.
+    # ponytail: a dearer tier is then no fallback where the cheaper one fails; the lowest one, costed first, always is.
+    limit = sure
+    for t in reversed(lib.craft.MADE):
         if t in ok:
-            m = make(kind, t, uses, radius, costs, sure)
+            m = make(kind, t, uses, radius, costs, limit)
             if m is not None:
                 found.append((m[0], "make", t, m[1]))
+                limit = m[0] if limit is None else min(limit, m[0])
     return sorted(found, key=lambda o: o[0])
 
 
