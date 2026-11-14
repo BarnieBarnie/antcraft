@@ -96,6 +96,57 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		measured(helper, bot);
 	}
 
+	/**
+	 * Four coal ore buried under the floor, none exposed, four sticks and a stone pickaxe carried (#641): make_cost of 16
+	 * torches (the coal source's estimate each and lib.get.deep's STEP_DOWN, BRANCH and STEP_UP) is within
+	 * {@link #COST_FACTOR} of the ticks get takes to dig stairs 3 down, a branch of 4 north past the vein, climb back up
+	 * and craft. The coal source and lib.dig.LENGTH are cut to that depth and length, as the area is 8 blocks wide. Stone
+	 * is filled under the floor, y -4 to -1. Measured: make_cost 482, get 464 ticks.
+	 */
+	@GameTest(maxTicks = 950)
+	public void makeCostOfBuriedOreIsCloseToItsTicks(GameTestHelper helper) {
+		for (BlockPos pos : BlockPos.betweenClosed(0, -4, 0, 7, -1, 7)) {
+			helper.setBlock(pos, Blocks.STONE);
+		}
+		for (BlockPos pos : BlockPos.betweenClosed(4, -2, 1, 4, -1, 2)) {
+			helper.setBlock(pos, Blocks.COAL_ORE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 7);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 4));
+		run(helper, bot, """
+			import lib.dig
+			from lib.get import get, make_cost, Source, SOURCES
+			y = pos().y - 3
+			lib.dig.LENGTH = 4
+			s = SOURCES["minecraft:coal"]
+			SOURCES["minecraft:coal"] = Source(lambda n, radius: lib.dig.ore("coal", n, radius, y, length=4), s.tool, s.tier, s.estimate, s.ore, y=y)
+			print(make_cost("torch", 16))
+			r = get("torch", 16)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/**
+	 * A stick carried and a coal in a chest across the area (#641): make_cost of four torches (the walk to the chest) is
+	 * within {@link #COST_FACTOR} of the ticks get takes to fetch the coal and craft them. Measured: make_cost 70, get 60
+	 * ticks.
+	 */
+	@GameTest(maxTicks = 150)
+	public void makeCostOfChestCoalIsCloseToItsTicks(GameTestHelper helper) {
+		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.COAL));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 0);
+		bot.getInventory().addItem(new ItemStack(Items.STICK));
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("torch", 4))
+			r = get("torch", 4)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
 	/** How far make_cost may be from the ticks get takes, either way. */
 	private static final double COST_FACTOR = 1.5;
 
