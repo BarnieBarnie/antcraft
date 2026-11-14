@@ -36,7 +36,7 @@ r = lib.project.run(name, steps)
 - **farm**, round after round, for ever:
     1. fells each grown tree with `lib.treefarm.harvest`, which replants it;
     2. stores what it felled with `lib.depot.store`: logs, saplings of other kinds, sticks and apples each in their own chests, the rest in `other`; the bot keeps its saplings, dirt, torches, slabs and the crafting table it makes chests with;
-    3. tends each cell: a sapling on a spot that holds none (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands takes its place, so a lost torch comes from the chests);
+    3. tends each cell: a sapling on a spot that holds none (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands breaks it with its drop, and the bot picks the torch up to put back);
     4. builds the next cell when the farm has fewer than its most and the bot carries, or takes from the chests within the radius, what a cell takes and a spare sapling;
     5. waits 100 ticks where nothing had grown.
 - `lib.project.run` keeps the steps done in `memory["projects"]`, `lib.cells` the cells built in `memory["cells"]`, `lib.depot` the chests in `memory["depots"]` and the job the corner in `memory["wood_farms"]`, so a farm run again goes on farming: it does not build its first cell a second time. To start over, `lib.project.reset("birch_farm")` and pop the farm from those.

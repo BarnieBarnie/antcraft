@@ -18,6 +18,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -38,6 +39,7 @@ import net.minecraft.world.level.gameevent.GameEventListener;
 import net.minecraft.world.level.gameevent.GameEventListenerRegistry;
 import net.minecraft.world.level.gameevent.PositionSource;
 import net.minecraft.world.level.storage.TagValueInput;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.Vec3;
 
@@ -537,6 +539,28 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 4, 3)));
 
 		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
+	}
+
+	/**
+	 * A bot pillars up a one-wide shaft from a spot holding a torch: the torch is broken with its drop before the
+	 * scaffold goes there (#608), so it ends up in the bot's inventory or on the ground, not deleted.
+	 */
+	// Measured: passes at tick 22 (red: the torch gone without a drop).
+	@GameTest(maxTicks = 50)
+	public void pillaringBreaksATorchWithItsDrop(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 6, Blocks.BEDROCK);
+		fill(helper, 3, 2, 3, 3, 7, 3, Blocks.AIR);
+		helper.setBlock(3, 1, 3, Blocks.TORCH);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 4, 3)));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(GameTests.walked(bot), "still walking, at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			boolean dropped = !helper.getLevel().getEntitiesOfClass(ItemEntity.class, new AABB(helper.absolutePos(BlockPos.ZERO)).inflate(8),
+				item -> item.getItem().is(Items.TORCH)).isEmpty();
+			helper.assertTrue(bot.getInventory().countItem(Items.TORCH) == 1 || dropped, "the torch vanished");
+		});
 	}
 
 	/**

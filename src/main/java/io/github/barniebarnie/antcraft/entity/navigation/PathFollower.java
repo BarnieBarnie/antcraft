@@ -36,6 +36,7 @@ import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
@@ -485,7 +486,8 @@ public class PathFollower {
 
 	/**
 	 * Places one of the bot's scaffold blocks at {@code pos}, recorded as its scaffold, unless it carries none or an
-	 * entity that blocks building, such as another bot, overlaps the block, as for a player.
+	 * entity that blocks building, such as another bot, overlaps the block, as for a player. A block other than air or a
+	 * fluid there, such as a torch, is broken with its drops first.
 	 */
 	public Placed placeBlock(ServerLevel level, BlockPos pos) {
 		SimpleContainer inventory = this.bot.getInventory();
@@ -498,6 +500,10 @@ public class PathFollower {
 				}
 				Vec3 center = Vec3.atCenterOf(pos);
 				this.bot.getLookControl().setLookAt(center.x, center.y, center.z);
+				BlockState old = level.getBlockState(pos);
+				if (!old.isAir() && !(old.getBlock() instanceof LiquidBlock)) {
+					level.destroyBlock(pos, true, this.bot); // a torch, sapling or grass in the way drops, not vanishes (#608)
+				}
 				level.setBlockAndUpdate(pos, state);
 				level.playSound(null, pos, state.getSoundType().getPlaceSound(), SoundSource.BLOCKS, 1.0F, 1.0F);
 				level.gameEvent(this.bot, GameEvent.BLOCK_PLACE, pos);

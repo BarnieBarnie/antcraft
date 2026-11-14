@@ -100,13 +100,9 @@ def unplanted(kind, b):
 
 def tend(kind, b, radius):
     """Puts back what cell b lacks: a sapling on each spot without one (mining what stands there first, such as a
-    scaffold block a felling left) and its torches (taken from the chests within radius where the bot carries too few),
-    as far as the bot has them. ponytail: a walk that pillars where a torch stands puts its block there without
-    dropping the torch, so a lost torch comes from the chests."""
+    scaffold block a felling left) and its torches (a walk that pillars where a torch stands breaks it, and the bot
+    picks it up), as far as the bot has them."""
     torches = lib.treefarm.torches(b[0], b[1])
-    lost = len([t for t in torches if block(t).id != lib.treefarm.TORCH])
-    if lost and count(lib.treefarm.TORCH) < lost:
-        lib.stock.take_up_to(lib.treefarm.TORCH, lost, radius)
     for p in unplanted(kind, b):
         if count(kind):
             if not block(p).is_air:

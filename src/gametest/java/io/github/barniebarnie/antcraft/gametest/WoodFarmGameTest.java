@@ -40,15 +40,15 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * An empty bot, a stone axe, 16 dirt and 4 torches in the chest: it gets the kit, two saplings from the birch's
+	 * An empty bot, a stone axe, 16 dirt and 2 torches in the chest: it gets the kit, two saplings from the birch's
 	 * leaves, builds and plants the first cell; the test grows its sapling, and the bot fells the birch, replants and
 	 * stores the logs in a chest of the depot, and the cell keeps its torches (a pillar up to drops on the leaves can take
-	 * one's place: the spare 2 put it back).
+	 * one's place: the bot picks the torch up and puts it back, with no spare, #608).
 	 */
 	// Measured: passes at tick 363 to 1187 alone or with the tree tests, up to 1700 with 7 copies at once.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 3000)
 	public void buildsTheFirstCellHarvestsAndStoresTheLogs(GameTestHelper helper) {
-		AntBot bot = farm(helper, 0, 4);
+		AntBot bot = farm(helper, 0, 2);
 		run(helper, bot);
 		boolean[] grew = new boolean[1];
 		BotScripts.failOnWarning(helper, bot);
