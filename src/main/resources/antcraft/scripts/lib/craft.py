@@ -37,12 +37,14 @@ def craft_all(item, n=1, table=None, furnace=None):
             if not r:
                 return result(r.reason)
         else:
+            # The fuel the plan burns for the step, so coal it keeps for a later step is not burnt (#577).
+            fuel = plan["fuel"].get(step) or None
             while k > 0:
                 # ponytail: smelt_here puts a furnace down and takes it back for each stack, fine for tools and armour.
                 if furnace is None:
-                    r = smelt_here(plan["inputs"][step], min(k, STACK))
+                    r = smelt_here(plan["inputs"][step], min(k, STACK), fuel=fuel)
                 else:
-                    r = result(smelt(plan["inputs"][step], min(k, STACK), furnace=furnace).reason)
+                    r = result(smelt(plan["inputs"][step], min(k, STACK), furnace=furnace, fuel=fuel).reason)
                 if not r["ok"]:
                     return r
                 k -= min(k, STACK)

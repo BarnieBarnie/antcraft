@@ -4,7 +4,7 @@ Crafting and smelting an item through its whole recipe tree, with a crafting tab
 
 ## `craft_all(item, n=1, table=None, furnace=None)`
 
-Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the steps and runs each in order, `craft` at `table` or `smelt` in `furnace` (`None`: one within reach, as those actions take it; for a smelting step without `furnace`, `smelt_here` (below), which puts one down where none is in reach). A smelting step of more than a stack takes several `smelt` calls. It gathers nothing: fetch the raw items first, with [`take`](../../crafting/take.md) from a chest or by mining.
+Makes `n` of `item` from what the bot carries: it asks `needs(item, n)` for the steps and runs each in order, `craft` at `table` or `smelt` in `furnace` (`None`: one within reach, as those actions take it; for a smelting step without `furnace`, `smelt_here` (below), which puts one down where none is in reach), burning the fuel `needs` gives for the step. A smelting step of more than a stack takes several `smelt` calls. It gathers nothing: fetch the raw items first, with [`take`](../../crafting/take.md) from a chest or by mining.
 
 - **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives: `ok`, `reason`, `at` (always `None`) and `missing`.
 - **Pauses** yes, while it walks to the table or furnace and waits for the smelting.

@@ -185,8 +185,10 @@ def resolve(item, n, radius):
             break
         logs = wood_for_coal(p["gather"].get(COAL, 0), radius)
         if logs and get(LOGS, count(LOGS) + logs, radius)["ok"]:
-            # The charcoal now, before get takes the chests' coal, which the smelt would burn first (#564). logs * 3 // 5
-            # is the charcoal those logs make (the inverse of charcoal's).
+            # The charcoal now, before get takes the chests' coal (#564): the plan sees only what the bot carries, so with
+            # the logs and no coal it would smelt charcoal for all of it and ask for more logs, and with the coal carried
+            # it would burn the coal, its best fuel, to smelt the charcoal (#577). logs * 3 // 5 is the charcoal those
+            # logs make (the inverse of charcoal's).
             lib.craft.craft_here("minecraft:charcoal", count("minecraft:charcoal") + logs * 3 // 5)
             continue
         for raw, k in p["gather"].items():

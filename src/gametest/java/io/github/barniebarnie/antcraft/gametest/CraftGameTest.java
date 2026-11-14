@@ -326,6 +326,22 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			"raw_iron", "stick"), List.of("True None {} 1 0 0 0"));
 	}
 
+	/**
+	 * Eight torches from one coal and one log (#577): the plan puts the coal in the torches, smelts the log into charcoal
+	 * for the rest and burns a plank doing it, so the smelt burns that plank, not the coal the torches need.
+	 */
+	@GameTest(maxTicks = 420)
+	public void craftAllSmeltsWithTheFuelThePlanPicked(GameTestHelper helper) {
+		furnace(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		expect(helper, bot, "print(needs('torch', 8)['fuel'])\n" + craftAll("'torch', 8, furnace=" + furnaceAt(helper), "torch", "coal", "charcoal",
+			"oak_log", "oak_planks"), List.of("{'minecraft:charcoal': ['minecraft:oak_planks']}", "True None {} 8 0 0 0 3"));
+	}
+
 	// lib.craft.craft_here
 
 	/** Prints what {@code lib.craft.craft_here(args)} gives and then {@code counts}, the {@code count} of each item. */

@@ -60,6 +60,7 @@ class NeedsTest {
 		assertEquals("{'log': 2, 'coal': 2, 'ore': 3}", gather(needs));
 		assertEquals("[('planks', 8, 'craft'), ('ingot', 3, 'smelt')]", crafts(needs));
 		assertEquals("{'ingot': ['ore']}", Values.repr(needs.get("inputs")));
+		assertEquals("{'ingot': ['coal']}", Values.repr(needs.get("fuel")));
 	}
 
 	@Test
@@ -93,6 +94,7 @@ class NeedsTest {
 		assertEquals("{}", gather(needs));
 		assertEquals("[('minecraft:iron_ingot', 3, 'smelt'), ('minecraft:iron_pickaxe', 1, 'craft')]", crafts(needs));
 		assertEquals("{'minecraft:iron_ingot': ['minecraft:raw_iron']}", Values.repr(needs.get("inputs")));
+		assertEquals("{'minecraft:iron_ingot': ['minecraft:coal']}", Values.repr(needs.get("fuel")));
 		PyList crafts = (PyList) needs.get("crafts");
 		assertEquals(2, crafts.items.size());
 	}

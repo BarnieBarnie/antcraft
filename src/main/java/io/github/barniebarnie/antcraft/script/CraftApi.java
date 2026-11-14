@@ -154,6 +154,7 @@ public final class CraftApi {
 		gather.forEach(gatherDict::put);
 		List<Object> crafts = new ArrayList<>();
 		PyDict inputs = new PyDict();
+		PyDict fuel = new PyDict();
 		boolean table = false;
 		for (TaskPlanner.Craft<I> craft : plan.crafts()) {
 			TaskPlanner.Recipe<I> recipe = craft.recipe();
@@ -164,12 +165,17 @@ public final class CraftApi {
 				List<Object> options = new ArrayList<>();
 				recipe.ingredients().keySet().forEach(set -> set.forEach(item -> options.add(id.apply(item))));
 				inputs.put(id.apply(recipe.output()), new PyList(options));
+				// What the plan burns for it, so smelt(fuel=...) burns that, not coal the plan keeps for a later step (#577).
+				List<Object> burnt = new ArrayList<>();
+				craft.fuel().keySet().forEach(item -> burnt.add(id.apply(item)));
+				fuel.put(id.apply(recipe.output()), new PyList(burnt));
 			}
 		}
 		PyDict needs = new PyDict();
 		needs.put("gather", gatherDict);
 		needs.put("crafts", new PyList(crafts));
 		needs.put("inputs", inputs);
+		needs.put("fuel", fuel);
 		needs.put("table", table);
 		return needs;
 	}
