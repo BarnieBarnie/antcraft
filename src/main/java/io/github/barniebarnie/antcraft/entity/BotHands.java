@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
+import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.script.Result;
 import io.github.barniebarnie.antcraft.script.WorkApi;
 import java.util.List;
@@ -301,15 +302,16 @@ public final class BotHands {
 	/**
 	 * Uses the held item on the block at {@code pos}, or with an empty hand the block itself, as a player's right click
 	 * does: on the block first, then the item on its own (a bucket), looking where the bot sees the block from the eyes the
-	 * walk checks ({@link #aim}). Null when that did something; else why not: {@link Result#OUT_OF_REACH} when no line from
-	 * those eyes reaches the block, so the
-	 * use would act on another block (docs/reference/blocks/use.md), and {@link Result#BLOCKED} when the use did nothing.
+	 * walk checks ({@link #aim}): those over its feet as paths count them ({@link PathFollower#feet}), not over its block
+	 * position, which on farmland is the farmland itself, so the eyes were a block low (#660). Null when that did
+	 * something; else why not: {@link Result#OUT_OF_REACH} when no line from those eyes reaches the block, so the use
+	 * would act on another block (docs/reference/blocks/use.md), and {@link Result#BLOCKED} when the use did nothing.
 	 */
 	public static @Nullable String use(AntBot bot, BlockPos pos) {
 		ServerLevel level = (ServerLevel) bot.level();
 		String[] failed = {Result.BLOCKED};
 		withHand(bot, pos, player -> {
-			BlockHitResult hit = aim(level, player, bot.blockPosition(), pos);
+			BlockHitResult hit = aim(level, player, PathFollower.feet(bot), pos);
 			if (hit == null) {
 				failed[0] = Result.OUT_OF_REACH;
 				return false;

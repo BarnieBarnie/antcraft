@@ -376,6 +376,44 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * The field of theJobTendsAFieldWiderThanItsReach, with a hoe and 36 seeds carried, tilled and planted one spot at a
+	 * time, each row from x 3 up, as colony.farmer did before #646 (#660): the bot reaches every spot, though the crops
+	 * it planted stand between it and the next. The cause was not the crops: use aimed from the bot's block position,
+	 * which on farmland is the farmland, so from eyes a block low that saw no dirt a few blocks off.
+	 */
+	// Measured: passes at tick 311 (red: seven spots use out_of_reach, the bot on farmland).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 640)
+	public void spotBySpotTheBotReachesEverySpotPastItsCrops(GameTestHelper helper) {
+		List<BlockPos> spots = new java.util.ArrayList<>();
+		for (int z = 3; z <= 5; z++) {
+			for (int x = 3; x <= 15; x++) {
+				if (z == 4 && (x == 5 || x == 9 || x == 13)) {
+					helper.setBlock(x, 0, z, Blocks.WATER);
+				} else {
+					helper.setBlock(x, 0, z, Blocks.DIRT);
+					spots.add(new BlockPos(x, 0, z));
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 8);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT_SEEDS, 36));
+		ScriptRun run = run(helper, bot, """
+			for s in [%s]:
+			    r = use(s, "wooden_hoe")
+			    if not r:
+			        print("till", s, r.reason)
+			    r = place(s.up(), "wheat_seeds")
+			    if not r:
+			        print("plant", s, r.reason)
+			""".formatted(String.join(", ", spots.stream().map(s -> printed(helper, s.getX(), s.getY(), s.getZ())).toList())));
+		helper.succeedWhen(() -> {
+			finished(helper, bot, run, List.of());
+			planted(helper, spots);
+		});
+	}
+
 	/** The job finished (the bot runs idle.py once it has). */
 	private static void jobFinished(GameTestHelper helper, AntBot bot, ScriptRun job) {
 		helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state() + " " + BotScripts.log(bot, Output.Level.DEBUG));
