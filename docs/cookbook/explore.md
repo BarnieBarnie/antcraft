@@ -6,16 +6,25 @@ A job that walks a spiral around the bot until it sees what it was sent for, a b
 import lib.explore
 from lib.home import go_home
 
-what = ARGS[0] if len(ARGS) > 0 and ARGS[0] != "all" else None
-rings = int(ARGS[1]) if len(ARGS) > 1 else 4
-step = int(ARGS[2]) if len(ARGS) > 2 else 32
+def run(what=None, rings=4, step=32):
+    """Explores until the bot sees what (None: the whole spiral), goes home and reports. Gives lib.explore.explore's
+    result()."""
+    until = None if what is None else lambda s: len(lib.explore.seen(what)) > 0
+    r = lib.explore.explore(rings, step, until)
+    go_home()
+    lib.explore.report()
+    if not r["ok"]:
+        warn("explore:", what, r["reason"])
+    return r
 
-until = None if what is None else lambda s: len(lib.explore.seen(what)) > 0
-r = lib.explore.explore(rings, step, until)
-go_home()
-lib.explore.report()
-if not r["ok"]:
-    warn("explore:", what, r["reason"])
+
+try:
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    run(args[0] if len(args) > 0 and args[0] != "all" else None, int(args[1]) if len(args) > 1 else 4,
+        int(args[2]) if len(args) > 2 else 32)
 ```
 
 ## How it works

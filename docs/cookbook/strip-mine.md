@@ -19,30 +19,23 @@ ROUNDS = 16
 # The blocks a branch breaks: its tunnel two blocks tall and a few ore. ponytail: a guess, not counted from the veins.
 USES = 2 * LENGTH + 8
 
-item = lib.dig.short(ARGS[0])
-n = int(ARGS[1]) if len(ARGS) > 1 else 8
-y = int(ARGS[2]) if len(ARGS) > 2 else lib.dig.best_y(item)
-radius = int(ARGS[3]) if len(ARGS) > 3 else 32
-facing = ARGS[4] if len(ARGS) > 4 else "north"
-
-
-def tier():
+def tier(item):
     """The pickaxe tier the ore of item needs ("iron" for diamond), stone at least: the kit's."""
     t = lib.tools.tier_for(item.replace("raw_", "").replace("_lazuli", "") + "_ore")
     return min([t, "stone"], key=lib.tools.TIERS.index)
 
 
-def strip_mine():
-    """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure before the stairs
-    and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs or a branch reach
-    the edge of lib.find.WHERE, it turns square to it (lib.dig.turn). Gives result()."""
+def strip_mine(item, n, y, radius, facing):
+    """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure
+    before the stairs and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs or
+    a branch reach the edge of lib.find.WHERE, it turns square to it (lib.dig.turn). Gives result()."""
     if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
     if y is None:
         return result("no_ore", None, {"minecraft:" + item: n})  # as lib.dig.ore: no height to dig to (emerald)
     r = lib.bootstrap.kit(MINER, radius)
     if r["ok"]:
-        r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(), radius)
+        r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(item), radius)
     way = facing
     tried = []
     if r["ok"]:
@@ -56,7 +49,7 @@ def strip_mine():
         if not r["ok"] or count(item) >= n or way is None:
             break
         # A new pickaxe where the one it holds would break in the branch: stone from the cobblestone it dug.
-        r = ensure_tool("pickaxe", USES, tier(), radius)
+        r = ensure_tool("pickaxe", USES, tier(item), radius)
         if r["ok"]:
             r = lib.dig.branch(LENGTH, facing=way)
     if r["reason"] == "outside":
@@ -70,22 +63,38 @@ def strip_mine():
     return r
 
 
+def run(ore, n=8, y=None, radius=32, facing="north"):
+    """Strip-mines for ore until the bot carries n of it, at y (lib.dig.best_y(ore) where None), says how it went and
+    gives back what it borrowed, also when it fails. Gives strip_mine's result()."""
+    item = lib.dig.short(ore)
+    if y is None:
+        y = lib.dig.best_y(item)
+    try:
+        r = strip_mine(item, n, y, radius, facing)
+        if r["ok"]:
+            print(f"strip mined {count(item)} {item}")
+        else:
+            warn("strip mine:", r["reason"], r["at"], r["missing"])
+    finally:
+        give_back()
+        if borrowed():
+            warn("could not give back", borrowed())
+    return r
+
+
 try:
-    r = strip_mine()
-    if r["ok"]:
-        print(f"strip mined {count(item)} {item}")
-    else:
-        warn("strip mine:", r["reason"], r["at"], r["missing"])
-finally:
-    give_back()
-    if borrowed():
-        warn("could not give back", borrowed())
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    run(args[0], int(args[1]) if len(args) > 1 else 8, int(args[2]) if len(args) > 2 else None,
+        int(args[3]) if len(args) > 3 else 32, args[4] if len(args) > 4 else "north")
 ```
 
 ## How it works
 
 - [`kit(MINER)`](../reference/modules/lib/bootstrap.md) makes sure the bot carries the kit: a carried or chest pickaxe of at least stone does, the rest it gets with [`get`](../reference/modules/lib/get.md), borrowing from chests or making it.
-- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times. Where a script set [`lib.find.WHERE`](../reference/modules/lib/find.md#where), the edge of it ends a branch or the stairs, and the job turns square to the way it was going with [`lib.dig.turn`](../reference/modules/lib/dig.md#turnfacing-tried) instead of stopping with a warning.
+- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times. Where [`lib.find.WHERE`](../reference/modules/lib/find.md#where) is set, as it is for a bot in a colony or by a script that imports the job and calls `jobs.strip_mine.run(...)` (#594), the edge of it ends a branch or the stairs, and the job turns square to the way it was going with [`lib.dig.turn`](../reference/modules/lib/dig.md#turnfacing-tried) instead of stopping with a warning.
 - Before the stairs and before each branch, [`ensure_tool`](../reference/modules/lib/get.md) makes sure the pickaxes the bot carries last the blocks it will break: about three a step, and twice the branch's length plus a few for ore. Where they do not, it takes the cheapest that does, usually a new stone pickaxe from the cobblestone the stairs and branches gave and the crafting table of the kit. An ore that needs a better pickaxe, such as diamond, asks for that tier ([`tier_for`](../reference/modules/lib/tools.md)).
 - [`stairs_up`](../reference/modules/lib/dig.md) walks back up the staircase, also when a branch failed, and [`go_home`](../reference/modules/lib/home.md) walks home.
 - [`give_back`](../reference/modules/lib/borrow.md) in `finally` returns what was borrowed, also when a step failed or the script stopped with an error.

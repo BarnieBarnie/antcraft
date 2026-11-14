@@ -25,12 +25,12 @@ The steps, from `config/antcraft/scripts/jobs/settle.py`:
 
 ```python
 steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
-         Step("flatten", flatten),
+         Step("flatten", flatten, (at, radius)),
          Step("hut", build_here, (hut, at, 0, False, radius)),
-         Step("furnish", furnish),
-         Step("field", plant, tries=2, optional=True),
+         Step("furnish", furnish, (at,)),
+         Step("field", plant, (at, radius), tries=2, optional=True),
          Step("store", lib.storage.deposit, (None, radius), optional=True),
-         Step("home", home_in)]
+         Step("home", home_in, (at, hut))]
 r = lib.project.run("settle", steps)
 ```
 

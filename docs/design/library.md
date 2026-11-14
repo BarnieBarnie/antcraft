@@ -101,7 +101,7 @@ What the library needs from the API:
 
 ## Example jobs
 
-Eleven jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
+Eleven jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails. Each is a `run(...)` function too, taking the job's arguments as values: run as a script, the job calls it with its `ARGS`; imported, it runs nothing, so another script sets up first and calls it, such as `jobs.strip_mine.run("coal", 2, -40)` after setting `lib.find.WHERE` (#594). A bot in a colony keeps to the colony in every job, as `lib.find.WHERE` is `in_colony` for it from the start ([`lib.find`](../reference/modules/lib/find.md#where)).
 
 1. **`jobs/bootstrap.py`**: an empty-handed bot gets `lib.bootstrap.KIT` from what is around: logs, a crafting table, a wooden pickaxe, cobblestone, the stone tools, a furnace, charcoal and torches; tools in a nearby chest are borrowed instead of made. Test: an empty bot by trees and stone; again with an iron pickaxe in a chest, which it uses and gives back.
 2. **`jobs/get.py <item> [n]`**: `get(ARGS[0], n)`, the resolver alone. Test: `iron_pickaxe` from nothing, with trees, stone and iron ore in the area.

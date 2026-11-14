@@ -12,7 +12,7 @@ The position of the colony's Colony Core, where members store what they bring in
 
 ## `in_colony(p)`
 
-Whether the position `p` lies within the colony's radius of its core, measured across (x and z): the colony's edge is a column, so a block 40 below the core within the radius is in the colony (#576). `False` for a bot in no colony. Done at once.
+Whether the position `p` lies within the colony's radius of its core, measured across (x and z): the colony's edge is a column, so a block 40 below the core within the radius is in the colony (#576). `False` for a bot in no colony. Done at once. It is [`lib.find.in_colony`](../lib/find.md#in_colonyp), which `lib.find.WHERE` starts as for a bot in a colony, so a member keeps to the colony in any script, not only one that imports this module (#594).
 
 ## `store(item)`
 

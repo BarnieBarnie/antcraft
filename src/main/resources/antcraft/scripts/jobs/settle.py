@@ -3,7 +3,8 @@
 # started), how far to look for what it needs, in blocks (32 by default), and the house's blueprint (the bundled starter
 # house by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, levels
 # the plot, builds the house, places a chest and a crafting table beside it, plants a small wheat field round a water
-# source, stores the rest and sets home inside the house (docs/cookbook/settle.md).
+# source, stores the rest and sets home inside the house (docs/cookbook/settle.md). Another script runs it with
+# run(at, radius, hut); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -26,40 +27,35 @@ SEED = "minecraft:wheat_seeds"
 TALL = 6  # how high over the ground the plot is cleared
 DEEP = 3  # how deep a hole in the plot is filled
 
-# Without x y z, a rerun resumes where the stopped run started, not where the bot stands now.
-at = Pos(int(ARGS[0]), int(ARGS[1]), int(ARGS[2])) if len(ARGS) > 2 else memory.get("settle_at", pos())
-memory["settle_at"] = at
-radius = int(ARGS[3]) if len(ARGS) > 3 else 32
-hut = ARGS[4] if len(ARGS) > 4 else HUT
-ground = at.y - 1
 # The house at at, the chest and table east of its front, the field (3 by 3, water in the middle) behind them.
-chest = at + (6, 0, 0)
-table = at + (6, 0, 1)
-field = (at + (6, -1, 2), at + (8, -1, 4))
-water = at + (7, -1, 3)
+CHEST = (6, 0, 0)
+TABLE = (6, 0, 1)
+FIELD = ((6, -1, 2), (8, -1, 4))
+WATER = (7, -1, 3)
 
 
-def flatten():
+def flatten(at, radius):
     """Levels the plot, house, chest and field with a block round them, at ground, getting the dirt it falls short of."""
     low = at + (-1, -1 - DEEP, -1)
     high = at + (9, TALL - 1, 5)
-    r = lib.terrain.flatten(low, high, ground)
+    r = lib.terrain.flatten(low, high, at.y - 1)
     if r["reason"] == "missing_ingredients":
         g = get("dirt", r["missing"]["minecraft:dirt"], radius)
         if not g["ok"]:
             return g
-        r = lib.terrain.flatten(low, high, ground)
+        r = lib.terrain.flatten(low, high, at.y - 1)
     return r
 
 
-def furnish():
-    r = place(chest, "chest")
-    return r if not r else place(table, "crafting_table")
+def furnish(at):
+    r = place(at + CHEST, "chest")
+    return r if not r else place(at + TABLE, "crafting_table")
 
 
-def pour():
+def pour(at, radius):
     """Pours a water source in the middle of the field, so its farmland stays wet, with a water bucket from lib.get, else
     an empty bucket from lib.get (a chest's, or made of three iron ingots) filled at the nearest water source (#592)."""
+    water = at + WATER
     if block(water).id == "minecraft:water":
         return
     # With no water source within radius no bucket is got: the field is planted dry.
@@ -69,8 +65,9 @@ def pour():
         use(water, "water_bucket")  # aimed at the hole itself, so the water goes in, not over its rim
 
 
-def plant():
-    pour()
+def plant(at, radius):
+    pour(at, radius)
+    field = (at + FIELD[0], at + FIELD[1])
     spots = lib.farm.field(*field)
     r = ensure_tool("hoe", len(spots), None, radius)
     if not r["ok"]:
@@ -82,23 +79,39 @@ def plant():
     return lib.farm.tend(field[0], field[1], SEED)
 
 
-def home_in():
+def home_in(at, hut):
     """Home at the house's first work spot (the starter house's is inside, behind the door), else beside the chest."""
     spots = blueprint(hut, at)["work_spots"]
     set_home(spots[0] if spots else at + (5, 0, 0))
     goto(home())
 
 
-steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
-         Step("flatten", flatten),
-         Step("hut", build_here, (hut, at, 0, False, radius)),
-         Step("furnish", furnish),
-         Step("field", plant, tries=2, optional=True),
-         Step("store", lib.storage.deposit, (None, radius), optional=True),
-         Step("home", home_in)]
-r = lib.project.run("settle", steps)
-if r["ok"]:
-    # Settled: the next run settles anew.
-    lib.project.reset("settle")
-    memory.pop("settle_at")
-say("settled" if r["ok"] else f"not settled: {r['reason']} at {r['at']}, left {r['missing']}")
+def run(at=None, radius=32, hut=HUT):
+    """Settles a base with the house hut at at (where the stopped run started, else where the bot stands, where None).
+    Gives lib.project.run's result()."""
+    # Without at, a rerun resumes where the stopped run started, not where the bot stands now.
+    at = at if at is not None else memory.get("settle_at", pos())
+    memory["settle_at"] = at
+    steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
+             Step("flatten", flatten, (at, radius)),
+             Step("hut", build_here, (hut, at, 0, False, radius)),
+             Step("furnish", furnish, (at,)),
+             Step("field", plant, (at, radius), tries=2, optional=True),
+             Step("store", lib.storage.deposit, (None, radius), optional=True),
+             Step("home", home_in, (at, hut))]
+    r = lib.project.run("settle", steps)
+    if r["ok"]:
+        # Settled: the next run settles anew.
+        lib.project.reset("settle")
+        memory.pop("settle_at")
+    say("settled" if r["ok"] else f"not settled: {r['reason']} at {r['at']}, left {r['missing']}")
+    return r
+
+
+try:
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) > 2 else None, int(args[3]) if len(args) > 3 else 32,
+        args[4] if len(args) > 4 else HUT)

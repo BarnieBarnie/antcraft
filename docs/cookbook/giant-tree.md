@@ -9,11 +9,7 @@ from lib.get import ensure_tool, get
 from lib.result import result
 from lib.stock import take_up_to
 
-at = Pos(int(ARGS[0]), int(ARGS[1]), int(ARGS[2])) if len(ARGS) >= 3 else pos()
-radius = int(ARGS[-1]) if len(ARGS) in (1, 4) else 32
-
-
-def fell():
+def fell(at, radius):
     """Fells the giant tree nearest to at with an axe that lasts, scaffold dirt and saplings; gives result()."""
     base = lib.trees.next_tree(radius, lib.trees.is_giant, around=at)
     if base is None:
@@ -41,14 +37,27 @@ def fell():
     return r
 
 
+def run(at=None, radius=32):
+    """Fells and replants the giant tree nearest to at (the bot where None) and gives back what it borrowed. Gives fell's
+    result()."""
+    try:
+        r = fell(at if at is not None else pos(), radius)
+        if not r["ok"]:
+            warn("giant tree:", r["reason"], r["at"], r["missing"])
+    finally:
+        give_back()
+        if borrowed():
+            warn("could not give back", borrowed())
+    return r
+
+
 try:
-    r = fell()
-    if not r["ok"]:
-        warn("giant tree:", r["reason"], r["at"], r["missing"])
-finally:
-    give_back()
-    if borrowed():
-        warn("could not give back", borrowed())
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    run(Pos(int(args[0]), int(args[1]), int(args[2])) if len(args) >= 3 else None,
+        int(args[-1]) if len(args) in (1, 4) else 32)
 ```
 
 ## How it works

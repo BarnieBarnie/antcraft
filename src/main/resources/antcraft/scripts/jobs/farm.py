@@ -4,7 +4,8 @@
 # default) and rounds how often to tend it (1 by default, 0 until a round fails or the bot is stopped). Each round it gets
 # a hoe for the soil to till and the seeds for the bare spots with lib.get, harvests, tills and plants (lib.farm.tend),
 # gives back what it borrowed and puts the harvest in the nearest chest, keeping what the bot carried of it before the job;
-# between rounds it waits for the crops to ripen (docs/cookbook/farm.md).
+# between rounds it waits for the crops to ripen (docs/cookbook/farm.md). Another script runs it with
+# run(low, high, crop, rounds); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -14,17 +15,12 @@ import lib.stock
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool, get
 
-low = Pos(int(ARGS[0]), int(ARGS[1]), int(ARGS[2]))
-high = Pos(int(ARGS[3]), int(ARGS[4]), int(ARGS[5]))
-c = lib.farm.crop(ARGS[6] if len(ARGS) > 6 else "wheat")
-rounds = int(ARGS[7]) if len(ARGS) > 7 else 1
 WAIT = 100  # ticks between looks at the field while the crops grow
-# What the bot carried of the harvest before the job: it stores only what it carries beyond that (#600).
-kept = [] if c is None else [(item, count(item)) for item in [c[2], lib.farm.POISON]]
 
 
-def farm():
-    """Gets the hoe and seeds, tends the field, gives back what it borrowed and stores the harvest. Gives result()."""
+def farm(low, high, c, kept):
+    """Gets the hoe and seeds for crop c (of lib.farm.CROPS), tends the field, gives back what it borrowed and stores the
+    harvest beyond what kept, (item, count) pairs, says the bot carried. Gives result()."""
     spots = lib.farm.field(low, high)
     till = len([s for s in spots if block(s).id in lib.farm.SOIL and block(s.up()).is_air])
     if till:
@@ -48,7 +44,7 @@ def farm():
     return r
 
 
-def ripened():
+def ripened(low, high):
     """Waits until every crop of the field is ripe; at once where none grows. ponytail: looks every WAIT ticks."""
     while True:
         crops = [s.up() for s in lib.farm.field(low, high) if not block(s.up()).is_air]
@@ -57,15 +53,21 @@ def ripened():
         wait(WAIT)
 
 
-if c is None:
-    warn("farm: no crop", ARGS[6])
-else:
+def run(low, high, crop="wheat", rounds=1):
+    """Tends the field from low to high, the corners of its soil, rounds times (0: until a round fails), planting crop,
+    and gives back what it borrowed. Gives the last round's result(), None for no crop."""
+    c = lib.farm.crop(crop)
+    if c is None:
+        warn("farm: no crop", crop)
+        return None
+    # What the bot carried of the harvest before the job: it stores only what it carries beyond that (#600).
+    kept = [(item, count(item)) for item in [c[2], lib.farm.POISON]]
     try:
         n = 0
         while rounds == 0 or n < rounds:
             if n > 0:
-                ripened()
-            r = farm()
+                ripened(low, high)
+            r = farm(low, high, c, kept)
             n += 1
             if not r["ok"]:
                 warn("farm:", r["reason"], r["missing"])
@@ -74,3 +76,13 @@ else:
         give_back()
         if borrowed():
             warn("could not give back", borrowed())
+    return r
+
+
+try:
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
+        args[6] if len(args) > 6 else "wheat", int(args[7]) if len(args) > 7 else 1)

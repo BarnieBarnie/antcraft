@@ -6,10 +6,21 @@ A job that puts away what the bot carries and walks home: each item into a chest
 import lib.storage
 from lib.home import go_home
 
-r = lib.storage.deposit(radius=int(ARGS[0]) if len(ARGS) > 0 else 32)
-go_home()
-if not r["ok"]:
-    warn("store:", r["reason"], r["missing"])
+def run(radius=32):
+    """Deposits what the bot carries in the chests within radius and goes home. Gives lib.storage.deposit's result()."""
+    r = lib.storage.deposit(radius=radius)
+    go_home()
+    if not r["ok"]:
+        warn("store:", r["reason"], r["missing"])
+    return r
+
+
+try:
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    run(int(args[0]) if len(args) > 0 else 32)
 ```
 
 ## How it works

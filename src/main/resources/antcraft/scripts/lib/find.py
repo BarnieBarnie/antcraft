@@ -7,10 +7,25 @@
 # How many blocks a finder looks through, nearest first; where WHERE leaves out every one, it looks through 8 times as
 # many, and so on, until one passes or none are left within its radius (#552).
 LIMIT = 256
+
+
+def in_colony(p):
+    """Whether p lies within the colony's radius of its core, measured across: the edge is a column, so a deep block
+    under the colony is in it (#576). False for a bot in no colony."""
+    c = colony()
+    if c is None:
+        return False
+    p = Pos(p)
+    dx = p.x - c["core"].x
+    dz = p.z - c["core"].z
+    return dx * dx + dz * dz <= c["radius"] * c["radius"]
+
+
 # Where the library may look, a function of a Pos (None: anywhere): the finders here, lib.trees.next_tree and
 # lib.stock.chests leave out each position it is false for, so lib.get neither takes from nor gathers outside it, nor
-# counts on it in a cost. colony.common sets it to in_colony.
-WHERE = None
+# counts on it in a cost. in_colony for a bot in a colony when the script starts, so every job keeps to its edge (#594);
+# None for any other.
+WHERE = in_colony if colony() is not None else None
 
 
 def allowed(p):

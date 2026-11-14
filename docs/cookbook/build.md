@@ -13,15 +13,23 @@ The job, `config/antcraft/scripts/jobs/build.py`:
 ```python
 from lib.build import build_here
 
-if len(ARGS) < 4:
-    say("usage: jobs.build <blueprint> x y z [turn] [radius]")
-    stop()
-id = ARGS[0]
-at = Pos(int(ARGS[1]), int(ARGS[2]), int(ARGS[3]))
-turn = int(ARGS[4]) if len(ARGS) > 4 else 0
-radius = int(ARGS[5]) if len(ARGS) > 5 else 32
-r = build_here(id, at, turn, radius=radius)
-say(f"built {id}" if r["ok"] else f"not built {id}: {r['reason']} {r['missing']}")
+def run(id, at, turn=0, radius=32):
+    """Builds the blueprint id at at, turned turn, and says whether it built it. Gives build_here's result()."""
+    r = build_here(id, at, turn, radius=radius)
+    say(f"built {id}" if r["ok"] else f"not built {id}: {r['reason']} {r['missing']}")
+    return r
+
+
+try:
+    args = ARGS
+except NameError:
+    args = None  # imported: the importer calls run
+if args is not None:
+    if len(args) < 4:
+        say("usage: jobs.build <blueprint> x y z [turn] [radius]")
+        stop()
+    run(args[0], Pos(int(args[1]), int(args[2]), int(args[3])), int(args[4]) if len(args) > 4 else 0,
+        int(args[5]) if len(args) > 5 else 32)
 ```
 
 ## How it works
