@@ -72,7 +72,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     within radius, nearest first, but for those its pickaxe does not drop (lib.tools.drops); where they give too few, digs stairs down to y (best_y(item) where None) towards
     facing, branches of length on from there and climbs back up it, or walks back to where it started where it dug no
     staircase. Gives result(): ok, no_recipe for an item that is no ore, no_ore with missing where ROUNDS branches found
-    too little, where its staircase or branches reach the edge of lib.find.WHERE, or there is no y to dig to (emerald),
+    too little, where its staircase and branches reach the edge of lib.find.WHERE whichever way it turns (turn), or there
+    is no y to dig to (emerald),
     or where a step failed. A no_ore where it left veins also has tier, the lowest pickaxe tier that drops them all
     (#555), for lib.get to try again with."""
     key = short(item)
@@ -90,6 +91,8 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
             left.append(lib.tools.tier_for(p))
             continue  # a vein its pickaxe does not drop is left (#547)
         for b in ore_vein(p):
+            if not lib.find.allowed(b):
+                continue  # the block of a vein lib.find.WHERE leaves out stays (#561)
             r = mine(b)
             if not r and r.reason == "no_space":
                 return result("no_space", b)
@@ -99,13 +102,19 @@ def ore(item, n, radius=32, y=None, facing="north", length=LENGTH):
     if y is None:
         return no_ore(key, target, left)
     start = pos()
+    tried = []
     r = stairs_to(y, facing)
     for _ in range(ROUNDS):
-        if not r["ok"] or count(key) >= target:
+        while r["reason"] == "outside" and facing is not None:
+            # At the edge of lib.find.WHERE it goes on square to it, down or along (#561).
+            tried.append(facing)
+            facing = turn(facing, tried)
+            r = stairs_to(y, facing) if facing is not None else result()
+        if not r["ok"] or count(key) >= target or facing is None:
             break
         r = branch(length, facing=facing, left=left)
     if r["reason"] == "outside":
-        r = result()  # ponytail: no other facing is tried; it gives no_ore below
+        r = result()  # it gives no_ore below
     # Where it dug no staircase, as at y already, or remembers one it is not on (#556), it walks back to start: digging
     # up would look for a surface, which the Nether has none of.
     up = stairs_up() if stairs() is not None else back(start)
@@ -138,6 +147,18 @@ def cut(p, stand, opened):
         return None
     air = [s for s in (p.north(), p.south(), p.east(), p.west(), p.up()) if lib.find.is_air(s)]
     return lib.shaft.dig(p, opened + air, stand)
+
+
+def turn(facing, tried):
+    """A facing square to facing that is not in tried, for ore, dig_up and jobs.strip_mine to go on in where facing
+    reached the edge of lib.find.WHERE (#561); None where both are tried. Never back the way it came, which would dig
+    under the steps of the staircase behind it."""
+    s = FACING[facing]
+    for f in FACING:
+        d = FACING[f]
+        if d[0] * s[0] + d[2] * s[2] == 0 and f not in tried:
+            return f
+    return None
 
 
 def outside(cells):
@@ -232,26 +253,40 @@ def bridge_block(here, step, opened):
     return None if has(lib.shaft.FILL) else result("no_blocks", here)
 
 
+def climb(here, step):
+    """The block dig_up steps to from here towards step and the blocks it digs for that: a step up, or where the block
+    ahead is air with a floor under it, as in a cave, the block ahead."""
+    ahead = here + step
+    if lib.find.is_air(ahead) and is_floor(ahead.down()):
+        return ahead, [ahead.up()]  # ponytail: a long cave floor is walked to its end
+    up = here + (step[0], 1, step[2])
+    return up, [here.up(2), up, up.up()]
+
+
 def dig_up(facing):
     """Digs a 1-wide staircase from the bot's feet up towards facing, one block on for each block up, and walks up it
     until surfaced. Where the block ahead is air with a floor under it, as in a cave, walks on along the floor instead,
     so it needs no block to build its next step with. Where the next step is over a pit, fills it, with a block dug out
-    of the wall beside or behind it where it carries none (#546). Gives result(): ok, no_surface in a dimension with a
-    roof over it (surface gives None there), no_blocks where it has none and no wall gives one, or the reason a step
-    failed with at."""
+    of the wall beside or behind it where it carries none (#546). Where the next step has a block lib.find.WHERE leaves
+    out, it climbs on square to facing (turn), and stops where that is outside too (#561). Gives result(): ok,
+    no_surface in a dimension with a roof over it (surface gives None there), no_blocks where it has none and no wall
+    gives one, outside with at, or the reason a step failed with at."""
     step = FACING[facing]
     here = pos()
     if surface(here) is None:
         return result("no_surface", here)
     opened = [here, here.up()]
+    tried = []
     while not surfaced(here, step):
-        up = here + (step[0], 1, step[2])
-        cells = [here.up(2), up, up.up()]
-        ahead = here + step
-        if lib.find.is_air(ahead) and is_floor(ahead.down()):
-            # ponytail: a long cave floor is walked to its end
-            up = ahead
-            cells = [ahead.up()]
+        up, cells = climb(here, step)
+        failure = outside(cells + [up])
+        if failure:
+            tried.append(facing)
+            facing = turn(facing, tried)
+            if facing is None:
+                return failure
+            step = FACING[facing]
+            continue
         opened = opened + cells
         for p in cells:
             failure = cut(p, here, opened)
@@ -268,12 +303,12 @@ def dig_up(facing):
     return result()
 
 
-def branch(length, every=8, facing="north", left=None):
+def branch(length, every=8, facing="north", left=None, out=None):
     """Digs a tunnel two blocks tall length blocks on from the bot's feet towards facing and walks it, mining each ore
-    vein in its walls and ceiling that its pickaxe drops (lib.mine.veins) and putting a torch on the floor every every blocks while it carries one. Walls off a
+    vein in its walls and ceiling that its pickaxe drops (lib.mine.veins), within lib.find.WHERE, and putting a torch on the floor every every blocks while it carries one. Walls off a
     fluid or falling block beside it as lib.shaft does. Gives result(): ok, outside with at where the next block is one
     lib.find.WHERE leaves out, or the reason it stopped with at. The tier each vein it left needs is added to the list
-    left where given (#555). Branching from a staircase stairs() gives, it remembers where it got to there, so stairs_up
+    left where given (#555), and each vein block WHERE leaves out to the list out (#561). Branching from a staircase stairs() gives, it remembers where it got to there, so stairs_up
     still climbs that staircase."""
     step = FACING[facing]
     stand = pos()
@@ -294,7 +329,7 @@ def branch(length, every=8, facing="north", left=None):
         if not r:
             return result(r.reason, feet)
         stand = feet
-        failure = lib.mine.veins([feet, head], opened, stand, left=left)
+        failure = lib.mine.veins([feet, head], opened, stand, left=left, out=out)
         if not failure and i % every == 0 and has("torch"):
             # Once the veins are out, so it hangs on no ore it then mines.
             failure = lib.shaft.put_block(feet, "torch", lib.shaft.TORCHES)

@@ -197,8 +197,8 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * With lib.find.WHERE true only up to x 4, a branch of 6 east stops at its edge with outside, digging nothing past it;
-	 * ore, already at its y, branches no further and gives no_ore (#552).
+	 * With lib.find.WHERE true only up to x 4, a branch of 6 east stops at its edge with outside, digging nothing past it
+	 * (#552).
 	 */
 	@GameTest(maxTicks = 260)
 	public void branchStaysWhereAllowed(GameTestHelper helper) {
@@ -212,12 +212,66 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			lib.find.WHERE = lambda p: p.x <= %d
 			r = lib.dig.branch(6, 3, "east")
 			print(r["ok"], r["reason"], r["at"] == Pos%s)
-			r = lib.dig.ore("coal", 1, radius=2, y=pos().y, facing="east")
-			print(r["ok"], r["reason"], r["missing"])
 			""".formatted(helper.absolutePos(new BlockPos(4, 0, 0)).getX(), at(helper, 5, 1, 3)),
-			List.of("False outside True", "False no_ore {'minecraft:coal': 1}"),
+			List.of("False outside True"),
 			() -> {
 				helper.assertBlockPresent(Blocks.AIR, 4, 1, 3);
+				helper.assertBlockPresent(Blocks.STONE, 5, 1, 3);
+				helper.assertBlockPresent(Blocks.STONE, 5, 2, 3);
+			});
+	}
+
+	/**
+	 * With lib.find.WHERE true only up to x 4, a branch east to its edge takes the coal in its wall inside WHERE but not
+	 * the block of the same vein outside it, nor the coal in the wall ahead, outside it; both are added to the list out
+	 * (#561).
+	 */
+	@GameTest(maxTicks = 300)
+	public void aVeinAcrossTheEdgeOfWhereStaysOutsideIt(GameTestHelper helper) {
+		stone(helper, 4);
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		helper.setBlock(4, 1, 2, Blocks.COAL_ORE);
+		helper.setBlock(5, 1, 2, Blocks.COAL_ORE);
+		helper.setBlock(5, 2, 3, Blocks.COAL_ORE);
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			import lib.find
+			lib.find.WHERE = lambda p: p.x <= %d
+			out = []
+			r = lib.dig.branch(6, 3, "east", out=out)
+			print(r["reason"], count("coal"), len(out))
+			""".formatted(helper.absolutePos(new BlockPos(4, 0, 0)).getX()),
+			List.of("outside 1 2"),
+			() -> {
+				helper.assertBlockPresent(Blocks.AIR, 4, 1, 2);
+				helper.assertBlockPresent(Blocks.COAL_ORE, 5, 1, 2);
+				helper.assertBlockPresent(Blocks.COAL_ORE, 5, 2, 3);
+			});
+	}
+
+	/**
+	 * At the edge of lib.find.WHERE (x 4) facing east, ore, already at its y, turns north and branches along the edge,
+	 * where it finds the buried coal, instead of giving no_ore (#561).
+	 */
+	@GameTest(maxTicks = 300)
+	public void oreAtTheEdgeOfWhereTurnsAndBranchesAlongIt(GameTestHelper helper) {
+		stone(helper, 4);
+		helper.setBlock(4, 1, 3, Blocks.AIR);
+		helper.setBlock(4, 2, 3, Blocks.AIR);
+		helper.setBlock(3, 1, 1, Blocks.COAL_ORE);
+		AntBot bot = miner(helper, 4, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			import lib.find
+			lib.find.WHERE = lambda p: p.x <= %d
+			r = lib.dig.ore("coal", 1, radius=2, y=pos().y, facing="east", length=3)
+			print(r["ok"], r["reason"], count("coal"))
+			""".formatted(helper.absolutePos(new BlockPos(4, 0, 0)).getX()),
+			List.of("True None 1"),
+			() -> {
+				helper.assertBlockPresent(Blocks.AIR, 4, 1, 1);
 				helper.assertBlockPresent(Blocks.STONE, 5, 1, 3);
 				helper.assertBlockPresent(Blocks.STONE, 5, 2, 3);
 			});
@@ -266,6 +320,32 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			() -> {
 				for (int k = 1; k <= 5; k++) {
 					helper.assertBlockPresent(Blocks.STONE, 1 + k, k, 3);
+				}
+			});
+	}
+
+	/**
+	 * From a pocket at the edge of lib.find.WHERE (x 1), stairs_up east turns north and climbs to the surface along the
+	 * edge, digging nothing east of it (#561).
+	 */
+	@GameTest(maxTicks = 500, skyAccess = true)
+	public void stairsUpAtTheEdgeOfWhereClimbsAlongIt(GameTestHelper helper) {
+		stone(helper, 5);
+		helper.setBlock(1, 1, 6, Blocks.AIR);
+		helper.setBlock(1, 2, 6, Blocks.AIR);
+		AntBot bot = miner(helper, 1, 1, 6);
+		expect(helper, bot, """
+			import lib.dig
+			import lib.find
+			lib.find.WHERE = lambda p: p.x <= %d
+			s = pos()
+			r = lib.dig.stairs_up("east")
+			print(r["ok"], pos().x - s.x, pos().y - s.y, pos().z - s.z)
+			""".formatted(helper.absolutePos(new BlockPos(1, 0, 0)).getX()),
+			List.of("True 0 5 -5"),
+			() -> {
+				for (int y = 1; y <= 5; y++) {
+					helper.assertBlockPresent(Blocks.STONE, 2, y, 6);
 				}
 			});
 	}

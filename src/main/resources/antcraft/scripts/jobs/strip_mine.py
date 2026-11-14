@@ -38,7 +38,8 @@ def tier():
 
 def strip_mine():
     """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure before the stairs
-    and each branch that its pickaxe lasts them, then climbs back up and goes home. Gives result()."""
+    and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs or a branch reach
+    the edge of lib.find.WHERE, it turns square to it (lib.dig.turn). Gives result()."""
     if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
     if y is None:
@@ -46,15 +47,24 @@ def strip_mine():
     r = lib.bootstrap.kit(MINER, radius)
     if r["ok"]:
         r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(), radius)
+    way = facing
+    tried = []
     if r["ok"]:
-        r = lib.dig.stairs_to(y, facing)
+        r = lib.dig.stairs_to(y, way)
     for _ in range(ROUNDS):
-        if not r["ok"] or count(item) >= n:
+        while r["reason"] == "outside" and way is not None:
+            # The edge of lib.find.WHERE ends a branch or the stairs: it goes on square to it, as lib.dig.ore (#561).
+            tried.append(way)
+            way = lib.dig.turn(way, tried)
+            r = lib.dig.stairs_to(y, way) if way is not None else result()
+        if not r["ok"] or count(item) >= n or way is None:
             break
         # A new pickaxe where the one it holds would break in the branch: stone from the cobblestone it dug.
         r = ensure_tool("pickaxe", USES, tier(), radius)
         if r["ok"]:
-            r = lib.dig.branch(LENGTH, facing=facing)
+            r = lib.dig.branch(LENGTH, facing=way)
+    if r["reason"] == "outside":
+        r = result()  # the last branch ended at the edge: no_ore below where it carries too few
     if lib.dig.stairs() is not None:
         up = lib.dig.stairs_up()
         r = r if not r["ok"] else up

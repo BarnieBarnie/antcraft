@@ -34,7 +34,8 @@ def tier():
 
 def strip_mine():
     """Gets the kit, digs stairs down to y towards facing and branches on until the bot carries n of item, making sure before the stairs
-    and each branch that its pickaxe lasts them, then climbs back up and goes home. Gives result()."""
+    and each branch that its pickaxe lasts them, then climbs back up and goes home. Where the stairs or a branch reach
+    the edge of lib.find.WHERE, it turns square to it (lib.dig.turn). Gives result()."""
     if item not in lib.dig.ORES:
         return result("no_recipe", None, {"minecraft:" + item: n})
     if y is None:
@@ -42,15 +43,24 @@ def strip_mine():
     r = lib.bootstrap.kit(MINER, radius)
     if r["ok"]:
         r = ensure_tool("pickaxe", 3 * max(pos().y - y, 0), tier(), radius)
+    way = facing
+    tried = []
     if r["ok"]:
-        r = lib.dig.stairs_to(y, facing)
+        r = lib.dig.stairs_to(y, way)
     for _ in range(ROUNDS):
-        if not r["ok"] or count(item) >= n:
+        while r["reason"] == "outside" and way is not None:
+            # The edge of lib.find.WHERE ends a branch or the stairs: it goes on square to it, as lib.dig.ore (#561).
+            tried.append(way)
+            way = lib.dig.turn(way, tried)
+            r = lib.dig.stairs_to(y, way) if way is not None else result()
+        if not r["ok"] or count(item) >= n or way is None:
             break
         # A new pickaxe where the one it holds would break in the branch: stone from the cobblestone it dug.
         r = ensure_tool("pickaxe", USES, tier(), radius)
         if r["ok"]:
-            r = lib.dig.branch(LENGTH, facing=facing)
+            r = lib.dig.branch(LENGTH, facing=way)
+    if r["reason"] == "outside":
+        r = result()  # the last branch ended at the edge: no_ore below where it carries too few
     if lib.dig.stairs() is not None:
         up = lib.dig.stairs_up()
         r = r if not r["ok"] else up
@@ -75,7 +85,7 @@ finally:
 ## How it works
 
 - [`kit(MINER)`](../reference/modules/lib/bootstrap.md) makes sure the bot carries the kit: a carried or chest pickaxe of at least stone does, the rest it gets with [`get`](../reference/modules/lib/get.md), borrowing from chests or making it.
-- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times.
+- [`stairs_to`](../reference/modules/lib/dig.md) digs a staircase down to the height, towards `facing`, and remembers its top; [`branch`](../reference/modules/lib/dig.md) digs a tunnel two blocks tall, 8 blocks at a time, mining each ore vein it uncovers and putting a torch at the end. The job branches on until the bot carries enough, at most 16 times. Where a script set [`lib.find.WHERE`](../reference/modules/lib/find.md#where), the edge of it ends a branch or the stairs, and the job turns square to the way it was going with [`lib.dig.turn`](../reference/modules/lib/dig.md#turnfacing-tried) instead of stopping with a warning.
 - Before the stairs and before each branch, [`ensure_tool`](../reference/modules/lib/get.md) makes sure the pickaxes the bot carries last the blocks it will break: about three a step, and twice the branch's length plus a few for ore. Where they do not, it takes the cheapest that does, usually a new stone pickaxe from the cobblestone the stairs and branches gave and the crafting table of the kit. An ore that needs a better pickaxe, such as diamond, asks for that tier ([`tier_for`](../reference/modules/lib/tools.md)).
 - [`stairs_up`](../reference/modules/lib/dig.md) walks back up the staircase, also when a branch failed, and [`go_home`](../reference/modules/lib/home.md) walks home.
 - [`give_back`](../reference/modules/lib/borrow.md) in `finally` returns what was borrowed, also when a step failed or the script stopped with an error.

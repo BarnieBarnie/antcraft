@@ -561,10 +561,11 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A stone pickaxe and a branch east past a lodestone vein in its wall, which the game test tags put in needs_iron_tool
-	 * and c:ores; an iron pickaxe in a chest by the start (#555). The branch leaves the vein and lib.dig.ore gives no_ore
-	 * with the tier it left it for; get takes the iron pickaxe and tries once more, mining the vein now exposed.
-	 * lib.find.WHERE stops a second branch at the area's east edge.
+	 * A stone pickaxe and a branch east past a lodestone vein in its ceiling, which the game test tags put in
+	 * needs_iron_tool and c:ores; an iron pickaxe in a chest by the start (#555). The branch leaves the vein and
+	 * lib.dig.ore gives no_ore with the tier it left it for; get takes the iron pickaxe and tries once more, mining the vein
+	 * now exposed. lib.find.WHERE, the branch's row up to the area's east edge and the chest's column x 1, stops a second branch there and leaves ore
+	 * no facing to turn to (#561).
 	 */
 	@GameTest(maxTicks = 600)
 	public void getRetriesAVeinLeftForItsTierWithABetterPickaxe(GameTestHelper helper) {
@@ -574,24 +575,25 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		}
 		helper.setBlock(1, 1, 3, Blocks.AIR);
 		helper.setBlock(1, 2, 3, Blocks.AIR);
-		helper.setBlock(5, 2, 4, Blocks.LODESTONE);
+		helper.setBlock(5, 3, 3, Blocks.LODESTONE);
 		Container chest = chest(helper, new BlockPos(1, 1, 2), new ItemStack(Items.IRON_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		run(helper, bot, """
 			import lib.dig, lib.find
 			from lib.get import get, Source, SOURCES
-			lib.find.WHERE = lambda p: p.x <= %d
+			lib.find.WHERE = lambda p: p.x <= %d and (p.z == %d or p.x == %d)
 			lib.dig.ORES["lodestone"] = "minecraft:lodestone"
 			dig = lambda n, radius: lib.dig.ore("lodestone", n, radius, y=pos().y, facing="east", length=6)
 			SOURCES["minecraft:lodestone"] = Source(dig, "pickaxe", "wooden", 60, "minecraft:lodestone")
 			r = get("lodestone", radius=8)
 			print(r["ok"], r["reason"], count("lodestone"), held().item)
-			""".formatted(helper.absolutePos(new BlockPos(7, 0, 0)).getX()));
+			""".formatted(helper.absolutePos(new BlockPos(7, 0, 3)).getX(), helper.absolutePos(new BlockPos(7, 0, 3)).getZ(),
+				helper.absolutePos(new BlockPos(1, 0, 0)).getX()));
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True None 1 minecraft:iron_pickaxe");
 			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
-			helper.assertBlockPresent(Blocks.AIR, 5, 2, 4);
+			helper.assertBlockPresent(Blocks.AIR, 5, 3, 3);
 		});
 	}
 

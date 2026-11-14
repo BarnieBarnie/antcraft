@@ -10,6 +10,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.find
 import lib.tools
 from lib.result import result
 from lib.shaft import dig, seal, put_block, FILL, TORCHES
@@ -114,11 +115,14 @@ def fluids(cells):
     return wet
 
 
-def veins(cells, opened, stand, chest=None, left=None):
+def veins(cells, opened, stand, chest=None, left=None, out=None, anywhere=False):
     """Mines every ore vein in the walls and ceiling of cells, standing at stand, and walls off what each opens up; a
     vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547), and the tier that drops it
-    (lib.tools.tier_for) is added to the list left where given (#555). With a chest, it empties the bot into it (room)
-    when its inventory is nearly full."""
+    (lib.tools.tier_for) is added to the list left where given (#555). The blocks of a vein lib.find.WHERE leaves out
+    stay too, and are added to the list out where given (#561), but for anywhere, which mine_level passes: the shaft is
+    the site its caller chose, whose halls and branches WHERE does not limit either, and a deep level is outside a
+    colony's in_colony, which measures from the core in 3D. With a chest, it empties the bot into it (room) when its
+    inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
             if p in opened:
@@ -129,6 +133,10 @@ def veins(cells, opened, stand, chest=None, left=None):
                     left.append(lib.tools.tier_for(p))
                 continue
             for b in vein:
+                if not anywhere and not lib.find.allowed(b):
+                    if out is not None:
+                        out.append(b)
+                    continue
                 failure = (room(chest) if chest is not None else None) or dig(b, opened + vein, stand)
                 if failure:
                     return failure
@@ -165,7 +173,7 @@ def tunnel(cells, stand, opened, level, sealed):
         if wet:
             sealed.append(wet[0])
             return None
-        failure = veins([feet, head], opened, feet, level["chest"])
+        failure = veins([feet, head], opened, feet, level["chest"], anywhere=True)
         if failure:
             return failure
         if feet in level["torches"]:

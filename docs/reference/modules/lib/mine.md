@@ -19,6 +19,13 @@ Without a shaft in memory that has such a level, it stops the script with an ass
 | `no_space` | the landing chest is full of ore, or putting away frees too little room |
 | another reason | an action's (see [`Result`](../../types/result.md)), with `at` |
 
+## `veins(cells, opened, stand, chest=None, left=None, out=None, anywhere=False)`
+
+Mines every ore vein ([`ore_vein`](../../mining/ore_vein.md)) in the walls and ceiling of `cells`, standing at `stand`, and walls off what each opens up; `opened` are the blocks that stay open. `mine_level` and [`lib.dig.branch`](dig.md#branchlength-every8-facingnorth-leftnone-outnone) mine the veins of their tunnels with it. A vein its pickaxe does not drop ([`lib.tools.drops`](tools.md)) stays in the wall, and the tier that drops it is added to the list `left` where given. The blocks of a vein [`lib.find.WHERE`](find.md#where) leaves out stay too, so a vein across the edge of a colony is mined only up to it; each is added to the list `out` where given (#561). With `anywhere`, as `mine_level` passes, it mines the veins whole wherever they reach: the shaft is the site its caller chose, its halls and branches go where the shaft's layout puts them, and a deep level lies outside a colony's `in_colony`, which measures from the core in 3D. With a `chest`, it empties the bot into it when its inventory is nearly full.
+
+- **Returns** `None` once done, else a result dict with the reason it stopped and `at`.
+- **Pauses** yes, while it digs.
+
 ## `site(r=0)`
 
 The shaft in `memory["shaft"]` with its branches of round `r`, as `mineshaft_at` gives it; `None` without a shaft in memory. Besides `top` and `levels`, `memory["shaft"]` may hold `branches` (per side, default 4) and `length` (of a branch, default 16) for a shaft of another size.
