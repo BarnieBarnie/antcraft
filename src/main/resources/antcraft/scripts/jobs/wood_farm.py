@@ -106,6 +106,7 @@ def build(kind, name, size, radius):
         r = ensure_tool(k, uses, None if k == "pickaxe" else "hand", radius)
         if not r["ok"]:
             return r
+    lib.trees.take_back()  # build_cell starts with placed_scaffold() too, as reap's harvest (#654)
     r = lib.treefarm.build_cell(kind, low, high)
     if r["ok"]:
         lib.cells.add(name, i)
@@ -201,11 +202,14 @@ def reap(kind, b, radius, told):
     """Fells the tree of cell b with an axe (lib.treefarm.harvest). Where that leaves a log, says why once (tell), gets
     the kit's dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
     ensure_tool("axe", 16, "hand", radius)
+    # harvest starts with placed_scaffold(), which drops what earlier walks placed: those come down first (#654).
+    lib.trees.take_back()
     r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     if not r["ok"]:
         tell(told, f"harvest: {r['reason']} at {r['at']}")
         get(lib.treefarm.DIRT, dict(KIT)["dirt"], radius)
         ensure_tool("axe", 16, "hand", radius)
+        lib.trees.take_back()
         r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     return r
 
@@ -215,13 +219,17 @@ def farm(kind, name, size, radius):
     what it fell, tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
     lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
-    where it felled nothing picks up the drops in the farm (sweep) and waits. Where size is None the farm grows to
+    where it felled nothing picks up the drops in the farm (sweep) and waits. Each round takes back the scaffold its walks
+    placed (lib.trees.take_back) before it waits, and before each felling and build, which drop the list (#654). Where size is None the farm grows to
     limit(kind, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
     felled (learn)."""
     full = False
     told = {}
     backoff = 0  # rounds until stocked is tried again
     while True:
+        # What the setup steps' walks placed is not the round's; what the round's walks place (the felling's and the
+        # build's own taken back by them, sweep, tend, get, reap's retry) comes down at its end (#654).
+        placed_scaffold()
         own()
         boxes = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
         grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
@@ -260,6 +268,8 @@ def farm(kind, name, size, radius):
             full = True
         if not felled:
             sweep(kind, boxes)
+        lib.trees.take_back()
+        if not felled:
             wait(WAIT)
 
 

@@ -139,6 +139,17 @@ for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_o
 LEAF = 6 + lib.cost.WALK
 
 
+def climbing(do):
+    """A Source's do that takes back, after do, the scaffold the script's walks placed (lib.trees.take_back): the walks to
+    leaves high up pillar (#654). Without a placed_scaffold() first, so what the caller's walks placed and did not take
+    back yet comes down too, not dropped from the list."""
+    def climbed(n, radius):
+        r = do(n, radius)
+        lib.trees.take_back()
+        return r
+    return climbed
+
+
 def grown(p):
     """Whether the leaves at p are a tree's, not placed by a player (persistent)."""
     return not block(p).state.get("persistent", False)
@@ -151,7 +162,7 @@ for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapli
                              ("azalea", ["azalea_leaves"], 20), ("flowering_azalea", ["flowering_azalea_leaves"], 20),
                              ("poplar_sapling", ["orange_poplar_leaves", "red_poplar_leaves", "yellow_poplar_leaves"], 20),
                              ("apple", ["oak_leaves", "dark_oak_leaves"], 200)]:
-    SOURCES["minecraft:" + item] = Source(breaking("minecraft:" + item, leaves, "no_tree", True, grown),
+    SOURCES["minecraft:" + item] = Source(climbing(breaking("minecraft:" + item, leaves, "no_tree", True, grown)),
                                           estimate=LEAF * chance, near=leaves, keep=grown)
 
 

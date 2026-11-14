@@ -979,6 +979,34 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A birch leaves block at y 7 on a log on a stone column, out of reach from the floor (#654): the bot pillars with
+	 * its dirt to break it for a sapling, and takes the pillar back, so no dirt stands in the area after.
+	 */
+	// Measured: passes at tick 75.
+	@GameTest(maxTicks = 150)
+	public void getsSaplingsFromHighLeavesAndTakesItsPillarBack(GameTestHelper helper) {
+		for (int y = 1; y <= 5; y++) {
+			helper.setBlock(4, y, 4, Blocks.STONE);
+		}
+		helper.setBlock(4, 6, 4, Blocks.BIRCH_LOG);
+		helper.setBlock(4, 7, 4, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			r = get("birch_sapling")
+			print(r["ok"], count("birch_sapling"), count("dirt"))
+			""");
+		failOnOtherPrint(helper, bot, "True 1 16");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 1 16");
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
+				helper.assertBlockNotPresent(Blocks.DIRT, p);
+			}
+		});
+	}
+
 	private static int cherryLeaves(GameTestHelper helper) {
 		int n = 0;
 		for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {

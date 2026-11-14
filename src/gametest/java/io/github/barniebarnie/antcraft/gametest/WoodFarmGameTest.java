@@ -16,6 +16,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
@@ -146,6 +147,41 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(said(bot), List.of("next cell: no_item, lacks {'minecraft:torch': 2}", "wait 2 1 1", "wait 2 1 1",
 				"wait 2 1 1"), "said");
 			helper.assertItemEntityPresent(Items.STICK, new BlockPos(20, 1, 20), 1.0);
+		});
+	}
+
+	/**
+	 * A sapling lying on a column of three persistent leaves in the cell: the sweep pillars up to it with the bot's dirt,
+	 * and the round takes that pillar back before it waits, so no dirt stands in the farm (#654).
+	 */
+	// Measured: passes at tick 107.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 220)
+	public void aSweepThatPillarsToADropTakesThePillarBack(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(7, y, 3, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		}
+		helper.spawnItem(Items.BIRCH_SAPLING, new BlockPos(7, 4, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		script(helper, bot, """
+			import lib.cells
+			import lib.result
+			def counted(ticks):
+			    print("wait", count(kind), count("dirt"))
+			    stop()
+			jobs.wood_farm.wait = counted
+			jobs.wood_farm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
+			lib.cells.layout("birch_farm", cell[0], (5, 5))
+			lib.cells.add("birch_farm", 0)
+			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("next cell: no_item, lacks {'minecraft:torch': 2}", "wait 1 16"), "said");
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 15, 23)) {
+				helper.assertBlockNotPresent(Blocks.DIRT, p);
+			}
 		});
 	}
 
