@@ -156,6 +156,31 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * fetch on the steps a, b, a, c with a get that always succeeds: once b is got it gets the second a straight away,
+	 * in the same trip, not after c (#626). A failed get stops it with that get's reason.
+	 */
+	// Measured: passes at tick 2.
+	@GameTest(maxTicks = 20)
+	public void fetchGetsTheRestOfAnItemOnceTheItemItWaitedOnIsGot(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		String name = BotScripts.libraryScript(helper, "build_", """
+			from lib.build import fetch
+			calls = []
+			def get(item, n, radius):
+			    calls.append((item, n))
+			    return {"ok": item != "x", "reason": None if item != "x" else "no_x"}
+			print(fetch(["a", "b", "a", "c"], 8, get), calls)
+			calls = []
+			print(fetch(["a", "x", "a"], 8, get), calls)
+			""");
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
+			"None [('a', 1), ('b', 1), ('a', 2), ('c', 1)]",
+			"no_x [('a', 1), ('x', 1)]"), "printed"));
+	}
+
 	/** A blueprint id the server does not know: build_here fails at once with no_blueprint, at at, nothing missing. */
 	// Measured: passes at tick 2.
 	@GameTest(maxTicks = 20)

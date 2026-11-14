@@ -68,32 +68,24 @@ def fetch(steps, radius, get):
     """Gets with get the items of steps, one for each step still to build in build order (blueprint's steps), as far as
     build gets with them: build stops at the first step it lacks a block for, so the steps after the first item it
     cannot get wait for a later call (#599). It gets each item in the order of its first step, as many as the steps
-    before the next item's first step take, then the rest of what the steps before the first item it could not get
-    take, so an item placed both before and after that one is got only for the steps before (#620). Gives the reason
-    of the first get that failed, or None.
-    ponytail: an item placed on both sides of another's first step is got in two trips; fine while chests are near."""
-    seen = {}
-    end = len(steps)
+    before the next item's first step take, and once that is got, tops the items before it up to what those steps
+    take, in the same trip (#626). So an item placed both before and after one it could not get is got only for the
+    steps before (#620). Gives the reason of the first get that failed, or None."""
+    need = {}
+    got = {}
     last = None
     for i in range(len(steps) + 1):
-        if i < len(steps) and steps[i] in seen:
-            seen[steps[i]] = seen[steps[i]] + 1
+        if i < len(steps) and steps[i] in need:
+            need[steps[i]] = need[steps[i]] + 1
             continue
         if last is not None:
-            r = get(last, seen[last], radius)
-            if not r["ok"]:
-                end = first
-                break
+            for item in [last] + [k for k in need if k != last]:
+                if need[item] > got.get(item, 0):
+                    r = get(item, need[item], radius)
+                    if not r["ok"]:
+                        return r["reason"]
+                    got[item] = need[item]
         if i < len(steps):
             last = steps[i]
-            first = i
-            seen[last] = 1
-    failed = None if end == len(steps) else r["reason"]
-    need = {}
-    for item in steps[:end]:
-        need[item] = need.get(item, 0) + 1
-    for item, n in need.items():
-        r = get(item, n, radius)
-        if not r["ok"]:
-            return failed or r["reason"]
-    return failed
+            need[last] = 1
+    return None

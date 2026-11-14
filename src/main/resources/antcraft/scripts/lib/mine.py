@@ -190,7 +190,7 @@ def tunnel(cells, stand, opened, level, sealed, outside):
         if wet:
             sealed.append(wet[0])
             return None
-        failure = veins([feet, head], opened, feet, level["chest"])
+        failure = veins([feet, head], opened, feet, level["chest"], out=outside)
         if failure:
             return failure
         if feet in level["torches"]:

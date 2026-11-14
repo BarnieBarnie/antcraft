@@ -180,7 +180,8 @@ public class MineGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * mine_level keeps to lib.find.WHERE (#576), as a colony miner's in_colony does now that the colony's edge is a column:
-	 * of the iron vein beside the south branch's end, the block past the edge (x 7) stays in the wall.
+	 * of the iron vein beside the south branch's end, the block past the edge (x 7) stays in the wall, and its
+	 * result's outside names it (#626).
 	 */
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aVeinAcrossTheEdgeOfWhereIsMinedUpToIt(GameTestHelper helper) {
@@ -194,10 +195,11 @@ public class MineGameTest implements CustomTestMethodInvoker {
 			def inside(p):
 			    return p.x <= EDGE
 			lib.find.WHERE = inside
-			""");
-		failOnError(helper, () -> bot, "True None 0");
+			start = pos()
+			""", ", r[\"outside\"] == [start + (5, 1, 2)]");
+		failOnError(helper, () -> bot, "True None 0 True");
 		helper.succeedWhen(() -> {
-			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0")), "not done");
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0 True")), "not done");
 			assertLevelDug(helper);
 			vein.forEach(pos -> helper.assertTrue(helper.getBlockState(pos).isAir(), "ore left at " + pos.toShortString()));
 			helper.assertTrue(helper.getBlockState(past).is(Blocks.IRON_ORE), "the ore past the edge was mined");
