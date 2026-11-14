@@ -972,7 +972,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 * A bot with the starter house's materials and some dirt builds the whole house, pillaring up with the dirt where it
 	 * cannot reach, and takes the dirt down again: none is left standing, and it carries all of it.
 	 */
-	// Measured: passes at tick 567.
+	// Measured: passes at tick 323 (567 before beds were floor, #647).
 	@GameTest(maxTicks = 1100)
 	public void buildPillarsWithDirtForTheStarterHouseAndTakesItDown(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 7);

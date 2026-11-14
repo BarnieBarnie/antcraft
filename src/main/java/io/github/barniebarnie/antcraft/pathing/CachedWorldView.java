@@ -27,6 +27,7 @@ final class CachedWorldView implements WorldView {
 	/** {@code canOpen} and {@code stairUp}, one per horizontal direction. */
 	private static final int CAN_OPEN = 7;
 	private static final int STAIR_UP = 11;
+	private static final int JUMPS_SHORT = 15;
 
 	private final WorldView world;
 	/** Per block, the answers so far, two bits per question. */
@@ -43,6 +44,7 @@ final class CachedWorldView implements WorldView {
 	private final Predicate<BlockPos> climbable;
 	private final Predicate<BlockPos> bedrock;
 	private final Predicate<BlockPos> mayPlace;
+	private final Predicate<BlockPos> jumpsShort;
 	/** {@code canOpen} and {@code stairUp}, by {@link Direction#get2DDataValue}. */
 	private final List<Predicate<BlockPos>> canOpen;
 	private final List<Predicate<BlockPos>> stairUp;
@@ -57,6 +59,7 @@ final class CachedWorldView implements WorldView {
 		this.climbable = world::isClimbable;
 		this.bedrock = world::isBedrock;
 		this.mayPlace = world::mayPlace;
+		this.jumpsShort = world::jumpsShort;
 		this.canOpen = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
 			.<Predicate<BlockPos>>map(dir -> pos -> world.canOpen(pos, dir)).toList();
 		this.stairUp = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
@@ -87,6 +90,11 @@ final class CachedWorldView implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		return this.answer(pos, STAND_ON, this.standOn);
+	}
+
+	@Override
+	public boolean jumpsShort(BlockPos pos) {
+		return this.answer(pos, JUMPS_SHORT, this.jumpsShort);
 	}
 
 	@Override

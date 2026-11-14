@@ -843,4 +843,24 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	public void walksAcrossBottomSlabs(GameTestHelper helper) {
 		walksAcross(helper, Blocks.OAK_SLAB.defaultBlockState());
 	}
+
+	/**
+	 * A bot on a bottom slab beside a block two high, in a room (#647): a jump from the slab's top falls short of the
+	 * block's, a block and a half higher, so it steps down onto the floor and up a stone step beside it, rather than
+	 * jumping at the block until it gives up.
+	 */
+	// Measured: passes at tick 53 (red: jumped at the block from the slab until it gave up, at tick 100).
+	@GameTest(maxTicks = 100)
+	public void stepsUpByWayOfTheFloorFromABottomSlab(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(2, 1, 3, Blocks.OAK_SLAB);
+		fill(helper, 3, 1, 3, 3, 2, 3, Blocks.STONE);
+		helper.setBlock(4, 1, 3, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1.5, 3.5));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 3, 3)), 0);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(WorkGameTest.printed(bot), List.of("True"), "printed");
+			helper.assertBlockPresent(Blocks.OAK_SLAB, 2, 1, 3);
+		});
+	}
 }

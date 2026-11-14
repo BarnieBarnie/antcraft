@@ -11,6 +11,14 @@ public interface WorldView {
 	/** The block has a solid top a bot can stand on. */
 	boolean canStandOn(BlockPos pos);
 
+	/**
+	 * A floor lower than three quarters of a block, such as a bottom slab, a bed or thin snow: a bot's jump from its top,
+	 * at most about 1.25 blocks, falls short of a full block one higher, and of a block placed under it (#647).
+	 */
+	default boolean jumpsShort(BlockPos pos) {
+		return false;
+	}
+
 	/** Never enter, stand on, or open up next to this block (lava, fire, any fluid), except to swim in it if {@link #isWater}. */
 	boolean isHazard(BlockPos pos);
 

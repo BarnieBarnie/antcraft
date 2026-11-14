@@ -282,6 +282,11 @@ public final class PathFinder {
 
 		private Candidate stepUp(BlockPos feet, Direction dir) {
 			BlockPos to = feet.relative(dir).above();
+			// From a floor too low, a jump falls short of a full block's top; a stair's low front or another low floor it reaches.
+			// ponytail: snow two layers deep up onto a slab, past a jump too, is let through; measure heights if a path tries it.
+			if (this.world.jumpsShort(feet.below()) && !this.world.jumpsShort(to.below()) && !this.world.stairUp(to.below(), dir)) {
+				return null;
+			}
 			// Onto a stair block from its low front a bot walks up without jumping.
 			Builder b = new Builder(MoveType.STEP_UP, to, this.world.stairUp(to.below(), dir) ? WALK_COST : WALK_COST + JUMP_COST);
 			b.clear(feet.above(2)).pass(to, dir).pass(to.above(), dir).support(to.below());
@@ -375,7 +380,7 @@ public final class PathFinder {
 		}
 
 		private Candidate pillar(BlockPos feet) {
-			if (this.world.isClimbable(feet) || !this.options.canPlace() || !this.world.mayPlace(feet)) {
+			if (this.world.isClimbable(feet) || !this.options.canPlace() || !this.world.mayPlace(feet) || this.world.jumpsShort(feet.below())) {
 				return null;
 			}
 			BlockPos to = feet.above();

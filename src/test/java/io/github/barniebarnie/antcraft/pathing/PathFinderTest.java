@@ -111,6 +111,29 @@ class PathFinderTest {
 		return path.cost();
 	}
 
+	/**
+	 * On a bottom slab sunk in the floor, a block one up is a block and a half above the slab's top, past a jump (#647):
+	 * the path steps onto the floor and up from there.
+	 */
+	@Test
+	void stepsUpFromTheFloorRatherThanFromALowFloor() {
+		GridWorld world = GridWorld.flat(10).set(0, 0, 0, 'l').set(1, 1, 0, '#');
+		Path path = find(world, new BlockPos(1, 2, 0), WALK_ONLY);
+
+		assertTrue(path.complete());
+		assertEquals(List.of(MoveType.WALK, MoveType.WALK, MoveType.STEP_UP), types(path));
+	}
+
+	/** Nor does it pillar up from a bottom slab: a jump from its top does not clear the block placed over it (#647). */
+	@Test
+	void pillarsFromNoLowFloor() {
+		GridWorld world = GridWorld.flat(10).set(0, 0, 0, 'l');
+		Path path = find(world, new BlockPos(0, 2, 0), new PathFinder.Options(false, true, 10_000, 3));
+
+		assertTrue(path.complete());
+		assertEquals(MoveType.WALK, types(path).getFirst());
+	}
+
 	@Test
 	void cannotClimbTwoBlockWallWithoutTools() {
 		// Wall of height 2 across the whole floor.

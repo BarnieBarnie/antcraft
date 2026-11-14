@@ -28,6 +28,11 @@ public final class LoadedWorldView implements WorldView {
 	}
 
 	@Override
+	public boolean jumpsShort(BlockPos pos) {
+		return this.loaded.test(pos) && this.world.jumpsShort(pos);
+	}
+
+	@Override
 	public boolean isHazard(BlockPos pos) {
 		return !this.loaded.test(pos) || this.world.isHazard(pos);
 	}

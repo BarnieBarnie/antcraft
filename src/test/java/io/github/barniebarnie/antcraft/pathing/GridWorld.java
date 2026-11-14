@@ -13,7 +13,8 @@ import net.minecraft.core.Direction;
  * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces),
  * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis),
  * 'H' = a ladder (climbed, unbreakable), 'T' = a trapdoor over a ladder (stood on shut, climbed through open),
- * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal).
+ * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal),
+ * 'l' = a bottom slab (stood on, but too low to jump a full block up from).
  */
 public final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
@@ -87,7 +88,12 @@ public final class GridWorld implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		char c = this.at(pos);
-		return c == '#' || c == 'D' || c == 'B' || c == 'S' || c == 'T';
+		return c == '#' || c == 'D' || c == 'B' || c == 'S' || c == 'T' || c == 'l';
+	}
+
+	@Override
+	public boolean jumpsShort(BlockPos pos) {
+		return this.at(pos) == 'l';
 	}
 
 	@Override
@@ -125,7 +131,7 @@ public final class GridWorld implements WorldView {
 	@Override
 	public float breakTicks(BlockPos pos) {
 		return switch (this.at(pos)) {
-			case '#', 'S' -> 30;
+			case '#', 'S', 'l' -> 30;
 			case 'D' -> 10;
 			default -> -1;
 		};

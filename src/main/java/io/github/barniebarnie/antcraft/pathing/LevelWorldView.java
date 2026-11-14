@@ -11,7 +11,6 @@ import net.minecraft.tags.FluidTags;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.AbstractBedBlock;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -72,14 +71,20 @@ public class LevelWorldView implements WorldView {
 	public boolean canStandOn(BlockPos pos) {
 		BlockState state = this.blocks.get(pos);
 		// A stair is half a block lower at the front, but walkable.
-		// A bed is lower and as wide, but furniture: walked round, as what players build with is (see isBuilt).
 		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.getBlock() instanceof StairBlock
-			|| !(state.getBlock() instanceof AbstractBedBlock) && isLowFloor(state.getCollisionShape(this.level, pos));
+			|| isLowFloor(state.getCollisionShape(this.level, pos));
+	}
+
+	@Override
+	public boolean jumpsShort(BlockPos pos) {
+		VoxelShape shape = this.blocks.get(pos).getCollisionShape(this.level, pos);
+		return isLowFloor(shape) && shape.max(Direction.Axis.Y) < 0.75;
 	}
 
 	/**
 	 * A block lower than a full one that is as wide as one, give or take a sixteenth, such as farmland, a dirt path, a
-	 * chest, snow two layers deep or more, or a bottom slab (#642): walked on as on a full block. A bot standing on one
+	 * chest, a bed, snow two layers deep or more, or a bottom slab (#642): walked on as on a full block, but one lower than
+	 * three quarters of a block is too low to jump a block up from ({@link #jumpsShort}, #647). A bot standing on one
 	 * is in the block over it, as paths count it (see {@code PathFollower.feet}).
 	 */
 	static boolean isLowFloor(VoxelShape shape) {
