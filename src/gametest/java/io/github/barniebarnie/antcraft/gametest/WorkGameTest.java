@@ -652,6 +652,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Mine and place judge reach from the same eyes as use, over the middle of the bot's block (#624): a bot off the middle,
+	 * whose own eyes a block beside the target hides it from, mines and places it where it stands, and use aims at it too.
+	 */
+	@GameTest(maxTicks = 40)
+	public void mineAndPlaceAgreeWithUseOnReachFromOffTheMiddle(GameTestHelper helper) {
+		helper.setBlock(4, 2, 2, Blocks.STONE);
+		helper.setBlock(5, 2, 2, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.5, 1, 3.05));
+		String target = at(helper, 5, 2, 2);
+		expect(helper, bot, "p = pos()\nprint(mine(" + target + ").ok, pos() == p, place(" + target + ", 'dirt').ok, pos() == p, use("
+			+ target + ").reason)\n", List.of("True True True True blocked"));
+	}
+
 	/** That {@code bot} has {@code target} in reach exactly when an empty-handed use of it does not fail out_of_reach. */
 	private static void assertAgree(GameTestHelper helper, AntBot bot, BlockPos target) {
 		BlockPos at = helper.absolutePos(target);

@@ -76,12 +76,17 @@ class DocExampleTest {
 		}
 	}
 
-	/** docs/cookbook/settle.md shows the steps of jobs/settle.py, as they stand in its run(...), one indent in. */
+	/**
+	 * docs/cookbook/settle.md and wood-farm.md show the steps of jobs/settle.py and jobs/wood_farm.py, as they stand in
+	 * their run(...), one indent in.
+	 */
 	@Test
-	void theSettleStepsAreTheJobs() throws IOException {
-		String steps = example(Files.readString(Path.of("docs/cookbook/settle.md")), "The steps,");
-		String indented = steps.lines().map(line -> "    " + line).collect(Collectors.joining("\n", "", "\n"));
-		assertTrue(job("settle").contains(indented), "settle.md's steps are not in jobs/settle.py:\n" + steps);
+	void theStepsShownAreTheJobs() throws IOException {
+		for (String page : List.of("settle", "wood-farm")) {
+			String steps = example(Files.readString(Path.of("docs/cookbook/" + page + ".md")), "The steps,");
+			String indented = steps.lines().map(line -> "    " + line).collect(Collectors.joining("\n", "", "\n"));
+			assertTrue(job(page).contains(indented), page + ".md's steps are not in its job:\n" + steps);
+		}
 	}
 
 	/** A python block: its fence's indent (inside an admonition), then its lines up to a closing fence at that indent. */

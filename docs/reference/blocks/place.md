@@ -31,6 +31,8 @@ One instruction, the call itself. The walk plans its path as `goto` does.
 
 The first carried block item `item` selects goes to the bot's hand and is placed through the game's own code with a stand-in player at the bot, so the block behaves as when a player places it. Without `facing` or `half`, the block turns as it would for that player.
 
+Reach is a matter of sight: the bot sees the spot when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the spot's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the spot as a wall does, so the bot walks to where it sees past them; [`mine`](mine.md) and [`use`](use.md) judge reach the same way.
+
 Only air or a block that may be replaced (grass, water) is placed in, so a slab placed onto a slab is `blocked`, not made a double slab. A `facing` or `half` that is not one of the names above stops the script with an error.
 
 ## Examples
@@ -52,7 +54,7 @@ place((10, 64, -3), "oak_stairs", facing="east", half="bottom")
 | `no_item` | the bot carries no block item `item` selects |
 | `protected` | the spot may not be changed: outside the build height or border, or under spawn protection |
 | `blocked` | a block that cannot be replaced is there, an entity stands there, or the block cannot stay there |
-| `out_of_reach` | the bot could not walk into reach |
+| `out_of_reach` | the bot could not walk to where it sees the spot within reach |
 | `not_loaded` | the spot is in a chunk that is not loaded |
 | `wrong_dimension` | `pos` is in another dimension than the bot's |
 | `timeout` | the walk got stuck |
