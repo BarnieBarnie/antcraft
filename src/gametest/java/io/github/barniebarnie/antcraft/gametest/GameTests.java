@@ -255,11 +255,9 @@ public final class GameTests {
 		List<String> want = new ArrayList<>(List.of("measure"));
 		want.addAll(expected);
 		long[] start = {-1, 0};
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
-			if (run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (start[0] < 0 && !printed.isEmpty()) {
 				start[0] = run.executed();
 				start[1] = helper.getTick();

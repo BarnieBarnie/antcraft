@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -34,12 +33,7 @@ public class ResultGameTest implements CustomTestMethodInvoker {
 			""");
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 			helper.assertTrue(log.equals(List.of("True True", "True None None 0 False no_tool 2")), "printed " + log);

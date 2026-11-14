@@ -121,11 +121,6 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 	private static void run(GameTestHelper helper, AntBot bot, String args) {
 		List<String> started = BotScripts.command(helper, ("antcraft bot " + bot.getStringUUID() + " run jobs.giant_tree " + args).strip());
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.giant_tree, 1]")), "run answered " + started);
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("job failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 	}
 }

@@ -43,11 +43,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	/** Runs {@code source} on {@code bot}, failing the test as soon as the script fails. */
 	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
 		ScriptRun run = BotScripts.run(bot, source);
-		helper.onEachTick(() -> {
-			if (run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		return run;
 	}
 

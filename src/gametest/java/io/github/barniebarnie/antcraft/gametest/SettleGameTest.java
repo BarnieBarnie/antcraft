@@ -7,7 +7,6 @@ import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -59,12 +58,9 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 			assertBase(helper, bot, chest, at);
 			assertWateredField(helper);
 		};
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (!rerun[0] && said.contains("settle 3/7: hut")) {
 				rerun[0] = true;
 				bot.stopScript();
@@ -94,12 +90,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
 			+ " 12 antcraft:cobble_step");
-		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("settle 1/7: kit", "settle 2/7: flatten",
 				"settle 3/7: hut", "settle 4/7: furnish", "settle 5/7: field", "settle 6/7: store", "settle 7/7: home", "settled"), "said");
@@ -125,11 +116,10 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
 			+ " 12 antcraft:cobble_step");
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
-				|| !said.isEmpty() && said.getLast().startsWith("not settled")) {
+			if (!said.isEmpty() && said.getLast().startsWith("not settled")) {
 				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});
@@ -155,11 +145,10 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
 			+ " 12 antcraft:cobble_step");
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
-				|| !said.isEmpty() && said.getLast().startsWith("not settled")) {
+			if (!said.isEmpty() && said.getLast().startsWith("not settled")) {
 				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});
@@ -186,11 +175,10 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
 			+ " 12 antcraft:cobble_step");
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
-				|| !said.isEmpty() && said.getLast().startsWith("not settled") || bot.blockPosition().getY() < at.getY() - 1) {
+			if (!said.isEmpty() && said.getLast().startsWith("not settled") || bot.blockPosition().getY() < at.getY() - 1) {
 				helper.fail("failed, warned or went under the floor at " + bot.blockPosition() + ": " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});
@@ -230,11 +218,10 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
 			+ " 12");
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
-				|| !said.isEmpty() && said.getLast().startsWith("not settled")) {
+			if (!said.isEmpty() && said.getLast().startsWith("not settled")) {
 				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});

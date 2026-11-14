@@ -70,15 +70,9 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 12);
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.forester 8");
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
-		helper.onEachTick(() -> {
-			if (!strict) {
-				return;
-			}
-			ScriptRun script = bot.getScript();
-			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		if (strict) {
+			BotScripts.failOnWarning(helper, bot);
+		}
 		return bot;
 	}
 

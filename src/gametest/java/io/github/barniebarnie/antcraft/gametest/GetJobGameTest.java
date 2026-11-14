@@ -89,11 +89,9 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + borrow);
 		boolean[] started = {false};
 		String says = "got 2 #minecraft:planks";
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (!started[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
 				started[0] = true;
 				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get #minecraft:planks 2");
@@ -125,11 +123,9 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 			.formatted(p.getX(), p.getY(), p.getZ()));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + borrow);
 		boolean[] started = {false};
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (!started[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
 				started[0] = true;
 				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get oak_planks 2");
@@ -151,11 +147,9 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	private static void run(GameTestHelper helper, AntBot bot, String args, String says, Runnable then) {
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.get " + args);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.get, 1]")), "run answered " + started);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
 			if (!said.isEmpty() && !said.equals(List.of(says))) {
 				helper.fail("said " + said + ", log " + BotScripts.log(bot, Output.Level.DEBUG));

@@ -51,8 +51,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = farm(helper, 0, 4);
 		run(helper, bot);
 		boolean[] grew = new boolean[1];
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			failOnWarning(helper, bot);
 			if (!grew[0] && said(bot).contains("birch_farm 4/4: farm")) {
 				BlockPos at = helper.absolutePos(SPOT);
 				BlockState sapling = helper.getLevel().getBlockState(at);
@@ -85,7 +85,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	public void buildsTheSecondCellFromTheMaterialsInTheChests(GameTestHelper helper) {
 		AntBot bot = farm(helper, 4, 4);
 		run(helper, bot);
-		helper.onEachTick(() -> failOnWarning(helper, bot));
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(said(bot).contains("built cell 2"), "said " + said(bot));
 			assertCell(helper, bot, SPOT);
@@ -100,8 +100,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = farm(helper, 0, 2);
 		run(helper, bot);
 		boolean[] rerun = new boolean[1];
+		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
-			failOnWarning(helper, bot);
 			if (!rerun[0] && said(bot).contains("birch_farm 4/4: farm")) {
 				rerun[0] = true;
 				bot.stopScript();
@@ -126,7 +126,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	public void mostIsTheGrowthTimeOverTheHarvestTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		BotScripts.run(bot, "import jobs.wood_farm\nprint(int(jobs.wood_farm.GROWTH), jobs.wood_farm.most(400), jobs.wood_farm.most(10 ** 6))\n");
-		helper.onEachTick(() -> failOnWarning(helper, bot));
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
 			helper.assertValueEqual(said(bot), List.of("19114 47 1"), "printed");
@@ -174,12 +174,5 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	private static List<String> said(AntBot bot) {
 		return BotScripts.log(bot, Output.Level.PRINT);
-	}
-
-	/** Fails the test at once when the bot warned or logged an error, such as its script failing. */
-	private static void failOnWarning(GameTestHelper helper, AntBot bot) {
-		if (!BotScripts.warnings(bot).isEmpty()) {
-			helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-		}
 	}
 }

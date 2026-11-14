@@ -105,12 +105,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 
 	private static void run(GameTestHelper helper, AntBot bot, String source) {
 		BotScripts.run(bot, source);
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("script failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnWarning(helper, bot);
 	}
 
 	private static void finished(GameTestHelper helper, AntBot bot, List<String> expected) {

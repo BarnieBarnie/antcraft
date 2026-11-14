@@ -4,10 +4,8 @@ import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.at;
 import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.expect;
 import static io.github.barniebarnie.antcraft.gametest.WorkGameTest.fillInventory;
 
-import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
-import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Compiler;

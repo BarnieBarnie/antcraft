@@ -488,6 +488,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		ScriptRun[] run = {null};
+		BotScripts.failOnError(helper, () -> run[0] == null ? null : (AntBot) nether.getEntity(id));
 		GameTests.waitAtMost(helper, () -> run[0] == null, () -> "Nether chunk not ticking entities");
 		helper.onEachTick(() -> {
 			BotChunks.keep(nether, spot);
@@ -495,8 +496,6 @@ public class DigGameTest implements CustomTestMethodInvoker {
 				build.accept(nether, feet);
 				bot.teleportTo(nether, feet.getX() + 0.5, feet.getY(), feet.getZ() + 0.5, Set.of(), 0, 0, false);
 				run[0] = BotScripts.run((AntBot) Objects.requireNonNull(nether.getEntity(id)), script);
-			} else if (run[0] != null && run[0].state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log((AntBot) nether.getEntity(id), Output.Level.DEBUG));
 			}
 		});
 		helper.succeedWhen(() -> {

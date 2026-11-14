@@ -187,11 +187,8 @@ public class CookbookGameTest implements CustomTestMethodInvoker {
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name + " 5");
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 		boolean[] edited = {false};
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			// Once two blocks of the tunnel are dug, the script is edited and reloaded: it starts again from the top.
 			if (!edited[0] && helper.getBlockState(new BlockPos(3, 1, 3)).isAir() && helper.getBlockState(new BlockPos(3, 2, 3)).isAir()) {
 				try {

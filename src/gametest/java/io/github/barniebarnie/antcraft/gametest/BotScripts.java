@@ -120,6 +120,20 @@ public final class BotScripts {
 		});
 	}
 
+	/**
+	 * As {@link #failOnError(GameTestHelper, AntBot...)}, and also when one of {@code bots} logs a warning: {@link #warnings}
+	 * holds its errors too.
+	 */
+	public static void failOnWarning(GameTestHelper helper, AntBot... bots) {
+		helper.onEachTick(() -> {
+			for (AntBot bot : bots) {
+				if (!warnings(bot).isEmpty()) {
+					helper.fail("failed or warned: " + log(bot, Output.Level.DEBUG));
+				}
+			}
+		});
+	}
+
 	private static void failIfError(GameTestHelper helper, AntBot bot) {
 		if (!errors(bot).isEmpty()) {
 			helper.fail("script error: " + log(bot, Output.Level.DEBUG));

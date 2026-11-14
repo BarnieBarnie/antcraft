@@ -159,12 +159,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 5));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.store 8");
-		BotScripts.failOnError(helper, bot);
-		helper.onEachTick(() -> {
-			if (!BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
 			helper.assertTrue(chest.countItem(Items.DIRT) == 5, "dirt in the chest: " + chest.countItem(Items.DIRT));

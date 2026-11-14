@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -120,12 +119,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 
 	/** Fails at once when the script fails; succeeds once it printed {@code printed} and {@code check} holds. */
 	private static void succeedWhenPrinted(GameTestHelper helper, AntBot bot, String printed, Runnable check) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 			helper.assertTrue(log.equals(List.of(printed)), "printed " + log);

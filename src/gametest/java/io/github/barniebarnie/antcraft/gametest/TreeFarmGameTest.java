@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -141,11 +140,6 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		BlockPos h = helper.absolutePos(high);
 		BotScripts.run(bot, "import lib.treefarm\nkind = \"" + kind + "\"\nlow = Pos(" + l.getX() + ", " + l.getY() + ", " + l.getZ()
 			+ ")\nhigh = Pos(" + h.getX() + ", " + h.getY() + ", " + h.getZ() + ")\n" + body);
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 	}
 }

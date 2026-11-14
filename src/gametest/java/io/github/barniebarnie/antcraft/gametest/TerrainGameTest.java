@@ -86,12 +86,7 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 		BlockPos high = helper.absolutePos(new BlockPos(4, 0, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.flatten " + low.getX() + " " + low.getZ() + " "
 			+ high.getX() + " " + high.getZ());
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished: "
 				+ (bot.getScript() == null ? "no script" : bot.getScript().state()) + " " + BotScripts.log(bot, Output.Level.DEBUG));
@@ -209,12 +204,7 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 		String y = args.startsWith(" 2") ? " " + (low.getY() + 2) + args.substring(2) : args;
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.flatten " + low.getX() + " " + low.getZ() + " "
 			+ high.getX() + " " + high.getZ() + y);
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
-				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished: "
 				+ (bot.getScript() == null ? "no script" : bot.getScript().state()) + " " + BotScripts.log(bot, Output.Level.DEBUG));

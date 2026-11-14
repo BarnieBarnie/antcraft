@@ -806,14 +806,12 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		BotScripts.run(bot, build);
 		AntBot[] loaded = new AntBot[1];
 		ScriptRun[] again = new ScriptRun[1];
+		BotScripts.failOnError(helper, () -> loaded[0]);
 		helper.onEachTick(() -> {
 			if (loaded[0] == null && helper.getBlockState(new BlockPos(3, 7, 3)).is(Blocks.COBBLESTONE)) {
 				bot.stopScript();
 				loaded[0] = saveAndLoad(helper, bot);
 				again[0] = BotScripts.run(loaded[0], build + "print(r.ok, r.reason, r.value, count('dirt'))\n");
-			}
-			if (again[0] != null && again[0].state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(loaded[0], Output.Level.DEBUG));
 			}
 		});
 		helper.succeedWhen(() -> {
@@ -844,6 +842,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "not saved: " + saved(helper, loaded));
 		loaded.tickCount += AntBot.BUILD_SCAFFOLD_TICKS;
 		ScriptRun[] build = new ScriptRun[1];
+		BotScripts.failOnError(helper, () -> build[0] == null ? null : loaded);
 		helper.onEachTick(() -> {
 			if (build[0] == null && helper.getBlockState(new BlockPos(2, 1, 6)).isAir()) {
 				helper.assertBlockPresent(Blocks.AIR, 2, 2, 6);
@@ -852,9 +851,6 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(saved(helper, loaded).contains("BuildScaffold"), "the dirt out of reach is forgotten: " + saved(helper, loaded));
 				WorkGameTest.carryCobbleStep(loaded, 2);
 				build[0] = BotScripts.run(loaded, "r = build('antcraft:cobble_step', " + WorkGameTest.at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason)\n");
-			}
-			if (build[0] != null && build[0].state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(loaded, Output.Level.DEBUG));
 			}
 		});
 		helper.succeedWhen(() -> {

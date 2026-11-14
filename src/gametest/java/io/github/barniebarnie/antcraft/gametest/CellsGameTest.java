@@ -41,11 +41,9 @@ public class CellsGameTest implements CustomTestMethodInvoker {
 		String run = "antcraft bot " + bot.getStringUUID() + " run " + name;
 		BotScripts.command(helper, run);
 		boolean[] rerun = new boolean[1];
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			ScriptRun script = bot.getScript();
-			if (script != null && script.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (!rerun[0] && script != null && script.state() == ScriptRun.State.FINISHED) {
 				rerun[0] = true;
 				BotScripts.command(helper, run);

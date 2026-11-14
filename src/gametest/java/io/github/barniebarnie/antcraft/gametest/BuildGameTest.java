@@ -247,11 +247,9 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 	private static void run(GameTestHelper helper, AntBot bot, String args, String says, Runnable then) {
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.build " + args);
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.build, 1]")), "run answered " + started);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
 			if (!said.isEmpty() && !said.equals(List.of(says))) {
 				helper.fail("said " + said + ", log " + BotScripts.log(bot, Output.Level.DEBUG));

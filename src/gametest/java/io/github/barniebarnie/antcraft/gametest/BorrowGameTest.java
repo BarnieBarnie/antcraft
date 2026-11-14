@@ -214,11 +214,9 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], borrowed(), count("iron_pickaxe"), count("oak_planks"))
 			""");
 		boolean[] restarted = {false};
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (!restarted[0] && run != null && run.state() == ScriptRun.State.FINISHED) {
 				restarted[0] = true;
 				BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + second);

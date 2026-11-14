@@ -71,11 +71,7 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	/** Runs {@code source} on a bot at (3, 1, 3), failing the test as soon as the script fails. */
 	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
 		ScriptRun run = BotScripts.run(bot, source);
-		helper.onEachTick(() -> {
-			if (run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		return run;
 	}
 
@@ -465,13 +461,9 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		AntBot[] copy = {null};
 		ScriptRun[] second = {null};
 		ScriptRun[] third = {null};
+		BotScripts.failOnError(helper, () -> copy[0] == null ? bot : copy[0]);
 		// One listener for every step: a listener added while the listeners run breaks the game test framework.
 		helper.onEachTick(() -> {
-			for (ScriptRun run : new ScriptRun[] {first, second[0], third[0]}) {
-				if (run != null && run.state() == ScriptRun.State.FAILED) {
-					helper.fail("script failed: " + BotScripts.log(copy[0] == null ? bot : copy[0], Output.Level.DEBUG));
-				}
-			}
 			if (first.state() == ScriptRun.State.FINISHED && second[0] == null) {
 				second[0] = BotScripts.run(bot, "memory['n'] += 1\n");
 			} else if (second[0] != null && second[0].state() == ScriptRun.State.FINISHED && copy[0] == null) {

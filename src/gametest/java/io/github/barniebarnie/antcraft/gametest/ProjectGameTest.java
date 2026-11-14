@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -51,11 +50,8 @@ public class ProjectGameTest implements CustomTestMethodInvoker {
 		String run = "antcraft bot " + bot.getStringUUID() + " run " + name;
 		BotScripts.command(helper, run);
 		boolean[] rerun = new boolean[1];
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
-			if (script != null && script.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (!rerun[0] && ran(bot).contains("starts 3")) {
 				rerun[0] = true;
 				bot.stopScript();
@@ -94,12 +90,7 @@ public class ProjectGameTest implements CustomTestMethodInvoker {
 			print(lib.project.status("q"))
 			""");
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
-			if (script != null && script.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
 				.filter(line -> !line.startsWith("q ")).toList(),
 			List.of("False no_item pick ['logs', 'pick', 'never'] 3", "['flaky'] {'logs': 'no_logs', 'pick': 'no_item'}",
@@ -132,12 +123,7 @@ public class ProjectGameTest implements CustomTestMethodInvoker {
 			    print(name, r["ok"], count("stone_pickaxe"))
 			""".formatted(WorkGameTest.at(helper, 5, 1, 4)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		helper.onEachTick(() -> {
-			ScriptRun script = bot.getScript();
-			if (script != null && script.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
 					.filter(line -> !line.matches(".* \\d+/\\d+: .*")).toList(),

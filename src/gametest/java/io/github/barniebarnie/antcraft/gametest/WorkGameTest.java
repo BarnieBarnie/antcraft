@@ -101,10 +101,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 */
 	static void expect(GameTestHelper helper, AntBot bot, String source, List<String> expected, Runnable world) {
 		ScriptRun run = BotScripts.run(bot, source);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			if (run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
 			if (run.state() == ScriptRun.State.FINISHED && !printed(bot).equals(expected)) {
 				helper.fail("printed " + printed(bot) + ", expected " + expected + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
@@ -689,11 +687,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.2, 2, 3.5));
 		bot.getInventory().addItem(new ItemStack(Items.WATER_BUCKET));
 		ScriptRun run = BotScripts.run(bot, "r = use(" + at(helper, 3, 0, 3) + ", 'water_bucket')\nprint(r.ok)\n");
-		helper.onEachTick(() -> {
-			if (run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
 			for (int x = 1; x <= 5; x++) {
