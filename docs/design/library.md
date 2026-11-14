@@ -23,7 +23,7 @@ The library is written the Unix way: small functions that each do one thing well
 
 ```text
  jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py   run with bot run jobs.<job> [args]
- kits         lib/bootstrap  lib/gather  lib/project  lib/build  lib/depot                        a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end; a storage row that grows
+ kits         lib/bootstrap  lib/gather  lib/project  lib/build  lib/depot  lib/treefarm         a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end; a storage row that grows; tree cells
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore  lib/farm  lib/storage  lib/terrain     one skill each, preconditions assumed
  primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/cells  lib/retry  lib/home  no ticks, or a single action
@@ -55,6 +55,7 @@ New modules are marked *new*; the others exist and grow.
 - `lib/storage` (#572): `KEEP_KINDS` (tools, weapons, torches, food), `deposit(keep)` gives back what is borrowed and puts the rest into the chests of `lib/stock`, each item first where it already is, and `sort(chests)` gathers each item into the chest that holds most of it.
 - `lib/terrain` (#573): `needs(low, high, y)` the fill and digging it takes, `flatten(low, high, y, fill)` mines above `y` and fills the holes at `y` (air, water or lava, sources first) down to solid ground, over `lib/area`.
 - Existing: `lib/inv`, `lib/shaft`, `lib/mine`.
+- `lib/treefarm` (#605), a kit over `lib/terrain`, `lib/area` and `lib/trees`: `KINDS` a spec per sapling from the game's tree features (cell size, 2x2, the air the tree needs over its floor, a slab roof for oak), `materials(kind)`, `build_cell`, `grown`, `harvest` (`fell_whole` with replant) on a `lib/cells` cell; the wood farm (#606) is built on it.
 
 ### The resolver: `lib/get`
 

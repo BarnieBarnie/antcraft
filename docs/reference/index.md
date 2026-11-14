@@ -173,6 +173,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/trees`](modules/lib/trees.md): `next_tree(radius=32, where=None, remnants=False, around=None)`, `is_tree(base)`, `fell(base, replant=True)`, `logs(n, radius=32, kind=LOGS)`, `low_log(radius=32, skip=None)`, `tree_blocks(base)`, `is_giant(base)`, `stands(blocks)`, `fell_whole(base, replant=True)`, `take_back()`, `LOGS`, `SAPLINGS`, `SCAFFOLD`, `KEEP`.
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/cells`](modules/lib/cells.md): `layout(name, origin, size, row=4, gap=1)`, `cell(name, i)`, `built(name)`, `add(name, i)`, `next(name)`, `count(name)`, a grid of farm cells that grows one cell at a time, kept in `memory["cells"]`.
+- [`lib/treefarm`](modules/lib/treefarm.md): `KINDS`, `materials(kind)`, `build_cell(kind, low, high)`, `grown(kind, low, high)`, `harvest(kind, low, high)`, tree cells per sapling kind for a wood farm.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `walk(a, b)`, `breaking(n, material, tier)`.
 - [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(what)`, `hold(kind)`.
