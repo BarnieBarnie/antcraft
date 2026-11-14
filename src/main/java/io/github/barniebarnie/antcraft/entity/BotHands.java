@@ -1,5 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
+import io.github.barniebarnie.antcraft.script.Result;
 import io.github.barniebarnie.antcraft.script.WorkApi;
 import java.util.List;
 import java.util.function.Function;
@@ -300,31 +302,52 @@ public final class BotHands {
 
 	/**
 	 * Uses the held item on the block at {@code pos}, or with an empty hand the block itself, as a player's right click
-	 * does: on the block first, then the item on its own (a bucket). False when that did nothing.
+	 * does: on the block first, then the item on its own (a bucket), looking where the bot sees the block. Null when that
+	 * did something; else why not: {@link Result#OUT_OF_REACH} when no line from the bot's eyes reaches the block, so the
+	 * use would act on another block (docs/reference/blocks/use.md), and {@link Result#BLOCKED} when the use did nothing.
 	 */
-	public static boolean use(AntBot bot, BlockPos pos) {
+	public static @Nullable String use(AntBot bot, BlockPos pos) {
 		ServerLevel level = (ServerLevel) bot.level();
-		return withHand(bot, pos, player -> {
+		String[] failed = {Result.BLOCKED};
+		withHand(bot, pos, player -> {
 			BlockHitResult hit = aim(level, player, pos);
-			InteractionResult result = player.gameMode.useItemOn(player, level, player.getMainHandItem(), InteractionHand.MAIN_HAND, hit);
-			if (result.consumesAction()) {
-				return true;
+			if (hit == null) {
+				failed[0] = Result.OUT_OF_REACH;
+				return false;
 			}
+			InteractionResult result = player.gameMode.useItemOn(player, level, player.getMainHandItem(), InteractionHand.MAIN_HAND, hit);
 			ItemStack held = player.getMainHandItem();
-			return !held.isEmpty() && player.gameMode.useItem(player, level, held, InteractionHand.MAIN_HAND).consumesAction();
+			if (result.consumesAction()
+				|| !held.isEmpty() && player.gameMode.useItem(player, level, held, InteractionHand.MAIN_HAND).consumesAction()) {
+				failed[0] = null;
+			}
+			return failed[0] == null;
 		});
+		return failed[0];
 	}
 
-	/** Where the player's look at the centre of {@code pos} meets the block, or its face turned to the player. */
-	private static BlockHitResult aim(ServerLevel level, FakePlayer player, BlockPos pos) {
+	/**
+	 * Turns the player to the first point of {@code pos} its eyes see, as {@link LineOfSight} aims: the middle, then the
+	 * middle of each face; where that ray meets the block, or null if every ray hits another block first. An item that
+	 * casts its own ray along the player's look, such as a bucket, then meets this block too, not one in front of it.
+	 */
+	private static @Nullable BlockHitResult aim(ServerLevel level, FakePlayer player, BlockPos pos) {
 		Vec3 eyes = player.getEyePosition();
 		Vec3 center = Vec3.atCenterOf(pos);
-		BlockHitResult hit = level.clip(new ClipContext(eyes, center, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
-		if (hit.getType() == HitResult.Type.BLOCK && hit.getBlockPos().equals(pos)) {
-			return hit;
+		for (Vec3 point : LineOfSight.aims(pos)) {
+			BlockHitResult hit = level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
+			if (hit.getType() == HitResult.Type.BLOCK && !hit.getBlockPos().equals(pos)) {
+				continue;
+			}
+			player.lookAt(EntityAnchorArgument.Anchor.EYES, point);
+			if (hit.getType() == HitResult.Type.BLOCK) {
+				return hit;
+			}
+			// No outline in the way nor at pos (air or a fluid): its face turned to the player.
+			Vec3 toEyes = eyes.subtract(center);
+			return new BlockHitResult(point, Direction.getApproximateNearest(toEyes.x, toEyes.y, toEyes.z), pos, false);
 		}
-		Vec3 toEyes = eyes.subtract(center);
-		return new BlockHitResult(center, Direction.getApproximateNearest(toEyes.x, toEyes.y, toEyes.z), pos, false);
+		return null;
 	}
 
 	/**

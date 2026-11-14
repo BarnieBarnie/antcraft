@@ -405,7 +405,8 @@ public final class WorkApi {
 			if (this.item != null) {
 				BotHands.equip(this.bot, this.item);
 			}
-			return BotHands.use(this.bot, this.pos) ? Result.OK : Result.fail(Result.BLOCKED);
+			String failed = BotHands.use(this.bot, this.pos);
+			return failed == null ? Result.OK : Result.fail(failed);
 		}
 
 		@Override

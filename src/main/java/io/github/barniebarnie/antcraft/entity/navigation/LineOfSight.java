@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.entity.navigation;
 
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -59,16 +61,22 @@ public final class LineOfSight {
 			}
 		};
 		Vec3 eyes = new Vec3(feet.getX() + 0.5, feet.getY() + Goal.Reach.EYE_HEIGHT, feet.getZ() + 0.5);
-		Vec3 middle = Vec3.atCenterOf(target);
-		if (clear(level, eyes, middle, target)) {
-			return true;
-		}
-		for (Direction face : Direction.values()) {
-			if (clear(level, eyes, middle.add(face.getUnitVec3().scale(INSET)), target)) {
+		for (Vec3 point : aims(target)) {
+			if (clear(level, eyes, point, target)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	/** The points of {@code target} a bot aims at, in turn: its middle, then just inside the middle of each face. */
+	public static List<Vec3> aims(BlockPos target) {
+		Vec3 middle = Vec3.atCenterOf(target);
+		List<Vec3> points = new ArrayList<>(List.of(middle));
+		for (Direction face : Direction.values()) {
+			points.add(middle.add(face.getUnitVec3().scale(INSET)));
+		}
+		return points;
 	}
 
 	/** Whether the first block a ray from {@code from} to {@code to} hits is {@code target}, or none. */

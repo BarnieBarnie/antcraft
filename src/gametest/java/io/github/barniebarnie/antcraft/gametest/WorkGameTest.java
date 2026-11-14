@@ -612,6 +612,39 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * Pouring into a 1x1 hole from off the middle of its edge, where the line from the eyes to the middle of the hole's
+	 * floor clips the rim (#591): the water goes into the hole, or use fails and pours nothing, never onto the rim.
+	 */
+	@GameTest(maxTicks = 10)
+	public void usePoursIntoAHoleFromItsEdgeOrFails(GameTestHelper helper) {
+		for (int x = 1; x <= 5; x++) {
+			for (int z = 1; z <= 5; z++) {
+				helper.setBlock(x, 1, z, x == 3 && z == 3 ? Blocks.AIR : Blocks.DIRT);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.2, 2, 3.5));
+		bot.getInventory().addItem(new ItemStack(Items.WATER_BUCKET));
+		ScriptRun run = BotScripts.run(bot, "r = use(" + at(helper, 3, 0, 3) + ", 'water_bucket')\nprint(r.ok)\n");
+		helper.onEachTick(() -> {
+			if (run.state() == ScriptRun.State.FAILED) {
+				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			for (int x = 1; x <= 5; x++) {
+				for (int z = 1; z <= 5; z++) {
+					helper.assertTrue(!helper.getBlockState(new BlockPos(x, 2, z)).getFluidState().is(Fluids.WATER),
+						"water poured onto the rim at (" + x + ", 2, " + z + "), printed " + printed(bot));
+				}
+			}
+			boolean filled = helper.getBlockState(new BlockPos(3, 1, 3)).getFluidState().is(Fluids.WATER);
+			helper.assertTrue(printed(bot).equals(List.of(filled ? "True" : "False")),
+				"printed " + printed(bot) + " with the hole " + (filled ? "filled" : "dry"));
+		});
+	}
+
 	@GameTest(maxTicks = 20)
 	public void useGrowsWheatWithBoneMeal(GameTestHelper helper) {
 		helper.setBlock(3, 0, 3, Blocks.FARMLAND);

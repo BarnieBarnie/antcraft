@@ -63,9 +63,7 @@ def pour():
     # ponytail: no bucket in reach, no water (the field is planted dry); filling a bucket at a lake would cover that.
     if count("water_bucket") or get("water_bucket", 1, radius)["ok"]:
         mine(water)
-        # From in the hole the bot sees the top of the block under it, so the water goes into the hole, not over its rim.
-        goto(water)
-        use(water.down(), "water_bucket")
+        use(water, "water_bucket")  # aimed at the hole itself, so the water goes in, not over its rim
 
 
 def plant():
