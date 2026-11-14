@@ -38,6 +38,19 @@ KINDS = {
     # DARK_OAK, its grower's only tree, from four saplings: DarkOakTrunkPlacer(6, 2, 1), trunk 6 to 9, leaning up to 2 and
     # branching 1 out of the 2x2, so its logs stay 3 blocks of it; ThreeLayersFeatureSize(1, 1, 0, 1, 2).
     "minecraft:dark_oak_sapling": {"size": 8, "square": True, "clear": 11, "roof": False},
+    # PALE_OAK_BONEMEAL, its grower's only tree, from four saplings: DARK_OAK's DarkOakTrunkPlacer(6, 2, 1) and
+    # ThreeLayersFeatureSize(1, 1, 0, 1, 2), so the same cell.
+    "minecraft:pale_oak_sapling": {"size": 8, "square": True, "clear": 11, "roof": False},
+    # ACACIA: ForkingTrunkPlacer(5, 2, 2), trunk 5 to 9, leaning up to 3 one way and forking a branch up to 3 another,
+    # so its logs stay 3 blocks of it; AcaciaFoliagePlacer radius 2, TwoLayersFeatureSize(1, 0, 2).
+    "minecraft:acacia_sapling": {"size": 7, "square": False, "clear": 11, "roof": False},
+    # CHERRY (or CHERRY_BEES_005): CherryTrunkPlacer(7, 1, 0, ...), trunk 7 to 8, one to three branches of 2 to 4 out
+    # and one more for a branch that does not end above its start, so its logs stay 5 blocks of it; CherryFoliagePlacer
+    # radius 4, TwoLayersFeatureSize(1, 0, 2).
+    "minecraft:cherry_sapling": {"size": 11, "square": False, "clear": 10, "roof": False},
+    # Not here: MEGA_SPRUCE, MEGA_PINE and MEGA_JUNGLE_TREE grow from the same sapling as the one-sapling kind, and a kind
+    # is its sapling item; MANGROVE's MangroveRootPlacer lifts the trunk 1 to 3 over roots at the propagule's spot, where
+    # grown and harvest look for a log.
 }
 TORCH = "minecraft:torch"
 DIRT = "minecraft:dirt"
@@ -71,20 +84,24 @@ def roof(kind, low, high):
 
 def torches(low, high):
     """Where the cell's torches go: on the floor at two opposite corners. Torch light 14 falls by one a block, so it
-    lights every floor block of a cell up to 8 wide."""
+    lights every floor block of a cell up to 14 wide with no tree in it, and of the widest kind's, the cherry's 11, with
+    its tree grown."""
     low = Pos(low)
     high = Pos(high)
     return [Pos(low.x, low.y + 1, low.z), Pos(high.x, low.y + 1, high.z)]
 
 
 def materials(kind):
-    """The items one cell of kind takes, item to count: dirt under each sapling, the saplings, torches and roof slabs.
-    The fill to level the cell is lib.terrain.needs's."""
+    """The items one cell of kind takes, item to count: dirt under each sapling, the saplings, torches, roof slabs and,
+    for a roof, clear more dirt to pillar up to it with, which build_cell takes back. The fill to level the cell depends
+    on its ground: lib.terrain.needs gives it."""
     n = 4 if spec(kind)["square"] else 1
     out = {DIRT: n, kind: n, TORCH: 2}
     slabs = len(roof(kind, Pos(0, 0, 0), Pos(spec(kind)["size"] - 1, 0, spec(kind)["size"] - 1)))
     if slabs:
         out[SLABS] = slabs
+        # ponytail: a pillar the roof's height, the most a walk up to it places; it comes back.
+        out[DIRT] += spec(kind)["clear"]
     return out
 
 

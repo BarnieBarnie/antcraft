@@ -6,14 +6,20 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.function.Consumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.data.worldgen.features.TreeFeatures;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.SlabBlock;
@@ -109,7 +115,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		});
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
-				"{'minecraft:dirt': 1, 'minecraft:oak_sapling': 1, 'minecraft:torch': 2, '#minecraft:wooden_slabs': 9}",
+				"{'minecraft:dirt': 9, 'minecraft:oak_sapling': 1, 'minecraft:torch': 2, '#minecraft:wooden_slabs': 9}",
 				"True None", "True None"), "printed");
 			helper.assertTrue(grew[0], "the oak never grew");
 			for (int x = 0; x < 24; x++) {
@@ -126,6 +132,158 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class, area, e -> e.getItem().is(Items.OAK_LOG)).isEmpty(),
 				"oak logs left lying");
 		});
+	}
+
+	/**
+	 * A cherry cell of 11x11 from (2, 0, 2): built, then grown as the game does; the cherry's branches, up to 5 out of
+	 * the trunk, keep its logs inside the cell.
+	 */
+	// Measured: passes at tick 229 to 230.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 460)
+	public void aCherryCellGrowsItsTreeInside(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT), new ItemStack(Items.CHERRY_SAPLING),
+			new ItemStack(Items.TORCH, 2));
+		BlockPos spot = new BlockPos(7, 1, 7);
+		start(helper, bot, "minecraft:cherry_sapling", new BlockPos(2, 0, 2), new BlockPos(12, 0, 12), """
+			print(lib.treefarm.materials(kind))
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.CHERRY_LOG, at -> advance(helper, at));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
+				List.of("{'minecraft:dirt': 1, 'minecraft:cherry_sapling': 1, 'minecraft:torch': 2}", "True None"), "printed");
+			helper.assertTrue(grew[0], "the cherry never grew");
+			for (int x = 2; x <= 12; x++) {
+				for (int z = 2; z <= 12; z++) {
+					BlockPos p = new BlockPos(x, 1, z);
+					int light = helper.getLevel().getBrightness(LightLayer.BLOCK, helper.absolutePos(p));
+					helper.assertTrue(!helper.getBlockState(p).isAir() || light > 0, "dark at (" + x + ", 1, " + z + ")");
+				}
+			}
+			for (int x = 0; x < 24; x++) {
+				for (int y = 1; y < 16; y++) {
+					for (int z = 0; z < 24; z++) {
+						if (x < 2 || x > 12 || z < 2 || z > 12) {
+							helper.assertBlockNotPresent(Blocks.CHERRY_LOG, new BlockPos(x, y, z));
+						}
+					}
+				}
+			}
+		});
+	}
+
+	/**
+	 * A dark oak cell of 8x8 from (2, 0, 2): four saplings on dirt in its middle, grown into the 2x2 tree, felled whole
+	 * and replanted, all four. The game test loot makes dark oak leaves drop apples, so the bot is given the saplings to
+	 * replant.
+	 */
+	// Measured: passes at tick 1959 to 2069.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
+	public void aDarkOakCellOfFourSaplingsIsGrownAndHarvested(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 4),
+			new ItemStack(Items.DARK_OAK_SAPLING, 8), new ItemStack(Items.TORCH, 2));
+		BlockPos spot = new BlockPos(5, 1, 5);
+		start(helper, bot, "minecraft:dark_oak_sapling", new BlockPos(2, 0, 2), new BlockPos(9, 0, 9), """
+			print(lib.treefarm.materials(kind))
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"])
+			while not lib.treefarm.grown(kind, low, high):
+			    wait(5)
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.DARK_OAK_LOG, at -> advance(helper, at));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
+				"{'minecraft:dirt': 4, 'minecraft:dark_oak_sapling': 4, 'minecraft:torch': 2}", "True None", "True None"), "printed");
+			helper.assertTrue(grew[0], "the dark oak never grew");
+			assertFelled(helper, bot, Blocks.DARK_OAK_LOG, Items.DARK_OAK_LOG);
+			for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
+				helper.assertBlockPresent(Blocks.DARK_OAK_SAPLING, p);
+			}
+		});
+	}
+
+	/**
+	 * An oak cell whose sapling grows a fancy oak (one in ten): the roof clips its trunk, of up to 14, to 6, and the bot
+	 * fells it whole, branches and all, under the roof it leaves standing.
+	 */
+	// Measured: passes at tick 373 to 405.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 800)
+	public void aClippedFancyOakUnderTheRoofIsHarvested(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 12);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 17),
+			new ItemStack(Items.OAK_SAPLING, 2), new ItemStack(Items.TORCH, 2), new ItemStack(Items.OAK_SLAB, 9));
+		BlockPos spot = new BlockPos(5, 1, 5);
+		start(helper, bot, "minecraft:oak_sapling", new BlockPos(2, 0, 2), new BlockPos(8, 0, 8), """
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"])
+			while not lib.treefarm.grown(kind, low, high):
+			    wait(5)
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		boolean[] grew = growOnceBuilt(helper, bot, 1, spot, Blocks.OAK_LOG, at -> {
+			ServerLevel level = helper.getLevel();
+			level.setBlock(at, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+			level.registryAccess().lookupOrThrow(Registries.FEATURE).getOrThrow(TreeFeatures.FANCY_OAK).value()
+				.place(level, level.getChunkSource().getGenerator(), level.getRandom(), at);
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None", "True None"), "printed");
+			helper.assertTrue(grew[0], "the fancy oak never grew");
+			assertFelled(helper, bot, Blocks.OAK_LOG, Items.OAK_LOG);
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, spot);
+			for (int x = 4; x <= 6; x++) {
+				for (int z = 4; z <= 6; z++) {
+					helper.assertBlockPresent(Blocks.OAK_SLAB, new BlockPos(x, 9, z));
+				}
+			}
+		});
+	}
+
+	/**
+	 * Once the bot has printed printed lines, grows the tree at spot with grow (given the absolute position) each tick
+	 * the spot holds a sapling, until a log stands there; gives whether it grew.
+	 */
+	private static boolean[] growOnceBuilt(GameTestHelper helper, AntBot bot, int printed, BlockPos spot, Block log,
+			Consumer<BlockPos> grow) {
+		boolean[] grew = new boolean[1];
+		helper.onEachTick(() -> {
+			if (grew[0] || BotScripts.log(bot, Output.Level.PRINT).size() < printed) {
+				return;
+			}
+			if (helper.getBlockState(spot).getBlock() instanceof SaplingBlock) {
+				grow.accept(helper.absolutePos(spot));
+			}
+			grew[0] = helper.getBlockState(spot).is(log);
+		});
+		return grew;
+	}
+
+	/** Grows the sapling at the absolute at as a random tick or bone meal would. */
+	private static void advance(GameTestHelper helper, BlockPos at) {
+		BlockState sapling = helper.getLevel().getBlockState(at);
+		((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1),
+			helper.getLevel().getRandom());
+	}
+
+	/** No log left standing in the area nor lying about, and the bot carries 4 or more. */
+	private static void assertFelled(GameTestHelper helper, AntBot bot, Block log, Item item) {
+		for (int x = 0; x < 24; x++) {
+			for (int y = 1; y < 16; y++) {
+				for (int z = 0; z < 24; z++) {
+					helper.assertBlockNotPresent(log, new BlockPos(x, y, z));
+				}
+			}
+		}
+		helper.assertTrue(GameTests.carried(bot, item) >= 4, "the bot carries " + GameTests.carried(bot, item) + " logs");
+		AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).expandTowards(24, 16, 24);
+		helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class, area, e -> e.getItem().is(item)).isEmpty(),
+			"logs left lying");
 	}
 
 	private static void give(AntBot bot, ItemStack... stacks) {

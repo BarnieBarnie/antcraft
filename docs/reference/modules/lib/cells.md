@@ -18,7 +18,7 @@ if r["ok"]:
 
 ## `layout(name, origin, size, row=4, gap=1)`
 
-Sets up the farm `name`: cells of `size`, `(w, d)` blocks along x and z, `row` cells to a row, `gap` blocks between cells, cell 0 at `origin` (a [`Pos`](../../types/pos.md) or tuple). A farm already laid out keeps its layout and the cells built, so a script can call `layout` each time it starts.
+Sets up the farm `name`: cells of `size`, `(w, d)` blocks along x and z, `row` cells to a row, `gap` blocks between cells, cell 0 at `origin` (a [`Pos`](../../types/pos.md) or tuple). A farm already laid out keeps its layout and the cells built, even where this call gives other arguments, and `layout` gives that first layout; so a script can call `layout` each time it starts. To lay a farm out anew, delete `memory["cells"][name]` first.
 
 - **Returns** the farm, a dict with `origin`, `size`, `row`, `gap` and `built`.
 - **Pauses** no.

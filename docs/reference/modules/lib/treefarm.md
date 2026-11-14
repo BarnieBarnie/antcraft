@@ -2,7 +2,7 @@
 
 Tree cells for a wood farm, one tree each, shaped by the sapling kind: built, watched, harvested and replanted. A module of the mod's default library: `import lib.treefarm`, then `lib.treefarm.build_cell("minecraft:birch_sapling", low, high)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/treefarm.py`, a kit over [`lib/terrain`](terrain.md), [`lib/area`](area.md) and [`lib/trees`](trees.md) (see [The script library](../../../design/library.md#layers)). Its cells come from [`lib/cells`](cells.md): `low` and `high` are the corners of a cell's floor, one block high.
 
-It assumes the bot carries what [`materials`](#materialskind) lists, the tools to clear the cell (a pickaxe where the sapling spot is on stone) and, for a roofed cell, scaffold blocks to pillar up to the roof with; [`lib/get`](get.md) gets those.
+It assumes the bot carries what [`materials`](#materialskind) lists, the tools to clear the cell (a pickaxe where the sapling spot is on stone) and the fill to level it; [`lib/get`](get.md) gets those.
 
 ```python
 import lib.cells
@@ -40,21 +40,26 @@ The values come from the game's tree features, named in the module's comments:
 | `spruce_sapling` | 7 | no | 10 | no | a trunk of 5 to 8, leaves up to 3 out; one sapling a cell, so never a giant |
 | `jungle_sapling` | 5 | no | 14 | no | a trunk of 4 to 12, leaves 2 out; one sapling a cell, so never a giant |
 | `dark_oak_sapling` | 8 | yes | 11 | no | a 2x2 trunk of 6 to 9, leaning up to 2 and branching 1 out |
+| `pale_oak_sapling` | 8 | yes | 11 | no | grown as a dark oak |
+| `acacia_sapling` | 7 | no | 11 | no | a trunk of 5 to 9, leaning up to 3 one way and forking up to 3 another |
+| `cherry_sapling` | 11 | no | 10 | no | a trunk of 7 to 8, one to three branches up to 5 out, leaves 4 out of their ends |
+
+Not kinds: a giant spruce or jungle tree grows from four saplings of the same item as the one-sapling kind, and a kind is its sapling; a mangrove stands on roots 1 to 3 high at its propagule's spot, where `grown` and `harvest` look for a log.
 
 A tree grows only where the air over its sapling is free up to its trunk height plus 2; a roof lower than that stops it, but a fancy oak grows shorter instead, down to a trunk of 4. Mobs do not spawn on leaves nor on bottom slabs; under the canopy the torches keep the floor lit.
 
 ## `materials(kind)`
 
-The items one cell of `kind` takes, item to count: a dirt and a sapling per sapling spot, 2 torches and, for a roofed kind, 9 `#minecraft:wooden_slabs`. Done at once. The fill to level an uneven cell is not in it: [`lib.terrain.needs`](terrain.md) gives that.
+The items one cell of `kind` takes, item to count: a dirt and a sapling per sapling spot, 2 torches and, for a roofed kind, 9 `#minecraft:wooden_slabs` and `clear` more dirt to pillar up to the roof with, which `build_cell` takes back. Done at once. The fill to level an uneven cell depends on its ground, so it is not in it: [`lib.terrain.needs`](terrain.md) gives that.
 
 ```python
 print(lib.treefarm.materials("minecraft:oak_sapling"))
-# {'minecraft:dirt': 1, 'minecraft:oak_sapling': 1, 'minecraft:torch': 2, '#minecraft:wooden_slabs': 9}
+# {'minecraft:dirt': 9, 'minecraft:oak_sapling': 1, 'minecraft:torch': 2, '#minecraft:wooden_slabs': 9}
 ```
 
 ## `build_cell(kind, low, high)`
 
-Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over it ([`lib.terrain.flatten`](terrain.md)), puts dirt under each sapling spot in the cell's middle where the ground is no dirt, a torch on the floor at the `low` and `high` corners (torch light reaches every floor block of a cell up to 8 wide), the roof where the spec has one (taking back the scaffold it pillared up with), then plants.
+Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over it ([`lib.terrain.flatten`](terrain.md)), puts dirt under each sapling spot in the cell's middle where the ground is no dirt, a torch on the floor at the `low` and `high` corners (torch light reaches every floor block of each kind's cell, the cherry's 11 wide too, under its grown tree), the roof where the spec has one (taking back the scaffold it pillared up with), then plants.
 
 - **Returns** a [`result()`](result.md): ok, or the reason of the step that failed with `at`.
 - **Pauses** yes.

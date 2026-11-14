@@ -54,4 +54,23 @@ public class CellsGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
 			List.of(boxes, "[] 0 0", boxes, "[0, 2] 1 2"), "printed"));
 	}
+
+	/** A second layout of a farm with other arguments gives and keeps the first: origin, size, row, gap and the built. */
+	// Measured: passes at tick 1.
+	@GameTest(maxTicks = 10)
+	public void aSecondLayoutKeepsTheFirst(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		BotScripts.run(bot, """
+			import lib.cells
+			lib.cells.layout("g", Pos(10, 64, 20), (5, 5), 3, 1)
+			lib.cells.add("g", 1)
+			f = lib.cells.layout("g", Pos(0, 70, 0), (7, 7), 2, 2)
+			print(f["origin"].x, f["size"], f["row"], f["gap"], f["built"])
+			l, h = lib.cells.cell("g", 3)
+			print(l.x, l.y, l.z, h.x, h.y, h.z, lib.cells.built("g"))
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
+			List.of("10 [5, 5] 3 1 [1]", "10 64 26 14 64 30 [1]"), "printed"));
+	}
 }
