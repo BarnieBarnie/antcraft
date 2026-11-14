@@ -110,15 +110,6 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 			""".formatted(top.getX(), top.getY(), top.getZ(), top.getY() - 3, top.getY() - 5));
 	}
 
-	/** Fails at once when the script of the bot {@code bot} gives fails. */
-	private static void failOnError(GameTestHelper helper, Supplier<AntBot> bot) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.get().getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot.get(), Output.Level.DEBUG));
-			}
-		});
-	}
 
 	/**
 	 * Succeeds once the script printed {@code printed}, the last line it prints, with a shut trapdoor in the hatch and a
@@ -220,7 +211,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = miner(helper, COLUMN.size() - 1);
 		dig(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> bot, List.of("dug True"));
 	}
 
@@ -293,7 +284,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 				bot[0] = ScriptGameTest.saveAndLoad(helper, first);
 			}
 		});
-		failOnError(helper, () -> bot[0]);
+		BotScripts.failOnError(helper, () -> bot[0]);
 		succeedWhenDug(helper, () -> {
 			helper.assertTrue(bot[0] != first, "not saved yet");
 			return bot[0];
@@ -317,7 +308,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 				given[0] = true;
 			}
 		});
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> bot, List.of(lacks, "dug True"));
 	}
 
@@ -340,7 +331,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	private static void digsAShaftSealing(GameTestHelper helper, BlockPos sealed) {
 		AntBot bot = miner(helper, COLUMN.size() - 1);
 		dig(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> {
 			helper.assertTrue(helper.getBlockState(sealed).getFluidState().isEmpty(), "no wall at " + sealed.toShortString());
 			return bot;
@@ -360,7 +351,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		husk.setNoAi(true);
 		AntBot bot = miner(helper, COLUMN.size() - 1);
 		dig(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		int[] hits = {0};
 		helper.onEachTick(() -> {
 			if (helper.getTick() % 20 == 0 && husk.isWithinMeleeAttackRange(bot) && husk.hasLineOfSight(bot)
@@ -387,7 +378,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		cow.setNoAi(true);
 		AntBot bot = miner(helper, COLUMN.size() - 1);
 		dig(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		String blocked = "blocked {}";
 		helper.onEachTick(() -> {
 			if (cow.isAlive() && BotScripts.log(bot, Output.Level.PRINT).contains(blocked)) {
@@ -405,7 +396,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 			print("down", lib.shaft.to_level(y - 5).ok, pos().y == y - 5)
 			print("up", lib.shaft.to_surface().ok)
 			""");
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		succeedWhenDug(helper, () -> bot, List.of("dug True", "down True True", "up True"));
 	}
 
@@ -431,7 +422,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		husk.setNoAi(true);
 		husk.setHealth(0.5F);
 		climbOut(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		BlockPos bottom = helper.absolutePos(COLUMN.getLast());
 		helper.onEachTick(() -> {
 			if (!bot.isAlive()) {
@@ -476,7 +467,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		husk.setNoAi(true);
 		husk.setHealth(5);
 		climbOut(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		BlockPos bottom = helper.absolutePos(COLUMN.getLast());
 		boolean[] opened = {false};
 		helper.onEachTick(() -> {
@@ -522,7 +513,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		bot.setHealth(AntCraftConfig.botFleeHealth());
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
 		climbOut(helper, bot);
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		helper.onEachTick(() -> {
 			if (bot.isDeadOrDying()) { // not isAlive: the test's end removes the bot on the tick it succeeds
 				helper.fail("the bot died: " + BotScripts.log(bot, Output.Level.DEBUG));
@@ -556,7 +547,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 			m = lib.shaft.shaft([pos().y - 3])
 			print(m is not None and m["top"] == memory["shaft"]["top"])
 			""");
-		failOnError(helper, () -> bot);
+		BotScripts.failOnError(helper, () -> bot);
 		boolean[] fire = {false};
 		helper.onEachTick(() -> {
 			if (fire[0]) {

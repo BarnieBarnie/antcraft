@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Supplier;
 import net.minecraft.commands.CommandSource;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -95,6 +96,34 @@ public final class BotScripts {
 	public static List<String> errors(AntBot bot) {
 		return bot.getLog().last(BotLog.CAPACITY, Output.Level.ERROR).stream()
 			.filter(entry -> entry.level() == Output.Level.ERROR).map(BotLog.Entry::text).toList();
+	}
+
+	/**
+	 * Fails the test at once when one of {@code bots} logs an error, such as its script failing, rather than waiting out
+	 * its maxTicks (CLAUDE.md, Game tests). It reads the log, so it also sees an error after the bot went on to idle.py.
+	 */
+	public static void failOnError(GameTestHelper helper, AntBot... bots) {
+		helper.onEachTick(() -> {
+			for (AntBot bot : bots) {
+				failIfError(helper, bot);
+			}
+		});
+	}
+
+	/** As {@link #failOnError(GameTestHelper, AntBot...)} for the bot {@code bot} gives; null while there is none yet. */
+	public static void failOnError(GameTestHelper helper, Supplier<@Nullable AntBot> bot) {
+		helper.onEachTick(() -> {
+			AntBot now = bot.get();
+			if (now != null) {
+				failIfError(helper, now);
+			}
+		});
+	}
+
+	private static void failIfError(GameTestHelper helper, AntBot bot) {
+		if (!errors(bot).isEmpty()) {
+			helper.fail("script error: " + log(bot, Output.Level.DEBUG));
+		}
 	}
 
 	/** A message a {@link RecordingPlayer} got, at the game time it got it. */

@@ -54,15 +54,6 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		return BotScripts.log(bot, Output.Level.PRINT);
 	}
 
-	/** Fails at once when the script fails, rather than waiting out the test. */
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			List<String> errors = BotScripts.errors(bot);
-			if (!errors.isEmpty()) {
-				helper.fail("script error: " + errors);
-			}
-		});
-	}
 
 	/**
 	 * A wall across the area, open only at its far end, then a trench two deep across the whole area: the bot goes round
@@ -84,7 +75,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
 		BlockPos target = helper.absolutePos(new BlockPos(6, 1, 1));
 		ScriptRun run = BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, r.reason)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			if (printed(bot).contains("False unreachable")) {
 				helper.fail("goto gave up, bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
@@ -103,7 +94,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos target = helper.absolutePos(new BlockPos(4, 6, 4));
 		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, r.reason, bool(r))\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False unreachable False")), "printed " + printed(bot)));
 	}
@@ -128,7 +119,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		AntBot bot = inABedrockPit(helper);
 		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
 		BotScripts.run(bot, "r = goto(" + pos(target) + ", keep=\"cobblestone\")\nprint(r.ok, r.reason)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(printed(bot).equals(List.of("False unreachable")), "printed " + printed(bot));
@@ -142,7 +133,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		AntBot bot = inABedrockPit(helper);
 		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
 		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, r.reason)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(printed(bot).equals(List.of("True None")), "printed " + printed(bot));
@@ -160,7 +151,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		BlockPos target = helper.absolutePos(new BlockPos(2, 3, 4));
 		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, placed_scaffold() == [Pos" + pos(helper.absolutePos(new BlockPos(2, 1, 2)))
 			+ "], placed_scaffold())\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True []")), "printed " + printed(bot)));
 	}
@@ -202,7 +193,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		bot.teleportTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
 		// As the bot does each tick while it runs a script, from the first tick on its new spot.
 		BotChunks.keep(bot);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		waitForChunks(helper, bot, targetChunk, chunkZ);
 		helper.onEachTick(() -> {
 			if (printed(bot).stream().anyMatch(line -> line.startsWith("False"))) {
@@ -228,7 +219,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		BlockPos away = helper.absolutePos(new BlockPos(6, 1, 6));
 		BlockPos newHome = helper.absolutePos(new BlockPos(6, 1, 1));
 		BotScripts.run(bot, "print(goto(" + pos(away) + ").ok)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		int[] homeTicks = {0};
 		boolean[] moved = {false};
 		helper.onEachTick(() -> {
@@ -282,7 +273,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		bot.teleportTo(start.getX() + 0.5, start.getY(), start.getZ() + 0.5);
 		bot.setHome(home);
 		BotChunks.keep(bot);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		waitForChunks(helper, bot, homeChunk, chunkZ);
 
 		helper.succeedWhen(() -> {
@@ -345,7 +336,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		bot.setHome(start);
 		// As a bot running a script does each tick, so it ticks on its new spot and starts idle.py there.
 		BotChunks.keep(bot);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		boolean[] idled = {false};
 		boolean[] unloaded = {false};
 		GameTests.onEnd(helper, () -> {
@@ -422,7 +413,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		});
 		BlockPos target = helper.absolutePos(new BlockPos(3, 1, 6));
 		BotScripts.run(bot, "r = goto(" + pos(target) + ")\nprint(r.ok, dimension())\nwait(1000)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			if (level.getBlockState(bot.blockPosition()).is(Blocks.NETHER_PORTAL) || bot.isRemoved()) {
 				helper.fail("bot walked into the portal");
@@ -472,7 +463,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			}
 			bot.discard();
 		});
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		// Where the portal leads, an eighth of the way from the Nether's origin.
 		BlockPos there = new BlockPos(Math.floorDiv(start.getX(), 8), 64, Math.floorDiv(start.getZ(), 8));
 		boolean[] started = {false};
@@ -596,7 +587,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		});
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		// 0: waiting for the chunks; 1: the bot travels; 2: the bot, through and remembering the portal, was put at the far
 		// end of the tunnel and idles.
 		int[] phase = {0};
@@ -672,7 +663,7 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 			}
 			bot.discard();
 		});
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		GameTests.waitAtMost(helper, () -> !bot.isRemoved() && !level.isPositionEntityTicking(bot.blockPosition()), () -> "bot not ticking on its spot");
 		helper.onEachTick(() -> BotChunks.keep(level, spot));
 		helper.succeedWhen(() -> {

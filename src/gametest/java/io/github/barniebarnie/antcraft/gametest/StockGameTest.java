@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -47,7 +46,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			r = fetch("oak_planks", 10)
 			print(r["ok"], count("oak_planks"), [(x["chest"] == a, x["n"]) for x in borrowed()])
 			""".formatted(pos(helper, NEAR), pos(helper, FAR)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True True []", "True 10 [(True, 6), (False, 4)]");
 			helper.assertTrue(count(near, Items.OAK_PLANKS) == 0, "planks in the near chest " + count(near, Items.OAK_PLANKS));
@@ -66,7 +65,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			r = fetch("oak_planks", 10)
 			print(r["ok"], r["reason"], r["missing"], count("oak_planks"), borrowed())
 			""");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "False no_item {'oak_planks': 1} 1 []");
 			helper.assertTrue(count(near, Items.OAK_PLANKS) == 4 && count(far, Items.OAK_PLANKS) == 4, "planks taken");
@@ -83,7 +82,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			r = fetch("oak_planks", 10)
 			print(r["ok"], count("oak_planks"), borrowed())
 			""");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True 10 []");
 			helper.assertTrue(count(near, Items.OAK_PLANKS) == 6, "planks taken");
@@ -104,7 +103,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			r = take_up_to("oak_planks", 9, chests=[%s])
 			print(r["ok"], r["missing"], count("oak_planks"))
 			""".formatted(pos(helper, FAR), pos(helper, FAR)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True 6", "False {'oak_planks': 2} 7");
 			helper.assertTrue(count(near, Items.OAK_PLANKS) == 6, "planks in the near chest " + count(near, Items.OAK_PLANKS));
@@ -124,7 +123,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			memory["chests"] = [Pos(%d, %d, %d, "minecraft:the_nether"), b]
 			print(chests() == [a, b])
 			""".formatted(pos(helper, NEAR), far.getX(), far.getY(), far.getZ(), far.getX() + 1, far.getY(), far.getZ()));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> printed(helper, bot, "True"));
 	}
 
@@ -132,7 +131,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 	 * A chest just outside the test's area (#598), within the radius, is not one of the bot's chests, so a test never
 	 * takes from a neighbouring test's chest; fetch takes from the one inside only.
 	 */
-	@GameTest(maxTicks = 50)
+	@GameTest(maxTicks = 20)
 	public void leavesOutAChestOutsideTheTestArea(GameTestHelper helper) {
 		Container near = chest(helper, NEAR, new ItemStack(Items.OAK_PLANKS, 2));
 		Container out = chest(helper, new BlockPos(8, 1, 5), new ItemStack(Items.OAK_PLANKS, 6));
@@ -142,7 +141,7 @@ public class StockGameTest implements CustomTestMethodInvoker {
 			r = fetch("oak_planks", 4)
 			print(r["ok"], r["missing"], count("oak_planks"))
 			""".formatted(pos(helper, NEAR)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True", "False {'oak_planks': 2} 0");
 			helper.assertTrue(count(near, Items.OAK_PLANKS) == 2 && count(out, Items.OAK_PLANKS) == 6, "planks taken");
@@ -169,14 +168,6 @@ public class StockGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 	}
 
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
-	}
 
 	private static void printed(GameTestHelper helper, AntBot bot, String... lines) {
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);

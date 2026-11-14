@@ -29,7 +29,7 @@ public class GatherGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Logs from the oak, a wooden pickaxe, cobblestone from the stone, then the stone axe. */
-	@GameTest(maxTicks = 1600)
+	@GameTest(maxTicks = 950)
 	public void makeStoneAxeFromAnEmptyInventory(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		expect(helper, bot, "import lib.gather\nr = lib.gather.make('stone_axe')\nprint(r['ok'], count('stone_axe'))\n",

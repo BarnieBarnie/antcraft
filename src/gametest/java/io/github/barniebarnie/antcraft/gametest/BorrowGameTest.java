@@ -52,7 +52,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], borrowed(), count("iron_pickaxe"), count("oak_planks"))
 			""".formatted(pos(helper, CHEST), pos(helper, new BlockPos(6, 1, 3)), pos(helper, new BlockPos(6, 1, 7)),
 			pos(helper, new BlockPos(7, 1, 7))));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True True 2 2", "True [] 0 0");
 			helper.assertTrue(count(chest, Items.OAK_PLANKS) == 8, "planks in the chest " + count(chest, Items.OAK_PLANKS));
@@ -76,7 +76,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back()
 			print(r["ok"], borrowed())
 			""".formatted(pos(helper, CHEST)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True []");
 			helper.assertTrue(count(other, Items.OAK_PLANKS) == 4, "planks in the other chest " + count(other, Items.OAK_PLANKS));
@@ -97,7 +97,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back()
 			print(r["ok"], r["reason"], r["missing"], len(borrowed()), count("oak_planks"))
 			""".formatted(pos(helper, CHEST)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> printed(helper, bot, "False no_space {'oak_planks': 4} 1 4"));
 	}
 
@@ -114,7 +114,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back()
 			print(r["ok"], borrowed(), count("oak_planks"))
 			""".formatted(pos(helper, CHEST), pos(helper, new BlockPos(6, 1, 7))));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True [] 2");
 			helper.assertTrue(count(chest, Items.OAK_PLANKS) == 6, "planks in the chest " + count(chest, Items.OAK_PLANKS));
@@ -137,7 +137,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back()
 			print(r["ok"], borrowed(), count("oak_planks"), count("iron_pickaxe"))
 			""".formatted(pos(helper, CHEST)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "[('iron_pickaxe', 1)]", "True [] 4 1");
 			helper.assertTrue(count(chest, Items.IRON_PICKAXE) == 1, "pickaxes in the chest " + count(chest, Items.IRON_PICKAXE));
@@ -159,7 +159,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back()
 			print(r["ok"], borrowed(), count("#minecraft:planks"))
 			""".formatted(pos(helper, CHEST)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> printed(helper, bot, "True [] 4"));
 	}
 
@@ -174,7 +174,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back(since=1)
 			print(r["ok"], [(b["item"], b["n"]) for b in borrowed()], count("oak_planks"), count("iron_pickaxe"))
 			""".formatted(pos(helper, CHEST), pos(helper, CHEST)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True [('oak_planks', 4)] 4 0");
 			helper.assertTrue(count(chest, Items.IRON_PICKAXE) == 1, "no pickaxe in the chest");
@@ -192,7 +192,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 			r = give_back()
 			print(r["ok"], borrowed(), count("oak_planks"))
 			""".formatted(pos(helper, CHEST)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True [] 0");
 			helper.assertTrue(count(chest, Items.OAK_PLANKS) == 4, "planks in the chest " + count(chest, Items.OAK_PLANKS));
@@ -251,14 +251,6 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + name + ", 1]")), "run answered " + started);
 	}
 
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
-	}
 
 	private static void printed(GameTestHelper helper, AntBot bot, String... lines) {
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);

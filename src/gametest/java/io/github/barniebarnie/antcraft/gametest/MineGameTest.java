@@ -3,7 +3,6 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
-import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -97,11 +96,8 @@ public class MineGameTest implements CustomTestMethodInvoker {
 
 	/** Fails at once when the script of the bot {@code bot} gives fails or prints other than {@code printed}. */
 	private static void failOnError(GameTestHelper helper, Supplier<AntBot> bot, String printed) {
+		BotScripts.failOnError(helper, bot::get);
 		helper.onEachTick(() -> {
-			ScriptRun run = bot.get().getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot.get(), Output.Level.DEBUG));
-			}
 			List<String> log = BotScripts.log(bot.get(), Output.Level.PRINT);
 			if (!log.isEmpty() && !log.equals(List.of(printed))) {
 				helper.fail("printed " + log + ", " + describe(helper, bot.get()));

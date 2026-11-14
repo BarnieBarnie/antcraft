@@ -72,7 +72,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["missing"], borrowed(), count("cobblestone"))
 			""".formatted(at(helper, 4, 1, 3), at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
 				"{'minecraft:cobblestone': 2, 'minecraft:oak_stairs': 1}",
@@ -111,7 +111,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["missing"], "minecraft:cobblestone" in got, "minecraft:dirt" in got)
 			""".formatted(at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
 				"False no_logs {'minecraft:oak_stairs': 1, 'minecraft:dirt': 1} True False"),
@@ -148,7 +148,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["missing"], most[0])
 			""".formatted(at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
 				"False no_logs {'minecraft:oak_stairs': 1, 'minecraft:cobblestone': 1} 1"), "printed");
@@ -175,7 +175,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			print(fetch(["a", "x", "a"], 8, get), calls)
 			""");
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
 			"None [('a', 1), ('b', 1), ('a', 2), ('c', 1)]",
 			"no_x [('a', 1), ('x', 1)]"), "printed"));
@@ -192,7 +192,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["at"] == %s, r["missing"])
 			""".formatted(at(helper, 4, 1, 3), at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
 			List.of("False no_blueprint True {}"), "printed"));
 	}
@@ -223,7 +223,7 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["missing"], len(builds))
 			""".formatted(at(helper, 1, 1, 6), at(helper, 4, 1, 3)));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT),
 				List.of("False no_progress {'minecraft:cobblestone': 1} 1"), "printed");
@@ -242,14 +242,6 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 		return p.getX() + " " + p.getY() + " " + p.getZ();
 	}
 
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
-	}
 
 	/** Runs jobs.build with args by the command; succeeds once the bot said {@code says} and {@code then} holds. */
 	private static void run(GameTestHelper helper, AntBot bot, String args, String says, Runnable then) {

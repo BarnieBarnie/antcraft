@@ -121,7 +121,7 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 			r = lib.farm.tend(%s, %s)
 			print(r["ok"], r["reason"], r["at"])
 			""".formatted(printed(helper, 1, 0, 1), printed(helper, 3, 0, 3)));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			jobFinished(helper, bot, job);
 			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
@@ -284,7 +284,7 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 			+ low.getY() + " " + low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " " + args);
 		ScriptRun job = bot.getScript();
 		helper.assertTrue(job != null, "not run: " + said);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			if (!BotScripts.warnings(bot).isEmpty()) {
 				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
@@ -322,18 +322,10 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 
 	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
 		ScriptRun run = BotScripts.run(bot, source);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		return run;
 	}
 
-	/** Fails the test as soon as the bot's script fails. */
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			if (!BotScripts.errors(bot).isEmpty()) {
-				helper.fail("script error: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
-	}
 
 	/** The run finished and printed expected (the run, as the bot goes on to idle.py once the script ends). */
 	private static void finished(GameTestHelper helper, AntBot bot, ScriptRun run, List<String> expected) {

@@ -381,6 +381,8 @@ public class BenchmarkGameTest {
 			for (int i = 0; i < BOTS; i++) {
 				AntBot bot = this.helper.spawn(ModEntities.ANT_BOT, 19 + 2 * (i % 6), GROUND + 1, 18 + 2 * (i / 6));
 				c.equip().accept(bot);
+				// Its scans cover all their radius, as in a world, not only the test's area.
+				GameTests.scansFreely(this.helper, bot);
 				BotScripts.run(bot, c.script());
 				this.bots.add(bot);
 			}

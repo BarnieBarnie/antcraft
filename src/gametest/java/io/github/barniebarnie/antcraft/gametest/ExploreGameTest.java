@@ -149,7 +149,7 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	public void theJobWalksTheSpiralGoesHomeAndReports(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.explore nothing 1 2");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		String biome = helper.getLevel().getBiome(helper.absolutePos(new BlockPos(3, 1, 3))).getRegisteredName();
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
@@ -162,18 +162,9 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 
 	private static void run(GameTestHelper helper, AntBot bot, String source) {
 		BotScripts.run(bot, source);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 	}
 
-	/** Fails the test as soon as the bot's script fails. */
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
-	}
 
 	private static void succeedWhenPrinted(GameTestHelper helper, AntBot bot, List<String> expected) {
 		helper.succeedWhen(() -> {

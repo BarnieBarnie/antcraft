@@ -60,7 +60,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 
 	/** The one chest is full of stone: deposit keeps the dirt and names it in missing. */
 	// Measured: passes at tick 1 (12 before room let deposit skip the full chest, #584).
-	@GameTest(maxTicks = 30)
+	@GameTest(maxTicks = 20)
 	public void fullChestsLeaveTheItemsCarried(GameTestHelper helper) {
 		Container full = chest(helper, 6, 1, 6);
 		for (int slot = 0; slot < full.getContainerSize(); slot++) {
@@ -81,7 +81,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 	 * near chest and never walks towards the full one, though it holds stone (#584).
 	 */
 	// Measured: passes at tick 2.
-	@GameTest(maxTicks = 30)
+	@GameTest(maxTicks = 20)
 	public void depositSkipsAFullChestWithoutWalkingToIt(GameTestHelper helper) {
 		Container full = chest(helper, 6, 1, 6);
 		for (int slot = 0; slot < full.getContainerSize(); slot++) {
@@ -159,7 +159,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 5));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.store 8");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
 			if (!BotScripts.warnings(bot).isEmpty()) {
 				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
@@ -179,18 +179,9 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 
 	private static void run(GameTestHelper helper, AntBot bot, String source) {
 		BotScripts.run(bot, source);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 	}
 
-	/** Fails the test as soon as the bot's script fails. */
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		helper.onEachTick(() -> {
-			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED) {
-				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-			}
-		});
-	}
 
 	private static void finished(GameTestHelper helper, AntBot bot, List<String> expected) {
 		helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");

@@ -75,16 +75,6 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		return BotScripts.log(bot, Output.Level.PRINT);
 	}
 
-	/** Fails at once when the script of {@code bot} fails. */
-	private static void failOnError(GameTestHelper helper, AntBot... bots) {
-		helper.onEachTick(() -> {
-			for (AntBot bot : bots) {
-				if (bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FAILED) {
-					helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
-				}
-			}
-		});
-	}
 
 	/**
 	 * What one member stores in {@code colony_memory} the other reads at once, and {@code colony()} tells both their
@@ -107,7 +97,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			print((c['core'].x, c['core'].y, c['core'].z) == CORE, c['core'].dimension, c['owner'])
 			""".replace("MEMBERS", "['" + writer.getStringUUID() + "', '" + reader.getStringUUID() + "']").replace("CORE", corePos));
 		BotScripts.run(outside, "wait(5)\nprint(colony(), colony_memory)\n");
-		failOnError(helper, writer, reader, outside);
+		BotScripts.failOnError(helper, writer, reader, outside);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(printed(reader).equals(List.of("42 1 32 True", "True minecraft:overworld None")), "reader printed " + printed(reader));
 			helper.assertTrue(printed(outside).equals(List.of("None None")), "outside printed " + printed(outside));
@@ -175,7 +165,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			r = take(c, 'dirt', 2)
 			print(r.ok, r.value, count('dirt'), [(s.item, s.count) for s in container(c)])
 			""");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True 6 [('minecraft:dirt', 6)]",
 			"True 2 6 [('minecraft:dirt', 4)]")), "printed " + printed(bot)));
 	}
@@ -189,7 +179,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		Colony colony = colonyAt(helper, 1, 1, 1);
 		AntBot bot = member(helper, colony, 3, 1, 3);
 		ScriptRun run = BotScripts.run(bot, "cm = colony_memory\ncm['a'] = 1\nwait(10)\ncm['b'] = cm['a']\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		AntBot[] copy = {null};
 		helper.runAfterDelay(5, () -> {
 			helper.assertTrue(run.action() != null && run.action().startsWith("wait"), "not waiting: " + run.action());
@@ -232,7 +222,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			""".replace("POSTER", "'" + poster.getStringUUID() + "'");
 		BotScripts.run(first, worker);
 		BotScripts.run(second, worker);
-		failOnError(helper, poster, first, second);
+		BotScripts.failOnError(helper, poster, first, second);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(printed(poster).equals(List.of("1 2")), "poster printed " + printed(poster));
 			List<String> both = new ArrayList<>(printed(first));
@@ -252,7 +242,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		AntBot other = member(helper, colony, 5, 1, 5);
 		colony.jobs().post("haul", Memory.encode("logs"), stopped.getUUID());
 		ScriptRun run = BotScripts.run(stopped, "print(take_job()['data'])\nwait(100)\n");
-		failOnError(helper, stopped, other);
+		BotScripts.failOnError(helper, stopped, other);
 		boolean[] started = {false};
 		helper.onEachTick(() -> {
 			if (!started[0] && printed(stopped).equals(List.of("logs"))) {
@@ -429,7 +419,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
 		BotScripts.run(builder, "a = take_job('build')\nb = take_job('build')\nprint(build('antcraft:cobble_step', "
 			+ WorkGameTest.at(helper, 3, 1, 3) + ", job=a['id']).reason)\nfinish_job(a['id'])\nwait(300)\nprint('end')\n");
-		failOnError(helper, builder);
+		BotScripts.failOnError(helper, builder);
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(printed(builder), List.of("missing_ingredients"), "printed");
 			helper.assertValueEqual(idle.blockPosition(), helper.absolutePos(new BlockPos(4, 1, 3)), "where the idle bot stands");
@@ -514,7 +504,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
-	@GameTest(maxTicks = 110)
+	@GameTest(maxTicks = 40)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -540,7 +530,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * A haul job for a build that is done is moot (#557): the builder got the cobblestone another way and finished, so
 	 * the hauler finds none in the colony and finishes the job without a warning, instead of reporting itself stuck.
 	 */
-	@GameTest(maxTicks = 140)
+	@GameTest(maxTicks = 20)
 	public void aHaulJobForADoneBuildIsFinishedQuietly(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -589,7 +579,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			import lib.stock
 			print(lib.stock.chests(8) == [core()])
 			""");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True")), "printed " + printed(bot)));
 	}
 
@@ -607,7 +597,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			c = core()
 			print(in_colony(c.down(40) + (2, 0, 2)), in_colony(c.down(40) + (3, 0, 0)), in_colony(c + (3, 0, 1)), in_colony(c.up(40) + (0, 0, 4)))
 			""");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True False False")), "printed " + printed(bot)));
 	}
 
@@ -629,7 +619,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			print(lib.find.allowed(out))
 			""");
 		helper.runAfterDelay(5, () -> ColonyManager.get(helper.getLevel()).leave(bot));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False", "True")), "printed " + printed(bot)));
 	}
 
@@ -649,7 +639,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			print(lib.find.allowed(out))
 			""");
 		helper.runAfterDelay(5, () -> ColonyManager.get(helper.getLevel()).leave(bot));
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False", "True")), "printed " + printed(bot)));
 	}
 
@@ -684,7 +674,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			from colony.common import fetch
 			print(fetch('#minecraft:planks', 3), count('birch_planks'), count('dirt'))
 			""");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True 3 0")), "printed " + printed(bot)));
 	}
 
@@ -700,7 +690,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			bots[i] = helper.spawn(ModEntities.ANT_BOT, 1 + i, 1, 1);
 			runDefault(helper, bots[i], scripts[i]);
 		}
-		failOnError(helper, bots);
+		BotScripts.failOnError(helper, bots);
 		helper.succeedWhen(() -> {
 			for (int i = 0; i < scripts.length; i++) {
 				helper.assertTrue(printed(bots[i]).equals(List.of("I am in no colony: place a Colony Core and let me join it")),
@@ -765,7 +755,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * axe from the logs of an oak of four logs at (6, 1, 6), not the giant's, then fells the giant whole with dirt and
 	 * saplings from the core, takes back its scaffold, replants four saplings and stores the 26 logs (#541). Passes at about tick 1700.
 	 */
-	@GameTest(maxTicks = 3400)
+	@GameTest(maxTicks = 2300)
 	public void aLumberjackMakesAnAxeAndFellsAGiantTree(GameTestHelper helper) {
 		TreesGameTest.plantGiant(helper);
 		TreesGameTest.crownGiant(helper);
@@ -782,7 +772,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		AntBot lumberjack = member(helper, colony, 1, 1, 1);
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			TreesGameTest.assertGiantFelled(helper);
 			helper.assertTrue(core.countItem(Items.SPRUCE_LOG) == 26, "spruce logs in the core: " + core.countItem(Items.SPRUCE_LOG));
@@ -811,7 +801,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			for (int x = 0; x < 8; x++) {
 				for (int z = 0; z < 8; z++) {
@@ -853,7 +843,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.onEachTick(() -> {
 			for (BlockPos p : ground) {
 				if (!helper.getBlockState(p).is(Blocks.DIRT)) {
@@ -876,7 +866,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * An empty-handed lumberjack, no axe anywhere, by three oaks of three logs: one tree is cheaper felled by hand, but the
 	 * nine logs together are cheaper with a wooden axe, so it makes one, and a crafting table, from three of them and fells the rest with it (#553). Passes at about tick 860, 1130 with the other colony tests.
 	 */
-	@GameTest(maxTicks = 2260)
+	@GameTest(maxTicks = 1200)
 	public void aLumberjackMakesAnAxeForSeveralSmallTrees(GameTestHelper helper) {
 		for (BlockPos base : List.of(new BlockPos(3, 1, 3), new BlockPos(6, 1, 2), new BlockPos(5, 1, 6))) {
 			helper.setBlock(base.below(), Blocks.DIRT);
@@ -891,7 +881,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		AntBot lumberjack = member(helper, colony, 1, 1, 1);
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
 			helper.assertTrue(lumberjack.getMainHandItem().is(ItemTags.AXES) || lumberjack.getInventory().hasAnyMatching(s -> s.is(ItemTags.AXES)),
@@ -904,7 +894,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * crimson fungus: it is a tree, so the lumberjack fells it, plants the core's fungus on the nylium, stores the four
 	 * stems and keeps the warped fungus, as it keeps saplings (#563, #582). Passes at about tick 185.
 	 */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 230)
 	public void aLumberjackFellsAHugeFungusAndReplantsIt(GameTestHelper helper) {
 		hugeFungus(helper);
 		Colony colony = colonyAt(helper, 1, 1, 6);
@@ -916,7 +906,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.WARPED_FUNGUS));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.CRIMSON_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4
 				|| core.countItem(Items.WARPED_FUNGUS) != 0 || GameTests.carried(lumberjack, Items.WARPED_FUNGUS) != 1) {
@@ -930,7 +920,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * crimson fungus anywhere: no sapling grows on nylium, so it plants the warped fungus there and keeps the sapling (#582).
 	 * Passes at about tick 185.
 	 */
-	@GameTest(maxTicks = 400)
+	@GameTest(maxTicks = 240)
 	public void aLumberjackPlantsAnyFungusNotASaplingOnNylium(GameTestHelper helper) {
 		hugeFungus(helper);
 		Colony colony = colonyAt(helper, 1, 1, 6);
@@ -942,7 +932,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.WARPED_FUNGUS));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			if (!helper.getBlockState(new BlockPos(5, 1, 5)).is(Blocks.WARPED_FUNGUS) || core.countItem(Items.CRIMSON_STEM) != 4
 				|| GameTests.carried(lumberjack, Items.OAK_SAPLING) != 1) {
@@ -1002,7 +992,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 7, 7)) {
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, p);
@@ -1042,7 +1032,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.onEachTick(() -> {
 			if (core.countItem(Items.OAK_LOG) > 0) {
 				for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 15, 7)) {
@@ -1098,7 +1088,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.onEachTick(() -> {
 			List<String> log = BotScripts.log(lumberjack, Output.Level.DEBUG);
 			if (log.stream().anyMatch(e -> e.startsWith("goto(") && e.endsWith("-> unreachable"))) {
@@ -1144,7 +1134,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			for (int y = 1; y <= 7; y++) {
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(4, y, 4));
@@ -1187,7 +1177,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		failOnError(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
 		helper.succeedWhen(() -> {
 			for (BlockPos p : logs) {
 				helper.assertBlockNotPresent(Blocks.ACACIA_LOG, p);
@@ -1468,7 +1458,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * what it gets is the pickaxe and the torch; it digs the shaft at (3, 6, 3) down to its level at y 1, the torch on the
 	 * landing at (4, 1, 3) and the chest north of it.
 	 */
-	@GameTest(maxTicks = 2800)
+	@GameTest(maxTicks = 1900)
 	public void aMinerWithAnEmptyCoreGetsAPickaxeAndTorchesAndDigsTheShaft(GameTestHelper helper) {
 		Colony colony = mineColony(helper);
 		TreesGameTest.plantTree(helper, new BlockPos(1, 6, 5), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
@@ -1515,7 +1505,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * With spruce logs in the core and no trapdoor, the miner makes the hatch a spruce trapdoor (#559), not an oak one,
 	 * which it has no wood for. About twice its pass (362 ticks).
 	 */
-	@GameTest(maxTicks = 750)
+	@GameTest(maxTicks = 470)
 	public void aMinersHatchIsOfTheWoodTheColonyHas(GameTestHelper helper) {
 		Colony colony = mineColony(helper);
 		miners(helper, colony, new BlockPos(1, 6, 1));
@@ -1608,7 +1598,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		Colony colony = mineColony(helper);
 		helper.setBlock(1, 5, 1, Blocks.NETHERRACK);
 		AntBot bot = miners(helper, colony, new BlockPos(1, 6, 1)).getFirst();
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		boolean[] fire = {false};
 		helper.onEachTick(() -> {
 			if (fire[0]) {
@@ -1652,7 +1642,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(answer.equals(List.of("commands.antcraft.bot.join[1, " + colony.core().toShortString() + "]")), "answer " + answer);
 		helper.assertTrue(colony.members().contains(bot.getUUID()), "not a member: " + colony.members());
 		BotScripts.run(bot, "c = colony()['core']\nprint((c.x, c.y, c.z) == (" + at(helper, 1, 1, 1).replace(" ", ", ") + "))\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True")), "printed " + printed(bot)));
 	}
 

@@ -27,7 +27,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -98,7 +97,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	public void sayShowsTheTextAboveTheBotForAWhile(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		long[] shown = {-1};
 		Display.TextDisplay[] display = {null};
 		helper.onEachTick(() -> {
@@ -124,7 +123,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	public void aBotShowingWhatItSaidCanBePushed(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		Vec3 start = bot.position();
 		helper.spawnWithNoFreeWill(EntityTypes.PIG, new Vec3(3.6, 1, 3.5));
 		helper.succeedWhen(() -> {
@@ -144,7 +143,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		BlockPos target = helper.absolutePos(new BlockPos(4, 6, 4));
 		String xyz = target.getX() + ", " + target.getY() + ", " + target.getZ();
 		BotScripts.run(bot, "goto((" + xyz + "))\nwhile True:\n    wait(10)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 
 		helper.succeedWhen(() -> {
 			List<String> status = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " status");
@@ -165,7 +164,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 				loaded[0] = saveAndLoad(helper, bot);
 			}
 		});
-		failOnError(helper, () -> loaded[0]);
+		BotScripts.failOnError(helper, () -> loaded[0]);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(loaded[0] != null, "not saved yet");
 			List<String> status = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " status");
@@ -260,7 +259,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			List<BotLog.Entry> lines = bot.getLog().last(10, Output.Level.PRINT);
 			helper.assertTrue(lines.size() == 3, "log " + lines);
@@ -285,7 +284,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			List<String> lines = bot.getLog().last(10, Output.Level.PRINT).stream().map(BotLog.Entry::text).toList();
 			helper.assertTrue(lines.equals(List.of("True [('a', {'x': 1})]", "no_item 3 ('b', {})")), "log " + lines);
@@ -729,7 +728,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue("wait(30)".equals(bot.getScript().action()), "action " + bot.getScript().action());
 			loaded[0] = saveAndLoad(helper, bot);
 		});
-		failOnError(helper, () -> loaded[0]);
+		BotScripts.failOnError(helper, () -> loaded[0]);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(loaded[0] != null, "not saved yet");
 			List<BotLog.Entry> prints = prints(loaded[0]);
@@ -757,7 +756,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 				loaded[0] = saveAndLoad(helper, bot);
 			}
 		});
-		failOnError(helper, () -> loaded[0]);
+		BotScripts.failOnError(helper, () -> loaded[0]);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(loaded[0] != null, "not saved yet");
 			List<String> prints = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
@@ -783,7 +782,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 				loaded[0] = saveAndLoad(helper, bot);
 			}
 		});
-		failOnError(helper, () -> loaded[0]);
+		BotScripts.failOnError(helper, () -> loaded[0]);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(loaded[0] != null, "not saved yet");
 			List<String> prints = prints(loaded[0]).stream().map(BotLog.Entry::text).toList();
@@ -890,7 +889,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 			helper.assertFalse(bot.blockPosition().equals(target), "already there");
 			loaded[0] = saveAndLoad(helper, bot);
 		});
-		failOnError(helper, () -> loaded[0]);
+		BotScripts.failOnError(helper, () -> loaded[0]);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(loaded[0] != null, "not saved yet");
 			String arrived = "True Pos(" + target.getX() + ", " + target.getY() + ", " + target.getZ() + ")";
@@ -908,24 +907,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
-	/** Fails at once when {@code bot}'s script fails, rather than waiting out the test. */
-	private static void failOnError(GameTestHelper helper, AntBot bot) {
-		failOnError(helper, () -> bot);
-	}
 
-	/** Fails at once when the script of the bot {@code bot} gives fails; it gives null while there is none yet. */
-	private static void failOnError(GameTestHelper helper, Supplier<@Nullable AntBot> bots) {
-		helper.onEachTick(() -> {
-			AntBot bot = bots.get();
-			if (bot == null) {
-				return;
-			}
-			List<String> errors = BotScripts.errors(bot);
-			if (!errors.isEmpty()) {
-				helper.fail("script error: " + errors);
-			}
-		});
-	}
 
 	/** Succeeds once {@code bot} runs {@code idle.py} and has stood at {@code home} for 20 ticks. */
 	private static void succeedWhenIdleAtHome(GameTestHelper helper, AntBot bot, BlockPos home) {
@@ -948,7 +930,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
 		bot.setHome(home);
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		succeedWhenIdleAtHome(helper, bot, home);
 	}
 
@@ -962,7 +944,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
 		bot.setHome(home);
 		BotScripts.run(bot, "while True:\n    wait(10)\n");
-		failOnError(helper, bot);
+		BotScripts.failOnError(helper, bot);
 		helper.runAfterDelay(10, () -> {
 			helper.assertTrue(bot.isRunningScript() && bot.getScript().name().equals("test"), "bot runs " + bot.getScript().name());
 			BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " stop");
@@ -990,7 +972,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 		saved.store("Scaffold", BlockPos.CODEC.listOf(), List.of(helper.absolutePos(new BlockPos(3, 1, 3))));
 		AntBot copy = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		copy.load(TagValueInput.create(ProblemReporter.DISCARDING, helper.getLevel().registryAccess(), saved));
-		failOnError(helper, copy);
+		BotScripts.failOnError(helper, copy);
 		succeedWhenIdleAtHome(helper, copy, home);
 	}
 }

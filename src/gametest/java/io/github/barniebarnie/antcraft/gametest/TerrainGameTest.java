@@ -167,7 +167,7 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 	 * bot can climb back onto it.
 	 */
 	// Measured: passes at tick 24; the chest scan waits on a budget all bots share.
-	@GameTest(maxTicks = 120, skyAccess = true)
+	@GameTest(maxTicks = 50, skyAccess = true)
 	public void theJobGetsTheFillItLacksAndFlattensAgain(GameTestHelper helper) {
 		helper.setBlock(2, 3, 2, Blocks.AIR);
 		helper.setBlock(2, 4, 2, Blocks.AIR);
