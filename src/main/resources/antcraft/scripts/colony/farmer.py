@@ -13,26 +13,18 @@
 # delete it and the default comes back when the server starts.
 from colony.common import core, store
 from lib.borrow import give_back
-from lib.farm import CROPS, POISON, SOIL, harvest, plant, till
+from lib.farm import CROPS, POISON, SOIL, harvest, nearest_first, plant, rows, till
 from lib.stock import take_up_to
 
 
 def farm_spots():
-    """The soil blocks of every farm in the colony."""
+    """The soil blocks of every farm in the colony, in rows back and forth (lib.farm.rows)."""
     spots = []
     for b in (colony_memory or {}).get("buildings", []):
         plan = blueprint(b["blueprint"], b["at"], b.get("turn", 0), b.get("mirror", False))
         if plan is not None and plan["role"] == "farm":
             spots.extend(plan["work_spots"])
-    return spots
-
-
-def tend(soil):
-    """Harvests the crop on soil when it is ripe and replants it, else tills the soil and plants the first crop it has
-    seeds of (lib.farm)."""
-    harvest([soil])
-    till([soil])
-    plant([soil])
+    return rows(spots)
 
 
 core()  # a bot in no colony says so and stops
@@ -48,8 +40,10 @@ while True:
         if bare > 0:
             take_up_to(c[1], bare, chests=[core()])
             bare -= count(c[1])
-    for soil in spots:
-        tend(soil)
+    # As lib.farm.tend: harvest and replant, till, then plant the rest, each pass from the end nearest the bot (#646).
+    harvest(nearest_first(spots))
+    till(nearest_first(spots))
+    plant(nearest_first(spots))
     pick_up([i for c in CROPS for i in c[1:3]] + [POISON])
     # Keeps the seeds the bare spots still need, wheat first, and one carrot and
     # one potato; the rest goes into the core.

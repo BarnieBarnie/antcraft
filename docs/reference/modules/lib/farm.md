@@ -26,7 +26,11 @@ The crop block id at `pos`, such as `"minecraft:wheat"`, where a crop of `CROPS`
 
 ## `field(low, high)`
 
-The spots of the box from `low` to `high` (any two opposite corners) to farm, row by row and back and forth, each row starting at the end where the one before ended, so a walk along them never goes back to a row's start: in each column, its top block that is neither air nor a crop, where that is farmland, dirt or grass with air or a crop of `CROPS` over it. It reads each column from the top of the box down to that block, so give the box of the soil, one block high, where the field is flat (two blocks a column), or a taller box over uneven ground. A finder, done at once.
+The spots of the box from `low` to `high` (any two opposite corners) to farm, row by row and back and forth, each row starting at the end where the one before ended, so a walk along them never goes back to a row's start (`rows`): in each column, its top block that is neither air nor a crop, where that is farmland, dirt or grass with air or a crop of `CROPS` over it. It reads each column from the top of the box down to that block, so give the box of the soil, one block high, where the field is flat (two blocks a column), or a taller box over uneven ground. A finder, done at once.
+
+## `rows(spots)`
+
+`spots`, any list of positions such as a blueprint's work spots, in the order `field` gives: row by row along z and back and forth along x, the first row up x, the next down, so each row starts at the end where the one before ended. `field` and `colony.farmer` list their spots with it. Done at once.
 
 ## `till(spots)`
 

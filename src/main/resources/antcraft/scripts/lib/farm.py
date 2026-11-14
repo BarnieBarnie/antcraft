@@ -42,16 +42,22 @@ def ripe(p):
     return None
 
 
+def rows(spots):
+    """spots row by row (by z) and back and forth (by x), each row starting where the last ended (#640): the rows whose
+    z is an even number of blocks past the first go up x, the others down."""
+    z0 = min([s.z for s in spots]) if spots else 0
+    return sorted(spots, key=lambda s: (s.z, s.x if (s.z - z0) % 2 == 0 else -s.x))
+
+
 def field(low, high):
-    """The spots of the box from low to high (two corners) to farm, row by row and back and forth, each row starting
-    where the last ended (#640): in each column, its top block that is neither air nor a crop where that is farmland,
-    dirt or grass. Reads each column from the top of the box down to that block, so a box of soil one block high reads
-    two blocks a column."""
+    """The spots of the box from low to high (two corners) to farm, in rows back and forth (rows): in each column, its
+    top block that is neither air nor a crop where that is farmland, dirt or grass. Reads each column from the top of the
+    box down to that block, so a box of soil one block high reads two blocks a column."""
     crops = [c[0] for c in CROPS]
     spots = []
     xs = list(range(min(low.x, high.x), max(low.x, high.x) + 1))
     for z in range(min(low.z, high.z), max(low.z, high.z) + 1):
-        for x in (xs if (z - low.z) % 2 == 0 else xs[::-1]):
+        for x in xs:
             p = Pos(x, max(low.y, high.y), z, low.dimension)
             up = block(p.up())
             if up is None or not (up.is_air or up.id in crops):
@@ -62,7 +68,7 @@ def field(low, high):
                 b = block(p)
             if b is not None and (b.id == FARMLAND or b.id in SOIL):
                 spots.append(p)
-    return spots
+    return rows(spots)
 
 
 def till(spots):

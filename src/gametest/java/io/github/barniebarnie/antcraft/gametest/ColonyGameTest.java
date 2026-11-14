@@ -1353,6 +1353,45 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A farm of 13 by 3 (antcraft-gametest:wide_farm, its work spots row by row from the same end) is tilled and planted
+	 * back and forth from the end nearest the farmer, as lib.farm.tend does (#646).
+	 */
+	// Measured: passes at tick 313; tending spot by spot in the blueprint's order it left four spots untilled (use
+	// out_of_reach) after 3000 ticks.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 640)
+	public void aFarmerTendsAWideFarmBackAndForth(GameTestHelper helper) {
+		List<BlockPos> spots = new ArrayList<>();
+		for (int z = 3; z <= 5; z++) {
+			for (int x = 3; x <= 15; x++) {
+				if (z == 4 && (x == 5 || x == 9 || x == 13)) {
+					helper.setBlock(x, 0, z, Blocks.WATER);
+				} else {
+					helper.setBlock(x, 0, z, Blocks.DIRT);
+					spots.add(new BlockPos(x, 0, z));
+				}
+			}
+		}
+		Colony colony = colonyAt(helper, 18, 1, 4);
+		colony.setRadius(16);
+		PyDict farm = new PyDict();
+		farm.put("blueprint", "antcraft-gametest:wide_farm");
+		farm.put("at", pos(helper, 3, 0, 3));
+		PyList buildings = new PyList();
+		buildings.items.add(farm);
+		colony.memory().put("buildings", buildings);
+		Container core = container(helper, 18, 1, 4);
+		core.setItem(0, new ItemStack(Items.WOODEN_HOE));
+		core.setItem(1, new ItemStack(Items.WHEAT_SEEDS, 36));
+		AntBot farmer = member(helper, colony, 16, 1, 8);
+		runDefault(helper, farmer, "colony.farmer");
+		failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			List<BlockPos> bare = spots.stream().filter(s -> !helper.getBlockState(s.above()).is(Blocks.WHEAT)).toList();
+			helper.assertTrue(bare.isEmpty(), "bare " + bare + " " + spots.stream().map(s -> helper.getBlockState(s).getBlock().getName().getString()).toList() + BotScripts.log(farmer, Output.Level.DEBUG));
+		});
+	}
+
 	private static List<BlockPos> farm(GameTestHelper helper, BlockState ripe, int ripeSpots, ItemStack... items) {
 		return farm(helper, true, ripe, ripeSpots, items);
 	}
