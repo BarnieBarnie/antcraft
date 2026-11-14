@@ -76,7 +76,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A stone pickaxe carried by a tree, coal ore and three iron ore (#635): make_cost of an iron axe is within a factor
 	 * {@link #COST_FACTOR} of the ticks get then takes to make it, logs, cobblestone, smelting, table and furnace and all.
-	 * Measured: make_cost 1237, get 1333 ticks.
+	 * Measured: make_cost 1182 (the three ore a vein, #661), get 1360 ticks.
 	 */
 	@GameTest(maxTicks = 2700)
 	public void makeCostOfAnIronAxeIsCloseToItsTicks(GameTestHelper helper) {
@@ -158,6 +158,48 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(7, 1, 1, Blocks.IRON_ORE);
 		helper.setBlock(7, 1, 7, Blocks.IRON_ORE);
 		helper.setBlock(1, 1, 7, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("raw_iron", 3))
+			r = get("raw_iron", 3)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/**
+	 * A stone pickaxe carried, two raw iron in a chest along the area's side and one iron ore past it (#661): make_cost of
+	 * three raw iron is the walk to the chest and one raw iron from its source, as get takes the chest's first, within
+	 * {@link #COST_FACTOR} of get's ticks; it was three from the source. Measured: make_cost 90 (180 before), get 63 ticks
+	 * (test tick 75).
+	 */
+	@GameTest(maxTicks = 150)
+	public void makeCostOfRawIronInAChestIsCloseToItsTicks(GameTestHelper helper) {
+		chest(helper, new BlockPos(1, 1, 7), new ItemStack(Items.RAW_IRON, 2));
+		helper.setBlock(7, 1, 7, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("raw_iron", 3))
+			r = get("raw_iron", 3)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/**
+	 * A stone pickaxe carried, a vein of three iron ore a few blocks off (#661): make_cost of three raw iron is the source's
+	 * estimate for the first and the mining of the rest of the vein, within {@link #COST_FACTOR} of get's ticks; it was the
+	 * estimate, which counts a walk, for each. Measured: make_cost 106 (180 before), get 80 to 85 ticks (test tick 98).
+	 */
+	@GameTest(maxTicks = 200)
+	public void makeCostOfAVeinOfRawIronIsCloseToItsTicks(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.IRON_ORE);
+		helper.setBlock(5, 1, 4, Blocks.IRON_ORE);
+		helper.setBlock(4, 1, 5, Blocks.IRON_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		run(helper, bot, """

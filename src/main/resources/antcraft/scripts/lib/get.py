@@ -70,10 +70,16 @@ class Source:
     def cost(self, n, radius):
         """(ticks, tier) to get n: estimate each, and deep(y) once more where none of ore is exposed within radius (one
         flight of stairs reaches a vein); the tier of a pickaxe source is that of the nearest exposed ore block
-        (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier."""
+        (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier. The
+        rest of that block's vein (ore_vein), up to n, costs only its mining with that tier, as lib.dig.ore mines a vein
+        from where it stands (#661): the estimate counts a walk to each. ponytail: the nearest vein only."""
         p = None if self.ore is None else lib.find.exposed(self.ore, radius)
+        tier = lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
         ticks = self.estimate * n + (deep(self.y) if self.ore is not None and p is None else 0)
-        return ticks, lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
+        if p is not None and n > 1:
+            more = min(n, len([b for b in ore_vein(p) if lib.find.allowed(b)])) - 1
+            ticks -= more * max(0, self.estimate - lib.cost.breaking(1, "ore", tier))
+        return ticks, tier
 
 
 def deep(y):
@@ -270,17 +276,18 @@ def wood_for_coal(k, radius):
     less than the coal source: that many to smelt into charcoal and two thirds as many burnt doing it, which as planks
     also burn as long as that much coal. 0 where the coal is cheaper or the chests hold all k."""
     if k:
-        k -= chest_coal(radius)[1]
+        k -= chest_held(COAL, radius)[1]
     if k <= 0:
         return 0
     logs, wood = charcoal(k, radius)
     return logs if wood < SOURCES[COAL].cost(k, radius)[0] else 0
 
 
-def chest_coal(radius):
-    """(chests, n): the chests of lib.stock within radius that hold coal, nearest first, and how much they hold."""
-    chests = lib.stock.where(COAL, radius)
-    return chests, sum([s.count for c in chests for s in container(c) or [] if matches(s, COAL)])
+def chest_held(item, radius, chests=None):
+    """(chests, n): the chests of lib.stock within radius (or of chests, a list of them) that hold item, nearest first,
+    and how much they hold."""
+    chests = lib.stock.where(item, radius) if chests is None else [c for c in chests if lib.stock.holds(c, item)]
+    return chests, sum([s.count for c in chests for s in container(c) or [] if matches(s, item)])
 
 
 def charcoal(k, radius):
@@ -312,12 +319,12 @@ def gather(source, n, radius):
 def make_cost(item, n, radius=32, tools=None, limit=None):
     """The estimated ticks to make n of item in total from what the bot carries: the walk to each step of the plan the
     chests of lib.stock within radius hold, as get takes them, and the raw items those cover left out (stored); the cost
-    of each other raw item lib.craft.plan lists from its source (coal the walk to the nearest chest of lib.stock within
-    radius that holds some, for as much as the chests hold, the rest from its source or from logs as charcoal where that
-    is cheaper), SMELT for each item smelted, the walk to or the mining back of its crafting table and furnace (stations),
+    of each other raw item lib.craft.plan lists, the item itself where it is raw too: the walk to the nearest chest of
+    lib.stock within radius that holds some, for as much as the chests hold, as get takes them first (#661), the rest
+    from its source (coal from logs as charcoal where that is cheaper), SMELT for each item smelted, the walk to or the mining back of its crafting table and furnace (stations),
     and for each kind of tool their sources need the tool_cost of the highest
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
-    raw and its source has none of it within radius (Source.there), as get then fails at once. tools holds the tool
+    raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once. tools holds the tool
     costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
     limit, None as soon as the cost is sure to be over it: a source costs at least its estimate each, so the ore scans
     and tool costs of a dear one are left out (#582)."""
@@ -338,19 +345,22 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             s = SOURCES.get(key(raw))
             # The item itself is in GETTING as this call costs it (#649): a raw item plans as gathering itself.
             itself = key(raw) == key(item)
-            if s is None or not itself and key(raw) in GETTING or itself and not s.there(radius):
+            if s is None or not itself and key(raw) in GETTING:
                 return None
-            # Coal may come from a chest or as charcoal for less than its estimate.
+            # get takes a raw item from the chests first: the walk to the nearest, for as much as they hold (#555, #661).
+            if "chests" not in tools:
+                tools["chests"] = lib.stock.chests(radius)
+            chests, held = chest_held(key(raw), radius, tools["chests"])
+            if chests:
+                ticks += lib.cost.walk(pos(), chests[0])
+                k -= held
+                if k <= 0:
+                    continue
+            if itself and not s.there(radius):
+                return None
+            # Coal may come as charcoal for less than its estimate.
             if limit is not None and ticks + (0 if key(raw) == COAL else s.estimate * k) > limit:
                 return None
-            if key(raw) == COAL:
-                # get takes coal from the chests first: the walk to the nearest, for as much as they hold (#555).
-                chests, held = chest_coal(radius)
-                if chests:
-                    ticks += lib.cost.walk(pos(), chests[0])
-                    k -= held
-                    if k <= 0:
-                        continue
             c, tier = s.cost(k, radius)
             if key(raw) == COAL and LOGS not in GETTING:
                 wood = charcoal(k, radius)[1]
