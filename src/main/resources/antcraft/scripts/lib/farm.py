@@ -43,13 +43,15 @@ def ripe(p):
 
 
 def field(low, high):
-    """The spots of the box from low to high (two corners) to farm, row by row: in each column, its top block that is
-    neither air nor a crop where that is farmland, dirt or grass. Reads each column from the top of the box down to that
-    block, so a box of soil one block high reads two blocks a column."""
+    """The spots of the box from low to high (two corners) to farm, row by row and back and forth, each row starting
+    where the last ended (#640): in each column, its top block that is neither air nor a crop where that is farmland,
+    dirt or grass. Reads each column from the top of the box down to that block, so a box of soil one block high reads
+    two blocks a column."""
     crops = [c[0] for c in CROPS]
     spots = []
+    xs = list(range(min(low.x, high.x), max(low.x, high.x) + 1))
     for z in range(min(low.z, high.z), max(low.z, high.z) + 1):
-        for x in range(min(low.x, high.x), max(low.x, high.x) + 1):
+        for x in (xs if (z - low.z) % 2 == 0 else xs[::-1]):
             p = Pos(x, max(low.y, high.y), z, low.dimension)
             up = block(p.up())
             if up is None or not (up.is_air or up.id in crops):
@@ -154,14 +156,20 @@ def fill_bucket(radius=32, keep=None):
     return result() if r else result(r.reason, p)
 
 
+def nearest_first(spots):
+    """spots, back to front where the bot stands nearer the last than the first, so a pass over a field (field) starts
+    at the end the last one ended (#640)."""
+    return spots[::-1] if spots and pos().distance(spots[-1]) < pos().distance(spots[0]) else spots
+
+
 def tend(low, high, seed=None):
     """Harvests, tills and plants the field from low to high (field) with seed (None: what the bot carries, wheat first).
     Gives result(): ok; blocked at the first spot left untilled, or left bare though the bot still carries its seed, which
     is worth another try (lib.retry); or no_item with missing, the seeds still lacking for the farmland left bare."""
     spots = field(low, high)
-    harvest(spots)
-    till(spots)
-    plant(spots, seed)
+    harvest(nearest_first(spots))
+    till(nearest_first(spots))
+    plant(nearest_first(spots), seed)
     seeds = [seed] if seed is not None else [c[1] for c in CROPS]
     bare = [s for s in spots if block(s).id == FARMLAND and block(s.up()).is_air]
     stuck = [s for s in spots if block(s).id in SOIL] + (bare if any([has(s) for s in seeds]) else [])

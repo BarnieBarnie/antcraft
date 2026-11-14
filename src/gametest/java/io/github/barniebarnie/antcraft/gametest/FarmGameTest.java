@@ -66,7 +66,7 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * field over a box three blocks high on the field with a dirt block raised at (3, 1, 3) and stone at (2, 1, 1): it
-	 * lists the top soil of each column, row by row, so (3, 1, 3) and not the dirt under it, and nothing under the stone.
+	 * lists the top soil of each column, row by row and back and forth (row z 2 from x 3 to 1, #640), so (3, 1, 3) and not the dirt under it, and nothing under the stone.
 	 */
 	@GameTest(maxTicks = 15)
 	public void fieldListsTheTopSoilOfEachColumn(GameTestHelper helper) {
@@ -78,8 +78,8 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 			import lib.farm
 			print(lib.farm.field(%s, %s))
 			""".formatted(printed(helper, 1, 0, 1), printed(helper, 3, 2, 3)));
-		String expected = "[" + String.join(", ", printed(helper, 1, 0, 1), printed(helper, 3, 0, 1), printed(helper, 1, 0, 2),
-			printed(helper, 3, 0, 2), printed(helper, 1, 0, 3), printed(helper, 2, 0, 3), printed(helper, 3, 1, 3)) + "]";
+		String expected = "[" + String.join(", ", printed(helper, 1, 0, 1), printed(helper, 3, 0, 1), printed(helper, 3, 0, 2),
+			printed(helper, 1, 0, 2), printed(helper, 1, 0, 3), printed(helper, 2, 0, 3), printed(helper, 3, 1, 3)) + "]";
 		helper.succeedWhen(() -> finished(helper, bot, run, List.of(expected)));
 	}
 
@@ -286,8 +286,9 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	 * most 9 by 9, so jobs.farm pours one per dry patch, never filling the bucket at a source it poured, until every
 	 * spot is wet, and plants them all. Two wet the row, so it pours two (#634).
 	 */
-	// Measured: passes at tick 474 (red: dry at (3, 0, 4) with the one source at (8, 0, 4); with three sources at x 7 to 9, #634).
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1100)
+	// Measured: passes at tick 429, 474 before tend went back and forth (#640) (red: dry at (3, 0, 4) with the one source
+	// at (8, 0, 4); with three sources at x 7 to 9, #634).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 900)
 	public void theJobWatersAFieldWiderThanNine(GameTestHelper helper) {
 		for (int x = 3; x <= 13; x++) {
 			helper.setBlock(x, 0, 4, Blocks.DIRT);
@@ -349,10 +350,11 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A field of dirt 13 by 3 from (3, 0, 3) to (15, 0, 5) in the wide area, watered at (5, 0, 4), (9, 0, 4) and (13, 0, 4),
 	 * and a hoe and 36 seeds in a chest at (18, 1, 4) (#634): the field is wider than the bot's reach, so jobs.farm walks
-	 * along it and tills and plants every spot.
+	 * along it and tills and plants every spot, each pass back and forth from the end nearest the bot (#640).
 	 */
-	// Measured: passes at tick 600 (red: use out_of_reach at (3, 0, 4), the bot standing on the tilled row z 3).
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1200)
+	// Measured: passes at tick 400; it took 600 walking each row from its start (#640), so the limit stays under that
+	// (red: use out_of_reach at (3, 0, 4), the bot standing on the tilled row z 3, #634).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
 	public void theJobTendsAFieldWiderThanItsReach(GameTestHelper helper) {
 		List<BlockPos> spots = new java.util.ArrayList<>();
 		for (int z = 3; z <= 5; z++) {

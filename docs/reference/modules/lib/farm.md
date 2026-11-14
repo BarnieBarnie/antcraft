@@ -26,7 +26,7 @@ The crop block id at `pos`, such as `"minecraft:wheat"`, where a crop of `CROPS`
 
 ## `field(low, high)`
 
-The spots of the box from `low` to `high` (any two opposite corners) to farm, row by row: in each column, its top block that is neither air nor a crop, where that is farmland, dirt or grass with air or a crop of `CROPS` over it. It reads each column from the top of the box down to that block, so give the box of the soil, one block high, where the field is flat (two blocks a column), or a taller box over uneven ground. A finder, done at once.
+The spots of the box from `low` to `high` (any two opposite corners) to farm, row by row and back and forth, each row starting at the end where the one before ended, so a walk along them never goes back to a row's start: in each column, its top block that is neither air nor a crop, where that is farmland, dirt or grass with air or a crop of `CROPS` over it. It reads each column from the top of the box down to that block, so give the box of the soil, one block high, where the field is flat (two blocks a column), or a taller box over uneven ground. A finder, done at once.
 
 ## `till(spots)`
 
@@ -66,6 +66,6 @@ if lib.farm.water(16) is not None and get("bucket", 1, 16)["ok"]:
 
 ## `tend(low, high, seed=None)`
 
-`harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`. **Returns** a dict: `ok`, `reason` (`None`; `blocked` where a spot of soil was left untilled, such as with no hoe, or farmland left bare though the bot still carries the seed, a passing failure that [`lib/retry`](retry.md) tries again; or `no_item` where farmland was left bare for want of seeds), `at` (the first spot left so for `blocked`, else `None`) and `missing` (`{seed: n}`, the bare spots, for `no_item`). **Pauses** yes.
+`harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`, each pass from the end of the field nearest the bot (`nearest_first(spots)`: the spots back to front where the bot stands nearer the last), so it starts where the pass before ended. A watered field 13 by 3 is tended in some 400 ticks, not 600. **Returns** a dict: `ok`, `reason` (`None`; `blocked` where a spot of soil was left untilled, such as with no hoe, or farmland left bare though the bot still carries the seed, a passing failure that [`lib/retry`](retry.md) tries again; or `no_item` where farmland was left bare for want of seeds), `at` (the first spot left so for `blocked`, else `None`) and `missing` (`{seed: n}`, the bare spots, for `no_item`). **Pauses** yes.
 
 `FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water and failing `blocked` where it has no hoe to till with, and the job: once, twice as the crops ripen, giving borrowed carrots back, watering a dry field from a pool with an empty bucket from a chest, giving a borrowed water bucket back empty, watering a dry row 11 long with two sources, and tending a watered field 13 by 3, wider than the bot's reach.
