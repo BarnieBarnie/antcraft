@@ -344,7 +344,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * Iron ore in sight but no coal ore: the make cost of two iron axes, whose six smelts plan a coal, burns wood for the
-	 * fuel, as get would, rather than dig for coal (#536). With DEEP a million, digging for it would cost more than that.
+	 * fuel, as get would, rather than dig for coal (#536). With a branch block a million ticks (lib.get.BRANCH), digging for
+	 * it would cost more than that.
 	 */
 	@GameTest(maxTicks = 40)
 	public void ironFuelIsWoodWithoutCoalInSight(GameTestHelper helper) {
@@ -352,7 +353,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, """
 			import lib.get
-			lib.get.DEEP = 1000000
+			lib.get.BRANCH = 1000000
 			print(lib.get.make_cost("iron_axe", 2, radius=8) < 1000000)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True"));
@@ -407,6 +408,56 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			far, near = make_cost("torch", 8, radius=2), make_cost("torch", 8, radius=8)
 			walk = make_cost("stick", 2, radius=8) + lib.cost.walk(pos(), lib.stock.where("coal", 8)[0])
 			print(walk < near, near < far)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
+	 * 1 coal in a chest, 8 torches wanted (#564): get takes it and burns 2 logs, also in the chest, into charcoal for the
+	 * other, rather than dig for coal. The bot carries a furnace and the wooden pickaxe that mines it back.
+	 * The coal source fails, so digging for coal fails the test at once.
+	 */
+	@GameTest(maxTicks = 600)
+	public void chestCoalAndCharcoalMakeTorches(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.COAL), new ItemStack(Items.OAK_LOG, 2));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		run(helper, bot, """
+			from lib.get import get, SOURCES
+			from lib.result import result
+			SOURCES["minecraft:coal"].do = lambda n, radius: result("dug_for_coal")
+			r = get("torch", 8, radius=8)
+			print(r["ok"], r["reason"], count("torch"))
+			""");
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (!log.isEmpty() && !log.equals(List.of("True None 8"))) {
+				helper.fail("printed " + log + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 8");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
+	 * Where no ore is exposed, a source's cost counts the trip to its lib.dig.best_y from the bot's height (#564): stairs
+	 * down, a branch and back up, so diamond (-59) costs more trip than coal (96, no stairs) from the same height, and coal
+	 * one branch: 37 ticks a block of lib.dig.LENGTH.
+	 */
+	@GameTest(maxTicks = 20)
+	public void aDeeperOreCostsMoreTrip(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.dig
+			from lib.get import SOURCES
+			def trip(item):
+			    s = SOURCES["minecraft:" + item]
+			    return s.cost(1, 1)[0] - s.estimate
+			print(trip("diamond") > trip("coal"), trip("coal") == 37 * lib.dig.LENGTH)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True True"));
 	}
@@ -469,7 +520,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"])
 			""");
 		helper.succeedWhen(() -> {
-			printed(helper, bot, "('chest', 'iron') 60", "('make', 'stone') 2060", "True minecraft:stone_axe", "False no_logs");
+			printed(helper, bot, "('chest', 'iron') 60", "('make', 'stone') 1244", "True minecraft:stone_axe", "False no_logs");
 			helper.assertTrue(chest.countItem(Items.IRON_AXE) == 1, "the iron axe left the chest");
 			helper.assertBlockPresent(Blocks.OAK_LOG, TreesGameTest.TREE);
 		});

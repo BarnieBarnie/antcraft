@@ -143,8 +143,8 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The trip lib.get.DEEP costs (#555): stairs 4 down east, a branch of 2 on and back up, with a stone pickaxe through
-	 * stone. It logs the tick each part ends on, as {@code Deep trip: <part> at tick <n>}, for DEEP's comment.
+	 * The trip lib.get.deep costs (#555, #564): stairs 4 down east, a branch of 2 on and back up, with a stone pickaxe through
+	 * stone. It logs the tick each part ends on, as {@code Deep trip: <part> at tick <n>}, for the comment of lib.get.STEP_DOWN.
 	 */
 	@GameTest(maxTicks = 700)
 	public void aTripDownABranchAndBackUp(GameTestHelper helper) {

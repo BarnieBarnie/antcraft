@@ -27,14 +27,16 @@ DEPTH = 8
 MATERIAL = {"pickaxe": "stone", "axe": "wood", "shovel": "dirt"}
 # Ticks to get one of a raw item, where its Source gives no estimate.
 ESTIMATE = 100
-# Ticks more to get an ore's raw items where none of the ore is exposed within radius, so lib.dig.ore digs stairs down,
-# branches and climbs back: once for the trip, however many it gets. Up to 7 coal (28 torches) cost less as charcoal
-# from logs (wood_for_coal), so a bot with no coal ore in sight burns wood for them.
-# Measured (#555, DigGameTest aTripDownABranchAndBackUp, stone pickaxe through stone): some 48 ticks a step down, 37 a
-# block of branch and 10 a step back up. From sea level (64) with one branch of lib.dig.LENGTH (32) that is about 1500
-# for coal (BEST_Y 96: no stairs), 4300 for iron (16) and 8600 for diamond (-59).
-# ponytail: one number for every ore, between coal's trip and iron's; per ore from its BEST_Y and the bot's height if the
-# choices it sways prove wrong. At 1000 the bootstrap tests dug for coal and failed.
+# Ticks more to get an ore's raw items where none of the ore is exposed within radius, so lib.dig.ore digs stairs down to
+# lib.dig.best_y, branches and climbs back: once for the trip, however many it gets (deep). Measured (#555, DigGameTest
+# aTripDownABranchAndBackUp, stone pickaxe through stone): some 48 ticks a step down, 37 a block of branch and 10 a step
+# back up. With one branch of lib.dig.LENGTH (32), from sea level (64) that is about 1200 for coal (BEST_Y 96: no
+# stairs), 4000 for iron (16) and 8300 for diamond (-59) (#564). Up to 4 coal (16 torches) cost less as charcoal from
+# logs (wood_for_coal), so a bot with no coal ore in sight burns wood for them.
+STEP_DOWN = 48
+BRANCH = 37
+STEP_UP = 10
+# The trip of an ore with no best_y, such as one a script adds. At 1000 the bootstrap tests dug for coal and failed.
 DEEP = 2000
 # The walk (lib.cost.walk ticks) to a chest within which ensure_tool takes a lasting tool from it before costing the
 # options; a farther one options weighs against making one (#562). ponytail: one number, about 16 blocks; the walk
@@ -47,11 +49,13 @@ GETTING = []
 class Source:
     """How get gathers a raw item: do(n, radius) gets n more of it within radius and gives result(), with a tool of
     kind tool held (None: no tool) of at least tier ("hand": the bare hand drops it too, so a tool is made only where it
-    pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for cost; near
-    the block or tag do gets it from, where none within radius means there is nothing to get (None: not known)."""
+    pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for cost, and y
+    the height it digs down to for it (lib.dig.best_y; None: DEEP); near the block or tag do gets it from, where none
+    within radius means there is nothing to get (None: not known)."""
 
-    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None):
+    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None):
         self.do = do
+        self.y = y
         self.tool = tool
         self.tier = tier
         self.estimate = ESTIMATE if estimate is None else estimate
@@ -64,12 +68,21 @@ class Source:
         return self.near is None or lib.find.nearest(self.near, radius) is not None
 
     def cost(self, n, radius):
-        """(ticks, tier) to get n: estimate each, and DEEP once more where none of ore is exposed within radius (one
+        """(ticks, tier) to get n: estimate each, and deep(y) once more where none of ore is exposed within radius (one
         flight of stairs reaches a vein); the tier of a pickaxe source is that of the nearest exposed ore block
         (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier."""
         p = None if self.ore is None else lib.find.exposed(self.ore, radius)
-        ticks = self.estimate * n + (DEEP if self.ore is not None and p is None else 0)
+        ticks = self.estimate * n + (deep(self.y) if self.ore is not None and p is None else 0)
         return ticks, lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
+
+
+def deep(y):
+    """The ticks of lib.dig.ore's trip from the bot's height down to y, one branch of lib.dig.LENGTH and back up; DEEP
+    where y is None. ponytail: one branch, from the bot's feet; a vein found sooner or a second branch is not costed."""
+    if y is None:
+        return DEEP
+    down = max(0, pos().y - y)
+    return (STEP_DOWN + STEP_UP) * down + BRANCH * lib.dig.LENGTH
 
 
 def dig_up(what):
@@ -92,7 +105,7 @@ def dig_up(what):
 def ore(item, block, estimate):
     """The Source of a raw item lib.dig.ore digs, with a pickaxe that drops block."""
     return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate,
-                  lib.dig.ORES[item])
+                  lib.dig.ORES[item], y=lib.dig.best_y(item))
 
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =
@@ -172,6 +185,9 @@ def resolve(item, n, radius):
             break
         logs = wood_for_coal(p["gather"].get(COAL, 0), radius)
         if logs and get(LOGS, count(LOGS) + logs, radius)["ok"]:
+            # The charcoal now, before get takes the chests' coal, which the smelt would burn first (#564). logs * 3 // 5
+            # is the charcoal those logs make (the inverse of charcoal's).
+            lib.craft.craft_here("minecraft:charcoal", count("minecraft:charcoal") + logs * 3 // 5)
             continue
         for raw, k in p["gather"].items():
             r = get(raw, count(key(raw)) + k, radius)
@@ -195,13 +211,21 @@ def intermediate(p, item, chests):
 
 
 def wood_for_coal(k, radius):
-    """The logs to get instead of k coal, where they cost less than the coal source and no chest within radius holds
-    coal: k to smelt into charcoal and two thirds as many burnt doing it, which as planks also burn as long as k coal.
-    0 where the coal is cheaper."""
-    if not k or lib.stock.where(COAL, radius):
+    """The logs to get instead of the k coal less what the chests of lib.stock within radius hold (#564), where they cost
+    less than the coal source: that many to smelt into charcoal and two thirds as many burnt doing it, which as planks
+    also burn as long as that much coal. 0 where the coal is cheaper or the chests hold all k."""
+    if k:
+        k -= chest_coal(radius)[1]
+    if k <= 0:
         return 0
     logs, wood = charcoal(k, radius)
     return logs if wood < SOURCES[COAL].cost(k, radius)[0] else 0
+
+
+def chest_coal(radius):
+    """(chests, n): the chests of lib.stock within radius that hold coal, nearest first, and how much they hold."""
+    chests = lib.stock.where(COAL, radius)
+    return chests, sum([s.count for c in chests for s in container(c) or [] if matches(s, COAL)])
 
 
 def charcoal(k, radius):
@@ -250,10 +274,10 @@ def make_cost(item, n, radius=32, tools=None):
                 return None
             if key(raw) == COAL:
                 # get takes coal from the chests first: the walk to the nearest, for as much as they hold (#555).
-                chests = lib.stock.where(COAL, radius)
+                chests, held = chest_coal(radius)
                 if chests:
                     ticks += lib.cost.walk(pos(), chests[0])
-                    k -= sum([s.count for c in chests for s in container(c) or [] if matches(s, COAL)])
+                    k -= held
                     if k <= 0:
                         continue
             c, tier = s.cost(k, radius)
