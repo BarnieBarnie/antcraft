@@ -570,7 +570,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		data.put("from", new Pos(chest.getX(), chest.getY(), chest.getZ()));
 		colony.jobs().post("haul", Memory.encode(data), hauler.getUUID());
 		runDefault(helper, hauler, "colony.hauler");
-		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(hauler, Output.Level.WARN),
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.warnings(hauler),
 			List.of("no minecraft:cobblestone to haul in the colony: no_item"), "warnings"));
 	}
 

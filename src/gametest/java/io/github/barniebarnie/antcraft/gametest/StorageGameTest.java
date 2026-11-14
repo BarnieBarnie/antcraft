@@ -113,7 +113,7 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.store 8");
 		failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			if (!BotScripts.log(bot, Output.Level.WARN).isEmpty()) {
+			if (!BotScripts.warnings(bot).isEmpty()) {
 				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});

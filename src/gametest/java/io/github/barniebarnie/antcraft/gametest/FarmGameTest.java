@@ -104,7 +104,7 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 			+ low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " wheat");
 		failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			if (!BotScripts.log(bot, Output.Level.WARN).isEmpty()) {
+			if (!BotScripts.warnings(bot).isEmpty()) {
 				helper.fail("warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});

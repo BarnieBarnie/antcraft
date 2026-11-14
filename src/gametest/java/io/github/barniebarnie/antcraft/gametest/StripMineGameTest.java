@@ -126,7 +126,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.strip_mine emerald 2");
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.strip_mine, 1]")), "run answered " + started);
 		helper.succeedWhen(() -> {
-			List<String> log = BotScripts.log(bot, Output.Level.WARN);
+			List<String> log = BotScripts.warnings(bot);
 			helper.assertTrue(log.equals(List.of("strip mine: no_ore None {'minecraft:emerald': 2}")), "warned " + log);
 		});
 	}

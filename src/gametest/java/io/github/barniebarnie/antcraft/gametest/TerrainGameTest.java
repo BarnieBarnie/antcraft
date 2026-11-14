@@ -86,7 +86,7 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 			+ high.getX() + " " + high.getZ());
 		helper.onEachTick(() -> {
 			ScriptRun run = bot.getScript();
-			if (run != null && run.state() == ScriptRun.State.FAILED || !BotScripts.log(bot, Output.Level.WARN).isEmpty()) {
+			if (run != null && run.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()) {
 				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});

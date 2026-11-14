@@ -82,6 +82,15 @@ public final class BotScripts {
 		return bot.getLog().last(BotLog.CAPACITY, level).stream().map(BotLog.Entry::text).toList();
 	}
 
+	/**
+	 * The texts of {@code bot}'s warnings and errors, without what it said or printed: {@link Output.Level#PRINT} is above
+	 * every log level, so {@code log(bot, WARN)} holds those too (as the player's {@code /antcraft bot log} shows them).
+	 */
+	public static List<String> warnings(AntBot bot) {
+		return bot.getLog().last(BotLog.CAPACITY, Output.Level.WARN).stream()
+			.filter(entry -> entry.level() != Output.Level.PRINT).map(BotLog.Entry::text).toList();
+	}
+
 	/** A message a {@link RecordingPlayer} got, at the game time it got it. */
 	public record Message(long tick, String text) {
 	}

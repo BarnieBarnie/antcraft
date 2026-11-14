@@ -78,7 +78,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			ScriptRun script = bot.getScript();
 			if (script != null && script.state() == ScriptRun.State.FAILED 
-				|| BotScripts.log(bot, Output.Level.WARN).size() > BotScripts.log(bot, Output.Level.PRINT).size()) {
+				|| !BotScripts.warnings(bot).isEmpty()) {
 				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 			if (!rerun[0] && BotScripts.log(bot, Output.Level.PRINT).contains("settle 3/7: hut")) {

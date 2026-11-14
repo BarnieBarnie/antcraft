@@ -319,10 +319,21 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 
 		helper.succeedWhen(() -> {
 			helper.assertTrue(run.state() == ScriptRun.State.FAILED, "script " + run.state());
-			helper.assertTrue(BotScripts.log(bot, Output.Level.WARN).equals(List.of(error)), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(BotScripts.warnings(bot).equals(List.of(error)), "log " + BotScripts.log(bot, Output.Level.DEBUG));
 			List<String> chat = fromBot(owner, bot).stream().map(BotScripts.Message::text).toList();
 			helper.assertTrue(chat.equals(List.of("[" + bot.getName().getString() + "] " + error)), "owner got " + chat);
 			helper.assertFalse(bot.isRunningScript(), "bot still runs its script");
+		});
+	}
+
+	/** What a script says or prints is not a warning to the tests that check for none (#579). */
+	@GameTest(maxTicks = 20)
+	public void sayAndPrintAreNotWarnings(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = BotScripts.run(bot, "say('hello')\nprint('there')\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(BotScripts.warnings(bot), List.of(), "warnings");
 		});
 	}
 
