@@ -29,6 +29,7 @@
 			"io.github.barniebarnie.antcraft.gametest.ExploreGameTest",
 			"io.github.barniebarnie.antcraft.gametest.FarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.StorageGameTest",
+			"io.github.barniebarnie.antcraft.gametest.DepotGameTest",
 			"io.github.barniebarnie.antcraft.gametest.TerrainGameTest",
 			"io.github.barniebarnie.antcraft.gametest.CellsGameTest",
 			"io.github.barniebarnie.antcraft.gametest.SettleGameTest",

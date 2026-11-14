@@ -36,7 +36,29 @@ The bot carries one item at a time, so it needs a free slot or two.
 
 `StorageGameTest` runs the bundled job in a test area as `jobs.store 8`, and tests `deposit` with a chest that holds the item, a full chest it skips without walking to it, chests too full for anything, and `sort` over two chests.
 
+## A depot that grows
+
+A farm that runs for days wants its output sorted, saplings in one chest and logs in another, and more chests as they fill. [`lib/depot`](../reference/modules/lib/depot.md) keeps a row of chests, one category each, and puts a new chest at the end of the row when a category's chests are full:
+
+```python
+import lib.depot
+
+lib.depot.depot("wood", Pos(10, 64, 10), "east", {
+    "logs": ["#minecraft:logs"],
+    "saplings": ["#minecraft:saplings"],
+    "apples": ["minecraft:apple"],
+})
+r = lib.depot.store("wood")
+if not r["ok"]:
+    warn("depot:", r["reason"], r["missing"])
+```
+
+- The first call sets the depot up and remembers it in `memory`; later calls give it back, so the job can call it every round.
+- [`store`](../reference/modules/lib/depot.md#storename-keepnone-radius32) puts each item in a chest of its category with [`room`](../reference/crafting/room.md); what no category selects goes in an `other` chest.
+- A new chest comes from [`lib.get`](../reference/modules/lib/get.md): one carried or stored, or crafted, so a wood farm's chests come from its own logs.
+- Each chest faces along the row, so two chests side by side never join in a double chest.
+
 ## See also
 
-- [`lib/storage`](../reference/modules/lib/storage.md), [`lib/stock`](../reference/modules/lib/stock.md), [`room`](../reference/crafting/room.md), [`container`](../reference/crafting/container.md), [`put`](../reference/crafting/put.md)
+- [`lib/depot`](../reference/modules/lib/depot.md), [`lib/storage`](../reference/modules/lib/storage.md), [`lib/stock`](../reference/modules/lib/stock.md), [`room`](../reference/crafting/room.md), [`container`](../reference/crafting/container.md), [`put`](../reference/crafting/put.md)
 - [Keep a chest stocked](stock-chest.md), which fills a chest instead of emptying the bot

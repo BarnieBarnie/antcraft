@@ -72,6 +72,7 @@ nav = [
       "reference/modules/lib/explore.md",
       "reference/modules/lib/farm.md",
       "reference/modules/lib/storage.md",
+      "reference/modules/lib/depot.md",
       "reference/modules/lib/build.md",
       "reference/modules/lib/terrain.md",
       "reference/modules/lib/cells.md",
