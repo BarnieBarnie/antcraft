@@ -157,7 +157,7 @@ public class PathFollower {
 		if (this.goal == null || !(this.bot.level() instanceof ServerLevel level)) {
 			return Status.FAILED;
 		}
-		BlockPos feet = this.bot.blockPosition();
+		BlockPos feet = feet(this.bot);
 		if (this.goal.isReached(feet) && (this.bot.onGround() || this.goal.mayEndAfloat() && this.bot.isInWater())) {
 			this.stop();
 			return Status.ARRIVED;
@@ -238,7 +238,7 @@ public class PathFollower {
 
 		// On a ladder counts as landed: a bot walking into one climbs as it bumps into the wall.
 		boolean landed = this.bot.onGround() || this.bot.onClimbable() || step.type() == MoveType.SWIM && this.bot.isInWater();
-		if (this.bot.blockPosition().equals(step.to()) && landed && this.centered(step.to())) {
+		if (feet(this.bot).equals(step.to()) && landed && this.centered(step.to())) {
 			this.stepIndex++;
 			this.stepTicks = 0;
 			this.stepBudget = this.budgetFor(world);
@@ -260,7 +260,7 @@ public class PathFollower {
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep);
 		PathFinder.Options options = this.options();
 		this.path = null;
-		this.search = PathFinder.search(world, this.bot.blockPosition(), this.goal, options);
+		this.search = PathFinder.search(world, feet(this.bot), this.goal, options);
 		this.searchWorld = world;
 		return this.search(level);
 	}
@@ -277,7 +277,7 @@ public class PathFollower {
 		ServerLevel level = (ServerLevel) this.bot.level();
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep);
 		LoadedBlocks loaded = new LoadedBlocks(level);
-		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), this.bot.blockPosition(), goal, this.options());
+		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), feet(this.bot), goal, this.options());
 	}
 
 	/**
@@ -306,7 +306,7 @@ public class PathFollower {
 		this.stepIndex = 0;
 		this.stepTicks = 0;
 		this.stepBudget = this.budgetFor(world);
-		return !this.path.steps().isEmpty() || this.goal == null || this.goal.isReached(this.bot.blockPosition());
+		return !this.path.steps().isEmpty() || this.goal == null || this.goal.isReached(feet(this.bot));
 	}
 
 	/**
@@ -429,6 +429,15 @@ public class PathFollower {
 			this.stepBudget = this.budgetFor(world);
 			this.replansWithoutProgress = 0;
 		}
+	}
+
+	/**
+	 * The block the bot's feet are in, as paths count it: the one over the block it stands on. On a block a little lower
+	 * than a full one, such as farmland, its block position is that block itself, which a path never steps to (#634).
+	 */
+	public static BlockPos feet(AntBot bot) {
+		BlockPos at = bot.blockPosition();
+		return bot.onGround() && bot.getY() - at.getY() > 0.5 ? at.above() : at;
 	}
 
 	/** Where the current step starts: the end of the step before it, or the start of the path. */

@@ -284,9 +284,9 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	 * A dry row of soil 11 long from (3, 0, 4) to (13, 0, 4) in the wide area, a 2 by 2 pool at (10, 1, 12), which a
 	 * filled source refills, and a hoe, 11 seeds and an empty bucket in a chest at (18, 1, 4) (#629): one source wets at
 	 * most 9 by 9, so jobs.farm pours one per dry patch, never filling the bucket at a source it poured, until every
-	 * spot is wet, and plants them all.
+	 * spot is wet, and plants them all. Two wet the row, so it pours two (#634).
 	 */
-	// Measured: passes at tick 537 (red: dry at (3, 0, 4) with the one source at (8, 0, 4)).
+	// Measured: passes at tick 474 (red: dry at (3, 0, 4) with the one source at (8, 0, 4); with three sources at x 7 to 9, #634).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1100)
 	public void theJobWatersAFieldWiderThanNine(GameTestHelper helper) {
 		for (int x = 3; x <= 13; x++) {
@@ -315,7 +315,62 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 					"dry at " + s + ", water at " + water);
 			}
 			planted(helper, soil);
+			helper.assertTrue(water.size() == 2, "water at " + water);
 			helper.assertTrue(chest.countItem(Items.BUCKET) == 1, "no bucket in the chest");
+		});
+	}
+
+	/**
+	 * A floor of farmland, a little lower than a full block, with the bot on it at (1, 0, 1) and dirt out of its reach at
+	 * (6, 0, 6) (#634): use walks across the farmland into reach and tills it, though the bot's block position on farmland
+	 * is the farmland block, not the one over it its path steps to.
+	 */
+	// Measured: passes at tick 37 (red: still walking at tick 60).
+	@GameTest(maxTicks = 80)
+	public void useWalksAcrossFarmlandIntoReach(GameTestHelper helper) {
+		for (int z = 0; z < 8; z++) {
+			for (int x = 0; x < 8; x++) {
+				helper.setBlock(x, 0, z, Blocks.FARMLAND);
+			}
+		}
+		helper.setBlock(6, 0, 6, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
+		ScriptRun run = run(helper, bot, """
+			wait(5)
+			print(use(%s, "wooden_hoe").reason)
+			""".formatted(printed(helper, 6, 0, 6)));
+		helper.succeedWhen(() -> {
+			finished(helper, bot, run, List.of("None"));
+			helper.assertBlockPresent(Blocks.FARMLAND, 6, 0, 6);
+		});
+	}
+
+	/**
+	 * A field of dirt 13 by 3 from (3, 0, 3) to (15, 0, 5) in the wide area, watered at (5, 0, 4), (9, 0, 4) and (13, 0, 4),
+	 * and a hoe and 36 seeds in a chest at (18, 1, 4) (#634): the field is wider than the bot's reach, so jobs.farm walks
+	 * along it and tills and plants every spot.
+	 */
+	// Measured: passes at tick 600 (red: use out_of_reach at (3, 0, 4), the bot standing on the tilled row z 3).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1200)
+	public void theJobTendsAFieldWiderThanItsReach(GameTestHelper helper) {
+		List<BlockPos> spots = new java.util.ArrayList<>();
+		for (int z = 3; z <= 5; z++) {
+			for (int x = 3; x <= 15; x++) {
+				if (z == 4 && (x == 5 || x == 9 || x == 13)) {
+					helper.setBlock(x, 0, z, Blocks.WATER);
+				} else {
+					helper.setBlock(x, 0, z, Blocks.DIRT);
+					spots.add(new BlockPos(x, 0, z));
+				}
+			}
+		}
+		chest(helper, 18, 1, 4, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 36));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 9, 1, 8);
+		ScriptRun job = runJob(helper, bot, new BlockPos(3, 0, 3), new BlockPos(15, 0, 5), "wheat");
+		helper.succeedWhen(() -> {
+			jobFinished(helper, bot, job);
+			planted(helper, spots);
 		});
 	}
 

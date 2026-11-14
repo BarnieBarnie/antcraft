@@ -50,7 +50,7 @@ The spots of `spots` with no water within 4 blocks across, level with them or on
 
 ## `source(spots)`
 
-The spot of `spots` where a water source would wet the most of `dry(spots)`, the one nearest the middle spot where several wet as many: the middle of a field that is all dry. `None` where none is dry. `jobs.farm` pours there and asks again until it gives `None`, one source per dry patch, so a field wider than 9 is watered all over. It is greedy, so a field may get a source more than the fewest that would wet it. A finder, done at once.
+Of the spots of `spots` where a water source would wet the first spot of `dry(spots)`, the one that would wet the most of them, the one nearest the middle spot where several wet as many: the middle of a field that is all dry. Starting from that first dry spot, an edge or corner, a row 11 long gets 2 sources, not 3. `None` where none is dry. `jobs.farm` pours there and asks again until it gives `None`, one source per dry patch, so a field wider than 9 is watered all over. It is greedy, so a field of odd shape may get a source more than the fewest that would wet it. A finder, done at once.
 
 ## `fill_bucket(radius=32, keep=None)`
 
@@ -68,4 +68,4 @@ if lib.farm.water(16) is not None and get("bucket", 1, 16)["ok"]:
 
 `harvest`, `till` and `plant(spots, seed)` over the `field(low, high)`. **Returns** a dict: `ok`, `reason` (`None`; `blocked` where a spot of soil was left untilled, such as with no hoe, or farmland left bare though the bot still carries the seed, a passing failure that [`lib/retry`](retry.md) tries again; or `no_item` where farmland was left bare for want of seeds), `at` (the first spot left so for `blocked`, else `None`) and `missing` (`{seed: n}`, the bare spots, for `no_item`). **Pauses** yes.
 
-`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water and failing `blocked` where it has no hoe to till with, and the job: once, twice as the crops ripen, giving borrowed carrots back, watering a dry field from a pool with an empty bucket from a chest, giving a borrowed water bucket back empty, and watering a dry row 11 long with a source per dry patch.
+`FarmGameTest` tests `field` on uneven ground, `harvest` on ripe and unripe crops, `tend` on a 3 by 3 field around water and failing `blocked` where it has no hoe to till with, and the job: once, twice as the crops ripen, giving borrowed carrots back, watering a dry field from a pool with an empty bucket from a chest, giving a borrowed water bucket back empty, watering a dry row 11 long with two sources, and tending a watered field 13 by 3, wider than the bot's reach.

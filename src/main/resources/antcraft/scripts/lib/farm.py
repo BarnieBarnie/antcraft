@@ -128,13 +128,16 @@ def dry(spots):
 
 
 def source(spots):
-    """The spot of spots where a water source wets the most of dry(spots), the one nearest the middle spot of a tie; None
-    where none is dry. ponytail: greedy, so a field may get a source more than the fewest that wet it."""
+    """Of the spots of spots where a water source wets the first spot of dry(spots), the one that wets the most of them,
+    the one nearest the middle spot of a tie; None where none is dry. Starting from the first dry spot, an edge or corner,
+    a row 11 long gets 2 sources, not 3 (#634). ponytail: greedy, so a field of odd shape may get a source more than the
+    fewest that wet it."""
     left = dry(spots)
     if not left:
         return None
     mid = spots[len(spots) // 2]
-    return max(spots, key=lambda s: (len([d for d in left if near_water(d, [s])]), -s.distance(mid)))
+    return max([s for s in spots if near_water(left[0], [s])],
+               key=lambda s: (len([d for d in left if near_water(d, [s])]), -s.distance(mid)))
 
 
 def fill_bucket(radius=32, keep=None):

@@ -93,7 +93,7 @@ final class BotBody implements MoveApi.Body {
 
 	@Override
 	public boolean inReach(Pos target) {
-		return this.reach(target).isReached(this.bot.blockPosition());
+		return this.reach(target).isReached(PathFollower.feet(this.bot));
 	}
 
 	private Goal reach(Pos target) {
