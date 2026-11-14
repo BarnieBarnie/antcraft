@@ -197,6 +197,47 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The farm keeps the ticks it spends per felled tree in memory and, from SAMPLES trees on, sizes itself from their
+	 * mean instead of HARVEST (#653). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 400; a
+	 * third felled in the farm's first round makes the mean over GROWTH, so most() is 1 and the farm of one cell, run
+	 * with no size, is full. With HARVEST it would have gone on to a second cell.
+	 */
+	// Measured: passes at tick 7.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void sizesItselfFromTheTicksItSpendsPerTree(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			tree = [True]
+			memory["wood_harvest"] = {kind: [4 * int(jobs.wood_farm.GROWTH), 2]}
+			print(jobs.wood_farm.harvest(kind))
+			def reaped(k, b, radius, told):
+			    tree[0] = False
+			    wait(3)
+			    return lib.result.result()
+			def waited(ticks):
+			    h = memory["wood_harvest"][kind]
+			    print(h[1], h[0] > 4 * int(jobs.wood_farm.GROWTH), jobs.wood_farm.harvest(kind) > jobs.wood_farm.GROWTH)
+			    stop()
+			jobs.wood_farm.reap = reaped
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.grown = lambda k, low, high: tree[0]
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", None, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("400", "farm full", "3 True True"), "said"));
+	}
+
+	/**
 	 * A branch log a harvest left off the trunk column, such as an acacia's or a cherry's, is seen in the cell's tree
 	 * space and felled (#651): grown looked only over the sapling spots.
 	 */

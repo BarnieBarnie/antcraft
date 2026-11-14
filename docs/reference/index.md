@@ -47,6 +47,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`entities`](world/entities.md) | `entities(what=None, radius=16)` | the [`Entity`](types/entity.md) values around, nearest first |
 | [`items_near`](world/items_near.md) | `items_near(item=None, radius=16)` | the dropped items around, nearest first |
 | [`time`](world/time.md) | `time()` | the time of day, 0 to 23999 |
+| [`game_time`](world/game_time.md) | `game_time()` | the ticks the world has run, which never start again |
 | [`is_day`](world/is_day.md) | `is_day()` | whether it is day |
 
 ## Inventory

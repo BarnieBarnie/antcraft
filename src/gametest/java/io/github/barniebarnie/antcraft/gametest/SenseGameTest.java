@@ -454,6 +454,22 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** game_time() is the level's game time in ticks, which goes on past a day, unlike time() (#653). */
+	// Measured: passes at tick 6.
+	@GameTest(maxTicks = 15)
+	public void gameTimeIsTheLevelsTicks(GameTestHelper helper) {
+		long start = helper.getLevel().getGameTime();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ScriptRun run = run(helper, bot, "a = game_time()\nwait(5)\nb = game_time()\nprint(isinstance(a, int), b - a >= 5)\nprint(a)\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertValueEqual(printed.getFirst(), "True True", "printed");
+			long a = Long.parseLong(printed.get(1));
+			helper.assertTrue(a >= start && a <= helper.getLevel().getGameTime(), "game_time " + a + " from " + start);
+		});
+	}
+
 	@GameTest(maxTicks = 10)
 	public void memorySurvivesAScriptRestartAndASaveAndLoad(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

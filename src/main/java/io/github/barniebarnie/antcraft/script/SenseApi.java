@@ -286,6 +286,10 @@ public final class SenseApi {
 			Args.bind("time", call, 0);
 			return Math.floorMod(bot(run, call).level().getDefaultClockTime(), 24000L);
 		});
+		natives.register("game_time", call -> {
+			Args.bind("game_time", call, 0);
+			return bot(run, call).level().getGameTime();
+		});
 		natives.register("is_day", call -> {
 			Args.bind("is_day", call, 0);
 			return bot(run, call).level().isBrightOutside();

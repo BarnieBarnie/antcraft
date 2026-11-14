@@ -1,7 +1,7 @@
 # A job: grows a wood farm from nothing and farms it until a player stops it. Run it as
 # /antcraft bot run jobs.wood_farm <kind> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a kind of
 # lib.treefarm.KINDS (a sapling, or giant_spruce or giant_jungle), the farm's first corner, by default where the bot stands (or where a stopped run of the kind
-# started), the most cells it grows to (most(HARVEST[kind]) by default) and how far to look for what it needs, in
+# started), the most cells it grows to (by default most of the ticks a tree takes, learnt as it farms, else HARVEST[kind]) and how far to look for what it needs, in
 # blocks (32 by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
 # logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
@@ -32,11 +32,12 @@ GROWTH = 2 * 7 * 4096 / 3
 # 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs; the others are that per log times their mean logs from
 # lib.treefarm.KINDS's trunks and branches: oak 5.5, spruce 6.5, jungle 8, acacia 9, cherry 13.5, dark and pale oak 34
 # (four trunks and branches), poplar 15 (measured), giant spruce 84 (four trunks of 21), giant jungle 97 (four of 20.5 and some 15 in branches).
-# ponytail: scaled by logs, not measured per kind; time the farm's own rounds if a kind's farm comes out too big or small.
+# A farm learns its own (harvest, #653); these are its start.
 HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
            "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
            "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
            "giant_spruce": 5600, "giant_jungle": 6500}
+SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WAIT = 100  # ticks between looks at the farm while nothing has grown
 # Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
 # be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
@@ -53,6 +54,26 @@ def most(harvest=HARVEST["minecraft:birch_sapling"]):
     """The cells at which the bot is always busy: a tree's mean growth ticks over the ticks it takes for one, harvest
     (HARVEST[kind] for a farm of kind); at least one."""
     return max(1, int(GROWTH // harvest))
+
+
+def harvest(kind):
+    """The ticks a tree of kind takes the bot: the mean of those memory["wood_harvest"] keeps for kind (learn), once it
+    has SAMPLES trees, else HARVEST[kind]."""
+    ticks, trees = memory.get("wood_harvest", {}).get(kind, [0, 0])
+    return ticks / trees if trees >= SAMPLES else HARVEST[kind]
+
+
+def learn(kind, ticks, trees):
+    """Adds trees felled of kind in ticks, game ticks, to memory["wood_harvest"]: [ticks, trees] for each kind."""
+    h = memory.get("wood_harvest", {})
+    total, n = h.get(kind, [0, 0])
+    h[kind] = [total + ticks, n + trees]
+    memory["wood_harvest"] = h
+
+
+def limit(kind, size):
+    """The most cells of a farm of kind: size, else most(harvest(kind))."""
+    return size or most(harvest(kind))
 
 
 def materials(kind):
@@ -89,7 +110,7 @@ def build(kind, name, size, radius):
     if r["ok"]:
         lib.cells.add(name, i)
         say(f"built cell {i + 1}")
-        say(f"cells {lib.cells.count(name)}/{size}")
+        say(f"cells {lib.cells.count(name)}/{limit(kind, size)}")
     return r
 
 
@@ -194,7 +215,9 @@ def farm(kind, name, size, radius):
     what it fell, tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
     lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
-    where it felled nothing picks up the drops in the farm (sweep) and waits."""
+    where it felled nothing picks up the drops in the farm (sweep) and waits. Where size is None the farm grows to
+    limit(kind, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
+    felled (learn)."""
     full = False
     told = {}
     backoff = 0  # rounds until stocked is tried again
@@ -202,9 +225,12 @@ def farm(kind, name, size, radius):
         own()
         boxes = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
         grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
-        felled = False
+        start = game_time()
+        trees = 0
         for b in grown:
-            felled = reap(kind, b, radius, told)["ok"] or felled
+            if reap(kind, b, radius, told)["ok"]:
+                trees += 1
+        felled = trees > 0
         if grown:
             r = lib.depot.store(name, KEEP + [lib.treefarm.sapling(kind)], radius)
             if not r["ok"]:
@@ -217,10 +243,12 @@ def farm(kind, name, size, radius):
         for b in boxes:
             tend(kind, b)
         if felled:
+            learn(kind, game_time() - start, trees)
             backoff = 0
-        if lib.cells.count(name) < size and backoff:
+        most_cells = limit(kind, size)
+        if lib.cells.count(name) < most_cells and backoff:
             backoff -= 1
-        elif lib.cells.count(name) < size:
+        elif lib.cells.count(name) < most_cells:
             r = stocked(kind, radius)
             if r["ok"]:
                 build(kind, name, size, radius)
@@ -237,7 +265,8 @@ def farm(kind, name, size, radius):
 
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a wood farm of kind (a kind of lib.treefarm.KINDS) with its first corner at at (where the bot
-    stands, or where the last farm of kind started), up to size cells (most(HARVEST[kind])). Never returns but on a
+    stands, or where the last farm of kind started), up to size cells (limit: most of the ticks a tree takes, learnt,
+    else HARVEST[kind]). Never returns but on a
     failed setup step: gives lib.project.run's result() then."""
     kind = lib.treefarm.key(kind)
     name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
@@ -245,7 +274,6 @@ def run(kind, at=None, size=None, radius=32):
     at = Pos(at) if at is not None else farms.get(kind, pos())
     farms[kind] = at
     memory["wood_farms"] = farms
-    size = size or most(HARVEST[kind])
     w = lib.treefarm.spec(kind)["size"]
     lib.cells.layout(name, at.down(), (w, w))
     # The depot north of the farm, a path's width off its first row, going east along it.

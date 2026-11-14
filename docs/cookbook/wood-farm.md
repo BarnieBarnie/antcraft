@@ -8,7 +8,7 @@ The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms i
 /antcraft bot run jobs.wood_farm spruce_sapling 10 64 10 12 16
 ```
 
-The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar) or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most(HARVEST[kind])`, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells.
+The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar) or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most` of the ticks a tree takes, which the farm learns, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells.
 
 The farm, from the corner `x y z` (the cells' floor is the block under it):
 
@@ -48,10 +48,12 @@ A farm is as big as it is useful: one cell more than the bot can harvest while t
 ```python
 GROWTH = 2 * 7 * 4096 / 3                        # some 19,115 ticks, 16 minutes
 HARVEST["minecraft:birch_sapling"] == 400        # fell, replant and store one birch
-most(HARVEST[kind]) == GROWTH // HARVEST[kind]   # 47 cells of birch
+most(harvest(kind)) == GROWTH // harvest(kind)   # 47 cells of birch
 ```
 
-A sapling grows on random ticks: each tick, the game gives one to `randomTickSpeed` (3) blocks of each 16 by 16 by 16 section, 4096 blocks, and a sapling with light 9 or more over it moves up a stage on 1 in 7 of those, from stage 0 to 1, then from 1 to a tree. Every sapling of `KINDS` grows the same way. `HARVEST` gives the ticks for one tree of each kind. The birch's is measured in `WoodFarmGameTest`, where felling, replanting and storing a birch took some 150 to 1000 ticks. The others are the birch's ticks per log times the kind's mean logs, from the trunks and branches its trees grow, so they are estimates, not measurements:
+A sapling grows on random ticks: each tick, the game gives one to `randomTickSpeed` (3) blocks of each 16 by 16 by 16 section, 4096 blocks, and a sapling with light 9 or more over it moves up a stage on 1 in 7 of those, from stage 0 to 1, then from 1 to a tree. Every sapling of `KINDS` grows the same way.
+
+`harvest(kind)` is the ticks one tree takes the bot. The farm learns it: in each round that fells a tree it times, with [`game_time()`](../reference/world/game_time.md), the felling, storing and replanting, and adds the ticks and the trees felled to `memory["wood_harvest"]`. Once it has felled 3 trees (`SAMPLES`), `harvest` is their mean, so a farm whose trees take longer than its kind's estimate stops growing sooner, and one that is quicker grows on. Until then it is `HARVEST[kind]`, which gives the ticks for one tree of each kind. The birch's is measured in `WoodFarmGameTest`, where felling, replanting and storing a birch took some 150 to 1000 ticks. The others are the birch's ticks per log times the kind's mean logs, from the trunks and branches its trees grow, so they are estimates, not measurements:
 
 | Kind | Mean logs | `HARVEST` | `most` |
 |---|---|---|---|
@@ -66,7 +68,7 @@ A sapling grows on random ticks: each tick, the game gives one to `randomTickSpe
 | giant spruce | 84 | 5600 | 3 |
 | giant jungle | 97 | 6500 | 2 |
 
-Pass the most cells as an argument for a farm of another size.
+Pass the most cells as an argument for a farm of another size: the farm keeps to it, whatever it learns.
 
 ## A forester
 

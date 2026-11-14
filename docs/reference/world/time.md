@@ -33,4 +33,4 @@ while time() > 1000:
 
 ## See also
 
-[`is_day`](is_day.md), [`wait`](../bot/wait.md).
+[`is_day`](is_day.md), [`game_time`](game_time.md), [`wait`](../bot/wait.md).
