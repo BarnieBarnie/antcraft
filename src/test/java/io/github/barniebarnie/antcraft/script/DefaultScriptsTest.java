@@ -105,6 +105,7 @@ class DefaultScriptsTest {
 		assertTrue(bundled.containsKey("lib/terrain.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("jobs/flatten.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("jobs/settle.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("lib/cells.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 

@@ -26,7 +26,7 @@ The library is written the Unix way: small functions that each do one thing well
  kits         lib/bootstrap  lib/gather  lib/project  lib/build                        a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore  lib/farm  lib/storage  lib/terrain     one skill each, preconditions assumed
- primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/retry  lib/home             no ticks, or a single action
+ primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/cells  lib/retry  lib/home  no ticks, or a single action
  builtins     goto, mine, place, craft, scan, ore_vein, needs, ...                                  the API (Java)
 ```
 
@@ -40,6 +40,7 @@ New modules are marked *new*; the others exist and grow.
 - `lib/find` *new*, finders over `scan` and `find_nearest`: `nearest(what, radius, where=None)` with a filter, `exposed(what, radius)` (a block with an air neighbour the bot can stand by, nearest at or above its feet first, as `lib.gather.exposed_stone` does now).
 - `lib/borrow` *new*: `borrow(chest, item, n)` takes and records it in `memory["borrowed"]`; `borrowed()` lists what is out; `keep(item, n)` strikes what a job keeps off it; `give_back()` puts each item back in its chest (where the chest is gone or full, into the nearest chest that has room, else kept and named in `missing`).
 - `lib/cost` *new*, the numbers the heuristics need: `WALK` ticks a block, `BREAK[material][tier]` ticks to break a block, `USES[tier]` a tool's uses (59, 131, 190 for copper, 250, 1561, 32 for gold, 2031 for netherite), `SMELT` ticks an item; `walk(a, b)`, `breaking(n, material, tier)`. ponytail: constants, not the game's break-time formula; a `break_ticks(pos, item)` sense if estimates prove too rough.
+- `lib/cells` (#603): a self-expanding farm's grid, kept in `memory["cells"][name]`: `layout(name, origin, size, row=4, gap=1)`, `cell(name, i)` the `(low, high)` box of cell `i` (row-major, `gap` blocks of path between cells) for `lib/area`, `built`, `add`, `next` the first cell not built, `count`. Generic: the wood farm (#605, #606) and later farms keep their own logic.
 - Existing: `lib/area`, `lib/retry`, `lib/home`.
 
 ### Skills
