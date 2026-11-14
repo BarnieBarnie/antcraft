@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -54,6 +55,45 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> assertStarted(helper, bot, "forester: birch_sapling, a tree", "birch_farm 1/4: kit"));
 	}
 
+	/** Oak saplings in the nearer chest, birch in the farther: birch has no roof, so it is cheaper and wins (#613). */
+	// Measured: passes at tick 4.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	public void choosesTheCheaperOfTwoStoredKinds(GameTestHelper helper) {
+		chest(helper, CHEST, Items.OAK_SAPLING);
+		chest(helper, new BlockPos(12, 1, 6), Items.BIRCH_SAPLING);
+		AntBot bot = run(helper, true);
+		helper.succeedWhen(() -> assertStarted(helper, bot, "forester: birch_sapling, saplings in a chest 6", "birch_farm 1/4: kit"));
+	}
+
+	/** An oak nearer than a birch: birch has no roof, so it is cheaper and wins (#613). */
+	// Measured: passes at tick 5.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	public void choosesTheCheaperOfTwoNearbyTrees(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(12, 1, 8), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		TreesGameTest.plantTree(helper, BIRCH, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		AntBot bot = run(helper, true);
+		helper.succeedWhen(() -> assertStarted(helper, bot, "forester: birch_sapling, a tree 5", "birch_farm 1/4: kit"));
+	}
+
+	/**
+	 * candidates looks for the trees of all kinds in one scan of the logs, not one next_tree a kind (#613): with an oak and
+	 * a birch about, it costs fewer than 5,000 instructions over importing the job.
+	 * Measured: 6,663 with a next_tree a kind, 3,766 now.
+	 */
+	// Measured: passes at tick 5.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	public void candidatesScansTheLogsOnce(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(12, 1, 8), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		TreesGameTest.plantTree(helper, BIRCH, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
+		ScriptRun call = BotScripts.run(helper.spawn(ModEntities.ANT_BOT, 12, 1, 12), "import jobs.forester\nprint(jobs.forester.candidates(8))\n");
+		ScriptRun bare = BotScripts.run(helper.spawn(ModEntities.ANT_BOT, 11, 1, 12), "import jobs.forester\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(call.state() == ScriptRun.State.FINISHED && bare.state() == ScriptRun.State.FINISHED, "scripts " + call.state() + " " + bare.state());
+			long cost = call.executed() - bare.executed();
+			helper.assertTrue(cost < 5000, "candidates cost " + cost + " instructions");
+		});
+	}
+
 	/** Neither saplings nor trees within its radius: it warns no_saplings and stops. */
 	// Measured: passes at tick 4 to 5.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
@@ -63,6 +103,12 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getScript().state() == ScriptRun.State.FINISHED, "not finished: " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(BotScripts.warnings(bot).stream().anyMatch(w -> w.contains("no_saplings")), "warned " + BotScripts.warnings(bot));
 		});
+	}
+
+	/** A chest at pos holding four of item. */
+	private static void chest(GameTestHelper helper, BlockPos pos, Item item) {
+		helper.setBlock(pos, Blocks.CHEST);
+		helper.getBlockEntity(pos, ChestBlockEntity.class).setItem(0, new ItemStack(item, 4));
 	}
 
 	/** Runs jobs.forester 8 with the bot at (12, 1, 12); with strict, fails the test at once on a warning or error. */

@@ -65,11 +65,11 @@ The job `jobs/forester` picks the tree kind itself and starts its farm where the
 The argument is how far to look, in blocks (32 by default); the farm gets the same radius. Its candidates are the kinds of `lib.treefarm.KINDS`:
 
 1. kinds whose saplings a chest within the radius holds (`lib.stock`), as the farm can start on them at once;
-2. then kinds of a tree within the radius (`lib.trees.next_tree`), whose leaves give the saplings.
+2. then kinds of a tree within the radius, whose leaves give the saplings: `jobs.forester.trees(radius)` finds the nearest tree of each kind in one scan of the logs, with `lib.trees.next_tree`'s checks.
 
 Within each, the simplest cell comes first: a 1x1 trunk before the 2x2 of dark oak, no roof before the roof of oak, a smaller cell, then a shorter clear; ties go to the nearest. So spruce saplings in a chest beat a birch tree nearby, and among trees birch comes before jungle, spruce, oak and dark oak. It says its choice and why, such as `forester: spruce_sapling, saplings in a chest 3 blocks away`, then runs `jobs.wood_farm.run` for that kind, which farms until stopped. With no candidate it warns `no_saplings` and stops. Imported, it runs nothing: `jobs.forester.candidates(radius)` gives the ranked `(kind, why)` pairs and `jobs.forester.run(radius)` starts the farm.
 
-`ForesterGameTest` checks that it chooses stored spruce saplings over a birch nearby, a birch without stored saplings, and warns `no_saplings` with nothing around.
+`ForesterGameTest` checks that it chooses stored spruce saplings over a birch nearby, a birch without stored saplings, stored birch saplings over oak ones in a nearer chest, a birch over a nearer oak, and warns `no_saplings` with nothing around.
 
 ## Use it from a script
 

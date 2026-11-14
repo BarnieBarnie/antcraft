@@ -1,7 +1,7 @@
 # A job: picks a tree kind by itself and starts its wood farm where the bot stands. Run it as
 # /antcraft bot run jobs.forester [radius]: how far to look for saplings in chests and for trees, and for what the farm
 # needs, in blocks (32 by default). The candidates are the kinds of lib.treefarm.KINDS whose saplings a chest within
-# radius holds (lib.stock), then those of a tree within radius (lib.trees.next_tree); it says its choice and why, then
+# radius holds (lib.stock), then those of a tree within radius (trees); it says its choice and why, then
 # runs jobs.wood_farm for that kind, which never returns (docs/cookbook/wood-farm.md, A forester). With no candidate it
 # warns no_saplings and stops.
 #
@@ -9,6 +9,7 @@
 # delete it and the default comes back when the server starts.
 
 import jobs.wood_farm
+import lib.find
 import lib.stock
 import lib.treefarm
 import lib.trees
@@ -21,10 +22,25 @@ def cost(kind):
     return (s["square"], s["roof"], s["size"], s["clear"])
 
 
+def trees(radius=32):
+    """The base of the nearest tree of each kind of lib.treefarm.KINDS within radius, kind to base, from one scan of the
+    logs with lib.trees.next_tree's checks (a log with no log under it, lib.find.WHERE, is_tree), not one next_tree a
+    kind (#613)."""
+    # ponytail: one scan of up to 4096 logs over the whole radius, as next_tree reads anyway for a kind not about.
+    allowed = lib.find.resolve()
+    out = {}
+    for base in scan(lib.trees.LOGS, radius=radius, limit=4096):
+        kind = lib.trees.sapling(block(base).id)
+        if kind in lib.treefarm.KINDS and kind not in out and not lib.trees.is_log(base.down()) and (allowed is None or allowed(base)) and lib.trees.is_tree(base):
+            out[kind] = base
+    return out
+
+
 def candidates(radius=32):
     """The kinds of lib.treefarm.KINDS the bot can start a farm of, best first, as (kind, why): those whose saplings a
     chest within radius holds, then those of a tree within radius; each by cost, ties by distance."""
     chests = lib.stock.chests(radius)
+    bases = None
     found = []
     for kind in lib.treefarm.KINDS:
         held = [c for c in chests if lib.stock.holds(c, kind)]
@@ -32,7 +48,9 @@ def candidates(radius=32):
             d = int(lib.stock.distance(held[0]))
             found.append((0, cost(kind), d, kind, f"saplings in a chest {d} blocks away"))
             continue
-        base = lib.trees.next_tree(radius, lambda b, k=kind: lib.trees.sapling(block(b).id) == k)
+        if bases is None:
+            bases = trees(radius)
+        base = bases.get(kind)
         if base is not None:
             d = int(lib.stock.distance(base))
             found.append((1, cost(kind), d, kind, f"a tree {d} blocks away"))
