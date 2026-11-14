@@ -633,6 +633,45 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False", "True")), "printed " + printed(bot)));
 	}
 
+	/** So does a colony script's: importing colony.common no longer pins WHERE to in_colony, False everywhere once out (#625). */
+	@GameTest(maxTicks = 15)
+	public void aColonyScriptsBotThatLeavesIsNotShutOut(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 3, 1, 1);
+		colony.setRadius(3);
+		AntBot bot = member(helper, colony, 3, 1, 3);
+		BotScripts.run(bot, """
+			from colony.common import core
+			import lib.find
+			out = colony()["core"] + (5, 0, 0)
+			print(lib.find.allowed(out))
+			while colony() is not None:
+			    wait(1)
+			print(lib.find.allowed(out))
+			""");
+		helper.runAfterDelay(5, () -> ColonyManager.get(helper.getLevel()).leave(bot));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False", "True")), "printed " + printed(bot)));
+	}
+
+	/**
+	 * What keeping to the colony costs a member's found(): the 64 blocks of the floor, all within the colony, cost less
+	 * than one colony() call (35 instructions) each over the same found() with WHERE None, as colony() is asked once a
+	 * call of found, not twice a block (#625). Measured: some 129 instructions a block before, some 26 now.
+	 */
+	@GameTest(maxTicks = 10)
+	public void keepingToTheColonyCostsFoundLittle(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 3, 1, 1);
+		colony.setRadius(16);
+		String find = "print(len(lib.find.found('stone', 8, lambda p: True)))\n";
+		ScriptRun kept = BotScripts.run(member(helper, colony, 3, 1, 3), "import lib.find\n" + find);
+		ScriptRun free = BotScripts.run(member(helper, colony, 5, 1, 5), "import lib.find\nlib.find.WHERE = None\n" + find);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(kept.state() == ScriptRun.State.FINISHED && free.state() == ScriptRun.State.FINISHED, "scripts " + kept.state() + " " + free.state());
+			long extra = kept.executed() - free.executed();
+			helper.assertTrue(extra < 35 * 64, "keeping to the colony cost " + extra + " instructions (" + kept.executed() + " vs " + free.executed() + ")");
+		});
+	}
+
 	/** {@code fetch} takes a selector: one for {@code #minecraft:planks} takes birch planks from the core and leaves the dirt (#383). */
 	@GameTest(maxTicks = 20)
 	public void fetchForATagTakesMatchingItemsFromTheCore(GameTestHelper helper) {

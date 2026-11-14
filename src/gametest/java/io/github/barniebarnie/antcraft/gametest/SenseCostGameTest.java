@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.Pos;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
@@ -48,6 +50,9 @@ public class SenseCostGameTest {
 		helper.setBlock(5, 1, 5, Blocks.CHEST);
 		((ChestBlockEntity) level.getBlockEntity(chest)).setItem(0, new ItemStack(Items.STONE, 20));
 		SenseGameTest.village(helper, new BlockPos(5, 1, 5), new BlockPos(7, 3, 7));
+		helper.setBlock(1, 1, 1, ModBlocks.COLONY_CORE);
+		ColonyManager colonies = ColonyManager.get(level);
+		colonies.join(bot, colonies.byCore(helper.absolutePos(new BlockPos(1, 1, 1))).orElseThrow());
 		ScriptRun run = BotScripts.run(bot, "wait(1000)\n");
 		helper.runAfterDelay(2, () -> {
 			// Every chunk structures(128) reads loaded, its worst case.
@@ -70,6 +75,7 @@ public class SenseCostGameTest {
 			calls.put("biome_tags", call("biome_tags", "minecraft:plains"));
 			calls.put("structure_tags", call("structure_tags", "minecraft:village_plains"));
 			calls.put("room", call("room", box, "stone"));
+			calls.put("colony", call("colony"));
 			calls.put("structures 16", call("structures", 16L));
 			calls.put("structures 64", call("structures", 64L));
 			calls.put("structures 128", call("structures", 128L));

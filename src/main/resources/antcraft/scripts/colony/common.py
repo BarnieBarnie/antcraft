@@ -1,15 +1,15 @@
 # What the colony scripts (colony.lumberjack, colony.hauler, colony.builder,
 # colony.farmer, colony.miner) share: `from colony.common import core, store`. They take from the core with
 # lib.stock.take_up_to(item, n, chests=[core()]); fetch(item, n) is kept for old scripts.
-# Importing it keeps the library within the colony: lib.find.WHERE is in_colony (lib.find.in_colony), so lib.get,
-# lib.stock, lib.trees and lib.dig neither take from a chest nor gather a block outside the colony's radius of its core,
-# a column from the build limit down to bedrock. lib.find does so by itself for a bot in a colony (#594).
+# The library keeps within the colony by itself (lib.find.WHERE is colony_edge, #594): lib.get, lib.stock, lib.trees and
+# lib.dig neither take from a chest nor gather a block outside the colony's radius of its core, a column from the build
+# limit down to bedrock, and a bot that leaves its colony mid-run is no longer kept to it (#625).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 import lib.find
 import lib.stock
-from lib.find import in_colony
+from lib.find import in_colony  # kept for `from colony.common import in_colony`
 
 
 def core():
@@ -32,5 +32,3 @@ def fetch(item, n):
     """Kept for old scripts: whether lib.stock.take_up_to(item, n, chests=[core()]) got the bot n of item."""
     return lib.stock.take_up_to(item, n, chests=[core()])["ok"]
 
-
-lib.find.WHERE = in_colony

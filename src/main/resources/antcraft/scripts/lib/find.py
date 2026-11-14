@@ -13,9 +13,11 @@ def in_colony(p):
     """Whether p lies within the colony's radius of its core, measured across: the edge is a column, so a deep block
     under the colony is in it (#576). False for a bot in no colony."""
     c = colony()
-    if c is None:
-        return False
-    p = Pos(p)
+    return c is not None and within(c, Pos(p))
+
+
+def within(c, p):
+    """Whether Pos p lies within colony c's radius of its core, measured across."""
     dx = p.x - c["core"].x
     dz = p.z - c["core"].z
     return dx * dx + dz * dz <= c["radius"] * c["radius"]
@@ -27,7 +29,8 @@ def in_colony(p):
 # each call, so a bot that joins or leaves a colony mid-run follows (#621).
 def colony_edge(p):
     """in_colony(p) for a bot in a colony now, True for any other."""
-    return colony() is None or in_colony(p)
+    c = colony()
+    return c is None or within(c, Pos(p))
 
 
 WHERE = colony_edge
@@ -41,18 +44,27 @@ def allowed(p):
 def found(what, radius, keep, first=False):
     """The blocks what selects within radius, nearest first, that keep(p) and WHERE allow, from the LIMIT nearest;
     where WHERE is set and leaves out each of those, from 8 times as many, and so on (ponytail: a bot far outside WHERE
-    reads up to the whole radius, and rereads the nearest each time). With first, only the first one."""
+    reads up to the whole radius, and rereads the nearest each time). With first, only the first one. For colony_edge it
+    asks colony() (35 instructions) once, not twice a block (#625)."""
+    where = WHERE
+    if where == colony_edge:
+        c = colony()
+        if c is None:
+            where = None
+        else:
+            x, z, r = c["core"].x, c["core"].z, c["radius"] * c["radius"]
+            where = lambda p: (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z) <= r
     limit = LIMIT
     done = 0
     while True:
         ps = scan(what, radius=radius, limit=limit)
         out = []
         for p in ps[done:]:
-            if allowed(p) and keep(p):
+            if (where is None or where(p)) and keep(p):
                 out.append(p)
                 if first:
                     return out
-        if out or WHERE is None or len(ps) < limit or (WHERE == colony_edge and colony() is None):
+        if out or where is None or len(ps) < limit:
             return out
         done = limit
         limit = limit * 8
