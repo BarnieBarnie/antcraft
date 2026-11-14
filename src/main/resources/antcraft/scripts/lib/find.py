@@ -23,9 +23,14 @@ def in_colony(p):
 
 # Where the library may look, a function of a Pos (None: anywhere): the finders here, lib.trees.next_tree and
 # lib.stock.chests leave out each position it is false for, so lib.get neither takes from nor gathers outside it, nor
-# counts on it in a cost. in_colony for a bot in a colony when the script starts, so every job keeps to its edge (#594);
-# None for any other.
-WHERE = in_colony if colony() is not None else None
+# counts on it in a cost. colony_edge by default, so every job a member runs keeps to its colony's edge (#594), checked
+# each call, so a bot that joins or leaves a colony mid-run follows (#621).
+def colony_edge(p):
+    """in_colony(p) for a bot in a colony now, True for any other."""
+    return colony() is None or in_colony(p)
+
+
+WHERE = colony_edge
 
 
 def allowed(p):
@@ -47,7 +52,7 @@ def found(what, radius, keep, first=False):
                 out.append(p)
                 if first:
                     return out
-        if out or WHERE is None or len(ps) < limit:
+        if out or WHERE is None or len(ps) < limit or (WHERE == colony_edge and colony() is None):
             return out
         done = limit
         limit = limit * 8

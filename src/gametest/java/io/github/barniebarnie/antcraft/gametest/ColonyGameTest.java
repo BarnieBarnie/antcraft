@@ -612,6 +612,28 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("True True False False")), "printed " + printed(bot)));
 	}
 
+	/**
+	 * {@code lib.find.WHERE} follows membership mid-run (#621): a member started in the colony is kept to its edge, and
+	 * once it leaves the colony a block past the old edge is allowed again.
+	 */
+	@GameTest(maxTicks = 15)
+	public void whereFollowsLeavingTheColonyMidRun(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 3, 1, 1);
+		colony.setRadius(3);
+		AntBot bot = member(helper, colony, 3, 1, 3);
+		BotScripts.run(bot, """
+			import lib.find
+			out = colony()["core"] + (5, 0, 0)
+			print(lib.find.allowed(out))
+			while colony() is not None:
+			    wait(1)
+			print(lib.find.allowed(out))
+			""");
+		helper.runAfterDelay(5, () -> ColonyManager.get(helper.getLevel()).leave(bot));
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False", "True")), "printed " + printed(bot)));
+	}
+
 	/** {@code fetch} takes a selector: one for {@code #minecraft:planks} takes birch planks from the core and leaves the dirt (#383). */
 	@GameTest(maxTicks = 20)
 	public void fetchForATagTakesMatchingItemsFromTheCore(GameTestHelper helper) {

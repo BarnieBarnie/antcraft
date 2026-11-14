@@ -36,7 +36,7 @@ Whether the position `p` lies within the colony's radius of its core, measured a
 
 ## `WHERE`
 
-Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. It starts as `in_colony` for a bot in a colony when the script starts, so every job a member runs keeps to the colony (#594), and `None` for any other bot; [`colony/common`](../colony/common.md) sets it to `in_colony` too. Where the `LIMIT` nearest blocks are all outside it, the finders look further (see above). [`lib.dig`](dig.md)'s `stairs_to` and `branch` dig nothing it is false for.
+Where the library may look: a function of a [`Pos`](../../types/pos.md), or `None` for anywhere. `nearest`, `exposed`, [`lib.trees.next_tree`](trees.md) and [`lib.stock.chests`](stock.md#chestsradius32) leave out each position it is false for, so [`lib/get`](get.md) neither takes from a chest nor gathers a block outside it, and its cost estimates do not count on them. It starts as `colony_edge`: `in_colony` for a bot in a colony, `True` for any other, checked each time it is used, so every job a member runs keeps to the colony (#594) and a bot that joins or leaves a colony mid-run keeps to its new edge or none (#621); [`colony/common`](../colony/common.md) sets it to `in_colony` too. Where the `LIMIT` nearest blocks are all outside it, the finders look further (see above). [`lib.dig`](dig.md)'s `stairs_to` and `branch` dig nothing it is false for.
 
 ```python
 import lib.find
