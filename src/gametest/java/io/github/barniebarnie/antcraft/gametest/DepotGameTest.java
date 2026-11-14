@@ -97,6 +97,53 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Dirt at the depot's first slot (1, 1, 1), which store may not dig: it skips the slot and places the logs chest at
+	 * (2, 1, 1), leaving the dirt.
+	 */
+	// Measured: passes at tick 6.
+	@GameTest(maxTicks = 20)
+	public void aBlockedSlotIsSkipped(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 5));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
+		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			r = lib.depot.store("wood")
+			print(r["ok"], count("oak_log"), len(lib.depot.chests("wood")))
+			""");
+		helper.succeedWhen(() -> {
+			finished(helper, bot, List.of("True 0 1"));
+			helper.assertBlockPresent(Blocks.DIRT, 1, 1, 1);
+			helper.assertTrue(chest(helper, 2).countItem(Items.OAK_LOG) == 5, "logs in the chest: " + chest(helper, 2).countItem(Items.OAK_LOG));
+		});
+	}
+
+	/**
+	 * A chest of cobblestone at the depot's first slot (1, 1, 1): store does not take it over for the logs but skips it
+	 * and places the logs chest at (2, 1, 1).
+	 */
+	// Measured: passes at tick 5.
+	@GameTest(maxTicks = 20)
+	public void aChestOfOtherItemsIsNotTakenOver(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.CHEST);
+		Container foreign = chest(helper, 1);
+		foreign.setItem(0, new ItemStack(Items.COBBLESTONE, 10));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 5));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
+		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			r = lib.depot.store("wood")
+			print(r["ok"], count("oak_log"), len(lib.depot.chests("wood")))
+			""");
+		helper.succeedWhen(() -> {
+			finished(helper, bot, List.of("True 0 1"));
+			helper.assertTrue(foreign.countItem(Items.OAK_LOG) == 0, "logs in the cobblestone chest");
+			helper.assertTrue(foreign.countItem(Items.COBBLESTONE) == 10, "cobblestone: " + foreign.countItem(Items.COBBLESTONE));
+			helper.assertTrue(chest(helper, 2).countItem(Items.OAK_LOG) == 5, "logs in the new chest: " + chest(helper, 2).countItem(Items.OAK_LOG));
+		});
+	}
+
 	/** The chest at (x, 1, 1). */
 	private static Container chest(GameTestHelper helper, int x) {
 		helper.assertBlockPresent(Blocks.CHEST, x, 1, 1);

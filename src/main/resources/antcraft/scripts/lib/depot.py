@@ -69,22 +69,41 @@ def store(name, keep=None, radius=32):
     return result(reason, None, missing)
 
 
+SKIPS = 8  # slots add_chest skips at most a call
+
+
 def add_chest(name, cat, radius=32):
     """Puts a chest at the next slot of depot name's row, facing along the row so it never joins its neighbour in a
-    double chest, and gives it to category cat. A chest already standing there is taken as it is. The chest is got with
-    lib.get within radius, so crafted from planks where none is carried or stored. Gives result(): ok with at, the
-    chest, or the reason getting or placing it failed with.
-    ponytail: a chest standing at the slot is taken whatever it holds."""
+    double chest, and gives it to category cat. A chest already standing there is taken if it is empty or holds only
+    items of cat. A slot holding another chest, or a block place may not replace (blocked), is skipped for good, at most
+    SKIPS a call (then blocked): the depot never digs, so it leaves what someone else put there. The chest is got with
+    lib.get within radius, so crafted from planks where none is carried or stored. Gives result(): ok with at, the chest, or the reason getting
+    or placing it failed with."""
     d = depot(name)
     step = FACING[d["facing"]]
-    p = d["origin"] + (step[0] * len(d["chests"]), 0, step[2] * len(d["chests"]))
-    b = block(p)
-    if b is None or b.id != CHEST:
-        r = lib.get.get(CHEST, 1, radius)
-        if not r["ok"]:
-            return r
-        placed = place(p, CHEST, d["facing"])
-        if not placed:
-            return result(placed.reason, p)
+    # ponytail: at most SKIPS slots skipped a call, so a wall along the row ends it with blocked, not a walk down it.
+    found = False
+    for _ in range(SKIPS + 1):
+        n = d.get("next", len(d["chests"]))
+        p = d["origin"] + (step[0] * n, 0, step[2] * n)
+        b = block(p)
+        if b is not None and b.id == CHEST:
+            if all([category(name, s.item) == cat for s in container(p)]):
+                found = True
+                break
+        else:
+            r = lib.get.get(CHEST, 1, radius)
+            if not r["ok"]:
+                return r
+            placed = place(p, CHEST, d["facing"])
+            if placed:
+                found = True
+                break
+            if placed.reason != "blocked":
+                return result(placed.reason, p)
+        d["next"] = n + 1
+    if not found:
+        return result("blocked", p)
+    d["next"] = n + 1
     d["chests"].append([cat, p])
     return result(None, p)

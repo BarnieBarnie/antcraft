@@ -24,7 +24,7 @@ if not r["ok"]:
 
 ## `depot(name, origin=None, facing="east", categories=None)`
 
-The depot `name`, made the first time it is asked for: its row starts at `origin` (a [`Pos`](../../types/pos.md) or tuple) and goes one block at a time towards `facing` (`"north"`, `"south"`, `"east"` or `"west"`); `categories` is a dict of category name to a list of item ids or [selectors](../../types/selectors.md). Asked for again, it gives the depot it made, and `origin` and `facing` are not read: given `categories` replace the old ones, its chests stay as they are. **Returns** the depot, a dict with `origin`, `facing`, `categories` and `chests` (a list of `[category, pos]`, in row order). **Pauses** no.
+The depot `name`, made the first time it is asked for: its row starts at `origin` (a [`Pos`](../../types/pos.md) or tuple) and goes one block at a time towards `facing` (`"north"`, `"south"`, `"east"` or `"west"`); `categories` is a dict of category name to a list of item ids or [selectors](../../types/selectors.md). Asked for again, it gives the depot it made, and `origin` and `facing` are not read: given `categories` replace the old ones, its chests stay as they are. **Returns** the depot, a dict with `origin`, `facing`, `categories`, `chests` (a list of `[category, pos]`, in row order) and, once a chest is added, `next` (the index of the next slot, past any skipped ones). **Pauses** no.
 
 ## `store(name, keep=None, radius=32)`
 
@@ -40,6 +40,6 @@ The first category of the depot whose selectors select `item` (an item id or a s
 
 ## `add_chest(name, cat, radius=32)`
 
-Puts a chest at the depot's next slot and gives it to category `cat`. The chest faces along the row, so it never joins the chest next to it in a double chest. A chest already standing at the slot is taken as it is, whatever it holds. Otherwise the chest is got with [`lib.get.get`](get.md) within `radius`: one carried, one from a chest, or one crafted from planks, logs carried or stored. **Returns** a dict: `ok`, `reason` (`None`, or what getting or placing the chest failed with) and `at` (the chest). **Pauses** yes.
+Puts a chest at the depot's next slot and gives it to category `cat`. The chest faces along the row, so it never joins the chest next to it in a double chest. A chest already standing at the slot is taken as it is when it is empty or holds only items of `cat`. A slot that holds a chest of other items, or a block [`place`](../../blocks/place.md) may not replace (it fails `blocked`: dirt, stone, a log, an entity standing there), is skipped for good (at most 8 a call, else `blocked`) and the next slot is tried: the depot never digs, so it leaves what someone else put there. Otherwise the chest is got with [`lib.get.get`](get.md) within `radius`: one carried, one from a chest, or one crafted from planks, logs carried or stored. **Returns** a dict: `ok`, `reason` (`None`, or what getting or placing the chest failed with) and `at` (the chest). **Pauses** yes.
 
-`DepotGameTest` stores logs, saplings, sticks and apples each in a chest of its own, and fills a second logs chest, crafted from the logs, where the first is full. See also the cookbook page [Store and sort](../../../cookbook/store.md#a-depot-that-grows).
+`DepotGameTest` stores logs, saplings, sticks and apples each in a chest of its own, and fills a second logs chest, crafted from the logs, where the first is full; it skips a slot of dirt and one holding a chest of cobblestone. See also the cookbook page [Store and sort](../../../cookbook/store.md#a-depot-that-grows).
