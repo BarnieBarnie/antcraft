@@ -370,6 +370,20 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * structures costs by the chunks it reads (#588): radius 128 reads 17 by 17 chunks, radius 0 the bot's one, so the
+	 * first costs 288 chunks' charge more than the second.
+	 */
+	@GameTest(maxTicks = 10)
+	public void structuresCostsByTheChunksItReads(GameTestHelper helper) {
+		ScriptRun near = run(helper, helper.spawn(ModEntities.ANT_BOT, 1, 1, 1), "structures(0)\n");
+		ScriptRun far = run(helper, helper.spawn(ModEntities.ANT_BOT, 1, 1, 1), "structures(128)\n");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(near.state() == ScriptRun.State.FINISHED && far.state() == ScriptRun.State.FINISHED, "scripts " + near.state() + " " + far.state());
+			helper.assertValueEqual(far.executed() - near.executed(), 288L * SenseApi.STRUCTURE_CHUNK_COST, "instructions more for radius 128");
+		});
+	}
+
+	/**
 	 * Puts a plains village start with one piece from {@code low} to {@code high} (in the area) in the area's chunks, with
 	 * the references the chunks it reaches keep to it, as world generation would; takes it out again when the test ends.
 	 * A chunk keeps one start per structure type, so two tests that run at once (one batch) must not put a village in the

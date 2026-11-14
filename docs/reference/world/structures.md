@@ -31,7 +31,7 @@ No, it is done at once.
 
 ## Cost
 
-60 instructions besides the call.
+10 instructions besides the call, and 4 for each chunk it reads: the chunks within `radius` of the bot, 9 at radius 16 (46 in all), 81 at 64 (334) and 289 at 128 (1166). Each chunk takes some 65 ns, about 4 instructions' time (#588).
 
 ## Description
 

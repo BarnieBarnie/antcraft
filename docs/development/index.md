@@ -110,6 +110,13 @@ The bot benchmark (`BenchmarkGameTest`) runs 30 bots in a 48x48 area through a s
 grep -A10 'Benchmark: summary' build/check.log   # the summary, when run through scripts/check.sh (-A30 'Benchmark:' for each case)
 ```
 
+`SenseCostGameTest`, manual-only too, times senses that are done at once against each other in one tick, each native called straight from Java, and logs each one's median time a call and the cost it implies at 20 ns an instruction (#588). The ratios hold on a busy machine, where absolute times do not:
+
+```sh
+scripts/check.sh runGameTest -Pbenchmark -PgameTest='antcraft-gametest:sense_cost_game_test*'
+grep -A12 'Sense costs' build/check.log
+```
+
 The game test server runs ticks back to back rather than 20 a second, so the 3600 ticks take well under a minute.
 
 The work skins under `textures/entity/bot/` (one per kind of work the goal-driven colony had; bots wear a vanilla skin for now, see `BotSkins`) are drawn by `tools/skins.py` (needs Pillow). To add or tweak a skin, edit its entry in `SKINS` and regenerate them all:

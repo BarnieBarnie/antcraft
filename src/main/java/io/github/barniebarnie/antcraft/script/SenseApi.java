@@ -75,6 +75,11 @@ public final class SenseApi {
 	public static final int MAX_ENTITY_RADIUS = 64;
 	/** The largest radius {@code structures} looks in: at most 17 by 17 loaded chunks read. */
 	public static final int MAX_STRUCTURE_RADIUS = 128;
+	/**
+	 * What {@code structures} counts for each chunk it reads, on top of its cost of 10: some 65 ns a chunk, timed with
+	 * {@code SenseCostGameTest} at about 20 ns an instruction (#588), so radius 16 (9 chunks) costs 46, 64 (81) 334 and 128 (289) 1166.
+	 */
+	public static final int STRUCTURE_CHUNK_COST = 4;
 
 	private SenseApi() {
 	}
@@ -123,7 +128,7 @@ public final class SenseApi {
 				.map(tag -> "#" + tag.location()).sorted().forEach(tags.items::add));
 			return tags;
 		});
-		natives.register("biome_tags", 20, call -> {
+		natives.register("biome_tags", 50, call -> {
 			Identifier id = Identifier.tryParse(Values.str(Args.bind("biome_tags", call, 1, "biome")[0]));
 			PyList tags = new PyList();
 			Optional.ofNullable(id).flatMap(i -> bot(run, call).level().registryAccess().lookupOrThrow(Registries.BIOME)
@@ -164,7 +169,7 @@ public final class SenseApi {
 				: new Pos(pos.x(), chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX() & 15, at.getZ() & 15) + 1, pos.z(),
 					pos.dimension());
 		});
-		natives.register("biome", 30, call -> {
+		natives.register("biome", 10, call -> {
 			Object[] args = Args.bind("biome", call, 0, "pos");
 			AntBot bot = bot(run, call);
 			Pos pos = Args.absent(args[0]) ? null : Pos.of(args[0]);
@@ -176,10 +181,15 @@ public final class SenseApi {
 			return level.getChunkSource().getChunkNow(SectionPos.blockToSectionCoord(at.getX()), SectionPos.blockToSectionCoord(at.getZ())) == null
 				? PyNone.NONE : level.getBiome(at).getRegisteredName();
 		});
-		natives.register("structures", 60, call -> {
+		natives.register("structures", 10, call -> {
 			Object[] args = Args.bind("structures", call, 0, "radius");
 			AntBot bot = bot(run, call);
-			return structures((ServerLevel) bot.level(), bot.blockPosition(), radius(args[0], 64, MAX_STRUCTURE_RADIUS));
+			int radius = radius(args[0], 64, MAX_STRUCTURE_RADIUS);
+			BlockPos from = bot.blockPosition();
+			long side = SectionPos.blockToSectionCoord(from.getX() + radius) - SectionPos.blockToSectionCoord(from.getX() - radius) + 1;
+			long rows = SectionPos.blockToSectionCoord(from.getZ() + radius) - SectionPos.blockToSectionCoord(from.getZ() - radius) + 1;
+			run.charge(STRUCTURE_CHUNK_COST * side * rows);
+			return structures((ServerLevel) bot.level(), from, radius);
 		});
 		natives.register("find_nearest", call -> {
 			Object[] args = Args.bind("find_nearest", call, 1, "what", "radius", "around");
@@ -224,7 +234,7 @@ public final class SenseApi {
 			}
 			return stacks;
 		});
-		natives.register("room", 30, call -> {
+		natives.register("room", 10, call -> {
 			Object[] args = Args.bind("room", call, 2, "pos", "item");
 			AntBot bot = bot(run, call);
 			Pos pos = Pos.of(args[0]);

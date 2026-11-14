@@ -23,7 +23,7 @@ No, it is done at once.
 
 ## Cost
 
-30 instructions besides the call.
+10 instructions besides the call (it takes some 0.2 µs, #588).
 
 ## Description
 
