@@ -54,11 +54,6 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 

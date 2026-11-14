@@ -57,11 +57,6 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -125,7 +120,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot showing what it said can still be pushed: a pig standing in it moves it aside (bots do not push each other). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void aBotShowingWhatItSaidCanBePushed(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
@@ -250,7 +245,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	 * {@code lib.retry.retry} (#449) with {@code equip}, which is done at once: a success returns without waiting, a hard
 	 * reason at once, and a passing one is tried {@code tries} times with {@code delay} ticks between tries.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void retryTriesAgainOnlyOnPassingReasons(GameTestHelper helper) {
 		String name = BotScripts.libraryScript(helper, "retry_", """
 			import lib.retry
@@ -276,7 +271,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** {@code lib.retry.retry} passes {@code kwargs} to its action as keyword arguments, on every try (#468). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void retryPassesKeywordArgumentsToItsAction(GameTestHelper helper) {
 		String name = BotScripts.libraryScript(helper, "retry_kw_", """
 			import lib.retry
@@ -379,7 +374,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	 * {@code /antcraft script reload} after a script file changed starts the new version on the bot running it. The test
 	 * writes its own script into the world script folder, under a name of its own.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void reloadAfterAFileChangeRestartsTheBotsScript(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		String name = "reload_test_" + UUID.randomUUID().toString().substring(0, 8);
@@ -412,7 +407,7 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	 * A script imports a module of the world script folder, and {@code /antcraft script reload} after only that module
 	 * changed starts the script again with the new version. The test writes its own script and module, under names of its own.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void importsALibraryModuleAndRestartsWhenOnlyTheModuleChanged(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		String id = UUID.randomUUID().toString().substring(0, 8);

@@ -71,7 +71,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * The sapling of a log: a table for the vanilla logs whose sapling is no {@code _sapling}, else {@code _sapling} where
 	 * the game knows it as a sapling, else None, so the lumberjack gets none for an unknown log (#553).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void saplingOfALog(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
 		expect(helper, bot, "from lib.trees import sapling\nprint(sapling('minecraft:mangrove_log'), sapling('minecraft:crimson_stem'), "
@@ -80,7 +80,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A wall of two logs on stone next to the bot is no tree; the oak further off is. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void nextTreeFindsATreeAndSkipsALogWall(GameTestHelper helper) {
 		helper.setBlock(1, 1, 1, Blocks.OAK_LOG);
 		helper.setBlock(1, 2, 1, Blocks.OAK_LOG);
@@ -93,7 +93,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * tree_logs keeps the logs that are part of a tree: the oak's four and a branch log touching its top only at a
 	 * corner, and leaves out a wall of two logs on stone, so the lumberjack weighs an axe for trees alone (#563).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void treeLogsLeavesOutALogWall(GameTestHelper helper) {
 		helper.setBlock(1, 1, 1, Blocks.OAK_LOG);
 		helper.setBlock(1, 2, 1, Blocks.OAK_LOG);
@@ -112,7 +112,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * A tree near the bot is found without reading the whole sphere of radius 32 (some 137,000 blocks of the block search
 	 * budget every bot shares): next_tree looks within 8 blocks first, then 16, then its radius (#527).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void nextTreeLooksNearTheBotFirst(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree() == " + tree(helper) + ")\n", List.of("True"));
@@ -125,7 +125,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** low_log finds the oak's base near the bot without reading the whole sphere of radius 32, as next_tree does (#532). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void lowLogLooksNearTheBotFirst(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.low_log() == " + tree(helper) + ")\n", List.of("True"));
@@ -138,7 +138,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The oak's logs are in KEEP, so low_log passes over its base by the bot for a log further off (#532). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void lowLogSkipsATreeInKeep(GameTestHelper helper) {
 		helper.setBlock(1, 1, 1, Blocks.OAK_LOG);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
@@ -148,7 +148,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A {@code where} that rejects every base finds no tree; one that takes the oak's base finds it. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void nextTreeTakesOnlyABaseWherePasses(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, """
@@ -162,7 +162,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Within 2 blocks of the bot there is no tree; within 2 of a position by the oak, the oak (#513). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void nextTreeSearchesAroundAPosition(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.next_tree(2), lib.trees.next_tree(2, around=Pos"
@@ -170,14 +170,14 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** SCAFFOLD is read from the item tag the walks pillar and bridge with, so a data pack that changes the tag changes it. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void scaffoldIsTheScaffoldTagsItems(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 0, 1, 0);
 		expect(helper, bot, "import lib.trees\nprint(lib.trees.SCAFFOLD == tag_items('#antcraft:scaffold_blocks'))\n", List.of("True"));
 	}
 
 	/** A wall of 73 logs on stone, all nearer the bot than the oak, does not hide the oak (#520). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void nextTreeFindsATreeBehindMoreThan64NearerLogs(GameTestHelper helper) {
 		for (int x = 0; x <= 4; x++) {
 			for (int z = 0; z <= 2; z++) {
@@ -216,7 +216,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** logs(2) mines the two lowest logs of the oak, picks them up and leaves the two above standing (#481). */
-	@GameTest(maxTicks = 440)
+	@GameTest(maxTicks = 290)
 	public void logsMinesTheLowestLogs(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(2)\nprint(r['ok'], count('oak_log'))\n", List.of("True 2"),
@@ -278,7 +278,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** With no log within radius, logs fails with no_logs and what it lacks instead of looping. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void logsFailsWithNoLogsInRadius(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(1, radius=2)\nprint(r['ok'], r['reason'], r['missing'])\n",
@@ -315,7 +315,7 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * tree_blocks of the giant spruce gives its 24 trunk logs and two branch logs, and not the spruce of three logs a block
 	 * west of it; is_giant says its trunk is 2x2 and the small one's not (#510).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void treeBlocksGivesTheLogsOfOneGiantTree(GameTestHelper helper) {
 		plantGiant(helper);
 		for (int y = 1; y <= 3; y++) {

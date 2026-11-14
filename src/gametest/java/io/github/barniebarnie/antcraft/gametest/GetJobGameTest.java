@@ -52,14 +52,14 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Feathers come from no source and no recipe: no_recipe, with what is missing. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void unknownRawItemFailsWithNoRecipe(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
 		run(helper, bot, "feather 2 8", "no feather: no_recipe {'minecraft:feather': 2}", () -> { });
 	}
 
 	/** The item asked for, taken from a chest, is kept: only what was borrowed on the way goes back. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void keepsTheItemItTookFromAChest(GameTestHelper helper) {
 		BlockPos at = new BlockPos(6, 1, 3);
 		helper.setBlock(at, Blocks.CHEST);
@@ -76,7 +76,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	 * 5 oak planks borrowed by an earlier script, then jobs.get of 2 of #minecraft:planks: the job keeps 2, matched by the
 	 * selector, and gives the other 3 back (#535).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void keepsOnlyTheNItAskedFor(GameTestHelper helper) {
 		BlockPos at = new BlockPos(6, 1, 3);
 		helper.setBlock(at, Blocks.CHEST);
@@ -112,7 +112,7 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	 * A bot that owns 1 oak plank and borrowed 3 in an earlier script, then jobs.get of 2: it ends with 2, its own and 1
 	 * kept, and gives 2 back (#537).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void keepsOnlyWhatItLacksBesidesItsOwn(GameTestHelper helper) {
 		BlockPos at = new BlockPos(6, 1, 3);
 		helper.setBlock(at, Blocks.CHEST);

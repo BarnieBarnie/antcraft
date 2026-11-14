@@ -32,7 +32,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -46,11 +45,6 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		GameTests.start(helper);
 		// Game tests run on a dedicated server, where bots are disabled unless opted in.
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 

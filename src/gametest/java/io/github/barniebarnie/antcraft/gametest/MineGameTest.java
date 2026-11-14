@@ -258,7 +258,7 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	 * On a granite level, a bot with 3 slots free, the rest granite (junk), keeps a stock of it when it drops its junk,
 	 * and seals the water in the first block of the hall with it (#392).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void aBotOnAGraniteLevelKeepsBlocksToSealAWaterPocket(GameTestHelper helper) {
 		AABB bounds = helper.getBounds();
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, (int) bounds.getXsize() - 1, 4, (int) bounds.getZsize() - 1)) {

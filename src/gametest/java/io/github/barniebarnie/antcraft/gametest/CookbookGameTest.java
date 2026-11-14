@@ -42,11 +42,6 @@ public class CookbookGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -90,7 +85,7 @@ public class CookbookGameTest implements CustomTestMethodInvoker {
 	 * wheat, tills a spot that turned back to dirt after it picked the field, plants seeds on every spot and stores the
 	 * wheat in the chest.
 	 */
-	@GameTest(maxTicks = 130)
+	@GameTest(maxTicks = 60)
 	public void theFarmRecipeHarvestsTillsReplantsAndStores(GameTestHelper helper) {
 		BlockPos chestAt = new BlockPos(1, 1, 1);
 		helper.setBlock(chestAt, Blocks.CHEST);

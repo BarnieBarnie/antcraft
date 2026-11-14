@@ -25,11 +25,6 @@ public class ReachableGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		for (int x = 4; x <= 6; x++) {
 			for (int z = 4; z <= 6; z++) {
 				boolean centre = x == 5 && z == 5;
@@ -103,13 +98,6 @@ public class ReachableGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 20)
 	public void aShortPlanIsNotHeldUpByAnotherBotsLongOne(GameTestHelper helper) {
-		for (int x = 0; x < 24; x++) {
-			for (int z = 0; z < 24; z++) {
-				if (x >= 8 || z >= 8) {
-					helper.setBlock(x, 0, z, Blocks.STONE);
-				}
-			}
-		}
 		AntBot far = helper.spawn(ModEntities.ANT_BOT, 20, 1, 20);
 		far.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 64));
 		AntBot near = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);

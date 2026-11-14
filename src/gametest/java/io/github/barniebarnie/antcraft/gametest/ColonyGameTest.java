@@ -55,11 +55,6 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -219,7 +214,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * The job board (#368): one member posts two jobs, and two others running the same script each take a different
 	 * one, which {@code jobs()} lists with its taker.
 	 */
-	@GameTest(maxTicks = 30)
+	@GameTest(maxTicks = 20)
 	public void twoBotsRunningTheSameScriptTakeDifferentJobs(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 1, 1, 1);
 		AntBot poster = member(helper, colony, 3, 1, 3);
@@ -249,7 +244,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot whose script is stopped gives back its job, and another member takes it (#368). */
-	@GameTest(maxTicks = 30)
+	@GameTest(maxTicks = 20)
 	public void aStoppedBotsJobGoesBackAndAnotherTakesIt(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 1, 1, 1);
 		AntBot stopped = member(helper, colony, 3, 1, 3);
@@ -311,7 +306,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * are in a chest in the colony, which the builder borrows them from with lib.get (#543) or a hauler brings to the
 	 * core, and the builder builds.
 	 */
-	@GameTest(maxTicks = 340)
+	@GameTest(maxTicks = 160)
 	public void aBuilderAndAHaulerBuildAPostedCobbleStepFromAChest(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -342,7 +337,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * is put there, cancelling the haul job no hauler took, and the idle bot keeps off the site in between instead of going
 	 * back home.
 	 */
-	@GameTest(maxTicks = 730)
+	@GameTest(maxTicks = 180)
 	public void anIdleBotMakesWayOnceForABuildThatGoesOnAfterMissingIngredients(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -410,7 +405,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * way only once: the build's spots go with the hold, not a second after the last ask (#400).
 	 */
 	// Measured: passes at tick 11 (with the spots kept a second after the hold, the idle bot made way twice); with any build job holding, it never goes back while the second one is held.
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void anIdleBotGoesBackOnceTheBuildsOwnJobIsDone(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -552,7 +547,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A haul that finds nothing says why its take failed (#566): from an empty chest, no_item. */
-	@GameTest(maxTicks = 100)
+	@GameTest(maxTicks = 40)
 	public void aHaulThatFindsNothingWarnsWithTheReason(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -627,7 +622,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A lumberjack alone fells the colony's tree, plants a sapling where it stood and puts the logs, and all else it carries
-	 * but its saplings, into the core (lib.inv's store_all, #457).
+	 * but its saplings, into the core (lib.inv's store_all, #457): those it had, less the one it plants, and those it picked
+	 * up, a sapling dropped by the tree and any of the leaves it breaks.
 	 */
 	@GameTest(maxTicks = 960)
 	public void aLumberjackFellsATreeReplantsAndStoresTheLogs(GameTestHelper helper) {
@@ -652,15 +648,26 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		AntBot lumberjack = member(helper, colony, 1, 1, 1);
 		lumberjack.getInventory().addItem(new ItemStack(Items.OAK_SAPLING, 2));
 		lumberjack.getInventory().addItem(new ItemStack(Items.DIRT));
+		// A sapling lying by the tree, as a leaf the bot breaks drops one at random: it picks that up and keeps it too.
+		helper.spawnItem(Items.OAK_SAPLING, new BlockPos(4, 1, 6));
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
+		// The saplings it picks up, that one and those of the leaves it breaks to stand in them (1 in 20 each, #565).
+		int[] gained = {0};
+		int[] last = {2};
+		helper.onEachTick(() -> {
+			int now = lumberjack.getInventory().countItem(Items.OAK_SAPLING)
+				+ (lumberjack.getMainHandItem().is(Items.OAK_SAPLING) ? lumberjack.getMainHandItem().getCount() : 0);
+			gained[0] += Math.max(0, now - last[0]);
+			last[0] = now;
+		});
 		helper.succeedWhen(() -> {
 			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(5, 1, 5));
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 4, "logs in the core: " + core.countItem(Items.OAK_LOG));
 			helper.assertTrue(core.countItem(Items.DIRT) == 1, "dirt in the core: " + core.countItem(Items.DIRT));
 			int saplings = lumberjack.getInventory().countItem(Items.OAK_SAPLING)
 				+ (lumberjack.getMainHandItem().is(Items.OAK_SAPLING) ? lumberjack.getMainHandItem().getCount() : 0);
-			helper.assertTrue(saplings == 1, "saplings the lumberjack keeps: " + saplings);
+			helper.assertTrue(saplings == 2 + gained[0] - 1, "saplings the lumberjack keeps: " + saplings + ", picked up " + gained[0]);
 		});
 	}
 
@@ -697,9 +704,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A lumberjack with a stone axe fells an oak of six logs, taller than it reaches from the ground, whole: it climbs on
-	 * dirt from the core, takes the dirt back, replants the sapling from the core and stores the logs and the dirt (#541). Passes at about tick 380, 540 with the other colony tests.
+	 * dirt from the core, takes the dirt back, replants the sapling from the core and stores the logs and the dirt (#541). Passes at about tick 225, alone or with the other colony tests.
 	 */
-	@GameTest(maxTicks = 1080)
+	@GameTest(maxTicks = 450)
 	public void aLumberjackFellsATreeTallerThanItReaches(GameTestHelper helper) {
 		helper.setBlock(4, 0, 4, Blocks.DIRT);
 		for (int y = 1; y <= 6; y++) {
@@ -734,9 +741,9 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A lumberjack with a stone axe by an oak of six logs, the core holding three dirt and three cobblestone: it climbs on
 	 * the core's blocks, not on dirt dug from the colony's ground (four exposed dirt blocks in the floor), and puts them
-	 * back (#553). Passes at about tick 390, 540 with the other colony tests.
+	 * back (#553). Passes at about tick 225, alone or with the other colony tests.
 	 */
-	@GameTest(maxTicks = 1080)
+	@GameTest(maxTicks = 450)
 	public void aLumberjackClimbsOnTheCoresBlocksNotTheGround(GameTestHelper helper) {
 		helper.setBlock(4, 0, 4, Blocks.DIRT);
 		for (int y = 1; y <= 6; y++) {

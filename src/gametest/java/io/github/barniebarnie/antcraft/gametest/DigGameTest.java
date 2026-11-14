@@ -60,7 +60,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** nearest takes a filter; exposed leaves out an ore walled in by stone. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void findNearestAndExposed(GameTestHelper helper) {
 		helper.setBlock(2, 1, 2, Blocks.IRON_ORE);
 		for (BlockPos pos : List.of(new BlockPos(1, 1, 2), new BlockPos(3, 1, 2), new BlockPos(2, 1, 1), new BlockPos(2, 1, 3),
@@ -85,7 +85,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	 * With lib.find.LIMIT 8, ten gold blocks next to the bot outside lib.find.WHERE and one inside it across the area: the
 	 * finders widen the scan past the 8 nearest and find the one inside (#552).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void findersLookPastTheLimitForOneWhereAllows(GameTestHelper helper) {
 		for (int z = 0; z < 5; z++) {
 			helper.setBlock(0, 1, z, Blocks.GOLD_BLOCK);
@@ -387,9 +387,6 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	 */
 	@GameTest(maxTicks = 320, skyAccess = true)
 	public void stairsUpOutOfATallCaveDigsToTheRealSurface(GameTestHelper helper) {
-		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 2, 0, 7)) {
-			helper.setBlock(pos, Blocks.STONE); // the cave's floor
-		}
 		for (BlockPos pos : BlockPos.betweenClosed(3, 1, 0, 7, 4, 7)) {
 			helper.setBlock(pos, Blocks.STONE);
 		}
@@ -413,14 +410,11 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Carrying no blocks, with the first step up over a pit (#546): the bot stands in a cave 3 tall whose block ahead,
 	 * east, has air under it, and the cells of the first step are air, so digging them gives no block either. It digs one
-	 * out of the wall beside it, fills the pit with it and digs on up to the surface. The area's bottom row is made stone.
+	 * out of the wall beside it, fills the pit with it and digs on up to the surface.
 	 */
 	@GameTest(maxTicks = 400, skyAccess = true)
 	public void stairsUpOverAPitWithNoBlocksDigsABlockToBridgeWith(GameTestHelper helper) {
 		stone(helper, 5);
-		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 0, 7)) {
-			helper.setBlock(pos, Blocks.STONE);
-		}
 		for (BlockPos pos : BlockPos.betweenClosed(1, 1, 3, 2, 3, 3)) {
 			helper.setBlock(pos, Blocks.AIR);
 		}
@@ -554,7 +548,7 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Emerald has no best_y (it is only in mountains): without y, and no exposed vein, ore gives no_ore at once. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void emeraldWithoutYGivesNoOre(GameTestHelper helper) {
 		AntBot bot = miner(helper, 1, 1, 1);
 		expect(helper, bot, """

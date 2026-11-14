@@ -46,11 +46,6 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -908,7 +903,7 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	 * The "keep a chest stocked" recipe of docs/cookbook/stock-chest.md, run as it is (DocExampleTest keeps the copy the
 	 * same): it tops a chest holding 10 torches up to 64 torches and 16 bread from a barrel, and puts nothing more in.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void theStockChestRecipeTopsTheChestUpFromTheBarrel(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.TORCH, 10));
 		BlockPos barrelAt = new BlockPos(1, 1, 1);

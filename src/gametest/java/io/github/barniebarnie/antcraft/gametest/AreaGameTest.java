@@ -25,11 +25,6 @@ public class AreaGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -115,7 +110,7 @@ public class AreaGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** With 5 dirt for 9 positions it places 5 and stops with missing_ingredients where the sixth goes, missing 4. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void fillWithTooFewBlocksStopsWithMissingIngredients(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 2);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 5));

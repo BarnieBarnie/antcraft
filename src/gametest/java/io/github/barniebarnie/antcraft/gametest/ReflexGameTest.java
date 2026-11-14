@@ -35,13 +35,6 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		// The whole floor: the flee tests run in a wider area.
-		AABB bounds = helper.getBounds();
-		for (int x = 0; x < (int) bounds.getXsize(); x++) {
-			for (int z = 0; z < (int) bounds.getZsize(); z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -60,7 +53,7 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot standing in fire on netherrack, which burns for good, steps out of it. */
-	@GameTest(maxTicks = 30)
+	@GameTest(maxTicks = 20)
 	public void getsOutOfFire(GameTestHelper helper) {
 		helper.setBlock(3, 0, 3, Blocks.NETHERRACK);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

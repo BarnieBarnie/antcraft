@@ -78,7 +78,7 @@ public class ToolsGameTest implements CustomTestMethodInvoker {
 	 * data pack adds to #minecraft:needs_iron_tool and lib.tools.NEEDS leaves out, gives "iron" there, and by id too, as
 	 * tier_for of an id NEEDS leaves out reads the block's tags (#566).
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void tierForAPositionReadsTheBlocksTags(GameTestHelper helper) {
 		helper.setBlock(1, 1, 1, Blocks.LODESTONE);
 		helper.setBlock(1, 1, 2, Blocks.OBSIDIAN);

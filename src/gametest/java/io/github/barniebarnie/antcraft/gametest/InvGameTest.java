@@ -33,7 +33,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The chest has enough: the bot borrows 4 cobblestone, no torches (it carries its 3), and nothing is short. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void takeAllFillsWhatIsLacking(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.COBBLESTONE, 10), new ItemStack(Items.TORCH, 5));
 		AntBot bot = run(helper, List.of(new ItemStack(Items.TORCH, 3)), """
@@ -47,7 +47,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The chest has too little: the bot takes its 2 cobblestone and gives what is still short, a selector too. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void takeAllGivesWhatIsShort(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.COBBLESTONE, 2));
 		AntBot bot = run(helper, List.of(new ItemStack(Items.COBBLESTONE, 1)), """
@@ -57,7 +57,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Logs and dirt go into the chest; the pickaxe (a tool) and the bread (food) stay with the bot. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void storeAllKeepsToolsAndFood(GameTestHelper helper) {
 		Container chest = chest(helper);
 		AntBot bot = run(helper, List.of(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.IRON_PICKAXE),
@@ -70,7 +70,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** keep selects the logs: only the dirt goes in. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void storeAllKeepsWhatKeepSelects(GameTestHelper helper) {
 		Container chest = chest(helper);
 		AntBot bot = run(helper, List.of(new ItemStack(Items.OAK_LOG, 10), new ItemStack(Items.DIRT, 5)),
@@ -81,7 +81,7 @@ public class InvGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A full chest takes nothing: no_space, with what is left in the bot as missing. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void storeAllIntoAFullChestGivesNoSpace(GameTestHelper helper) {
 		ItemStack[] stone = new ItemStack[27];
 		for (int i = 0; i < stone.length; i++) {

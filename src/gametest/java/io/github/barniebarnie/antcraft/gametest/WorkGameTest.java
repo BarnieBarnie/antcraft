@@ -75,11 +75,6 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
 		GameTests.start(helper);
 		AntCraftConfig.setValues(new AntCraftConfig.Values(true, 64));
-		for (int x = 0; x < 8; x++) {
-			for (int z = 0; z < 8; z++) {
-				helper.setBlock(x, 0, z, Blocks.STONE);
-			}
-		}
 		method.invoke(this, helper);
 	}
 
@@ -322,7 +317,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The walk into reach gets no closer: {@code timeout}, passed on as {@code goto} gives it. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void aBlockActionWhoseWalkGetsNoCloserTimesOut(GameTestHelper helper) {
 		helper.setBlock(6, 1, 6, Blocks.DIRT);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
@@ -697,7 +692,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertItemEntityPresent(Items.NAUTILUS_SHELL));
 	}
 
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void pickUpTakesWhatAnotherBotDropped(GameTestHelper helper) {
 		AntBot dropper = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
@@ -866,7 +861,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Short of a cobblestone, the bot stops with missing_ingredients; given one, build again finishes the step. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void buildWithoutEnoughBlocksIsMissingIngredientsAndResumes(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
 		carryCobbleStep(bot, 1);
@@ -1096,7 +1091,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The building bot standing where the step's second cobblestone goes, beside the first moves off it and finishes. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void buildMovesTheBuilderOffTheSite(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 3);
 		carryCobbleStep(bot, 2);

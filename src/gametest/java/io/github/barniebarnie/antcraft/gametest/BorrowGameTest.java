@@ -102,7 +102,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The bot owns 3 planks, borrows 4 and uses 5 (a crafting table and one placed): the borrowed ones count as used first, so nothing goes back and it keeps its own 2. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void ownItemsAreNotGivenBack(GameTestHelper helper) {
 		Container chest = chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 10));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
@@ -122,7 +122,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** keep strikes what a job keeps off the record: all the planks, then 1 of 2 pickaxes; the other pickaxe goes back. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void keepLeavesAnItemOutOfGiveBack(GameTestHelper helper) {
 		Container chest = chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 4), new ItemStack(Items.IRON_PICKAXE),
 			new ItemStack(Items.IRON_PICKAXE));
@@ -145,7 +145,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** keep by a selector over records of several items counts what the bot owns of each: 1 oak and 1 birch plank owned, 3 of each borrowed, 4 kept, so 4 planks are left (#549). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void keepBySelectorCountsWhatTheBotOwnsOfEachItem(GameTestHelper helper) {
 		chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 3), new ItemStack(Items.BIRCH_PLANKS, 3));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
@@ -164,7 +164,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** give_back(since=1) gives back only what was borrowed after the first record: the pickaxe, not the planks (#535). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void giveBackSinceLeavesTheOlderRecords(GameTestHelper helper) {
 		Container chest = chest(helper, CHEST, new ItemStack(Items.OAK_PLANKS, 4), new ItemStack(Items.IRON_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
@@ -182,7 +182,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A record from before the bot's own count was kept (no "had") still gives back. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void anOlderRecordStillGivesBack(GameTestHelper helper) {
 		Container chest = chest(helper, CHEST);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);
@@ -200,7 +200,7 @@ public class BorrowGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** One script borrows, the next gives back: the record is kept in memory between them. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 30)
 	public void theRecordSurvivesARestart(GameTestHelper helper) {
 		Container chest = chest(helper, CHEST, new ItemStack(Items.IRON_PICKAXE), new ItemStack(Items.OAK_PLANKS, 10));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 1, 5);

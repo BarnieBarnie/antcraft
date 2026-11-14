@@ -70,7 +70,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Logs and cobblestone carried for a stone axe, an iron axe in a chest: ensure_tool borrows and holds the iron one. */
-	@GameTest(maxTicks = 80)
+	@GameTest(maxTicks = 20)
 	public void borrowsAChestAxeRatherThanCrafting(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.IRON_AXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -107,7 +107,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An iron pickaxe in a chest, none carried (#551): ensure_tool borrows it without costing options. */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void borrowsALastingChestToolWithoutCosting(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.IRON_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -211,7 +211,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** 5 planks in a chest and a log carried: get takes the 5 and crafts the rest from the log (#517). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void takesPartFromAChestAndCraftsTheRest(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.OAK_PLANKS, 5));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -229,7 +229,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** 5 planks in a chest, no log and no tree: get fails for the other 3 and gives the 5 back (#535). */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void givesBackWhatItBorrowedWhenItFails(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.OAK_PLANKS, 5));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -467,7 +467,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
 	 * NEEDS says "wooden" for it, so the source's own tier by id (which reads the tags too since #566) differs.
 	 */
-	@GameTest(maxTicks = 40)
+	@GameTest(maxTicks = 20)
 	public void aSourceCostCountsDeepOnceAndTheBlocksTier(GameTestHelper helper) {
 		helper.setBlock(5, 1, 4, Blocks.LODESTONE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
