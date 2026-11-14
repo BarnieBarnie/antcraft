@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotHands;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotApi;
 import io.github.barniebarnie.antcraft.script.MoveApi;
@@ -610,6 +611,54 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.AIR, 3, 0, 3);
 				helper.assertTrue(helper.getBlockState(new BlockPos(1, 1, 3)).getFluidState().is(Fluids.WATER), "no water poured at (1, 1, 3)");
 			});
+	}
+
+	/** use on a block every face of which another block hides fails out_of_reach and does nothing (#616). */
+	@GameTest(maxTicks = 10)
+	public void useOnABlockWithEveryFaceHiddenIsOutOfReach(GameTestHelper helper) {
+		helper.setBlock(3, 1, 3, Blocks.DIRT);
+		for (BlockPos around : List.of(new BlockPos(2, 1, 3), new BlockPos(4, 1, 3), new BlockPos(3, 1, 2), new BlockPos(3, 1, 4),
+			new BlockPos(3, 2, 3))) {
+			helper.setBlock(around, Blocks.STONE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(1.5, 1, 3.5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.WATER_BUCKET));
+		helper.succeedWhen(() -> {
+			String failed = BotHands.use(bot, helper.absolutePos(new BlockPos(3, 1, 3)));
+			helper.assertTrue(Result.OUT_OF_REACH.equals(failed), "use gave " + failed);
+			helper.assertTrue(bot.getMainHandItem().is(Items.WATER_BUCKET), "held " + bot.getMainHandItem());
+		});
+	}
+
+	/**
+	 * Where the walk takes a block to be in reach, use aims at it, and the other way round (#616): a bot off the middle of
+	 * its block, whose eyes a block beside the target hides it from though it is seen from the middle (the walk stands bots
+	 * anywhere in the end block), and a target seen only through a cobweb, which a bucket's ray stops at.
+	 */
+	@GameTest(maxTicks = 10)
+	public void walkAndUseAgreeOnReach(GameTestHelper helper) {
+		helper.setBlock(4, 2, 2, Blocks.STONE);
+		helper.setBlock(5, 2, 2, Blocks.STONE);
+		AntBot offMiddle = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.5, 1, 3.05));
+		helper.setBlock(5, 1, 6, Blocks.STONE);
+		helper.setBlock(4, 1, 6, Blocks.COBWEB);
+		for (BlockPos around : List.of(new BlockPos(6, 1, 6), new BlockPos(5, 1, 5), new BlockPos(5, 1, 7), new BlockPos(5, 2, 6))) {
+			helper.setBlock(around, Blocks.STONE);
+		}
+		AntBot web = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.5, 1, 6.5));
+		helper.succeedWhen(() -> {
+			assertAgree(helper, offMiddle, new BlockPos(5, 2, 2));
+			assertAgree(helper, web, new BlockPos(5, 1, 6));
+		});
+	}
+
+	/** That {@code bot} has {@code target} in reach exactly when an empty-handed use of it does not fail out_of_reach. */
+	private static void assertAgree(GameTestHelper helper, AntBot bot, BlockPos target) {
+		BlockPos at = helper.absolutePos(target);
+		boolean inReach = bot.getBody().inReach(new Pos(at.getX(), at.getY(), at.getZ()));
+		String failed = BotHands.use(bot, at);
+		helper.assertTrue(inReach != Result.OUT_OF_REACH.equals(failed),
+			"at " + bot.position() + ": in reach " + inReach + " but use gave " + failed + " on " + target);
 	}
 
 	/**

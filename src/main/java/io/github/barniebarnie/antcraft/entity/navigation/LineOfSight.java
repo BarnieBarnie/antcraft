@@ -17,6 +17,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import org.jspecify.annotations.Nullable;
 
 /**
  * What a bot can see, as a player must to break a block: a clear line from its eyes to the block's
@@ -60,13 +61,35 @@ public final class LineOfSight {
 				return world.getMinY();
 			}
 		};
-		Vec3 eyes = new Vec3(feet.getX() + 0.5, feet.getY() + Goal.Reach.EYE_HEIGHT, feet.getZ() + 0.5);
+		return aim(level, eyes(feet), target) != null;
+	}
+
+	/**
+	 * Where the eyes of a bot standing at {@code feet} are for sight: over the middle of the block, wherever in it the bot
+	 * stands, so the walk and {@code use} agree on what it sees (docs/reference/blocks/use.md).
+	 */
+	public static Vec3 eyes(BlockPos feet) {
+		return new Vec3(feet.getX() + 0.5, feet.getY() + Goal.Reach.EYE_HEIGHT, feet.getZ() + 0.5);
+	}
+
+	/**
+	 * Where the first ray from {@code eyes} to one of the points of {@code target} a bot aims at ({@link #aims}) meets it, no
+	 * other block's outline in the way; null if every ray hits another block first. A target with no outline (air, a fluid)
+	 * is met at the point, on its face turned to the eyes.
+	 */
+	public static @Nullable BlockHitResult aim(BlockGetter level, Vec3 eyes, BlockPos target) {
 		for (Vec3 point : aims(target)) {
-			if (clear(level, eyes, point, target)) {
-				return true;
+			BlockHitResult hit = level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, CollisionContext.empty()));
+			if (hit.getType() == HitResult.Type.BLOCK) {
+				if (hit.getBlockPos().equals(target)) {
+					return hit;
+				}
+				continue;
 			}
+			Vec3 toEyes = eyes.subtract(Vec3.atCenterOf(target));
+			return new BlockHitResult(point, Direction.getApproximateNearest(toEyes.x, toEyes.y, toEyes.z), target, false);
 		}
-		return false;
+		return null;
 	}
 
 	/** The points of {@code target} a bot aims at, in turn: its middle, then just inside the middle of each face. */
@@ -77,11 +100,5 @@ public final class LineOfSight {
 			points.add(middle.add(face.getUnitVec3().scale(INSET)));
 		}
 		return points;
-	}
-
-	/** Whether the first block a ray from {@code from} to {@code to} hits is {@code target}, or none. */
-	private static boolean clear(BlockGetter level, Vec3 from, Vec3 to, BlockPos target) {
-		BlockHitResult hit = level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty()));
-		return hit.getType() == HitResult.Type.MISS || hit.getBlockPos().equals(target);
 	}
 }

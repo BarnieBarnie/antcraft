@@ -35,14 +35,12 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.item.context.BlockPlaceContext;
-import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
@@ -302,15 +300,16 @@ public final class BotHands {
 
 	/**
 	 * Uses the held item on the block at {@code pos}, or with an empty hand the block itself, as a player's right click
-	 * does: on the block first, then the item on its own (a bucket), looking where the bot sees the block. Null when that
-	 * did something; else why not: {@link Result#OUT_OF_REACH} when no line from the bot's eyes reaches the block, so the
+	 * does: on the block first, then the item on its own (a bucket), looking where the bot sees the block from the eyes the
+	 * walk checks ({@link #aim}). Null when that did something; else why not: {@link Result#OUT_OF_REACH} when no line from
+	 * those eyes reaches the block, so the
 	 * use would act on another block (docs/reference/blocks/use.md), and {@link Result#BLOCKED} when the use did nothing.
 	 */
 	public static @Nullable String use(AntBot bot, BlockPos pos) {
 		ServerLevel level = (ServerLevel) bot.level();
 		String[] failed = {Result.BLOCKED};
 		withHand(bot, pos, player -> {
-			BlockHitResult hit = aim(level, player, pos);
+			BlockHitResult hit = aim(level, player, bot.blockPosition(), pos);
 			if (hit == null) {
 				failed[0] = Result.OUT_OF_REACH;
 				return false;
@@ -327,27 +326,19 @@ public final class BotHands {
 	}
 
 	/**
-	 * Turns the player to the first point of {@code pos} its eyes see, as {@link LineOfSight} aims: the middle, then the
-	 * middle of each face; where that ray meets the block, or null if every ray hits another block first. An item that
-	 * casts its own ray along the player's look, such as a bucket, then meets this block too, not one in front of it.
+	 * Stands the player over the middle of the bot's block, where the walk takes its eyes to be ({@link LineOfSight#eyes}),
+	 * and turns it to where its eyes first see {@code pos} ({@link LineOfSight#aim}); that hit, or null if every ray hits
+	 * another block first. An item that casts its own ray along the player's look, such as a bucket, then meets this block
+	 * too, not one in front of it.
 	 */
-	private static @Nullable BlockHitResult aim(ServerLevel level, FakePlayer player, BlockPos pos) {
-		Vec3 eyes = player.getEyePosition();
-		Vec3 center = Vec3.atCenterOf(pos);
-		for (Vec3 point : LineOfSight.aims(pos)) {
-			BlockHitResult hit = level.clip(new ClipContext(eyes, point, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, player));
-			if (hit.getType() == HitResult.Type.BLOCK && !hit.getBlockPos().equals(pos)) {
-				continue;
-			}
-			player.lookAt(EntityAnchorArgument.Anchor.EYES, point);
-			if (hit.getType() == HitResult.Type.BLOCK) {
-				return hit;
-			}
-			// No outline in the way nor at pos (air or a fluid): its face turned to the player.
-			Vec3 toEyes = eyes.subtract(center);
-			return new BlockHitResult(point, Direction.getApproximateNearest(toEyes.x, toEyes.y, toEyes.z), pos, false);
+	private static @Nullable BlockHitResult aim(ServerLevel level, FakePlayer player, BlockPos feet, BlockPos pos) {
+		Vec3 eyes = LineOfSight.eyes(feet);
+		player.snapTo(eyes.x, eyes.y - player.getEyeHeight(), eyes.z, player.getYRot(), player.getXRot());
+		BlockHitResult hit = LineOfSight.aim(level, eyes, pos);
+		if (hit != null) {
+			player.lookAt(EntityAnchorArgument.Anchor.EYES, hit.getLocation());
 		}
-		return null;
+		return hit;
 	}
 
 	/**
