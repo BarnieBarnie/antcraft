@@ -350,24 +350,25 @@ def stations(p):
     """The ticks the stations of p, a plan, add (#630): for its crafting table and its furnace (or smoker or blast furnace)
     each, the walk to the one lib.craft.plan counts within lib.craft.REACH, as craft_here walks to one craft or smelt does
     not see, else the ticks to mine back the one craft_here puts down, with the best axe or pickaxe carried (a furnace at
-    least with a wooden pickaxe, which get gets before it smelts); what makes one is in p already. ponytail: a table breaks as a log and a furnace as an ore (hardness 2.5 and 3.5 against 2 and 3),
-    and a furnace counts once, though smelt_here puts one down for each stack."""
+    least with a wooden pickaxe, which get gets before it smelts), a furnace once for each stack of lib.craft.STACK a step
+    smelts, as smelt_here puts one down for each (#635); what makes one is in p already."""
     ticks = 0
     if p["table"]:
-        ticks += station(find_nearest("crafting_table", radius=lib.craft.REACH), "axe", "wood", None)
+        ticks += station(find_nearest("crafting_table", radius=lib.craft.REACH), "axe", "table", None)
     inputs = lib.craft.smelt_inputs(p)
     if inputs:
-        ticks += station(lib.craft.furnace_at(inputs), "pickaxe", "ore", "wooden")
+        stacks = sum([(k + lib.craft.STACK - 1) // lib.craft.STACK for step, k, how in p["crafts"] if how == "smelt"])
+        ticks += station(lib.craft.furnace_at(inputs), "pickaxe", "furnace", "wooden", stacks)
     return ticks
 
 
-def station(at, kind, material, least):
-    """The walk to at, a station's Pos; where it is None, the ticks to break one of material with the best tool of kind
+def station(at, kind, material, least, n=1):
+    """The walk to at, a station's Pos; where it is None, the ticks to break n of material with the best tool of kind
     carried, else with one of tier least (None: the hand)."""
     if at is not None:
         return lib.cost.walk(pos(), at)
     tool = lib.tools.best(kind)
-    return lib.cost.breaking(1, material, least if tool is None else lib.tools.tier(tool))
+    return lib.cost.breaking(n, material, least if tool is None else lib.tools.tier(tool))
 
 
 def stored(p, item, gather, radius, tools):

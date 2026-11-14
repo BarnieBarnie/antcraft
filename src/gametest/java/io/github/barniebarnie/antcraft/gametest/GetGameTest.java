@@ -16,6 +16,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code lib/get.py} (#508): the resolver gets anything by the cheapest of carried, chests, crafting and SOURCES, and
@@ -23,6 +25,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
  */
 public class GetGameTest implements CustomTestMethodInvoker {
 	private static final BlockPos CHEST = new BlockPos(6, 1, 3);
+	private static final Logger LOGGER = LoggerFactory.getLogger("antcraft");
 
 	@Override
 	public void invokeTestMethod(GameTestHelper helper, Method method) throws ReflectiveOperationException {
@@ -51,6 +54,79 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], [(s.item, s.count) for s in inventory()] == before)
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "True 1", "True True"));
+	}
+
+	/**
+	 * A wooden pickaxe carried, no station near (#635): the stations of 64 iron ingots are a table mined back by hand
+	 * (hardness 2.5: 75 ticks) and a furnace with the pickaxe (3.5: 53); of 65, smelt_here puts a furnace down for each
+	 * of two stacks.
+	 */
+	@GameTest(maxTicks = 20)
+	public void stationsBreakAsTheirHardnessAndAFurnaceAStack(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		run(helper, bot, """
+			import lib.get
+			import lib.craft
+			print(lib.get.stations(lib.craft.plan("iron_ingot", 64)), lib.get.stations(lib.craft.plan("iron_ingot", 65)))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "128 181"));
+	}
+
+	/**
+	 * A stone pickaxe carried by a tree, coal ore and three iron ore (#635): make_cost of an iron axe is within a factor
+	 * {@link #COST_FACTOR} of the ticks get then takes to make it, logs, cobblestone, smelting, table and furnace and all.
+	 * Measured: make_cost 1237, get 1333 ticks.
+	 */
+	@GameTest(maxTicks = 2700)
+	public void makeCostOfAnIronAxeIsCloseToItsTicks(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		helper.setBlock(1, 1, 3, Blocks.COAL_ORE);
+		for (int z = 4; z <= 6; z++) {
+			helper.setBlock(1, 1, z, Blocks.IRON_ORE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			import lib.get
+			print(lib.get.make_cost("iron_axe", 1))
+			r = lib.get.get("iron_axe")
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/** How far make_cost may be from the ticks get takes, either way. */
+	private static final double COST_FACTOR = 1.5;
+
+	/**
+	 * Succeeds where the bot printed an estimate and then True, and the ticks from the first print to the second are
+	 * within COST_FACTOR of that estimate; fails at once where they cannot be any more, or the bot printed anything else.
+	 */
+	private static void measured(GameTestHelper helper, AntBot bot) {
+		long[] start = {-1};
+		boolean[] close = {false};
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (log.isEmpty() || close[0]) {
+				return;
+			}
+			if (start[0] < 0) {
+				start[0] = helper.getTick();
+			}
+			double cost = Double.parseDouble(log.get(0));
+			long ticks = helper.getTick() - start[0];
+			String measured = "make_cost " + log.get(0) + ", measured " + ticks + " ticks";
+			if (log.size() > 1 && !log.subList(1, log.size()).equals(List.of("True"))) {
+				helper.fail("printed " + log + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
+			} else if (cost * COST_FACTOR < ticks || log.size() > 1 && cost > ticks * COST_FACTOR) {
+				helper.fail(measured + ", more than a factor " + COST_FACTOR + " apart");
+			} else if (log.size() > 1) {
+				LOGGER.info(measured);
+				close[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(close[0], "get has not finished"));
 	}
 
 	/**
