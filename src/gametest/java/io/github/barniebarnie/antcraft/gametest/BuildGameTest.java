@@ -84,6 +84,43 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A blueprint of cobblestone, oak stairs (no logs anywhere, so its get fails) and dirt on top, both blocks in a
+	 * chest: build_here gets only what comes before the stairs, never the dirt it could not place this round (#599),
+	 * builds the cobblestone and fails with the stairs and the dirt in missing.
+	 */
+	// Measured: passes at tick 19.
+	@GameTest(maxTicks = 40)
+	public void itemsAfterTheFirstItemItCannotGetAreNotGot(GameTestHelper helper) {
+		BlockPos at = new BlockPos(1, 1, 6);
+		helper.setBlock(at, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.COBBLESTONE, 1));
+		chest.setItem(1, new ItemStack(Items.DIRT, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		String name = BotScripts.libraryScript(helper, "build_", """
+			import lib.get
+			import lib.build
+			real = lib.get.get
+			got = []
+			def recorded(item, n, radius):
+			    got.append(item)
+			    return real(item, n, radius)
+			lib.get.get = recorded
+			r = lib.build.build_here("antcraft-gametest:capped_step", %s, radius=8)
+			print(r["ok"], r["reason"], r["missing"], "minecraft:cobblestone" in got, "minecraft:dirt" in got)
+			""".formatted(at(helper, 4, 1, 3)));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + name);
+		failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
+				"False no_logs {'minecraft:oak_stairs': 1, 'minecraft:dirt': 1} True False"),
+				"printed");
+			helper.assertBlockPresent(Blocks.COBBLESTONE, 4, 1, 3);
+			helper.assertTrue(chest.countItem(Items.DIRT) == 1, "dirt in the chest " + chest.countItem(Items.DIRT));
+		});
+	}
+
 	/** A blueprint id the server does not know: build_here fails at once with no_blueprint, at at, nothing missing. */
 	// Measured: passes at tick 2.
 	@GameTest(maxTicks = 20)

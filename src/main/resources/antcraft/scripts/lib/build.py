@@ -27,8 +27,8 @@ def short(left):
 
 
 def build_here(id, at, turn=0, mirror=False, radius=32):
-    """Gets each item the site lacks with lib.get within radius, in the blueprint's order, then builds what it has, and
-    again while each round leaves less missing. Gives result(): ok once it stands; no_blueprint; the reason of the
+    """Gets each item the site lacks with lib.get within radius, in the blueprint's order up to the first it cannot get,
+    then builds what it has, and again while each round leaves less missing. Gives result(): ok once it stands; no_blueprint; the reason of the
     build, of the first get that failed (after building what it got), or no_progress, at at, with missing what the bot
     lacks to finish. Gives back what it borrowed during the call (lib.borrow.give_back), also on a failure."""
     since = len(lib.borrow.borrowed())
@@ -54,10 +54,14 @@ def rounds(id, at, turn, mirror, radius):
             return result("no_progress", at)
         before = sum(left.values())
         failed = None
+        # missing is in build order (by an item's first step), and build stops at the first step it lacks a block for,
+        # so what comes after the first item it cannot get waits for a later call (#599).
+        # ponytail: an item used before and after that step is got in full; count it per step if that ever matters.
         for item, n in left.items():
             r = get(item, n, radius)
-            if not r["ok"] and failed is None:
+            if not r["ok"]:
                 failed = r["reason"]
+                break
         # Builds what it has also when a get failed: build goes on to the first step it lacks a block for (#585).
         b = build(id, at, turn, mirror)
         if b:
