@@ -172,19 +172,29 @@ def build_cell(kind, low, high):
 
 
 def standing(kind, low, high):
-    """The lowest log of the cell's tree still standing: the first log up the column over a sapling spot, up to clear
-    blocks over the floor, so also one a failed harvest left over the sapling (#644); None where there is none."""
-    # ponytail: the trunk columns only; a branch an acacia or cherry harvest left off them is not seen.
-    for p in spots(kind, low, high):
-        for y in range(spec(kind)["clear"]):
-            if lib.trees.is_log(p.up(y)):
-                return p.up(y)
-    return None
+    """The lowest log of the cell's tree still standing, in its tree space, the cell up to clear blocks over the floor:
+    the lowest up a column over a sapling spot, so also one a failed harvest left over the sapling (#644), else the
+    lowest anywhere in it, such as a branch an acacia or cherry harvest left off the trunk (#651); None where there is
+    none."""
+    low = Pos(low)
+    high = Pos(high)
+    a = Pos(low.x, low.y + 1, low.z)
+    b = Pos(high.x, low.y + spec(kind)["clear"], high.z)
+    c = lib.area.centre(a, b)
+    # One scan of the sphere round the tree space, its corners in, some 20,000 blocks read for a giant's (a block()
+    # read of each would cost 30 instructions, the scan 1 per 8 blocks).
+    r = int(max([(p.x - c.x) ** 2 + (p.y - c.y) ** 2 + (p.z - c.z) ** 2 for p in [a, b]]) ** 0.5) + 1
+    logs = [p for p in scan(lib.trees.LOGS, radius=min(r, 32), limit=1024, around=c) if lib.area.inside(p, a, b)]
+    if not logs:
+        return None
+    columns = [(p.x, p.z) for p in spots(kind, low, high)]
+    trunk = [p for p in logs if (p.x, p.z) in columns]
+    return min(trunk or logs, key=lambda p: p.y)
 
 
 def grown(kind, low, high):
-    """Whether the cell has a tree to fell: a log at its sapling spot, or one a failed harvest left over it, which stops
-    the sapling growing (standing)."""
+    """Whether the cell has a tree to fell: a log in its tree space (standing), at its sapling spot or one a failed
+    harvest left, over it, which stops the sapling growing, or off it."""
     return standing(kind, low, high) is not None
 
 

@@ -150,6 +150,75 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Where the next cell's materials cannot be got, the farm does not run get every round, which can be a long chain
+	 * (#651): it tries again after BACKOFF rounds, or at once after a felling, whose logs it may make them of. Here
+	 * gets fails, and a tree "grows" once, after the first wait: gets runs in the first round and in the felling's,
+	 * not in the waits' rounds after. The farm is lib.cells's functions swapped for one cell, with no lib.cells.layout:
+	 * a module attribute assigned is what the job's functions see (docs/language/modules.md).
+	 */
+	// Measured: passes at tick 5.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void aFarmThatCannotGetAMaterialBacksOff(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			calls = [0]
+			waits = [0]
+			tree = [False]
+			def failing(item, n, radius):
+			    calls[0] += 1
+			    return lib.result.result("no_item", None, {item: n})
+			def counted(ticks):
+			    waits[0] += 1
+			    tree[0] = waits[0] == 1
+			    if waits[0] == 3:
+			        print("gets", calls[0])
+			        stop()
+			def reaped(k, b, radius, told):
+			    tree[0] = False
+			    return lib.result.result()
+			jobs.wood_farm.gets = failing
+			jobs.wood_farm.wait = counted
+			jobs.wood_farm.reap = reaped
+			lib.treefarm.grown = lambda k, low, high: tree[0]
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("next cell: no_item, lacks {'minecraft:dirt': 1}", "gets 2"),
+			"said"));
+	}
+
+	/**
+	 * A branch log a harvest left off the trunk column, such as an acacia's or a cherry's, is seen in the cell's tree
+	 * space and felled (#651): grown looked only over the sapling spots.
+	 */
+	// Measured: passes at tick 112.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 200)
+	public void aLeftoverBranchOffTheTrunkIsFelled(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		BlockPos branch = new BlockPos(7, 3, 3);
+		helper.setBlock(branch, Blocks.BIRCH_LOG);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		script(helper, bot, "import lib.treefarm\ng = lib.treefarm.grown(kind, cell[0], cell[1])\nr = jobs.wood_farm.reap(kind, cell, 12, {})\n"
+			+ "print(g, r['ok'], lib.treefarm.grown(kind, cell[0], cell[1]), block(spot).id)\n");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("True True False minecraft:birch_sapling"), "printed");
+			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, branch);
+		});
+	}
+
+	/**
 	 * On the area's stone floor, with no pickaxe in the kit or the chest, the farm builds its first cell (#612): the stone
 	 * under the sapling spot gives way to dirt, mined with a pickaxe it makes of the logs it carries.
 	 */

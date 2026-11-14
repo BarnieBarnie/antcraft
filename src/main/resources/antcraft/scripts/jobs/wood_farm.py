@@ -38,6 +38,9 @@ HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecr
            "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
            "giant_spruce": 5600, "giant_jungle": 6500}
 WAIT = 100  # ticks between looks at the farm while nothing has grown
+# Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
+# be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
+BACKOFF = 10
 KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
               "sticks": ["minecraft:stick"]}
@@ -190,9 +193,11 @@ def farm(kind, name, size, radius):
     """Farms forever: each round fells every grown tree (reap, so logs a failed felling left are felled again), stores
     what it fell, tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
-    lacks), and where it felled nothing picks up the drops in the farm (sweep) and waits."""
+    lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
+    where it felled nothing picks up the drops in the farm (sweep) and waits."""
     full = False
     told = {}
+    backoff = 0  # rounds until stocked is tried again
     while True:
         own()
         boxes = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
@@ -211,12 +216,17 @@ def farm(kind, name, size, radius):
             get(s, n, radius)
         for b in boxes:
             tend(kind, b)
-        if lib.cells.count(name) < size:
+        if felled:
+            backoff = 0
+        if lib.cells.count(name) < size and backoff:
+            backoff -= 1
+        elif lib.cells.count(name) < size:
             r = stocked(kind, radius)
             if r["ok"]:
                 build(kind, name, size, radius)
             else:
                 tell(told, f"next cell: {r['reason']}, lacks {r['missing']}")
+                backoff = BACKOFF
         elif not full:
             say("farm full")
             full = True

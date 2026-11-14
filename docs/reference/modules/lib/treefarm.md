@@ -79,11 +79,11 @@ Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over 
 
 ## `grown(kind, low, high)`
 
-Whether the cell has a tree to fell: a log at its sapling spot, or one a failed `harvest` left in the column over a sapling spot, up to `clear` blocks over the floor, as a sapling under it never grows. Logs a failed harvest left off those columns, such as an acacia's or cherry's branch, it does not see. Done at once.
+Whether the cell has a tree to fell: a log in its tree space, the cell up to `clear` blocks over the floor, read with one [`scan`](../../world/scan.md) round it: at its sapling spot, one a failed `harvest` left in the column over a sapling spot, as a sapling under it never grows, or one off those columns, such as an acacia's or cherry's branch. Done at once, or over a few ticks where the server's block search budget runs short.
 
 ## `harvest(kind, low, high, radius=32)`
 
-Fells the cell's tree whole from the lowest log `grown` sees and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). Where `fell_whole` left sapling spots empty for want of saplings, such as a 2x2 kind with fewer than four on the bot, it gets the rest within `radius` with [`lib.get`](get.md) and plants them; where it cannot, the spots stay empty for the wood farm's tending. The [wood farm](../../../cookbook/wood-farm.md) runs on it.
+Fells the cell's tree whole from the lowest log `grown` sees, the lowest over a sapling spot first, and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). Where `fell_whole` left sapling spots empty for want of saplings, such as a 2x2 kind with fewer than four on the bot, it gets the rest within `radius` with [`lib.get`](get.md) and plants them; where it cannot, the spots stay empty for the wood farm's tending. The [wood farm](../../../cookbook/wood-farm.md) runs on it.
 
 - **Returns** `fell_whole`'s [`result()`](result.md): ok (also where no log stands), or `out_of_reach` or `no_space` with `at`, the log it left, which `grown` still sees, so the next harvest fells it.
 - **Pauses** yes.
