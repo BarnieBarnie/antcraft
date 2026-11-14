@@ -453,6 +453,33 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			});
 	}
 
+	/**
+	 * take_back goes on while a round takes a block back (#637): placed_scaffold(), stood in for, gives one dirt block a
+	 * round, as walks that each place one more would, six rounds in all; every one is taken back, not the first four. Then
+	 * a round that takes nothing back (a spot left air every round) ends it. Passes at about tick 110.
+	 */
+	@GameTest(maxTicks = 220)
+	public void takeBackGoesOnWhileARoundTakesABlockBack(GameTestHelper helper) {
+		StringBuilder spots = new StringBuilder();
+		for (int x = 1; x <= 6; x++) {
+			helper.setBlock(x, 1, 5, Blocks.DIRT);
+			spots.append("Pos").append(at(helper, x, 1, 5)).append(", ");
+		}
+		helper.setBlock(4, 3, 4, Blocks.AIR);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 2);
+		expect(helper, bot, "import lib.trees\nspots = [" + spots + "]\ncalls = [0]\n"
+			+ "def one():\n    calls[0] += 1\n    return spots[calls[0] - 1:calls[0]]\n"
+			+ "lib.trees.placed_scaffold = one\nlib.trees.take_back()\nprint(count('dirt'), calls[0])\n"
+			+ "calls[0] = 0\n"
+			+ "def air():\n    calls[0] += 1\n    return [Pos" + at(helper, 4, 3, 4) + "]\n"
+			+ "lib.trees.placed_scaffold = air\nlib.trees.take_back()\nprint(calls[0])\n",
+			List.of("6 7", "1"), () -> {
+				for (int x = 1; x <= 6; x++) {
+					helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(x, 1, 5));
+				}
+			});
+	}
+
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
 	static void assertGiantFelled(GameTestHelper helper) {
 		assertGiantFelled(helper, null);

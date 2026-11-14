@@ -338,17 +338,23 @@ def stands(blocks):
 def take_back():
     """Mines the scaffold the script's walks placed since it last asked placed_scaffold(), the highest first: only blocks
     unchanged since, so one someone else mined or put there meanwhile stays. Then what its walks to those blocks placed,
-    up to four rounds (#614). A block mine could not reach, once the blocks it was reached from were gone, stays for the
-    next round, from what that round's walks placed (#628)."""
+    round after round while a round takes some block back, at most 32 (#614, #637). A block mine could not reach, once the blocks it
+    was reached from were gone, stays for the next round, from what that round's walks placed (#628)."""
     out = {}
-    for _ in range(4):
+    took = True
+    rounds = 0
+    # ponytail: a backstop, should each round's walks place a block as it mines one; raise it if a real tree needs more.
+    while took and rounds < 32:
+        rounds += 1
         placed = placed_scaffold() + [q for q in out if block(q).id == out[q]]
-        if not placed:
-            return
         out = {}
+        took = False
         for q in sorted(placed, key=lambda q: -q.y):
             was = block(q).id
-            if mine(q).reason == "out_of_reach":
+            r = mine(q)
+            if r:
+                took = True
+            if r.reason == "out_of_reach":
                 out[q] = was
 
 
