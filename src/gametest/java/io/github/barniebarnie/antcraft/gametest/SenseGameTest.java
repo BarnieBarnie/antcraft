@@ -362,14 +362,25 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	/**
 	 * structures(radius) lists the structure starts whose box is within radius of the bot (#567): a plains village start
 	 * put in the area's chunks, its box from (5, 1, 5) to (7, 3, 7), some 5.7 blocks from the bot at (1, 1, 1), is not
-	 * within 4 but is within 16. The start is taken out again once the script is done.
+	 * within 4 but is within 16. The start is taken out again when the test ends.
 	 */
 	@GameTest(maxTicks = 10)
 	public void structuresListsTheStartsWithinRadius(GameTestHelper helper) {
+		village(helper, new BlockPos(5, 1, 5), new BlockPos(7, 3, 7));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ScriptRun run = run(helper, bot, "s = structures(16)\nprint(len(structures(4)), len(s))\n"
+			+ "print(s[0]['id'], s[0]['at'], s[0]['low'], s[0]['high'])\n");
+		succeedWhenPrinted(helper, bot, run, List.of("0 1",
+			"minecraft:village_plains " + printed(helper, 6, 2, 6) + " " + printed(helper, 5, 1, 5) + " " + printed(helper, 7, 3, 7)));
+	}
+
+	/**
+	 * Puts a plains village start with one piece from {@code low} to {@code high} (in the area) in the area's chunks, with
+	 * the references the chunks it reaches keep to it, as world generation would; takes it out again when the test ends.
+	 */
+	static void village(GameTestHelper helper, BlockPos low, BlockPos high) {
 		ServerLevel level = helper.getLevel();
-		BlockPos low = helper.absolutePos(new BlockPos(5, 1, 5));
-		BlockPos high = helper.absolutePos(new BlockPos(7, 3, 7));
-		BoundingBox box = BoundingBox.fromCorners(low, high);
+		BoundingBox box = BoundingBox.fromCorners(helper.absolutePos(low), helper.absolutePos(high));
 		Structure village = level.registryAccess().lookupOrThrow(Registries.STRUCTURE).getValueOrThrow(BuiltinStructures.VILLAGE_PLAINS);
 		StructurePiece piece = new StructurePiece(StructurePieceType.JIGSAW, 0, box) {
 			@Override
@@ -381,23 +392,15 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 				BoundingBox chunkBox, ChunkPos chunk, BlockPos pivot) {
 			}
 		};
-		ChunkPos start = ChunkPos.containing(low);
+		ChunkPos start = ChunkPos.containing(helper.absolutePos(low));
 		level.getChunk(start.x(), start.z()).setStartForStructure(village, new StructureStart(village, start, 0, new PiecesContainer(List.of(piece))));
 		box.intersectingChunks().forEach(chunk -> level.getChunk(chunk.x(), chunk.z()).addReferenceForStructure(village, start.pack()));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
-		ScriptRun run = run(helper, bot, "s = structures(16)\nprint(len(structures(4)), len(s))\n"
-			+ "print(s[0]['id'], s[0]['at'], s[0]['low'], s[0]['high'])\n");
-		helper.succeedWhen(() -> {
-			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+		GameTests.onEnd(helper, () -> {
 			LevelChunk startChunk = level.getChunk(start.x(), start.z());
 			Map<Structure, StructureStart> starts = new HashMap<>(startChunk.getAllStarts());
 			starts.remove(village);
 			startChunk.setAllStarts(starts);
 			box.intersectingChunks().forEach(chunk -> level.getChunk(chunk.x(), chunk.z()).getReferencesForStructure(village).remove(start.pack()));
-			List<String> expected = List.of("0 1",
-				"minecraft:village_plains " + printed(helper, 6, 2, 6) + " " + printed(helper, 5, 1, 5) + " " + printed(helper, 7, 3, 7));
-			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
-			helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
 		});
 	}
 

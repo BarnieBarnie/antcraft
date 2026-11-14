@@ -179,6 +179,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None, ore=None)`, `DEEP`, `wood_for_coal(k, radius)`, `key(item)`, the resolver.
 - [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32)`, the things a job starts with.
 - [`lib/project`](modules/lib/project.md): `Step(name, do, args=(), tries=1, optional=False)`, `run(name, steps)`, `status(name)`, `reset(name)`, a list of steps that resumes where it stopped.
+- [`lib/explore`](modules/lib/explore.md): `spiral(centre, step=32, rings=4)`, `look(radius=64, around=16)`, `explore(rings=4, step=32, until=None)`, `seen(what)`, `report()`, the biomes and structures a bot has seen, kept in `memory["seen"]`.
 - [`colony/common`](modules/colony/common.md): `core()`, `in_colony(p)`, `store(item)`, shared by the [default colony scripts](../features/colony-scripts.md).
 
 Kept for old scripts, each now a wrapper of the library function after it; new scripts call that one:

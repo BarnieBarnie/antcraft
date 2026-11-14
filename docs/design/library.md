@@ -22,10 +22,10 @@ The library is written the Unix way: small functions that each do one thing well
 ## Layers
 
 ```text
- jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py   run with bot run jobs.<job> [args]
+ jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py   run with bot run jobs.<job> [args]
  kits         lib/bootstrap  lib/gather  lib/project                                   a set of things a job starts with; make and gather over get; resumable steps
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
- skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine     one skill each, preconditions assumed
+ skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore     one skill each, preconditions assumed
  primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/retry  lib/home             no ticks, or a single action
  builtins     goto, mine, place, craft, scan, ore_vein, needs, ...                                  the API (Java)
 ```
@@ -49,6 +49,7 @@ New modules are marked *new*; the others exist and grow.
 - `lib/craft`: `plan`, `craft_all`, `craft_here`, `smelt_here` stay; `obtain` and `ensure_tool` stay as they are, taking from chests only (borrowed): a skill cannot import the resolver above it, so a script that wants gathering and a tier by cost calls `lib.get`.
 - `lib/trees`: adds `tree_blocks(base)`, the logs of one tree, found by a flood from its base through logs of its kind (diagonal steps too, for acacia and jungle branches, a cap of 512 blocks); `is_giant(base)` for a 2x2 trunk; `stands(blocks)`, the fewest standing spots within reach of every log, greedily, preferring spots on the tree's own logs so the bot places few blocks; `fell_whole(base)`, which works the stands from the top down so each stand is on logs not yet mined, and takes its scaffold back. `logs(n)` uses `fell_whole` for a tree it needs all of.
 - `lib/dig` *new*, getting things out of the ground: `stone(n)` (from `lib/gather`), `ore(item, n)` (an exposed ore vein within radius by `find.exposed` and `ore_vein`, else `branch` at `best_y(item)`), `best_y(item)` (iron 16, coal 96, copper 48, gold -16, redstone and diamond -59, lapis 0), `stairs_to(y)` and `stairs_up()`, a 1-wide staircase that never digs straight down (`stairs_up` digs one up to the surface where none is remembered), `branch(length, every=8)` a 1x2 tunnel with a torch every 8 blocks, mining each ore vein it uncovers. `lib/shaft` and `lib/mine` stay for the laddered colony mine.
+- `lib/explore` (#568): `spiral(centre, step, rings)` the waypoints of a square spiral, `look()` records `biome` and `structures` in `memory["seen"]` (one position per biome per chunk, one per structure), `explore(rings, step, until)` walks the spiral looking until `until(seen)`, `seen(what)` and `report()`.
 - Existing: `lib/inv`, `lib/shaft`, `lib/mine`.
 
 ### The resolver: `lib/get`
@@ -81,11 +82,12 @@ What the library needs from the API:
 
 ## Example jobs
 
-Four jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each ends with `borrow.give_back()`, also when it fails.
+Five jobs in `jobs/`, each a few lines over the library, each with a game test. A job runs by its dotted name, such as `/antcraft bot run jobs.get iron_pickaxe`. Each that borrows ends with `borrow.give_back()`, also when it fails.
 
 1. **`jobs/bootstrap.py`**: an empty-handed bot gets `lib.bootstrap.KIT` from what is around: logs, a crafting table, a wooden pickaxe, cobblestone, the stone tools, a furnace, charcoal and torches; tools in a nearby chest are borrowed instead of made. Test: an empty bot by trees and stone; again with an iron pickaxe in a chest, which it uses and gives back.
 2. **`jobs/get.py <item> [n]`**: `get(ARGS[0], n)`, the resolver alone. Test: `iron_pickaxe` from nothing, with trees, stone and iron ore in the area.
 3. **`jobs/giant_tree.py [x y z]`**: finds the nearest giant tree (2x2 jungle, spruce or dark oak) to a position, `tree_blocks`, `ensure_tool("axe", len(logs))`, `fell_whole`, replants four saplings. Test: a short 2x2 tree built in the area; all logs taken, no scaffold left, fewer than a set number of blocks placed.
 4. **`jobs/strip_mine.py <ore> [n] [y] [radius] [facing]`**: `kit(MINER)`, `stairs_to(best_y(ore))`, `branch` until it carries `n`, keeping a pickaxe through `ensure_tool` (a new stone one from the cobblestone it dug), then `stairs_up()` and home. Test: seeded ore at a set depth.
+5. **`jobs/explore.py [what] [rings] [step]`**: `lib.explore.explore` until `seen(what)`, then home and `report()`. Tests: a village put in the area, found by `explore` with 2-block steps; the job walking a whole spiral of them for what is not there.
 
 A test area is 8x8x8 blocks: tests build small trees and seed ore close, and set `best_y` through an argument rather than dig to y=16.

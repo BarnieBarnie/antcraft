@@ -94,6 +94,8 @@ class DefaultScriptsTest {
 		assertTrue(bundled.containsKey("jobs/bootstrap.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("jobs/get.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("jobs/strip_mine.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("lib/explore.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("jobs/explore.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 
