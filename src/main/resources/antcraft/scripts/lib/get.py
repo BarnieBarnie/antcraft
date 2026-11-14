@@ -48,10 +48,12 @@ class Source:
     kind tool held (None: no tool) of at least tier ("hand": the bare hand drops it too, so a tool is made only where it
     pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for cost, and y
     the height it digs down to for it (lib.dig.best_y; None: DEEP); near the block or tag do gets it from, where none
-    within radius means there is nothing to get (None: not known)."""
+    within radius means there is nothing to get (None: not known), and keep(p) whether do would take the one at p (None:
+    any, as the leaves sources take no persistent leaves, #649)."""
 
-    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None):
+    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None, keep=None):
         self.do = do
+        self.keep = keep
         self.y = y
         self.tool = tool
         self.tier = tier
@@ -60,9 +62,10 @@ class Source:
         self.near = near
 
     def there(self, radius):
-        """Whether do may find something within radius: False where near is set and none of it is (#554), so get gives
-        up at once instead of costing the tools to gather nothing with. make_cost still costs it, as if there were some."""
-        return self.near is None or lib.find.nearest(self.near, radius) is not None
+        """Whether do may find something within radius: False where near is set and none of it that keep allows is
+        (#554), so get gives up at once instead of costing the tools to gather nothing with. make_cost of the raw item
+        itself is None then (#649); as a raw item of a plan it still costs it, as if there were some."""
+        return self.near is None or lib.find.nearest(self.near, radius, self.keep) is not None
 
     def cost(self, n, radius):
         """(ticks, tier) to get n: estimate each, and deep(y) once more where none of ore is exposed within radius (one
@@ -149,7 +152,7 @@ for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapli
                              ("poplar_sapling", ["orange_poplar_leaves", "red_poplar_leaves", "yellow_poplar_leaves"], 20),
                              ("apple", ["oak_leaves", "dark_oak_leaves"], 200)]:
     SOURCES["minecraft:" + item] = Source(breaking("minecraft:" + item, leaves, "no_tree", True, grown),
-                                          estimate=LEAF * chance, near=leaves)
+                                          estimate=LEAF * chance, near=leaves, keep=grown)
 
 
 def key(item):
@@ -302,7 +305,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     radius that holds some, for as much as the chests hold, the rest from its source or from logs as charcoal where that
     is cheaper), SMELT for each item smelted, the walk to or the mining back of its crafting table and furnace (stations),
     and for each kind of tool their sources need the tool_cost of the highest
-    tier any needs; None where a raw item has no source, or it or that tool is being got or costed. tools holds the tool
+    tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
+    raw and its source has none of it within radius (Source.there), as get then fails at once. tools holds the tool
     costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
     limit, None as soon as the cost is sure to be over it: a source costs at least its estimate each, so the ore scans
     and tool costs of a dear one are left out (#582)."""
@@ -321,7 +325,9 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if k <= 0:
                 continue
             s = SOURCES.get(key(raw))
-            if s is None or key(raw) in GETTING:
+            # The item itself is in GETTING as this call costs it (#649): a raw item plans as gathering itself.
+            itself = key(raw) == key(item)
+            if s is None or not itself and key(raw) in GETTING or itself and not s.there(radius):
                 return None
             # Coal may come from a chest or as charcoal for less than its estimate.
             if limit is not None and ticks + (0 if key(raw) == COAL else s.estimate * k) > limit:

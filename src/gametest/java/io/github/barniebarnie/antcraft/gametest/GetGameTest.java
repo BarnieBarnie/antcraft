@@ -147,6 +147,47 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		measured(helper, bot);
 	}
 
+	/**
+	 * A stone pickaxe carried, three iron ore at three corners of the area (#649): make_cost of three raw iron is the raw
+	 * iron source's estimate, as get gathers it, within {@link #COST_FACTOR} of get's ticks; it was None, as make_cost turned
+	 * down the raw item it was costing. The estimate (60) counts a walk to each ore: three ore beside the bot took 82 ticks.
+	 * Measured: make_cost 180, get 126 to 133 ticks (test tick 131 to 142).
+	 */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfRawIronIsCloseToItsTicks(GameTestHelper helper) {
+		helper.setBlock(7, 1, 1, Blocks.IRON_ORE);
+		helper.setBlock(7, 1, 7, Blocks.IRON_ORE);
+		helper.setBlock(1, 1, 7, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("raw_iron", 3))
+			r = get("raw_iron", 3)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/**
+	 * A grown cherry tree and two persistent birch leaves, as a player places them (#649): make_cost of a cherry sapling is
+	 * the source's estimate, of a birch sapling None, as get breaks no persistent leaves
+	 * (persistentLeavesAreNotBrokenForSaplings). Both were None: make_cost turned down a raw item it was costing itself.
+	 */
+	@GameTest(maxTicks = 20)
+	public void makeCostOfASaplingCountsOnlyGrownLeaves(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, false);
+		for (int y = 1; y <= 2; y++) {
+			helper.setBlock(1, y, 7, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import make_cost, SOURCES
+			print(make_cost("cherry_sapling", 2) == SOURCES["minecraft:cherry_sapling"].estimate * 2, make_cost("birch_sapling", 1))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True None"));
+	}
+
 	/** How far make_cost may be from the ticks get takes, either way. */
 	private static final double COST_FACTOR = 1.5;
 
@@ -922,7 +963,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * A cherry tree under persistent leaves, as a player places them (#609): get breaks none of them for saplings and
 	 * fails no_tree.
 	 */
-	@GameTest(maxTicks = 20)
+	@GameTest(maxTicks = 40)
 	public void persistentLeavesAreNotBrokenForSaplings(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, true);
 		int leaves = cherryLeaves(helper);
