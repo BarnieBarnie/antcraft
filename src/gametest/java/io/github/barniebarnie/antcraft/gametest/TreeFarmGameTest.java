@@ -23,13 +23,15 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
 
 /**
  * {@code lib/treefarm.py} (#605): tree cells per sapling kind, built, grown, harvested and replanted. In the 24x16x24
- * {@code wide_tall} structure: a cell clears 8 to 14 blocks over its floor, more than the 8 high of {@code wide}.
+ * {@code wide_tall} structure: a cell clears 8 to 14 blocks over its floor, more than the 8 high of {@code wide}; the giant
+ * kinds clear 31 and 33, in the 24x40x24 {@code giant} structure.
  */
 public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -268,6 +270,137 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 4, 4);
 			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 5, 4);
 			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 4, 1, 4);
+		});
+	}
+
+	/**
+	 * A giant spruce cell of 10x10 from (2, 0, 2) (#650): a kind of its own, though it grows from spruce saplings, four
+	 * of them in its middle; grown as the game does, MEGA_SPRUCE or MEGA_PINE, its 2x2 trunk of up to 29 stays inside.
+	 */
+	// Measured: passes at tick 328 to 329.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 700)
+	public void aGiantSpruceCellOfFourSaplingsGrowsInside(GameTestHelper helper) {
+		growsAGiant(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_LOG,
+			"{'minecraft:dirt': 4, 'minecraft:spruce_sapling': 4, 'minecraft:torch': 2}");
+	}
+
+	/**
+	 * A giant jungle cell of 10x10 from (2, 0, 2) (#650): four jungle saplings grow MEGA_JUNGLE_TREE, whose branches,
+	 * up to 4 out of its 2x2 trunk, stay inside.
+	 */
+	// Measured: passes at tick 334 to 336.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 700)
+	public void aGiantJungleCellOfFourSaplingsGrowsInside(GameTestHelper helper) {
+		growsAGiant(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_LOG,
+			"{'minecraft:dirt': 4, 'minecraft:jungle_sapling': 4, 'minecraft:torch': 2}");
+	}
+
+	/**
+	 * A poplar cell of 7x7 from (2, 0, 2) (#650): built, grown as the game does (red, orange or yellow poplar), its logs,
+	 * up to 3 out of the trunk, inside the cell; felled whole and replanted.
+	 */
+	// Measured: passes at tick 652 to 2278 (some poplars take long to fell).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4600)
+	public void aPoplarCellIsGrownHarvestedAndReplanted(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 14, 1, 14);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 16),
+			new ItemStack(Items.POPLAR_SAPLING, 2), new ItemStack(Items.TORCH, 2));
+		BlockPos spot = new BlockPos(5, 1, 5);
+		start(helper, bot, "poplar_sapling", new BlockPos(2, 0, 2), new BlockPos(8, 0, 8), """
+			print(lib.treefarm.materials(kind))
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"])
+			while not lib.treefarm.grown(kind, low, high):
+			    wait(5)
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		boolean[] inside = {true};
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.POPLAR_LOG, at -> advance(helper, at));
+		helper.onEachTick(() -> {
+			if (!grew[0] || !inside[0]) {
+				return;
+			}
+			for (int x = 0; x < 24; x++) {
+				for (int y = 1; y < 16; y++) {
+					for (int z = 0; z < 24; z++) {
+						if ((x < 2 || x > 8 || z < 2 || z > 8) && helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.POPLAR_LOG)) {
+							inside[0] = false;
+						}
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
+				"{'minecraft:dirt': 1, 'minecraft:poplar_sapling': 1, 'minecraft:torch': 2}", "True None", "True None"), "printed");
+			helper.assertTrue(grew[0], "the poplar never grew");
+			helper.assertTrue(inside[0], "a poplar log grew outside the cell");
+			assertFelled(helper, bot, Blocks.POPLAR_LOG, Items.POPLAR_LOG);
+			helper.assertBlockPresent(Blocks.POPLAR_SAPLING, spot);
+		});
+	}
+
+	/**
+	 * A giant spruce cell from (2, 0, 2) whose 2x2 trunk the bot fells carrying 2 saplings (#650): harvest gets the 2
+	 * more from the chest and replants all four spots.
+	 */
+	// Measured: passes at tick 326 to 328.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 700)
+	public void aSquareCellHarvestedWithTwoSaplingsIsFullyReplanted(GameTestHelper helper) {
+		List<BlockPos> spots = List.of(new BlockPos(6, 1, 6), new BlockPos(7, 1, 6), new BlockPos(6, 1, 7), new BlockPos(7, 1, 7));
+		for (BlockPos p : spots) {
+			helper.setBlock(p.below(), Blocks.DIRT);
+			for (int y = 0; y < 3; y++) {
+				helper.setBlock(p.above(y), Blocks.SPRUCE_LOG);
+			}
+		}
+		helper.setBlock(14, 1, 4, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(14, 1, 4), ChestBlockEntity.class).setItem(0, new ItemStack(Items.SPRUCE_SAPLING, 2));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 12);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 8), new ItemStack(Items.SPRUCE_SAPLING, 2));
+		start(helper, bot, "giant_spruce", new BlockPos(2, 0, 2), new BlockPos(11, 0, 11), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None"), "printed");
+			for (BlockPos p : spots) {
+				helper.assertBlockPresent(Blocks.SPRUCE_SAPLING, p);
+			}
+		});
+	}
+
+	/**
+	 * Builds the 10x10 cell of the giant kind from (2, 0, 2) with the bot given its four saplings, prints materials,
+	 * grows the tree once built and checks its 2x2 trunk stands on the spots and no log of it is outside the cell.
+	 */
+	private void growsAGiant(GameTestHelper helper, String kind, Item sapling, Block log, String materials) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT, 4), new ItemStack(sapling, 4),
+			new ItemStack(Items.TORCH, 2));
+		BlockPos spot = new BlockPos(6, 1, 6);
+		start(helper, bot, kind, new BlockPos(2, 0, 2), new BlockPos(11, 0, 11), """
+			print(lib.treefarm.materials(kind))
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, log, at -> advance(helper, at));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(materials, "True None"), "printed");
+			helper.assertTrue(grew[0], "the giant never grew");
+			for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
+				helper.assertBlockPresent(log, p);
+			}
+			for (int x = 0; x < 24; x++) {
+				for (int y = 1; y < 40; y++) {
+					for (int z = 0; z < 24; z++) {
+						if (x < 2 || x > 11 || z < 2 || z > 11) {
+							helper.assertBlockNotPresent(log, new BlockPos(x, y, z));
+						}
+					}
+				}
+			}
 		});
 	}
 

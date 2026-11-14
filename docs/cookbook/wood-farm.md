@@ -8,7 +8,7 @@ The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms i
 /antcraft bot run jobs.wood_farm spruce_sapling 10 64 10 12 16
 ```
 
-The arguments are the sapling, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md) (oak, birch, spruce, jungle, dark oak, pale oak, acacia or cherry), the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that sapling started), the most cells it grows to (by default `most(HARVEST[kind])`, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells.
+The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar) or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most(HARVEST[kind])`, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells.
 
 The farm, from the corner `x y z` (the cells' floor is the block under it):
 
@@ -22,7 +22,7 @@ The steps, from `config/antcraft/scripts/jobs/wood_farm.py`:
 
 ```python
 steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
-         Step("sapling", get, (kind, 2 * n, radius)),
+         Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
          Step("cell", first_cell, (kind, name, size, radius)),
          Step("farm", farm, (kind, name, size, radius))]
 r = lib.project.run(name, steps)
@@ -31,10 +31,10 @@ r = lib.project.run(name, steps)
 ## How it works
 
 - **kit**: [`lib.bootstrap.kit`](../reference/modules/lib/bootstrap.md) of a stone axe and 16 dirt, to put under the saplings and to climb a tall tree with. Each comes through [`lib.get`](../reference/modules/lib/get.md): from a chest within the radius, else gathered and crafted. The farm keeps what it takes.
-- **sapling**: two saplings a spot (four spots for dark oak), one to plant and one to replant with, by `get`: from a chest, else broken out of the leaves of a tree of the kind.
+- **sapling**: two saplings a spot (four spots for dark oak, pale oak and the giants), one to plant and one to replant with, by `get`: from a chest, else broken out of the leaves of a tree of the kind.
 - **cell**: what [`lib.treefarm.materials`](../reference/modules/lib/treefarm.md) lists for a cell (dirt, the sapling, 2 torches, slabs for an oak's roof) by `get`, the tools [`lib.terrain.needs`](../reference/modules/lib/terrain.md) names for its ground and for the ground under each sapling spot that is not dirt (a pickaxe on stone, where the dirt goes) by `ensure_tool`, then `lib.treefarm.build_cell` at cell 1. The roof takes any wooden slabs the chests within the radius hold, such as birch slabs for an oak farm; those they lack it makes as oak slabs, as `get` takes an item, not a tag.
 - **farm**, round after round, for ever:
-    1. fells each grown tree with `lib.treefarm.harvest`, which replants it; where a felling leaves a log (out of reach, or no room for the drops), it says so once, such as `harvest: out_of_reach at Pos(8, 70, 4)`, gets the kit's 16 dirt to pillar with and an axe, and fells it again. A cell whose logs still stand counts as grown, so a felling that fails again is tried again next round;
+    1. fells each grown tree with `lib.treefarm.harvest`, which replants it, getting the saplings it lacks for that (a 2x2 kind takes four); where a felling leaves a log (out of reach, or no room for the drops), it says so once, such as `harvest: out_of_reach at Pos(8, 70, 4)`, gets the kit's 16 dirt to pillar with and an axe, and fells it again. A cell whose logs still stand counts as grown, so a felling that fails again is tried again next round;
     2. stores what it felled with `lib.depot.store`: logs, saplings of other kinds, sticks and apples each in their own chests, the rest in `other`; the bot keeps its saplings, dirt, torches, slabs and the crafting table it makes chests with;
     3. tends each cell: a sapling on a spot that holds none, but never under logs of the cell's tree left standing (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands breaks it with its drop, and the bot picks the torch up to put back);
     4. builds the next cell when the farm has fewer than its most and the bot has what a cell takes and a spare sapling: what it lacks it takes from the chests within the radius, else gets with `get` as for the first cell (torches crafted from coal or charcoal of its logs, dirt dug, saplings from leaves, oak slabs where the chests hold no wooden slabs). Where `get` fails, it says once what it lacks, such as `next cell: no_item, lacks {'minecraft:torch': 2}`;
@@ -61,7 +61,10 @@ A sapling grows on random ticks: each tick, the game gives one to `randomTickSpe
 | jungle | 8 | 550 | 34 |
 | acacia | 9 | 600 | 31 |
 | cherry | 13.5 | 900 | 21 |
+| poplar | 15 (measured in the game) | 1000 | 19 |
 | dark oak, pale oak | 34 | 2250 | 8 |
+| giant spruce | 84 | 5600 | 3 |
+| giant jungle | 97 | 6500 | 2 |
 
 Pass the most cells as an argument for a farm of another size.
 
@@ -79,7 +82,7 @@ The argument is how far to look, in blocks (32 by default); the farm gets the sa
 1. kinds whose saplings a chest within the radius holds (`lib.stock`), as the farm can start on them at once;
 2. then kinds of a tree within the radius, whose leaves give the saplings: `jobs.forester.trees(radius)` finds the nearest tree of each kind in one scan of the logs, with `lib.trees.next_tree`'s checks.
 
-Within each, the simplest cell comes first: a 1x1 trunk before the 2x2 of dark oak, no roof before the roof of oak, a smaller cell, then a shorter clear; ties go to the nearest. So spruce saplings in a chest beat a birch tree nearby, and among trees birch comes before jungle, spruce, oak and dark oak. It says its choice and why, such as `forester: spruce_sapling, saplings in a chest 3 blocks away`, then runs `jobs.wood_farm.run` for that kind, which farms until stopped. With no candidate it warns `no_saplings` and stops. Imported, it runs nothing: `jobs.forester.candidates(radius)` gives the ranked `(kind, why)` pairs and `jobs.forester.run(radius)` starts the farm.
+Within each, the simplest cell comes first: a 1x1 trunk before a 2x2 (dark oak, pale oak, and the giants, whose spruce or jungle saplings come second to the one-sapling kind of the same saplings), no roof before the roof of oak, a smaller cell, then a shorter clear; ties go to the nearest. So spruce saplings in a chest beat a birch tree nearby, and among trees birch comes before jungle, spruce, oak and dark oak. It says its choice and why, such as `forester: spruce_sapling, saplings in a chest 3 blocks away`, then runs `jobs.wood_farm.run` for that kind, which farms until stopped. With no candidate it warns `no_saplings` and stops. Imported, it runs nothing: `jobs.forester.candidates(radius)` gives the ranked `(kind, why)` pairs and `jobs.forester.run(radius)` starts the farm.
 
 `ForesterGameTest` checks that it chooses stored spruce saplings over a birch nearby, a birch without stored saplings, stored birch saplings over oak ones in a nearer chest, a birch over a nearer oak, and warns `no_saplings` with nothing around.
 

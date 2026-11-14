@@ -2,7 +2,7 @@
 
 Tree cells for a wood farm, one tree each, shaped by the sapling kind: built, watched, harvested and replanted. A module of the mod's default library: `import lib.treefarm`, then `lib.treefarm.build_cell("minecraft:birch_sapling", low, high)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/treefarm.py`, a kit over [`lib/terrain`](terrain.md), [`lib/area`](area.md) and [`lib/trees`](trees.md) (see [The script library](../../../design/library.md#layers)). Its cells come from [`lib/cells`](cells.md): `low` and `high` are the corners of a cell's floor, one block high.
 
-It assumes the bot carries what [`materials`](#materialskind) lists, the tools to clear the cell (a pickaxe where the sapling spot is on stone) and the fill to level it; [`lib/get`](get.md) gets those.
+It assumes the bot carries what [`materials`](#materialskind) lists, the tools to clear the cell (a pickaxe where the sapling spot is on stone) and the fill to level it; [`lib/get`](get.md) gets those, and `harvest` gets the saplings it lacks to replant with.
 
 ```python
 import lib.cells
@@ -22,10 +22,11 @@ lib.treefarm.harvest(kind, low, high)
 
 ## `KINDS`
 
-A spec per sapling, a dict with:
+A spec per kind, a dict with:
 
 | Key | Meaning |
 |---|---|
+| `sapling` | the item that grows the kind, only where the key is no sapling: a giant kind's (see [`sapling`](#saplingkind)) |
 | `size` | the cell's width and depth, so a tree's logs stay in its cell |
 | `square` | a 2x2 trunk, grown from four saplings |
 | `clear` | the blocks of air the sapling needs over the floor: the tallest trunk of its tree plus 2, as the game's free-height check of a growing tree wants |
@@ -33,7 +34,7 @@ A spec per sapling, a dict with:
 
 The values come from the game's tree features, named in the module's comments:
 
-| Sapling | Size | 2x2 | Clear | Roof | Why |
+| Kind | Size | 2x2 | Clear | Roof | Why |
 |---|---|---|---|---|---|
 | `oak_sapling` | 7 | no | 8 | yes | a trunk of 4 to 6; one in ten grows a fancy oak, whose trunk of up to 14 the roof clips to 6, its branches some 3 out |
 | `birch_sapling` | 5 | no | 9 | no | a trunk of 5 to 7, leaves 2 out; a sapling never grows a tall birch |
@@ -43,10 +44,22 @@ The values come from the game's tree features, named in the module's comments:
 | `pale_oak_sapling` | 8 | yes | 11 | no | grown as a dark oak |
 | `acacia_sapling` | 7 | no | 11 | no | a trunk of 5 to 9, leaning up to 3 one way and forking up to 3 another |
 | `cherry_sapling` | 11 | no | 10 | no | a trunk of 7 to 8, one to three branches up to 5 out, leaves 4 out of their ends |
+| `poplar_sapling` | 7 | no | 13 | no | a trunk of 7 to 11 with logs in its canopy, up to 3 out of the trunk (measured over 200 trees), leaves 7 out |
+| `giant_spruce` | 10 | yes | 31 | no | four `spruce_sapling`s: a 2x2 trunk of 13 to 29, leaves 4 out |
+| `giant_jungle` | 10 | yes | 33 | no | four `jungle_sapling`s: a 2x2 trunk of 10 to 31, branches up to 4 out |
 
-Not kinds: a giant spruce or jungle tree grows from four saplings of the same item as the one-sapling kind, and a kind is its sapling; a mangrove stands on roots 1 to 3 high at its propagule's spot, where `grown` and `harvest` look for a log.
+A kind's key is its sapling, with or without `minecraft:`, but for the giants: they grow from the same saplings as the one-sapling spruce and jungle, four in a square, so they have a name of their own and `sapling` names the item. Not a kind: a mangrove stands on roots 1 to 3 high at its propagule's spot, where `grown` and `harvest` look for a log from, and [`lib/get`](get.md) has no source for propagules.
 
 A tree grows only where the air over its sapling is free up to its trunk height plus 2; a roof lower than that stops it, but a fancy oak grows shorter instead, down to a trunk of 4. Mobs do not spawn on leaves nor on bottom slabs; under the canopy the torches keep the floor lit.
+
+## `sapling(kind)`
+
+The item that grows `kind`: the kind itself, or for a giant kind the sapling its spec names. Done at once.
+
+```python
+print(lib.treefarm.sapling("birch_sapling"), lib.treefarm.sapling("giant_spruce"))
+# minecraft:birch_sapling minecraft:spruce_sapling
+```
 
 ## `materials(kind)`
 
@@ -68,9 +81,9 @@ Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over 
 
 Whether the cell has a tree to fell: a log at its sapling spot, or one a failed `harvest` left in the column over a sapling spot, up to `clear` blocks over the floor, as a sapling under it never grows. Logs a failed harvest left off those columns, such as an acacia's or cherry's branch, it does not see. Done at once.
 
-## `harvest(kind, low, high)`
+## `harvest(kind, low, high, radius=32)`
 
-Fells the cell's tree whole from the lowest log `grown` sees and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). The [wood farm](../../../cookbook/wood-farm.md) runs on it.
+Fells the cell's tree whole from the lowest log `grown` sees and replants it with [`lib.trees.fell_whole`](trees.md), which picks up the logs and saplings, then picks up the sticks and apples lying about, and a torch of the cell a pillar took the place of, and takes back the blocks it pillared up to drops on the leaves with (`lib.trees.take_back`). Where `fell_whole` left sapling spots empty for want of saplings, such as a 2x2 kind with fewer than four on the bot, it gets the rest within `radius` with [`lib.get`](get.md) and plants them; where it cannot, the spots stay empty for the wood farm's tending. The [wood farm](../../../cookbook/wood-farm.md) runs on it.
 
 - **Returns** `fell_whole`'s [`result()`](result.md): ok (also where no log stands), or `out_of_reach` or `no_space` with `at`, the log it left, which `grown` still sees, so the next harvest fells it.
 - **Pauses** yes.

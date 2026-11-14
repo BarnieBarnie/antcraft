@@ -43,7 +43,7 @@ def candidates(radius=32):
     bases = None
     found = []
     for kind in lib.treefarm.KINDS:
-        held = [c for c in chests if lib.stock.holds(c, kind)]
+        held = [c for c in chests if lib.stock.holds(c, lib.treefarm.sapling(kind))]
         if held:
             d = int(lib.stock.distance(held[0]))
             found.append((0, cost(kind), d, kind, f"saplings in a chest {d} blocks away"))

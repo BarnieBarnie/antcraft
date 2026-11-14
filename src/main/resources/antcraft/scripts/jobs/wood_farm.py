@@ -1,6 +1,6 @@
 # A job: grows a wood farm from nothing and farms it until a player stops it. Run it as
-# /antcraft bot run jobs.wood_farm <sapling> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a sapling of
-# lib.treefarm.KINDS, the farm's first corner, by default where the bot stands (or where a stopped run of the kind
+# /antcraft bot run jobs.wood_farm <kind> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a kind of
+# lib.treefarm.KINDS (a sapling, or giant_spruce or giant_jungle), the farm's first corner, by default where the bot stands (or where a stopped run of the kind
 # started), the most cells it grows to (most(HARVEST[kind]) by default) and how far to look for what it needs, in
 # blocks (32 by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
@@ -31,11 +31,12 @@ GROWTH = 2 * 7 * 4096 / 3
 # The ticks the bot takes for one tree of each kind: fell it, replant and store the logs. Birch is measured, some 150 to
 # 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs; the others are that per log times their mean logs from
 # lib.treefarm.KINDS's trunks and branches: oak 5.5, spruce 6.5, jungle 8, acacia 9, cherry 13.5, dark and pale oak 34
-# (four trunks and branches).
+# (four trunks and branches), poplar 15 (measured), giant spruce 84 (four trunks of 21), giant jungle 97 (four of 20.5 and some 15 in branches).
 # ponytail: scaled by logs, not measured per kind; time the farm's own rounds if a kind's farm comes out too big or small.
 HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
            "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
-           "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250}
+           "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
+           "giant_spruce": 5600, "giant_jungle": 6500}
 WAIT = 100  # ticks between looks at the farm while nothing has grown
 KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
@@ -55,7 +56,8 @@ def materials(kind):
     """What the farm wants on hand to build a cell of kind: lib.treefarm.materials and a spare sapling for each spot, for
     replanting."""
     m = lib.treefarm.materials(kind)
-    m[kind] = m[kind] * 2
+    s = lib.treefarm.sapling(kind)
+    m[s] = m[s] * 2
     return m
 
 
@@ -122,7 +124,7 @@ def stocked(kind, radius):
 def sweep(kind, boxes):
     """Picks up the saplings of kind, sticks and apples lying in the farm, its cells boxes up to their clear height:
     leaves left after a felling decay over the next minutes and drop them then (#643)."""
-    what = [kind] + lib.treefarm.DROPS
+    what = [lib.treefarm.sapling(kind)] + lib.treefarm.DROPS
     corners = []
     for b in boxes:
         corners += list(b)
@@ -140,7 +142,7 @@ def sweep(kind, boxes):
 
 def unplanted(kind, b):
     """The spots of cell b, a (low, high) box, that hold neither a sapling of kind nor a log."""
-    return [p for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id != kind and not lib.trees.is_log(p)]
+    return [p for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id != lib.treefarm.sapling(kind) and not lib.trees.is_log(p)]
 
 
 def tend(kind, b):
@@ -151,11 +153,12 @@ def tend(kind, b):
     if lib.treefarm.grown(kind, b[0], b[1]):
         return
     torches = lib.treefarm.torches(b[0], b[1])
+    s = lib.treefarm.sapling(kind)
     for p in unplanted(kind, b):
-        if count(kind):
+        if count(s):
             if not block(p).is_air:
                 mine(p)
-            place(p, kind)
+            place(p, s)
     for t in torches:
         if block(t).id != lib.treefarm.TORCH and count(lib.treefarm.TORCH):
             if not block(t).is_air:
@@ -174,12 +177,12 @@ def reap(kind, b, radius, told):
     """Fells the tree of cell b with an axe (lib.treefarm.harvest). Where that leaves a log, says why once (tell), gets
     the kit's dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
     ensure_tool("axe", 16, "hand", radius)
-    r = lib.treefarm.harvest(kind, b[0], b[1])
+    r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     if not r["ok"]:
         tell(told, f"harvest: {r['reason']} at {r['at']}")
         get(lib.treefarm.DIRT, dict(KIT)["dirt"], radius)
         ensure_tool("axe", 16, "hand", radius)
-        r = lib.treefarm.harvest(kind, b[0], b[1])
+        r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     return r
 
 
@@ -198,13 +201,14 @@ def farm(kind, name, size, radius):
         for b in grown:
             felled = reap(kind, b, radius, told)["ok"] or felled
         if grown:
-            r = lib.depot.store(name, KEEP + [kind], radius)
+            r = lib.depot.store(name, KEEP + [lib.treefarm.sapling(kind)], radius)
             if not r["ok"]:
                 say(f"store: {r['reason']}, kept {r['missing']}")
         # After the felling, so lib.get breaks the felled trees' leaves for saplings, not those of a tree still to fell.
         n = sum([len(unplanted(kind, b)) for b in boxes])
-        if n and count(kind) < n and not lib.stock.take_up_to(kind, n, radius)["ok"]:
-            get(kind, n, radius)
+        s = lib.treefarm.sapling(kind)
+        if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
+            get(s, n, radius)
         for b in boxes:
             tend(kind, b)
         if lib.cells.count(name) < size:
@@ -222,11 +226,11 @@ def farm(kind, name, size, radius):
 
 
 def run(kind, at=None, size=None, radius=32):
-    """Grows and farms a wood farm of kind (a sapling of lib.treefarm.KINDS) with its first corner at at (where the bot
+    """Grows and farms a wood farm of kind (a kind of lib.treefarm.KINDS) with its first corner at at (where the bot
     stands, or where the last farm of kind started), up to size cells (most(HARVEST[kind])). Never returns but on a
     failed setup step: gives lib.project.run's result() then."""
-    kind = kind if ":" in kind else "minecraft:" + kind
-    name = kind.split(":")[1].replace("_sapling", "") + "_farm"
+    kind = lib.treefarm.key(kind)
+    name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
     farms = memory.get("wood_farms", {})
     at = Pos(at) if at is not None else farms.get(kind, pos())
     farms[kind] = at
@@ -238,7 +242,7 @@ def run(kind, at=None, size=None, radius=32):
     lib.depot.depot(name, at + (0, 0, -2), "east", CATEGORIES)
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
     steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
-             Step("sapling", get, (kind, 2 * n, radius)),
+             Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]
     r = lib.project.run(name, steps)

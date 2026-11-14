@@ -2,12 +2,14 @@
 # lib.treefarm.build_cell("minecraft:birch_sapling", low, high), lib.treefarm.grown(...) and lib.treefarm.harvest(...)
 # on a cell of lib.cells (docs/reference/modules/lib/treefarm.md).
 # A module of the mod's default library (lib/), a kit over lib.terrain, lib.area and lib.trees. It assumes what
-# materials(kind) lists and the tools to clear the cell with; lib.get gets those.
+# materials(kind) lists and the tools to clear the cell with; lib.get gets those, and harvest gets the saplings to
+# replant with that it lacks.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
 import lib.area
+import lib.get
 import lib.terrain
 import lib.trees
 from lib.result import result
@@ -48,9 +50,21 @@ KINDS = {
     # and one more for a branch that does not end above its start, so its logs stay 5 blocks of it; CherryFoliagePlacer
     # radius 4, TwoLayersFeatureSize(1, 0, 2).
     "minecraft:cherry_sapling": {"size": 11, "square": False, "clear": 10, "roof": False},
-    # Not here: MEGA_SPRUCE, MEGA_PINE and MEGA_JUNGLE_TREE grow from the same sapling as the one-sapling kind, and a kind
-    # is its sapling item; MANGROVE's MangroveRootPlacer lifts the trunk 1 to 3 over roots at the propagule's spot, where
-    # grown and harvest look for a log.
+    # The giant kinds grow from four of the sapling a one-sapling kind grows from, so their key is a name of their own and
+    # sapling names the item (#650).
+    # MEGA_SPRUCE or, one in two, MEGA_PINE: GiantTrunkPlacer(13, 2, 14), a 2x2 trunk 13 to 29, no branches;
+    # MegaPineFoliagePlacer's canopy reaches 4 out of the trunk; TwoLayersFeatureSize(1, 1, 2).
+    "giant_spruce": {"sapling": "minecraft:spruce_sapling", "size": 10, "square": True, "clear": 31, "roof": False},
+    # MEGA_JUNGLE_TREE: MegaJungleTrunkPlacer(10, 2, 19), a 2x2 trunk 10 to 31, branches of 5 logs reaching up to 4 out of
+    # it; TwoLayersFeatureSize(1, 1, 2).
+    "giant_jungle": {"sapling": "minecraft:jungle_sapling", "size": 10, "square": True, "clear": 33, "roof": False},
+    # RED_POPLAR, ORANGE_POPLAR or YELLOW_POPLAR (new in 26.3): PoplarTrunkPlacer(7, 4, 0), trunk 7 to 11, 1 to 4
+    # branches of one log 5 below its top; PoplarFoliagePlacer puts more logs in its canopy, whose leaves reach 7 out.
+    # Measured over 200 trees (#650): logs up to 3 out of the trunk and 11 over the sapling, 15 a tree on average;
+    # TwoLayersFeatureSize(1, 0, 2).
+    "minecraft:poplar_sapling": {"size": 7, "square": False, "clear": 13, "roof": False},
+    # Not here: MANGROVE's MangroveRootPlacer lifts the trunk 1 to 3 over roots at the propagule's spot, where standing
+    # looks for a log from, and lib.get has no source for propagules (they hang from the leaves, see lib.get's SOURCES).
 }
 TORCH = "minecraft:torch"
 DIRT = "minecraft:dirt"
@@ -59,9 +73,19 @@ SLABS = "#minecraft:wooden_slabs"
 DROPS = ["minecraft:stick", "minecraft:apple"]
 
 
+def key(kind):
+    """kind as KINDS has it: a sapling with or without minecraft:, or a giant kind's own name."""
+    return kind if kind in KINDS or ":" in kind else "minecraft:" + kind
+
+
 def spec(kind):
-    """KINDS[kind], kind with or without minecraft:."""
-    return KINDS[kind if ":" in kind else "minecraft:" + kind]
+    """KINDS[kind], kind as key takes it."""
+    return KINDS[key(kind)]
+
+
+def sapling(kind):
+    """The item that grows kind: the kind itself, or the sapling a giant kind names."""
+    return spec(kind).get("sapling", key(kind))
 
 
 def spots(kind, low, high):
@@ -96,7 +120,7 @@ def materials(kind):
     for a roof, clear more dirt to pillar up to it with, which build_cell takes back. The fill to level the cell depends
     on its ground: lib.terrain.needs gives it."""
     n = 4 if spec(kind)["square"] else 1
-    out = {DIRT: n, kind: n, TORCH: 2}
+    out = {DIRT: n, sapling(kind): n, TORCH: 2}
     slabs = len(roof(kind, Pos(0, 0, 0), Pos(spec(kind)["size"] - 1, 0, spec(kind)["size"] - 1)))
     if slabs:
         out[SLABS] = slabs
@@ -141,7 +165,7 @@ def build_cell(kind, low, high):
     lib.trees.take_back()
     for p in ps:
         if block(p).is_air:
-            r = place(p, kind)
+            r = place(p, sapling(kind))
             if not r:
                 return result(r.reason, p)
     return result()
@@ -164,10 +188,12 @@ def grown(kind, low, high):
     return standing(kind, low, high) is not None
 
 
-def harvest(kind, low, high):
+def harvest(kind, low, high, radius=32):
     """Fells the cell's tree whole from its lowest log standing and replants (lib.trees.fell_whole), then picks up the
-    sticks and apples lying about. Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space
-    with at, the log left, which grown still sees."""
+    sticks and apples lying about. Where fell_whole left sapling spots empty for want of saplings, such as a square kind
+    with fewer than four carried, gets the rest within radius (lib.get) and plants them; where it cannot, tend does later.
+    Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space with at, the log left, which
+    grown still sees."""
     base = standing(kind, low, high)
     if base is None:
         return result()
@@ -175,4 +201,9 @@ def harvest(kind, low, high):
     # A torch a pillar up to the leaves took the place of lies about too; the pillars to drops on the leaves come down.
     pick_up(DROPS + [TORCH])
     lib.trees.take_back()
+    if r["ok"]:
+        empty = [p for p in spots(kind, low, high) if block(p).is_air]
+        if empty and lib.get.get(sapling(kind), len(empty), radius)["ok"]:
+            for p in empty:
+                place(p, sapling(kind))
     return r
