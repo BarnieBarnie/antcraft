@@ -1,22 +1,30 @@
 package io.github.barniebarnie.antcraft.gametest;
 
+import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.blueprint.Blueprint;
+import io.github.barniebarnie.antcraft.blueprint.BlueprintSummary;
+import io.github.barniebarnie.antcraft.blueprint.Blueprints;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FarmlandBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.minecraft.world.level.material.Fluids;
 
 /** The job {@code jobs/settle.py} (#574; docs/cookbook/settle.md): a whole base over {@code lib.project}. */
@@ -112,10 +120,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 750)
 	public void fillsABucketAtAPoolToWaterTheField(GameTestHelper helper) {
 		Container chest = plot(helper, new ItemStack(Items.WHEAT_SEEDS, 9), new ItemStack(Items.BUCKET));
-		helper.setBlock(16, 1, 10, Blocks.WATER);
-		for (BlockPos rim : List.of(new BlockPos(15, 1, 10), new BlockPos(17, 1, 10), new BlockPos(16, 1, 9), new BlockPos(16, 1, 11))) {
-			helper.setBlock(rim, Blocks.STONE);
-		}
+		pool(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
@@ -134,6 +139,87 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(helper.getBlockState(new BlockPos(16, 1, 10)).isAir(), "the pool is left: " + BotScripts.log(bot, Output.Level.DEBUG));
 			assertWateredField(helper);
 		});
+	}
+
+	/**
+	 * With a water pool in reach but no bucket and no iron stored, the field is planted dry at once: the bot does not dig
+	 * for iron to make a bucket (#615). Going under the floor (digging for ore)
+	 * fails the test at once.
+	 */
+	// Measured: passes at tick 346 (red: not settled by tick 652, off getting iron for a bucket).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 700)
+	public void plantsTheFieldDryWithNoBucketOrIronAtHand(GameTestHelper helper) {
+		Container chest = plot(helper, new ItemStack(Items.WHEAT_SEEDS, 9));
+		pool(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12 antcraft:cobble_step");
+		helper.onEachTick(() -> {
+			ScriptRun script = bot.getScript();
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
+				|| !said.isEmpty() && said.getLast().startsWith("not settled") || bot.blockPosition().getY() < at.getY() - 1) {
+				helper.fail("failed, warned or went under the floor at " + bot.blockPosition() + ": " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settled"), "not settled yet");
+			assertBase(helper, bot, chest, at);
+			helper.assertBlockPresent(Blocks.WATER, 16, 1, 10);
+			helper.assertFalse(helper.getBlockState(new BlockPos(11, 0, 7)).getFluidState().is(Fluids.WATER), "water in the field");
+			for (int x = 10; x <= 12; x++) {
+				for (int z = 6; z <= 8; z++) {
+					if (x != 11 || z != 7) {
+						helper.assertBlockPresent(Blocks.WHEAT, x, 1, z);
+					}
+				}
+			}
+		});
+	}
+
+	/**
+	 * With the starter house, the default, home is the house's work spot (2, 1, 1), inside behind the door, and the bot
+	 * stands there once settled (#615).
+	 */
+	// Measured: passes at tick 924 to 1003.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2000)
+	public void homeIsTheStarterHousesWorkSpot(GameTestHelper helper) {
+		Identifier id = AntCraft.id("starter_house");
+		Blueprint blueprint = Blueprints.get(id).orElseThrow();
+		Optional<StructureTemplate> template = helper.getLevel().getServer().getStructureTemplateManager().get(blueprint.structure());
+		List<ItemStack> materials = new ArrayList<>();
+		BlueprintSummary.of(id, blueprint, template).materials().forEach((item, count) -> {
+			for (int i = 0; i < count; i++) {
+				materials.add(new ItemStack(item));
+			}
+		});
+		plot(helper, materials.toArray(ItemStack[]::new));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12");
+		helper.onEachTick(() -> {
+			ScriptRun script = bot.getScript();
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
+				|| !said.isEmpty() && said.getLast().startsWith("not settled")) {
+				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settled"), "not settled yet");
+			helper.assertValueEqual(bot.getHome(), at.offset(2, 1, 1), "home");
+			helper.assertValueEqual(bot.blockPosition(), at.offset(2, 1, 1), "where the bot stands");
+		});
+	}
+
+	/** A one-block water pool at (16, 1, 10), stone round it. */
+	private static void pool(GameTestHelper helper) {
+		helper.setBlock(16, 1, 10, Blocks.WATER);
+		for (BlockPos rim : List.of(new BlockPos(15, 1, 10), new BlockPos(17, 1, 10), new BlockPos(16, 1, 9), new BlockPos(16, 1, 11))) {
+			helper.setBlock(rim, Blocks.STONE);
+		}
 	}
 
 	/**

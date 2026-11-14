@@ -12,10 +12,11 @@
 import lib.bootstrap
 import lib.farm
 import lib.project
+import lib.stock
 import lib.storage
 import lib.terrain
 from lib.build import build_here
-from lib.get import ensure_tool, get
+from lib.get import ensure_tool, get, make_cost
 from lib.project import Step
 
 HUT = "antcraft:starter_house"  # 5 by 4 by 5, a floor, its door at (2, 1, 0); any blueprint that fits in 5 by 5 will do
@@ -32,6 +33,8 @@ CHEST = (6, 0, 0)
 TABLE = (6, 0, 1)
 FIELD = ((6, -1, 2), (8, -1, 4))
 WATER = (7, -1, 3)
+# The most ticks an empty bucket may cost to make for the field: a chest's iron, walked to and smelted, not an ore dig.
+BUCKET_TICKS = 1000
 
 
 def flatten(at, radius):
@@ -58,11 +61,19 @@ def pour(at, radius):
     water = at + WATER
     if block(water).id == "minecraft:water":
         return
-    # With no water source within radius no bucket is got: the field is planted dry.
+    # With no water source within radius, or no bucket at hand, no bucket is got: the field is planted dry.
     if (count("water_bucket") or get("water_bucket", 1, radius)["ok"]
-            or lib.farm.water(radius) is not None and get("bucket", 1, radius)["ok"] and lib.farm.fill_bucket(radius)["ok"]):
+            or lib.farm.water(radius) is not None and bucket_at_hand(radius) and get("bucket", 1, radius)["ok"]
+            and lib.farm.fill_bucket(radius)["ok"]):
         mine(water)
         use(water, "water_bucket")  # aimed at the hole itself, so the water goes in, not over its rim
+
+
+def bucket_at_hand(radius):
+    """Whether an empty bucket is carried, in a chest within radius, or made for at most BUCKET_TICKS (a chest's iron),
+    so the optional field never digs for iron ore, thousands of ticks (#615)."""
+    return (count("bucket") > 0 or len(lib.stock.where("minecraft:bucket", radius)) > 0
+            or make_cost("bucket", 1, radius, None, BUCKET_TICKS) is not None)
 
 
 def plant(at, radius):
