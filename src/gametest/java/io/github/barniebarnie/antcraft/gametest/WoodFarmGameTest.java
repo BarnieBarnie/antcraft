@@ -43,13 +43,14 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * An empty bot, a stone axe, 16 dirt and 2 torches in the chest: it gets the kit, two saplings from the birch's
 	 * leaves, builds and plants the first cell; the test grows its sapling, and the bot fells the birch, replants and
 	 * stores the logs in a chest of the depot, and the cell keeps its torches (a pillar up to drops on the leaves can take
-	 * one's place: the bot picks the torch up and puts it back, with no spare, #608).
+	 * one's place: the bot picks the torch up and puts it back, with no spare, #608). A farm of one cell, as for a second
+	 * the bot makes torches of the birch's logs (#643).
 	 */
 	// Measured: passes at tick 363 to 1187 alone or with the tree tests, up to 1700 with 7 copies at once.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 3000)
 	public void buildsTheFirstCellHarvestsAndStoresTheLogs(GameTestHelper helper) {
 		AntBot bot = farm(helper, 0, 2);
-		run(helper, bot);
+		run(helper, bot, 1);
 		boolean[] grew = new boolean[1];
 		BotScripts.failOnWarning(helper, bot);
 		helper.onEachTick(() -> {
@@ -90,6 +91,64 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(said(bot).contains("built cell 2"), "said " + said(bot));
 			assertCell(helper, bot, SPOT);
 			assertCell(helper, bot, SPOT_2);
+		});
+	}
+
+	/**
+	 * With 4 saplings, 2 torches (the first cell's), a coal and a birch log in the chest, the farm makes the second cell's
+	 * torches (#643): it took only what the chests held, so it never grew without torches in a chest.
+	 */
+	// Measured: passes at tick 158.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 320)
+	public void buildsTheSecondCellMakingTheTorches(GameTestHelper helper) {
+		AntBot bot = farm(helper, 4, 2);
+		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class);
+		chest.setItem(4, new ItemStack(Items.COAL));
+		chest.setItem(5, new ItemStack(Items.BIRCH_LOG));
+		run(helper, bot);
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot).contains("built cell 2"), "said " + said(bot));
+			assertCell(helper, bot, SPOT);
+			assertCell(helper, bot, SPOT_2);
+		});
+	}
+
+	/**
+	 * Before each wait the farm picks up the saplings, sticks and apples lying in it, as leaves decay after a felling and
+	 * drop them then; a stick past the farm stays. Where the next cell's materials cannot be got, it says what it lacks
+	 * once, not every round (#643).
+	 */
+	// Measured: passes at tick 48.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
+	public void picksUpDropsBeforeEachWaitAndSaysOnceWhatItLacks(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		helper.spawnItem(Items.BIRCH_SAPLING, new BlockPos(7, 1, 3));
+		helper.spawnItem(Items.BIRCH_SAPLING, new BlockPos(10, 1, 6));
+		helper.spawnItem(Items.STICK, new BlockPos(9, 1, 5));
+		helper.spawnItem(Items.APPLE, new BlockPos(6, 1, 6));
+		helper.spawnItem(Items.STICK, new BlockPos(20, 1, 20));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			import lib.result
+			waits = [0]
+			def counted(ticks):
+			    waits[0] += 1
+			    print("wait", count(kind), count("stick"), count("apple"))
+			    if waits[0] == 3:
+			        stop()
+			jobs.wood_farm.wait = counted
+			jobs.wood_farm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
+			lib.cells.layout("birch_farm", cell[0], (5, 5))
+			lib.cells.add("birch_farm", 0)
+			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("next cell: no_item, lacks {'minecraft:torch': 2}", "wait 2 1 1", "wait 2 1 1",
+				"wait 2 1 1"), "said");
+			helper.assertItemEntityPresent(Items.STICK, new BlockPos(20, 1, 20), 1.0);
 		});
 	}
 
@@ -196,9 +255,14 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Runs jobs.wood_farm for birch at AT, up to 2 cells, radius 12. */
 	private static void run(GameTestHelper helper, AntBot bot) {
+		run(helper, bot, 2);
+	}
+
+	/** Runs jobs.wood_farm for birch at AT, up to cells cells, radius 12. */
+	private static void run(GameTestHelper helper, AntBot bot, int cells) {
 		BlockPos at = helper.absolutePos(AT);
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm birch_sapling "
-			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 2 12");
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " " + cells + " 12");
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
 	}
 

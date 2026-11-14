@@ -1,6 +1,6 @@
 # Grow a wood farm
 
-The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms it until a player stops it (the stop command or the bot's screen). It builds one tree cell, and each time the chests hold what another cell takes, it builds the next one, up to the size at which the bot is always busy. It is one [`lib/project`](../reference/modules/lib/project.md), so a run stopped halfway (a stop, a reload, a death) goes on where it was when it is run again, on the same farm.
+The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms it until a player stops it (the stop command or the bot's screen). It builds one tree cell, and each time it has or can get what another cell takes, it builds the next one, up to the size at which the bot is always busy. It is one [`lib/project`](../reference/modules/lib/project.md), so a run stopped halfway (a stop, a reload, a death) goes on where it was when it is run again, on the same farm.
 
 ```text
 /antcraft bot run jobs.wood_farm birch_sapling
@@ -37,8 +37,8 @@ r = lib.project.run(name, steps)
     1. fells each grown tree with `lib.treefarm.harvest`, which replants it; where a felling leaves a log (out of reach, or no room for the drops), it says so once, such as `harvest: out_of_reach at Pos(8, 70, 4)`, gets the kit's 16 dirt to pillar with and an axe, and fells it again. A cell whose logs still stand counts as grown, so a felling that fails again is tried again next round;
     2. stores what it felled with `lib.depot.store`: logs, saplings of other kinds, sticks and apples each in their own chests, the rest in `other`; the bot keeps its saplings, dirt, torches, slabs and the crafting table it makes chests with;
     3. tends each cell: a sapling on a spot that holds none, but never under logs of the cell's tree left standing (from the chests, else broken out of leaves of the kind, such as those of the trees it just felled), a torch where one is gone (a walk that pillars where a torch stands breaks it with its drop, and the bot picks the torch up to put back);
-    4. builds the next cell when the farm has fewer than its most and the bot carries, or takes from the chests within the radius, what a cell takes and a spare sapling;
-    5. waits 100 ticks where it felled nothing.
+    4. builds the next cell when the farm has fewer than its most and the bot has what a cell takes and a spare sapling: what it lacks it takes from the chests within the radius, else gets with `get` as for the first cell (torches crafted from coal or charcoal of its logs, dirt dug, saplings from leaves, oak slabs). Where `get` fails, it says once what it lacks, such as `next cell: no_item, lacks {'minecraft:torch': 2}`;
+    5. where it felled nothing, picks up the saplings, sticks and apples lying in the farm (the leaves of a felled tree decay over the next minutes and drop them then), then waits 100 ticks.
 - `lib.project.run` keeps the steps done in `memory["projects"]`, `lib.cells` the cells built in `memory["cells"]`, `lib.depot` the chests in `memory["depots"]` and the job the corner in `memory["wood_farms"]`, so a farm run again goes on farming: it does not build its first cell a second time. To start over, `lib.project.reset("birch_farm")` and pop the farm from those.
 
 ## How big
@@ -83,4 +83,4 @@ jobs.wood_farm.run("minecraft:spruce_sapling", Pos(10, 64, 10), 12)
 
 `run(kind, at=None, size=None, radius=32)` never returns but when a setup step fails: it gives `lib.project.run`'s `result()` then. `most(harvest)` gives the most cells for a harvest time of `harvest` ticks.
 
-`WoodFarmGameTest` runs the job for birch in a 24 by 16 by 24 area with a stone axe, dirt and torches in a chest and a small birch whose leaves give the saplings: the bot builds and plants the first cell, the test grows its sapling, and the bot fells the birch, replants and stores the logs in a chest of the depot. With two more saplings and torches in the chest it builds a second cell; stopped as it starts farming and run again, it goes on with the same farm.
+`WoodFarmGameTest` runs the job for birch in a 24 by 16 by 24 area with a stone axe, dirt and torches in a chest and a small birch whose leaves give the saplings: the bot builds and plants the first cell, the test grows its sapling, and the bot fells the birch, replants and stores the logs in a chest of the depot. With two more saplings and torches in the chest it builds a second cell, and with a coal and a log instead of the torches it makes them for it; stopped as it starts farming and run again, it goes on with the same farm.

@@ -4,12 +4,13 @@
 # started), the most cells it grows to (most() by default) and how far to look for what it needs, in blocks (32 by
 # default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
-# logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once the chests hold what
-# one takes (docs/cookbook/wood-farm.md). Another job starts a farm with run(kind, at); imported, this runs nothing.
+# logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
+# what one takes (docs/cookbook/wood-farm.md). Another job starts a farm with run(kind, at); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.area
 import lib.bootstrap
 import lib.borrow
 import lib.cells
@@ -21,6 +22,7 @@ import lib.treefarm
 import lib.trees
 from lib.get import ensure_tool, get
 from lib.project import Step
+from lib.result import result
 
 # A sapling grows on random ticks: each tick randomTickSpeed (3) blocks of each 16x16x16 section (4096 blocks) get one,
 # and SaplingBlock.randomTick advances a sapling on 1 in 7 of those (with light 9 or more over it), from stage 0 to 1,
@@ -86,11 +88,37 @@ def first_cell(kind, name, size, radius):
 
 
 def stocked(kind, radius):
-    """Whether the bot carries materials(kind), taking what it lacks from the chests within radius."""
+    """Makes the bot carry materials(kind): what it lacks from the chests within radius, else by lib.get (torches
+    crafted, dirt dug, saplings from leaves, oak slabs for the roof), as first_cell does (#643). Gives result(): ok, or
+    the failed get's for the first item it could not get."""
     for item, n in materials(kind).items():
-        if count(item) < n and not lib.stock.take_up_to(item, n, radius)["ok"]:
-            return False
-    return True
+        if item == lib.treefarm.SLABS and not lib.stock.take_up_to(item, n, radius)["ok"]:
+            # ponytail: lib.get takes an item, not a tag, so the slabs the chests lack are oak, as in first_cell.
+            r = get("minecraft:oak_slab", count("minecraft:oak_slab") + n - count(item), radius)
+        else:
+            r = get(item, n, radius)
+        if not r["ok"]:
+            return r
+    return result()
+
+
+def sweep(kind, boxes):
+    """Picks up the saplings of kind, sticks and apples lying in the farm, its cells boxes up to their clear height:
+    leaves left after a felling decay over the next minutes and drop them then (#643)."""
+    what = [kind] + lib.treefarm.DROPS
+    corners = []
+    for b in boxes:
+        corners += list(b)
+    low, high = lib.area.bounds(corners, 1)
+    high = high.up(lib.treefarm.spec(kind)["clear"])
+    # ponytail: at most a walk a cell; a drop pick_up cannot reach stays for the next wait.
+    for _ in boxes:
+        near = [e for e in items_near(what, 64) if lib.area.inside(e.pos, low, high)]
+        if not near:
+            return
+        goto(near[0].pos)
+        if not pick_up(what).value:
+            return
 
 
 def unplanted(kind, b):
@@ -141,8 +169,8 @@ def reap(kind, b, radius, told):
 def farm(kind, name, size, radius):
     """Farms forever: each round fells every grown tree (reap, so logs a failed felling left are felled again), stores
     what it fell, tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
-    lib.get), builds the next cell where the farm is below size and the chests hold what one takes, and waits where it
-    felled nothing."""
+    lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
+    lacks), and where it felled nothing picks up the drops in the farm (sweep) and waits."""
     full = False
     told = {}
     while True:
@@ -163,12 +191,16 @@ def farm(kind, name, size, radius):
         for b in boxes:
             tend(kind, b, radius)
         if lib.cells.count(name) < size:
-            if stocked(kind, radius):
+            r = stocked(kind, radius)
+            if r["ok"]:
                 build(kind, name, size, radius)
+            else:
+                tell(told, f"next cell: {r['reason']}, lacks {r['missing']}")
         elif not full:
             say("farm full")
             full = True
         if not felled:
+            sweep(kind, boxes)
             wait(WAIT)
 
 
