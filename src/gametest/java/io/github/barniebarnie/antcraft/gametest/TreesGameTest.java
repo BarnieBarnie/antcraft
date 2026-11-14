@@ -20,6 +20,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -559,6 +560,30 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		}
+	}
+
+	/**
+	 * A stand needs room for the bot's head (#652): of the air beside a log at (1, 3, 1), clear of the oak, only (1, 3, 2)
+	 * has air over it, leaves over the rest, over the log and under it. A log at (1, 3, 6) with leaves over every spot
+	 * beside it and over it is mined from under it, the bot's head under the log. A walk to a spot under leaves got
+	 * nowhere, so a dark oak's top log stayed once the logs under it were mined.
+	 */
+	@GameTest(maxTicks = 20)
+	public void aStandHasRoomForTheHead(GameTestHelper helper) {
+		BlockState leaves = Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true);
+		helper.setBlock(1, 3, 1, Blocks.OAK_LOG);
+		for (BlockPos p : List.of(new BlockPos(1, 4, 1), new BlockPos(0, 4, 1), new BlockPos(2, 4, 1), new BlockPos(1, 4, 0),
+				new BlockPos(1, 2, 1))) {
+			helper.setBlock(p, leaves);
+		}
+		helper.setBlock(1, 3, 6, Blocks.OAK_LOG);
+		for (BlockPos p : List.of(new BlockPos(1, 4, 6), new BlockPos(0, 4, 6), new BlockPos(2, 4, 6), new BlockPos(1, 4, 5),
+				new BlockPos(1, 4, 7))) {
+			helper.setBlock(p, leaves);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 1);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.stands([Pos" + at(helper, 1, 3, 1) + "]) == [Pos" + at(helper, 1, 3, 2)
+			+ "], lib.trees.stands([Pos" + at(helper, 1, 3, 6) + "]) == [Pos" + at(helper, 1, 1, 6) + "])\n", List.of("True True"));
 	}
 
 	/**

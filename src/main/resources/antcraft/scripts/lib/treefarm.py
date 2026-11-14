@@ -199,20 +199,21 @@ def grown(kind, low, high):
 
 
 def harvest(kind, low, high, radius=32):
-    """Fells the cell's tree whole from its lowest log standing and replants (lib.trees.fell_whole), then picks up the
-    sticks and apples lying about. Where fell_whole left sapling spots empty for want of saplings, such as a square kind
-    with fewer than four carried, gets the rest within radius (lib.get) and plants them; where it cannot, tend does later.
+    """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), picks up the sticks and apples
+    lying about, then, where it felled the tree whole, plants each empty sapling spot over dirt, getting the saplings it
+    lacks within radius (lib.get), such as a square kind with fewer than four carried; where it cannot, tend does later.
     Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space with at, the log left, which
     grown still sees."""
     base = standing(kind, low, high)
     if base is None:
         return result()
-    r = lib.trees.fell_whole(base, True)
+    r = lib.trees.fell_whole(base, False)
     # A torch a pillar up to the leaves took the place of lies about too; the pillars to drops on the leaves come down.
     pick_up(DROPS + [TORCH])
     lib.trees.take_back()
+    # Planted last: a pillar up to drops on the leaves took a sapling's place (#652).
     if r["ok"]:
-        empty = [p for p in spots(kind, low, high) if block(p).is_air]
+        empty = [p for p in spots(kind, low, high) if block(p).is_air and lib.trees.is_kind(p.down(), "#minecraft:dirt")]
         if empty and lib.get.get(sapling(kind), len(empty), radius)["ok"]:
             for p in empty:
                 place(p, sapling(kind))

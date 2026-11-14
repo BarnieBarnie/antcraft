@@ -270,8 +270,9 @@ def pillar(spot):
 def stands(blocks):
     """Where to stand to mine the logs blocks lists: few spots, together within reach of each log, chosen greedily, each
     the spot that reaches the most logs not yet reached less the blocks placed to stand there, a spot on one of the logs
-    first where that is a tie, then the one that reaches more logs. Spots are the air above and beside the logs. A log no
-    spot reaches is left out."""
+    first where that is a tie, then the one that reaches more logs. Spots are the air above and beside the logs, and two
+    under a log over air, the bot's head under it. A spot needs room for the head: air over it, or a log of blocks, which
+    the felling mines; a walk to a spot under leaves gets nowhere (#652). A log no spot reaches is left out."""
     # Greedy. A spot reaches only logs 2 below to 5 above its feet, so it tries those layers alone, and counts what each
     # spot still reaches as logs are reached rather than again each round: for a jungle giant of 100 logs (232 spots)
     # some 450,000 instructions, 225 ticks of a bot's budget, down from 1,700,000 (#522).
@@ -283,8 +284,8 @@ def stands(blocks):
         layers.setdefault(p.y, []).append(p)
     cost = {}
     for p in blocks:
-        for c in [p.up(), p.north(), p.south(), p.east(), p.west()]:
-            if c not in logs and c not in cost and block(c).is_air:
+        for c in [p.up(), p.north(), p.south(), p.east(), p.west(), p.down().down()]:
+            if c not in logs and c not in cost and block(c).is_air and (c.up() in logs or block(c.up()).is_air):
                 cost[c] = None
     # Lowest first, so a spot over another (air) has one more to place than that one, without reading down again.
     for c in sorted(list(cost), key=lambda c: c.y):
@@ -390,6 +391,13 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
                 return result("no_space", p)
     for p in sorted(list(left), key=lambda p: -p.y):
         r = mine(p)
+        if r.reason == "out_of_reach":
+            # stands counts reach, not sight: a log its stand reached past other logs and leaves may be hidden from it,
+            # and no walk gets in sight of it, such as a dark oak's top log in its leaves (#652). With the logs around it
+            # mined, a stand by it now, such as under it.
+            for s in stands([p]):
+                goto(s)
+                r = mine(p)
         if not r and r.reason != "target_gone":
             take_back()
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)

@@ -14,6 +14,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.features.TreeFeatures;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -179,13 +180,37 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A dark oak cell of 8x8 from (2, 0, 2): four saplings on dirt in its middle, grown into the 2x2 tree, felled whole
 	 * and replanted, all four. The game test loot makes dark oak leaves drop apples, so the bot is given the saplings to
-	 * replant.
+	 * replant. Its top logs stand past its reach from the ground, so it carries the 16 dirt to climb with that
+	 * jobs.wood_farm's kit holds (#652): with none, a tree whose leaves it could not climb kept a log out_of_reach.
 	 */
-	// Measured: passes at tick 1959 to 2069.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
+	// Measured: passes at tick 1893 to 3963 in 10 runs (#652); a random tree may be the slow shape below, so its limit.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 8500)
 	public void aDarkOakCellOfFourSaplingsIsGrownAndHarvested(GameTestHelper helper) {
+		darkOak(helper, at -> advance(helper, at));
+	}
+
+	/**
+	 * The dark oak four saplings grow with seed 36 (#652): its one stand, below the crown, is in reach of a top log of the
+	 * trunk that lower logs and leaves hid from it, and once those were mined no walk got in sight of it. Felled whole too.
+	 * Most of its time is harvest's pick_up of the sticks and apples the leaves drop as they decay, pillaring up to them.
+	 */
+	// Measured: passes at tick 3250 to 4248 in 10 runs, 4393 with 15 dark oak tests at once.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 8500)
+	public void aDarkOakWithATopLogHiddenFromItsStandIsFelled(GameTestHelper helper) {
+		darkOak(helper, at -> {
+			BlockState sapling = helper.getLevel().getBlockState(at);
+			((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1),
+				RandomSource.create(36));
+		});
+	}
+
+	/**
+	 * The dark oak cell of 8x8 from (2, 0, 2) built by a bot carrying 16 dirt to climb with, its tree grown with grow
+	 * (given the absolute position of (5, 1, 5)), felled whole and all four saplings replanted.
+	 */
+	private static void darkOak(GameTestHelper helper, Consumer<BlockPos> grow) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
-		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 4),
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 20),
 			new ItemStack(Items.DARK_OAK_SAPLING, 8), new ItemStack(Items.TORCH, 2));
 		BlockPos spot = new BlockPos(5, 1, 5);
 		start(helper, bot, "minecraft:dark_oak_sapling", new BlockPos(2, 0, 2), new BlockPos(9, 0, 9), """
@@ -195,12 +220,19 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			while not lib.treefarm.grown(kind, low, high):
 			    wait(5)
 			r = lib.treefarm.harvest(kind, low, high)
-			print(r["ok"], r["reason"])
+			print(r["ok"], r["reason"], r["at"])
 			""");
-		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.DARK_OAK_LOG, at -> advance(helper, at));
+		List<String> printed = List.of("{'minecraft:dirt': 4, 'minecraft:dark_oak_sapling': 4, 'minecraft:torch': 2}", "True None",
+			"True None None");
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.DARK_OAK_LOG, grow);
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (log.size() == printed.size() && !log.equals(printed)) {
+				helper.fail("printed " + log);
+			}
+		});
 		helper.succeedWhen(() -> {
-			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of(
-				"{'minecraft:dirt': 4, 'minecraft:dark_oak_sapling': 4, 'minecraft:torch': 2}", "True None", "True None"), "printed");
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), printed, "printed");
 			helper.assertTrue(grew[0], "the dark oak never grew");
 			assertFelled(helper, bot, Blocks.DARK_OAK_LOG, Items.DARK_OAK_LOG);
 			for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
