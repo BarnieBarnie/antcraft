@@ -68,7 +68,7 @@ Whether the trunk `base` is a bottom log of is 2x2, as a giant spruce's, jungle 
 
 ## `stands(blocks)`
 
-Where to stand to mine the logs in the list `blocks`: few spots that together reach every log, chosen greedily, each the spot that reaches the most logs not yet reached less the blocks the bot must place to stand there, a spot on one of the logs first on a tie, among the spots that reach a log not yet reached. The spots looked at are the air above and beside each log; a log none reaches is left out. A spot reaches a log as `mine` measures it: 4 blocks from the bot's eyes to the log's centre. Done at once; for a jungle giant of 100 logs (232 spots looked at) some 450,000 instructions, 225 ticks of a bot's budget at the default 2000 a tick: a few percent of the thousands of ticks felling it takes (#522).
+Where to stand to mine the logs in the list `blocks`: few spots that together reach every log, chosen greedily, each the spot that reaches the most logs not yet reached less the blocks the bot must place to stand there, a spot on one of the logs first on a tie, then the one that reaches more logs (so up a trunk it picks one stand high up, not one a block higher each time: 4 stands for two trunks of 12 logs, not 14), among the spots that reach a log not yet reached. The spots looked at are the air above and beside each log; a log none reaches is left out. A spot reaches a log as `mine` measures it: 4 blocks from the bot's eyes to the log's centre. Done at once; for a jungle giant of 100 logs (232 spots looked at) some 450,000 instructions, 225 ticks of a bot's budget at the default 2000 a tick: a few percent of the thousands of ticks felling it takes (#522).
 
 ## `fell_whole(base, replant=True, blocks=None, plan=None)`
 
@@ -93,7 +93,7 @@ if base is not None and lib.trees.is_giant(base):
 
 ## `take_back()`
 
-Mines the blocks the script's walks placed since it last called [`placed_scaffold`](../../movement/placed_scaffold.md), the highest first: only those unchanged since, so a block someone else mined or put there meanwhile stays. `fell_whole` ends with it.
+Mines the blocks the script's walks placed since it last called [`placed_scaffold`](../../movement/placed_scaffold.md), the highest first: only those unchanged since, so a block someone else mined or put there meanwhile stays. Then the blocks its walks to those placed, up to four rounds, so none is left. `fell_whole` ends with it.
 
 - **Returns** `None`.
 - **Pauses** yes, while it walks and mines.

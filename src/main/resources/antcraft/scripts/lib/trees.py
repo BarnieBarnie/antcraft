@@ -269,7 +269,8 @@ def pillar(spot):
 def stands(blocks):
     """Where to stand to mine the logs blocks lists: few spots, together within reach of each log, chosen greedily, each
     the spot that reaches the most logs not yet reached less the blocks placed to stand there, a spot on one of the logs
-    first where that is a tie. Spots are the air above and beside the logs. A log no spot reaches is left out."""
+    first where that is a tie, then the one that reaches more logs. Spots are the air above and beside the logs. A log no
+    spot reaches is left out."""
     # Greedy. A spot reaches only logs 2 below to 5 above its feet, so it tries those layers alone, and counts what each
     # spot still reaches as logs are reached rather than again each round: for a jungle giant of 100 logs (232 spots)
     # some 450,000 instructions, 225 ticks of a bot's budget, down from 1,700,000 (#522).
@@ -319,7 +320,9 @@ def stands(blocks):
             # top of a tree too tall to reach from the ground, so that tree got no stand by its top (#563).
             if n[c]:
                 s = 2 * (n[c] - cost[c]) + bonus[c]
-                if best is None or s > score:
+                # A tie goes to the spot that reaches more: up a column every spot one higher scores the same, one more
+                # log for one more block, and the first of them won, some 14 stands where 4 reach every log (#614).
+                if best is None or s > score or s == score and n[c] > n[best]:
                     best, score = c, s
         if best is None:
             break
@@ -333,9 +336,14 @@ def stands(blocks):
 
 def take_back():
     """Mines the scaffold the script's walks placed since it last asked placed_scaffold(), the highest first: only blocks
-    unchanged since, so one someone else mined or put there meanwhile stays."""
-    for q in sorted(placed_scaffold(), key=lambda q: -q.y):
-        mine(q)
+    unchanged since, so one someone else mined or put there meanwhile stays. Then what its walks to those blocks placed,
+    up to four rounds (#614)."""
+    for _ in range(4):
+        placed = placed_scaffold()
+        if not placed:
+            return
+        for q in sorted(placed, key=lambda q: -q.y):
+            mine(q)
 
 
 def fell_whole(base, replant=True, blocks=None, plan=None):

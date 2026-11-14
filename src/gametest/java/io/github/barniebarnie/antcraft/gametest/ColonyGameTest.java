@@ -966,9 +966,10 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * from the ground and from the other trunk, so it climbs at each on its own pillar; the core holds 20 dirt. ready()
 	 * gets scaffold for both pillars, not the highest only, so fell_whole fells the whole tree in one go: no log may reach
 	 * the core while one still stands (#596). With the highest pillar's scaffold only it stored 27 logs and left the top of
-	 * the trunk it climbed second. Passes at about tick 1740.
+	 * the trunk it climbed second. All 20 dirt come back to the core, also one its walks placed while it took the scaffold
+	 * back (#614). With 4 stands, not 14, it passes at about tick 960-980 (#614), 1745 before.
 	 */
-	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 3500)
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 1900)
 	public void aLumberjackClimbsOnAPillarAtEachOfTwoStands(GameTestHelper helper) {
 		helper.setBlock(1, 0, 4, Blocks.DIRT);
 		for (int y = 1; y <= 12; y++) {
@@ -1004,6 +1005,14 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, p);
 			}
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 28, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			// Every block of scaffold comes back, those its own walks placed while it took the scaffold back too (#614).
+			StringBuilder left = new StringBuilder();
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 7, 15, 7)) {
+				if (helper.getBlockState(p).is(Blocks.DIRT)) {
+					left.append(' ').append(p.toShortString());
+				}
+			}
+			helper.assertTrue(core.countItem(Items.DIRT) == 20, "dirt in the core: " + core.countItem(Items.DIRT) + ", left at" + left);
 		});
 	}
 
