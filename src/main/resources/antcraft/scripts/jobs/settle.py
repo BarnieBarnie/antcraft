@@ -58,11 +58,13 @@ def furnish():
 
 
 def pour():
-    """Pours a water source in the middle of the field, so its farmland stays wet, with a water bucket from lib.get."""
+    """Pours a water source in the middle of the field, so its farmland stays wet, with a water bucket from lib.get, else
+    an empty bucket from lib.get (a chest's, or made of three iron ingots) filled at the nearest water source (#592)."""
     if block(water).id == "minecraft:water":
         return
-    # ponytail: no bucket in reach, no water (the field is planted dry); filling a bucket at a lake would cover that.
-    if count("water_bucket") or get("water_bucket", 1, radius)["ok"]:
+    # With no water source within radius no bucket is got: the field is planted dry.
+    if (count("water_bucket") or get("water_bucket", 1, radius)["ok"]
+            or lib.farm.water(radius) is not None and get("bucket", 1, radius)["ok"] and lib.farm.fill_bucket(radius)["ok"]):
         mine(water)
         use(water, "water_bucket")  # aimed at the hole itself, so the water goes in, not over its rim
 

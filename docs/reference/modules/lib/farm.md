@@ -1,6 +1,6 @@
 # `lib/farm`
 
-Farming: finding a field's soil and ripe crops, and tilling, planting and harvesting it. A module of the mod's default library: `import lib.farm`, then `lib.farm.tend(low, high)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/farm.py`, a skill over [`lib/result`](result.md) written with [`block`](../../world/block.md), [`use`](../../blocks/use.md), [`place`](../../blocks/place.md) and [`mine`](../../blocks/mine.md) (see [The script library](../../../design/library.md#layers)). As a skill it assumes what it needs: a hoe to till with and the seeds to plant; [`lib/get`](get.md) gets those, as the bundled `jobs.farm` does ([Auto-farm](../../../cookbook/farm.md#the-bundled-job)). The colony farmer (`colony.farmer`) is built on it too.
+Farming: finding a field's soil and ripe crops, and tilling, planting and harvesting it. A module of the mod's default library: `import lib.farm`, then `lib.farm.tend(low, high)` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/farm.py`, a skill over [`lib/result`](result.md) and [`lib/find`](find.md) written with [`block`](../../world/block.md), [`use`](../../blocks/use.md), [`place`](../../blocks/place.md) and [`mine`](../../blocks/mine.md) (see [The script library](../../../design/library.md#layers)). As a skill it assumes what it needs: a hoe to till with, the seeds to plant and an empty bucket to fill; [`lib/get`](get.md) gets those, as the bundled `jobs.farm` does ([Auto-farm](../../../cookbook/farm.md#the-bundled-job)). The colony farmer (`colony.farmer`) is built on it too.
 
 ```python
 import lib.farm
@@ -39,6 +39,22 @@ Plants `seed` on each of `spots` that is farmland with air over it, while the bo
 ## `harvest(spots)`
 
 Harvests the ripe crop over each of `spots` and replants it with its own seed where the bot carries one, as it does after the harvest unless no seed dropped. Unripe crops are left. What it harvests goes into the bot's inventory. **Returns** how many it harvested. **Pauses** yes.
+
+## `water(radius=32)`
+
+The nearest water source block within `radius` (through [`lib/find`](find.md), so `WHERE` applies), where an empty bucket fills; flowing water is left out. `None` if there is none. A finder.
+
+## `fill_bucket(radius=32)`
+
+Fills an empty bucket the bot carries at `water(radius)`: [`use`](../../blocks/use.md) with the bucket, so the bot walks there first. As a skill it assumes the bucket; [`lib/get`](get.md) gets one, from a chest or made of three iron ingots, as `jobs.settle` does to water its field ([Settle a base](../../../cookbook/settle.md)). **Returns** a dict: `ok`, `reason` (`None`; `no_water` where no source is within `radius`; `no_item` with `missing` `{"minecraft:bucket": 1}` where the bot carries no empty bucket; or the reason `use` failed with, `at` the source). **Pauses** yes.
+
+```python
+import lib.farm
+from lib.get import get
+
+if lib.farm.water(16) is not None and get("bucket", 1, 16)["ok"]:
+    lib.farm.fill_bucket(16)
+```
 
 ## `tend(low, high, seed=None)`
 

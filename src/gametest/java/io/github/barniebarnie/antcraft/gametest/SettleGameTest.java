@@ -38,7 +38,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 435 (953 to 1017 with the starter house, whose build WorkGameTest covers).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 900)
 	public void settlesABaseAndResumesAfterAStop(GameTestHelper helper) {
-		Container chest = plot(helper, true);
+		Container chest = plot(helper, new ItemStack(Items.WHEAT_SEEDS, 9), new ItemStack(Items.WATER_BUCKET));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		String run = "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ() + " 12 antcraft:cobble_step";
@@ -49,21 +49,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 				"settle 3/7: hut", "settle 3/7: hut", "settle 4/7: furnish", "settle 5/7: field", "settle 6/7: store", "settle 7/7: home",
 				"settled"), "said");
 			assertBase(helper, bot, chest, at);
-			helper.assertTrue(helper.getBlockState(new BlockPos(11, 0, 7)).getFluidState().isSource()
-				&& helper.getBlockState(new BlockPos(11, 0, 7)).getFluidState().is(Fluids.WATER), "no water in the middle of the field");
-			for (int x = 10; x <= 12; x++) {
-				for (int z = 6; z <= 8; z++) {
-					if (x == 11 && z == 7) {
-						continue;
-					}
-					// A random tick dries farmland with no water near and wets farmland that has.
-					BlockPos soil = helper.absolutePos(new BlockPos(x, 0, z));
-					helper.assertBlockPresent(Blocks.FARMLAND, x, 0, z);
-					helper.getLevel().getBlockState(soil).randomTick(helper.getLevel(), soil, helper.getLevel().getRandom());
-					helper.assertBlockProperty(new BlockPos(x, 0, z), FarmlandBlock.MOISTURE, 7);
-					helper.assertBlockPresent(Blocks.WHEAT, x, 1, z);
-				}
-			}
+			assertWateredField(helper);
 		};
 		helper.onEachTick(() -> {
 			ScriptRun script = bot.getScript();
@@ -95,7 +81,7 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 311.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 650)
 	public void aFieldThatFailsLeavesTheBaseSettled(GameTestHelper helper) {
-		Container chest = plot(helper, false);
+		Container chest = plot(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
@@ -119,10 +105,42 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The plot of the settle tests: a dirt bump at (12, 1, 9), a 3 by 3 dirt patch at (10, 0, 6) to (12, 0, 8), and a
-	 * chest at (17, 1, 4) with the kit and the cobble step's materials, and with seeds and a water bucket where field.
+	 * With an empty bucket in the chest instead of a water bucket and a one-block water pool at (16, 1, 10), the bot fills
+	 * the bucket at the pool and pours it in the middle of the field (#592).
 	 */
-	private static Container plot(GameTestHelper helper, boolean field) {
+	// Measured: passes at tick 369.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 750)
+	public void fillsABucketAtAPoolToWaterTheField(GameTestHelper helper) {
+		Container chest = plot(helper, new ItemStack(Items.WHEAT_SEEDS, 9), new ItemStack(Items.BUCKET));
+		helper.setBlock(16, 1, 10, Blocks.WATER);
+		for (BlockPos rim : List.of(new BlockPos(15, 1, 10), new BlockPos(17, 1, 10), new BlockPos(16, 1, 9), new BlockPos(16, 1, 11))) {
+			helper.setBlock(rim, Blocks.STONE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12 antcraft:cobble_step");
+		helper.onEachTick(() -> {
+			ScriptRun script = bot.getScript();
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			if (script != null && script.state() == ScriptRun.State.FAILED || !BotScripts.warnings(bot).isEmpty()
+				|| !said.isEmpty() && said.getLast().startsWith("not settled")) {
+				helper.fail("failed or warned: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settled"), "not settled yet");
+			assertBase(helper, bot, chest, at);
+			helper.assertTrue(helper.getBlockState(new BlockPos(16, 1, 10)).isAir(), "the pool is left: " + BotScripts.log(bot, Output.Level.DEBUG));
+			assertWateredField(helper);
+		});
+	}
+
+	/**
+	 * The plot of the settle tests: a dirt bump at (12, 1, 9), a 3 by 3 dirt patch at (10, 0, 6) to (12, 0, 8), and a
+	 * chest at (17, 1, 4) with the kit, the cobble step's materials and extra.
+	 */
+	private static Container plot(GameTestHelper helper, ItemStack... extra) {
 		helper.setBlock(12, 1, 9, Blocks.DIRT);
 		helper.setBlock(12, 2, 9, Blocks.DIRT);
 		for (int x = 10; x <= 12; x++) {
@@ -136,11 +154,29 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 			.forEach(item -> add(chest, new ItemStack(item)));
 		add(chest, new ItemStack(Items.DIRT, 16));
 		add(chest, new ItemStack(Items.COBBLESTONE, 2));
-		if (field) {
-			add(chest, new ItemStack(Items.WHEAT_SEEDS, 9));
-			add(chest, new ItemStack(Items.WATER_BUCKET));
+		for (ItemStack stack : extra) {
+			add(chest, stack);
 		}
 		return chest;
+	}
+
+	/** A water source in the middle of the field and the 8 blocks round it wet farmland planted with wheat. */
+	private static void assertWateredField(GameTestHelper helper) {
+		helper.assertTrue(helper.getBlockState(new BlockPos(11, 0, 7)).getFluidState().isSource()
+			&& helper.getBlockState(new BlockPos(11, 0, 7)).getFluidState().is(Fluids.WATER), "no water in the middle of the field");
+		for (int x = 10; x <= 12; x++) {
+			for (int z = 6; z <= 8; z++) {
+				if (x == 11 && z == 7) {
+					continue;
+				}
+				// A random tick dries farmland with no water near and wets farmland that has.
+				BlockPos soil = helper.absolutePos(new BlockPos(x, 0, z));
+				helper.assertBlockPresent(Blocks.FARMLAND, x, 0, z);
+				helper.getLevel().getBlockState(soil).randomTick(helper.getLevel(), soil, helper.getLevel().getRandom());
+				helper.assertBlockProperty(new BlockPos(x, 0, z), FarmlandBlock.MOISTURE, 7);
+				helper.assertBlockPresent(Blocks.WHEAT, x, 1, z);
+			}
+		}
 	}
 
 	/** The cobble step at (4, 1, 4), the bump gone, the chest and table placed, the bot home and the pickaxe back in its chest. */

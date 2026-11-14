@@ -1,11 +1,12 @@
 # Farming, for any script: `import lib.farm`, then lib.farm.tend(low, high) over a field of soil. colony.farmer is built
 # on it, and so is jobs.farm (docs/reference/modules/lib/farm.md).
-# A module of the mod's default library (lib/), a skill: it imports only lib.result. It assumes a hoe to till with and the
-# seeds to plant; lib.get gets those.
+# A module of the mod's default library (lib/), a skill: it imports only lib.result and lib.find. It assumes a hoe to till
+# with, the seeds to plant and an empty bucket to fill; lib.get gets those.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.find
 from lib.result import result
 
 # (crop block, seed item, harvest item, ripe age); wheat first, so it is planted
@@ -19,6 +20,8 @@ CROPS = [
 POISON = "minecraft:poisonous_potato"
 SOIL = ["minecraft:dirt", "minecraft:grass_block"]
 FARMLAND = "minecraft:farmland"
+WATER = "minecraft:water"
+BUCKET = "minecraft:bucket"
 
 
 def crop(name):
@@ -94,6 +97,24 @@ def harvest(spots):
             n += 1
             plant([soil], c[1])
     return n
+
+
+def water(radius=32):
+    """The nearest water source block within radius (lib.find.nearest), where an empty bucket fills; None if there is none."""
+    return lib.find.nearest(WATER, radius, lambda p: block(p).state["level"] == 0)
+
+
+def fill_bucket(radius=32):
+    """Fills an empty bucket the bot carries at the nearest water source within radius (water). Gives result(): ok;
+    no_water where there is none; no_item with missing where the bot carries no empty bucket; or the reason use failed,
+    at the source."""
+    p = water(radius)
+    if p is None:
+        return result("no_water")
+    if not has(BUCKET):
+        return result("no_item", None, {BUCKET: 1})
+    r = use(p, BUCKET)
+    return result() if r else result(r.reason, p)
 
 
 def tend(low, high, seed=None):

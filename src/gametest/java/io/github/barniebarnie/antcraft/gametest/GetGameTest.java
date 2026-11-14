@@ -70,6 +70,21 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> printed(helper, bot, "True minecraft:wooden_hoe"));
 	}
 
+	/** Three iron ingots and a log carried: get crafts an empty bucket, with a crafting table of the log (#592). */
+	// Measured: passes at tick 90.
+	@GameTest(maxTicks = 180)
+	public void craftsABucketOfIronIngots(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.IRON_INGOT, 3));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG));
+		run(helper, bot, """
+			from lib.get import get
+			r = get("bucket", radius=8)
+			print(r["ok"], count("bucket"), count("iron_ingot"))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True 1 0"));
+	}
+
 	/** Logs and cobblestone carried for a stone axe, an iron axe in a chest: ensure_tool borrows and holds the iron one. */
 	@GameTest(maxTicks = 20)
 	public void borrowsAChestAxeRatherThanCrafting(GameTestHelper helper) {
