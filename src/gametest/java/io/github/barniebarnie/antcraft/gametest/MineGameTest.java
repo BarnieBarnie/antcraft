@@ -201,6 +201,30 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A branch stops at the edge of lib.find.WHERE as lib.dig.branch does (#593): with the edge between the north branch's
+	 * two blocks (z 2 inside, z 1 out), the bot digs its first block only and goes on with the south branch.
+	 */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aBranchAcrossTheEdgeOfWhereStopsAtIt(GameTestHelper helper) {
+		AntBot bot = mine(helper, LANDING, 1, """
+			import lib.find
+			EDGE = pos().z - 1
+			def inside(p):
+			    return p.z >= EDGE
+			lib.find.WHERE = inside
+			""");
+		failOnError(helper, () -> bot, "True None 0");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0")), "not done");
+			assertDug(helper, HALL, "hall");
+			assertDug(helper, SOUTH, "south branch");
+			assertDug(helper, List.of(NORTH.get(0)), "north branch");
+			helper.assertTrue(helper.getBlockState(NORTH.get(1)).is(Blocks.STONE)
+				&& helper.getBlockState(NORTH.get(1).above()).is(Blocks.STONE), "dug past the edge: " + describe(helper, bot));
+		});
+	}
+
+	/**
 	 * Lava past the end of the south branch is sealed with a block the bot dug once the branch's end is dug, not dug into,
 	 * and the bot goes on with the north branch.
 	 */

@@ -157,13 +157,16 @@ def veins(cells, opened, stand, chest=None, left=None, out=None):
 def tunnel(cells, stand, opened, level, sealed):
     """Digs cells (feet and head, from stand outwards), mining the veins it uncovers and putting torches at the
     level's torch spots. Where a fluid is in or beside the next block, it seals it, adds it to sealed and stops
-    there: short of a fluid in the next block, past the block beside the fluid."""
+    there: short of a fluid in the next block, past the block beside the fluid. It stops short of the first block
+    lib.find.WHERE leaves out too, as lib.dig.branch does (#593)."""
     for i in range(0, len(cells), 2):
         feet = cells[i]
         head = cells[i + 1]
         if dug(feet) and dug(head):
             stand = feet
             continue
+        if not (lib.find.allowed(feet) and lib.find.allowed(head)):
+            return None
         failure = room(level["chest"])
         if failure:
             return failure
@@ -199,7 +202,7 @@ def mine_level(level, rounds=1):
     """Digs the hall of level of the shaft in memory (dug by lib.shaft) and the next rounds of branches off it,
     mines every ore vein it uncovers, puts torches at the torch spots and the ore into the landing chest (dropping
     the junk), also when its inventory fills. Where a fluid is in or beside the next block of a hall or branch, it
-    seals it and goes on with the next branch. Gives report(): ok, or the reason it stopped (missing_ingredients without a pickaxe or
+    seals it and goes on with the next branch; so too at the edge of lib.find.WHERE (#593). Gives report(): ok, or the reason it stopped (missing_ingredients without a pickaxe or
     something to seal with, no_space when the chest is full of ore, or an action's reason) with at, and sealed."""
     m = site()
     assert m is not None and level in m["level"], f"no shaft with a level at {level}: dig_shaft first"
