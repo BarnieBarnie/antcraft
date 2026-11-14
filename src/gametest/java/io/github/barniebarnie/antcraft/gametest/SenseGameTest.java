@@ -372,6 +372,9 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Puts a plains village start with one piece from {@code low} to {@code high} (in the area) in the area's chunks, with
 	 * the references the chunks it reaches keep to it, as world generation would; takes it out again when the test ends.
+	 * A chunk keeps one start per structure type, so two tests that run at once (one batch) must not put a village in the
+	 * same chunk: the second replaces the first's, and the first one's cleanup takes both out. Give such tests an
+	 * environment of their own, as ExploreGameTest does with {@code antcraft-gametest:structures}.
 	 */
 	static void village(GameTestHelper helper, BlockPos low, BlockPos high) {
 		ServerLevel level = helper.getLevel();

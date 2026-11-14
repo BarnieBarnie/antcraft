@@ -66,12 +66,17 @@ def look(radius=64, around=16):
 
 def explore(rings=4, step=32, until=None):
     """Walks the spiral(pos(), step, rings) and look()s at each waypoint, structures within step and biomes step / 2
-    around. A waypoint goes to the surface where its column is loaded; one the bot cannot get to is looked at from
+    around. A waypoint goes to the surface: where its column is not loaded yet, the bot walks half way first, which loads
+    it; where it stays unloaded, it keeps the centre's y. One the bot cannot get to is looked at from
     where the walk stopped. Stops at the first waypoint where until(memory["seen"]) is true. Gives result(): ok and at
     where it stopped; where until never held, not_found."""
     for w in spiral(pos(), step, rings):
         t = surface(w)
-        # ponytail: a waypoint not loaded yet keeps the centre's y; goto digs or pillars to it.
+        if t is None:
+            # Not loaded yet: walk half way there, which loads its chunk (goto loads the chunks ahead), then read it.
+            lib.retry.retry(goto, (w,), 3, kwargs={"near": step // 2})
+            t = surface(w)
+        # Still None (the Nether, or it did not load): keep the centre's y; goto digs or pillars to it.
         lib.retry.retry(goto, (w if t is None else t,), 3)
         s = look(step, step // 2)
         if until is not None and until(s):
@@ -79,9 +84,18 @@ def explore(rings=4, step=32, until=None):
     return result(None if until is None else "not_found", pos())
 
 
+# The biome_tags of each id asked about, so seen() pays the native once per id.
+_TAGS = {}
+
+
 def matches(id, what):
-    """Whether the biome or structure id is what: the same id, or what, without a namespace, is part of its name, so
-    "village" matches every village and "ocean" every ocean. ponytail: no #tags, as no sense reads a biome's tags."""
+    """Whether the biome or structure id is what: the same id, a biome tag of it ("#minecraft:is_forest"), or what,
+    without a namespace, is part of its name, so "village" matches every village and "ocean" every ocean.
+    ponytail: tags are biome tags only; a structure's tags are not read."""
+    if what.startswith("#"):
+        if id not in _TAGS:
+            _TAGS[id] = biome_tags(id)
+        return what in _TAGS[id]
     return id == what or (":" not in what and what in id.split(":")[-1])
 
 

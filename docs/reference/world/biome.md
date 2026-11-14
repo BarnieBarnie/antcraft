@@ -39,4 +39,4 @@ if biome() == "minecraft:desert":
 
 ## See also
 
-[`structures`](structures.md), [`surface`](surface.md), [`block`](block.md).
+[`biome_tags`](biome_tags.md), [`structures`](structures.md), [`surface`](surface.md), [`block`](block.md).

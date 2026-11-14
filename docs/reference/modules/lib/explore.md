@@ -28,14 +28,14 @@ Records in `memory["seen"]` the biome at the bot's feet and at `around` blocks n
 
 ## `explore(rings=4, step=32, until=None)`
 
-Walks [`spiral`](#spiralcentre-step32-rings4)`(pos(), step, rings)` and [`look`](#lookradius64-around16)s at each waypoint: structures within `step`, biomes `step / 2` around, so the looks cover the land between the waypoints. A waypoint goes to the [`surface`](../../world/surface.md) where its column is loaded, else it keeps the bot's `y` and [`goto`](../../movement/goto.md) digs or pillars there; each walk is [`retry`](retry.md)'d 3 times, and a waypoint the bot cannot get to is looked at from where it stopped. Stops at the first waypoint where `until(memory["seen"])` is true.
+Walks [`spiral`](#spiralcentre-step32-rings4)`(pos(), step, rings)` and [`look`](#lookradius64-around16)s at each waypoint: structures within `step`, biomes `step / 2` around, so the looks cover the land between the waypoints. A waypoint goes to the [`surface`](../../world/surface.md): where its column is not loaded yet, the bot first walks half way there, `step / 2` blocks short of it, which loads it (as [`goto`](../../movement/goto.md) loads the chunks ahead), and then goes to its surface; where it is still not loaded, as in the Nether, it keeps the bot's `y` and `goto` digs or pillars there; each walk is [`retry`](retry.md)'d 3 times, and a waypoint the bot cannot get to is looked at from where it stopped. Stops at the first waypoint where `until(memory["seen"])` is true.
 
 - **Returns** a [`result()`](result.md) dict: `ok`, with `at` the bot's position where it stopped; with an `until` that never held, `reason` `not_found`.
 - **Pauses** yes, for the walks: with the defaults, 81 waypoints over 256 by 256 blocks.
 
 ## `seen(what)`
 
-The positions remembered of the biomes and structures `what` matches, nearest the bot first; `[]` if none. `what` matches an id itself, such as `"minecraft:desert"`, or is a part of its name, without a namespace: `"village"` matches every village and `"ocean"` every ocean biome. Biome tags such as `#minecraft:is_forest` are not supported. A finder, done at once.
+The positions remembered of the biomes and structures `what` matches, nearest the bot first; `[]` if none. `what` matches an id itself, such as `"minecraft:desert"`, or is a part of its name, without a namespace: `"village"` matches every village and `"ocean"` every ocean biome, or is a biome tag with its `#`: `"#minecraft:is_forest"` matches every biome [`biome_tags`](../../world/biome_tags.md) puts in that tag (forest, birch forest, dark forest...). Structure tags are not read. A finder, done at once.
 
 ## `report()`
 
@@ -43,4 +43,4 @@ Prints one line for each biome and structure remembered: its id and its position
 
 ## See also
 
-[`biome`](../../world/biome.md), [`structures`](../../world/structures.md), [Explore and find a village](../../../cookbook/explore.md), [`memory`](../../types/memory.md), [The script library](../../../design/library.md).
+[`biome`](../../world/biome.md), [`biome_tags`](../../world/biome_tags.md), [`structures`](../../world/structures.md), [Explore and find a village](../../../cookbook/explore.md), [`memory`](../../types/memory.md), [The script library](../../../design/library.md).

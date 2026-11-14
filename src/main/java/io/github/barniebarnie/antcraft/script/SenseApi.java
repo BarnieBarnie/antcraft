@@ -30,6 +30,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -118,6 +119,14 @@ public final class SenseApi {
 			Identifier id = Identifier.tryParse(Values.str(Args.bind("block_tags", call, 1, "block")[0]));
 			PyList tags = new PyList();
 			Optional.ofNullable(id).flatMap(BuiltInRegistries.BLOCK::getOptional).ifPresent(block -> block.defaultBlockState().tags()
+				.map(tag -> "#" + tag.location()).sorted().forEach(tags.items::add));
+			return tags;
+		});
+		natives.register("biome_tags", 20, call -> {
+			Identifier id = Identifier.tryParse(Values.str(Args.bind("biome_tags", call, 1, "biome")[0]));
+			PyList tags = new PyList();
+			Optional.ofNullable(id).flatMap(i -> bot(run, call).level().registryAccess().lookupOrThrow(Registries.BIOME)
+				.get(ResourceKey.create(Registries.BIOME, i))).ifPresent(biome -> biome.tags()
 				.map(tag -> "#" + tag.location()).sorted().forEach(tags.items::add));
 			return tags;
 		});
