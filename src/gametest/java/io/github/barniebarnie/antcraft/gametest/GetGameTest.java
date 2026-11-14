@@ -83,7 +83,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], held().item, count("stone_axe"), count("cobblestone"), [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
-			printed(helper, bot, "True minecraft:iron_axe 0 3 [('iron_axe', 1)]");
+			printed(helper, bot, "True minecraft:iron_axe 0 3 [('minecraft:iron_axe', 1)]");
 			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
 		});
 	}
@@ -120,7 +120,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], held().item, [(b["item"], b["n"]) for b in borrowed()])
 			""");
 		helper.succeedWhen(() -> {
-			printed(helper, bot, "True minecraft:iron_pickaxe [('iron_pickaxe', 1)]");
+			printed(helper, bot, "True minecraft:iron_pickaxe [('minecraft:iron_pickaxe', 1)]");
 			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
 		});
 	}
@@ -299,6 +299,120 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			""");
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True None 1 [('minecraft:stick', 2)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
+	 * 4 birch planks in a chest, no log or tree in the area (#580): the plan picks oak planks for a crafting table, whose
+	 * recipe takes any planks, so get borrows the birch ones.
+	 */
+	@GameTest(maxTicks = 30)
+	public void borrowsOtherPlanksForAnyPlanksRecipe(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.BIRCH_PLANKS, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("crafting_table", radius=8)
+			print(r["ok"], r["reason"], count("crafting_table"), [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 1 [('#minecraft:planks', 4)]");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
+	 * 4 birch planks in a chest within radius 8 but not 2 (#580): the make cost of a crafting table is the walk to them, as
+	 * get takes them, not the log it costs without the chest.
+	 */
+	@GameTest(maxTicks = 20)
+	public void chestPlanksLowerTheMakeCostToTheWalk(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.BIRCH_PLANKS, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.cost, lib.stock
+			from lib.get import make_cost
+			far, near = make_cost("crafting_table", 1, radius=2), make_cost("crafting_table", 1, radius=8)
+			print(far > near, near == lib.cost.walk(pos(), lib.stock.where("#minecraft:planks", 8)[0]))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
+	 * 8 oak planks in a chest, a crafting table by the bot (#580): get takes a planks step's whole output (4, 2 of them for
+	 * the sticks), and the plan made again counts the rest for the pickaxe's head, so it takes one more step of 4, gathers
+	 * nothing and has 3 left. This worked before #580: the planner keeps what a step makes beyond its need for later steps.
+	 */
+	@GameTest(maxTicks = 30)
+	public void theRestOfATakenStepCountsForLaterSteps(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.OAK_PLANKS, 8));
+		helper.setBlock(3, 1, 5, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			from lib.borrow import borrowed
+			r = get("wooden_pickaxe", radius=8)
+			print(r["ok"], r["reason"], count("wooden_pickaxe"), count("oak_planks"), [(b["item"], b["n"]) for b in borrowed()])
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True None 1 3 [('minecraft:oak_planks', 4), ('minecraft:oak_planks', 4)]"));
+	}
+
+	/**
+	 * Two sticks carried, no log or chest in the area (#580): the sticks cover a stick's plan, but every tool still needs
+	 * logs, for a wooden one's planks or the pickaxe a stone one's cobblestone takes, so ensure_tool fails no_logs without
+	 * costing options.
+	 */
+	@GameTest(maxTicks = 30)
+	public void ensureToolFailsFastWithSticksButNoLogs(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
+		run(helper, bot, where(helper, 7) + """
+			import lib.get
+			lib.get.options = lambda *a: print("costed") or []
+			r = lib.get.ensure_tool("axe", 30, radius=8)
+			print(r["ok"], r["reason"])
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "False no_logs"));
+	}
+
+	/**
+	 * An iron axe in a chest 20 blocks off (walk 100), an empty bot (#580): walking there and felling 30 logs with it costs
+	 * less than making a wooden axe from logs and felling with that, so ensure_tool takes it without costing options.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 200)
+	public void aChestToolCheaperThanMakingOneIsTakenWithoutCosting(GameTestHelper helper) {
+		Container chest = chest(helper, new BlockPos(12, 1, 12), new ItemStack(Items.IRON_AXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		run(helper, bot, where(helper, 23) + """
+			import lib.get
+			lib.get.options = lambda *a: print("costed") or []
+			r = lib.get.ensure_tool("axe", 30, radius=30)
+			print(r["ok"], held().item)
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True minecraft:iron_axe");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
+	 * A copper axe in a chest, a tool of no lib.tools.TIERS tier as a modded one is, an empty bot (#580): where no tier is
+	 * asked ensure_tool borrows it, as it uses a carried one (#562).
+	 */
+	@GameTest(maxTicks = 30)
+	public void aChestToolOfUnknownTierIsTakenWhereNoTierIsAsked(GameTestHelper helper) {
+		Container chest = chest(helper, new ItemStack(Items.COPPER_AXE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, where(helper, 7) + """
+			import lib.get
+			lib.get.options = lambda *a: print("costed") or []
+			r = lib.get.ensure_tool("axe", 30, radius=8)
+			print(r["ok"], held().item)
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True minecraft:copper_axe");
 			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
 		});
 	}
