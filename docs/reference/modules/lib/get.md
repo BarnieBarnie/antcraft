@@ -85,6 +85,9 @@ How `get` gathers each raw item: a dict of item id (`"#minecraft:logs"` for any 
 | cobblestone | [`lib.dig.stone`](dig.md#stonen-radius32) | pickaxe |
 | dirt, sand | the exposed ones within `radius`, nearest first | shovel, or by hand |
 | coal, raw iron, raw copper, raw gold, redstone, lapis lazuli, diamond, emerald | [`lib.dig.ore`](dig.md) | pickaxe of [`lib.tools.tier_for`](tools.md) its ore |
+| each sapling of `#minecraft:saplings` but the mangrove propagule, apple | the exposed leaves that drop it within `radius`, nearest first, broken until enough drop (`no_tree` where none is left) | none, by hand |
+
+Saplings and apples come from breaking leaves (#602), with the chances of the 26.3 loot tables: one in 20 leaves drops a sapling (oak, spruce, birch, acacia, dark oak, pale oak, cherry, azalea, flowering azalea; poplar from orange, red or yellow poplar leaves), one in 40 for jungle, and one in 200 oak or dark oak leaves an apple. The estimate is that many leaves at `LEAF` (11) ticks each, 6 to break one by hand and a step. Each source's `near` is its leaves, so where none is within `radius` `get` fails `no_tree` at once. No leaves drop a mangrove propagule, so it has no source. ponytail: [`mine`](../../blocks/mine.md) picks the best tool carried, so a bot that carries shears breaks leaves into leaves and gets no sapling.
 
 An ore source's pickaxe tier comes from the block it is about to mine: before it digs, `get` finds the nearest exposed block of the source's `ore` and asks [`lib.tools.tier_for`](tools.md#tier_forwhat) of its position, which reads the block's `needs_*_tool` tags, so a modded ore that needs an iron pickaxe gets one. Where none is exposed it uses the source's `tier`. ponytail: only that first block's tier counts; a vein further on that needs more is tried with the same pickaxe.
 

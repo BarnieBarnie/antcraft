@@ -84,13 +84,19 @@ def deep(y):
 
 def dig_up(what):
     """A Source's do for a block that drops itself, such as dirt: mines the exposed ones within radius, nearest first."""
+    return breaking(what, what, "no_block")
+
+
+def breaking(item, what, reason):
+    """A Source's do that mines the exposed blocks what selects within radius, nearest first, until the bot carries n more
+    of item, which they drop; fails reason once none is left."""
     def do(n, radius):
-        target = count(what) + n
+        target = count(item) + n
         skip = {}
-        while count(what) < target:
+        while count(item) < target:
             p = lib.find.exposed(what, radius, skip)
             if p is None:
-                return result("no_block", None, {what: target - count(what)})
+                return result(reason, None, {item: target - count(item)})
             skip[p] = True
             r = mine(p)
             if not r and r.reason == "no_space":
@@ -121,6 +127,19 @@ for item, block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore",
                               ("lapis_lazuli", "lapis_ore", 300), ("diamond", "diamond_ore", 2000),
                               ("emerald", "emerald_ore", 2000)]:
     SOURCES["minecraft:" + item] = ore(item, block, estimate)
+# Saplings and apples break from leaves by hand, one in chance leaves broken (the 26.3 loot tables, no fortune); LEAF
+# ticks a leaves block (hardness 0.2: 6 by hand) and the step to the next. The mangrove propagule drops from no leaves.
+# ponytail: mine picks the best tool, so a bot carrying shears breaks leaves into leaves and gets none.
+LEAF = 6 + lib.cost.WALK
+for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapling", ["spruce_leaves"], 20),
+                             ("birch_sapling", ["birch_leaves"], 20), ("jungle_sapling", ["jungle_leaves"], 40),
+                             ("acacia_sapling", ["acacia_leaves"], 20), ("dark_oak_sapling", ["dark_oak_leaves"], 20),
+                             ("pale_oak_sapling", ["pale_oak_leaves"], 20), ("cherry_sapling", ["cherry_leaves"], 20),
+                             ("azalea", ["azalea_leaves"], 20), ("flowering_azalea", ["flowering_azalea_leaves"], 20),
+                             ("poplar_sapling", ["orange_poplar_leaves", "red_poplar_leaves", "yellow_poplar_leaves"], 20),
+                             ("apple", ["oak_leaves", "dark_oak_leaves"], 200)]:
+    SOURCES["minecraft:" + item] = Source(breaking("minecraft:" + item, leaves, "no_tree"), estimate=LEAF * chance,
+                                          near=leaves)
 
 
 def key(item):

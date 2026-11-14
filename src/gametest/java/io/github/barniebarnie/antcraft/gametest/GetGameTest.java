@@ -15,6 +15,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 
 /**
@@ -728,6 +729,58 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A cherry tree of {@link TreesGameTest#plantTree} (#602): get breaks its leaves by hand until two cherry saplings
+	 * dropped. The game test data pack makes every cherry leaves block drop one (1 in 20 in the game), so the test does
+	 * not wait on chance; no other test breaks cherry leaves.
+	 */
+	@GameTest(maxTicks = 60)
+	public void getsCherrySaplingsFromItsLeaves(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES);
+		leavesTest(helper, "cherry_sapling");
+	}
+
+	/**
+	 * A dark oak tree (#602): get("apple") breaks its leaves. The game test data pack makes every dark oak leaves block
+	 * drop an apple (1 in 200 in the game); no other test breaks dark oak leaves.
+	 */
+	@GameTest(maxTicks = 60)
+	public void getsApplesFromDarkOakLeaves(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_LEAVES);
+		leavesTest(helper, "apple");
+	}
+
+	/** An empty bot by the tree gets two of item with radius 8 and prints "True 2", with no warnings. */
+	private static void leavesTest(GameTestHelper helper, String item) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			r = get("%s", 2, radius=8)
+			print(r["ok"], count("%s"))
+			""".formatted(item, item));
+		failOnOtherPrint(helper, bot, "True 2");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 2");
+			helper.assertTrue(BotScripts.warnings(bot).isEmpty(), "warned " + BotScripts.warnings(bot));
+		});
+	}
+
+	/** Oak leaves and no birch (#602): get("birch_sapling") fails no_tree at once, with the sapling in missing. */
+	@GameTest(maxTicks = 20)
+	public void noTreeOfTheKindFailsNoTree(GameTestHelper helper) {
+		helper.setBlock(5, 2, 5, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			r = get("birch_sapling", radius=8)
+			print(r["ok"], r["reason"], r["missing"])
+			""");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "False no_tree {'minecraft:birch_sapling': 1}");
+			helper.assertTrue(BotScripts.warnings(bot).isEmpty(), "warned " + BotScripts.warnings(bot));
+		});
+	}
+
+	/**
 	 * A modded ore stand-in: lodestone, which the game test tags put in needs_iron_tool and c:ores, with an ore Source named after a
 	 * block any pickaxe drops. The bot carries a stone pickaxe, the chest holds an iron one: get takes the tier from the
 	 * exposed block's tags and mines it only with the iron pickaxe (#528).
@@ -843,6 +896,16 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			ScriptRun run = bot.getScript();
 			if (run != null && run.state() == ScriptRun.State.FAILED) {
 				helper.fail("script failed: " + BotScripts.log(bot, Output.Level.DEBUG));
+			}
+		});
+	}
+
+	/** Fails the test at once where the bot printed something other than lines, so a slow test need not wait out maxTicks. */
+	private static void failOnOtherPrint(GameTestHelper helper, AntBot bot, String... lines) {
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (!log.isEmpty() && !log.equals(List.of(lines))) {
+				helper.fail("printed " + log + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
 			}
 		});
 	}

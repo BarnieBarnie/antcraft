@@ -7,6 +7,7 @@ import lib.trees
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool, get
 from lib.result import result
+from lib.stock import take_up_to
 
 at = Pos(int(ARGS[0]), int(ARGS[1]), int(ARGS[2])) if len(ARGS) >= 3 else pos()
 radius = int(ARGS[-1]) if len(ARGS) in (1, 4) else 32
@@ -29,7 +30,8 @@ def fell():
         r = get("dirt", max([p.y for p in logs]) - base.y + 1, radius)
         if not r["ok"]:
             return r
-        get(block(base).id.replace("_log", "_sapling"), 4, radius)
+        # From chests only: get would break the leaves of this very tree for them (#602).
+        take_up_to(block(base).id.replace("_log", "_sapling"), 4, radius)
     finally:
         lib.trees.KEEP.clear()
     before = count(lib.trees.LOGS)

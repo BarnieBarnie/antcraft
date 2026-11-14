@@ -14,7 +14,7 @@ import lib.find
 import lib.stock
 import lib.trees
 from lib.borrow import give_back
-from lib.get import ensure_tool, get
+from lib.get import ensure_tool
 from lib.inv import store_all
 from lib.stock import take_up_to
 from lib.trees import LOGS, SCAFFOLD, SEEDLINGS, fell_whole, is_log, next_tree, pillar, sapling, square, stands, tree_blocks, tree_logs
@@ -42,7 +42,8 @@ def ready(base):
             scaffold(climb)
         kind = sapling(block(base).id)
         if kind:
-            get(kind, len(square(base) or [base]))
+            # From the chests only, not get: get breaks leaves for saplings, this tree's too (#602), and felling drops some.
+            take_up_to(kind, len(square(base) or [base]))
         return logs, plan
     finally:
         lib.trees.KEEP.clear()
