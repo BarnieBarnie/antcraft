@@ -84,7 +84,7 @@ How `get` gathers each raw item: a dict of item id (`"#minecraft:logs"` for any 
 | any log | [`lib.trees.logs`](trees.md) | axe, or by hand |
 | cobblestone | [`lib.dig.stone`](dig.md#stonen-radius32) | pickaxe |
 | dirt, sand | the exposed ones within `radius`, nearest first | shovel, or by hand |
-| flint | the exposed gravel within `radius`, nearest first, until enough flint drops (one gravel in ten without Fortune; `no_block` where none is left) | shovel, or by hand |
+| flint | the exposed gravel within `radius`, nearest first, then the gravel it carries or what the dug gravel dropped, put down beside it and dug again, until enough flint drops (one gravel in ten without Fortune; `no_block` where it has neither) | shovel, or by hand |
 | coal, raw iron, raw copper, raw gold, redstone, lapis lazuli, diamond, emerald | [`lib.dig.ore`](dig.md) | pickaxe of [`lib.tools.tier_for`](tools.md) its ore |
 | each sapling of `#minecraft:saplings` but the mangrove propagule, apple | the exposed leaves of grown trees (not `persistent`) that drop it within `radius`, nearest first, broken by hand until enough drop (`no_tree` where none is left) | none, by hand |
 | mangrove propagule | the ripe propagules (`age` 4) hanging from mangrove leaves within `radius`, nearest first, broken by hand until enough drop (`no_tree` where none is left) | none, by hand |

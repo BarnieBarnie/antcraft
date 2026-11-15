@@ -149,11 +149,45 @@ SOURCES = {
                              near="minecraft:dirt"),
     "minecraft:sand": Source(dig_up("minecraft:sand"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK,
                              near="minecraft:sand"),
-    # Gravel drops flint one time in ten without fortune, else itself (#720). ponytail: only the exposed gravel within
-    # radius, the gravel it drops is not put down and dug again.
-    "minecraft:flint": Source(breaking("minecraft:flint", "minecraft:gravel", "no_block"), "shovel", "hand",
-                              10 * (lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK), near="minecraft:gravel"),
 }
+
+
+def flint(n, radius):
+    """The flint Source's do (#720): breaks the exposed gravel within radius, nearest first, and where none is left puts
+    down a gravel it carries beside it and breaks that (#746), until the bot carries n more flint; no_block once it has
+    neither."""
+    target = count(FLINT) + n
+    skip = {}
+    while count(FLINT) < target:
+        p = lib.find.exposed(GRAVEL_BLOCK, radius, skip)
+        if p is not None:
+            skip[p] = True
+        elif count(GRAVEL_BLOCK) > 0:
+            p = lib.craft.place_beside(GRAVEL_BLOCK)
+            if p is None:
+                return result("no_space", None)
+        else:
+            return result("no_block", None, {FLINT: target - count(FLINT)})
+        r = mine(p)
+        if not r and r.reason == "no_space":
+            return result("no_space", p)
+    return result()
+
+
+class Flint(Source):
+    """Gravel drops flint one time in ten without fortune, else itself, so the source digs what it drops again (#746)
+    and there is flint to get where gravel is carried too. ponytail: estimate counts ten gravel a flint, as fortune is
+    not read; a Stack enchantments sense if fortune shovels matter."""
+
+    def there(self, radius):
+        return count(GRAVEL_BLOCK) > 0 or super().there(radius)
+
+
+FLINT = "minecraft:flint"
+GRAVEL_BLOCK = "minecraft:gravel"
+# Ticks to break one gravel by hand and step to the next; a flint takes ten of them without fortune.
+GRAVEL = lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK
+SOURCES[FLINT] = Flint(flint, "shovel", "hand", 10 * GRAVEL, near=GRAVEL_BLOCK)
 for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
                                   ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 400),
                                   ("lapis_lazuli", "lapis_ore", 300), ("diamond", "diamond_ore", 2000),

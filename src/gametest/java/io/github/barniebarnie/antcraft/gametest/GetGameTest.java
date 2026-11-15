@@ -197,6 +197,55 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Two gravel carried, none in the world, and a Fortune III shovel (#746): get puts the gravel down and digs it for two
+	 * flint, as it would dig what gravel drops again where no exposed gravel is left. Measured: passes at tick 12 to 16.
+	 */
+	@GameTest(maxTicks = 30)
+	public void getFlintFromCarriedGravel(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(fortuneShovel(helper));
+		bot.getInventory().addItem(new ItemStack(Items.GRAVEL, 2));
+		run(helper, bot, """
+			from lib.get import get
+			r = get("flint", 2)
+			print(r["ok"], count("flint"), count("gravel"))
+			""");
+		failOnOtherPrint(helper, bot, "True 2 0");
+		helper.succeedWhen(() -> printed(helper, bot, "True 2 0"));
+	}
+
+	/**
+	 * Three gravel at the area's far corners and a Fortune III shovel carried, which drops flint from each gravel (#746):
+	 * make_cost of three flint, with the source's estimate cut to one gravel a flint (lib.get.GRAVEL, as the ten gravel a
+	 * flint it counts are the chance without fortune), is within {@link #COST_FACTOR} of the ticks get takes. Measured:
+	 * make_cost 75, get 72 to 78 ticks (test tick 78 to 92).
+	 */
+	@GameTest(maxTicks = 160)
+	public void makeCostOfFlintIsCloseToItsTicks(GameTestHelper helper) {
+		helper.setBlock(7, 1, 1, Blocks.GRAVEL);
+		helper.setBlock(7, 1, 7, Blocks.GRAVEL);
+		helper.setBlock(1, 1, 7, Blocks.GRAVEL);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(fortuneShovel(helper));
+		run(helper, bot, """
+			import lib.get
+			from lib.get import get, make_cost
+			lib.get.SOURCES["minecraft:flint"].estimate = lib.get.GRAVEL
+			print(make_cost("flint", 3))
+			r = get("flint", 3)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/** An iron shovel with Fortune III, which always drops flint from gravel. */
+	private static ItemStack fortuneShovel(GameTestHelper helper) {
+		ItemStack shovel = new ItemStack(Items.IRON_SHOVEL);
+		shovel.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.FORTUNE), 3);
+		return shovel;
+	}
+
+	/**
 	 * A stone pickaxe carried, three iron ore at three corners of the area (#649): make_cost of three raw iron is the raw
 	 * iron source's estimate, as get gathers it, within {@link #COST_FACTOR} of get's ticks; it was None, as make_cost turned
 	 * down the raw item it was costing. The estimate (60) counts a walk to each ore: three ore beside the bot took 82 ticks.
