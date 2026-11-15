@@ -315,6 +315,55 @@ class PathFinderTest {
 		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + hurt, path.cost(), 1e-9);
 	}
 
+	/** A bot's death as {@link #death}, its food healing {@code quick} health at 10 ticks a point, then {@code slow} at 80. */
+	private static PathFinder.Death fed(float health, @Nullable BlockPos home, float quick, float slow) {
+		return new PathFinder.Death(health, home, 200, quick, slow);
+	}
+
+	/**
+	 * A bot whose food heals the health a drop takes counts the ticks healing it takes rather than its share of a death
+	 * (#708): 9 health at 10 ticks a point, full with saturation.
+	 */
+	@Test
+	void aDropThatHurtsAFedBotCostsTheTicksItTakesToHeal() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		Path path = find(platform(12), landing, walkOnly(fed(20, landing.south(10), 20, 0)));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 9 * 10, path.cost(), 1e-9);
+	}
+
+	/**
+	 * Healing a point costs at most its share of a death, what a point the bot does not heal costs: a bot whose home is
+	 * near heals slowly (80 ticks a point) for more than dying would cost. Health its food does not heal is that share.
+	 */
+	@Test
+	void aDropCostsEachPointTheLesserOfHealingItAndItsShareOfADeath() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		Path near = find(platform(12), landing, walkOnly(fed(20, landing.south(10), 0, 20)));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 9 / 20.0 * (200 + 10 * PathFinder.WALK_COST), near.cost(), 1e-9);
+		Path away = find(platform(12), landing, walkOnly(fed(20, null, 3, 2)));
+		double share = (200 + PathFinder.AWAY_WALK) / 20;
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 3 * 10 + 2 * 80 + 4 * share, away.cost(), 1e-9);
+	}
+
+	/** Food makes a fatal drop no cheaper: it costs a whole death. */
+	@Test
+	void aFatalDropCostsAFedBotADeath() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		Path weak = find(platform(12), landing, walkOnly(fed(5, landing.south(10), 20, 20)));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 200 + 10 * PathFinder.WALK_COST, weak.cost(), 1e-9);
+	}
+
+	/** Up the pillar of {@link #jumpsOffAPillarWhereThatCostsLessThanDiggingDown}, its home far off: a fed bot jumps off where a hungry one digs down. */
+	@Test
+	void aFedBotJumpsOffAPillarWhereAHungryOneDigsDown() {
+		GridWorld world = new GridWorld().fill(0, -11, 0, 0, 0, 0, 'D').fill(-10, -12, -10, 10, -12, 10, '#');
+		BlockPos foot = new BlockPos(1, -11, 0);
+		Path jump = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, fed(20, foot.east(100), 20, 0)));
+		assertEquals(List.of(new Step(MoveType.DROP, foot, List.of(), List.of())), jump.steps());
+		Path dig = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, fed(20, foot.east(100), 0, 0)));
+		assertTrue(types(dig).contains(MoveType.DIG_DOWN), "jumped: " + dig.steps());
+	}
+
 	/** A drop that hurts the bot as much as the health it has or more costs a whole death, however far past that it falls. */
 	@Test
 	void aFatalDropCostsADeath() {

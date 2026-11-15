@@ -101,4 +101,32 @@ class BotFoodTest {
 		assertEquals(20, food.food());
 		assertEquals(20, food.saturation());
 	}
+
+	/**
+	 * What the bot's food heals before it stops, as the path search costs a fall with it (#708): quickly while full with
+	 * saturation, then slowly down to 18 food. Checked against the ticks themselves, for a bot at 1 health that does not eat.
+	 */
+	@Test
+	void theHealthItsFoodHealsIsWhatTheTicksHeal() {
+		float[][] cases = {{20, 5, 0}, {20, 20, 0}, {20, 0, 0}, {19, 3, 2}, {18, 0, 0}, {17, 5, 0}, {20, 5, 3.5F}};
+		for (float[] c : cases) {
+			BotFood food = new BotFood();
+			food.setFoodLevel((int) c[0]);
+			food.setSaturation(c[1]);
+			food.exhaust(c[2]);
+			float quick = food.quickHeal();
+			float slow = food.slowHeal();
+			String at = "food " + c[0] + ", saturation " + c[1] + ", exhaustion " + c[2];
+			float healed = 0;
+			float quickHealed = 0;
+			for (int i = 0; i < 10_000; i++) {
+				boolean saturated = food.food() == 20 && food.saturation() > 0;
+				float change = food.tick(1 + healed, 20, true, Difficulty.NORMAL);
+				healed += change;
+				quickHealed += saturated ? change : 0;
+			}
+			assertEquals(healed, quick + slow, 1, at);
+			assertEquals(quickHealed, quick, 1, at);
+		}
+	}
 }

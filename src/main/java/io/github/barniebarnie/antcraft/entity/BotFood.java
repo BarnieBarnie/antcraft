@@ -89,6 +89,30 @@ public final class BotFood {
 		return 0;
 	}
 
+	/**
+	 * The health the bot heals quickly, every 10 ticks, before it stops for want of food: while full with saturation, 6
+	 * exhaustion a point, and every 4 exhaustion takes a point of saturation (#708).
+	 */
+	public float quickHeal() {
+		if (this.food < FoodConstants.MAX_FOOD) {
+			return 0;
+		}
+		return Math.max(0, Mth.ceil(this.saturation) * FoodConstants.EXHAUSTION_DROP - this.exhaustion) / FoodConstants.EXHAUSTION_HEAL;
+	}
+
+	/**
+	 * The health the bot heals slowly, a point every 80 ticks, after {@link #quickHeal}: down to 18 food, its saturation
+	 * first, 4 exhaustion a point of either.
+	 */
+	public float slowHeal() {
+		int spare = this.food - FoodConstants.HEAL_LEVEL + 1;
+		if (spare <= 0) {
+			return 0;
+		}
+		float all = Math.max(0, (Mth.ceil(this.saturation) + spare) * FoodConstants.EXHAUSTION_DROP - this.exhaustion);
+		return all / FoodConstants.EXHAUSTION_HEAL - this.quickHeal();
+	}
+
 	public void save(ValueOutput output) {
 		output.putInt("foodLevel", this.food);
 		output.putInt("foodTickTimer", this.tickTimer);

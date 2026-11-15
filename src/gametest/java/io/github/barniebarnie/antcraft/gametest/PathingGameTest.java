@@ -857,26 +857,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot up a dirt pillar 12 high, its home {@code homeOff} blocks east of the pillar's top, walks to the floor beside
-	 * the pillar: off the pillar, hurt, or digging down it (#682).
+	 * A bot up a dirt pillar 12 high, its home {@code homeOff} blocks east of the pillar's top, at {@code food} with
+	 * {@code saturation} (a player starts at 20 with 5), walks to the floor beside the pillar: off the pillar, hurt, or
+	 * digging down it (#682, #708).
 	 */
-	private static AntBot upAPillar(GameTestHelper helper, int homeOff) {
+	private static AntBot upAPillar(GameTestHelper helper, int homeOff, int food, float saturation) {
 		room(helper, 0, 16);
 		fill(helper, 3, 1, 3, 3, 12, 3, Blocks.DIRT);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 13, 3);
 		bot.setHome(helper.absolutePos(new BlockPos(3 + homeOff, 13, 3)));
+		bot.getFood().setFoodLevel(food);
+		bot.getFood().setSaturation(saturation);
 		BotScripts.failOnError(helper, bot);
 		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 1, 3)));
 		return bot;
 	}
 
 	/**
-	 * With its home on the pillar, a bot jumps off it: the 9 health the fall takes are 9/20 of a death, 119 ticks, which
-	 * with the drop costs less than digging 12 dirt down (some 250) (#682).
+	 * With its home on the pillar, a bot jumps off it: of the 9 health the fall takes its food heals 3 quickly (10 ticks
+	 * a point) and the rest costs no more than its share of a death (some 11 ticks a point, less than healing it slowly),
+	 * some 100 ticks in all, which with the drop costs less than digging 12 dirt down (some 250) (#682, #708).
 	 */
 	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 60)
 	public void jumpsOffAPillarWhereThatCostsLessThanDiggingDown(GameTestHelper helper) {
-		AntBot bot = upAPillar(helper, 0);
+		AntBot bot = upAPillar(helper, 0, 20, 5);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(bot.getHealth() < bot.getMaxHealth(), "not hurt: dug down? pillar top at " + topOf(helper));
 			helper.assertTrue(helper.getBlockState(new BlockPos(3, 12, 3)).is(Blocks.DIRT), "dug the pillar");
@@ -885,10 +889,28 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	/** With its home 100 blocks off, the share of a death costs more than digging down, so the bot digs down unhurt (#682). */
+	/**
+	 * With its home 100 blocks off but full with 20 saturation, the bot heals the 9 health in 90 ticks, which costs less
+	 * than digging down, so it jumps off (#708).
+	 */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 60)
+	public void aWellFedBotJumpsOffAPillarWithItsHomeFarOff(GameTestHelper helper) {
+		AntBot bot = upAPillar(helper, 100, 20, 20);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getHealth() < bot.getMaxHealth(), "not hurt: dug down? pillar top at " + topOf(helper));
+			helper.assertTrue(helper.getBlockState(new BlockPos(3, 12, 3)).is(Blocks.DIRT), "dug the pillar");
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(helper.absolutePos(new BlockPos(5, 1, 3))) <= 1,
+				"at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+		});
+	}
+
+	/**
+	 * With its home 100 blocks off and too hungry to heal (17 food), the 9 health are 9/20 of a death, more than digging
+	 * down costs, so the bot digs down unhurt (#682). A bot with a player's starting food heals some of it and jumps (#708).
+	 */
 	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 400)
 	public void digsDownAPillarWhereThatCostsLessThanJumpingOff(GameTestHelper helper) {
-		AntBot bot = upAPillar(helper, 100);
+		AntBot bot = upAPillar(helper, 100, 17, 0);
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt: jumped off"));
 		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
 	}

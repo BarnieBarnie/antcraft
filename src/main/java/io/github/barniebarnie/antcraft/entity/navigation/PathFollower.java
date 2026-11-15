@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.entity.navigation;
 import io.github.barniebarnie.antcraft.AntCraft;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.BotFood;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
@@ -42,6 +43,7 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
@@ -279,7 +281,8 @@ public class PathFollower {
 
 	/**
 	 * What a death costs the bot, so a path may drop farther than {@link #MAX_DROP} at that cost (#682); none where it
-	 * would not come back. A home in another dimension is a death with no home here (#688).
+	 * would not come back. A home in another dimension is a death with no home here (#688). A bot heals what its food
+	 * heals (#708), unless botHunger or the naturalHealthRegeneration game rule is off.
 	 */
 	private PathFinder.@Nullable Death death() {
 		BlockPos home = this.bot.getHome();
@@ -287,7 +290,10 @@ public class PathFollower {
 			return null;
 		}
 		boolean here = this.bot.getHomeDimension() == this.bot.level().dimension();
-		return new PathFinder.Death(this.bot.getHealth(), here ? home : null, AntCraftConfig.botRespawnTicks());
+		boolean heals = AntCraftConfig.botHunger() && ((ServerLevel) this.bot.level()).getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION);
+		BotFood food = this.bot.getFood();
+		return new PathFinder.Death(this.bot.getHealth(), here ? home : null, AntCraftConfig.botRespawnTicks(),
+			heals ? food.quickHeal() : 0, heals ? food.slowHeal() : 0);
 	}
 
 	/**

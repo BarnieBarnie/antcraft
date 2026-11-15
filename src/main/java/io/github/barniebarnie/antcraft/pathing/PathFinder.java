@@ -71,18 +71,39 @@ public final class PathFinder {
 	 * comes back at {@code home} {@code respawnTicks} later, then walks back for what it dropped, as
 	 * {@code lib.cost.death} counts it (docs/features/death.md); {@code home} is null where it is in another dimension,
 	 * and the walk back then costs {@link #AWAY_WALK} (#688). A death costs no more, so dying is a move like any other
-	 * where it is cheaper.
+	 * where it is cheaper. Its food heals {@code quickHeal} health at {@link #QUICK_HEAL_TICKS} a point, then
+	 * {@code slowHeal} at {@link #SLOW_HEAL_TICKS} (#708, docs/features/bots.md, Hunger); none where it does not heal.
 	 */
-	// ponytail: the items lost past their despawn are not counted.
-	public record Death(float health, @Nullable BlockPos home, int respawnTicks) {
+	// ponytail: the items lost past their despawn, and the food healing uses up, are not counted.
+	public record Death(float health, @Nullable BlockPos home, int respawnTicks, float quickHeal, float slowHeal) {
+		/** Healing a point full with saturation, as a player's FoodData. */
+		public static final int QUICK_HEAL_TICKS = 10;
+		/** Healing a point at 18 food or more without saturation. */
+		public static final int SLOW_HEAL_TICKS = 80;
+
+		/** A bot that does not heal. */
+		public Death(float health, @Nullable BlockPos home, int respawnTicks) {
+			this(health, home, respawnTicks, 0, 0);
+		}
+
 		/** A death at {@code at}: the respawn and the walk from home back to it. */
 		double cost(BlockPos at) {
 			return this.respawnTicks + (this.home == null ? AWAY_WALK : WALK_COST * this.home.distManhattan(at));
 		}
 
-		/** {@code damage} at {@code at}: a bot does not heal, so the health it loses is that share of a death, at most one. */
+		/**
+		 * {@code damage} at {@code at}: a fatal one a death; else each point the ticks it takes to heal, its quick points
+		 * first, but at most its share of a death, which is what a point it does not heal costs.
+		 */
 		double hurt(int damage, BlockPos at) {
-			return Math.min(1, damage / (double) this.health) * this.cost(at);
+			double death = this.cost(at);
+			if (damage >= this.health) {
+				return death;
+			}
+			double share = death / this.health;
+			double quick = Math.min(damage, this.quickHeal);
+			double slow = Math.min(damage - quick, this.slowHeal);
+			return quick * Math.min(QUICK_HEAL_TICKS, share) + slow * Math.min(SLOW_HEAL_TICKS, share) + (damage - quick - slow) * share;
 		}
 	}
 
