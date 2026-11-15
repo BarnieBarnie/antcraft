@@ -57,9 +57,13 @@ final class BotBody implements MoveApi.Body {
 		return false;
 	}
 
+	/** Where the bot stands at home: beside its home when that was built over, in its home's dimension (#711). */
 	@Override
 	public Pos home() {
 		BlockPos home = this.bot.getScriptHome();
+		if (this.bot.level().dimension() == this.bot.getHomeDimension()) {
+			home = AntBot.freeSpotNear(this.level(), home);
+		}
 		return new Pos(home.getX(), home.getY(), home.getZ());
 	}
 

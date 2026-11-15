@@ -39,6 +39,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.phys.Vec3;
@@ -183,6 +184,29 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 				&& level.getBlockState(at.above()).getCollisionShape(level, at.above()).isEmpty()
 				&& !level.getBlockState(at.below()).getCollisionShape(level, at.below()).isEmpty(), "respawned at " + at + ", not free");
 			helper.assertTrue(at.distManhattan(home) <= 2, "respawned at " + at + ", home " + home);
+		});
+	}
+
+	/**
+	 * A bot whose home is buried deeper than the free-spot search reaches respawns on top of the ground over it, not inside
+	 * the stone (#711).
+	 */
+	@GameTest(maxTicks = 440)
+	public void aBotWhoseHomeIsBuriedDeepRespawnsOnTheGroundOverIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(4, 1, 4)));
+		BotScripts.run(bot, SCRIPT);
+		helper.runAfterDelay(5, () -> {
+			bot.kill(helper.getLevel());
+			for (BlockPos pos : BlockPos.betweenClosed(0, 1, 0, 7, 5, 7)) {
+				helper.setBlock(pos, Blocks.STONE);
+			}
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again != bot, "not respawned");
+			helper.assertValueEqual(TestPositions.relative(helper, Objects.requireNonNull(again).blockPosition()), new BlockPos(4, 6, 4), "respawned at");
 		});
 	}
 

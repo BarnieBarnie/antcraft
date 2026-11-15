@@ -4,7 +4,7 @@
 home()
 ```
 
-The bot's home: where it was first spawned, until [`set_home`](set_home.md) changes it.
+The bot's home: where it was first spawned, until [`set_home`](set_home.md) changes it. When a block was built there since, in the home's dimension, it is the spot where the bot stands at home instead, the same spot it respawns on: the nearest within 3 blocks with room for it and a floor, else the first with room up the home's column (see [Idle, home and death](../../features/death.md#idle-home-and-death)). A slab, carpet or anything else no higher than half a block leaves the home as it is.
 
 ## Returns
 

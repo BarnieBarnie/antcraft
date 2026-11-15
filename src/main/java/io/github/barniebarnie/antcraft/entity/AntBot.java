@@ -31,6 +31,7 @@ import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -78,6 +79,7 @@ import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -831,17 +833,27 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	/**
-	 * Where a bot respawning at {@code home} stands: the home itself when nothing blocks feet or head there, else the nearest
-	 * spot within 3 blocks with feet and head clear and a floor, else the home (#696, docs/features/death.md). Only loaded blocks.
+	 * Where a bot at {@code home} stands, respawning there or going home (home() in a script): the home itself when a bot can
+	 * stand in it, with nothing higher than a slab there and its head clear, else the nearest spot within 3 blocks with feet
+	 * and head clear and a floor, else the first such spot up the home's column, on the ground over a home buried deeper
+	 * (#696, #711, docs/features/death.md). Only loaded blocks.
 	 */
 	static BlockPos freeSpotNear(ServerLevel level, BlockPos home) {
-		if (clear(level, home) && clear(level, home.above())) {
-			return home;
+		if (level.isLoaded(home) && clear(level, home.above())) {
+			VoxelShape feet = level.getBlockState(home).getCollisionShape(level, home);
+			if (feet.isEmpty() || feet.max(Direction.Axis.Y) <= 0.5) {
+				return home;
+			}
 		}
 		for (BlockPos pos : BlockPos.withinManhattan(home, 3)) { // nearest first
 			if (clear(level, pos) && clear(level, pos.above())
 				&& level.isLoaded(pos.below()) && !level.getBlockState(pos.below()).getCollisionShape(level, pos.below()).isEmpty()) {
 				return pos.immutable();
+			}
+		}
+		for (BlockPos pos = home.above(); level.isLoaded(pos) && pos.getY() < level.getMaxY(); pos = pos.above()) {
+			if (clear(level, pos) && clear(level, pos.above())) {
+				return pos; // over what it stood on
 			}
 		}
 		return home;

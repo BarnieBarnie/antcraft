@@ -257,6 +257,37 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot whose home was built over goes home to the free spot beside it (#711): {@code lib.home.go_home} gives True
+	 * there, and then {@code idle.py} keeps it there, the chest on its home left alone.
+	 */
+	@GameTest(maxTicks = 200)
+	public void aBotWhoseHomeWasBuiltOverGoesHomeBesideIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos home = helper.absolutePos(new BlockPos(5, 1, 5));
+		bot.setHome(home);
+		helper.setBlock(5, 1, 5, Blocks.CHEST);
+		BotScripts.run(bot, "from lib.home import go_home\nprint(go_home(), home() != " + pos(home) + ")\n");
+		BotScripts.failOnError(helper, bot);
+		BlockPos[] last = {null};
+		int[] stillTicks = {0};
+		helper.onEachTick(() -> {
+			ScriptRun run = bot.getScript();
+			if (run == null || !run.name().equals(DefaultScripts.IDLE)) {
+				return;
+			}
+			stillTicks[0] = bot.blockPosition().equals(last[0]) ? stillTicks[0] + 1 : 0;
+			last[0] = bot.blockPosition();
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(printed(bot), List.of("True True"), "printed");
+			helper.assertBlockPresent(Blocks.CHEST, 5, 1, 5);
+			BlockPos at = bot.blockPosition();
+			helper.assertTrue(at.distManhattan(home) == 1, "at " + TestPositions.relative(helper, at).toShortString());
+			helper.assertTrue(stillTicks[0] >= 60, "idle bot still " + stillTicks[0] + " ticks");
+		});
+	}
+
+	/**
 	 * An idle bot loads chunks on its way home as any script's {@code goto} does (#327): far from every other test, on a
 	 * bridge high in the air, its home lies in the fourth chunk on, which nothing loads until its walk does. Waiting for its
 	 * chunks as {@link #gotoIntoAnUnloadedChunkLoadsItAndArrives} does.

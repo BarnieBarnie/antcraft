@@ -1,6 +1,7 @@
 # What a bot does when it has no script to run, or its script ended, stopped or
 # failed: walk home, then wait there. home() is where the bot was first spawned,
-# until a script calls set_home(pos). In another dimension than its home's, the
+# until a script calls set_home(pos), or the free spot beside it once a block was
+# built there (#711). In another dimension than its home's, the
 # bot goes through a nether portal within 32 blocks, or else the nearest one it
 # went through before in this dimension (the next one if that is gone), and
 # waits where it is without any.
