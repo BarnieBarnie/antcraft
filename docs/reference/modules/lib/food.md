@@ -27,7 +27,7 @@ Makes the bot carry at least `n` food of `FOODS` (`STOCK` is 4). It first takes 
 
 ## `FOODS`, `MADE`, `MEALS`
 
-`FOODS` is the food a bot eats, best first, as `(item, food points)`: cooked meat and fish, golden carrots, beetroot soup (eating it keeps the bowl), bread, baked potatoes, then apples, carrots, raw meat, berries and the like. It leaves out what poisons or hurts (raw chicken, rotten flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, golden apples and the other stews. A script adds a modded food with `lib.food.FOODS.append(("mymod:pie", 8))` and `lib.food.ITEMS.append("mymod:pie")`. `MADE` is what `ensure_food` makes, in turn. `MEALS` are the items of `FOODS` worth 5 food points or more, the meals [`colony.farmer`](../../../features/colony-scripts.md) keeps in the core, `STOCK` for each member (#704).
+`FOODS` is the food a bot eats, best first, as `(item, food points)`: the game's foods, [`foods()`](../../inventory/foods.md), so modded ones too (#722), but those of `LEFT_OUT` (suspicious stew). The items of `FIRST` come first in its order: golden carrots, cooked meat and fish, beetroot soup, baked potatoes, bread; then the rest, most points first: rabbit stew, pumpkin pie, mushroom stew, apples, carrots, raw meat, berries and the like. Eating a stew keeps the bowl. `foods()` leaves out what has an effect on eating: what poisons or hurts (raw chicken, rotten flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, golden apples and honey. `MADE` is what `ensure_food` makes, in turn. `MEALS` are the items of `FOODS` worth 5 food points or more, the meals [`colony.farmer`](../../../features/colony-scripts.md) keeps in the core, `STOCK` for each member (#704).
 
 ```python
 import lib.food

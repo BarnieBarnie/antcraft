@@ -11,6 +11,11 @@ import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
+import io.github.barniebarnie.antcraft.script.lang.PyTuple;
+import java.util.Objects;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.MobCategory;
+import net.minecraft.world.item.component.Consumable;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import io.github.barniebarnie.antcraft.work.Storage;
@@ -99,6 +104,28 @@ public final class SenseApi {
 		return dict;
 	}
 
+	/**
+	 * What {@code foods()} and {@code monsters()} give, read from the registries once, on first use, so modded foods and
+	 * mobs are in (#722, docs/reference/inventory/foods.md, docs/reference/world/monsters.md).
+	 */
+	private static final class GameLists {
+		/** (item, food points) of every item with a food component and no effect on eating (poison, hunger, teleport). */
+		static final List<Object> FOODS = BuiltInRegistries.ITEM.stream()
+			.filter(item -> item.components().has(DataComponents.FOOD))
+			.filter(item -> {
+				Consumable consumable = item.components().get(DataComponents.CONSUMABLE);
+				return consumable == null || consumable.onConsumeEffects().isEmpty();
+			})
+			.map(item -> (Object) PyTuple.of(BuiltInRegistries.ITEM.getKey(item).toString(),
+				(long) Objects.requireNonNull(item.components().get(DataComponents.FOOD)).nutrition()))
+			.toList();
+		/** The ids of the entity types of the monster category. */
+		static final List<Object> MONSTERS = BuiltInRegistries.ENTITY_TYPE.stream()
+			.filter(type -> type.getCategory() == MobCategory.MONSTER)
+			.map(type -> (Object) BuiltInRegistries.ENTITY_TYPE.getKey(type).toString())
+			.toList();
+	}
+
 	public static void register(Natives natives, ScriptRun run) {
 		natives.register("inventory", 30, call -> {
 			Args.bind("inventory", call, 0);
@@ -124,6 +151,14 @@ public final class SenseApi {
 			return Selector.matches(args[0], args[1]);
 		});
 		natives.register("tag_items", 20, call -> Selector.tagItems(Args.bind("tag_items", call, 1, "tag")[0]));
+		natives.register("foods", 20, call -> {
+			Args.bind("foods", call, 0);
+			return new PyList(new ArrayList<>(GameLists.FOODS));
+		});
+		natives.register("monsters", 20, call -> {
+			Args.bind("monsters", call, 0);
+			return new PyList(new ArrayList<>(GameLists.MONSTERS));
+		});
 		natives.register("block_tags", 100, call -> {
 			Identifier id = Identifier.tryParse(Values.str(Args.bind("block_tags", call, 1, "block")[0]));
 			PyList tags = new PyList();

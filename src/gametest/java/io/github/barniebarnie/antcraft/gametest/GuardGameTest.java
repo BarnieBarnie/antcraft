@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Endermite;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -69,6 +70,24 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(near.isDeadOrDying() && far.isDeadOrDying(), "zombies alive: near " + near.getHealth() + ", far " + far.getHealth());
 			helper.assertTrue(bot.getInventory().countItem(Items.BREAD) < 3, "ate no bread");
 		});
+	}
+
+	/**
+	 * A guard kills an endermite, a hostile mob the hand-written MOBS left out: MOBS now comes from the game's monster
+	 * category (#722). At 19 health and not healing, so the bot's own target goal leaves the fight to the script (#718).
+	 */
+	// Measured: passes at tick 74.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 160)
+	public void aGuardFightsAHostileMobOfTheGamesMonsterCategory(GameTestHelper helper) {
+		Endermite endermite = helper.spawn(EntityTypes.ENDERMITE, 9, 1, 9);
+		endermite.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+		bot.setHealth(19);
+		bot.getFood().setFoodLevel(17); // under 18, so it does not heal
+		bot.getFood().setSaturation(0);
+		guard(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(endermite.isDeadOrDying(), "endermite alive: " + endermite.getHealth()));
 	}
 
 	/** Runs {@code jobs.guard 32} on {@code bot}, failing the test as soon as the script fails. */

@@ -13,9 +13,11 @@ import lib.food
 from lib.home import go_home
 from lib.tools import hold
 
-# The mobs it fights. ponytail: by hand, as no entity tag holds every hostile mob; add a modded mob here.
-MOBS = ["#minecraft:zombies", "#minecraft:skeletons", "spider", "cave_spider", "creeper", "witch", "slime", "silverfish",
-        "pillager", "vindicator"]
+# The mobs it fights: the game's monsters (monsters(), modded ones too, #722) but LEFT_OUT, the neutral ones, which a
+# blow turns on the bot with their kin, the warden and the bosses.
+LEFT_OUT = ["minecraft:enderman", "minecraft:zombified_piglin", "minecraft:piglin", "minecraft:warden",
+            "minecraft:wither", "minecraft:ender_dragon"]
+MOBS = [m for m in monsters() if m not in LEFT_OUT]
 # Health under which it retreats, also from a fight, above the flee reflex's 6, and the health it heals to before it
 # fights again.
 RETREAT = 12

@@ -45,6 +45,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`find_nearest`](world/find_nearest.md) | `find_nearest(what, radius=32, around=None)` | the nearest matching block's position (to the bot or `around`), or `None` (may pause) |
 | [`scan`](world/scan.md) | `scan(what, radius=16, limit=64, around=None)` | the positions of matching blocks, nearest first (to the bot or `around`) (may pause) |
 | [`entities`](world/entities.md) | `entities(what=None, radius=16)` | the [`Entity`](types/entity.md) values around, nearest first |
+| [`monsters`](world/monsters.md) | `monsters()` | the entity type ids of the game's hostile mobs, modded ones too |
 | [`items_near`](world/items_near.md) | `items_near(item=None, radius=16)` | the dropped items around, nearest first |
 | [`time`](world/time.md) | `time()` | the time of day, 0 to 23999 |
 | [`game_time`](world/game_time.md) | `game_time()` | the ticks the world has run, which never start again |
@@ -61,6 +62,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`free_slots`](inventory/free_slots.md) | `free_slots()` | how many inventory slots are empty |
 | [`matches`](inventory/matches.md) | `matches(item, selector)` | whether an item id or a `Stack` is one the [selector](types/selectors.md) selects |
 | [`tag_items`](inventory/tag_items.md) | `tag_items(tag)` | the item ids of an item tag, such as `"#antcraft:scaffold_blocks"` |
+| [`foods`](inventory/foods.md) | `foods()` | the game's foods, modded ones too, as `(item, food points)` |
 | [`equip`](inventory/equip.md) | `equip(item)` | hold a carried item |
 | [`drop`](inventory/drop.md) | `drop(item, n=None)` | toss up to `n` matching items |
 | [`eat`](inventory/eat.md) | `eat(item)` | action: eat or drink a carried item |

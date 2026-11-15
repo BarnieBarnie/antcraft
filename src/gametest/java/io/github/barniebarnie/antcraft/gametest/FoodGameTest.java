@@ -90,6 +90,25 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * An idle bot at food 10 eats the rabbit stew it carries (10 points), a food the hand-written FOODS left out: FOODS now
+	 * comes from the game's food components (#722). It keeps the bowl.
+	 */
+	@GameTest(maxTicks = 100)
+	public void anIdleHungryBotEatsAFoodOfTheGamesFoodComponents(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.setHome(helper.absolutePos(new BlockPos(3, 1, 3)));
+		bot.getFood().setFoodLevel(10);
+		bot.getFood().setSaturation(0);
+		bot.getInventory().addItem(new ItemStack(Items.RABBIT_STEW));
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(bot.getFood().food(), 20, "food");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.RABBIT_STEW), 0, "rabbit stew left");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BOWL), 1, "bowls");
+		});
+	}
+
 	/** A hungry hauler with no food makes bread from the core's wheat at the crafting table beside it, and eats. */
 	@GameTest(maxTicks = 250)
 	public void aHungryBotWithNoFoodMakesBreadFromTheCoresWheat(GameTestHelper helper) {

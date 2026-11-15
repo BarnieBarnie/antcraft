@@ -210,7 +210,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	 * {@code set_home} sets the home in the position's dimension, and the {@code Pos} methods work on coordinates.
 	 */
 	private static final Set<String> TAKE_NO_POSITION = Set.of("pos", "say", "wait", "stop", "home", "home_dimension",
-		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "tag_items", "held", "entities",
+		"dimension", "set_home", "portals", "inventory", "free_slots", "count", "has", "matches", "tag_items", "foods", "monsters", "held", "entities",
 		"items_near", "structures", "deaths", "last_death", "colony", "time", "game_time", "is_day", "placed_scaffold", "equip", "drop", "pick_up", "Pos", "Pos.up", "Pos.down", "Pos.north",
 		"Pos.south", "Pos.east", "Pos.west", "Pos.distance", "blueprint", "post_job", "jobs", "take_job", "finish_job",
 		"drop_job", "block_tags", "biome_tags", "structure_tags", "health", "max_health", "food", "saturation", "eat", "attack", "shoot", "needs", "cooks_in", "build_placement");

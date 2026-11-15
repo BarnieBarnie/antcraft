@@ -10,19 +10,19 @@ import lib.borrow
 import lib.stock
 from lib.result import result
 
-# The food a bot eats, best first, with the food points each gives. Left out: what poisons or hurts (raw chicken, rotten
-# flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, which teleports, golden apples, kept for a fight,
-# and stews and drinks but beetroot soup, which colony.farmer makes (#721); eat keeps its bowl. ponytail: the vanilla
-# values by hand; a modded food is not eaten unless added here.
-FOODS = [("minecraft:golden_carrot", 6), ("minecraft:cooked_beef", 8), ("minecraft:cooked_porkchop", 8),
-         ("minecraft:cooked_mutton", 6), ("minecraft:cooked_salmon", 6), ("minecraft:cooked_chicken", 6),
-         ("minecraft:beetroot_soup", 6),
-         ("minecraft:baked_potato", 5), ("minecraft:bread", 5), ("minecraft:cooked_rabbit", 5),
-         ("minecraft:cooked_cod", 5), ("minecraft:pumpkin_pie", 8), ("minecraft:apple", 4), ("minecraft:carrot", 3),
-         ("minecraft:beef", 3), ("minecraft:porkchop", 3), ("minecraft:rabbit", 3), ("minecraft:mutton", 2),
-         ("minecraft:cod", 2), ("minecraft:salmon", 2), ("minecraft:melon_slice", 2), ("minecraft:sweet_berries", 2),
-         ("minecraft:glow_berries", 2), ("minecraft:cookie", 2), ("minecraft:beetroot", 1), ("minecraft:potato", 1),
-         ("minecraft:dried_kelp", 1)]
+# The food a bot eats, best first, as (item, food points): the game's foods (foods(), modded ones too, #722), FIRST in
+# its order, then the rest most points first. foods() leaves out what has an effect on eating: what poisons or hurts
+# (raw chicken, rotten flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, which teleports, golden apples,
+# kept for a fight, and honey. LEFT_OUT is food it eats none of besides. Eating a stew keeps its bowl.
+FIRST = ["minecraft:golden_carrot", "minecraft:cooked_beef", "minecraft:cooked_porkchop", "minecraft:cooked_mutton",
+         "minecraft:cooked_salmon", "minecraft:cooked_chicken", "minecraft:beetroot_soup", "minecraft:baked_potato",
+         "minecraft:bread", "minecraft:cooked_rabbit", "minecraft:cooked_cod"]
+LEFT_OUT = ["minecraft:suspicious_stew"]  # its effects are its own component, not on eating
+POINTS = dict(foods())
+for i in LEFT_OUT:
+    POINTS.pop(i, None)
+FOODS = ([(i, POINTS[i]) for i in FIRST if i in POINTS]
+         + sorted([f for f in POINTS.items() if f[0] not in FIRST], key=lambda f: -f[1]))
 ITEMS = [f[0] for f in FOODS]
 # The meals of FOODS, 5 food points or more, as colony.farmer counts the core's stock: raw crops are seeds as well.
 MEALS = [f[0] for f in FOODS if f[1] >= 5]

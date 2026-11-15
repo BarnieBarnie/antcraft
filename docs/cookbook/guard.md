@@ -7,9 +7,11 @@ import lib.food
 from lib.home import go_home
 from lib.tools import hold
 
-# The mobs it fights. ponytail: by hand, as no entity tag holds every hostile mob; add a modded mob here.
-MOBS = ["#minecraft:zombies", "#minecraft:skeletons", "spider", "cave_spider", "creeper", "witch", "slime", "silverfish",
-        "pillager", "vindicator"]
+# The mobs it fights: the game's monsters (monsters(), modded ones too, #722) but LEFT_OUT, the neutral ones, which a
+# blow turns on the bot with their kin, the warden and the bosses.
+LEFT_OUT = ["minecraft:enderman", "minecraft:zombified_piglin", "minecraft:piglin", "minecraft:warden",
+            "minecraft:wither", "minecraft:ender_dragon"]
+MOBS = [m for m in monsters() if m not in LEFT_OUT]
 # Health under which it retreats, also from a fight, above the flee reflex's 6, and the health it heals to before it
 # fights again.
 RETREAT = 12
@@ -69,7 +71,7 @@ if args is not None:
 
 - Each round, under `RETREAT` (12) health, `heal` walks home with [`go_home`](../reference/modules/lib/home.md) and eats the best food it carries ([`lib.food.best`](../reference/modules/lib/food.md)) while it is hurt and not full, so it gets saturation and heals quickly, a point every 10 ticks; at 20 food without saturation it waits, healing a point every 80 ticks, until it has `HEALED` (18) health. Under 18 food with nothing left to eat it can heal no more, and goes back to the fight as it is, fighting that round without `min_health`.
 - It retreats before [`lib.food.upkeep`](../reference/modules/lib/food.md), which would otherwise eat where it fought; `upkeep` gets food from the chests at 14 food or under where it carries none.
-- It then [`attack`](../reference/combat/attack.md)s the mob of `MOBS` nearest it within the radius of [`home()`](../reference/movement/home.md), holding its best sword ([`lib.tools.hold`](../reference/modules/lib/tools.md)), with `min_health=RETREAT`: once its health drops under 12 the attack ends with `hurt`, and it retreats at once, in the middle of the fight. No entity tag holds every hostile mob, so `MOBS` lists them by hand: add a modded mob there. With none near it waits at home.
+- It then [`attack`](../reference/combat/attack.md)s the mob of `MOBS` nearest it within the radius of [`home()`](../reference/movement/home.md), holding its best sword ([`lib.tools.hold`](../reference/modules/lib/tools.md)), with `min_health=RETREAT`: once its health drops under 12 the attack ends with `hurt`, and it retreats at once, in the middle of the fight. `MOBS` is the game's monsters, [`monsters()`](../reference/world/monsters.md), modded ones too, but those of `LEFT_OUT`: endermen, zombified piglins and piglins, which a blow turns on the bot with their kin, the warden and the bosses. With none near it waits at home.
 - The flee reflex at `botFleeHealth` (6 by default) stays the last line: it ends the fight with `interrupted` and flees, and once it lets go the bot is under `RETREAT`, so it retreats home and heals as after any fight (see [Reflexes](../features/bots.md#reflexes)).
 - While it is hurt and runs a script, the bot's own goals start no fight with a mob in sight, so a mob far off does not draw it out while it retreats or heals. A mob that follows it home and hurts it is still fought back there.
 

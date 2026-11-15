@@ -9,8 +9,8 @@ Every builtin a script can call has its own page, listed on the [index](index.md
 | Folder | Group on the index | Builtins |
 |---|---|---|
 | `movement/` | Movement | `goto`, `travel`, `reachable`, `pos`, `home`, `set_home`, `home_dimension`, `dimension`, `portals`, `placed_scaffold` |
-| `world/` | The world around | `block`, `block_tags`, `surface`, `biome`, `biome_tags`, `structures`, `structure_tags`, `find_nearest`, `scan`, `entities`, `items_near`, `time`, `is_day` |
-| `inventory/` | Inventory | `inventory`, `held`, `count`, `has`, `free_slots`, `matches`, `tag_items`, `equip`, `drop`, `eat`, `pick_up` |
+| `world/` | The world around | `block`, `block_tags`, `surface`, `biome`, `biome_tags`, `structures`, `structure_tags`, `find_nearest`, `scan`, `entities`, `monsters`, `items_near`, `time`, `is_day` |
+| `inventory/` | Inventory | `inventory`, `held`, `count`, `has`, `free_slots`, `matches`, `tag_items`, `foods`, `equip`, `drop`, `eat`, `pick_up` |
 | `blocks/` | Working blocks | `mine`, `place`, `use` |
 | `crafting/` | Containers and crafting | `container`, `room`, `put`, `take`, `craft`, `smelt`, `needs`, `cooks_in` |
 | `building/` | Building | `build`, `build_placement`, `blueprint` |
