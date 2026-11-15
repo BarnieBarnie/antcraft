@@ -194,6 +194,16 @@ class AntCraftConfigTest {
 	}
 
 	@Test
+	void botsGetHungryUnlessTurnedOff() {
+		assertTrue(AntCraftConfig.parse(new Properties()).botHunger());
+		assertTrue(new AntCraftConfig.Values(true, 64).botHunger());
+		Properties props = new Properties();
+		props.setProperty("botHunger", " false ");
+		assertFalse(AntCraftConfig.parse(props).botHunger());
+		assertTrue(AntCraftConfig.fileComment().contains("botHunger"), AntCraftConfig.fileComment());
+	}
+
+	@Test
 	void theConfigCommentNamesTheReflexThresholds() {
 		String comment = AntCraftConfig.fileComment();
 		assertTrue(comment.contains("botFleeHealth") && comment.contains("botSurfaceAir"), comment);

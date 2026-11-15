@@ -290,6 +290,15 @@ public final class GameTests {
 
 	private static final Logger COST = LoggerFactory.getLogger("antcraft");
 
+	/**
+	 * Brings {@code bot} down to {@code health} and keeps it there: hungry, below the 18 food a bot needs to heal (#702), so a
+	 * test of what a hurt bot does is not undone by its healing.
+	 */
+	public static void hurt(AntBot bot, float health) {
+		bot.getFood().setFoodLevel(17);
+		bot.setHealth(health);
+	}
+
 	/** Whether the walk {@link #walkTo} started has ended, there or given up. */
 	public static boolean walked(AntBot bot) {
 		return !BotScripts.log(bot, Output.Level.PRINT).isEmpty();

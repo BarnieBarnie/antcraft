@@ -219,7 +219,7 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 3);
 		husk.setNoAi(true);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		bot.setHealth(4);
+		GameTests.hurt(bot, 4);
 		BotScripts.run(bot, WAIT);
 		long[] lastPlan = {-1};
 		int[] plans = {0};
@@ -254,7 +254,7 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);
 		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
 		// Low from the start, so the reflex has it before its own fight would strike the husk beside it (#427).
-		bot.setHealth(4);
+		GameTests.hurt(bot, 4);
 		BotScripts.run(bot, WAIT);
 		helper.onEachTick(() -> {
 			float blow = 200 - husk.getHealth();
@@ -284,7 +284,7 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
 		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
 		// As in aFleeingBotsFirstBlowDoesTheSwordsDamage.
-		bot.setHealth(4);
+		GameTests.hurt(bot, 4);
 		BotScripts.run(bot, WAIT);
 		long[] firstBlow = {-1};
 		helper.onEachTick(() -> {
@@ -313,7 +313,7 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	private static void fleeFrom(GameTestHelper helper, AntBot bot, Husk husk) {
 		husk.setNoAi(true);
 		// Once the bot waits.
-		helper.runAfterDelay(2, () -> bot.setHealth(4));
+		helper.runAfterDelay(2, () -> GameTests.hurt(bot, 4));
 		BotScripts.run(bot, WAIT);
 		helper.onEachTick(() -> {
 			if (husk.getHealth() < husk.getMaxHealth()) {

@@ -15,11 +15,13 @@ import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -29,7 +31,10 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.food.FoodConstants;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.Consumable;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.phys.AABB;
@@ -38,7 +43,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The actions of the bot API that change the world (docs/reference/index.md, Working blocks): {@code mine}, {@code place},
- * {@code pick_up}, {@code equip}, {@code use}, {@code drop} and {@code attack}. Those that work on a block first walk into reach of it, as
+ * {@code pick_up}, {@code equip}, {@code use}, {@code drop}, {@code eat} and {@code attack}. Those that work on a block first walk into reach of it, as
  * {@code goto} walks ({@link MoveApi#reach}); each returns a {@link Result}.
  */
 public final class WorkApi {
@@ -73,6 +78,11 @@ public final class WorkApi {
 			Selector item = Selector.parse(Args.bind("equip", call, 1, "item")[0]);
 			boolean held = BotHands.equip(bot(run, call), item.items());
 			return run.done("equip(" + item + ")", held ? Result.OK : Result.fail(Result.NO_ITEM));
+		});
+		natives.register("eat", call -> {
+			Eat eat = new Eat(bot(run, call), Selector.parse(Args.bind("eat", call, 1, "item")[0]));
+			Result refused = eat.check();
+			return refused != null ? run.done(eat.describe(), refused) : run.start(eat, call);
 		});
 		natives.register("drop", 20, call -> {
 			Object[] args = Args.bind("drop", call, 1, "item", "n");
@@ -531,6 +541,90 @@ public final class WorkApi {
 		@Override
 		public String describe() {
 			return "attack(" + this.info + ")";
+		}
+	}
+
+	/**
+	 * {@code eat(item)}: eats or drinks a carried item {@code item} selects that can be, taking its eat time as a player does
+	 * (32 ticks for most food), then gives its nutrition and saturation and its effects, such as a golden apple's, and uses
+	 * it up, keeping what is left of it, such as a stew's bowl (#702).
+	 */
+	private static final class Eat implements ScriptRun.Action {
+		private final AntBot bot;
+		private final Selector selector;
+		private final Predicate<ItemStack> item;
+		private int ticks;
+		private @Nullable Result result;
+
+		Eat(AntBot bot, Selector selector) {
+			this.bot = bot;
+			this.selector = selector;
+			Predicate<ItemStack> selected = selector.items();
+			this.item = stack -> selected.test(stack) && stack.has(DataComponents.CONSUMABLE);
+		}
+
+		/** Why the bot cannot eat now: it carries nothing to eat, or it is full; null if it can. */
+		@Nullable Result check() {
+			ItemStack stack = BotHands.find(this.bot, this.item);
+			if (stack == null) {
+				return Result.fail(Result.NO_ITEM);
+			}
+			FoodProperties food = stack.get(DataComponents.FOOD);
+			return food != null && !food.canAlwaysEat() && this.bot.getFood().food() >= FoodConstants.MAX_FOOD
+				? Result.fail(Result.FULL) : null;
+		}
+
+		@Override
+		public boolean tick() {
+			if (this.result != null) {
+				return true;
+			}
+			this.result = this.check();
+			if (this.result != null) {
+				return true;
+			}
+			ItemStack stack = Objects.requireNonNull(BotHands.find(this.bot, this.item));
+			Consumable consumable = Objects.requireNonNull(stack.get(DataComponents.CONSUMABLE));
+			int left = consumable.consumeTicks() - ++this.ticks;
+			if (left > 0) {
+				if (consumable.shouldEmitParticlesAndSounds(left)) {
+					consumable.emitParticlesAndSounds(this.bot.getRandom(), this.bot, stack, 5);
+				}
+				return false;
+			}
+			FoodProperties food = stack.get(DataComponents.FOOD);
+			ItemStack rest = stack.finishUsingItem(this.bot.level(), this.bot); // its effects, and it is used up
+			if (food != null) {
+				this.bot.getFood().eat(food.nutrition(), food.saturation());
+			}
+			if (rest != stack && !rest.isEmpty()) {
+				ItemStack over = this.bot.getInventory().addItem(rest);
+				if (!over.isEmpty()) {
+					this.bot.spawnAtLocation((ServerLevel) this.bot.level(), over);
+				}
+			}
+			this.result = Result.OK;
+			return true;
+		}
+
+		@Override
+		public Object result() {
+			return this.result == null ? Result.fail(Result.STOPPED) : this.result;
+		}
+
+		@Override
+		public long progress() {
+			return this.ticks;
+		}
+
+		@Override
+		public void restore(long progress) {
+			this.ticks = (int) progress;
+		}
+
+		@Override
+		public String describe() {
+			return "eat(" + this.selector + ")";
 		}
 	}
 

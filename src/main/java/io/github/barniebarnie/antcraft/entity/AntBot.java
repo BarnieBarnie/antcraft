@@ -42,6 +42,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.food.FoodConstants;
+import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
@@ -154,6 +158,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private List<Pos> scaffoldLeft = List.of();
 	/** Whether the bot came through a nether portal and has yet to remember where it came out, on its first tick. Not saved. */
 	private boolean arriving;
+	/** The bot's food, saturation and exhaustion, a player's (#702, docs/features/bots.md, Hunger). Saved; full again on respawn. */
+	private BotFood food = new BotFood();
 
 	public AntBot(EntityType<? extends AntBot> type, Level level) {
 		super(type, level);
@@ -252,8 +258,62 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (running != null && (!this.idling || running.walking()) && AntCraftConfig.botsLoadChunks()) {
 			BotChunks.keep(this);
 		}
+		if (this.level() instanceof ServerLevel level && !this.isNoAi() && !this.isDeadOrDying() && AntCraftConfig.botHunger()) {
+			long food = TickProfiler.SERVER.begin();
+			this.tickFood(level);
+			TickProfiler.SERVER.end("bot.food", food);
+		}
 		BlockPos feet = this.blockPosition();
 		this.pathScaffold.removeIf(pos -> Math.max(Math.abs(pos.getX() - feet.getX()), Math.abs(pos.getZ() - feet.getZ())) > PATH_SCAFFOLD_RANGE);
+	}
+
+	/**
+	 * A tick of the bot's hunger, a player's (#702): swimming and the hunger effect add exhaustion as they do for a player
+	 * (walking costs a player none), then {@link BotFood#tick} heals or starves the bot.
+	 */
+	private void tickFood(ServerLevel level) {
+		if (this.isInWater()) {
+			double dx = this.getX() - this.xo, dy = this.getY() - this.yo, dz = this.getZ() - this.zo;
+			this.exhaust(FoodConstants.EXHAUSTION_SWIM * (float) Math.sqrt(dx * dx + dy * dy + dz * dz));
+		}
+		MobEffectInstance hunger = this.getEffect(MobEffects.HUNGER);
+		if (hunger != null) {
+			this.exhaust(0.005F * (hunger.getAmplifier() + 1)); // HungerMobEffect, which feeds only players
+		}
+		float change = this.food.tick(this.getHealth(), this.getMaxHealth(), level.getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION),
+			level.getDifficulty());
+		if (change > 0) {
+			this.heal(change);
+		} else if (change < 0) {
+			this.hurtServer(level, this.damageSources().starve(), 1);
+		}
+	}
+
+	public BotFood getFood() {
+		return this.food;
+	}
+
+	/** Adds exhaustion, as {@code Player.causeFoodExhaustion}; none with {@code botHunger} off. */
+	public void exhaust(float amount) {
+		if (AntCraftConfig.botHunger()) {
+			this.food.exhaust(amount);
+		}
+	}
+
+	/** A jump costs a player's exhaustion for one. */
+	@Override
+	public void jumpFromGround() {
+		super.jumpFromGround();
+		this.exhaust(FoodConstants.EXHAUSTION_JUMP);
+	}
+
+	/** Damage taken costs the exhaustion of its kind, as a player's. */
+	@Override
+	protected void actuallyHurt(ServerLevel level, DamageSource source, float amount) {
+		super.actuallyHurt(level, source, amount);
+		if (amount > 0 && !this.isInvulnerableTo(level, source)) {
+			this.exhaust(source.getFoodExhaustion());
+		}
 	}
 
 	/**
@@ -303,7 +363,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	@Override
 	public boolean doHurtTarget(ServerLevel level, Entity target) {
 		this.detectEquipmentUpdates();
-		return super.doHurtTarget(level, target);
+		boolean hit = super.doHurtTarget(level, target);
+		if (hit) {
+			this.exhaust(FoodConstants.EXHAUSTION_ATTACK);
+		}
+		return hit;
 	}
 
 	/** A bot fleeing a hostile mob (see {@link Reflexes}) takes on no target. */
@@ -807,6 +871,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		bot.setAirSupply(bot.getMaxAirSupply());
 		bot.deathTime = 0;
 		bot.setHealth(bot.getMaxHealth());
+		bot.food = new BotFood();
 		if (!level.addFreshEntity(bot)) {
 			return false;
 		}
@@ -913,6 +978,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			output.putInt("Deaths", this.deaths);
 		}
 		output.storeNullable("LastDeath", GlobalPos.CODEC, this.lastDeath);
+		this.food.save(output);
 		ScriptRun.Saved running = this.isRunningScript() ? this.script.save() : this.savedScript;
 		// The script's saved state holds memory too, so it is saved on its own only when that does not (#341).
 		if (running == null || running.vm() == null || !Memory.isPlain(this.memory)) {
@@ -966,6 +1032,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.owner = input.read("Owner", UUIDUtil.CODEC).orElse(null);
 		this.deaths = input.getIntOr("Deaths", 0);
 		this.lastDeath = input.read("LastDeath", GlobalPos.CODEC).orElse(null);
+		this.food.load(input);
 		this.log.load(input);
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
 		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());

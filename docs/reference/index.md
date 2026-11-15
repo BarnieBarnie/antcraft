@@ -63,6 +63,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`tag_items`](inventory/tag_items.md) | `tag_items(tag)` | the item ids of an item tag, such as `"#antcraft:scaffold_blocks"` |
 | [`equip`](inventory/equip.md) | `equip(item)` | hold a carried item |
 | [`drop`](inventory/drop.md) | `drop(item, n=None)` | toss up to `n` matching items |
+| [`eat`](inventory/eat.md) | `eat(item)` | action: eat or drink a carried item |
 | [`pick_up`](inventory/pick_up.md) | `pick_up(what=None, radius=8)` | action: walk to dropped items and take them |
 
 ## Working blocks
@@ -127,6 +128,8 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`last_death`](bot/last_death.md) | `last_death()` | where the bot last died, or `None` |
 | [`health`](bot/health.md) | `health()` | the bot's health now, `0.0` to `20.0` |
 | [`max_health`](bot/max_health.md) | `max_health()` | the most health the bot can have, `20.0` |
+| [`food`](bot/food.md) | `food()` | the bot's food level, `0` to `20` |
+| [`saturation`](bot/saturation.md) | `saturation()` | the bot's saturation, `0.0` to its food level |
 | [`say`](bot/say.md) | `say(text)` | show text above the bot and in its owner's chat |
 | [`print`](bot/print.md) | `print(*values, sep=" ")` | write a line to the bot's log, always shown |
 | [`debug`](bot/debug.md) | `debug(*values, sep=" ")` | write a line to the bot's log at debug level |

@@ -67,7 +67,7 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A bot killed while it runs a script drops what it carries where it died and comes back at its home after
-	 * {@code botRespawnTicks}, with full health, its memory and its owner, and runs its script again from the top.
+	 * {@code botRespawnTicks}, with full health and food, its memory and its owner, and runs its script again from the top.
 	 */
 	@GameTest(maxTicks = 440)
 	public void aKilledBotDropsItsItemsAndRespawnsAtHomeRunningItsScriptAgain(GameTestHelper helper) {
@@ -83,6 +83,8 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		helper.runAfterDelay(5, () -> {
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("run 1 deaths 0"), "log " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("last None False"), "log " + BotScripts.log(bot, Output.Level.DEBUG));
+			bot.getFood().setFoodLevel(3);
+			bot.getFood().setSaturation(0);
 			bot.kill(helper.getLevel());
 			died[0] = helper.getLevel().getGameTime();
 		});
@@ -95,6 +97,8 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(waited >= AntCraftConfig.botRespawnTicks(), "respawned " + waited + " ticks after it died");
 			helper.assertTrue(again.blockPosition().distManhattan(home) <= 1, "respawned at " + again.blockPosition() + ", home " + home);
 			helper.assertTrue(again.getHealth() == again.getMaxHealth(), "health " + again.getHealth());
+			helper.assertTrue(again.getFood().food() == 20 && again.getFood().saturation() == 5,
+				"food " + again.getFood().food() + ", saturation " + again.getFood().saturation());
 			helper.assertTrue(again.getInventory().isEmpty() && again.getMainHandItem().isEmpty(), "still carries " + again.getInventory().getItems());
 			helper.assertTrue(again.getDeaths() == 1, "deaths " + again.getDeaths());
 			helper.assertTrue(owner.getUUID().equals(again.getOwner()), "owner " + again.getOwner());

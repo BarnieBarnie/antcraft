@@ -55,11 +55,21 @@ public final class AntCraftConfig {
 	 * {@code playerInstructionsPerTick} is what all the bots of a player who is not an operator may run a tick together, split
 	 * evenly between those running a script, at most {@link #MAX_SCRIPT_INSTRUCTIONS_PER_TICK}; {@code maxScriptsPerPlayer} is
 	 * how many scripts such a player may run with {@code /antcraft bot run} at once, 0 for none (docs/features/scripts.md,
-	 * Players' scripts).
+	 * Players' scripts). {@code botHunger} is whether bots get hungry and heal with food as players do (#702); off, their food
+	 * stays as it is and they neither heal nor starve, as before.
 	 */
 	public record Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 		Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir,
-		boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed, int playerInstructionsPerTick, int maxScriptsPerPlayer) {
+		boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed, int playerInstructionsPerTick, int maxScriptsPerPlayer,
+		boolean botHunger) {
+		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
+			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir,
+			boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed, int playerInstructionsPerTick, int maxScriptsPerPlayer) {
+			this(enableOnDedicatedServer, maxBotsPerLevel, colonyActionsRequireOp, scriptInstructionsPerTick, scriptChatLevel, botsLoadChunks,
+				botRespawn, botRespawnTicks, botFleeHealth, botSurfaceAir, botsAttackPlayers, botsAttackBots, botsAttackTamed,
+				playerInstructionsPerTick, maxScriptsPerPlayer, true);
+		}
+
 		public Values(boolean enableOnDedicatedServer, int maxBotsPerLevel, boolean colonyActionsRequireOp, int scriptInstructionsPerTick,
 			Output.Level scriptChatLevel, boolean botsLoadChunks, boolean botRespawn, int botRespawnTicks, int botFleeHealth, int botSurfaceAir,
 			boolean botsAttackPlayers, boolean botsAttackBots, boolean botsAttackTamed) {
@@ -133,6 +143,7 @@ public final class AntCraftConfig {
 		props.setProperty("botsAttackTamed", Boolean.toString(values.botsAttackTamed()));
 		props.setProperty("playerInstructionsPerTick", Integer.toString(values.playerInstructionsPerTick()));
 		props.setProperty("maxScriptsPerPlayer", Integer.toString(values.maxScriptsPerPlayer()));
+		props.setProperty("botHunger", Boolean.toString(values.botHunger()));
 		for (String removed : REMOVED) {
 			props.remove(removed);
 		}
@@ -160,7 +171,8 @@ public final class AntCraftConfig {
 			+ "and tamed or named animals; it always may hit hostile mobs and untamed, unnamed animals.\n"
 			+ "playerInstructionsPerTick (default " + DEFAULT_PLAYER_INSTRUCTIONS_PER_TICK + ", at most " + MAX_SCRIPT_INSTRUCTIONS_PER_TICK
 			+ ") is shared by all the bots of a player who is not an operator,\n"
-			+ "and maxScriptsPerPlayer (default " + DEFAULT_MAX_SCRIPTS_PER_PLAYER + ", 0 for none) is how many scripts such a player may run at once.";
+			+ "and maxScriptsPerPlayer (default " + DEFAULT_MAX_SCRIPTS_PER_PLAYER + ", 0 for none) is how many scripts such a player may run at once.\n"
+			+ "botHunger (default true): bots get hungry, heal with food and starve as players do; false: they neither heal nor starve.";
 	}
 
 	public static Values parse(Properties props) {
@@ -193,7 +205,8 @@ public final class AntCraftConfig {
 		int surfaceAir = nonNegativeInt(props, "botSurfaceAir", DEFAULT_BOT_SURFACE_AIR);
 		return new Values(enableOnDedicatedServer, maxBots, colonyActionsRequireOp, scriptInstructions, chatLevel, botsLoadChunks,
 			botRespawn, botRespawnTicks, fleeHealth, surfaceAir, flag(props, "botsAttackPlayers"), flag(props, "botsAttackBots"),
-			flag(props, "botsAttackTamed"), playerInstructions, maxScriptsPerPlayer);
+			flag(props, "botsAttackTamed"), playerInstructions, maxScriptsPerPlayer,
+			Boolean.parseBoolean(props.getProperty("botHunger", "true").trim()));
 	}
 
 	/** The boolean under {@code key}, false when it is missing. */
@@ -263,6 +276,10 @@ public final class AntCraftConfig {
 
 	public static boolean botRespawn() {
 		return values.botRespawn();
+	}
+
+	public static boolean botHunger() {
+		return values.botHunger();
 	}
 
 	public static int botRespawnTicks() {

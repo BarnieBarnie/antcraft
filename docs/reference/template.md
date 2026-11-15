@@ -10,14 +10,14 @@ Every builtin a script can call has its own page, listed on the [index](index.md
 |---|---|---|
 | `movement/` | Movement | `goto`, `travel`, `reachable`, `pos`, `home`, `set_home`, `home_dimension`, `dimension`, `portals`, `placed_scaffold` |
 | `world/` | The world around | `block`, `block_tags`, `surface`, `biome`, `biome_tags`, `structures`, `structure_tags`, `find_nearest`, `scan`, `entities`, `items_near`, `time`, `is_day` |
-| `inventory/` | Inventory | `inventory`, `held`, `count`, `has`, `free_slots`, `matches`, `tag_items`, `equip`, `drop`, `pick_up` |
+| `inventory/` | Inventory | `inventory`, `held`, `count`, `has`, `free_slots`, `matches`, `tag_items`, `equip`, `drop`, `eat`, `pick_up` |
 | `blocks/` | Working blocks | `mine`, `place`, `use` |
 | `crafting/` | Containers and crafting | `container`, `room`, `put`, `take`, `craft`, `smelt`, `needs`, `cooks_in` |
 | `building/` | Building | `build`, `build_placement`, `blueprint` |
 | `mining/` | Mining | `mineshaft`, `mineshaft_at`, `ore_vein` |
 | `combat/` | Fighting | `attack` |
 | `colony/` | Colony and jobs | `colony`, `post_job`, `take_job`, `jobs`, `finish_job`, `drop_job` |
-| `bot/` | The bot and its output | `deaths`, `last_death`, `health`, `max_health`, `say`, `print`, `debug`, `info`, `warn`, `error`, `wait`, `stop` |
+| `bot/` | The bot and its output | `deaths`, `last_death`, `health`, `max_health`, `food`, `saturation`, `say`, `print`, `debug`, `info`, `warn`, `error`, `wait`, `stop` |
 | `python/` | Python builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `isinstance`, `len`, `list`, `max`, `min`, `range`, `reversed`, `round`, `sorted`, `str`, `sum`, `tuple`, `zip` |
 
 The types (`Pos`, `Result`, `Stack`, `Block`, `Entity`, selectors, `memory`) have their pages in `types/`, which the test leaves out. A type's constructor, `Pos(x, y, z)`, is a native whose page is its type's page, `types/pos.md`: its index row links there. The language's methods (`str.split`, `list.append`, ...) are no natives of their own: each is on its type's page, `types/str.md`, `types/list.md`, `types/dict.md` and `types/pos.md`, which `ReferenceDocsTest` checks names every registered method. The library modules have a page each under `modules/`, by their path: `modules/lib/home.md`, `modules/colony/common.md`.

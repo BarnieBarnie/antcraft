@@ -53,7 +53,7 @@ import org.jspecify.annotations.Nullable;
 /**
  * The senses of the bot API (docs/reference/index.md): {@code inventory}, {@code count}, {@code has}, {@code matches}, {@code tag_items}, {@code held},
  * {@code block}, {@code surface}, {@code biome}, {@code structures}, {@code find_nearest}, {@code scan}, {@code entities}, {@code items_near}, {@code container},
- * {@code time}, {@code is_day}, {@code placed_scaffold}, {@code colony}, {@code health} and {@code max_health}. They read the world around the script's bot and return at once; only a block search
+ * {@code time}, {@code is_day}, {@code placed_scaffold}, {@code colony}, {@code health}, {@code max_health}, {@code food} and {@code saturation}. They read the world around the script's bot and return at once; only a block search
  * that the server's {@link #SCAN_BUDGET} cannot finish this tick goes on over the next ticks, pausing the script.
  */
 public final class SenseApi {
@@ -281,6 +281,14 @@ public final class SenseApi {
 		natives.register("max_health", call -> {
 			Args.bind("max_health", call, 0);
 			return (double) bot(run, call).getMaxHealth();
+		});
+		natives.register("food", call -> {
+			Args.bind("food", call, 0);
+			return (long) bot(run, call).getFood().food();
+		});
+		natives.register("saturation", call -> {
+			Args.bind("saturation", call, 0);
+			return (double) bot(run, call).getFood().saturation();
 		});
 		natives.register("time", call -> {
 			Args.bind("time", call, 0);

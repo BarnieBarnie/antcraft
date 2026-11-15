@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.food.FoodConstants;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -85,6 +86,7 @@ public class BlockBreaker {
 			} else {
 				level.destroyBlock(pos, true, this.bot);
 			}
+			this.bot.exhaust(FoodConstants.EXHAUSTION_MINE); // as a player's breaking it (#702)
 			// Wears the tool down like a player's.
 			if (!tool.isEmpty()) {
 				tool.getItem().mineBlock(tool, level, state, pos, this.bot);

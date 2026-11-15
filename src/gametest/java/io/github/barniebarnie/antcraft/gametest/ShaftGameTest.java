@@ -417,7 +417,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 2, 4);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
-		bot.setHealth(AntCraftConfig.botFleeHealth());
+		GameTests.hurt(bot, AntCraftConfig.botFleeHealth());
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
 		husk.setNoAi(true);
 		husk.setHealth(0.5F);
@@ -462,7 +462,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 2, 4);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
-		bot.setHealth(AntCraftConfig.botFleeHealth());
+		GameTests.hurt(bot, AntCraftConfig.botFleeHealth());
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
 		husk.setNoAi(true);
 		husk.setHealth(5);
@@ -510,7 +510,7 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 2, 4);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.STONE_PICKAXE));
-		bot.setHealth(AntCraftConfig.botFleeHealth());
+		GameTests.hurt(bot, AntCraftConfig.botFleeHealth());
 		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 4);
 		climbOut(helper, bot);
 		BotScripts.failOnError(helper, () -> bot);

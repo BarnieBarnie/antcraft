@@ -13,6 +13,7 @@
 | `scriptChatLevel` | `error` | The lowest level of a script's output (`debug`, `info`, `warn` or `error`) that goes to the chat of its bot's owner; everything goes to the bot's log, and `print` and `say` always show in chat |
 | `botRespawn` | `true` | Whether a dead bot comes back at its home |
 | `botRespawnTicks` | `200` | Ticks a dead bot waits before it comes back |
+| `botHunger` | `true` | Whether bots get hungry, heal with food and starve as players do ([Hunger](bots.md#hunger)); when `false` their food stays as it is and they neither heal nor starve |
 | `botFleeHealth` | `6` | Health (of 20) at or below which a bot flees a hostile mob within 8 blocks instead of fighting (Reflexes); `0` never |
 | `botSurfaceAir` | `100` | Air (of 300 ticks) below which a bot under water swims up to breathe (Reflexes); `0` never |
 | `botsAttackPlayers` | `false` | Whether a script's [`attack`](../reference/combat/attack.md) may hit players; when `false` it fails with `protected` |

@@ -365,7 +365,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		bot.setHome(helper.absolutePos(new BlockPos(8, 1, 8)));
 		ScriptRun run = run(helper, bot, attackThe("husk"));
 		// Once the bot attacks.
-		helper.runAfterDelay(3, () -> bot.setHealth(4));
+		helper.runAfterDelay(3, () -> GameTests.hurt(bot, 4));
 		succeedWhenPrinted(helper, bot, run, List.of("False interrupted"));
 	}
 

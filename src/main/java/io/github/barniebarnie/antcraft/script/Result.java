@@ -33,6 +33,8 @@ public record Result(boolean ok, @Nullable String reason, Object value, @Nullabl
 	public static final String NO_BLUEPRINT = "no_blueprint";
 	public static final String NO_TABLE = "no_table";
 	public static final String NO_FURNACE = "no_furnace";
+	/** {@code eat}: the bot is full, and the food is not one that can always be eaten, such as a golden apple. */
+	public static final String FULL = "full";
 
 	public Result(boolean ok, @Nullable String reason, Object value) {
 		this(ok, reason, value, null);
