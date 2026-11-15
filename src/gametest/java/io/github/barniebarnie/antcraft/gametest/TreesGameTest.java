@@ -131,6 +131,20 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A mangrove's trunk stands on its roots, not on dirt (#751): a mangrove log on mangrove roots under mangrove leaves is
+	 * a tree, so the forester and next_tree find it.
+	 */
+	@GameTest(maxTicks = 20)
+	public void aMangroveTrunkOnRootsIsATree(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.MANGROVE_ROOTS);
+		helper.setBlock(1, 2, 1, Blocks.MANGROVE_LOG);
+		helper.setBlock(1, 3, 1, Blocks.MANGROVE_LOG);
+		helper.setBlock(1, 4, 1, Blocks.MANGROVE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		expect(helper, bot, "import lib.trees\nprint(lib.trees.is_tree(Pos(" + at(helper, 1, 2, 1) + ")))\n", List.of("True"));
+	}
+
+	/**
 	 * tree_logs keeps the logs that are part of a tree: the oak's four and a branch log touching its top only at a
 	 * corner, and leaves out a wall of two logs on stone, so the lumberjack weighs an axe for trees alone (#563).
 	 */

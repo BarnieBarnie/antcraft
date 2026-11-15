@@ -233,7 +233,8 @@ def harvest(kind, low, high, radius=32):
         if not r["ok"]:
             break
     # The highest first, so none is left out of reach over a pillar's top; one mine could not reach is tried again in a
-    # second pass, from where the bot stands then. ponytail: two passes; the roots they drop are left lying.
+    # second pass, from where the bot stands then. ponytail: two passes. mine puts the roots into the inventory, so
+    # none lie about (#751), and jobs.wood_farm stores them in its depot.
     if r["ok"] and spec(kind).get("roots"):
         for _ in range(2):
             for p in sorted(within(ROOTS, kind, low, high), key=lambda p: -p.y):

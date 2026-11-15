@@ -634,6 +634,19 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			GIANT_JUNGLE_HARVEST, 9);
 	}
 
+	/**
+	 * A mangrove farm run end to end as the giant ones (#751): the kit with 23 dirt (the cell's clear height), 8
+	 * propagules, the cell of 11, the propagule grown with seed 0 (a TALL_MANGROVE on roots, as TreeFarmGameTest's), felled
+	 * whole, its roots mined, a propagule replanted and logs in the depot, the felling within {@link #HARVEST_FACTOR} of
+	 * HARVEST["minecraft:mangrove_propagule"].
+	 */
+	// Measured: passes at tick 1876 to 2085 in 3 runs, the felling within HARVEST_FACTOR of 1400.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
+	public void aMangroveFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
+		farm(helper, "mangrove_propagule", Items.MANGROVE_PROPAGULE, Blocks.MANGROVE_PROPAGULE, Blocks.MANGROVE_LOG,
+			Items.MANGROVE_LOG, 23, 0, 1400, 0, 11, List.of(new BlockPos(11, 1, 9)));
+	}
+
 	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
 	@GameTest(maxTicks = 10)
 	public void aGiantsHarvestIsWhatItsFarmTestMeasures(GameTestHelper helper) {
@@ -660,8 +673,18 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 */
 	private static void giantFarm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
 		Item logItem, int dirt, long seed, int harvest, int killAt) {
-		for (int x = 6; x <= 15; x++) {
-			for (int z = 4; z <= 13; z++) {
+		farm(helper, kind, saplingItem, saplingBlock, logBlock, logItem, dirt, seed, harvest, killAt, 10,
+			List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9)));
+	}
+
+	/**
+	 * As {@link #giantFarm} for any kind: its cell size wide from (6, 0, 4) on dirt, its sapling spots spots, the tree
+	 * grown at the first, which then no longer holds a sapling (a mangrove's holds air or a root).
+	 */
+	private static void farm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
+		Item logItem, int dirt, long seed, int harvest, int killAt, int size, List<BlockPos> spots) {
+		for (int x = 6; x < 6 + size; x++) {
+			for (int z = 4; z < 4 + size; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
 			}
 		}
@@ -679,7 +702,6 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(first.getScript() != null, "not run: " + out);
 		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
 		BotScripts.failOnWarningButDeath(helper, bot);
-		List<BlockPos> spots = List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9));
 		long[] grewAt = {-1};  // the tick the giant grew on
 		long[] took = {-1};  // the ticks from then to the first tick all is done
 		boolean[] killed = {false};
@@ -701,7 +723,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				BlockState sapling = helper.getLevel().getBlockState(a);
 				((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), a, sapling.setValue(SaplingBlock.STAGE, 1),
 					RandomSource.create(seed));
-				if (helper.getBlockState(spots.get(0)).is(logBlock)) {
+				if (!helper.getBlockState(spots.get(0)).is(saplingBlock)) {
 					grewAt[0] = helper.getTick();
 				}
 			}

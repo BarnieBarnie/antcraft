@@ -518,7 +518,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A mangrove cell of 11x11 from (2, 0, 2) (#650): built, grown as the game does with seed 0 (a TALL_MANGROVE), its
 	 * trunk on roots over the propagule's spot and its logs inside the cell; felled whole from the trunk's lowest log, the
-	 * roots in the cell mined, so the spot is free, and a propagule planted again.
+	 * roots in the cell mined, so the spot is free, and picked up (#751), and a propagule planted again.
 	 */
 	// Measured: passes at tick 1722 to 2181. 40 seeded trees passed at tick 553 to 3875 (red: key not in KINDS).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
@@ -579,6 +579,11 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 					}
 				}
 			}
+			// The roots it mined are picked up, not left lying (#751).
+			AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).expandTowards(24, 40, 24);
+			helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class, area,
+				e -> e.getItem().is(Items.MANGROVE_ROOTS) || e.getItem().is(Items.MUDDY_MANGROVE_ROOTS)).isEmpty(), "roots left lying");
+			helper.assertTrue(GameTests.carried(bot, Items.MANGROVE_ROOTS) > 0, "the bot carries no roots");
 			helper.assertBlockPresent(Blocks.MANGROVE_PROPAGULE, spot);
 		});
 	}

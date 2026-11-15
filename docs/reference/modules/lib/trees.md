@@ -18,7 +18,7 @@ giant = lib.trees.next_tree(where=lib.trees.is_giant, around=Pos(100, 64, -20))
 
 ## `is_tree(base)`
 
-Whether the trunk with its lowest log at `base` is a tree: it stands on `GROUND` (dirt, or nylium for a huge fungus) and has a `CROWN` (leaves, or a huge fungus's wart blocks) at its top, so a log wall or a log cabin is not. A huge fungus's stem on netherrack is a tree too: the nylium under a stem turns to netherrack in the dark, though no fungus is replanted there. The top is reached log by log up, straight up first, else at an edge or corner over the last log, so the trunk of an acacia, which bends with its logs touching only at a corner, is a tree too. Done at once.
+Whether the trunk with its lowest log at `base` is a tree: it stands on `GROUND` (dirt, or nylium for a huge fungus) and has a `CROWN` (leaves, or a huge fungus's wart blocks) at its top, so a log wall or a log cabin is not. A mangrove's trunk on its roots is a tree too (#751). A huge fungus's stem on netherrack is a tree too: the nylium under a stem turns to netherrack in the dark, though no fungus is replanted there. The top is reached log by log up, straight up first, else at an edge or corner over the last log, so the trunk of an acacia, which bends with its logs touching only at a corner, is a tree too. Done at once.
 
 ## `tree_logs(logs)`
 

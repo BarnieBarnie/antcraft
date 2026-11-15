@@ -58,10 +58,12 @@ def on_ground(p):
 
 
 def is_tree(base):
-    """A trunk standing on GROUND with a CROWN at its top, so a log wall or a cabin is left alone. A huge fungus's stem
-    on netherrack too: the nylium under it turns to netherrack in the dark (#575, #582), though no fungus grows there."""
+    """A trunk standing on GROUND with a CROWN at its top, so a log wall or a cabin is left alone. A mangrove's on its
+    roots too (#751; muddy roots are dirt). A huge fungus's stem on netherrack too: the nylium under it turns to
+    netherrack in the dark (#575, #582), though no fungus grows there."""
     under = base.down()
-    return (on_ground(under) or sapling(block(base).id) in FUNGI and is_kind(under, "netherrack")) and crowned(base)
+    return (on_ground(under) or is_kind(under, "minecraft:mangrove_roots")
+            or sapling(block(base).id) in FUNGI and is_kind(under, "netherrack")) and crowned(base)
 
 
 def is_remnant(base):
