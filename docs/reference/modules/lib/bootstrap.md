@@ -26,9 +26,9 @@ The default kit, a list of `(item, n)` in the order `kit` gets them, the tools f
  ("furnace", 1), ("torch", 16)]
 ```
 
-## `kit(items=KIT, radius=32)`
+## `kit(items=KIT, radius=32, gets=get)`
 
-Makes the bot carry each of `items`, a list of `(item, n)`, in order, with what is within `radius`: [`get(item, n, radius)`](get.md#getitem-n1-radius32) for each. A tool, an item named `<tier>_<kind>` such as `"stone_pickaxe"`, it gets with [`ensure_tool(kind, 1, tier, radius)`](get.md) instead, so a carried or chest tool of that kind and at least that tier does: with an iron pickaxe in a chest, `("stone_pickaxe", 1)` borrows it rather than making a stone one. Before each item it calls [`lib.food.upkeep(radius)`](food.md#upkeepradius32), as a kit can take thousands of ticks.
+Makes the bot carry each of `items`, a list of `(item, n)`, in order, with what is within `radius`: [`get(item, n, radius)`](get.md#getitem-n1-radius32) for each, or `gets(item, n, radius)` where a job passes its own, as `jobs.wood_farm` passes its `gets`, which digs no dirt from under the farm's cells (#777). A tool, an item named `<tier>_<kind>` such as `"stone_pickaxe"`, it gets with [`ensure_tool(kind, 1, tier, radius)`](get.md) instead, so a carried or chest tool of that kind and at least that tier does: with an iron pickaxe in a chest, `("stone_pickaxe", 1)` borrows it rather than making a stone one. Before each item it calls [`lib.food.upkeep(radius)`](food.md#upkeepradius32), as a kit can take thousands of ticks.
 
 An item whose recipe burns coal, such as a torch, gets charcoal smelted from logs where `get` finds that cheaper than coal: with no coal ore exposed within `radius` and none in a chest (see [`get`](get.md#getitem-n1-radius32)).
 

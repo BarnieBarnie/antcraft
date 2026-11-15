@@ -16,8 +16,9 @@ KIT = [("stone_pickaxe", 1), ("stone_axe", 1), ("stone_shovel", 1), ("stone_swor
 KINDS = ["pickaxe", "axe", "shovel", "hoe", "sword"]
 
 
-def kit(items=KIT, radius=32):
-    """Makes the bot carry each of items, a list of (item, n), in order, by get(item, n, radius); a tool, such as
+def kit(items=KIT, radius=32, gets=get):
+    """Makes the bot carry each of items, a list of (item, n), in order, by gets(item, n, radius), lib.get's get unless a
+    job passes its own, such as jobs.wood_farm.gets, which digs no dirt from under the farm (#777); a tool, such as
     "stone_pickaxe", by ensure_tool instead, so a carried or chest tool of its kind and at least its tier does (borrowed).
     Gives result(): ok, or the reason the first that failed gave, with missing; what it got before it keeps."""
     for item, n in items:
@@ -26,7 +27,7 @@ def kit(items=KIT, radius=32):
         if tier in lib.tools.TIERS and kind in KINDS:
             r = ensure_tool(kind, 1, tier, radius)
         else:
-            r = get(item, n, radius)
+            r = gets(item, n, radius)
         if not r["ok"]:
             return r
     return result()

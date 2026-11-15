@@ -21,7 +21,7 @@ The farm, from the corner `x y z` (the cells' floor is the block under it):
 The steps, from `config/antcraft/scripts/jobs/wood_farm.py`:
 
 ```python
-steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius)),
+steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius, gets)),
          Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
          Step("cell", first_cell, (kind, name, size, radius)),
          Step("farm", farm, (kind, name, size, radius))]
@@ -30,7 +30,7 @@ r = lib.project.run(name, steps)
 
 ## How it works
 
-- **kit**: [`lib.bootstrap.kit`](../reference/modules/lib/bootstrap.md) of a stone axe and 16 dirt, to put under the saplings and to climb a tall tree with; for a giant as much dirt as its cell's `clear` height, 31 for a giant spruce and 33 for a giant jungle (`scaffold(kind)`), as a pillar beside its trunk of up to 29 takes that many (#658). Each comes through [`lib.get`](../reference/modules/lib/get.md): from a chest within the radius, else gathered and crafted. The farm keeps what it takes.
+- **kit**: [`lib.bootstrap.kit`](../reference/modules/lib/bootstrap.md) of a stone axe and 16 dirt, to put under the saplings and to climb a tall tree with; for a giant as much dirt as its cell's `clear` height, 31 for a giant spruce and 33 for a giant jungle (`scaffold(kind)`), as a pillar beside its trunk of up to 29 takes that many (#658). Each comes through [`lib.get`](../reference/modules/lib/get.md): from a chest within the radius, else gathered and crafted; the dirt through `gets`, as the cell's, so a resumed farm digs none from under its cells (#777). The farm keeps what it takes.
 - **sapling**: two saplings a spot (four spots for dark oak, pale oak and the giants), one to plant and one to replant with, by `get`: from a chest, else broken out of the leaves of a tree of the kind.
 - **cell**: what [`lib.treefarm.materials`](../reference/modules/lib/treefarm.md) lists for a cell (dirt, the sapling, 2 torches, slabs for an oak's roof) by `get`, the tools [`lib.terrain.needs`](../reference/modules/lib/terrain.md) names for its ground and for the ground under each sapling spot that is not dirt (a pickaxe on stone, where the dirt goes) by `ensure_tool`, then `lib.treefarm.build_cell` at cell 1. Its dirt, here and for the next cells and the scaffold of a felling tried again, comes through `lib.treefarm.get_outside`, which digs none from under a cell of the farm (#767, #768). The roof takes any wooden slabs the chests within the radius hold, such as birch slabs for an oak farm; those they lack it makes as oak slabs, as `get` takes an item, not a tag.
 - **farm**, round after round, for ever:

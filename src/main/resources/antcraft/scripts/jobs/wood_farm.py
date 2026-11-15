@@ -55,7 +55,7 @@ WAIT = 100  # ticks between looks at the farm while nothing has grown
 # Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
 # be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
 BACKOFF = 10
-KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings; more for a giant (kit)
+KIT = [("stone_axe", 1), (lib.treefarm.DIRT, 16)]  # dirt to climb a tall tree with and to put under the saplings; more for a giant (kit)
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
               "sticks": ["minecraft:stick"]}
 # What the farm keeps on the bot instead of storing it, besides its own saplings and its dirt (dirt): what a cell takes and
@@ -235,12 +235,12 @@ def tell(told, what):
 def scaffold(kind):
     """The dirt the bot carries to pillar up a tree of kind with: the kit's 16, or the cell's clear height where that is
     more, as a giant's trunk of up to 29 (#658)."""
-    return max(dict(KIT)["dirt"], lib.treefarm.spec(kind)["clear"])
+    return max(dict(KIT)[lib.treefarm.DIRT], lib.treefarm.spec(kind)["clear"])
 
 
 def kit(kind):
     """KIT for a farm of kind: its dirt scaffold(kind)."""
-    return [(item, scaffold(kind) if item == "dirt" else n) for item, n in KIT]
+    return [(item, scaffold(kind) if item == lib.treefarm.DIRT else n) for item, n in KIT]
 
 
 def dirt(kind):
@@ -361,7 +361,7 @@ def run(kind, at=None, size=None, radius=32):
     set_home(at + (0, 0, -1))
     lib.trees.recover()
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
-    steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius)),
+    steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius, gets)),
              Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]

@@ -190,7 +190,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/dig`](modules/lib/dig.md): `stone(n, radius=32)`, `ore(item, n, radius=32, y=None, facing="north", length=32)`, `best_y(item)`, `stairs_to(y, facing="north")`, `stairs()`, `stairs_up(facing="north")`, `branch(length, every=8, facing="north")`.
 - [`lib/stock`](modules/lib/stock.md): `chests(radius=32)`, `where(item, radius=32)`, `fetch(item, n, radius=32)`, `take_up_to(item, n, radius=32, chests=None)`, `fetch_all(more, chests)`.
 - [`lib/get`](modules/lib/get.md): `get(item, n=1, radius=32)`, `ensure_tool(kind, uses=1, tier=None, radius=32)`, `choose(kind, uses=1, tier=None, radius=32)`, `options(...)`, `SOURCES`, `Source(do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None)`, `DEEP`, `wood_for_coal(k, radius)`, `key(item)`, the resolver.
-- [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32)`, the things a job starts with.
+- [`lib/bootstrap`](modules/lib/bootstrap.md): `KIT`, `kit(items=KIT, radius=32, gets=get)`, the things a job starts with.
 - [`lib/project`](modules/lib/project.md): `Step(name, do, args=(), tries=1, optional=False)`, `run(name, steps)`, `status(name)`, `reset(name)`, a list of steps that resumes where it stopped.
 - [`lib/farm`](modules/lib/farm.md): `CROPS`, `ripe(pos)`, `field(low, high)`, `rows(spots)`, `till(spots)`, `plant(spots, seed=None)`, `harvest(spots)`, `tend(low, high, seed=None)`, a field harvested, tilled and replanted.
 - [`lib/storage`](modules/lib/storage.md): `KEEP_KINDS`, `deposit(keep=None, radius=32)`, `sort(chests)`, putting away loot and sorting chests.

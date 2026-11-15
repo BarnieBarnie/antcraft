@@ -865,6 +865,40 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The job's kit step on a resumed farm, two cells built and no dirt carried (#777): the dirt under the spots of both
+	 * cells is nearer, but the kit's 16 dirt are dug outside the cells (lib.bootstrap.kit with gets).
+	 */
+	// Measured: passes at tick 518 to 582 (red: the dirt under the first cell's spot dug, tick 519).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 1100)
+	public void theKitDigsNoDirtFromUnderTheFarmsSpots(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT_2.below(), Blocks.DIRT);
+		for (int x = 2; x < 18; x++) {
+			helper.setBlock(new BlockPos(x, 0, 17), Blocks.DIRT);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 11, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		script(helper, bot, """
+			import lib.cells
+			lib.cells.layout("birch_farm", cell[0], (5, 5))
+			lib.cells.add("birch_farm", 0)
+			lib.cells.add("birch_farm", 1)
+			jobs.wood_farm.run(kind, cell[0].up(), None, 32)
+			""");
+		Runnable kitted = () -> {
+			helper.assertTrue(said(bot).contains("birch_farm 2/4: sapling"), "said " + said(bot));
+			helper.assertBlockPresent(Blocks.DIRT, SPOT.below());
+			helper.assertBlockPresent(Blocks.DIRT, SPOT_2.below());
+		};
+		helper.onEachTick(() -> {
+			if (said(bot).contains("birch_farm 2/4: sapling")) {
+				kitted.run();
+			}
+		});
+		helper.succeedWhen(kitted);
+	}
+
+	/**
 	 * A birch whose top logs the bot cannot reach without dirt to pillar with (#644): reap says the harvest failed and why,
 	 * gets dirt from the chest and harvests again, then tend replants the cell, its tree gone.
 	 */
