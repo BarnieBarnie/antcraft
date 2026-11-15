@@ -60,6 +60,22 @@ class ReflexesTest {
 		assertEquals(true, Reflexes.mayPlanFlight(Reflexes.FLEE_RETRY_TICKS));
 	}
 
+	/**
+	 * One owner of the bot's movement a tick (#725): with a creeper's fuse lit near it, the kite goal moves the bot and the
+	 * flee reflex yields to it, while every other reflex, a nearer danger, keeps the bot and the kite goal yields.
+	 */
+	@Test
+	void fleeingYieldsToKitingAndKitingToEveryOtherReflex() {
+		assertEquals(true, Reflexes.kites(null, true));
+		assertEquals(true, Reflexes.kites(Kind.FLEE, true));
+		assertEquals(false, Reflexes.kites(Kind.HAZARD, true));
+		assertEquals(false, Reflexes.kites(Kind.FALLING_BLOCK, true));
+		assertEquals(false, Reflexes.kites(Kind.SURFACE, true));
+		assertEquals(false, Reflexes.kites(Kind.MAKE_WAY, true));
+		assertEquals(false, Reflexes.kites(null, false));
+		assertEquals(false, Reflexes.kites(Kind.FLEE, false));
+	}
+
 	@Test
 	void aThresholdOfZeroTurnsItsReflexOff() {
 		assertNull(Reflexes.choose(new Senses(false, false, false, 300, 0.5f, true), 0, SURFACE_AIR));

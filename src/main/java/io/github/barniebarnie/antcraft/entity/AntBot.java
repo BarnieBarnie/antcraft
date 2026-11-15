@@ -360,6 +360,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return this.reflexes.waysMade();
 	}
 
+	/** Its reflexes, which the kite goal asks whether it may move the bot (#725). */
+	Reflexes reflexes() {
+		return this.reflexes;
+	}
+
 	/** How many flights from a hostile mob its reflexes planned (see {@link Reflexes}), for the game tests. */
 	public int getFlightPlans() {
 		return this.reflexes.flightPlans();

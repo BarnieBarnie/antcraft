@@ -90,6 +90,8 @@ final class Reflexes {
 	private int flightFailedAt = -FLEE_RETRY_TICKS;
 	/** The bot's tick count when it last struck the mob it flees. */
 	private int struckAt = Integer.MIN_VALUE / 2;
+	/** Whether the flee reflex yields the bot's movement to the kite goal: it neither runs nor strikes meanwhile. */
+	private boolean kiting;
 	/** How many flights the bot planned, for the game tests. */
 	private int flightPlans;
 	/** The spots of the build that last asked the bot to make way, or null. */
@@ -130,6 +132,15 @@ final class Reflexes {
 	}
 
 	/**
+	 * Whether the kite goal moves the bot this tick rather than a reflex: one owner of its movement a tick (#725). With a
+	 * creeper's fuse lit near it, fleeing yields to kiting, which keeps clear of the blast, and kiting yields to every other
+	 * reflex, a nearer danger. {@code reflex} is the one that holds the bot, or null.
+	 */
+	static boolean kites(@Nullable Kind reflex, boolean creeperLit) {
+		return creeperLit && (reflex == null || reflex == Kind.FLEE);
+	}
+
+	/**
 	 * Whether a bot fleeing a mob runs home: when home lies further from the mob than the bot does, and the bot is not
 	 * there yet. Otherwise it runs away from the mob.
 	 */
@@ -166,7 +177,7 @@ final class Reflexes {
 		if (this.active == Kind.FLEE && was != Kind.FLEE) {
 			this.bot.setTarget(null);
 		}
-		if (this.active == Kind.FLEE) {
+		if (this.active == Kind.FLEE && !this.kiting) {
 			this.strike(level, hostile);
 		}
 		return holds;
@@ -239,6 +250,11 @@ final class Reflexes {
 		return this.active != null;
 	}
 
+	/** Whether the kite goal may move the bot: no reflex holds it but the flee reflex, which yields to it (#725). */
+	boolean letKite() {
+		return kites(this.active, true);
+	}
+
 	/** Whether the bot flees a hostile mob: it does not take on a target while it does. */
 	boolean fleeing() {
 		return this.active == Kind.FLEE;
@@ -261,6 +277,15 @@ final class Reflexes {
 				return this.target != null;
 			}
 			case FLEE -> {
+				// Still holds the bot, so its script waits and it takes no target, but the kite goal moves it (#725).
+				this.kiting = kites(Kind.FLEE, KiteGoal.litNear(this.bot) != null);
+				if (this.kiting) {
+					if (this.fleeing) {
+						this.fleeing = false;
+						this.flight.stop();
+					}
+					return true;
+				}
 				// On its way, unless the mob has moved since the bot planned: then plan again, away from where the mob is now.
 				if (same && this.fleeing && hostile != null && this.fledFrom != null && hostile.position().distanceTo(this.fledFrom) <= MOB_MOVED) {
 					PathFollower.Status status = this.flight.tick();

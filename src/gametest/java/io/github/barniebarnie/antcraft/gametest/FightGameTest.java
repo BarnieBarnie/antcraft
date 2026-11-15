@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.gametest;
 
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
+import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
@@ -499,6 +500,58 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		creeper.setTarget(bot);
 		failOnExplosion(helper, bot, creeper);
 		succeedWhenTheFuseWentOut(helper, creeper, 0.75F);
+	}
+
+	/**
+	 * A bot between a creeper whose fuse lights at once and another 5 blocks off gets out of both blasts (#725). It ran
+	 * straight away from the lit one, into the other, which lit in turn and cornered it at the edge of the area, where it
+	 * stood until it exploded, as about 1 run in 52 of {@link #aBotKillsTwoCreepersAndAHuskWithoutAnExplosion}: it now
+	 * backs off from the nearest creeper of all, lit or not, to the side.
+	 */
+	// Measured: passes at tick 33 to 57 in 50 runs, 25 at once.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
+	public void aBotBetweenTwoCreepersGetsOutOfBothBlastsNotCornered(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 12.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper lit = helper.spawn(EntityTypes.CREEPER, new Vec3(10.5, 1, 12.5));
+		lit.setTarget(bot);
+		Creeper other = helper.spawn(EntityTypes.CREEPER, new Vec3(17.5, 1, 12.5));
+		other.setTarget(bot);
+		failOnExplosion(helper, bot, lit, other);
+		boolean[] wasLit = {false};
+		helper.onEachTick(() -> wasLit[0] |= lit.getSwelling(1) > 0);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(wasLit[0], "the fuse was never lit");
+			helper.assertTrue(KiteGoal.litNear(bot) == null && lit.getSwelling(1) == 0 && other.getSwelling(1) == 0, "a fuse burns");
+		});
+	}
+
+	/**
+	 * A bot at flee health with a creeper's fuse lit beside it kites, as at any health, rather than flee (#725): the flee
+	 * reflex yields the bot's movement to the kite goal while the fuse burns, and plans no flight, which fought the goal
+	 * for it.
+	 */
+	// Measured: passes at tick 46 to 50 in 50 runs, 25 at once.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
+	public void aFleeingBotKitesALitCreeperRatherThanFlee(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 8.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		bot.setHealth(4);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 10.5));
+		creeper.setTarget(bot);
+		failOnExplosion(helper, bot, creeper);
+		// The fuse lit at the end of the tick before, when the bot planned: it may plan before the creeper lights.
+		int[] plans = {0};
+		boolean[] wasLit = {false};
+		helper.onEachTick(() -> {
+			boolean lit = KiteGoal.litNear(bot) != null;
+			if (bot.getFlightPlans() > plans[0] && lit && wasLit[0]) {
+				helper.fail("planned a flight with the fuse lit, swell " + creeper.getSwelling(1));
+			}
+			plans[0] = bot.getFlightPlans();
+			wasLit[0] = lit;
+		});
+		succeedWhenTheFuseWentOut(helper, creeper, 1F);
 	}
 
 	/** A bot with a bow and {@code arrows} arrows, at {@code x, z} in the test area. */
