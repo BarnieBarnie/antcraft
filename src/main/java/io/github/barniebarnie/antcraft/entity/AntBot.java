@@ -370,10 +370,13 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		return hit;
 	}
 
-	/** A bot fleeing a hostile mob (see {@link Reflexes}) takes on no target. */
+	/**
+	 * A bot fleeing a hostile mob (see {@link Reflexes}) takes on no target, nor one shooting from range ({@code shoot}),
+	 * whose melee goal would run at the mob and swap the bow for a sword (#707).
+	 */
 	@Override
 	public void setTarget(@Nullable LivingEntity target) {
-		if (target != null && this.reflexes.fleeing()) {
+		if (target != null && (this.reflexes.fleeing() || this.script != null && this.script.aiming())) {
 			return;
 		}
 		if (target != null && target != this.getTarget()) {

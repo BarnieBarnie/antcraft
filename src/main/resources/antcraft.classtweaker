@@ -5,3 +5,6 @@ accessible	field	net/minecraft/world/level/levelgen/structure/templatesystem/Str
 accessible	method	net/minecraft/world/entity/LivingEntity	detectEquipmentUpdates	()V
 # smelt puts the next fuel in on the fire's last tick, so the furnace relights without losing progress (#512).
 accessible	field	net/minecraft/world/level/block/entity/AbstractFurnaceBlockEntity	litTimeRemaining	I
+# shoot fires a bot's bow or crossbow as the item would for a player, with the arrows the bot carries (#707).
+accessible	method	net/minecraft/world/item/ProjectileWeaponItem	shoot	(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/item/ItemStack;Ljava/util/List;FFZLnet/minecraft/world/entity/LivingEntity;)V
+accessible	method	net/minecraft/world/item/ProjectileWeaponItem	draw	(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Ljava/util/List;

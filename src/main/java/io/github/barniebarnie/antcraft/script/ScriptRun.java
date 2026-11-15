@@ -108,6 +108,11 @@ public final class ScriptRun {
 			return false;
 		}
 
+		/** Whether the action shoots at a mob from range, such as {@code shoot}: the bot's own melee fight holds off meanwhile. */
+		default boolean aims() {
+			return false;
+		}
+
 		/**
 		 * Whether the action waits out a reflex rather than end with {@code interrupted}: a search that does not move the bot,
 		 * such as {@code mineshaft}'s, pauses while a reflex holds the bot and goes on once it lets go (#410).
@@ -633,6 +638,11 @@ public final class ScriptRun {
 	/** Whether the script runs an action that walks the bot ({@link Action#walks}), such as {@code goto}. */
 	public boolean walking() {
 		return action != null && action.walks();
+	}
+
+	/** Whether the script runs an action that shoots from range ({@link Action#aims}), such as {@code shoot}. */
+	public boolean aiming() {
+		return action != null && action.aims();
 	}
 
 	/** The last action the script finished and its result ({@link #describe}), or null before the first. */

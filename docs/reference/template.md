@@ -15,7 +15,7 @@ Every builtin a script can call has its own page, listed on the [index](index.md
 | `crafting/` | Containers and crafting | `container`, `room`, `put`, `take`, `craft`, `smelt`, `needs`, `cooks_in` |
 | `building/` | Building | `build`, `build_placement`, `blueprint` |
 | `mining/` | Mining | `mineshaft`, `mineshaft_at`, `ore_vein` |
-| `combat/` | Fighting | `attack` |
+| `combat/` | Fighting | `attack`, `shoot` |
 | `colony/` | Colony and jobs | `colony`, `post_job`, `take_job`, `jobs`, `finish_job`, `drop_job` |
 | `bot/` | The bot and its output | `deaths`, `last_death`, `health`, `max_health`, `food`, `saturation`, `say`, `print`, `debug`, `info`, `warn`, `error`, `wait`, `stop` |
 | `python/` | Python builtins | `abs`, `all`, `any`, `bool`, `dict`, `enumerate`, `float`, `int`, `isinstance`, `len`, `list`, `max`, `min`, `range`, `reversed`, `round`, `sorted`, `str`, `sum`, `tuple`, `zip` |

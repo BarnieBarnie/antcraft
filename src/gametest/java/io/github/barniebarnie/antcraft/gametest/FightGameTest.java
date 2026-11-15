@@ -15,6 +15,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -432,6 +433,99 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			}
 			helper.assertTrue(husk.isDeadOrDying(), "husk alive with " + husk.getHealth() + " health");
 			helper.assertTrue(bot.isAlive(), "bot dead");
+		});
+	}
+
+	/** A bot with a bow and {@code arrows} arrows, at {@code x, z} in the test area. */
+	private static AntBot archer(GameTestHelper helper, int x, int z, int arrows) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
+		bot.getInventory().addItem(new ItemStack(Items.BOW));
+		if (arrows > 0) {
+			bot.getInventory().addItem(new ItemStack(Items.ARROW, arrows));
+		}
+		return bot;
+	}
+
+	/** Fails the test at once when {@code target} is hurt other than by an arrow, such as by the bot's blow. */
+	private static void failOnAnythingButArrows(GameTestHelper helper, LivingEntity target) {
+		helper.onEachTick(() -> {
+			DamageSource hurt = target.getLastDamageSource();
+			if (hurt != null && !hurt.is(DamageTypes.ARROW)) {
+				helper.fail(target.getType().toShortString() + " hurt by " + hurt.getMsgId());
+			}
+		});
+	}
+
+	/**
+	 * {@code shoot(creeper)} kills a creeper 15 blocks off with arrows before it gets near enough to explode (#707): only
+	 * arrows hurt it, and it neither explodes nor hurts the bot. Wide, for the range.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	public void shootKillsACreeperAtRangeWithoutItExploding(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 3, 16);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 12, 1, 18);
+		failOnExplosion(helper, bot, creeper);
+		failOnAnythingButArrows(helper, creeper);
+		ScriptRun run = run(helper, bot, "r = shoot(entities('creeper', 20)[0])\nprint(r.ok, r.reason)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
+	/**
+	 * {@code shoot(zombie)} kills a zombie that walks at the bot once hit, with arrows only, the bot leading it as it comes
+	 * (#707). The zombie wears a helmet, so the sun does not kill it instead.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	public void shootKillsAZombieAtRange(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 3, 16);
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 18);
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		failOnAnythingButArrows(helper, zombie);
+		ScriptRun run = run(helper, bot, "r = shoot(entities('zombie', 20)[0])\nprint(r.ok, r.reason)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
+	/**
+	 * {@code attack(creeper)} by a bot with a sword, a bow and arrows shoots it, as {@code shoot} does, rather than kite it
+	 * with the sword (#707): only arrows hurt it.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	public void attackShootsACreeperWithTheBowItCarries(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 3, 16);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 12, 1, 18);
+		failOnExplosion(helper, bot, creeper);
+		failOnAnythingButArrows(helper, creeper);
+		ScriptRun run = run(helper, bot, "r = attack(entities('creeper', 20)[0])\nprint(r.ok, r.reason)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
+	/**
+	 * {@code shoot} with no bow or crossbow fails with {@code no_tool}, with a bow but no arrows with {@code no_item}, and
+	 * a target it may not attack is {@code protected} (#707).
+	 */
+	@GameTest(maxTicks = 15)
+	public void shootWithoutABowOrArrowsFails(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 4, 1, 6);
+		husk.setNoAi(true);
+		Cow named = helper.spawn(EntityTypes.COW, 6, 1, 6);
+		named.setNoAi(true);
+		named.setCustomName(Component.literal("Daisy"));
+		AntBot unarmed = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		AntBot noArrows = archer(helper, 6, 1, 0);
+		AntBot armed = archer(helper, 3, 1, 4);
+		ScriptRun[] runs = {
+			run(helper, unarmed, "print(shoot(entities('husk', 8)[0]).reason)\n"),
+			run(helper, noArrows, "print(shoot(entities('husk', 8)[0]).reason)\n"),
+			run(helper, armed, "print(shoot(entities('cow', 8)[0]).reason)\n")};
+		AntBot[] bots = {unarmed, noArrows, armed};
+		List<String> expected = List.of("no_tool", "no_item", "protected");
+		helper.succeedWhen(() -> {
+			for (int i = 0; i < 3; i++) {
+				List<String> printed = BotScripts.log(bots[i], Output.Level.PRINT);
+				helper.assertTrue(runs[i].state() == ScriptRun.State.FINISHED && printed.equals(List.of(expected.get(i))),
+					"bot " + i + ": script " + runs[i].state() + ", printed " + printed);
+			}
+			helper.assertTrue(named.getHealth() == named.getMaxHealth(), "the named cow was hurt");
 		});
 	}
 

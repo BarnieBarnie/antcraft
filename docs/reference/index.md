@@ -108,6 +108,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | Builtin | Signature | Does |
 |---|---|---|
 | [`attack`](combat/attack.md) | `attack(entity)` | action: walk to a hostile mob or animal and strike it until it dies |
+| [`shoot`](combat/shoot.md) | `shoot(entity)` | action: shoot arrows at a mob with a bow or crossbow from range until it dies |
 
 ## Colony and jobs
 

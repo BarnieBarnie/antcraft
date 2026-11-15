@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
+import io.github.barniebarnie.antcraft.entity.Bow;
 import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
@@ -23,11 +24,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
@@ -43,7 +47,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The actions of the bot API that change the world (docs/reference/index.md, Working blocks): {@code mine}, {@code place},
- * {@code pick_up}, {@code equip}, {@code use}, {@code drop}, {@code eat} and {@code attack}. Those that work on a block first walk into reach of it, as
+ * {@code pick_up}, {@code equip}, {@code use}, {@code drop}, {@code eat}, {@code attack} and {@code shoot}. Those that work on a block first walk into reach of it, as
  * {@code goto} walks ({@link MoveApi#reach}); each returns a {@link Result}.
  */
 public final class WorkApi {
@@ -118,18 +122,43 @@ public final class WorkApi {
 			}
 			AntBot bot = bot(run, call);
 			Attack attack = new Attack(run, bot, info);
-			@Nullable Entity entity = info.entity();
-			if (entity == null || !entity.isAlive()) {
-				return run.done(attack.describe(), Result.fail(Result.TARGET_GONE));
+			@Nullable Result refused = refuse(bot, info.entity());
+			if (refused != null) {
+				return run.done(attack.describe(), refused);
 			}
-			if (entity.level() != bot.level()) {
-				return run.done(attack.describe(), Result.fail(Result.WRONG_DIMENSION));
-			}
-			if (entity == bot || !mayAttack(entity)) {
-				return run.done(attack.describe(), Result.fail(Result.PROTECTED));
-			}
-			return run.start(attack, call);
+			// A creeper is safer shot than kited, where the bot carries a bow and arrows (#707).
+			return run.start(info.entity() instanceof Creeper && Bow.armed(bot) ? new Shoot(run, bot, info) : attack, call);
 		});
+		natives.register("shoot", call -> {
+			Object arg = Args.bind("shoot", call, 1, "entity")[0];
+			if (!(arg instanceof EntityInfo info)) {
+				throw new ScriptError("shoot() takes an Entity, not '" + Values.typeName(arg) + "'");
+			}
+			AntBot bot = bot(run, call);
+			Shoot shoot = new Shoot(run, bot, info);
+			@Nullable Result refused = refuse(bot, info.entity());
+			if (refused == null && BotHands.find(bot, Bow.WEAPON) == null) {
+				refused = Result.fail(Result.NO_TOOL);
+			}
+			if (refused == null && BotHands.find(bot, Bow.ARROWS) == null) {
+				refused = Result.fail(Result.NO_ITEM);
+			}
+			return refused != null ? run.done(shoot.describe(), refused) : run.start(shoot, call);
+		});
+	}
+
+	/** Why {@code bot} may not fight {@code entity} at all ({@code attack}, {@code shoot}), or null if it may. */
+	private static @Nullable Result refuse(AntBot bot, @Nullable Entity entity) {
+		if (entity == null || !entity.isAlive()) {
+			return Result.fail(Result.TARGET_GONE);
+		}
+		if (entity.level() != bot.level()) {
+			return Result.fail(Result.WRONG_DIMENSION);
+		}
+		if (entity == bot || !mayAttack(entity)) {
+			return Result.fail(Result.PROTECTED);
+		}
+		return null;
 	}
 
 	/** What {@code attack} sees in a target, to tell whether it may hit it ({@link #mayAttack}). */
@@ -625,6 +654,154 @@ public final class WorkApi {
 		@Override
 		public String describe() {
 			return "eat(" + this.selector + ")";
+		}
+	}
+
+	/**
+	 * {@code shoot(entity)}: draws the bot's bow or crossbow and shoots arrows at the target ({@link Bow#fire}), keeping
+	 * between {@link #NEAR} and {@link #RANGE} blocks of it: it walks closer while the target is further or out of sight,
+	 * and backs off while it is nearer, leaving that to the kite goal while a creeper's fuse is lit. It ends ok once the
+	 * target dies, fails as {@code attack} does and with {@code no_tool} or {@code no_item} once the bow or the arrows are gone.
+	 */
+	private static final class Shoot implements ScriptRun.Action {
+		/** How far, in blocks, the bot shoots from: further, it walks closer. */
+		private static final double RANGE = 16;
+		/** How near, in blocks, it lets the target come before it backs off: well outside a creeper's 3 that lights its fuse. */
+		private static final double NEAR = 6;
+		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
+		private static final double MOVED = 2;
+
+		private final ScriptRun run;
+		private final AntBot bot;
+		private final EntityInfo info;
+		private ScriptRun.@Nullable Action walk;
+		private @Nullable Vec3 walkedTo;
+		private @Nullable Vec3 away;
+		private @Nullable Result result;
+
+		Shoot(ScriptRun run, AntBot bot, EntityInfo info) {
+			this.run = run;
+			this.bot = bot;
+			this.info = info;
+		}
+
+		@Override
+		public boolean tick() {
+			if (this.result != null) {
+				return true;
+			}
+			@Nullable Entity entity = this.info.entity();
+			if (entity instanceof LivingEntity living && living.isDeadOrDying()) {
+				return this.finish(Result.OK);
+			}
+			if (!(entity instanceof LivingEntity target) || entity.isRemoved() || entity.level() != this.bot.level()
+				|| entity.distanceTo(this.bot) > SenseApi.MAX_ENTITY_RADIUS) {
+				return this.finish(Result.fail(Result.TARGET_GONE));
+			}
+			if (!BotHands.equip(this.bot, Bow.WEAPON)) {
+				return this.finish(Result.fail(Result.NO_TOOL));
+			}
+			if (BotHands.find(this.bot, Bow.ARROWS) == null) {
+				return this.finish(Result.fail(Result.NO_ITEM));
+			}
+			this.bot.setTarget(null);
+			double distance = this.bot.distanceTo(target);
+			boolean inSight = this.bot.getSensing().hasLineOfSight(target);
+			boolean inRange = inSight && distance <= RANGE;
+			if (!inRange && KiteGoal.litNear(this.bot) == null) {
+				Result walked = this.walkTo(target);
+				if (walked != null) {
+					return this.finish(walked);
+				}
+			} else {
+				this.stopWalk();
+				if (distance < NEAR && KiteGoal.litNear(this.bot) == null) {
+					this.backOff(target);
+				} else if (this.away != null) {
+					this.away = null;
+					this.bot.getNavigation().stop();
+				}
+			}
+			if (!this.bot.isUsingItem()) {
+				this.bot.startUsingItem(InteractionHand.MAIN_HAND);
+			}
+			this.bot.getLookControl().setLookAt(target);
+			if (inRange && this.bot.getTicksUsingItem() >= Bow.drawTicks(this.bot, this.bot.getMainHandItem())
+				&& Bow.fire(this.bot, (ServerLevel) this.bot.level(), target)) {
+				this.bot.stopUsingItem();
+			}
+			return false;
+		}
+
+		/** Walks on towards {@code target}, planning again when it moved; the walk's failure, or null while it goes on. */
+		private @Nullable Result walkTo(LivingEntity target) {
+			if (this.walk != null && this.walkedTo != null && target.position().distanceTo(this.walkedTo) > MOVED) {
+				this.stopWalk();
+			}
+			if (this.walk == null) {
+				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(target.blockPosition()), 1);
+				this.walkedTo = target.position();
+			}
+			if (!this.walk.tick()) {
+				return null;
+			}
+			Result walked = (Result) this.walk.result();
+			this.walk = null;
+			return walked.ok() ? null : walked;
+		}
+
+		/** Backs off to somewhere further from {@code target}, as the kite goal does from a creeper. */
+		private void backOff(LivingEntity target) {
+			if (this.away == null || this.bot.getNavigation().isDone()) {
+				Vec3 to = DefaultRandomPos.getPosAway(this.bot, 16, 7, target.position());
+				this.away = to != null && to.distanceToSqr(target.position()) > this.bot.distanceToSqr(target) ? to : null;
+				if (this.away != null) {
+					this.bot.getNavigation().moveTo(this.away.x, this.away.y, this.away.z, 1.5);
+				}
+			}
+		}
+
+		private boolean finish(Result result) {
+			this.cancel();
+			this.result = result;
+			return true;
+		}
+
+		private void stopWalk() {
+			if (this.walk != null) {
+				this.walk.cancel();
+				this.walk = null;
+			}
+		}
+
+		@Override
+		public Object result() {
+			return this.result == null ? Result.fail(Result.STOPPED) : this.result;
+		}
+
+		@Override
+		public boolean walks() {
+			return true;
+		}
+
+		@Override
+		public boolean aims() {
+			return true;
+		}
+
+		@Override
+		public void cancel() {
+			this.stopWalk();
+			this.bot.stopUsingItem();
+			if (this.away != null) {
+				this.away = null;
+				this.bot.getNavigation().stop();
+			}
+		}
+
+		@Override
+		public String describe() {
+			return "shoot(" + this.info + ")";
 		}
 	}
 
