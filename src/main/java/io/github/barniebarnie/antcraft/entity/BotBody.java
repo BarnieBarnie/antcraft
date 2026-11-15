@@ -16,8 +16,11 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.FluidTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
 
 /** What the move actions of a script ({@link MoveApi}) do with a bot: its home, chunks and path follower. */
@@ -30,7 +33,24 @@ final class BotBody implements MoveApi.Body {
 	BotBody(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
-		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken);
+		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken)
+			&& (!feet.below().equals(target) || this.landsUnhurt(target));
+	}
+
+	/**
+	 * Whether the bot standing on {@code floor} lands at most {@link PathFollower#MAX_DROP} down, as a path drops it, once
+	 * that block is broken: else standing on it is no stand to break it from. Taking back a scaffold pillar whose lower
+	 * blocks it took back from the ground before, it stood on each block left to mine it and fell to the floor (#668).
+	 */
+	private boolean landsUnhurt(BlockPos floor) {
+		ServerLevel level = this.level();
+		for (int drop = 1; drop <= PathFollower.MAX_DROP; drop++) {
+			BlockPos below = floor.below(drop);
+			if (!level.getBlockState(below).getCollisionShape(level, below).isEmpty() || level.getFluidState(below).is(FluidTags.WATER)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	@Override
@@ -93,7 +113,30 @@ final class BotBody implements MoveApi.Body {
 
 	@Override
 	public boolean inReach(Pos target) {
-		return this.reach(target).isReached(PathFollower.feet(this.bot));
+		BlockPos pos = blockPos(target);
+		return this.reach(target).isReached(PathFollower.feet(this.bot)) && !(this.restsOnlyOn(pos) && !this.landsUnhurt(pos));
+	}
+
+	/**
+	 * Whether {@code pos} is the only block the bot rests on. Over the edge of it, as the bot lands once the block over it
+	 * is mined, its feet are in the block beside, so the reach goal does not see it stands on it (#668).
+	 */
+	private boolean restsOnlyOn(BlockPos pos) {
+		ServerLevel level = this.level();
+		AABB under = this.bot.getBoundingBox();
+		under = new AABB(under.minX, under.minY - 0.05, under.minZ, under.maxX, under.minY, under.maxZ);
+		boolean onPos = false;
+		for (BlockPos at : BlockPos.betweenClosed(BlockPos.containing(under.minX, under.minY, under.minZ),
+				BlockPos.containing(under.maxX, under.minY, under.maxZ))) {
+			VoxelShape shape = level.getBlockState(at).getCollisionShape(level, at);
+			if (!shape.isEmpty() && shape.move(at).bounds().intersects(under)) {
+				if (!at.equals(pos)) {
+					return false;
+				}
+				onPos = true;
+			}
+		}
+		return onPos;
 	}
 
 	private Goal reach(Pos target) {

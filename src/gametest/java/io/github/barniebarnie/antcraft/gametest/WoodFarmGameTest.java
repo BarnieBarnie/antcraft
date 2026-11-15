@@ -467,14 +467,16 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * the test grows them as the game does with seed 6, a 2x2 trunk of 24 (of 13 to 29), and the farm fells it whole,
 	 * replants all four spots and stores logs in its depot. The kit carries 31 dirt for a giant, its cell's clear height
 	 * (scaffold): with the 16 of other kinds the walks to its top stands got nowhere, the falls off the leaves left the
-	 * bot at 1 health and it died on the retry. Seed 6 rather than a random tree: the tallest, 28 and 29, take some 8000
+	 * bot at 1 health and it died on the retry. With 31 it still fell: taking back a scaffold pillar whose lower blocks it
+	 * took back from the ground before, it stood on the last ones to mine them (#668), so the test fails once the bot is
+	 * hurt. Seed 6 rather than a random tree: the tallest, 28 and 29, take some 8000
 	 * to 9000 ticks (seeds 15 and 58; TreeFarmGameTest theTallestGiantSpruceIsFelledWhole fells the one of 29).
 	 */
-	// Measured: passes at tick 5185 to 5258 (red: died at 4496).
+	// Measured: passes at tick 4604 to 4862 (red: died at 4496; with 31 dirt, hurt at tick 3005 to 3640).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10500)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
-			GIANT_SPRUCE_HARVEST);
+			GIANT_SPRUCE_HARVEST, true);
 	}
 
 	/**
@@ -485,13 +487,14 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * ticks a log (the mean of seeds 1 to 40: a trunk of 20.5, 87 logs). Seed 6 rather than a typical tree: seed 37 (a
 	 * trunk of 20, 89 logs) failed 4 of 9 runs (before and after #665, #670 and #671), the bot falling to its death or
 	 * leaving a branch log at (11, 18, 6), and seeds 8, 17 and 12 (trunks of 21, 24 and 28) killed it by falls each time
-	 * (#668).
+	 * (#668). Not yet unhurt: once in a few runs the bot stands on jungle leaves by a vine that decay under it with the
+	 * trunk gone, and falls (seen at 1 and 5 damage, after the fix of #668).
 	 */
 	// Measured: passes at tick 2718 to 3402 (9 of 9, three at once), the felling 2306 to 2990 ticks; seed 37 3282 to 4448.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 6800)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
-			GIANT_JUNGLE_HARVEST);
+			GIANT_JUNGLE_HARVEST, false);
 	}
 
 	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
@@ -513,10 +516,10 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * A giant farm of kind from (6, 0, 4) in the giant structure: a stone axe, dirt, 2 torches and 8 saplings in a chest;
 	 * once the cell is built and planted, the test grows its four saplings as the game does with seed. It passes when no
 	 * log of the tree is left in the area, the four spots hold saplings and the depot holds logs, the ticks from the
-	 * growth to then within {@link #HARVEST_FACTOR} of harvest.
+	 * growth to then within {@link #HARVEST_FACTOR} of harvest. With unhurt, it fails as soon as the bot loses health (#668).
 	 */
 	private static void giantFarm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
-		Item logItem, int dirt, long seed, int harvest) {
+		Item logItem, int dirt, long seed, int harvest, boolean unhurt) {
 		for (int x = 6; x <= 15; x++) {
 			for (int z = 4; z <= 13; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
@@ -538,6 +541,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		long[] grewAt = {-1};  // the tick the giant grew on
 		long[] took = {-1};  // the ticks from then to the first tick all is done
 		helper.onEachTick(() -> {
+			if (unhurt && bot.getHealth() < bot.getMaxHealth()) {
+				helper.fail("hurt: health " + bot.getHealth() + " at " + TestPositions.relative(helper, bot.blockPosition()).toShortString() + "; said " + said(bot));
+			}
 			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
 				helper.fail("said " + said(bot));
 			}

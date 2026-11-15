@@ -267,6 +267,49 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.DIRT, 4, 7, 4));
 	}
 
+	/**
+	 * The block the bot stands on, 4 blocks over the floor, such as the last of a scaffold pillar whose lower blocks were
+	 * taken back from the ground: broken from where it stands, the bot would fall 5 and get hurt, as it did felling a
+	 * giant spruce (#668). Standing on it is no stand to mine it from, and there is no other, so it stays.
+	 */
+	// Measured: passes at tick 2 (red: mined it, printed True None at tick 17).
+	@GameTest(maxTicks = 10)
+	public void mineTheBlockUnderfootOverADropIsOutOfReach(GameTestHelper helper) {
+		helper.setBlock(4, 5, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		expect(helper, bot, "r = mine(" + at(helper, 4, 5, 4) + ")\nprint(r.ok, r.reason)\n", List.of("False out_of_reach"), () -> {
+			helper.assertBlockPresent(Blocks.DIRT, 4, 5, 4);
+			helper.assertValueEqual(bot.getHealth(), bot.getMaxHealth(), "health");
+		});
+	}
+
+	/**
+	 * As {@link #mineTheBlockUnderfootOverADropIsOutOfReach}, the bot over the edge of the block, its feet in the block
+	 * beside, as it lands after the block over it was mined (#668): it still rests on the block, so it stays.
+	 */
+	// Measured: passes at tick 2.
+	@GameTest(maxTicks = 10)
+	public void mineTheBlockItRestsOnFromOverTheEdgeIsOutOfReach(GameTestHelper helper) {
+		helper.setBlock(4, 5, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.8, 6, 4.5));
+		expect(helper, bot, "r = mine(" + at(helper, 4, 5, 4) + ")\nprint(r.ok, r.reason)\n", List.of("False out_of_reach"), () -> {
+			helper.assertBlockPresent(Blocks.DIRT, 4, 5, 4);
+			helper.assertValueEqual(bot.getHealth(), bot.getMaxHealth(), "health");
+		});
+	}
+
+	/** The same block with a floor 3 under it: the bot breaks it from where it stands and drops 3, unhurt. */
+	// Measured: passes at tick 16.
+	@GameTest(maxTicks = 35)
+	public void mineTheBlockUnderfootOverAShortDropBreaksIt(GameTestHelper helper) {
+		helper.setBlock(4, 3, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 4, 4);
+		expect(helper, bot, "r = mine(" + at(helper, 4, 3, 4) + ")\nprint(r.ok, r.reason)\n", List.of("True None"), () -> {
+			helper.assertBlockPresent(Blocks.AIR, 4, 3, 4);
+			helper.assertValueEqual(bot.getHealth(), bot.getMaxHealth(), "health");
+		});
+	}
+
 	/** The block is mined, but its drop does not fit and stays on the ground. */
 	@GameTest(maxTicks = 20)
 	public void mineWithAFullInventoryIsNoSpace(GameTestHelper helper) {
