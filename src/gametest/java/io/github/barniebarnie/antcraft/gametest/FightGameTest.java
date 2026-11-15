@@ -391,7 +391,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 				hurt[0] = true;
 				bot.setHealth(10);
 			}
-			if (!BotScripts.log(bot, Output.Level.PRINT).isEmpty() && bot.getTarget() != null) {
+			// Only while the script runs: once it finished, the bot no longer waits on it and fights the husk of its own accord.
+			if (run.state() == ScriptRun.State.RUNNING && !BotScripts.log(bot, Output.Level.PRINT).isEmpty() && bot.getTarget() != null) {
 				helper.fail("the bot's own goals took up " + bot.getTarget());
 			}
 		});
@@ -792,7 +793,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 				hurt[0] = true;
 				bot.setHealth(9);
 			}
-			if (!BotScripts.log(bot, Output.Level.PRINT).isEmpty() && bot.getTarget() != null) {
+			// Only while the script runs: once it finished, the bot no longer waits on it and fights the husk of its own accord.
+			if (run.state() == ScriptRun.State.RUNNING && !BotScripts.log(bot, Output.Level.PRINT).isEmpty() && bot.getTarget() != null) {
 				helper.fail("the bot's own goals took up " + bot.getTarget());
 			}
 		});
