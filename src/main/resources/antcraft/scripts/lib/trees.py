@@ -367,9 +367,31 @@ def take_back(keep=()):
             # the pillar was cut under a bot on a giant jungle's crown, and it had no way down (#674).
             if pos().y > q.y + 1 and block(q.up()).is_air:
                 goto(q.up())
+            _drop_off(q)
             if _mine_back(q):
                 took = True
     placed_scaffold(keep=keep)
+
+
+def _drop_off(q):
+    """Where the bot rests on q alone over a drop that hurts, drops to the ground under it without placing a block, hurt or
+    not (deaths cost only items): mine will not break the block underfoot there, so its walk placed a block beside and over
+    q to mine it from, and that block stayed in the air once take_back stopped climbing (#758). From the ground, mine
+    pillars up to q, and the next round takes that pillar back from its top. ponytail: leaves under q count as a floor,
+    though they decay (#673)."""
+    feet = pos()
+    if q.y != feet.y - 1 or abs(q.x - feet.x) > 1 or abs(q.z - feet.z) > 1:
+        return
+    if q != feet.down() and not block(feet.down()).is_air:
+        return
+    if not all([block(q.down(k)).is_air for k in range(1, 4)]):
+        return
+    g = q.down(4)
+    for _ in range(64):
+        if not block(g).is_air:
+            break
+        g = g.down()
+    goto(g.up(), keep="#antcraft:scaffold_blocks")
 
 
 def recover():

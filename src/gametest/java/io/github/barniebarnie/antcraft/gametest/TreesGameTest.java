@@ -590,15 +590,20 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 	 * the pillar under its top block. mine will not break the block the bot stands on over that drop, so its walk placed a
 	 * block beside and over it to mine it from, which the next round took back the same way, one up a round to the 32nd;
 	 * a bot respawned by a giant jungle climbed so from its dead run's scaffold to the top of the test area and died of the
-	 * fall down. take_back now ends once a round's walks placed scaffold over all it had left: the bot climbs one.
+	 * fall down. take_back now ends once a round's walks placed scaffold over all it had left, and first drops the bot off
+	 * a lone block it rests on to the ground and mines the block from there (#758): no dirt is left in the air.
 	 */
-	// Measured: passes at tick 133 (red: climbed to 13 on tick 236; with a 6-block drop mine dropped off, no climb).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 280)
+	// Measured: passes at tick 230 (red: climbed to 13 on tick 236; with a 6-block drop mine dropped off, no climb; since
+	// #739 the dirt it climbed onto was left at (3, 10, 2)).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 460)
 	public void takeBackDoesNotClimbOnALoneBlockOverAir(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		// Cut once: the pillar it takes the block back from (#758) may stand in that column.
+		boolean[] cut = {false};
 		helper.onEachTick(() -> {
-			if (WorkGameTest.printed(bot).contains("up")) {
+			if (!cut[0] && WorkGameTest.printed(bot).contains("up")) {
+				cut[0] = true;
 				for (int y = 1; y <= 8; y++) {
 					helper.setBlock(3, y, 3, Blocks.AIR);
 				}
@@ -609,6 +614,9 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		});
 		expect(helper, bot, "import lib.trees\nr = goto(Pos" + at(helper, 3, 10, 3) + ")\nprint('up')\nwait(2)\n"
 			+ "lib.trees.take_back()\nprint(r.ok)\n", List.of("up", "True"), () -> {
+				for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 15, 23)) {
+					helper.assertBlockNotPresent(Blocks.DIRT, p);
+				}
 			});
 	}
 
