@@ -14,12 +14,14 @@ import org.jspecify.annotations.Nullable;
  * Fighting targets): it shoots it from between {@link Bow#NEAR} and {@link Bow#RANGE} blocks, as {@code shoot} does,
  * rather than close in with the melee goal, which fights on once the bow or the arrows are gone (#724), with its best
  * weapon in hand again. Not a skeleton, which outshoots it and is better closed in on, nor an enderman, which arrows do
- * not hit (#734). A hurt bot does not walk closer to a mob out of range, as {@code attack(min_health=...)} lets go once
- * hurt: it waits for it to come. While a fuse is lit near, the kite goal before it backs the bot off.
+ * not hit (#734). A bot under {@link #LOW_HEALTH} does not walk closer to a mob out of range, as {@code
+ * attack(min_health=...)} lets go once hurt: it waits for it to come. A scratch does not stop it (#750). While a fuse is lit near, the kite goal before it backs the bot off.
  */
 final class ShootGoal extends Goal {
 	/** How fast the bot walks closer, as a factor of its speed: as the melee goal does. */
 	private static final double SPEED = 1.2;
+	/** Health under which the bot waits for a mob out of range rather than close in: jobs.guard's RETREAT (#750). */
+	static final float LOW_HEALTH = 12;
 
 	private final AntBot bot;
 	private @Nullable Vec3 away;
@@ -62,7 +64,7 @@ final class ShootGoal extends Goal {
 		boolean inRange = distance <= Bow.RANGE && this.bot.getSensing().hasLineOfSight(target);
 		if (!inRange) {
 			this.away = null;
-			if (this.bot.getHealth() < this.bot.getMaxHealth()) {
+			if (this.bot.getHealth() < LOW_HEALTH) {
 				this.bot.getNavigation().stop();
 			} else if (this.bot.getNavigation().isDone()) {
 				this.bot.getNavigation().moveTo(target, SPEED);

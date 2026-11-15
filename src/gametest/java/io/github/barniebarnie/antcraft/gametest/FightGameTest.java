@@ -26,6 +26,7 @@ import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.animal.wolf.Wolf;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.item.ItemStack;
@@ -720,15 +721,56 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
 	public void aHurtBotWithABowDoesNotCloseInOnAMobOutOfRange(GameTestHelper helper) {
 		AntBot bot = archer(helper, 12, 1, 16);
-		bot.setHealth(12);
+		bot.setHealth(10);
 		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
 		zombie.setNoAi(true);
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
 		double z = bot.getZ();
+		// Kept at 10, under ShootGoal's 12 (#750): a fed bot heals a health in 10 ticks.
+		helper.onEachTick(() -> bot.setHealth(Math.min(bot.getHealth(), 10)));
 		helper.onEachTick(() -> helper.assertTrue(Math.abs(bot.getZ() - z) < 1, "the bot walked " + (bot.getZ() - z) + " blocks"));
 		helper.runAtTickTime(60, () -> {
 			helper.assertTrue(bot.getTarget() == zombie, "target " + bot.getTarget());
 			helper.succeed();
+		});
+	}
+
+	/**
+	 * A bot with a scratch, kept at 18 health, and a bow still closes in on a mob out of its range (#750): only a real low
+	 * health, under the guard's RETREAT of 12, keeps it waiting. The still zombie stands 20 blocks off.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 60)
+	public void aScratchedBotWithABowClosesInOnAMobOutOfRange(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 1, 16);
+		bot.setHealth(18);
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
+		zombie.setNoAi(true);
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		double z = bot.getZ();
+		// Kept at 18: a fed bot heals to full in a few ticks, and closes in then anyway.
+		helper.onEachTick(() -> bot.setHealth(Math.min(bot.getHealth(), 18)));
+		helper.succeedWhen(() -> helper.assertTrue(bot.getZ() - z > 2, "the bot walked " + (bot.getZ() - z) + " blocks"));
+	}
+
+	/**
+	 * An idle bot leaves an enderman near it alone, as arrows do not hit it and a blow turns it on the bot (#750); once the
+	 * enderman hurts it, it fights back (HurtByTargetGoal). The enderman has no AI, so it neither wanders nor teleports.
+	 */
+	@GameTest(maxTicks = 70)
+	public void anIdleBotLeavesAnEndermanAloneUntilHurtByIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Enderman enderman = helper.spawn(EntityTypes.ENDERMAN, 5, 1, 5);
+		enderman.setNoAi(true);
+		helper.onEachTick(() -> {
+			if (helper.getTick() < 40) {
+				helper.assertTrue(bot.getTarget() != enderman, "targets the enderman unprovoked");
+			}
+		});
+		helper.runAtTickTime(40, () -> bot.hurtServer(helper.getLevel(), helper.getLevel().damageSources().mobAttack(enderman), 1));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(helper.getTick() > 40, "not hurt yet");
+			helper.assertTrue(bot.getTarget() == enderman, "target " + bot.getTarget());
 		});
 	}
 

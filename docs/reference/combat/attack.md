@@ -37,7 +37,7 @@ Against a creeper the bot kites: while the fuse of a creeper near it is lit, it 
 
 A bot at or below `botFleeHealth` with a hostile mob near it flees instead of fighting on: the attack ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)). To retreat before that, give `min_health`: once the bot's health is under it, the attack ends with `hurt` and the bot lets go of the target, so its own goals do not chase it on. A creeper it shoots (above) ends the attack with `hurt` likewise. The bundled [`jobs.guard`](../../cookbook/guard.md) fights with `min_health=12`, then walks home to eat and heal.
 
-While a bot is hurt (under its full health) and runs a script of its own, its own goals start no fight with a hostile mob they see: the script decides, so a mob in sight does not draw out a bot that retreats or heals. A mob that hurts it is still fought back. An idle bot, or one at full health, fights any hostile mob it sees as before.
+While a bot is hurt (under its full health) and runs a script of its own, its own goals start no fight with a hostile mob they see: the script decides, so a mob in sight does not draw out a bot that retreats or heals. A mob that hurts it is still fought back. An idle bot, or one at full health, fights any hostile mob it sees as before, but leaves neutral ones (endermen, piglins, zombified piglins) and the warden and wither alone until they hurt it (#750).
 
 An argument that is no `Entity`, or a `min_health` that is no `int`, stops the script with an error.
 

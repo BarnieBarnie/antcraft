@@ -56,6 +56,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -65,9 +66,12 @@ import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.piglin.Piglin;
+import net.minecraft.world.entity.monster.warden.Warden;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -198,9 +202,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		// A hurt bot running a script of its own starts no fight: the script decides, such as to retreat home and heal
 		// (jobs.guard), and a mob that hurts it is still fought back (HurtByTargetGoal) (#718). Nor does it take on a
 		// creeper with its fuse lit, such as one it kited out of the kite goal's range: the melee goal would walk it back
-		// into the blast (#733).
+		// into the blast (#733). Nor a neutral mob, as jobs.guard's LEFT_OUT: an enderman, which arrows do not hit, a
+		// zombified piglin or piglin, which a blow turns on the bot with their kin, the warden or the wither; it fights
+		// one only once hurt by it (#750).
 		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true,
-			(target, level) -> !(target instanceof Creeper creeper && KiteGoal.lit(creeper))) {
+			(target, level) -> !(target instanceof Creeper creeper && KiteGoal.lit(creeper)) && !leftAlone(target)) {
 			@Override
 			public boolean canUse() {
 				return !this.scriptDecides() && super.canUse();
@@ -219,6 +225,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				return AntBot.this.getHealth() < AntBot.this.getMaxHealth() && AntBot.this.isRunningScript() && !AntBot.this.isIdling();
 			}
 		});
+	}
+
+	/** Whether the bot takes on {@code mob} only once hurt by it (#750). */
+	private static boolean leftAlone(LivingEntity mob) {
+		return mob instanceof NeutralMob || mob instanceof Piglin || mob instanceof Warden || mob instanceof WitherBoss;
 	}
 
 	/**
