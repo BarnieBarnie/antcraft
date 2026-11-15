@@ -707,6 +707,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// in 7 more). Since #687, where a path no longer stands on a block it broke (the climb to the top stand did, and the bot
 	// fell off it), 3623 to 3912 in 14 runs, 7 at once (the felling 3207 to 3495). Since #713 (#715), 3692 to 3979 in 8
 	// runs, 12 to 15 giants at once (the felling 3266 to 3555), so HARVEST["giant_spruce"] 3300 and maxTicks 8000 hold.
+	// Since #752 (#761), 3555 to 3814 in 8 copies at once with 6 killed giant jungles and 6 mangroves (the felling 3057 to
+	// 3316, 3171 on average), so HARVEST["giant_spruce"] 3200.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
@@ -737,7 +739,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// 6953, no death. That is slower than the suite's slowest test (the seed 37 giant jungle, TreeFarmGameTest, 2467 to
 	// 4909, once 7809) and would need maxTicks some 15000, so a full run would last longer; and its felling is past
 	// HARVEST_FACTOR of HARVEST["giant_jungle"] (at most 4050), as a typical giant jungle is no trunk of 28.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 7600)
+	// Since #752 (#761; once 1782 in #751, under 2700's window), 2491 to 3446 in 16 copies at once, the felling 2009 to
+	// 2970 (2223 on average), so HARVEST["giant_jungle"] 2250, the mean with no death; the killed test below has its own.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 7000)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
 			GIANT_JUNGLE_HARVEST, 0);
@@ -748,10 +752,12 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * again, takes back its scaffold and picks up its drops, and the farm finishes as above.
 	 */
 	// Measured: passes at tick 2972 to 4098 in 3 runs before #713, 3140 to 3855 in 8 since, the felling 2672 to 3385.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
+	// Since #752 (#761), 2899 to 4259 in 6 copies at once, the felling 2426 to 3763 (3112 on average): past
+	// HARVEST_FACTOR of HARVEST["giant_jungle"] 2250, so it checks KILLED_GIANT_JUNGLE_HARVEST, 3100.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8500)
 	public void aBotKilledWhileFellingAGiantJungleComesBackAndFinishesTheFarm(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
-			GIANT_JUNGLE_HARVEST, 9);
+			KILLED_GIANT_JUNGLE_HARVEST, 9);
 	}
 
 	/**
@@ -760,8 +766,10 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * whole, its roots mined, a propagule replanted and logs in the depot, the felling within {@link #HARVEST_FACTOR} of
 	 * HARVEST["minecraft:mangrove_propagule"].
 	 */
-	// Measured: passes at tick 1876 to 2085 in 3 runs, the felling within HARVEST_FACTOR of 1400.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
+	// Measured: passes at tick 1876 to 2085 in 3 runs, the felling within HARVEST_FACTOR of 1400. Since #752 (#761),
+	// 1880 to 2227 in 6 copies at once, the felling 1398 to 1745 (1556 on average): HARVEST stays 1400, the mean of 39
+	// seeded mangroves rather than this one tree.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4500)
 	public void aMangroveFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		farm(helper, "mangrove_propagule", Items.MANGROVE_PROPAGULE, Blocks.MANGROVE_PROPAGULE, Blocks.MANGROVE_LOG,
 			Items.MANGROVE_LOG, 23, 0, 1400, 0, 11, List.of(new BlockPos(11, 1, 9)));
@@ -776,8 +784,10 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
-	private static final int GIANT_SPRUCE_HARVEST = 3300;
-	private static final int GIANT_JUNGLE_HARVEST = 2700;
+	private static final int GIANT_SPRUCE_HARVEST = 3200;
+	private static final int GIANT_JUNGLE_HARVEST = 2250;
+	/** The ticks a giant jungle takes the bot killed up the tree, which its farm test fells within HARVEST_FACTOR of (#761). */
+	private static final int KILLED_GIANT_JUNGLE_HARVEST = 3100;
 
 	/** How far a giant's felling ticks may be from its HARVEST, either way. */
 	private static final double HARVEST_FACTOR = 1.5;
