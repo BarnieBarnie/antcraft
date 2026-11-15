@@ -64,7 +64,8 @@ class Source:
     def there(self, radius):
         """Whether do may find something within radius: False where near is set and none of it that keep allows is
         (#554), so get gives up at once instead of costing the tools to gather nothing with. make_cost of the raw item
-        itself is None then (#649); as a raw item of a plan it still costs it, as if there were some."""
+        itself is None then (#649), and of an item whose stations need it (#729); as a raw item of the item's own steps it
+        still costs it, as if there were some."""
         return self.near is None or lib.find.nearest(self.near, radius, self.keep) is not None
 
     def least(self, n):
@@ -370,7 +371,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     source's ore or tree),
     and for each kind of tool their sources need the tool_cost of the highest
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
-    raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once. tools holds the tool
+    raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once, and
+    so for a raw item only its crafting table or furnace takes (#729). tools holds the tool
     costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
     limit, None as soon as the cost is sure to be over it: a source costs at least its least, so the ore scans and tool
     costs of a dear one are left out (#582, #681)."""
@@ -380,6 +382,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     p = needs(item, n)
     if limit is not None and least_make(p, radius, tools) > limit:
         return None
+    # The raw items the item's own steps take; the others are its stations' (#729).
+    own = [key(raw) for raw in p["gather"]]
     GETTING.append(key(item))
     try:
         p = lib.craft.plan(item, n, p)
@@ -387,16 +391,16 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         gather = dict(p["gather"])
         # The last chest get takes from, where its walk back to the stations starts (#698).
         back = None
-        smelt = smelted(p)
+        smelt = smelts(p)
         if gather:
             c, back, smelt = stored(p, item, gather, radius, tools)
-            if smelt <= 0 < smelted(p):
+            if sum([max(0, k) for k in smelt.values()]) <= 0 < smelted(p):
                 # The chests hold all the plan smelts: no furnace to make, nor fuel to burn (#709).
                 p = without_furnace(item, n)
                 gather = dict(p["gather"])
                 c, back, smelt = stored(p, item, gather, radius, tools)
             ticks += c
-        ticks += lib.cost.SMELT * max(0, smelt)
+        ticks += lib.cost.SMELT * sum([max(0, k) for k in smelt.values()])
         need = {}
         # The raw items with no ore first, so the bound of an ore's least counts their cost (#681).
         for raw, k in sorted(gather.items(), key=lambda g: key(g[0]) in SOURCES and SOURCES[key(g[0])].ore is not None):
@@ -417,7 +421,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
                 k -= held
                 if k <= 0:
                     continue
-            if itself and not s.there(radius):
+            # A station's raw items too: get cannot make the furnace or table without them (#729).
+            if (itself or key(raw) not in own) and not s.there(radius):
                 return None
             # Coal may come as charcoal for less than its least.
             if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k) + smelted_pickaxe(s, tools)) > limit:
@@ -433,7 +438,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if s.tool and tier != "hand":
                 t, uses = need.get(s.tool, ("wooden", 0))
                 need[s.tool] = (min([t, tier or "wooden"], key=lib.tools.TIERS.index), uses + k)
-        ticks += stations(p, back, smelt > 0)
+        ticks += stations(p, back, smelt)
         if limit is not None and ticks > limit:
             return None
         for kind, (t, uses) in need.items():
@@ -489,7 +494,16 @@ def smelted_pickaxe(s, tools):
 
 def smelted(p):
     """How many items p, a plan, smelts."""
-    return sum([k for step, k, how in p["crafts"] if how == "smelt"])
+    return sum(smelts(p).values())
+
+
+def smelts(p):
+    """How many of each step p, a plan, smelts, by step."""
+    out = {}
+    for step, k, how in p["crafts"]:
+        if how == "smelt":
+            out[step] = out.get(step, 0) + k
+    return out
 
 
 def without_furnace(item, n):
@@ -499,19 +513,21 @@ def without_furnace(item, n):
     return needs(item, n, also=also)
 
 
-def stations(p, start=None, smelting=True):
+def stations(p, start=None, smelting=None):
     """The ticks the stations of p, a plan, add (#630): for its crafting table and its furnace (or smoker or blast furnace)
     each, the walk from start (None: the bot's Pos) to the one lib.craft.plan counts within lib.craft.REACH, as craft_here walks to one craft or smelt does
     not see, else the ticks to mine back the one craft_here puts down, with the best axe or pickaxe carried (a furnace at
     least with a wooden pickaxe, which get gets before it smelts), a furnace once for each stack of lib.craft.STACK a step
-    smelts, as smelt_here puts one down for each (#635); what makes one is in p already. No furnace where not smelting,
-    as the chests hold all p smelts (#709)."""
+    smelts, as smelt_here puts one down for each (#635); what makes one is in p already. smelting is how many of
+    each step are left to smelt (smelts; None: all p smelts), as the chests hold the rest: no furnace where none is left,
+    and one for each stack of what is (#709, #729)."""
     ticks = 0
     if p["table"]:
         ticks += station(find_nearest("crafting_table", radius=lib.craft.REACH), "axe", "table", None, start=start)
-    inputs = lib.craft.smelt_inputs(p) if smelting else []
+    left = smelts(p) if smelting is None else smelting
+    stacks = sum([(max(0, k) + lib.craft.STACK - 1) // lib.craft.STACK for k in left.values()])
+    inputs = lib.craft.smelt_inputs(p) if stacks else []
     if inputs:
-        stacks = sum([(k + lib.craft.STACK - 1) // lib.craft.STACK for step, k, how in p["crafts"] if how == "smelt"])
         ticks += station(lib.craft.furnace_at(inputs), "pickaxe", "furnace", "wooden", stacks, start)
     return ticks
 
@@ -529,11 +545,12 @@ def stored(p, item, gather, radius, tools):
     """The walk to the nearest chest of lib.stock within radius that holds each step of p, a plan for item, as
     intermediate takes them (planks of any kind for planks), lowering gather by the raw items the steps they cover take
     (#580), and the items smelted by those the steps they cover smelt (#709); tools as make_cost's. Gives those ticks,
-    the Pos of the last chest walked to (None: none) and the items p still smelts. ponytail: needs of the step alone, so
+    the Pos of the last chest walked to (None: none) and how many of each step p still smelts (smelts; under 0 where the
+    chests hold more than it smelts). ponytail: needs of the step alone, so
     a carried item the plan used for another step may count twice."""
     ticks = 0
     last = None
-    smelt = smelted(p)
+    smelt = smelts(p)
     for step, k, how in reversed(p["crafts"]):
         if step == item:
             continue
@@ -551,7 +568,8 @@ def stored(p, item, gather, radius, tools):
             left = needs(step, k - held) if held < k else {"gather": {}, "crafts": []}
             for raw, m in full["gather"].items():
                 gather[raw] = gather.get(raw, 0) - m + left["gather"].get(raw, 0)
-            smelt -= smelted(full) - smelted(left)
+            for st, m in smelts(full).items():
+                smelt[st] = smelt.get(st, 0) - m + smelts(left).get(st, 0)
             k -= held
     return ticks, last, smelt
 

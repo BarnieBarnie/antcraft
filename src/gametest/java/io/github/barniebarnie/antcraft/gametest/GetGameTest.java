@@ -754,6 +754,51 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A crafting table by the bot, which carries a furnace and nine coal, 64 iron ingots and 8 raw iron in a chest across
+	 * the area (#729): make_cost of 192 iron bars (72 ingots) counts the smelting of the 8 left and a furnace put down
+	 * and mined back once, for one stack; it counted a furnace for each of the two stacks of the 72.
+	 */
+	// Measured: passes at tick 18 (red: printed 53, the furnace of a second stack).
+	@GameTest(maxTicks = 45)
+	public void makeCostCountsTheFurnaceOnlyForTheSmeltingAChestLeaves(GameTestHelper helper) {
+		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.IRON_INGOT, 64), new ItemStack(Items.RAW_IRON, 8));
+		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 9));
+		run(helper, bot, """
+			import lib.cost
+			import lib.stock
+			from lib.get import make_cost
+			c = lib.stock.chests(32)[0]
+			t = find_nearest("crafting_table", radius=4)
+			walks = 2 * lib.cost.walk(pos(), c) + lib.cost.walk(c, t)
+			print(make_cost("iron_bars", 192) - walks - 8 * lib.cost.SMELT - lib.cost.breaking(1, "furnace", "wooden"))
+			""");
+		failOnOtherPrint(helper, bot, "0");
+		helper.succeedWhen(() -> printed(helper, bot, "0"));
+	}
+
+	/**
+	 * No tree, crafting table or furnace in the area, the bot carries a raw iron and a coal (#729): make_cost of an iron
+	 * ingot is None, as get cannot gather the logs of the crafting table the furnace takes; it costed the logs as if a
+	 * tree were near, as for a raw item the item itself needs.
+	 */
+	// Measured: passes at tick 14 (red: printed 887).
+	@GameTest(maxTicks = 30)
+	public void makeCostIsNoneWhereTheFurnacesRawItemsHaveNoSource(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON));
+		bot.getInventory().addItem(new ItemStack(Items.COAL));
+		run(helper, bot, """
+			from lib.get import make_cost
+			print(make_cost("iron_ingot", 1))
+			""");
+		failOnOtherPrint(helper, bot, "None");
+		helper.succeedWhen(() -> printed(helper, bot, "None"));
+	}
+
+	/**
 	 * A furnace by the bot, a raw iron in a chest across the area, more than lib.craft.REACH from the furnace, coal and no
 	 * pickaxe carried (#698): get takes the raw iron and walks back to the furnace to smelt it. From beside the chest it
 	 * saw no furnace within reach and would put one down, which it cannot mine back without a pickaxe.
