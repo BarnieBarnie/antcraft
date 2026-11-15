@@ -373,20 +373,30 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once, and
     so for a raw item only its crafting table or furnace takes (#729). tools holds the tool
-    costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
+    costs found so far, by tool id, for one options, under "chests" the chests of lib.stock, scanned once, and under
+    "plans" the needs and lib.craft.plan of each (item, n) costed (#728), as a tier options costs may be costed again as
+    the tool of a source (the wooden pickaxe of a stone one's cobblestone). With
     limit, None as soon as the cost is sure to be over it: a source costs at least its least, so the ore scans and tool
     costs of a dear one are left out (#582, #681)."""
     if key(item) in GETTING:
         return None
     tools = {} if tools is None else tools
-    p = needs(item, n)
+    if "plans" not in tools:
+        tools["plans"] = {}
+    plans = tools["plans"]
+    if (item, n) not in plans:
+        plans[(item, n)] = [needs(item, n), None]
+    cached = plans[(item, n)]
+    p = cached[0]
     if limit is not None and least_make(p, radius, tools) > limit:
         return None
     # The raw items the item's own steps take; the others are its stations' (#729).
     own = [key(raw) for raw in p["gather"]]
     GETTING.append(key(item))
     try:
-        p = lib.craft.plan(item, n, p)
+        if cached[1] is None:
+            cached[1] = lib.craft.plan(item, n, p)
+        p = cached[1]
         ticks = 0
         gather = dict(p["gather"])
         # The last chest get takes from, where its walk back to the stations starts (#698).

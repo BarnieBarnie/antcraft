@@ -1161,13 +1161,25 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far
 	 * (#595); 46,500 (26 ticks) since make_cost finds each plan's crafting table and furnace within reach (#630); 33,900
 	 * (19 ticks, 44,600 before) since make_cost bounds a tier by its needs alone before lib.craft.plan (#710), which leaves
-	 * out the plans of copper, iron and diamond. The limit keeps it there.
+	 * out the plans of copper, iron and diamond; 34,500-34,700 since #728. The limit keeps it there.
 	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
-			List.of("('make', 'stone')"), "choose", 60_000);
+			List.of("('make', 'stone')"), "choose", 45_000);
+	}
+
+	/**
+	 * What one choose of a pickaxe costs an empty bot with no chest near (#728): the stone pickaxe's cobblestone needs a
+	 * wooden pickaxe, whose needs and plan options has as the wooden tier already, so make_cost takes them from its cache.
+	 * Measured 28,500 instructions; 34,500 before, the two needs of the wooden pickaxe made again 6,000 of it.
+	 */
+	@GameTest(maxTicks = 60)
+	public void choosePickaxeCost(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('pickaxe', 30, radius=8)[1:3])\n",
+			List.of("('make', 'stone')"), "choose pickaxe", 33_000);
 	}
 
 	/**
