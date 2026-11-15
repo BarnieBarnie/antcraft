@@ -67,19 +67,25 @@ class Source:
         itself is None then (#649); as a raw item of a plan it still costs it, as if there were some."""
         return self.near is None or lib.find.nearest(self.near, radius, self.keep) is not None
 
-    def cost(self, n, radius):
+    def cost(self, n, radius, start=None):
         """(ticks, tier) to get n: estimate each, and deep(y) once more where none of ore is exposed within radius (one
         flight of stairs reaches a vein); the tier of a pickaxe source is that of the nearest exposed ore block
-        (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier. The
-        rest of that block's vein (ore_vein), up to n, costs only its mining with that tier, as lib.dig.ore mines a vein
-        from where it stands (#661): the estimate counts a walk to each. ponytail: the nearest vein only."""
+        (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier. Where
+        one is exposed, its vein (ore_vein), up to n, costs lib.cost.walk from start (None: the bot's Pos) to that block
+        (#675) and the mining of each, with the best pickaxe carried where it drops the ore, else with that tier, as
+        lib.dig.ore mines a vein from where it stands (#661); the rest costs the estimate, which counts a walk, each.
+        ponytail: the nearest vein only."""
         p = None if self.ore is None else lib.find.exposed(self.ore, radius)
         tier = lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
-        ticks = self.estimate * n + (deep(self.y) if self.ore is not None and p is None else 0)
-        if p is not None and n > 1:
-            more = min(n, len([b for b in ore_vein(p) if lib.find.allowed(b)])) - 1
-            ticks -= more * max(0, self.estimate - lib.cost.breaking(1, "ore", tier))
-        return ticks, tier
+        if p is None:
+            return self.estimate * n + (deep(self.y) if self.ore is not None else 0), tier
+        vein = min(n, len([b for b in ore_vein(p) if lib.find.allowed(b)]))
+        best = lib.tools.best("pickaxe")
+        mine = tier
+        if best is not None and tier in lib.tools.TIERS and lib.tools.rank(best) <= lib.tools.TIERS.index(tier):
+            mine = lib.tools.tier(best)
+        walk = lib.cost.walk(pos() if start is None else start, p)
+        return walk + lib.cost.breaking(max(vein, 1), "ore", mine) + self.estimate * (n - max(vein, 1)), tier
 
 
 def deep(y):
@@ -327,7 +333,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once. tools holds the tool
     costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
-    limit, None as soon as the cost is sure to be over it: a source costs at least its estimate each, so the ore scans
+    limit, None as soon as the cost is likely to be over it: a source costs about its estimate each, so the ore scans
     and tool costs of a dear one are left out (#582)."""
     if key(item) in GETTING:
         return None
@@ -359,10 +365,13 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
                     continue
             if itself and not s.there(radius):
                 return None
-            # Coal may come as charcoal for less than its estimate.
+            # Coal may come as charcoal for less than its estimate. ponytail: an exposed ore near costs less than its
+            # estimate too (#661, #675), so a dear tier may be left out that its ore in sight made cheaper; a bound of
+            # its mining alone would scan for ore on every options (#582).
             if limit is not None and ticks + (0 if key(raw) == COAL else s.estimate * k) > limit:
                 return None
-            c, tier = s.cost(k, radius)
+            # The source's walk starts at the chest get took the rest from.
+            c, tier = s.cost(k, radius, chests[0] if chests else None)
             if key(raw) == COAL and LOGS not in GETTING:
                 wood = charcoal(k, radius)[1]
                 if wood < c:

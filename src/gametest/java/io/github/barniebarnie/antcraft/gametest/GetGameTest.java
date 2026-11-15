@@ -153,7 +153,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * A stone pickaxe carried, three iron ore at three corners of the area (#649): make_cost of three raw iron is the raw
 	 * iron source's estimate, as get gathers it, within {@link #COST_FACTOR} of get's ticks; it was None, as make_cost turned
 	 * down the raw item it was costing. The estimate (60) counts a walk to each ore: three ore beside the bot took 82 ticks.
-	 * Measured: make_cost 180, get 126 to 133 ticks (test tick 131 to 142).
+	 * Since #675 the nearest ore costs the walk to it and its mining (30 and 23). Measured: make_cost 173 (180 before), get
+	 * 126 to 133 ticks (test tick 131 to 146).
 	 */
 	@GameTest(maxTicks = 270)
 	public void makeCostOfRawIronIsCloseToItsTicks(GameTestHelper helper) {
@@ -174,8 +175,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A stone pickaxe carried, two raw iron in a chest along the area's side and one iron ore past it (#661): make_cost of
 	 * three raw iron is the walk to the chest and one raw iron from its source, as get takes the chest's first, within
-	 * {@link #COST_FACTOR} of get's ticks; it was three from the source. Measured: make_cost 90 (180 before), get 63 ticks
-	 * (test tick 75).
+	 * {@link #COST_FACTOR} of get's ticks; it was three from the source. The ore costs the walk from the chest to it
+	 * and its mining (#675). Measured: make_cost 83 (180 before #661, 90 before #675, flaky against 59), get 63 ticks
+	 * (test tick 75 to 77).
 	 */
 	@GameTest(maxTicks = 150)
 	public void makeCostOfRawIronInAChestIsCloseToItsTicks(GameTestHelper helper) {
@@ -215,7 +217,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A stone pickaxe carried, a vein of three iron ore a few blocks off (#661): make_cost of three raw iron is the source's
 	 * estimate for the first and the mining of the rest of the vein, within {@link #COST_FACTOR} of get's ticks; it was the
-	 * estimate, which counts a walk, for each. Measured: make_cost 106 (180 before), get 80 to 85 ticks (test tick 98).
+	 * estimate, which counts a walk, for each. Since #675 the first costs the walk to it
+	 * and its mining. Measured: make_cost 99 (180 before #661, 106 before #675), get 80 to 86 ticks (test tick 98 to 100).
 	 */
 	@GameTest(maxTicks = 200)
 	public void makeCostOfAVeinOfRawIronIsCloseToItsTicks(GameTestHelper helper) {
@@ -237,9 +240,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * A vein of two coal ore and an oak in reach, four sticks, a stone pickaxe and a furnace carried (#663): get of eight
 	 * torches digs the vein (wood_for_coal gives 0) and then, with the vein gone and the coal source failing, eight more
 	 * burn the oak's logs into charcoal. Each route's make_cost is within {@link #COST_FACTOR} of the ticks get takes, and
-	 * the coal it chose is the faster route: the coal source costs 40 an ore, a vein's rest 23, charcoal 55 a log and SMELT
-	 * a coal, so a vein in sight wins and #661's cheaper vein does not change the choice. Measured: coal make_cost 80, get
-	 * 70 to 71 ticks; charcoal 620, get 739 to 740 (test tick 820).
+	 * the coal it chose is the faster route: the coal source costs the walk to the vein and 23 an ore (#675), charcoal 55 a
+	 * log and SMELT a coal, so a vein in sight wins and #661's cheaper vein does not change the choice. Measured: coal
+	 * make_cost 76 (80 before #675), get 70 to 77 ticks; charcoal 620, get 739 to 740 (test tick 820).
 	 */
 	@GameTest(maxTicks = 1650)
 	public void coalFromAVeinInSightBeatsCharcoal(GameTestHelper helper) {
@@ -289,6 +292,26 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			LOGGER.info("coal or wood: " + log);
 			helper.succeed();
 		});
+	}
+
+	/**
+	 * A coal ore at the far corner of the wide area, 42 blocks' walk off, and a stone pickaxe carried (#675): the coal
+	 * source costs lib.cost.walk to the ore and its mining (210 and 23), not a flat 40, so with SMELT cut to 50 ticks one
+	 * coal as charcoal (two logs at 55 and 50) is cheaper and wood_for_coal gives those two logs; it gave 0. A vein in
+	 * sight still beats charcoal (coalFromAVeinInSightBeatsCharcoal).
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 140)
+	public void aFarCoalVeinDoesNotBeatCheaperCharcoal(GameTestHelper helper) {
+		helper.setBlock(22, 1, 22, Blocks.COAL_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			import lib.cost
+			from lib.get import wood_for_coal
+			lib.cost.SMELT = 50
+			print(wood_for_coal(1, 32))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "2"));
 	}
 
 	/**
@@ -940,7 +963,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A source's cost counts DEEP once for all it gets, as one flight of stairs reaches a vein, and takes the pickaxe tier
 	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
-	 * NEEDS says "wooden" for it, so the source's own tier by id (which reads the tags too since #566) differs.
+	 * NEEDS says "wooden" for it, so the source's own tier by id (which reads the tags too since #566) differs. In sight it
+	 * costs the walk to it (10), its mining with iron's tier (15) and the estimate for the other two (#675).
 	 */
 	@GameTest(maxTicks = 20)
 	public void aSourceCostCountsDeepOnceAndTheBlocksTier(GameTestHelper helper) {
@@ -955,7 +979,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			s = ore("lodestone", "minecraft:lodestone", 60)
 			print(s.cost(3, 8), s.cost(3, 1)[0] - DEEP, s.cost(3, 1)[1])
 			""");
-		helper.succeedWhen(() -> printed(helper, bot, "(180, 'iron') 180 wooden"));
+		helper.succeedWhen(() -> printed(helper, bot, "(145, 'iron') 180 wooden"));
 	}
 
 	/**
@@ -976,8 +1000,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * lib.find.WHERE limits get to where it is true (#540): with it true only within 2 blocks of the bot, an iron axe in a
-	 * chest, the oak and iron ore just outside are not used. choose makes a stone axe from what the bot carries instead of
-	 * the chest's, the iron source costs DEEP more, ensure_tool crafts the stone axe and get finds no logs.
+	 * chest, the oak and iron ore just outside are not used (the iron source costs the walk to it, 20, and its mining with
+	 * stone's tier, 23, #675). choose makes a stone axe from what the bot carries instead of the chest's, the iron source
+	 * costs DEEP more, ensure_tool crafts the stone axe and get finds no logs.
 	 */
 	@GameTest(maxTicks = 240)
 	public void whereKeepsGetFromChestsAndBlocksOutsideIt(GameTestHelper helper) {
@@ -1001,7 +1026,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"])
 			""");
 		helper.succeedWhen(() -> {
-			printed(helper, bot, "('chest', 'iron') 60", "('make', 'stone') 1244", "True minecraft:stone_axe", "False no_logs");
+			printed(helper, bot, "('chest', 'iron') 43", "('make', 'stone') 1244", "True minecraft:stone_axe", "False no_logs");
 			helper.assertTrue(chest.countItem(Items.IRON_AXE) == 1, "the iron axe left the chest");
 			helper.assertBlockPresent(Blocks.OAK_LOG, TreesGameTest.TREE);
 		});
