@@ -560,11 +560,12 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// Since #677 (scaffold taken back on the way down), 3441 to 4217 in 15 runs. Since #682, which breaks ties in the path
 	// search the same way whatever else is in its queue, 4511 to 4990 in 7 at once (the felling 4088 to 4582; 4149 to 4653
 	// in 7 more). Since #687, where a path no longer stands on a block it broke (the climb to the top stand did, and the bot
-	// fell off it), 3623 to 3912 in 14 runs, 7 at once (the felling 3207 to 3495).
+	// fell off it), 3623 to 3912 in 14 runs, 7 at once (the felling 3207 to 3495). Since #713 (#715), 3692 to 3979 in 8
+	// runs, 12 to 15 giants at once (the felling 3266 to 3555), so HARVEST["giant_spruce"] 3300 and maxTicks 8000 hold.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
-			GIANT_SPRUCE_HARVEST);
+			GIANT_SPRUCE_HARVEST, 0);
 	}
 
 	/**
@@ -575,7 +576,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * ticks a log (the mean of seeds 1 to 40: a trunk of 20.5, 87 logs). Seed 6 rather than a typical tree: seed 37 (a
 	 * trunk of 20, 89 logs) failed 4 of 9 runs (before and after #665, #670 and #671), the bot falling to its death or
 	 * leaving a branch log at (11, 18, 6), and seeds 8, 17 and 12 (trunks of 21, 24 and 28) killed it by falls each time
-	 * (#668). It fails once the bot is hurt (#673): it walked on jungle leaves left with no log in range, which decayed
+	 * (#668); since #713 they pass with no death (#715, temporary copies: the felling 3439, 3836 and 4994 to 5021 ticks). It fails once the bot is hurt (#673): it walked on jungle leaves left with no log in range, which decayed
 	 * under it, and, landing over the edge of a block after a drop, planned from the air beside it and walked off. Seed 37
 	 * no longer hurt it, but still left the branch log at (11, 18, 6) in 2 of 6 runs. Since #674 it was hurt again in 2 of 3
 	 * runs (a fall to the floor); a fall, even a fatal one, is a move the farm recovers from (#679), so it may be hurt.
@@ -585,10 +586,23 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// Since #687 (#695), 2511 to 3782 in 21 runs, 7 at once, the felling 2056 to 3340 (2685 on average in the 14 runs
 	// with no kill), so HARVEST["giant_jungle"] 2700. Killed 8 up as it fells (a temporary copy), it respawned, ran the
 	// job again and passed at 3534 to 3671 in 3 (red, watching for a warning: failed on its death warning at tick 784).
+	// Since #713 (#715), 2427 to 3197 in 6 runs with no death, the felling 1948 to 2757 (2270 on average); HARVEST stays
+	// 2700, the mean of these and the 8 killed runs below (2714), within HARVEST_FACTOR of both.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 7600)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
-			GIANT_JUNGLE_HARVEST);
+			GIANT_JUNGLE_HARVEST, 0);
+	}
+
+	/**
+	 * The giant jungle farm above with the bot killed 8 blocks up as it fells the giant (#715): it respawns, runs the job
+	 * again, takes back its scaffold and picks up its drops, and the farm finishes as above.
+	 */
+	// Measured: passes at tick 2972 to 4098 in 3 runs before #713, 3140 to 3855 in 8 since, the felling 2672 to 3385.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
+	public void aBotKilledWhileFellingAGiantJungleComesBackAndFinishesTheFarm(GameTestHelper helper) {
+		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
+			GIANT_JUNGLE_HARVEST, 9);
 	}
 
 	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
@@ -611,10 +625,12 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * once the cell is built and planted, the test grows its four saplings as the game does with seed. It passes when no
 	 * log of the tree is left in the area, the four spots hold saplings and the depot holds logs, the ticks from the
 	 * growth to then within {@link #HARVEST_FACTOR} of harvest. It watches the bot by its UUID,
-	 * as one that dies (#694) respawns as a new entity and runs the job again, which recovers.
+	 * as one that dies (#694) respawns as a new entity and runs the job again, which recovers. It fails on a warning but
+	 * a death's ("died at"), as a fall may kill the bot (#715). With killAt above 0 it kills the bot the first time it
+	 * stands at that y once the giant grew, and passes only once the bot died.
 	 */
 	private static void giantFarm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
-		Item logItem, int dirt, long seed, int harvest) {
+		Item logItem, int dirt, long seed, int harvest, int killAt) {
 		for (int x = 6; x <= 15; x++) {
 			for (int z = 4; z <= 13; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
@@ -637,13 +653,20 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		List<BlockPos> spots = List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9));
 		long[] grewAt = {-1};  // the tick the giant grew on
 		long[] took = {-1};  // the ticks from then to the first tick all is done
+		boolean[] killed = {false};
 		helper.onEachTick(() -> {
 			AntBot now = bot.get();
 			if (now == null) {
 				return;
 			}
-			if (said(now).stream().anyMatch(l -> l.contains("stopped"))) {
-				helper.fail("said " + said(now));
+			if (said(now).stream().anyMatch(l -> l.contains("stopped"))
+				|| BotScripts.warnings(now).stream().anyMatch(l -> !l.startsWith("died at"))) {
+				helper.fail("said " + BotScripts.log(now, Output.Level.DEBUG));
+			}
+			if (killAt > 0 && grewAt[0] >= 0 && !killed[0] && helper.relativePos(now.blockPosition()).getY() >= killAt) {
+				killed[0] = true;
+				now.kill(helper.getLevel());
+				return;
 			}
 			if (grewAt[0] < 0 && said(now).contains(kind + "_farm 4/4: farm") && helper.getBlockState(spots.get(0)).is(saplingBlock)) {
 				BlockPos a = helper.absolutePos(spots.get(0));
@@ -659,6 +682,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.get() != null, "no bot alive");
 			AntBot now = Objects.requireNonNull(bot.get());
 			helper.assertTrue(grewAt[0] >= 0, "the giant never grew; said " + said(now));
+			helper.assertTrue(killAt == 0 || now.getDeaths() >= 1, "not killed; said " + said(now));
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
 				if (helper.getBlockState(p).is(logBlock)) {
 					helper.fail("a log left at " + p + ", health " + now.getHealth() + " at " + helper.relativePos(now.blockPosition())
