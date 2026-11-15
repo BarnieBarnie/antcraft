@@ -255,6 +255,26 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A branch stops at a block it may not mine as at the edge of lib.find.WHERE (#697): with barriers in the north branch's
+	 * second block, as round a game test's area, where the colony miner's second round of branches ran, the bot digs the
+	 * first block only and goes on with the south branch, rather than stopping the level on {@code protected}. Its result's
+	 * outside names the barrier it met first, the head, which it digs before the feet.
+	 */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aBranchStopsAtABlockItMayNotMine(GameTestHelper helper) {
+		helper.setBlock(NORTH.get(1), Blocks.BARRIER);
+		helper.setBlock(NORTH.get(1).above(), Blocks.BARRIER);
+		AntBot bot = mine(helper, LANDING, 1, "start = pos()\n", ", r[\"outside\"] == [start + (3, 1, -2)]");
+		failOnError(helper, () -> bot, "True None 0 True");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0 True")), "not done");
+			assertDug(helper, HALL, "hall");
+			assertDug(helper, SOUTH, "south branch");
+			assertDug(helper, List.of(NORTH.get(0)), "north branch");
+		});
+	}
+
+	/**
 	 * Lava past the end of the south branch is sealed with a block the bot dug once the branch's end is dug, not dug into,
 	 * and the bot goes on with the north branch.
 	 */

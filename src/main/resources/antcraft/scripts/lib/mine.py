@@ -161,7 +161,8 @@ def tunnel(cells, stand, opened, level, sealed, outside):
     level's torch spots. Where a fluid is in or beside the next block, it seals it, adds it to sealed and stops
     there: short of a fluid in the next block, past the block beside the fluid. It stops short of the first block
     lib.find.WHERE leaves out too, as lib.dig.branch does (#593), and adds that block to outside (#620) unless it is
-    there already: a vein met again from each block of a hall lists its blocks past the edge once (#632)."""
+    there already: a vein met again from each block of a hall lists its blocks past the edge once (#632). A block it
+    may not mine (protected) ends it the same way (#697)."""
     for i in range(0, len(cells), 2):
         feet = cells[i]
         head = cells[i + 1]
@@ -188,6 +189,11 @@ def tunnel(cells, stand, opened, level, sealed, outside):
         dry = [p for p in opened if p not in wet]
         for p in (head, feet):
             failure = dig(p, dry, stand)
+            if failure and failure["reason"] == "protected":
+                # A block it may not mine (bedrock, a barrier, a protected area) ends the hall or branch as the edge does (#697).
+                if p not in outside:
+                    outside.append(p)
+                return None
             if failure:
                 return failure
         if wet:
@@ -208,8 +214,8 @@ def mine_level(level, rounds=1):
     """Digs the hall of level of the shaft in memory (dug by lib.shaft) and the next rounds of branches off it,
     mines every ore vein it uncovers, puts torches at the torch spots and the ore into the landing chest (dropping
     the junk), also when its inventory fills. Where a fluid is in or beside the next block of a hall or branch, it
-    seals it and goes on with the next branch; so too at the edge of lib.find.WHERE (#593). Gives report(): ok, or the
-    reason it stopped (missing_ingredients without a pickaxe or something to seal with, no_space when the chest is full
+    seals it and goes on with the next branch; so too at the edge of lib.find.WHERE (#593) and at a block it may not
+    mine (#697). Gives report(): ok, or the reason it stopped (missing_ingredients without a pickaxe or something to seal with, no_space when the chest is full
     of ore, or an action's reason) with at, sealed and outside."""
     m = site()
     assert m is not None and level in m["level"], f"no shaft with a level at {level}: dig_shaft first"
