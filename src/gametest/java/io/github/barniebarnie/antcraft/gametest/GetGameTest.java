@@ -263,8 +263,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A stone sword carried and a still cow 6 blocks off (#719): make_cost of a beef, the walk to the cow and a kill with
-	 * a sword, is within {@link #COST_FACTOR} of the ticks get takes to kill it and pick up what it drops. Radius 6, so no
-	 * neighbouring test's animal is found: entities are not kept to the test's area.
+	 * a sword, is within {@link #COST_FACTOR} of the ticks get takes to kill it and pick up what it drops. The default
+	 * radius: no neighbouring test's animal is found, as entities are kept to the test's area (GameTests.hides, #742).
 	 */
 	@GameTest(maxTicks = 200)
 	public void makeCostOfBeefFromACowIsCloseToItsTicks(GameTestHelper helper) {
@@ -274,11 +274,55 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STONE_SWORD));
 		run(helper, bot, """
 			from lib.get import get, make_cost
-			print(make_cost("beef", 1, 6))
-			r = get("beef", 1, 6)
+			print(make_cost("beef", 1))
+			r = get("beef", 1)
 			print(r["ok"])
 			""");
 		measured(helper, bot);
+	}
+
+	/**
+	 * A still calf beside the bot and a still cow 5 blocks off (#742): get of a beef skips the calf, which drops nothing,
+	 * and kills the cow. Measured: 53 ticks.
+	 */
+	@GameTest(maxTicks = 120)
+	public void getBeefSkipsABabyCowAndKillsTheAdult(GameTestHelper helper) {
+		Cow calf = helper.spawn(EntityTypes.COW, 2, 1, 1);
+		calf.setNoAi(true);
+		calf.setBaby(true);
+		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 1);
+		cow.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_SWORD));
+		run(helper, bot, """
+			from lib.get import get
+			print(get("beef", 1)["ok"])
+			""");
+		helper.onEachTick(() -> {
+			if (calf.isDeadOrDying() || calf.getHealth() < calf.getMaxHealth()) {
+				helper.fail("hit the calf");
+			}
+		});
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True");
+			helper.assertTrue(cow.isDeadOrDying(), "cow alive");
+		});
+	}
+
+	/**
+	 * A still chicken and a still cow each 4 blocks off, no sword (#742): make_cost of a chicken is less than of a beef,
+	 * one kill each, as a chicken's 4 health dies sooner than a cow's 10. Measured: 16 ticks.
+	 */
+	@GameTest(maxTicks = 40)
+	public void makeCostOfAChickenIsLessThanOfABeef(GameTestHelper helper) {
+		helper.spawn(EntityTypes.CHICKEN, 5, 1, 1).setNoAi(true);
+		helper.spawn(EntityTypes.COW, 1, 1, 5).setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, """
+			from lib.get import make_cost
+			print(make_cost("chicken", 1) < make_cost("beef", 1))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True"));
 	}
 
 	/** No animal within radius (#719): get of a beef fails at once with no_animal, and make_cost of it is None. */
@@ -287,8 +331,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		run(helper, bot, """
 			from lib.get import get, make_cost
-			print(make_cost("beef", 1, 6))
-			r = get("beef", 2, 6)
+			print(make_cost("beef", 1))
+			r = get("beef", 2)
 			print(r["ok"], r["reason"], r["missing"])
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "None", "False no_animal {'minecraft:beef': 2}"));
@@ -306,7 +350,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
 		run(helper, bot, """
 			from lib.get import get
-			r = get("cooked_beef", 1, 6)
+			r = get("cooked_beef", 1)
 			print(r["ok"], r["reason"], count("#minecraft:pickaxes"), count("oak_log"))
 			""");
 		helper.succeedWhen(() -> printed(helper, bot, "False no_animal 0 3"));

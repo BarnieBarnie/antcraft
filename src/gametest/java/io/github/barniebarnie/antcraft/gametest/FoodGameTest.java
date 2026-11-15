@@ -127,7 +127,7 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A hungry bot with a stone sword and a furnace kit (a furnace, a wooden pickaxe to take it back and coal) and no food
 	 * kills the cow 5 blocks off, cooks its beef and eats (#719): food 12 to 20 only on cooked beef (8), as raw beef (3)
-	 * twice stops at 18. Radius 6, as entities are not kept to the test's area. Measured: 381 to 384 ticks with one beef
+	 * twice stops at 18. The default radius, as entities are kept to the test's area (#742). Measured: 381 to 384 ticks with one beef
 	 * dropped, 579 with two (646 to 655 before) and 787 with three, cooked in one smelt (200 ticks each, #741); one at a time three took some 920. A cow drops
 	 * at most three, so 787 is the slowest pass: maxTicks about twice it.
 	 */
@@ -142,7 +142,7 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
 		bot.getInventory().addItem(new ItemStack(Items.COAL, 2));
-		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.upkeep(6)\n");
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.upkeep()\n");
 		BotScripts.failOnError(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());

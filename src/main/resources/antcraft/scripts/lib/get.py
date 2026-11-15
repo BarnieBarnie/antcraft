@@ -209,39 +209,40 @@ SOURCES["minecraft:mangrove_propagule"] = Source(
     estimate=LEAF, near="minecraft:mangrove_propagule", keep=ripe)
 
 
-# Ticks to kill an animal (#719): with a sword, two or three blows 13 ticks apart and the pick-up; by hand ten 1-damage
-# blows, one each time the cow's invulnerability ends (FightGameTest attackKillsACow: 113 ticks with a 5-block walk); and
-# the walk from one animal to the next. ponytail: a cow's 10 health for every animal; a chicken's 4 dies sooner.
-SWORD_KILL = 30
-HAND_KILL = 90
+# Ticks to kill an animal (#719), for each of its health: with a sword, a cow's 10 in two or three blows 13 ticks apart
+# and the pick-up, some 30; by hand ten 1-damage blows, one each time the cow's invulnerability ends (FightGameTest
+# attackKillsACow: 113 ticks with a 5-block walk), some 90; and the walk from one animal to the next.
+SWORD_KILL = 3
+HAND_KILL = 9
 BETWEEN = 8 * lib.cost.WALK
 
 
 class Hunt(Source):
     """The Source of what animals drop (#719): mobs, an entity selector, within radius (at most entities' 64), nearest
-    first, killed with attack and a sword where the bot carries one; per is how many of item one drops on average. There
-    is nothing to get where none is in range, so get fails at once with no_animal and make_cost is None. ponytail: a baby
-    is killed for nothing, and an animal that cannot be got to is skipped."""
+    first and grown (a baby drops nothing, #742), killed with attack and a sword where the bot carries one; per is how
+    many of item one drops on average, health how much one has. There is nothing to get where none is in range, so get
+    fails at once with no_animal and make_cost is None. ponytail: an animal that cannot be got to is skipped."""
 
-    def __init__(self, item, mobs, per):
-        super().__init__(self.hunt, estimate=int(SWORD_KILL / per))
+    def __init__(self, item, mobs, per, health):
+        super().__init__(self.hunt, estimate=int(SWORD_KILL * health / per))
         self.item = item
         self.mobs = mobs
         self.per = per
+        self.health = health
 
     def near_mobs(self, radius):
-        return entities(self.mobs, min(radius, 64))
+        return [m for m in entities(self.mobs, min(radius, 64)) if not m.baby]
 
     def there(self, radius):
         return len(self.near_mobs(radius)) > 0
 
     def cost(self, n, radius, start=None):
-        """(ticks, None): the walk from start (None: the bot's Pos) to the nearest animal, a kill for each per of n, with
-        a sword where one is carried, else by hand, and BETWEEN from each animal to the next."""
+        """(ticks, None): the walk from start (None: the bot's Pos) to the nearest animal, a kill of its health for each
+        per of n, with a sword where one is carried, else by hand, and BETWEEN from each animal to the next."""
         mobs = self.near_mobs(radius)
         walk = 0 if not mobs else lib.cost.walk(pos() if start is None else start, mobs[0].pos)
         kills = max(1, int(-(-n // self.per)))
-        kill = SWORD_KILL if count("#minecraft:swords") else HAND_KILL
+        kill = (SWORD_KILL if count("#minecraft:swords") else HAND_KILL) * self.health
         return int(walk + kills * kill + (kills - 1) * BETWEEN), None
 
     def hunt(self, n, radius):
@@ -259,9 +260,11 @@ class Hunt(Source):
         return result()
 
 
-for item, mobs, per in [("beef", ["cow", "mooshroom"], 2), ("leather", ["cow", "mooshroom"], 1), ("porkchop", "pig", 2),
-                        ("mutton", "sheep", 1.5), ("chicken", "chicken", 1), ("feather", "chicken", 1)]:
-    SOURCES["minecraft:" + item] = Hunt("minecraft:" + item, mobs, per)
+# Each animal's health (Cow, Pig, Sheep and Chicken createAttributes).
+for item, mobs, per, health in [("beef", ["cow", "mooshroom"], 2, 10), ("leather", ["cow", "mooshroom"], 1, 10),
+                                ("porkchop", "pig", 2, 10), ("mutton", "sheep", 1.5, 8), ("chicken", "chicken", 1, 4),
+                                ("feather", "chicken", 1, 4)]:
+    SOURCES["minecraft:" + item] = Hunt("minecraft:" + item, mobs, per, health)
 
 
 def key(item):

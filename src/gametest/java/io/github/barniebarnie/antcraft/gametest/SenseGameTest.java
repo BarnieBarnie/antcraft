@@ -286,6 +286,20 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			"minecraft:cow True True None True", "False []"));
 	}
 
+	/**
+	 * entities leaves out a cow beside the test's area, as block scans leave out its blocks (GameTests.hides, #742), and
+	 * an Entity's baby tells a calf from a grown cow.
+	 */
+	@GameTest(maxTicks = 10)
+	public void entitiesLeavesOutAnEntityBesideTheTestAreaAndTellsABaby(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		helper.spawnWithNoFreeWill(EntityTypes.COW, 5, 1, 3).setBaby(true);
+		Cow outside = helper.spawnWithNoFreeWill(EntityTypes.COW, 9, 1, 3);
+		GameTests.onEnd(helper, outside::discard);
+		ScriptRun run = run(helper, bot, "cows = entities('cow', radius=16)\nprint(len(cows), cows[0].baby)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("1 True"));
+	}
+
 	@GameTest(maxTicks = 10)
 	public void itemsNearListsDroppedItems(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

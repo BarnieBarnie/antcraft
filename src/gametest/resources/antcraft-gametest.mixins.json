@@ -5,6 +5,7 @@
 	"server": [
 		"AutosaveAccessor",
 		"BenchmarkSelectionMixin",
+		"EntityAreaMixin",
 		"GameTestSelectionMixin",
 		"ScanAreaMixin",
 		"SpawnProtectionMixin"

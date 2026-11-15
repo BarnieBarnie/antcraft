@@ -6,5 +6,6 @@ A mob, player, dropped item or other entity, as `entities()` and `items_near()` 
 - `type`: such as `"minecraft:cow"`.
 - `pos`: its [`Pos`](pos.md).
 - `health`: `None` for an entity without health.
+- `baby`: true for a young animal or mob, such as a calf, which drops nothing when killed.
 - `valid`: false once it is gone: dead, picked up or unloaded.
 - `item`: the [`Stack`](stack.md) of a dropped item, `None` for other entities.
