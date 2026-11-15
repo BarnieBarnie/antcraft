@@ -31,12 +31,13 @@ GROWTH = 2 * 7 * 4096 / 3
 # The ticks the bot takes for one tree of each kind: fell it, replant and store the logs. Birch is measured, some 150 to
 # 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs; the others are that per log times their mean logs from
 # lib.treefarm.KINDS's trunks and branches: oak 5.5, spruce 6.5, jungle 8, acacia 9, cherry 13.5, dark and pale oak 34
-# (four trunks and branches), poplar 15 (measured), giant spruce 84 (four trunks of 21), giant jungle 97 (four of 20.5 and some 15 in branches).
+# (four trunks and branches), poplar 15 (measured), giant spruce 84 (four trunks of 21). Giant jungle is measured: a tree of
+# 89 logs (a trunk of 20 and its branches; 87 the mean) took some 3200 ticks in WoodFarmGameTest, 35 a log (#669).
 # A farm learns its own (harvest, #653); these are its start.
 HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
            "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
            "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
-           "giant_spruce": 5600, "giant_jungle": 6500}
+           "giant_spruce": 5600, "giant_jungle": 3200}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
 WAIT = 100  # ticks between looks at the farm while nothing has grown

@@ -14,8 +14,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
@@ -471,6 +473,50 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 5185 to 5258 (red: died at 4496).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10500)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
+		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
+			GIANT_SPRUCE_HARVEST);
+	}
+
+	/**
+	 * A giant jungle farm run end to end as the giant spruce one (#669): the kit with 33 dirt (the cell's clear height),
+	 * 8 jungle saplings, the cell of four, the four grown with seed 6, a trunk of 16 with its side branches, 67 logs,
+	 * felled whole, four saplings replanted and logs in the depot. The felling takes within {@link #HARVEST_FACTOR} of
+	 * HARVEST["giant_jungle"], which was 6500, some 97 logs at the giant spruce's rate; a giant jungle fells at some 35
+	 * ticks a log (the mean of seeds 1 to 40: a trunk of 20.5, 87 logs). Seed 6 rather than a typical tree: seed 37 (a
+	 * trunk of 20, 89 logs) failed 4 of 9 runs (before and after #665, #670 and #671), the bot falling to its death or
+	 * leaving a branch log at (11, 18, 6), and seeds 8, 17 and 12 (trunks of 21, 24 and 28) killed it by falls each time
+	 * (#668).
+	 */
+	// Measured: passes at tick 2718 to 3402 (9 of 9, three at once), the felling 2306 to 2990 ticks; seed 37 3282 to 4448.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 6800)
+	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
+		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
+			GIANT_JUNGLE_HARVEST);
+	}
+
+	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
+	@GameTest(maxTicks = 10)
+	public void aGiantsHarvestIsWhatItsFarmTestMeasures(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		script(helper, bot, "print(jobs.wood_farm.HARVEST['giant_spruce'], jobs.wood_farm.HARVEST['giant_jungle'])");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of(GIANT_SPRUCE_HARVEST + " " + GIANT_JUNGLE_HARVEST), "said"));
+	}
+
+	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
+	private static final int GIANT_SPRUCE_HARVEST = 5600;
+	private static final int GIANT_JUNGLE_HARVEST = 3200;
+
+	/** How far a giant's felling ticks may be from its HARVEST, either way. */
+	private static final double HARVEST_FACTOR = 1.5;
+
+	/**
+	 * A giant farm of kind from (6, 0, 4) in the giant structure: a stone axe, dirt, 2 torches and 8 saplings in a chest;
+	 * once the cell is built and planted, the test grows its four saplings as the game does with seed. It passes when no
+	 * log of the tree is left in the area, the four spots hold saplings and the depot holds logs, the ticks from the
+	 * growth to then within {@link #HARVEST_FACTOR} of harvest.
+	 */
+	private static void giantFarm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
+		Item logItem, int dirt, long seed, int harvest) {
 		for (int x = 6; x <= 15; x++) {
 			for (int z = 4; z <= 13; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
@@ -479,44 +525,55 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(3, 1, 16, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.STONE_AXE));
-		chest.setItem(1, new ItemStack(Items.DIRT, 31));
+		chest.setItem(1, new ItemStack(Items.DIRT, dirt));
 		chest.setItem(2, new ItemStack(Items.TORCH, 2));
-		chest.setItem(3, new ItemStack(Items.SPRUCE_SAPLING, 8));
+		chest.setItem(3, new ItemStack(saplingItem, 8));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
 		BlockPos at = helper.absolutePos(new BlockPos(6, 1, 4));
-		List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm giant_spruce "
+		List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm " + kind + " "
 			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 1 20");
 		helper.assertTrue(bot.getScript() != null, "not run: " + out);
 		BotScripts.failOnWarning(helper, bot);
 		List<BlockPos> spots = List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9));
-		boolean[] grew = new boolean[1];
+		long[] grewAt = {-1};  // the tick the giant grew on
+		long[] took = {-1};  // the ticks from then to the first tick all is done
 		helper.onEachTick(() -> {
 			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
 				helper.fail("said " + said(bot));
 			}
-			if (!grew[0] && said(bot).contains("giant_spruce_farm 4/4: farm") && helper.getBlockState(spots.get(0)).is(Blocks.SPRUCE_SAPLING)) {
+			if (grewAt[0] < 0 && said(bot).contains(kind + "_farm 4/4: farm") && helper.getBlockState(spots.get(0)).is(saplingBlock)) {
 				BlockPos a = helper.absolutePos(spots.get(0));
 				BlockState sapling = helper.getLevel().getBlockState(a);
 				((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), a, sapling.setValue(SaplingBlock.STAGE, 1),
-					RandomSource.create(6));
-				grew[0] = helper.getBlockState(spots.get(0)).is(Blocks.SPRUCE_LOG);
+					RandomSource.create(seed));
+				if (helper.getBlockState(spots.get(0)).is(logBlock)) {
+					grewAt[0] = helper.getTick();
+				}
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(grew[0], "the giant never grew; said " + said(bot));
+			helper.assertTrue(grewAt[0] >= 0, "the giant never grew; said " + said(bot));
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
-				helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, p);
+				if (helper.getBlockState(p).is(logBlock)) {
+					helper.fail("a log left at " + p + ", health " + bot.getHealth() + " at " + helper.relativePos(bot.blockPosition())
+						+ "; said " + said(bot));
+				}
 			}
 			for (BlockPos p : spots) {
-				helper.assertBlockPresent(Blocks.SPRUCE_SAPLING, p);
+				helper.assertBlockPresent(saplingBlock, p);
 			}
 			int stored = 0;
 			for (int x = 6; x < 16; x++) {
 				if (helper.getBlockState(new BlockPos(x, 1, 2)).is(Blocks.CHEST)) {
-					stored += helper.getBlockEntity(new BlockPos(x, 1, 2), ChestBlockEntity.class).countItem(Items.SPRUCE_LOG);
+					stored += helper.getBlockEntity(new BlockPos(x, 1, 2), ChestBlockEntity.class).countItem(logItem);
 				}
 			}
-			helper.assertTrue(stored > 0, "no spruce logs in the depot; said " + said(bot));
+			helper.assertTrue(stored > 0, "no logs in the depot; said " + said(bot));
+			if (took[0] < 0) {
+				took[0] = helper.getTick() - grewAt[0];
+			}
+			helper.assertTrue(took[0] >= harvest / HARVEST_FACTOR && took[0] <= harvest * HARVEST_FACTOR,
+				"felled in " + took[0] + " ticks, HARVEST " + harvest);
 		});
 	}
 
