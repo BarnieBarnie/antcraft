@@ -37,6 +37,7 @@ HEAL = 18
 STOCK = 4
 RETRY = 1200
 TRIED = {"at": None}
+WARNED = "hungry_warned"  # the memory key set once upkeep warned, until the bot carries food again
 
 
 def best():
@@ -100,13 +101,19 @@ def cook(item, radius):
 
 def upkeep(radius=32):
     """Call it once a round of a long loop: at LOW food or under, carrying none, it gets some (ensure_food, not again for
-    RETRY ticks after it found none, and warns), then eats as eat_if_hungry. Costs a sense or two when the bot is fed. Gives whether it
-    ate."""
-    if food() <= LOW and best() is None and (TRIED["at"] is None or game_time() - TRIED["at"] >= RETRY):
+    RETRY ticks after it found none, and warns once until it carries food again), then eats as eat_if_hungry. Costs a
+    sense or two when the bot is fed. Gives whether it ate."""
+    if best() is not None:
+        if memory.get(WARNED):
+            memory.pop(WARNED)
+    elif food() <= LOW and (TRIED["at"] is None or game_time() - TRIED["at"] >= RETRY):
         ensure_food(STOCK, radius)
         if best() is None:
             TRIED["at"] = game_time()
-            # So the player sees why the bot goes hungry (#704).
-            warn("hungry with no food: put food, or wheat and a crafting table, by a chest" if colony() is None else
-                 "hungry with no food in the colony core: a colony.farmer keeps it stocked")
+            if not memory.get(WARNED):
+                # So the player sees why the bot goes hungry (#704), once until it carries food again (#743): kept in
+                # memory, so idle after a job that warned stays quiet.
+                memory[WARNED] = True
+                warn("hungry with no food: put food, or wheat and a crafting table, by a chest" if colony() is None else
+                     "hungry with no food in the colony core: a colony.farmer keeps it stocked")
     return eat_if_hungry()

@@ -104,6 +104,38 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot that goes hungry as it starts flattening eats the bread it is given before it furnishes (#743): jobs.settle
+	 * calls lib.food.upkeep before the flatten and hut steps, which lib.bootstrap.kit's upkeep does not cover.
+	 */
+	// Measured: passes at tick 220.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 450)
+	public void aBotThatGoesHungryAsItFlattensEatsBeforeItFurnishes(GameTestHelper helper) {
+		plot(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12 antcraft:cobble_step");
+		BotScripts.failOnError(helper, bot);
+		boolean[] hungry = new boolean[1];
+		helper.onEachTick(() -> {
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			if (!hungry[0] && said.contains("settle 2/7: flatten")) {
+				hungry[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+				bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+			}
+			if (said.contains("settle 4/7: furnish") && bot.getInventory().countItem(Items.BREAD) > 0) {
+				helper.fail("furnishing with " + bot.getInventory().countItem(Items.BREAD) + " bread uneaten, food " + bot.getFood().food());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settle 4/7: furnish"), "not furnishing");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BREAD), 0, "bread left");
+		});
+	}
+
+	/**
 	 * With an empty bucket in the chest instead of a water bucket and a one-block water pool at (16, 1, 10), the bot fills
 	 * the bucket at the pool and pours it in the middle of the field (#592).
 	 */

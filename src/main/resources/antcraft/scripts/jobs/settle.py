@@ -12,6 +12,7 @@
 import jobs.farm
 import lib.bootstrap
 import lib.farm
+import lib.food
 import lib.project
 import lib.storage
 import lib.terrain
@@ -37,6 +38,7 @@ WATER = (7, -1, 3)
 
 def flatten(at, radius):
     """Levels the plot, house, chest and field with a block round them, at ground, getting the dirt it falls short of."""
+    lib.food.upkeep(radius)  # lib.terrain and lib.build keep no bot fed: the job does, before each long step (#743)
     low = at + (-1, -1 - DEEP, -1)
     high = at + (9, TALL - 1, 5)
     r = lib.terrain.flatten(low, high, at.y - 1)
@@ -46,6 +48,11 @@ def flatten(at, radius):
             return g
         r = lib.terrain.flatten(low, high, at.y - 1)
     return r
+
+
+def build_hut(id, at, radius):
+    lib.food.upkeep(radius)
+    return build_here(id, at, 0, False, radius)
 
 
 def furnish(at):
@@ -82,7 +89,7 @@ def run(at=None, radius=32, hut=HUT):
     memory["settle_at"] = at
     steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
              Step("flatten", flatten, (at, radius)),
-             Step("hut", build_here, (hut, at, 0, False, radius)),
+             Step("hut", build_hut, (hut, at, radius)),
              Step("furnish", furnish, (at,)),
              Step("field", plant, (at, radius), tries=2, optional=True),
              Step("store", lib.storage.deposit, (None, radius), optional=True),

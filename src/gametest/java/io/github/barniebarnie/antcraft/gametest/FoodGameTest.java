@@ -187,6 +187,24 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 				"warnings " + BotScripts.warnings(hauler)));
 	}
 
+	/**
+	 * A hungry bot with no food anywhere warns once, not every RETRY ticks (#743): the second try, RETRY on, finds none
+	 * again and stays quiet, as the bot has carried no food since it warned.
+	 */
+	// Measured: passes at tick 60.
+	@GameTest(maxTicks = 120)
+	public void aHungryBotWithNoFoodWarnsOnce(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getFood().setFoodLevel(5);
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.upkeep()\nlib.food.TRIED[\"at\"] = None\nlib.food.upkeep()\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(BotScripts.warnings(bot).stream().filter(w -> w.contains("no food")).count(), 1L,
+					"no food warnings " + BotScripts.warnings(bot));
+		});
+	}
+
 	/** A farmer bakes the core's potato in the colony's furnace with the core's logs and keeps the baked potato in the core (#704). */
 	@GameTest(maxTicks = 420)
 	public void aFarmerBakesTheCoresPotatoes(GameTestHelper helper) {

@@ -26,7 +26,7 @@ The steps, from `config/antcraft/scripts/jobs/settle.py`:
 ```python
 steps = [Step("kit", lib.bootstrap.kit, (KIT, radius)),
          Step("flatten", flatten, (at, radius)),
-         Step("hut", build_here, (hut, at, 0, False, radius)),
+         Step("hut", build_hut, (hut, at, radius)),
          Step("furnish", furnish, (at,)),
          Step("field", plant, (at, radius), tries=2, optional=True),
          Step("store", lib.storage.deposit, (None, radius), optional=True),
@@ -37,7 +37,7 @@ r = lib.project.run("settle", steps)
 ## How it works
 
 - **kit**: [`lib.bootstrap.kit`](../reference/modules/lib/bootstrap.md) with the job's own `KIT`: stone pickaxe, axe, shovel and hoe, a crafting table, a chest and 16 dirt to climb on while building. Each comes through [`lib.get`](../reference/modules/lib/get.md): from a chest within the radius (borrowed), else gathered and crafted.
-- **flatten**: [`lib.terrain.flatten`](../reference/modules/lib/terrain.md) levels the plot at the height under the corner, digging up to 6 blocks above it and filling holes up to 3 deep with dirt, getting more dirt when the dug blocks fall short.
+- **flatten**: [`lib.terrain.flatten`](../reference/modules/lib/terrain.md) levels the plot at the height under the corner, digging up to 6 blocks above it and filling holes up to 3 deep with dirt, getting more dirt when the dug blocks fall short. Before it, and before the hut, the job calls [`lib.food.upkeep(radius)`](../reference/modules/lib/food.md#upkeepradius32), so a bot that went hungry eats (#743); the kit calls it before each item.
 - **hut**: [`lib.build.build_here`](../reference/modules/lib/build.md) gets what the starter house lacks (cobblestone, oak planks, a door, three straw beds) and builds it.
 - **furnish**: [`place`](../reference/blocks/place.md)s the chest and the crafting table.
 - **field** (optional): first a water bucket by `get` (from a chest); with none stored, where a water source is within the radius ([`lib.farm.water`](../reference/modules/lib/farm.md#waterradius32-keepnone)), an empty bucket by `get` (from a chest, or made of three iron ingots, where that costs at most `BUCKET_TICKS` of `jobs.farm`, 1000: iron in a chest, never an ore dig) that [`lib.farm.fill_bucket`](../reference/modules/lib/farm.md#fill_bucketradius32-keepnone) fills there; `jobs.farm`'s `pour` does this, as the bundled farm job does for a dry field ([Auto-farm](farm.md#the-bundled-job)). The bot digs the middle of the field and pours the water into the hole, so the 8 blocks of farmland round it stay wet. With no water bucket, and no water source or no bucket or iron in reach, the field is planted dry: wheat keeps its farmland, but a block left bare dries out and turns back into dirt, and the wheat grows slowly. Then a hoe by `ensure_tool`, wheat seeds by `get`, and [`lib.farm.tend`](../reference/modules/lib/farm.md) tills and plants it. Where a block is left bare though the bot still carries seeds (it failed to till it, or stood in the way), the step is tried once more. A field that fails does not stop the base.

@@ -11,6 +11,8 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -157,6 +159,31 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 			List<String> printed = BotScripts.log(bot, Output.Level.WARN);
 			helper.assertTrue(printed.get(0).equals(biome + " at " + printed(helper, 3, 1, 3)), "printed " + printed);
 			helper.assertTrue(printed.get(printed.size() - 1).equals("explore: nothing not_found"), "printed " + printed);
+		});
+	}
+
+	/**
+	 * A hungry bot exploring eats the bread it carries on the way (#743): jobs.explore calls lib.food.upkeep at each
+	 * waypoint. It fails at once where the job ends with the bread uneaten.
+	 */
+	// Measured: passes at tick 67.
+	@GameTest(maxTicks = 140)
+	public void aHungryBotExploringEatsOnTheWay(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getFood().setFoodLevel(5);
+		bot.getFood().setSaturation(0);
+		bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.explore nothing 1 2");
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			if (bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED
+					&& bot.getInventory().countItem(Items.BREAD) > 0) {
+				helper.fail("explored with " + bot.getInventory().countItem(Items.BREAD) + " bread uneaten, food " + bot.getFood().food());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BREAD), 0, "bread left");
+			helper.assertValueEqual(bot.getFood().food(), 15, "food");
 		});
 	}
 

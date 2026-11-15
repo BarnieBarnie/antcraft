@@ -8,12 +8,15 @@
 # delete it and the default comes back when the server starts.
 
 import lib.explore
+import lib.food
 from lib.home import go_home
 
 def run(what=None, rings=4, step=32):
     """Explores until the bot sees what (None: the whole spiral), goes home and reports. Gives lib.explore.explore's
     result()."""
-    until = None if what is None else lambda s: len(lib.explore.seen(what)) > 0
+    def until(s):
+        lib.food.upkeep()  # at each waypoint, so a long walk does not starve the bot (#743)
+        return what is not None and len(lib.explore.seen(what)) > 0
     r = lib.explore.explore(rings, step, until)
     go_home()
     lib.explore.report()
