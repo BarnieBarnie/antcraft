@@ -250,7 +250,9 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A Fortune III pickaxe and no shovel carried (#754): the coal source counts 2.2 coal an ore, the mean of the game's
-	 * ore_drops bonus, so 11 coal are 5 ore; the flint source, with no Fortune shovel, ten gravel a flint.
+	 * ore_drops bonus, so 11 coal are 5 ore; the flint source, with no Fortune shovel, ten gravel a flint. Copper and lapis
+	 * drop 3.5 and 6.5 an ore before that bonus, redstone 4.5 and half the level more (#770): 30 of each are 4, 3 and 5
+	 * ore.
 	 */
 	@GameTest(maxTicks = 10)
 	public void sourcesCountTheFortuneOfTheirTool(GameTestHelper helper) {
@@ -260,10 +262,26 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(pickaxe);
 		run(helper, bot, """
 			from lib.get import SOURCES
-			print(SOURCES["minecraft:coal"].blocks(11), SOURCES["minecraft:flint"].blocks(3))
+			print(SOURCES["minecraft:coal"].blocks(11), SOURCES["minecraft:flint"].blocks(3),
+			      *[SOURCES["minecraft:" + i].blocks(30) for i in ("raw_copper", "lapis_lazuli", "redstone")])
 			""");
-		failOnOtherPrint(helper, bot, "5 30");
-		helper.succeedWhen(() -> printed(helper, bot, "5 30"));
+		failOnOtherPrint(helper, bot, "5 30 4 3 5");
+		helper.succeedWhen(() -> printed(helper, bot, "5 30 4 3 5"));
+	}
+
+	/**
+	 * No pickaxe carried (#770): copper, lapis and redstone ores drop 2 to 5, 4 to 9 and 4 to 5 items without Fortune (the
+	 * 26.3 loot tables), so 30 of each are 9, 5 and 7 ore; coal drops one, 30.
+	 */
+	@GameTest(maxTicks = 10)
+	public void oreSourcesCountTheirBaseDrops(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		run(helper, bot, """
+			from lib.get import SOURCES
+			print(*[SOURCES["minecraft:" + i].blocks(30) for i in ("raw_copper", "lapis_lazuli", "redstone", "coal")])
+			""");
+		failOnOtherPrint(helper, bot, "9 5 7 30");
+		helper.succeedWhen(() -> printed(helper, bot, "9 5 7 30"));
 	}
 
 	/**

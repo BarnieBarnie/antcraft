@@ -151,15 +151,23 @@ FORTUNE = "minecraft:fortune"
 
 
 def ore_drops(level):
-    """The mean bonus of the game's ore_drops loot function at a Fortune level (#754): 1, 1.33, 1.75, 2.2 for 0 to 3.
-    ponytail: the bonus alone; redstone's uniform bonus and a base count over one, such as copper's, are not read."""
+    """The mean bonus of the game's ore_drops loot function at a Fortune level (#754): 1, 1.33, 1.75, 2.2 for 0 to 3."""
     return 1 + level * (level + 1) / 2 / (level + 2)
+
+
+# The mean drops of an ore at a Fortune level where it is not one item times ore_drops (the 26.3 loot tables, #770):
+# copper 2 to 5 and lapis 4 to 9 times ore_drops, redstone 4 to 5 and a uniform 0 to level more.
+ORE_DROPS = {
+    "raw_copper": lambda level: 3.5 * ore_drops(level),
+    "lapis_lazuli": lambda level: 6.5 * ore_drops(level),
+    "redstone": lambda level: 4.5 + level / 2,
+}
 
 
 def ore(item, block, estimate):
     """The Source of a raw item lib.dig.ore digs, with a pickaxe that drops block."""
     return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate,
-                  lib.dig.ORES[item], y=lib.dig.best_y(item), drops=ore_drops)
+                  lib.dig.ORES[item], y=lib.dig.best_y(item), drops=ORE_DROPS.get(item, ore_drops))
 
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =

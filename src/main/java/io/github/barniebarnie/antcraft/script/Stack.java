@@ -10,7 +10,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * Items in a script (docs/reference/types/stack.md): {@code item}, the item's full id such as {@code minecraft:oak_log}, and
  * {@code count}, the {@code damage} and {@code max_damage} of an item that wears (both 0 for one that does not), and its
- * {@code enchantments}, by id with their level (#754). A snapshot: it does not change when the inventory it came from does.
+ * {@code enchantments}, by id with their level (#754; an enchanted book's stored ones, #770). A snapshot: it does not
+ * change when the inventory it came from does.
  */
 public record Stack(String item, long count, long damage, long maxDamage, Map<String, Long> enchantments) implements HostValue {
 	public static final String TYPE = "Stack";

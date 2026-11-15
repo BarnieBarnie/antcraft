@@ -39,6 +39,8 @@ import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.EnchantmentInstance;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
@@ -197,9 +199,12 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A search of radius 32 reads some 137,000 blocks, more than the server's scan budget for one tick: it goes on over
-	 * the next ticks, pausing the script, and charges the script an instruction per few blocks read.
+	 * the next ticks, pausing the script, and charges the script an instruction per few blocks read. Its ticks are the
+	 * script's 17,000 instructions at 2,000 a tick, some 9, and its part of the scan budget, which the other tests' bots
+	 * share (#527), so it passed at tick 13 alone and up to 36 in runs of several classes, where it timed out at 30
+	 * (#770): the limit is about twice that.
 	 */
-	@GameTest(maxTicks = 30)
+	@GameTest(maxTicks = 80)
 	public void aBigScanSpreadsOverTicksAndCostsInstructions(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		GameTests.scansFreely(helper, bot);
@@ -369,6 +374,16 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STONE_SHOVEL));
 		ScriptRun run = run(helper, bot, "print(held().enchantments, [s.enchantments for s in inventory() if s.item == 'minecraft:stone_shovel'])\n");
 		succeedWhenPrinted(helper, bot, run, List.of("{'minecraft:fortune': 3} [{}]"));
+	}
+
+	/** An enchanted book gives the enchantments it stores, which an anvil puts on a tool (#770). */
+	@GameTest(maxTicks = 10)
+	public void stacksGiveTheEnchantmentsAnEnchantedBookStores(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, EnchantmentHelper.createBook(new EnchantmentInstance(
+			helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.SILK_TOUCH), 1)));
+		ScriptRun run = run(helper, bot, "print(held().item, held().enchantments)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("minecraft:enchanted_book {'minecraft:silk_touch': 1}"));
 	}
 
 	@GameTest(maxTicks = 10)

@@ -47,6 +47,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -386,7 +387,8 @@ public final class SenseApi {
 
 	static Stack stack(ItemStack stack) {
 		Map<String, Long> enchantments = new HashMap<>();
-		for (var e : stack.getEnchantments().entrySet()) {
+		// an enchanted book's are the ones it stores (#770)
+		for (var e : EnchantmentHelper.getEnchantmentsForCrafting(stack).entrySet()) {
 			e.getKey().unwrapKey().ifPresent(key -> enchantments.put(key.identifier().toString(), (long) e.getIntValue()));
 		}
 		return new Stack(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), stack.getDamageValue(),
