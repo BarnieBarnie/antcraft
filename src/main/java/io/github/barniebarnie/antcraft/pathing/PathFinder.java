@@ -76,14 +76,18 @@ public final class PathFinder {
 	 * and the walk back then costs {@link #AWAY_WALK} (#688). A death costs no more, so dying is a move like any other
 	 * where it is cheaper. Its food heals {@code quickHeal} health at {@link #QUICK_HEAL_TICKS} a point, then
 	 * {@code slowHeal} at {@link #SLOW_HEAL_TICKS} (#708, docs/features/bots.md, Hunger), each point also costing the food
-	 * it uses, {@link #HEAL_FOOD} (#730); none where it does not heal.
+	 * it uses, {@link #HEAL_FOOD} (#730); none where it does not heal. On {@code peaceful} its food refills for free and
+	 * it heals every point it is not quick to heal at {@link #PEACEFUL_HEAL_TICKS}, using no food (#738).
 	 */
-	// ponytail: the items lost past their despawn are not counted; food costs a flat FOOD_POINT_TICKS, not what it takes to make.
-	public record Death(float health, @Nullable BlockPos home, int respawnTicks, float quickHeal, float slowHeal) {
+	// ponytail: the items lost past their despawn are not counted; food costs a flat FOOD_POINT_TICKS, not what it takes to make
+// (#738 left that out: cost it by what the colony has if bots pick drops badly by their food).
+	public record Death(float health, @Nullable BlockPos home, int respawnTicks, float quickHeal, float slowHeal, boolean peaceful) {
 		/** Healing a point full with saturation, as a player's FoodData. */
 		public static final int QUICK_HEAL_TICKS = 10;
 		/** Healing a point at 18 food or more without saturation. */
 		public static final int SLOW_HEAL_TICKS = 80;
+		/** Healing a point on peaceful, as a player's: {@code ServerPlayer.tickRegeneration}, every 20 ticks (#738). */
+		public static final int PEACEFUL_HEAL_TICKS = 20;
 		/**
 		 * A point of food or saturation, a flat guess at getting and eating it: eating bread takes 32 ticks for its 11
 		 * points, a steak 32 for 20.8, and growing or hunting it more. At 10 a well-fed bot digs 12 dirt down rather than
@@ -96,6 +100,11 @@ public final class PathFinder {
 		/** A bot that does not heal. */
 		public Death(float health, @Nullable BlockPos home, int respawnTicks) {
 			this(health, home, respawnTicks, 0, 0);
+		}
+
+		/** A bot whose food heals as given, not on peaceful. */
+		public Death(float health, @Nullable BlockPos home, int respawnTicks, float quickHeal, float slowHeal) {
+			this(health, home, respawnTicks, quickHeal, slowHeal, false);
 		}
 
 		/** A death at {@code at}: the respawn and the walk from home back to it. */
@@ -114,6 +123,10 @@ public final class PathFinder {
 				return death;
 			}
 			double share = death / this.health;
+			if (this.peaceful) {
+				double quick = Math.min(damage, this.quickHeal);
+				return quick * Math.min(QUICK_HEAL_TICKS, share) + (damage - quick) * Math.min(PEACEFUL_HEAL_TICKS, share);
+			}
 			double quick = Math.min(damage, this.quickHeal);
 			double slow = Math.min(damage - quick, this.slowHeal);
 			return quick * Math.min(QUICK_HEAL_TICKS + HEAL_FOOD, share) + slow * Math.min(SLOW_HEAL_TICKS + HEAL_FOOD, share)

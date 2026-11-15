@@ -348,6 +348,20 @@ class PathFinderTest {
 		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 3 * (10 + HEAL_FOOD) + 2 * (80 + HEAL_FOOD) + 4 * share, away.cost(), 1e-9);
 	}
 
+	/**
+	 * On peaceful a bot heals a point every 20 ticks for free and its food refills (#738): a drop costs only the ticks
+	 * healing takes, its quick points at 10, the rest at 20, and no food.
+	 */
+	@Test
+	void onPeacefulADropThatHurtsCostsOnlyTheHealTicks() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		BlockPos home = landing.south(100);
+		Path hungry = find(platform(12), landing, walkOnly(new PathFinder.Death(20, home, 200, 0, 0, true)));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 9 * 20, hungry.cost(), 1e-9);
+		Path fed = find(platform(12), landing, walkOnly(new PathFinder.Death(20, home, 200, 3, 20, true)));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 3 * 10 + 6 * 20, fed.cost(), 1e-9);
+	}
+
 	/** Food makes a fatal drop no cheaper: it costs a whole death. */
 	@Test
 	void aFatalDropCostsAFedBotADeath() {

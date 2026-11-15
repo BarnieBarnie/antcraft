@@ -29,6 +29,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.BlockItem;
@@ -282,7 +283,8 @@ public class PathFollower {
 	/**
 	 * What a death costs the bot, so a path may drop farther than {@link #MAX_DROP} at that cost (#682); none where it
 	 * would not come back. A home in another dimension is a death with no home here (#688). A bot heals what its food
-	 * heals (#708), unless botHunger or the naturalHealthRegeneration game rule is off.
+	 * heals (#708), unless botHunger or the naturalHealthRegeneration game rule is off, and on peaceful
+	 * regenerates (#738).
 	 */
 	private PathFinder.@Nullable Death death() {
 		BlockPos home = this.bot.getHome();
@@ -293,7 +295,7 @@ public class PathFollower {
 		boolean heals = AntCraftConfig.botHunger() && ((ServerLevel) this.bot.level()).getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION);
 		BotFood food = this.bot.getFood();
 		return new PathFinder.Death(this.bot.getHealth(), here ? home : null, AntCraftConfig.botRespawnTicks(),
-			heals ? food.quickHeal() : 0, heals ? food.slowHeal() : 0);
+			heals ? food.quickHeal() : 0, heals ? food.slowHeal() : 0, heals && this.bot.level().getDifficulty() == Difficulty.PEACEFUL);
 	}
 
 	/**
