@@ -200,15 +200,22 @@ def grown(kind, low, high):
 
 
 def harvest(kind, low, high, radius=32):
-    """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), picks up the sticks and apples
-    lying about, then, where it felled the tree whole, plants each empty sapling spot over dirt, getting the saplings it
-    lacks within radius (lib.get), such as a square kind with fewer than four carried; where it cannot, tend does later.
+    """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), again while a log is left, such
+    as one cut off from the tree, picks up the sticks and apples lying about, then, where it felled the tree whole,
+    plants each empty sapling spot over dirt, getting the saplings it lacks within radius (lib.get), such as a square
+    kind with fewer than four carried; where it cannot, tend does later.
     Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space with at, the log left, which
     grown still sees."""
-    base = standing(kind, low, high)
-    if base is None:
-        return result()
-    r = lib.trees.fell_whole(base, False)
+    # Again while a log is left standing: a bot that died up a giant jungle and had mined the logs round a branch log left
+    # it cut off from the tree, which fell_whole no longer reaches (#713). ponytail: at most 4 fellings, a backstop.
+    r = result()
+    for _ in range(4):
+        base = standing(kind, low, high)
+        if base is None:
+            break
+        r = lib.trees.fell_whole(base, False)
+        if not r["ok"]:
+            break
     # A torch a pillar up to the leaves took the place of lies about too. Only what lies on the floor or a step over it:
     # pillaring or digging up to each drop on the decaying leaves took most of a dark oak's harvest, and jobs.wood_farm's
     # sweep picks those up later (#655).

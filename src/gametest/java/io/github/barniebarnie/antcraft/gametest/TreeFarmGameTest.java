@@ -30,6 +30,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.SlabBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -309,6 +310,32 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A birch cell of 5x5 from (2, 0, 2) with a trunk of three logs at its spot and a log up at a corner, on leaves,
+	 * touching none of them, as a bot that died up a giant jungle, having mined the logs round a branch log, left that log
+	 * cut off from its tree (#713): harvest fells the trunk, then the log it left, so the cell is no longer grown.
+	 */
+	// Measured: passes at tick 247 (red: printed True None None True at tick 402, the log left).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 500)
+	public void harvestAlsoFellsALogCutOffFromTheTree(GameTestHelper helper) {
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(4, y, 4, Blocks.BIRCH_LOG);
+		}
+		helper.setBlock(6, 4, 6, Blocks.BIRCH_LOG);
+		helper.setBlock(6, 3, 6, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 8, 1, 8);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 8));
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"], r["at"], lib.treefarm.grown(kind, low, high))
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None None False"), "printed");
+			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 4, 1, 4);
+			helper.assertBlockNotPresent(Blocks.BIRCH_LOG, 6, 4, 6);
+		});
+	}
+
+	/**
 	 * A birch cell of 5x5 from (2, 0, 2) with three logs over its spot, a stick on the floor and one on three persistent
 	 * leaves (#655): harvest picks up the stick on the floor but does not pillar up to the one on the leaves, which
 	 * jobs.wood_farm's sweep leaves for later.
@@ -510,11 +537,59 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * again: recover takes back its scaffold and picks up its drops, and harvest fells the rest of the tree whole.
 	 */
 	// Measured: passes at tick 2571 to 5850, 52 of 52 in 4 runs of 13 copies (red, watching the first entity: printed
-	// nothing at tick 10002). Killed 12 up, harvest after the respawn gave out_of_reach in 3 of 12 (not looked into:
-	// perhaps drops left on the leaves, so too little dirt to reach the crown).
+	// nothing at tick 10002). Killed 12 up, harvest after the respawn gave out_of_reach in 3 of 12 (#713): recover
+	// walked to the leaves or branch under where it died, out of reach of the dirt that fell past them; and in some runs a
+	// branch log was left cut off from the tree by the dead run's mining, which harvest left standing. Killed 12 up since:
+	// 57 of 60 in 5 runs of 12 copies, some 3000 to 7000; 2 ran out of maxTicks with nothing printed, 1 gave out_of_reach.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWholeByABotThatDiesUpIt(GameTestHelper helper) {
 		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);
+	}
+
+	/**
+	 * A bot killed over a tree's crown, here on leaves 10 up with a vine under them, as one killed 12 up the seed 37 giant
+	 * jungle (#713): most of its dirt falls past the leaves to the floor, its axe stays on them. recover, once it respawns,
+	 * walks down through the tree to the floor under where it died and picks up the dirt before it climbs, then to the
+	 * leaves for the axe. It walked to the leaves first, out of reach of the dirt, so harvest had too little scaffold to
+	 * reach the crown: out_of_reach.
+	 */
+	// Measured: passes at tick 554 (red: walked up to the leaves before it fetched its dirt, tick 307).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 1100)
+	public void recoverPicksUpTheDropsThatFellThroughTheCrown(GameTestHelper helper) {
+		for (int x = 11; x <= 13; x++) {
+			for (int z = 11; z <= 13; z++) {
+				helper.setBlock(x, 10, z, Blocks.JUNGLE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+			}
+		}
+		helper.setBlock(12, 9, 12, Blocks.VINE.defaultBlockState().setValue(VineBlock.UP, true));
+		AntBot first = helper.spawn(ModEntities.ANT_BOT, new BlockPos(4, 1, 4));
+		UUID id = first.getUUID();
+		give(first, new ItemStack(Items.STONE_AXE));
+		BotScripts.run(first, "import lib.trees\nif not lib.trees.recover():\n    wait(1000)\nprint(count(\"minecraft:dirt\"), has(\"stone_axe\"))\n");
+		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
+		BotScripts.failOnError(helper, bot);
+		helper.runAfterDelay(5, () -> {
+			BlockPos over = helper.absolutePos(new BlockPos(12, 11, 12));
+			first.teleportTo(over.getX() + 0.5, over.getY(), over.getZ() + 0.5);
+			helper.spawnItem(Items.DIRT, new BlockPos(13, 1, 13)).setItem(new ItemStack(Items.DIRT, 20));
+			first.kill(helper.getLevel());
+		});
+		boolean[] fetched = {false};
+		helper.onEachTick(() -> {
+			AntBot now = bot.get();
+			if (now == null || now == first) {
+				return;
+			}
+			fetched[0] |= now.getInventory().countItem(Items.DIRT) >= 20;
+			if (!fetched[0] && helper.relativePos(now.blockPosition()).getY() > 2) {
+				helper.fail("walked up to " + helper.relativePos(now.blockPosition()).toShortString() + " before it fetched its dirt");
+			}
+		});
+		helper.succeedWhen(() -> {
+			AntBot now = bot.get();
+			helper.assertTrue(now != null && now != first, "not respawned");
+			helper.assertValueEqual(BotScripts.log(Objects.requireNonNull(now), Output.Level.PRINT), List.of("20 True"), "printed");
+		});
 	}
 
 	/** Grows the seed 37 giant jungle and fells it as {@link #fellsWhole} does. */

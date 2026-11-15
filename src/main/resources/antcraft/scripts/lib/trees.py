@@ -47,6 +47,8 @@ def trunk_base(log):
 GROUND = ["#minecraft:dirt", "#minecraft:nylium"]
 # What crowns a tree: leaves, or a huge fungus's wart blocks (#563).
 CROWN = ["#minecraft:leaves", "#minecraft:wart_blocks"]
+# What a tree is made of, which drops fall past: its logs, crown, and a jungle tree's vines and cocoa (#713).
+TREE = [LOGS, "minecraft:vine", "minecraft:cocoa"] + CROWN
 
 
 def on_ground(p):
@@ -362,21 +364,33 @@ def take_back(keep=()):
 def recover():
     """After a death, which the restarted run sees as deaths() above memory["wood_deaths"], takes back the scaffold the
     run it died in left (the pillar it died on first), picks up what it dropped round last_death() and takes back what
-    that walk placed (#679, #683). It walks to the ground under last_death(), where the drops fell, so also down a shaft
-    (#689). Call it at the top of a script that set its home where it works (set_home), so the bot respawned there. Gives
-    whether there was a death to recover from; on a first run it only notes deaths()."""
+    those walks placed (#679, #683). It walks to the ground under last_death(), where the drops fell, so also down a
+    shaft (#689) and through a tree (TREE), then to each block of that tree under last_death() that drops lie on (#713).
+    Call it at the top of a script that set its home where it works (set_home), so the bot respawned there. Gives whether
+    there was a death to recover from; on a first run it only notes deaths()."""
     if deaths() <= memory.get("wood_deaths", deaths()):
         memory["wood_deaths"] = deaths()
         return False
     memory["wood_deaths"] = deaths()
     take_back()
+    # Down through a tree too, the floor first, then where drops lie on the tree over it: killed 12 up a giant jungle over
+    # its leaves, most of its dirt fell past them to the floor, and the walk to the leaves left it out of reach, with too
+    # little scaffold for harvest to reach the crown (#713). Some runs' dirt lay on a branch log under it.
     p = last_death()
+    on_tree = []
     for _ in range(64):
-        if not block(p.down()).is_air:
-            break
-        p = p.down()
+        under = p.down()
+        if not block(under).is_air:
+            if not any([is_kind(under, k) for k in TREE]):
+                break
+            on_tree.append(p)
+        p = under
     goto(p, near=2)
     pick_up(radius=8)
+    for s in on_tree:
+        if any([e.valid and e.pos.distance(s) <= 2 for e in items_near(None, 32)]):
+            goto(s, near=2)
+            pick_up(radius=8)
     take_back()
     return True
 
