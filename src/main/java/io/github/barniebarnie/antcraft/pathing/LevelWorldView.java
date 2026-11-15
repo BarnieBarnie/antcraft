@@ -19,6 +19,7 @@ import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.phys.shapes.BooleanOp;
@@ -179,6 +180,35 @@ public class LevelWorldView implements WorldView {
 			return below.is(Blocks.LADDER) && below.getValue(LadderBlock.FACING) == state.getValue(TrapDoorBlock.FACING);
 		}
 		return state.is(BlockTags.CLIMBABLE);
+	}
+
+	@Override
+	public int climbFaces(BlockPos pos) {
+		return climbFaces(this.blocks.get(pos));
+	}
+
+	/**
+	 * A ladder's block behind it, a vine's faces, as bits by {@link Direction#get3DDataValue}; 0 for other climbables.
+	 */
+	// ponytail: weeping, twisting and cave vines, scaffolding and hatches hold on to nothing here; give them faces if paths through what holds them show.
+	static int climbFaces(BlockState state) {
+		if (state.getBlock() instanceof LadderBlock) {
+			return 1 << state.getValue(LadderBlock.FACING).getOpposite().get3DDataValue();
+		}
+		int faces = 0;
+		if (state.getBlock() instanceof VineBlock) {
+			for (var face : VineBlock.PROPERTY_BY_DIRECTION.entrySet()) {
+				if (state.getValue(face.getValue())) {
+					faces |= 1 << face.getKey().get3DDataValue();
+				}
+			}
+		}
+		return faces;
+	}
+
+	@Override
+	public boolean isVine(BlockPos pos) {
+		return this.blocks.get(pos).getBlock() instanceof VineBlock;
 	}
 
 	@Override

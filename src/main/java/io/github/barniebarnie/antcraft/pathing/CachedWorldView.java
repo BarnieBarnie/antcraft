@@ -28,6 +28,7 @@ final class CachedWorldView implements WorldView {
 	/** {@code canOpen} and {@code stairUp}, one per horizontal direction. */
 	private static final int CAN_OPEN = 7;
 	private static final int STAIR_UP = 11;
+	private static final int VINE = 15;
 
 	private final WorldView world;
 	/** Per block, the answers so far, two bits per question. */
@@ -44,6 +45,7 @@ final class CachedWorldView implements WorldView {
 	private final Predicate<BlockPos> hazard;
 	private final Predicate<BlockPos> water;
 	private final Predicate<BlockPos> climbable;
+	private final Predicate<BlockPos> vine;
 	private final Predicate<BlockPos> bedrock;
 	private final Predicate<BlockPos> mayPlace;
 	/** {@code canOpen} and {@code stairUp}, by {@link Direction#get2DDataValue}. */
@@ -60,6 +62,7 @@ final class CachedWorldView implements WorldView {
 		this.hazard = world::isHazard;
 		this.water = world::isWater;
 		this.climbable = world::isClimbable;
+		this.vine = world::isVine;
 		this.bedrock = world::isBedrock;
 		this.mayPlace = world::mayPlace;
 		this.canOpen = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
@@ -147,6 +150,17 @@ final class CachedWorldView implements WorldView {
 	@Override
 	public boolean isClimbable(BlockPos pos) {
 		return this.answer(pos, CLIMBABLE, this.climbable);
+	}
+
+	/** Asked only of climbable blocks, which are few, so not kept. */
+	@Override
+	public int climbFaces(BlockPos pos) {
+		return this.world.climbFaces(pos);
+	}
+
+	@Override
+	public boolean isVine(BlockPos pos) {
+		return this.answer(pos, VINE, this.vine);
 	}
 
 	@Override

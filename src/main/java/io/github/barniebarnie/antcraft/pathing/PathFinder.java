@@ -489,25 +489,34 @@ public final class PathFinder {
 		}
 
 		/**
-		 * Climbable in the world as the path so far left it: not a block it broke or placed, nor one beside or under a
-		 * block it broke, such as vines on it, which drop with it (#714), nor one hanging from such a one up its column,
-		 * as vines hang from the vine above (#726).
+		 * Climbable in the world as the path so far left it: not a block it broke or placed, and still held on one of its
+		 * faces: a ladder by the block behind it, a vine by a block beside it or the vine above it on that face, as vines
+		 * on a block the path broke drop with it (#714), and so do those hanging from them (#726, #735).
 		 */
-		// ponytail: the whole column up counts, ladders too, which hang from nothing; tell vines apart if that shows.
 		private boolean isClimbable(BlockPos pos) {
 			if (!this.world.isClimbable(pos) || edited(this.node, pos) != null) {
 				return false;
 			}
-			for (BlockPos p = pos; ; p = p.above()) {
-				for (Direction dir : Direction.values()) {
-					if (dir != Direction.DOWN && edited(this.node, p.relative(dir)) == Boolean.FALSE) {
-						return false;
-					}
-				}
-				if (!this.world.isClimbable(p.above()) || edited(this.node, p.above()) != null) {
+			int faces = this.world.climbFaces(pos);
+			if (faces == 0) {
+				return true;
+			}
+			for (Direction face : Direction.values()) {
+				if ((faces & 1 << face.get3DDataValue()) != 0 && this.holds(pos, face)) {
 					return true;
 				}
 			}
+			return false;
+		}
+
+		/** The climbable at {@code pos} still holds on to {@code face}: the block there stands, or for a vine, the vine above holds that face. */
+		private boolean holds(BlockPos pos, Direction face) {
+			if (this.solid(pos.relative(face), List.of())) {
+				return true;
+			}
+			BlockPos above = pos.above();
+			return face.getAxis().isHorizontal() && this.world.isVine(pos) && this.world.isVine(above) && edited(this.node, above) == null
+				&& (this.world.climbFaces(above) & 1 << face.get3DDataValue()) != 0 && this.holds(above, face);
 		}
 
 		/**

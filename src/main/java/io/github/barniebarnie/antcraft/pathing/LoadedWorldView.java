@@ -68,6 +68,16 @@ public final class LoadedWorldView implements WorldView {
 	}
 
 	@Override
+	public int climbFaces(BlockPos pos) {
+		return this.loaded.test(pos) ? this.world.climbFaces(pos) : 0;
+	}
+
+	@Override
+	public boolean isVine(BlockPos pos) {
+		return this.loaded.test(pos) && this.world.isVine(pos);
+	}
+
+	@Override
 	public boolean stairUp(BlockPos pos, Direction dir) {
 		return this.loaded.test(pos) && this.world.stairUp(pos, dir);
 	}

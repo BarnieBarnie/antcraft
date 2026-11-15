@@ -113,7 +113,7 @@ class CachedWorldViewTest {
 
 	@Test
 	void theViewAnswersAsTheWorldDoes() {
-		GridWorld grid = GridWorld.flat(4).set(1, 1, 0, 'D').set(2, 1, 0, 'L').set(3, 1, 0, 'W').set(4, 1, 0, 'h').set(4, 1, 1, 'l').stair(0, 1, 1, Direction.EAST).door(1, 1, 1, Direction.Axis.X)
+		GridWorld grid = GridWorld.flat(4).set(1, 1, 0, 'D').set(2, 1, 0, 'L').set(3, 1, 0, 'W').set(4, 1, 0, 'h').set(4, 1, 1, 'l').set(2, 1, 1, 'V').set(3, 1, 1, 'H').stair(0, 1, 1, Direction.EAST).door(1, 1, 1, Direction.Axis.X)
 			.forbidPlacing(new BlockPos(0, 2, 0));
 		CachedWorldView view = new CachedWorldView(grid);
 		for (BlockPos pos : BlockPos.betweenClosed(-1, 0, -1, 4, 3, 2)) {
@@ -125,6 +125,8 @@ class CachedWorldViewTest {
 				assertEquals(grid.isWater(pos), view.isWater(pos), "water " + pos);
 				assertEquals(grid.breakTicks(pos), view.breakTicks(pos), "breakTicks " + pos);
 				assertEquals(grid.isClimbable(pos), view.isClimbable(pos), "climbable " + pos);
+				assertEquals(grid.isVine(pos), view.isVine(pos), "vine " + pos);
+				assertEquals(grid.climbFaces(pos), view.climbFaces(pos), "climbFaces " + pos);
 				assertEquals(grid.isBedrock(pos), view.isBedrock(pos), "bedrock " + pos);
 				assertEquals(grid.mayPlace(pos), view.mayPlace(pos), "mayPlace " + pos);
 				assertEquals(grid.floorTop(pos), view.floorTop(pos), "floorTop " + pos);

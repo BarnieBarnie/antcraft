@@ -16,11 +16,14 @@ import net.minecraft.core.Direction;
  * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal),
  * 'l' = a bottom slab (stood on, but too low to jump a full block up from), 's' = snow two layers deep (an eighth high),
  * 'h' = a honey block (stood on, but halves the jump).
+ * A ladder or vine holds on to the faces set with {@link #hangsOn}, or else to every solid neighbour beside it (and
+ * above, for a vine); a vine with none hangs from the vine above, on its faces.
  */
 public final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
 	private final Map<BlockPos, Direction> stairs = new HashMap<>();
 	private final Map<BlockPos, Direction.Axis> doors = new HashMap<>();
+	private final Map<BlockPos, Integer> faces = new HashMap<>();
 	private final Set<BlockPos> noPlacing = new HashSet<>();
 	private boolean placingForbidden;
 
@@ -57,6 +60,16 @@ public final class GridWorld implements WorldView {
 		this.doors.put(new BlockPos(x, y, z), axis);
 		this.doors.put(new BlockPos(x, y + 1, z), axis);
 		return this.set(x, y, z, 'O').set(x, y + 1, z, 'O');
+	}
+
+	/** The ladder or vine at the given block holds on to these faces only. */
+	GridWorld hangsOn(int x, int y, int z, Direction... faces) {
+		int bits = 0;
+		for (Direction face : faces) {
+			bits |= 1 << face.get3DDataValue();
+		}
+		this.faces.put(new BlockPos(x, y, z), bits);
+		return this;
 	}
 
 	/** Fills the box between two corners (inclusive). */
@@ -111,6 +124,30 @@ public final class GridWorld implements WorldView {
 	public boolean isClimbable(BlockPos pos) {
 		char c = this.at(pos);
 		return c == 'H' || c == 'T' || c == 'V';
+	}
+
+	@Override
+	public boolean isVine(BlockPos pos) {
+		return this.at(pos) == 'V';
+	}
+
+	@Override
+	public int climbFaces(BlockPos pos) {
+		char c = this.at(pos);
+		if (c != 'V' && c != 'H') {
+			return 0;
+		}
+		Integer set = this.faces.get(pos);
+		if (set != null) {
+			return set;
+		}
+		int bits = 0;
+		for (Direction dir : Direction.values()) {
+			if ((dir.getAxis().isHorizontal() || dir == Direction.UP && c == 'V') && this.canStandOn(pos.relative(dir))) {
+				bits |= 1 << dir.get3DDataValue();
+			}
+		}
+		return bits == 0 && c == 'V' && this.isVine(pos.above()) ? this.climbFaces(pos.above()) & ~(1 << Direction.UP.get3DDataValue()) : bits;
 	}
 
 	@Override

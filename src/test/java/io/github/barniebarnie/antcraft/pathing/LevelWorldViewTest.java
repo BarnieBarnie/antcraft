@@ -12,7 +12,9 @@ import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -85,5 +87,15 @@ class LevelWorldViewTest {
 		assertFalse(LevelWorldView.decays(leaves.setValue(LeavesBlock.DISTANCE, 6)));
 		assertFalse(LevelWorldView.decays(leaves.setValue(LeavesBlock.DISTANCE, 7).setValue(LeavesBlock.PERSISTENT, true)));
 		assertFalse(LevelWorldView.decays(Blocks.STONE.defaultBlockState()));
+	}
+
+	/** A ladder holds on to the block behind it, a vine to the faces it clings to, scaffolding to none (#735). */
+	@Test
+	void aClimbableHoldsOnToItsFaces() {
+		BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
+		assertEquals(1 << Direction.SOUTH.get3DDataValue(), LevelWorldView.climbFaces(ladder));
+		BlockState vine = Blocks.VINE.defaultBlockState().setValue(VineBlock.WEST, true).setValue(VineBlock.UP, true);
+		assertEquals(1 << Direction.WEST.get3DDataValue() | 1 << Direction.UP.get3DDataValue(), LevelWorldView.climbFaces(vine));
+		assertEquals(0, LevelWorldView.climbFaces(Blocks.SCAFFOLDING.defaultBlockState()));
 	}
 }

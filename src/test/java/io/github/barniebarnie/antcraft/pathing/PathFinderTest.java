@@ -579,12 +579,13 @@ class PathFinderTest {
 	}
 
 	/**
-	 * Vines on the east face of a wall, by a dirt doorway at their foot that a path breaks to reach them: the two vines on
-	 * the dirt drop with it, so the path does not climb them (#714).
+	 * Vines on the east face of a wall, on a dirt doorway that a path breaks to reach them: the two vines on the dirt drop
+	 * with it, so the path does not climb them (#714). Only they hang there: vines above them on that face would hold them
+	 * up, as in vanilla (#735).
 	 */
 	@Test
 	void doesNotClimbVinesOnABlockItBroke() {
-		GridWorld world = GridWorld.flat(5).fill(1, 1, -5, 1, 5, 5, 'B').fill(1, 1, 0, 1, 2, 0, 'D').fill(2, 1, 0, 2, 5, 0, 'V');
+		GridWorld world = GridWorld.flat(5).fill(1, 1, -5, 1, 5, 5, 'B').fill(1, 1, 0, 1, 2, 0, 'D').fill(2, 1, 0, 2, 2, 0, 'V');
 		Path path = find(world, new BlockPos(1, 6, 0), FULL);
 		assertTrue(path.complete(), "found no way: " + path.steps());
 		BlockPos from = START;
@@ -624,9 +625,39 @@ class PathFinderTest {
 		GridWorld world = new GridWorld().fill(-3, 0, -2, 5, 6, 2, 'B')
 			.fill(-1, 2, 0, 1, 3, 0, ' ').set(1, 3, 0, 'D')
 			.fill(2, 1, 0, 2, 3, 0, 'V').set(2, 4, 0, ' ')
+			.hangsOn(2, 1, 0, Direction.WEST).hangsOn(2, 2, 0, Direction.WEST).hangsOn(2, 3, 0, Direction.WEST)
 			.fill(3, 3, 0, 3, 4, 0, ' ');
 		Path path = PathFinder.find(world, new BlockPos(0, 2, 0), new Goal.Block(new BlockPos(3, 3, 0)), new PathFinder.Options(true, false, 10_000, 3));
 		assertFalse(path.complete(), "climbed the vines under the one on the broken dirt: " + path.steps());
+	}
+
+	/**
+	 * In bedrock, a dirt doorway a path breaks to reach a climbable column three high against the bedrock east of it, the
+	 * only way up to the goal on the ledge at its top; the doorway is beside the bottom two (#735).
+	 */
+	private static GridWorld besideADoorway(char climbable) {
+		return new GridWorld().fill(-2, 0, -2, 5, 7, 2, 'B').fill(0, 1, 0, 0, 2, 0, ' ').fill(1, 1, 0, 1, 2, 0, 'D')
+			.fill(2, 1, 0, 2, 3, 0, climbable).fill(2, 4, 0, 4, 5, 0, ' ');
+	}
+
+	private static Path upBesideADoorway(GridWorld world) {
+		return PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(3, 4, 0)), new PathFinder.Options(true, false, 10_000, 3));
+	}
+
+	/** A ladder holds on to the block behind it only, so one beside a block the path broke is still climbed (#735). */
+	@Test
+	void climbsALadderBesideABlockItBroke() {
+		GridWorld world = besideADoorway('H').hangsOn(2, 1, 0, Direction.EAST).hangsOn(2, 2, 0, Direction.EAST);
+		Path path = upBesideADoorway(world);
+		assertTrue(path.complete(), "did not climb the ladder: " + path.steps());
+	}
+
+	/** A vine on the dirt and the bedrock beyond holds on to the bedrock once the dirt is broken (#735). */
+	@Test
+	void climbsAVineOnTwoBlocksWhenItBrokeOne() {
+		GridWorld world = besideADoorway('V').hangsOn(2, 1, 0, Direction.WEST, Direction.EAST).hangsOn(2, 2, 0, Direction.WEST, Direction.EAST);
+		Path path = upBesideADoorway(world);
+		assertTrue(path.complete(), "did not climb the vine: " + path.steps());
 	}
 
 	@Test

@@ -81,6 +81,20 @@ public interface WorldView {
 	}
 
 	/**
+	 * The faces this {@link #isClimbable climbable} block holds on to, one bit per {@link Direction#get3DDataValue}: a
+	 * ladder the block behind it, a vine each block it clings to (or, beside open air, the vine above on that face). 0
+	 * for one that holds on to nothing, such as scaffolding or a hatch (#735).
+	 */
+	default int climbFaces(BlockPos pos) {
+		return 0;
+	}
+
+	/** A vine, whose faces hold on to the vine above as well as to the block beside them (#735). */
+	default boolean isVine(BlockPos pos) {
+		return false;
+	}
+
+	/**
 	 * A bot moving {@code dir} walks up onto this stair block without jumping, because the side it enters by
 	 * is low, such as the front of the mineshaft's stairs. False for any other block.
 	 */
