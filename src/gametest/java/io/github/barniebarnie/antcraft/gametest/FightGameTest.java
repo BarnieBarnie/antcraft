@@ -847,6 +847,27 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("no_item 0", "True None 1"));
 	}
 
+	/**
+	 * A bot's arrow passes through another bot (#775): {@code shoot} kills a husk behind a bot that stands in the line of
+	 * fire, and that bot is never hurt. The bot in front has no AI, so it stays put and leaves the husk alone.
+	 */
+	// Measured: passes at tick 70.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	public void aBotsArrowPassesThroughABotInTheLineOfFire(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 18);
+		husk.setNoAi(true);
+		AntBot front = helper.spawn(ModEntities.ANT_BOT, 12, 1, 10);
+		front.setNoAi(true);
+		helper.onEachTick(() -> {
+			if (front.getLastDamageSource() != null) {
+				helper.fail("the bot in front was hurt by " + front.getLastDamageSource().getMsgId());
+			}
+		});
+		AntBot bot = archer(helper, 12, 3, 16);
+		ScriptRun run = run(helper, bot, "r = shoot(entities('husk', 20)[0])\nprint(r.ok, r.reason)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
 	/** {@code shoot(entity, min_health=...)} ends with {@code hurt} once the bot's health is under it, as {@code attack} does (#724). */
 	// Measured: passes at tick 47.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)

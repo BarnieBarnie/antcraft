@@ -3,6 +3,7 @@
 	"package": "io.github.barniebarnie.antcraft.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"mixins": [
+		"ProjectileMixin",
 		"ServerLevelMixin"
 	],
 	"injectors": {
