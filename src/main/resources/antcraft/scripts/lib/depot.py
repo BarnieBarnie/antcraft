@@ -42,30 +42,34 @@ def category(name, item):
 
 
 def store(name, keep=None, radius=32):
-    """Puts everything the bot carries but what keep (a list of item ids or selectors) selects into the chests of depot
-    name, and of what no category selects (OTHER) also not lib.storage.KEEP_KINDS or chests, so an apples category takes
-    apples though they are food: each item into the chests of its category with room, in row order; where they
-    are full, a new chest at the next slot of the row (add_chest) for the category. Gives result(): ok, or the reason
-    adding a chest failed with and missing, item to how many the bot still carries."""
+    """Puts everything the bot carries but what keep selects into the chests of depot name, and of what no category
+    selects (OTHER) also not lib.storage.KEEP_KINDS or chests, so an apples category takes apples though they are food:
+    each item into the chests of its category with room, in row order; where they are full, a new chest at the next slot
+    of the row (add_chest) for the category. keep is a list of item ids or selectors, all of which the bot keeps, and of
+    (selector, n) pairs, of which it keeps n and stores the rest, such as ("minecraft:dirt", 64) (#762). Gives result():
+    ok, or the reason adding a chest failed with and missing, item to how many the bot still carries beyond its keep."""
+    whole = [k for k in keep or [] if isinstance(k, str)]
+    capped = [k for k in keep or [] if not isinstance(k, str)]
     kept = lib.storage.KEEP_KINDS + [CHEST]
     items = []
     for s in inventory():
-        if s.item not in items and not (keep and matches(s, keep)) and (category(name, s.item) != OTHER or not matches(s, kept)):
+        if s.item not in items and not (whole and matches(s, whole)) and (category(name, s.item) != OTHER or not matches(s, kept)):
             items.append(s.item)
     reason = None
     missing = {}
     for item in items:
+        cap = sum([k[1] for k in capped if matches(item, k[0])])
         cat = category(name, item)
         for chest in chests(name, cat):
-            if has(item) and room(chest, item):
-                put(chest, item)
-        while has(item):
+            if count(item) > cap and room(chest, item):
+                put(chest, item, count(item) - cap)
+        while count(item) > cap:
             r = add_chest(name, cat, radius)
             if not r["ok"]:
                 reason = reason or r["reason"]
-                missing[item] = count(item)
+                missing[item] = count(item) - cap
                 break
-            put(r["at"], item)
+            put(r["at"], item, count(item) - cap)
     return result(reason, None, missing)
 
 

@@ -54,9 +54,10 @@ BACKOFF = 10
 KIT = [("stone_axe", 1), ("dirt", 16)]  # dirt to climb a tall tree with and to put under the saplings; more for a giant (kit)
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
               "sticks": ["minecraft:stick"]}
-# What the farm keeps on the bot instead of storing it, besides its own saplings: what a cell takes and the crafting
-# table lib.get makes a depot chest with.
-KEEP = [lib.treefarm.DIRT, lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
+# What the farm keeps on the bot instead of storing it, besides its own saplings and its dirt (dirt): what a cell takes and
+# the crafting table lib.get makes a depot chest with.
+KEEP = [lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
+STACK = 64  # the dirt the farm keeps at least: a stack, for the fill of an uneven cell (dirt)
 
 
 def most(harvest=HARVEST["minecraft:birch_sapling"]):
@@ -218,6 +219,12 @@ def kit(kind):
     return [(item, scaffold(kind) if item == "dirt" else n) for item, n in KIT]
 
 
+def dirt(kind):
+    """The dirt a farm of kind keeps when it stores (#762): its scaffold and a cell's materials, at least STACK. The
+    rest, such as the dirt flatten and its walks dig, goes in the depot, so it never fills the bot's inventory."""
+    return max(STACK, scaffold(kind) + lib.treefarm.materials(kind)[lib.treefarm.DIRT])
+
+
 def reap(kind, b, radius, told):
     """Fells the tree of cell b with an axe (lib.treefarm.harvest). Where that leaves a log, says why once (tell), gets
     scaffold(kind) dirt to pillar with and an axe, and harvests again (#644). Gives the last harvest's result()."""
@@ -261,7 +268,7 @@ def farm(kind, name, size, radius):
                 trees += 1
         felled = trees > 0
         if grown:
-            r = lib.depot.store(name, KEEP + [lib.treefarm.sapling(kind)], radius)
+            r = lib.depot.store(name, KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))], radius)
             if not r["ok"]:
                 say(f"store: {r['reason']}, kept {r['missing']}")
         # After the felling, so lib.get breaks the felled trees' leaves for saplings, not those of a tree still to fell.

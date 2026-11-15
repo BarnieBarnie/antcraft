@@ -364,6 +364,50 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot carrying 5 stacks of dirt stores all but a stack of it in the depot in the round that fells a tree (#762):
+	 * the birch's kit and a cell take less than a stack, so a stack is what it keeps. It carries a chest for the depot.
+	 */
+	// Measured: passes at tick 24.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
+	public void storesItsDirtButAStack(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		for (int i = 0; i < 5; i++) {
+			bot.getInventory().addItem(new ItemStack(Items.DIRT, 64));
+		}
+		bot.getInventory().addItem(new ItemStack(Items.CHEST));
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			tree = [True]
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			def reaped(k, b, radius, told):
+			    tree[0] = False
+			    return lib.result.result()
+			def waited(ticks):
+			    print(count("minecraft:dirt"))
+			    stop()
+			jobs.wood_farm.reap = reaped
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.grown = lambda k, low, high: tree[0]
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 1, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("farm full", "64"), "dirt carried");
+			helper.assertValueEqual(helper.getBlockEntity(new BlockPos(6, 1, 0), ChestBlockEntity.class).countItem(Items.DIRT), 256,
+				"dirt in the depot");
+		});
+	}
+
+	/**
 	 * harvest() is the mean of the last WINDOW trees only (#662): after three slow trees of 2 GROWTH, WINDOW quick ones
 	 * of 100 ticks (one round of two, the rest one a round) make it 100. A mean over every tree would still be some
 	 * 9000.
