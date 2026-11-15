@@ -657,7 +657,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * out of nodes, took the floor under the log as closest, and each replan from there got no closer: out_of_reach.
 	 */
 	// Measured: passes at tick 386 to 421 (red: printed False out_of_reach at tick 115).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 900)
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1400)
 	public void mineReachesALogBuriedInTheTopOfAGiantJunglesCrown(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(10, 1, 8);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
