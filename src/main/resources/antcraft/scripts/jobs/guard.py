@@ -14,11 +14,10 @@ import lib.food
 from lib.home import go_home
 from lib.tools import hold
 
-# The mobs it fights: the game's monsters (monsters(), modded ones too, #722) but LEFT_OUT, the neutral ones, which a
-# blow turns on the bot with their kin, the warden and the bosses.
-LEFT_OUT = ["minecraft:enderman", "minecraft:zombified_piglin", "minecraft:piglin", "minecraft:warden",
-            "minecraft:wither", "minecraft:ender_dragon"]
-MOBS = [m for m in monsters() if m not in LEFT_OUT]
+# The mobs it fights: the game's monsters (monsters(), modded ones too, #722) but the neutral ones (Entity.neutral, the
+# bot's own list, #772): endermen, zombified piglins and piglins, which a blow turns on the bot with their kin, the
+# warden and the bosses.
+MOBS = monsters()
 # Health under which it retreats, also from a fight, above the flee reflex's 6, and the health it heals to before it
 # fights again.
 RETREAT = 12
@@ -51,9 +50,10 @@ def can_shoot():
 
 
 def mobs(radius):
-    """The mobs of MOBS within radius of home, nearest the bot first, but those it skips."""
+    """The mobs of MOBS within radius of home, nearest the bot first, but neutral ones and those it skips."""
     now = game_time()
-    return [m for m in entities(MOBS, 64) if m.pos.distance(home()) <= radius and skipped.get(m.id, 0) <= now]
+    return [m for m in entities(MOBS, 64)
+            if not m.neutral and m.pos.distance(home()) <= radius and skipped.get(m.id, 0) <= now]
 
 
 def run(radius=16):

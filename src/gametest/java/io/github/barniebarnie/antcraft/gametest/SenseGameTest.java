@@ -301,6 +301,19 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("1 True"));
 	}
 
+	/**
+	 * An Entity's neutral is the bot's own list of mobs it leaves alone until hurt (AntBot.leftAlone), so jobs.guard reads
+	 * the same list (#772): true for an enderman, false for a zombie.
+	 */
+	@GameTest(maxTicks = 10)
+	public void anEntitysNeutralIsTheBotsListOfMobsItLeavesAlone(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		helper.spawnWithNoFreeWill(EntityTypes.ENDERMAN, 5, 1, 3);
+		helper.spawnWithNoFreeWill(EntityTypes.ZOMBIE, 3, 1, 5).setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		ScriptRun run = run(helper, bot, "print(entities('enderman', radius=8)[0].neutral, entities('zombie', radius=8)[0].neutral)\n");
+		succeedWhenPrinted(helper, bot, run, List.of("True False"));
+	}
+
 	@GameTest(maxTicks = 10)
 	public void itemsNearListsDroppedItems(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);

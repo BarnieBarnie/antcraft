@@ -66,6 +66,7 @@ import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
+import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
@@ -204,7 +205,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		// A hurt bot running a script of its own starts no fight: the script decides, such as to retreat home and heal
 		// (jobs.guard), and a mob that hurts it is still fought back (HurtByTargetGoal) (#718). Nor does it take on a
 		// creeper with its fuse lit, such as one it kited out of the kite goal's range: the melee goal would walk it back
-		// into the blast (#733). Nor a neutral mob, as jobs.guard's LEFT_OUT: an enderman, which arrows do not hit, a
+		// into the blast (#733). Nor a neutral mob, one of leftAlone: an enderman, which arrows do not hit, a
 		// zombified piglin or piglin, which a blow turns on the bot with their kin, the warden or the wither; it fights
 		// one only once hurt by it (#750).
 		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true,
@@ -229,9 +230,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		});
 	}
 
-	/** Whether the bot takes on {@code mob} only once hurt by it (#750). */
-	private static boolean leftAlone(LivingEntity mob) {
-		return mob instanceof NeutralMob || mob instanceof Piglin || mob instanceof Warden || mob instanceof WitherBoss;
+	/**
+	 * Whether the bot takes on {@code mob} only once hurt by it (#750): neutral mobs, piglins, the warden and the bosses.
+	 * Scripts read it as an Entity's {@code neutral}, so jobs.guard leaves the same mobs alone (#772). The ender dragon is
+	 * no {@link Monster}, so the target goal never sees it, but jobs.guard does.
+	 */
+	public static boolean leftAlone(Entity mob) {
+		return mob instanceof NeutralMob || mob instanceof Piglin || mob instanceof Warden || mob instanceof WitherBoss
+			|| mob instanceof EnderDragon;
 	}
 
 	/**

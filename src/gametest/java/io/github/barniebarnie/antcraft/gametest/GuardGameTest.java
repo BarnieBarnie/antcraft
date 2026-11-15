@@ -12,6 +12,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.monster.Blaze;
+import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.Endermite;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.entity.monster.zombie.Zombie;
@@ -153,6 +154,29 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(blaze.isDeadOrDying(), "blaze alive: " + blaze.getHealth());
 			helper.assertTrue(bot.getInventory().countItem(Items.ARROW) < 16, "shot no arrow");
 		});
+	}
+
+	/**
+	 * A guard leaves an enderman nearer than a zombie alone and kills the zombie: jobs.guard reads the bot's own list of
+	 * mobs it leaves alone (Entity.neutral, #772), as an idle bot does (FightGameTest anIdleBotLeavesAnEndermanAlone...).
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 200)
+	public void aGuardLeavesAnEndermanAlone(GameTestHelper helper) {
+		Enderman enderman = helper.spawn(EntityTypes.ENDERMAN, 6, 1, 6);
+		enderman.setNoAi(true);
+		Zombie zombie = zombie(helper, 14, 14);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+		bot.setHealth(19);
+		bot.getFood().setFoodLevel(17);
+		bot.getFood().setSaturation(0);
+		helper.onEachTick(() -> {
+			if (enderman.getHealth() < enderman.getMaxHealth()) {
+				helper.fail("struck the enderman");
+			}
+		});
+		guard(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(zombie.isDeadOrDying(), "zombie alive: " + zombie.getHealth()));
 	}
 
 	/** Runs {@code jobs.guard 32} on {@code bot}, failing the test as soon as the script fails. */

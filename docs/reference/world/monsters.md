@@ -24,7 +24,7 @@ No, it is done at once.
 
 ## Description
 
-The list is a [selector](../types/selectors.md), so [`entities`](entities.md) takes it as it is. [`jobs.guard`](../../cookbook/guard.md) fights those of it but the neutral ones, the warden and the bosses (#722). It does not look at the bot or the world.
+The list is a [selector](../types/selectors.md), so [`entities`](entities.md) takes it as it is. [`jobs.guard`](../../cookbook/guard.md) fights those of it but the [`neutral`](../types/entity.md) ones, the warden and the bosses (#722, #772). It does not look at the bot or the world.
 
 ## Examples
 

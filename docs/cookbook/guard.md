@@ -7,11 +7,10 @@ import lib.food
 from lib.home import go_home
 from lib.tools import hold
 
-# The mobs it fights: the game's monsters (monsters(), modded ones too, #722) but LEFT_OUT, the neutral ones, which a
-# blow turns on the bot with their kin, the warden and the bosses.
-LEFT_OUT = ["minecraft:enderman", "minecraft:zombified_piglin", "minecraft:piglin", "minecraft:warden",
-            "minecraft:wither", "minecraft:ender_dragon"]
-MOBS = [m for m in monsters() if m not in LEFT_OUT]
+# The mobs it fights: the game's monsters (monsters(), modded ones too, #722) but the neutral ones (Entity.neutral, the
+# bot's own list, #772): endermen, zombified piglins and piglins, which a blow turns on the bot with their kin, the
+# warden and the bosses.
+MOBS = monsters()
 # Health under which it retreats, also from a fight, above the flee reflex's 6, and the health it heals to before it
 # fights again.
 RETREAT = 12
@@ -44,9 +43,10 @@ def can_shoot():
 
 
 def mobs(radius):
-    """The mobs of MOBS within radius of home, nearest the bot first, but those it skips."""
+    """The mobs of MOBS within radius of home, nearest the bot first, but neutral ones and those it skips."""
     now = game_time()
-    return [m for m in entities(MOBS, 64) if m.pos.distance(home()) <= radius and skipped.get(m.id, 0) <= now]
+    return [m for m in entities(MOBS, 64)
+            if not m.neutral and m.pos.distance(home()) <= radius and skipped.get(m.id, 0) <= now]
 
 
 def run(radius=16):
@@ -87,7 +87,7 @@ if args is not None:
 
 - Each round, under `RETREAT` (12) health, `heal` walks home with [`go_home`](../reference/modules/lib/home.md) and eats the best food it carries ([`lib.food.best`](../reference/modules/lib/food.md)) while it is hurt and not full, so it gets saturation and heals quickly, a point every 10 ticks; at 20 food without saturation it waits, healing a point every 80 ticks, until it has `HEALED` (18) health. Under 18 food with nothing left to eat it can heal no more, and goes back to the fight as it is, fighting that round without `min_health`.
 - It retreats before [`lib.food.upkeep`](../reference/modules/lib/food.md), which would otherwise eat where it fought; `upkeep` gets food from the chests at 14 food or under where it carries none.
-- It then [`attack`](../reference/combat/attack.md)s the mob of `MOBS` nearest it within the radius of [`home()`](../reference/movement/home.md), holding its best sword ([`lib.tools.hold`](../reference/modules/lib/tools.md)), with `min_health=RETREAT`: once its health drops under 12 the attack ends with `hurt`, and it retreats at once, in the middle of the fight. `MOBS` is the game's monsters, [`monsters()`](../reference/world/monsters.md), modded ones too, but those of `LEFT_OUT`: endermen, zombified piglins and piglins, which a blow turns on the bot with their kin, the warden and the bosses. With none near it waits at home.
+- It then [`attack`](../reference/combat/attack.md)s the mob of `MOBS` nearest it within the radius of [`home()`](../reference/movement/home.md), holding its best sword ([`lib.tools.hold`](../reference/modules/lib/tools.md)), with `min_health=RETREAT`: once its health drops under 12 the attack ends with `hurt`, and it retreats at once, in the middle of the fight. `MOBS` is the game's monsters, [`monsters()`](../reference/world/monsters.md), modded ones too; it leaves out the [`neutral`](../reference/types/entity.md) ones, the mobs the bot's own goals leave alone too (#772): endermen, zombified piglins and piglins, which a blow turns on the bot with their kin, the warden and the bosses. With none near it waits at home.
 - A mob it cannot get to, such as a flying one, it shoots with [`shoot`](../reference/combat/shoot.md) where it carries a bow or crossbow and arrows. With them, it first asks [`reachable`](../reference/movement/reachable.md) whether it can walk to the mob, and shoots one it cannot from where it stands, rather than walking under a flying mob and shooting it straight up (#756); otherwise it tries [`attack`](../reference/combat/attack.md), and shoots where that ends with `unreachable`. Where that fails too, or the fight ends otherwise than with `hurt` or `interrupted`, it leaves that mob alone for `SKIP` (600) ticks and goes for the next, so it does not try the same mob over and over.
 - The flee reflex at `botFleeHealth` (6 by default) stays the last line: it ends the fight with `interrupted` and flees, and once it lets go the bot is under `RETREAT`, so it retreats home and heals as after any fight (see [Reflexes](../features/bots.md#reflexes)).
 - While it is hurt and runs a script, the bot's own goals start no fight with a mob in sight, so a mob far off does not draw it out while it retreats or heals. A mob that follows it home and hurts it is still fought back there.
