@@ -70,7 +70,7 @@ class DocExampleTest {
 	 */
 	@Test
 	void theJobRecipesAreTheBundledJobs() throws IOException {
-		for (String page : List.of("get", "bootstrap", "giant-tree", "strip-mine", "build", "explore", "store", "farm")) {
+		for (String page : List.of("get", "bootstrap", "giant-tree", "strip-mine", "build", "explore", "store", "farm", "guard")) {
 			String heading = page.equals("farm") ? "## The bundled job" : "```python";
 			assertEquals(example(Files.readString(Path.of("docs/cookbook/" + page + ".md")), heading), job(page), page);
 		}

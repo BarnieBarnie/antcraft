@@ -34,7 +34,7 @@ By default the bot attacks only hostile mobs, such as zombies and skeletons, and
 
 Against a creeper the bot kites: while the fuse of a creeper near it is lit, it strikes only at once and otherwise backs off out of the blast, and the attack waits until the fuse is out to walk in again (see [Fighting creepers](../../features/bots.md#fighting-creepers)). A bot that carries a bow or crossbow and arrows shoots a creeper instead, from range, as [`shoot`](shoot.md) does, so it never comes near enough to light the fuse.
 
-A bot at or below `botFleeHealth` with a hostile mob near it flees instead of fighting on: the attack ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)). Check [`health()`](../bot/health.md) to stop a fight before that.
+A bot at or below `botFleeHealth` with a hostile mob near it flees instead of fighting on: the attack ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)). Check [`health()`](../bot/health.md) between fights to retreat before that, as the bundled [`jobs.guard`](../../cookbook/guard.md) does.
 
 An argument that is no `Entity` stops the script with an error.
 
