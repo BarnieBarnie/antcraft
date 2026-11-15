@@ -79,15 +79,27 @@ def scaffold(n):
 # Home is on the core, so a lumberjack that dies comes back in the colony and fetches what it dropped (#683).
 set_home(core().up())
 lib.trees.recover()
+SKIP = 1200  # ticks an unreachable sapling is left before the idle lumberjack tries it again
+failed = {}  # entity id of a sapling it could not walk to: the game time it tried
 while True:
     # Remnants too: what lib.trees.logs leaves of a tree it took the bottom logs of for an axe.
     tree = next_tree(remnants=True)
     if tree is None:
         # Saplings lying in the colony: fell_whole picks up those within 8 of the tree it fells, not the rest. It walks
-        # to them on no blocks of its own, which nothing would take back (#676).
+        # to them on no blocks of its own, which nothing would take back (#676). One it could not reach it leaves for a
+        # minute, not every loop (#686). ponytail: kept by entity in this run only; a restart tries each once again.
+        now = game_time()
+        fresh = {}
+        for k in failed:
+            if now - failed[k] < SKIP:
+                fresh[k] = failed[k]
+        failed = fresh
         for e in items_near(SAPLINGS):
-            if e.valid and lib.find.allowed(e.pos) and goto(e.pos, keep="#antcraft:scaffold_blocks"):
-                pick_up(SAPLINGS, 1)
+            if e.valid and e.id not in failed and lib.find.allowed(e.pos):
+                if goto(e.pos, keep="#antcraft:scaffold_blocks"):
+                    pick_up(SAPLINGS, 1)
+                else:
+                    failed[e.id] = game_time()
         store_all(core(), keep=SEEDLINGS)
         wait(200)
     else:

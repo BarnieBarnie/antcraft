@@ -808,6 +808,29 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * An idle lumberjack tries once to walk to a sapling it cannot reach, on top of a bedrock pillar 4 high, and not again
+	 * on its next idle loop 200 ticks later, which tried it again before (#686, second goto at about tick 260).
+	 */
+	@GameTest(maxTicks = 400)
+	public void anIdleLumberjackDoesNotWalkAgainToASaplingItCannotReach(GameTestHelper helper) {
+		for (int y = 1; y <= 4; y++) {
+			helper.setBlock(6, y, 6, Blocks.BEDROCK);
+		}
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 5, 6));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		BotScripts.failOnError(helper, lumberjack);
+		helper.runAtTickTime(320, () -> {
+			List<String> walks = BotScripts.log(lumberjack, Output.Level.DEBUG).stream().filter(l -> l.startsWith("goto(")).toList();
+			helper.assertTrue(walks.size() == 1, "walked to the sapling " + walks.size() + " times: " + walks);
+			helper.assertTrue(GameTests.carried(lumberjack, Items.OAK_SAPLING) == 0, "the lumberjack reached the sapling");
+			helper.succeed();
+		});
+	}
+
+	/**
 	 * An empty-handed lumberjack, no axe in the core, by the giant spruce of {@link TreesGameTest#plantGiant}: it makes an
 	 * axe from the logs of an oak of four logs at (6, 1, 6), not the giant's, then fells the giant whole with dirt and
 	 * saplings from the core, takes back its scaffold, replants four saplings and stores the 26 logs (#541). Passes at about tick 1700.
