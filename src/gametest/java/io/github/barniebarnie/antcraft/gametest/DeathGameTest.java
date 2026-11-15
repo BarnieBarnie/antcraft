@@ -140,6 +140,26 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * With its home in another dimension, lib.cost.death(at) costs lib.cost.RESPAWN plus the fixed walk back
+	 * lib.cost.AWAY_WALK, as the path search costs it ({@link io.github.barniebarnie.antcraft.pathing.PathFinder#AWAY_WALK},
+	 * #699), not a walk between coordinates of two dimensions.
+	 */
+	@GameTest
+	public void aDeathWithTheHomeInAnotherDimensionCostsTheFixedWalkBack(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)), Level.NETHER);
+		BotScripts.failOnError(helper, bot);
+		BotScripts.run(bot, """
+			import lib.cost
+			print(lib.cost.death(pos()) == lib.cost.RESPAWN + lib.cost.AWAY_WALK, lib.cost.AWAY_WALK)
+			""");
+		helper.succeedWhen(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertValueEqual(printed, List.of("True " + (int) io.github.barniebarnie.antcraft.pathing.PathFinder.AWAY_WALK), "printed");
+		});
+	}
+
 	/** A bot whose home was built over respawns standing free beside it, not inside the block (#696). */
 	@GameTest(maxTicks = 440)
 	public void aBotWhoseHomeWasBuiltOverRespawnsStandingFreeBesideIt(GameTestHelper helper) {

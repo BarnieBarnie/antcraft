@@ -49,9 +49,17 @@ RESPAWN = 200
 # Ticks what a bot drops lies before it despawns, as a player's drops: five minutes.
 DESPAWN = 6000
 
+# Ticks the walk back costs from a home in another dimension: a fixed guess, as the path search's
+# PathFinder.AWAY_WALK (#688, #699), so the walk back costs at most what the drops lie.
+AWAY_WALK = DESPAWN
+
 
 def death(at, start=None):
     """The ticks a death at Pos at costs the bot: RESPAWN, then the walk from start (the bot's home() by default) back to
-    at for what it dropped (#679). Past DESPAWN ticks that is gone, and with it what the bot carried."""
-    # ponytail: a death costs only ticks here; a caller that weighs the items lost compares this with DESPAWN.
+    at for what it dropped (#679). Past DESPAWN ticks that is gone, and with it what the bot carried. With no start and the
+    home in another dimension the walk back is AWAY_WALK (#699)."""
+    # ponytail: a death costs only ticks here; a caller that weighs the items lost compares this with DESPAWN. AWAY_WALK
+    # is a fixed guess, not the way through a portal.
+    if start is None and home_dimension() != dimension():
+        return RESPAWN + AWAY_WALK
     return RESPAWN + walk(start or home(), at)
