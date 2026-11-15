@@ -127,10 +127,11 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A hungry bot with a stone sword and a furnace kit (a furnace, a wooden pickaxe to take it back and coal) and no food
 	 * kills the cow 5 blocks off, cooks its beef and eats (#719): food 12 to 20 only on cooked beef (8), as raw beef (3)
-	 * twice stops at 18. Radius 6, as entities are not kept to the test's area. Measured: 378 ticks with one beef dropped,
-	 * 646 to 655 with two, as ensure_food cooks the raw beef one at a time (200 ticks each); three would take some 920.
+	 * twice stops at 18. Radius 6, as entities are not kept to the test's area. Measured: 381 to 384 ticks with one beef
+	 * dropped, 579 with two (646 to 655 before) and 787 with three, cooked in one smelt (200 ticks each, #741); one at a time three took some 920. A cow drops
+	 * at most three, so 787 is the slowest pass: maxTicks about twice it.
 	 */
-	@GameTest(maxTicks = 1300)
+	@GameTest(maxTicks = 1600)
 	public void aHungryBotWithASwordHuntsACowAndEatsItsCookedBeef(GameTestHelper helper) {
 		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 3);
 		cow.setNoAi(true);
@@ -147,6 +148,32 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
 			helper.assertTrue(cow.isDeadOrDying(), "cow alive " + BotScripts.warnings(bot));
 			helper.assertValueEqual(bot.getFood().food(), 20, "food");
+		});
+	}
+
+	/**
+	 * A bot carrying three raw beef and a furnace kit, and no animal near, cooks all three in one smelt (#741): its cooked
+	 * beef goes from none to three at once, never one or two, as smelt takes the output when the input is all smelted.
+	 */
+	@GameTest(maxTicks = 1400)
+	public void ensureFoodCooksTheRawBeefCarriedInOneSmelt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 3));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 2));
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.ensure_food(4, 6)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			int cooked = bot.getInventory().countItem(Items.COOKED_BEEF);
+			if (cooked == 1 || cooked == 2) {
+				helper.fail("cooked " + cooked + " beef of three: not in one smelt");
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(bot.getInventory().countItem(Items.COOKED_BEEF), 3, "cooked beef");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BEEF), 0, "raw beef");
 		});
 	}
 

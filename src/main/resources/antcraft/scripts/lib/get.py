@@ -316,7 +316,11 @@ def resolve(item, n, radius):
         if item in p["gather"]:
             return result("no_recipe", None, {item: n - count(item)})
         if p["no_tool"]:
-            # A furnace craft_here puts down comes back only with a pickaxe.
+            # A furnace craft_here puts down comes back only with a pickaxe: none made where a raw item cannot be got,
+            # such as meat with no animal near (#741).
+            missing = short(p, {}, radius)
+            if missing is not None:
+                return missing[0].do(missing[1], radius)
             r = ensure_tool("pickaxe", 1, None, radius)
             if not r["ok"]:
                 return r

@@ -295,6 +295,24 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * No animal within radius and no pickaxe, but a furnace, coal and the logs for a pickaxe (#741): get of a cooked beef
+	 * fails with no_animal before it makes the pickaxe the furnace would need to come back.
+	 */
+	@GameTest(maxTicks = 20)
+	public void getCookedBeefWithNoAnimalFailsWithoutMakingAPickaxe(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 2));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 3));
+		run(helper, bot, """
+			from lib.get import get
+			r = get("cooked_beef", 1, 6)
+			print(r["ok"], r["reason"], count("#minecraft:pickaxes"), count("oak_log"))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "False no_animal 0 3"));
+	}
+
+	/**
 	 * A stone pickaxe carried, a vein of three iron ore a few blocks off (#661): make_cost of three raw iron is the source's
 	 * estimate for the first and the mining of the rest of the vein, within {@link #COST_FACTOR} of get's ticks; it was the
 	 * estimate, which counts a walk, for each. Since #675 the first costs the walk to it

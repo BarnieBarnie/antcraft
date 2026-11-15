@@ -63,8 +63,8 @@ def eat_if_hungry():
 
 def ensure_food(n=STOCK, radius=32):
     """Makes the bot carry at least n food of FOODS: taken from the chests of lib.stock within radius (the colony's core
-    plainly, others borrowed), best first, else made one at a time with lib.get's get from the first of MADE it can (bread
-    from wheat, raw meat cooked). Gives result(): ok, or no_item with missing, how much food it is still short."""
+    plainly, others borrowed), best first, else made with cook from the first of MADE it can (bread from wheat, raw meat
+    cooked). Gives result(): ok, or no_item with missing, how much food it is still short."""
     if count(ITEMS) < n:
         chests = lib.stock.chests(radius)
         for item in ITEMS:
@@ -74,17 +74,28 @@ def ensure_food(n=STOCK, radius=32):
                 if count(item) > had:
                     lib.borrow.keep(item)  # food is for eating: give_back does not take it back to its chest
     if count(ITEMS) < n:
-        from lib.get import get  # loads most of the library: only where it must make food
-
         made = True
         while made and count(ITEMS) < n:
             made = False
             for item in MADE:
-                if not made and get(item, count(item) + 1, radius)["ok"]:
+                if not made and cook(item, radius)["ok"]:
                     made = True
     if count(ITEMS) < n:
         return result("no_item", None, {"food": n - count(ITEMS)})
     return result()
+
+
+def cook(item, radius):
+    """get(item, ...) of lib.get: one more of item, or for an item smelted (cooked meat), one of its raw item got first
+    where none is carried, then all the raw carried in one smelt, as a kill drops more than one (#741)."""
+    from lib.get import get  # loads most of the library: only where it must make food
+
+    raw = needs(item)["inputs"].get(item, [])
+    if raw and not sum([count(i) for i in raw]):
+        r = get(raw[0], 1, radius)
+        if not r["ok"]:
+            return r
+    return get(item, count(item) + max(1, sum([count(i) for i in raw])), radius)
 
 
 def upkeep(radius=32):
