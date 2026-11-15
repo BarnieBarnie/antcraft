@@ -1247,6 +1247,66 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("False blocked 3", "minecraft:water is in the way at Pos" + at(helper, 4, 2, 3)));
 	}
 
+	/**
+	 * A cobblestone too high to reach on top of a shaft of air ({@code air_shaft}: 3 by 7 by 3 of air, the cobblestone at
+	 * the top in the middle), the bot shut in the shaft by barrier: it carries dirt, but dirt goes on no spot the blueprint
+	 * puts air in, so it is blocked saying so (#486), and nothing is placed.
+	 */
+	// Measured: passes at tick 4.
+	@GameTest(maxTicks = 12)
+	public void buildCarryingDirtWithNoRoomForItIsBlocked(GameTestHelper helper) {
+		for (int y = 1; y <= 2; y++) {
+			for (int i = 1; i <= 5; i++) {
+				helper.setBlock(i, y, 1, Blocks.BARRIER);
+				helper.setBlock(i, y, 5, Blocks.BARRIER);
+				helper.setBlock(1, y, i, Blocks.BARRIER);
+				helper.setBlock(5, y, i, Blocks.BARRIER);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		expect(helper, bot, "r = build('antcraft-gametest:air_shaft', " + at(helper, 2, 1, 2) + ")\nprint(r.ok, r.reason, r.value, count('dirt'))\nprint(r.detail)\n",
+			List.of("False blocked 0 16", "no walk reaches Pos" + at(helper, 3, 7, 3)
+				+ ", and dirt goes on no spot the blueprint puts a block or air in (structure_void leaves room for it)"),
+			() -> helper.assertBlockPresent(Blocks.AIR, 3, 7, 3));
+	}
+
+	/**
+	 * The bot rests on a lone stone block 4 over the floor, where {@code kept_void} has air, over its edge with its feet in
+	 * the block beside, which has a ledge 2 below it, so its feet count as there (see PathFollower.feet), not over the
+	 * stone: from there the stone is in sight, so its walks to it arrive at once, but the bot may not break the only block
+	 * it rests on with a fall under it that hurts (BotBody.inReach, #668). It walks there twice, then is blocked saying
+	 * the walk got nowhere (#486), and the stone stays. It waits to land first, as just spawned it plans from the air.
+	 */
+	// Measured: passes at tick 9.
+	@GameTest(maxTicks = 20)
+	public void buildWhoseWalkGetsNowhereTwiceIsBlocked(GameTestHelper helper) {
+		helper.setBlock(4, 5, 3, Blocks.STONE);
+		helper.setBlock(3, 3, 3, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.8, 6, 3.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_PICKAXE));
+		expect(helper, bot, "wait(5)\nr = build('antcraft-gametest:kept_void', " + at(helper, 3, 5, 3) + ")\nprint(r.ok, r.reason, r.value)\nprint(r.detail)\n",
+			List.of("False blocked 0", "the walk to Pos" + at(helper, 4, 5, 3) + " got nowhere twice"),
+			() -> helper.assertBlockPresent(Blocks.STONE, 4, 5, 3));
+	}
+
+	/**
+	 * {@code portal_step}: a cobblestone with a nether portal block on it, which no item places. The bot places the
+	 * cobblestone, then is blocked saying no step left can be placed and where the next is (#486).
+	 */
+	// Measured: passes at tick 3.
+	@GameTest(maxTicks = 10)
+	public void buildWithOnlyAnUnplaceableStepLeftIsBlocked(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE));
+		expect(helper, bot, "r = build('antcraft-gametest:portal_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value)\nprint(r.detail)\n",
+			List.of("False blocked 1", "no step left can be placed, the next is at Pos" + at(helper, 3, 2, 3)), () -> {
+				helper.assertBlockPresent(Blocks.COBBLESTONE, 3, 1, 3);
+				helper.assertBlockPresent(Blocks.AIR, 3, 2, 3);
+			});
+	}
+
 	/** A second bot idling where the step's second cobblestone goes is asked to step aside, and the build finishes. */
 	@GameTest(maxTicks = 40)
 	public void buildMovesABotIdlingOnTheSite(GameTestHelper helper) {
