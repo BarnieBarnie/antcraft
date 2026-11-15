@@ -341,7 +341,8 @@ def take_back(keep=()):
     keep (a list from placed_scaffold(False) before the walks, #657): only blocks unchanged since, so one someone else
     mined or put there meanwhile stays. Then what its walks to those blocks placed, round after round while a round takes
     some block back, at most 32 (#614, #637). A block mine could not reach, once the blocks it was reached from were gone,
-    stays for the next round, from what that round's walks placed (#628); what no round reached stays listed, as keep does."""
+    stays for the next round, from what that round's walks placed (#628); what no round reached is forgotten then, so a
+    later take_back does not try it again, but keep stays listed (#671)."""
     took = True
     rounds = 0
     # ponytail: a backstop, should each round's walks place a block as it mines one; raise it if a real tree needs more.
@@ -351,6 +352,7 @@ def take_back(keep=()):
         for q in sorted([q for q in placed_scaffold(False) if q not in keep], key=lambda q: -q.y):
             if mine(q):
                 took = True
+    placed_scaffold(keep=keep)
 
 
 def fell_whole(base, replant=True, blocks=None, plan=None):

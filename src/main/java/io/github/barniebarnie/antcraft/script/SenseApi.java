@@ -295,9 +295,11 @@ public final class SenseApi {
 			return bot(run, call).level().isBrightOutside();
 		});
 		natives.register("placed_scaffold", 10, call -> {
-			Object forget = Args.bind("placed_scaffold", call, 0, "forget")[0];
-			boolean peek = !Args.absent(forget) && !Values.truthy(forget);
-			return new PyList(new ArrayList<>(peek ? run.peekPlaced() : run.takePlaced()));
+			Object[] args = Args.bind("placed_scaffold", call, 0, "forget", "keep");
+			boolean peek = !Args.absent(args[0]) && !Values.truthy(args[0]);
+			Object keep = args[1];
+			return new PyList(new ArrayList<>(peek ? run.peekPlaced()
+				: Args.absent(keep) ? run.takePlaced() : run.takePlaced(pos -> Values.contains(keep, pos))));
 		});
 	}
 

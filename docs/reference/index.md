@@ -29,7 +29,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`home_dimension`](movement/home_dimension.md) | `home_dimension()` | the id of the dimension of the bot's home |
 | [`dimension`](movement/dimension.md) | `dimension()` | the id of the dimension the bot is in, such as `"minecraft:overworld"` |
 | [`portals`](movement/portals.md) | `portals()` | both ends of the nether portals the bot went through, newest first |
-| [`placed_scaffold`](movement/placed_scaffold.md) | `placed_scaffold(forget=True)` | where the script's walks placed scaffold blocks since it last asked, and forgets them unless `forget` is false |
+| [`placed_scaffold`](movement/placed_scaffold.md) | `placed_scaffold(forget=True, keep=())` | where the script's walks placed scaffold blocks since it last asked, and forgets them, but those in `keep`, unless `forget` is false |
 
 ## The world around
 

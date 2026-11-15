@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -366,8 +367,14 @@ public final class ScriptRun {
 	 * since ({@link #blockChanged}); none noted after.
 	 */
 	public List<Pos> takePlaced() {
-		List<Pos> out = this.placed.stream().filter(this::disown).toList();
-		this.placed.clear();
+		return this.takePlaced(pos -> false);
+	}
+
+	/** As {@link #takePlaced}, but those {@code keep} matches stay noted (#671). */
+	public List<Pos> takePlaced(Predicate<Pos> keep) {
+		this.placed.removeIf(pos -> !this.owns(pos));
+		List<Pos> out = List.copyOf(this.placed);
+		this.placed.removeIf(pos -> !keep.test(pos) && this.disown(pos));
 		return out;
 	}
 

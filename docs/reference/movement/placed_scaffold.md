@@ -1,7 +1,7 @@
 # `placed_scaffold`
 
 ```text
-placed_scaffold(forget=True)
+placed_scaffold(forget=True, keep=())
 ```
 
 Where the script's walks placed scaffold blocks since it last asked, and forgets them.
@@ -11,6 +11,7 @@ Where the script's walks placed scaffold blocks since it last asked, and forgets
 | Name | Type | Default | Meaning |
 |------|------|---------|---------|
 | `forget` | bool | `True` | false gives them without forgetting them, so the next call gives them again (#657) |
+| `keep` | list of [`Pos`](../types/pos.md) | `()` | with `forget` true, those in it stay listed and only the rest are forgotten (#671); it does not change what is given |
 
 ## Returns
 
@@ -28,7 +29,7 @@ No, it is done at once.
 
 The positions belong to the script run: a new script starts with none. They are saved with the bot, so a script resumed after a reload still gets what it placed before, each in its dimension. The bot keeps the last 4096 for a script that never asks.
 
-Only blocks that have not changed since the bot placed them are given: one mined, replaced or changed in any way since, by the bot, another bot, a player, a piston or anything else, is left out, even where the same block is back in its place, so a script takes back only the bot's own. [`lib.trees.fell_whole`](../modules/lib/trees.md) takes back what it gives with `lib.trees.take_back(keep)`, `keep` what `placed_scaffold(False)` gave before it began, so what earlier walks placed stays standing and listed for the caller.
+Only blocks that have not changed since the bot placed them are given: one mined, replaced or changed in any way since, by the bot, another bot, a player, a piston or anything else, is left out, even where the same block is back in its place, so a script takes back only the bot's own. [`lib.trees.fell_whole`](../modules/lib/trees.md) takes back what it gives with `lib.trees.take_back(keep)`, `keep` what `placed_scaffold(False)` gave before it began, so what earlier walks placed stays standing and listed for the caller; once done it forgets what it could not reach with `placed_scaffold(keep=keep)`, so a later `take_back` does not try it again.
 
 ## Examples
 

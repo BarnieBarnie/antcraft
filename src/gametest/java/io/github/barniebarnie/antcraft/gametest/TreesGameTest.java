@@ -530,16 +530,45 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 2);
 		expect(helper, bot, "import lib.trees\nspots = [" + spots + "]\ncalls = [0]\n"
-			+ "def one(forget=True):\n    calls[0] += 1\n    return [p for p in spots[:calls[0]] if block(p).id == 'minecraft:dirt']\n"
+			+ "def one(forget=True, keep=None):\n    if keep != None:\n        return []\n    calls[0] += 1\n    return [p for p in spots[:calls[0]] if block(p).id == 'minecraft:dirt']\n"
 			+ "lib.trees.placed_scaffold = one\nlib.trees.take_back()\nprint(count('dirt'), calls[0])\n"
 			+ "calls[0] = 0\n"
-			+ "def air(forget=True):\n    calls[0] += 1\n    return [Pos" + at(helper, 1, 3, 1) + "]\n"
+			+ "def air(forget=True, keep=None):\n    if keep != None:\n        return []\n    calls[0] += 1\n    return [Pos" + at(helper, 1, 3, 1) + "]\n"
 			+ "lib.trees.placed_scaffold = air\nlib.trees.take_back()\nprint(calls[0])\n",
 			List.of("6 7", "1"), () -> {
 				for (int x = 1; x <= 6; x++) {
 					helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(x, 1, 5));
 				}
 			});
+	}
+
+	/**
+	 * take_back forgets the scaffold it could not reach once it is done, but what keep lists (#671): the bot pillars out of a
+	 * bedrock pit on one cobblestone, which the test then seals in bedrock. take_back(keep) with it kept leaves it listed;
+	 * take_back() tries it, cannot reach it and forgets it, so a later take_back does not try it again.
+	 */
+	@GameTest(maxTicks = 60)
+	public void takeBackForgetsTheScaffoldItCouldNotReach(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				for (int y = 1; y <= 2; y++) {
+					helper.setBlock(x, y, z, x == 2 && z == 2 ? Blocks.AIR : Blocks.BEDROCK);
+				}
+			}
+		}
+		helper.setBlock(2, 0, 2, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 4));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		helper.onEachTick(() -> {
+			if (WorkGameTest.printed(bot).contains("out")) {
+				helper.setBlock(2, 2, 2, Blocks.BEDROCK);
+			}
+		});
+		expect(helper, bot, "import lib.trees\ngoto(Pos" + at(helper, 2, 3, 4) + ")\nprint('out')\nwait(2)\n"
+			+ "k = placed_scaffold(False)\nlib.trees.take_back(k)\nkept = placed_scaffold(False) == k\n"
+			+ "lib.trees.take_back()\nprint(len(k), kept, placed_scaffold(False))\n",
+			List.of("out", "1 True []"), () -> helper.assertBlockPresent(Blocks.COBBLESTONE, 2, 1, 2));
 	}
 
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
