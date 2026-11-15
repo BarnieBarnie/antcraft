@@ -151,7 +151,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 	 * Dirt in every slot of the row from (1, 1, 1) to (20, 1, 1), more than two calls skip: add_chest gives blocked and
 	 * leaves the row's next slot where it was, so repeated calls do not creep the depot along the row (#765).
 	 */
-	// Measured: passes at tick 21 (red: next 9 then 18).
+	// Measured: passes at tick 21 (red: next 9 then 18). The script finishes in the wide structure too: 5 of 5 runs (#774).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 45)
 	public void aBlockedRowLeavesItsNextSlot(GameTestHelper helper) {
 		for (int x = 1; x <= 20; x++) {
@@ -159,14 +159,14 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
-		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
 			d = lib.depot.depot("wood")
 			a = lib.depot.add_chest("wood", "logs")
 			first = d.get("next")
 			b = lib.depot.add_chest("wood", "logs")
 			print(a["reason"], b["reason"], first, d.get("next"))
 			""");
-		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("blocked blocked 0 0"), "printed"));
+		helper.succeedWhen(() -> finished(helper, job, bot, List.of("blocked blocked 0 0")));
 	}
 
 	/**

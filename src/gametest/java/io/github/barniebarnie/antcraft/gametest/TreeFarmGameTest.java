@@ -793,7 +793,10 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// placed one beside and over it, and the bot died of the drop down; 3 of 120 after #736 (all passed, at up to 6439),
 	// and 2 out_of_reach of a log some 10 up the dead run could not reach either. take_back now stops a round that
 	// climbs: 96 of 96 in 4 runs of 24, 2981 to 6076, no second death. With take_back dropping off a lone block (#758):
-	// 120 of 120 in 5 runs of 24, 2825 to 5428 (3734 on average), no out_of_reach.
+	// 120 of 120 in 5 runs of 24, 2825 to 5428 (3734 on average), no out_of_reach. How often it drops off (#774, counted
+	// in memory in temporary copies killed 12 up): 120 of 120 in 5 runs of 24, 2803 to 5401 (3757 on average); 39 copies
+	// dropped off, 55 times in all (1 to 3 a copy), from 4 to 17 blocks over the ground, and 1 copy still stopped a round
+	// that climbed.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWholeByABotThatDiesUpIt(GameTestHelper helper) {
 		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);

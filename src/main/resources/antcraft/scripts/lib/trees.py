@@ -378,7 +378,8 @@ def _drop_off(q):
     not (deaths cost only items): mine will not break the block underfoot there, so its walk placed a block beside and over
     q to mine it from, and that block stayed in the air once take_back stopped climbing (#758). From the ground, mine
     pillars up to q, and the next round takes that pillar back from its top. ponytail: leaves under q count as a floor,
-    though they decay (#673)."""
+    though they decay (#673). No mine option does both steps: a walk that places nothing reaches q from the ground only
+    where q is at most 6 over it, 10 of 55 drop-offs in the killed giant jungle copies, the rest 7 to 17 (#774)."""
     feet = pos()
     if q.y != feet.y - 1 or abs(q.x - feet.x) > 1 or abs(q.z - feet.z) > 1:
         return
