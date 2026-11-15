@@ -1008,19 +1008,28 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 */
 	// Measured: passes at tick 1876 to 2085 in 3 runs, the felling within HARVEST_FACTOR of 1400. Since #752 (#761),
 	// 1880 to 2227 in 6 copies at once, the felling 1398 to 1745 (1556 on average): HARVEST stays 1400, the mean of 39
-	// seeded mangroves rather than this one tree.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4500)
+	// seeded mangroves rather than this one tree. Since #768 harvest mines roots up to 2 out of the cell too, and the
+	// felling took 2150 once, past 1400's window (#782): 33 temporary copies at once, seeds 0 to 10, three each, felled
+	// 437 to 3123 ticks, 1724 on average over the 25 trees of 8 seeds (seed 0 1336 to 1664, 16 logs; the logs 6 to 26,
+	// 16.25 on average), so HARVEST 1700 (LOGS keeps its 16 of 188 trees). This test passed at tick 1915 alongside them,
+	// 2187 alone, once 2400 (#782). Seed 4 never grew from the test's advanceTree; seeds 2 and 6 left their logs unstored.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4800)
 	public void aMangroveFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		farm(helper, "mangrove_propagule", Items.MANGROVE_PROPAGULE, Blocks.MANGROVE_PROPAGULE, Blocks.MANGROVE_LOG,
-			Items.MANGROVE_LOG, 23, 0, 1400, 0, 11, List.of(new BlockPos(11, 1, 9)));
+			Items.MANGROVE_LOG, 23, 0, MANGROVE_HARVEST, 0, 11, List.of(new BlockPos(11, 1, 9)));
 	}
 
-	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
+	/**
+	 * HARVEST of each giant and of mangrove is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669,
+	 * mangrove #782).
+	 */
 	@GameTest(maxTicks = 10)
 	public void aGiantsHarvestIsWhatItsFarmTestMeasures(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
-		script(helper, bot, "print(jobs.wood_farm.HARVEST['giant_spruce'], jobs.wood_farm.HARVEST['giant_jungle'])");
-		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of(GIANT_SPRUCE_HARVEST + " " + GIANT_JUNGLE_HARVEST), "said"));
+		script(helper, bot, "print(jobs.wood_farm.HARVEST['giant_spruce'], jobs.wood_farm.HARVEST['giant_jungle'],"
+			+ " jobs.wood_farm.HARVEST['minecraft:mangrove_propagule'])");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot),
+			List.of(GIANT_SPRUCE_HARVEST + " " + GIANT_JUNGLE_HARVEST + " " + MANGROVE_HARVEST), "said"));
 	}
 
 	/**
@@ -1050,6 +1059,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
 	private static final int GIANT_SPRUCE_HARVEST = 3200;
 	private static final int GIANT_JUNGLE_HARVEST = 2250;
+	/** jobs.wood_farm's HARVEST of a mangrove, the mean of 25 seeded trees (#782). */
+	private static final int MANGROVE_HARVEST = 1700;
 	/** The ticks a giant jungle takes the bot killed up the tree, which its farm test fells within HARVEST_FACTOR of (#761). */
 	private static final int KILLED_GIANT_JUNGLE_HARVEST = 3100;
 

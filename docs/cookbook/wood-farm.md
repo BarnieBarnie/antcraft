@@ -65,7 +65,7 @@ A sapling grows on random ticks: each tick, the game gives one to `randomTickSpe
 | acacia | 8 (some 200 to 450) | 300 | 63 |
 | cherry | 16 (some 400 to 1250) | 850 | 22 |
 | poplar | 15 (measured in the game; some 400 to 1000 ticks) | 600 | 31 |
-| mangrove | 16 (measured in the game: felled and its roots mined, some 250 to 3550 ticks, 1400 on average) | 1400 | 13 |
+| mangrove | 16 (measured in the game: felled and its roots, up to 2 out of the cell, mined, some 450 to 3100 ticks, 1700 on average, #782) | 1700 | 11 |
 | dark oak | 40.5 (as pale oak: the same trees) | 950 | 20 |
 | pale oak | 40.5 (some 650 to 1200) | 950 | 20 |
 | giant spruce | 84 (measured: a trunk of 24 took some 3050 to 3300 ticks) | 3200 | 5 |

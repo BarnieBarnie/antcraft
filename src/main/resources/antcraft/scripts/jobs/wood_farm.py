@@ -44,12 +44,13 @@ GROWTH = 2 * 7 * 4096 / 3
 # the spruce 3050 to 3300, 3200 on average, the jungle 2000 to 2950, 2250 on average, its mean with no death (2300 to
 # 3400 killed up the tree, 3750 with 36 giants felled at once, which its test checks on its own, #761, #769). A mangrove
 # of 16 logs on average (measured over 188 trees) felled and its roots mined took some 250 to 3550 ticks in 39 seeded
-# trees of TreeFarmGameTest, 1400 on average (#650).
+# trees of TreeFarmGameTest, 1400 on average (#650); since harvest also mines roots up to 2 out of the cell (#768), 437 to
+# 3123, 1724 on average, in 25 trees of 8 seeds felled as the mangrove's farm test (#782), so 1700.
 # A farm learns its own (harvest, #653); these are its start.
 HARVEST = {"minecraft:oak_sapling": 200, "minecraft:birch_sapling": 250, "minecraft:spruce_sapling": 350,
            "minecraft:jungle_sapling": 350, "minecraft:acacia_sapling": 300, "minecraft:cherry_sapling": 850,
            "minecraft:dark_oak_sapling": 950, "minecraft:pale_oak_sapling": 950, "minecraft:poplar_sapling": 600,
-           "minecraft:mangrove_propagule": 1400, "giant_spruce": 3200, "giant_jungle": 2250}
+           "minecraft:mangrove_propagule": 1700, "giant_spruce": 3200, "giant_jungle": 2250}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
 WAIT = 100  # ticks between looks at the farm while nothing has grown
