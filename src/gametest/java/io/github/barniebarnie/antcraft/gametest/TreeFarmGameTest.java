@@ -731,8 +731,12 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 386 to 421 (red: printed False out_of_reach at tick 115). Not slower since (#727): 28 runs
 	// each at #685 (29f149c9) and at 7002a68a, alone and in 8 and 16 copies at once, spread alike: 313 to 991 then (and
 	// one False out_of_reach at 1123 among 16 copies), 291 to 1130 now; medians 568 then, 513 now. The first 386 to 421
-	// was a few lucky runs. maxTicks 2300, about twice the slowest pass (1130).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 2300)
+	// was a few lucky runs. The slow ones (#736): a step up off the vines that broke leaves let go of the vines while it dug,
+	// slid down, at times to the floor, and planned again from there; and a pillar in a vine grown since the path was
+	// planned jumped only from the ground, where a jump only climbs, until the step timed out. Since: 290 to 528 in 34 runs,
+	// alone and in 16 copies at once, the spread left from the routes the crown leaves, and a path that places more dirt
+	// than the bot carries planned again half way. maxTicks 1100, about twice the slowest pass.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1100)
 	public void mineReachesALogBuriedInTheTopOfAGiantJunglesCrown(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(10, 1, 8);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {

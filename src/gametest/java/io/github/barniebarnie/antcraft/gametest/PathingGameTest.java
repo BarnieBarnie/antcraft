@@ -297,6 +297,68 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The vines up the bedrock wall of {@link #climbsVinesUpAWall}, with dirt two high on the wall's near edge, at
+	 * (1..6, 4..5, 4): the bot climbs to the top of the vines and, hanging there, digs out the step onto the wall without
+	 * sliding down. It let go while it dug, slid off the vines and planned again from the floor, which made the buried log
+	 * of a giant jungle's crown take twice as long in some runs (#736).
+	 */
+	// Measured: passes at tick 92 (red: slid down the vines to y 2.3 at tick 39).
+	@GameTest(maxTicks = 200)
+	public void digsOffVinesWithoutSlidingDown(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 4, 6, 3, 6, Blocks.BEDROCK);
+		fill(helper, 1, 4, 4, 6, 5, 4, Blocks.DIRT);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(3, y, 3, Blocks.VINE.defaultBlockState().setValue(VineBlock.SOUTH, true));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		BlockPos target = helper.absolutePos(new BlockPos(3, 4, 5));
+		GameTests.walkTo(bot, target, 0);
+		BotScripts.failOnError(helper, bot);
+		double floor = helper.absolutePos(BlockPos.ZERO).getY();
+		boolean[] up = {false};
+		helper.onEachTick(() -> {
+			up[0] |= bot.getY() >= floor + 3;
+			if (up[0] && bot.getY() < floor + 2.5) {
+				helper.fail("slid down the vines to y " + (bot.getY() - floor));
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().equals(target) && bot.onGround(),
+			"at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO))));
+	}
+
+	/**
+	 * A bedrock shaft four high round (3, 1, 3): the bot with dirt pillars up out of it, and as it lands on its first block
+	 * a vine grows in where it stands, on the south side. The search plans no pillar out of a vine, but vines grow after it
+	 * planned, and on one a jump only climbs: the bot that jumped only from the ground never rose high enough to place its
+	 * block, in some runs of the buried log of a giant jungle's crown (#736).
+	 */
+	// Measured: passes at tick 32 (red: still at y 2 at its limit of 100, the step timed out and no way planned on).
+	@GameTest(maxTicks = 70)
+	public void pillarsUpOutOfAVineGrownSincePlanned(GameTestHelper helper) {
+		room(helper, 0);
+		for (Direction side : Direction.Plane.HORIZONTAL) {
+			BlockPos wall = new BlockPos(3, 1, 3).relative(side);
+			fill(helper, wall.getX(), 1, wall.getZ(), wall.getX(), 4, wall.getZ(), Blocks.BEDROCK);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+		BlockPos target = helper.absolutePos(new BlockPos(3, 4, 3));
+		GameTests.walkTo(bot, target, 0);
+		BotScripts.failOnError(helper, bot);
+		BlockPos vine = helper.absolutePos(new BlockPos(3, 2, 3));
+		boolean[] grown = {false};
+		helper.onEachTick(() -> {
+			if (!grown[0] && bot.onGround() && bot.blockPosition().equals(vine)) {
+				grown[0] = true;
+				helper.setBlock(3, 2, 3, Blocks.VINE.defaultBlockState().setValue(VineBlock.SOUTH, true));
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(grown[0] && GameTests.walked(bot) && bot.blockPosition().equals(target) && bot.onGround(),
+			"at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO))));
+	}
+
+	/**
 	 * A stone walkway three over the floor at z 3 from x 1 to 6, its block at x 3 jungle leaves with no log in range
 	 * (distance 7), which decay at a random tick, and a way round them at z 4: the bot goes round and never stands on
 	 * the leaves. Felling a giant jungle, it walked on leaves that decayed under it once the trunk was gone (#673).

@@ -200,6 +200,7 @@ public class PathFollower {
 					this.path = null; // another bot placed scaffolding here since: plan around it
 					return Status.RUNNING;
 				}
+				this.holdOn();
 				this.breaker.tick(level, pos, true); // into the inventory, as a build needs what its walk broke back at once
 				return Status.RUNNING;
 			}
@@ -207,6 +208,7 @@ public class PathFollower {
 		if (step.type() != MoveType.PILLAR) {
 			for (BlockPos pos : step.places()) {
 				if (!world.canStandOn(pos)) {
+					this.holdOn();
 					Placed placed = this.placeBlock(level, pos);
 					if (placed == Placed.NO_SCAFFOLD) {
 						this.path = null; // out of scaffold blocks: plan again without placing
@@ -437,6 +439,17 @@ public class PathFollower {
 	}
 
 	/**
+	 * Keeps the bot from sliding down the ladder or vines it hangs on while it breaks or places a block for its next step,
+	 * as a player sneaking holds on: a mob cannot, so it let go and slid off the vines while it dug (#736).
+	 */
+	private void holdOn() {
+		if (this.bot.onClimbable()) {
+			Vec3 v = this.bot.getDeltaMovement();
+			this.bot.setDeltaMovement(v.x, Math.max(0, v.y), v.z);
+		}
+	}
+
+	/**
 	 * Climbs up or down a ladder: steers to the middle of it without the move control, which overshoots, as a bot on a
 	 * ladder that bumps into a wall climbs up it. Jumps to climb up; slides down by itself, sneaking so scaffolding
 	 * lets it through.
@@ -542,8 +555,10 @@ public class PathFollower {
 		if (world.canStandOn(below)) {
 			return; // placed; wait to land on it
 		}
-		if (this.bot.onGround() || this.bot.isInWater()) {
-			this.bot.getJumpControl().jump(); // afloat, it swims up until high enough to place in the water under it
+		// Afloat, it swims up until high enough to place in the water under it; in a vine grown since the path was planned,
+		// a jump only climbs, so it climbs on until it is (#736).
+		if (this.bot.onGround() || this.bot.isInWater() || this.bot.onClimbable()) {
+			this.bot.getJumpControl().jump();
 		}
 		if (this.bot.getY() >= below.getY() + 1.0) {
 			if (this.placeBlock(level, below) == Placed.NO_SCAFFOLD) {
