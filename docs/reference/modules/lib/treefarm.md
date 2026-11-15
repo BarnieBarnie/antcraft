@@ -91,7 +91,7 @@ Fells the cell's tree whole from the lowest log `grown` sees, the lowest over a 
 
 ## `plant(kind, p, radius=32)`
 
-Plants a sapling of `kind` at the sapling spot `p`, the bot carrying one: first puts dirt under it where there is none (`soil(ground, radius=32)`), as a path may dig the dirt out or put a block there (#764), mining what is there and getting a dirt it lacks within `radius` with [`lib.get`](get.md), then mines what stands at `p` and places the sapling. `build_cell`, `harvest` and the wood farm's tending plant with it.
+Plants a sapling of `kind` at the sapling spot `p`, the bot carrying one: first puts dirt under it where there is none (`soil(ground, radius=32)`), as a path may dig the dirt out or put a block there (#764), mining what is there (with a pickaxe it gets or takes from a chest where it has none, such as for stone; #767) and getting a dirt it lacks within `radius` with [`lib.get`](get.md), never from under a cell of a farm in `memory["cells"]` ([`lib.cells`](cells.md)), built or next to build (`outside_cells()`, which narrows [`lib.find.WHERE`](find.md) for that get), then mines what stands at `p` and places the sapling. `build_cell`, `harvest` and the wood farm's tending plant with it.
 
 - **Returns** a [`result()`](result.md): ok, or the reason of the step that failed with `at`.
 

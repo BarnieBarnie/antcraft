@@ -9,8 +9,11 @@
 # delete it and the default comes back when the server starts.
 
 import lib.area
+import lib.cells
+import lib.find
 import lib.get
 import lib.terrain
+import lib.tools
 import lib.trees
 from lib.result import result
 
@@ -179,20 +182,41 @@ def build_cell(kind, low, high):
 
 def soil(ground, radius=32):
     """Puts dirt at ground, a sapling spot's floor, where there is none: mines what is there, such as stone or a block a
-    path put in, getting the dirt it lacks within radius (lib.get). Gives result(): ok, or the reason with at."""
+    path put in, with a pickaxe it gets where it has none (lib.get.ensure_tool), getting the dirt it lacks within radius
+    (lib.get), none from under the farm's cells (outside_cells). Gives result(): ok, or the reason with at."""
     if lib.trees.is_kind(ground, "#minecraft:dirt"):
         return result()
     if not block(ground).is_air:
         r = mine(ground)
+        if not r and r.reason == "no_tool" and "#minecraft:mineable/pickaxe" in block(ground).tags:
+            # Stone under a spot: a pickaxe got or taken from a chest, as build gets one before build_cell (#767).
+            t = lib.get.ensure_tool("pickaxe", 1, lib.tools.tier_for(ground), radius)
+            if not t["ok"]:
+                return t
+            r = mine(ground)
         if not r and r.reason != "target_gone":
             return result(r.reason, ground)
     if not count(DIRT):
-        # ponytail: lib.get may dig the dirt it gets from under another spot; the farm keeps a stack (#762), so seldom.
-        r = lib.get.get(DIRT, 1, radius)
+        # Never from under the farm's cells (#767): lib.get digs only where lib.find.WHERE allows, for this get.
+        where = lib.find.WHERE
+        edge = lib.find.resolve()
+        out = outside_cells()
+        lib.find.WHERE = lambda p: (edge is None or edge(p)) and out(p)
+        try:
+            r = lib.get.get(DIRT, 1, radius)
+        finally:
+            lib.find.WHERE = where
         if not r["ok"]:
             return r
     r = place(ground, DIRT)
     return result() if r else result(r.reason, ground)
+
+
+def outside_cells():
+    """A function of a Pos: whether it lies outside the columns of every farm's built cells and of the cell each builds
+    next (lib.cells, memory["cells"]), so a dirt get takes none from under a spot or floor of the farm (#767)."""
+    boxes = [lib.cells.cell(n, i) for n in memory.get("cells", {}) for i in lib.cells.built(n) + [lib.cells.next(n)]]
+    return lambda p: not any([a.x <= p.x <= b.x and a.z <= p.z <= b.z for a, b in boxes])
 
 
 def plant(kind, p, radius=32):
