@@ -77,6 +77,7 @@ nav = [
       "reference/modules/lib/terrain.md",
       "reference/modules/lib/cells.md",
       "reference/modules/lib/treefarm.md",
+      "reference/modules/lib/food.md",
       "reference/modules/colony/common.md",
     ] },
     { "Writing a page" = "reference/template.md" },

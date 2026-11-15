@@ -9,6 +9,7 @@
 
 import lib.bootstrap
 import lib.dig
+import lib.food
 import lib.tools
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool
@@ -52,6 +53,7 @@ def strip_mine(item, n, y, radius, facing):
             r = lib.dig.stairs_to(y, way) if way is not None else result()
         if not r["ok"] or count(item) >= n or way is None:
             break
+        lib.food.upkeep(radius)
         # A new pickaxe where the one it holds would break in the branch: stone from the cobblestone it dug.
         r = ensure_tool("pickaxe", USES, tier(item), radius)
         if r["ok"]:

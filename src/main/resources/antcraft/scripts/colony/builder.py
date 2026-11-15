@@ -24,6 +24,7 @@
 from colony.common import core, settle, store
 from lib.borrow import give_back
 from lib.build import materials
+import lib.food
 from lib.stock import take_up_to
 
 
@@ -78,6 +79,7 @@ def build_job(job):
 
 settle()  # a bot in no colony says so and stops
 while True:
+    lib.food.upkeep()
     job = take_job("build")
     if job is None:
         wait(40)

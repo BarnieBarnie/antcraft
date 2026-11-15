@@ -26,6 +26,7 @@
 from colony.common import core, settle, store
 
 core()  # a bot in no colony says so and stops, before the imports below spend its player's instruction budget
+import lib.food
 import lib.get
 import lib.mine
 import lib.shaft
@@ -171,6 +172,7 @@ def mine(job):
 
 settle()
 while True:
+    lib.food.upkeep()
     if site() is None:
         warn("there is no spot near the core to dig a shaft")
         wait(1200)

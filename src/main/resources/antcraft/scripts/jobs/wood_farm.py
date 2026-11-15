@@ -16,6 +16,7 @@ import lib.bootstrap
 import lib.borrow
 import lib.cells
 import lib.depot
+import lib.food
 import lib.project
 import lib.stock
 import lib.terrain
@@ -243,6 +244,7 @@ def farm(kind, name, size, radius):
     told = {}
     backoff = 0  # rounds until stocked is tried again
     while True:
+        lib.food.upkeep(radius)
         # What the setup steps' walks placed is not the round's; what the round's walks place (the felling's and the
         # build's own taken back by them, sweep, tend, get, reap's retry) comes down at its end (#654).
         placed_scaffold()

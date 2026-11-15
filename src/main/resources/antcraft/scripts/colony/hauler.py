@@ -17,6 +17,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from colony.common import core, settle
+import lib.food
 import lib.stock
 
 
@@ -48,6 +49,7 @@ def haul(job):
 
 settle()  # a bot in no colony says so and stops
 while True:
+    lib.food.upkeep()
     job = take_job("haul")
     if job is None:
         wait(40)

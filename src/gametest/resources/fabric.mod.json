@@ -14,6 +14,7 @@
 			"io.github.barniebarnie.antcraft.gametest.SenseGameTest",
 			"io.github.barniebarnie.antcraft.gametest.FightGameTest",
 			"io.github.barniebarnie.antcraft.gametest.HungerGameTest",
+			"io.github.barniebarnie.antcraft.gametest.FoodGameTest",
 			"io.github.barniebarnie.antcraft.gametest.MoveGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ReachableGameTest",
 			"io.github.barniebarnie.antcraft.gametest.WorkGameTest",

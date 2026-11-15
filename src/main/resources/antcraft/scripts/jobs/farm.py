@@ -12,6 +12,7 @@
 # delete it and the default comes back when the server starts.
 
 import lib.farm
+import lib.food
 import lib.stock
 from lib.borrow import borrowed, give_back, turned
 from lib.get import ensure_tool, get, make_cost
@@ -102,6 +103,7 @@ def run(low, high, crop="wheat", rounds=1):
         while rounds == 0 or n < rounds:
             if n > 0:
                 ripened(low, high)
+            lib.food.upkeep()
             r = farm(low, high, c, kept)
             n += 1
             if not r["ok"]:

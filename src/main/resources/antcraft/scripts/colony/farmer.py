@@ -12,6 +12,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 from colony.common import core, settle, store
+import lib.food
 from lib.borrow import give_back
 from lib.farm import CROPS, POISON, SOIL, harvest, nearest_first, plant, rows, till
 from lib.stock import take_up_to
@@ -32,6 +33,7 @@ core()  # a bot in no colony says so and stops
 from lib.get import ensure_tool
 settle()
 while True:
+    lib.food.upkeep()
     spots = farm_spots()
     soil = len([s for s in spots if block(s).id in SOIL])
     if soil:

@@ -11,6 +11,7 @@ from colony.common import core, settle
 core()  # a bot in no colony says so and stops, before it loads the rest of the library
 
 import lib.find
+import lib.food
 import lib.stock
 import lib.trees
 from lib.borrow import give_back
@@ -81,6 +82,7 @@ settle()
 SKIP = 1200  # ticks an unreachable sapling is left before the idle lumberjack tries it again
 failed = {}  # entity id of a sapling it could not walk to: the game time it tried
 while True:
+    lib.food.upkeep()
     # Remnants too: what lib.trees.logs leaves of a tree it took the bottom logs of for an axe.
     tree = next_tree(remnants=True)
     if tree is None:
