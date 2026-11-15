@@ -21,6 +21,8 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -885,6 +887,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(WorkGameTest.printed(bot), List.of("True"), "printed");
 			helper.assertBlockPresent(Blocks.OAK_SLAB, 2, 1, 3);
 		});
+	}
+
+	/**
+	 * A bot with Jump Boost II on honey beside a block two high (#665): the boost lifts its jump from the honey over the
+	 * block's top, so it steps straight up rather than down onto the floor and round by the stone step, as a bot without
+	 * the boost does ({@link #stepsUpByWayOfTheFloorFromABottomSlab}).
+	 */
+	// Measured: passes at tick 13 (red: stepped down onto the floor at tick 15).
+	@GameTest(maxTicks = 30)
+	public void stepsUpFromHoneyWithJumpBoost(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(2, 1, 3, Blocks.HONEY_BLOCK);
+		fill(helper, 3, 1, 3, 3, 2, 3, Blocks.STONE);
+		helper.setBlock(4, 1, 3, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 2, 3.5));
+		bot.addEffect(new MobEffectInstance(MobEffects.JUMP_BOOST, 1200, 1));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 3, 3)), 0);
+		BlockPos origin = helper.absolutePos(BlockPos.ZERO);
+		helper.onEachTick(() -> {
+			if (bot.onGround() && bot.getY() < origin.getY() + 1.5) {
+				helper.fail("stepped down onto the floor");
+			}
+		});
+		helper.succeedWhen(() -> helper.assertValueEqual(WorkGameTest.printed(bot), List.of("True"), "printed"));
 	}
 
 	/**

@@ -33,8 +33,16 @@ public interface WorldView {
 	 * jump factor (0.5 for honey), less 0.08 gravity a tick and 2% drag, until it falls; about 1.25 for a factor of 1.
 	 */
 	static double jumpHeight(float factor) {
+		return jumpHeight(factor, 0);
+	}
+
+	/**
+	 * Like {@link #jumpHeight(float)}, for a mob whose Jump Boost adds {@code boost} to the jump's speed after the
+	 * block's factor: 0.1 a level, as vanilla's {@code getJumpBoostPower} (#665).
+	 */
+	static double jumpHeight(float factor, float boost) {
 		double height = 0;
-		for (double speed = 0.42 * factor; speed > 0; speed = (speed - 0.08) * 0.98) {
+		for (double speed = 0.42 * factor + boost; speed > 0; speed = (speed - 0.08) * 0.98) {
 			height += speed;
 		}
 		return height;

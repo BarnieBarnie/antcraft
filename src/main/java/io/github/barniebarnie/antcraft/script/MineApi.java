@@ -113,7 +113,7 @@ public final class MineApi {
 			// Made anew each tick: it remembers chunks, which may unload between ticks.
 			LoadedBlocks loaded = new LoadedBlocks(this.bot.level());
 			long[] reads = {0};
-			LoadedWorldView world = new LoadedWorldView(new LevelWorldView(this.bot.level(), this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()),
+			LoadedWorldView world = new LoadedWorldView(new LevelWorldView(this.bot.level(), this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()).jumpBoost(this.bot.getJumpBoostPower()),
 				pos -> ++reads[0] > 0 && loaded.loaded(pos) != null);
 			boolean done = step(this.search, world, reads, SenseApi.SCAN_BUDGET, this.bot.level().getGameTime(), this.bot);
 			this.run.charge((reads[0] + SenseApi.BLOCKS_PER_INSTRUCTION - 1) / SenseApi.BLOCKS_PER_INSTRUCTION);

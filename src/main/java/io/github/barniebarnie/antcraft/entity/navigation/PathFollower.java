@@ -263,7 +263,7 @@ public class PathFollower {
 		}
 		this.breaker.reset();
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep);
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep).jumpBoost(this.bot.getJumpBoostPower());
 		PathFinder.Options options = this.options();
 		this.path = null;
 		this.search = PathFinder.search(world, feet(this.bot), this.goal, options);
@@ -281,7 +281,7 @@ public class PathFollower {
 	 */
 	public PathFinder.Search plan(Goal goal) {
 		ServerLevel level = (ServerLevel) this.bot.level();
-		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep);
+		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), this.othersScaffold(level)).placingOnly(this.mayPlaceAt).keeping(this.keep).jumpBoost(this.bot.getJumpBoostPower());
 		LoadedBlocks loaded = new LoadedBlocks(level);
 		return PathFinder.search(new LoadedWorldView(world, pos -> loaded.loaded(pos) != null), feet(this.bot), goal, this.options());
 	}

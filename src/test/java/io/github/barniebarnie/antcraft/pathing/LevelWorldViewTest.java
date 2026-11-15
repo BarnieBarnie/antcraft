@@ -59,6 +59,17 @@ class LevelWorldViewTest {
 		assertEquals(1.25, WorldView.jumpHeight(Blocks.STONE.getJumpFactor()), 0.01);
 	}
 
+	/**
+	 * Jump Boost adds 0.1 a level to a jump's speed after the block's factor, as vanilla's getJumpBoostPower does
+	 * (#665): with Jump Boost II a jump from honey clears a block over the honey's top, without it falls well short.
+	 */
+	@Test
+	void aJumpFromHoneyWithJumpBoostTwoClearsABlock() {
+		assertTrue(WorldView.jumpHeight(Blocks.HONEY_BLOCK.getJumpFactor(), 0.2f) >= 1);
+		assertTrue(WorldView.jumpHeight(Blocks.HONEY_BLOCK.getJumpFactor(), 0) < 1);
+		assertEquals(WorldView.jumpHeight(1), WorldView.jumpHeight(1, 0));
+	}
+
 	@Test
 	void aTrapdoorOpensByHandButAnIronOneDoesNot() {
 		assertTrue(LevelWorldView.isOpenable(Blocks.OAK_TRAPDOOR.defaultBlockState()));

@@ -34,6 +34,7 @@ public class LevelWorldView implements WorldView {
 	private Predicate<BlockPos> kept = pos -> false;
 	/** The level's blocks, looked up fast (see {@link LoadedBlocks}). */
 	private final LoadedBlocks blocks;
+	private float jumpBoost;
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
@@ -47,6 +48,12 @@ public class LevelWorldView implements WorldView {
 	/** Paths place scaffold only where {@code mayPlace} says, such as nowhere a build puts a block. */
 	public LevelWorldView placingOnly(Predicate<BlockPos> mayPlace) {
 		this.mayPlace = mayPlace;
+		return this;
+	}
+
+	/** Jumps are planned with this added to their speed: the bot's Jump Boost, its {@code getJumpBoostPower} (#665). */
+	public LevelWorldView jumpBoost(float boost) {
+		this.jumpBoost = boost;
 		return this;
 	}
 
@@ -83,7 +90,7 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public float jumpTop(BlockPos pos) {
-		return this.floorTop(pos) + (float) WorldView.jumpHeight(this.blocks.get(pos).getBlock().getJumpFactor());
+		return this.floorTop(pos) + (float) WorldView.jumpHeight(this.blocks.get(pos).getBlock().getJumpFactor(), this.jumpBoost);
 	}
 
 	/**
