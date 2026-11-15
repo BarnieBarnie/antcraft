@@ -233,10 +233,11 @@ def resolve(item, n, radius):
     if item.startswith("#"):
         return result("no_recipe", None, {item: n - count(item)})
     tried = []
+    table = find_nearest("crafting_table", radius=lib.craft.REACH)
     for _ in range(ROUNDS):
-        p = lib.craft.plan(item, n)
+        p = plan_by(table, item, n)
         while p["gather"] and intermediate(p, item, chests, tried):
-            p = lib.craft.plan(item, n)
+            p = plan_by(table, item, n)
         if item in p["gather"]:
             return result("no_recipe", None, {item: n - count(item)})
         if p["no_tool"]:
@@ -259,7 +260,24 @@ def resolve(item, n, radius):
             r = get(raw, count(key(raw)) + k, radius)
             if not r["ok"]:
                 return r
+    back_to(table)
     return lib.craft.craft_here(item, n)
+
+
+def back_to(table):
+    """Walks back to table, the crafting table within lib.craft.REACH where get began, where taking from a chest or
+    gathering took the bot out of its reach (#692). lib.craft.plan and craft_here look for a table within REACH of where
+    the bot stands, so from beside a chest far from it they would plan to craft another, and fail no_logs with no wood;
+    whether they did hung on where the bot stood to open the chest, which of several equal paths it walked. ponytail: a
+    furnace within reach where get began is not walked back to; it is put down and mined back instead."""
+    if table is not None and not lib.craft.table_near():
+        goto(table, 2)
+
+
+def plan_by(table, item, n):
+    """lib.craft.plan(item, n) once the bot is back by table (back_to)."""
+    back_to(table)
+    return lib.craft.plan(item, n)
 
 
 def intermediate(p, item, chests, tried):

@@ -686,6 +686,29 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A crafting table by the bot, three iron ingots in a chest across the area, more than lib.craft.REACH from the table
+	 * wherever the bot stands to open it, no log or tree (#692): get takes the iron and walks back to the table for the
+	 * bucket, where it planned again from beside the chest, saw no table within reach and failed no_logs crafting one.
+	 */
+	// Measured: passes at tick 70 (red: printed False no_logs 0 at tick 45).
+	@GameTest(maxTicks = 140)
+	public void walksBackToTheTableAfterTakingFromAFarChest(GameTestHelper helper) {
+		Container chest = chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.IRON_INGOT, 3));
+		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		run(helper, bot, """
+			from lib.get import get
+			r = get("bucket")
+			print(r["ok"], r["reason"], count("bucket"))
+			""");
+		failOnOtherPrint(helper, bot, "True None 1");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 1");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
 	 * 4 birch planks in a chest, no log or tree in the area (#580): the plan picks oak planks for a crafting table, whose
 	 * recipe takes any planks, so get borrows the birch ones.
 	 */
