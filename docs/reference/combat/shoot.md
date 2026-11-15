@@ -33,7 +33,7 @@ The bot aims as a good player would: above the target by how far the arrow drops
 
 The bot keeps its distance: while the target is further than 16 blocks or out of sight, it walks closer, as `goto` walks, digging and pillaring where it must; while the target is nearer than 6 blocks, it backs off. While a creeper near it has its fuse lit, the bot backs off out of the blast as in [Fighting creepers](../../features/bots.md#fighting-creepers), drawing and shooting on meanwhile. The bot's own melee fight holds off while it shoots, so it does not run at the mob with a sword.
 
-Any arrow shoots: plain, tipped or spectral; a crossbow's fireworks do not. Arrows the bot shot cannot be picked up again. It may attack the same targets as [`attack`](attack.md): hostile mobs and untamed, unnamed animals by default, others only where the config allows them. [`attack`](attack.md) on a creeper shoots it this way when the bot carries a bow or crossbow and arrows.
+Any arrow shoots: plain, tipped or spectral; a crossbow's fireworks do not. An arrow the bot shot can be picked up again, as a player's: one stuck in a block, by the bot with [`pick_up`](../inventory/pick_up.md) or by a player (#720); one shot with Infinity, or a crossbow's extra Multishot arrows, cannot. It may attack the same targets as [`attack`](attack.md): hostile mobs and untamed, unnamed animals by default, others only where the config allows them. [`attack`](attack.md) on a creeper shoots it this way when the bot carries a bow or crossbow and arrows.
 
 A bot at or below `botFleeHealth` with a hostile mob near it flees instead: the action ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)).
 

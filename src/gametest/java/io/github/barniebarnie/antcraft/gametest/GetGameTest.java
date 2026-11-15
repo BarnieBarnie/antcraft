@@ -11,12 +11,14 @@ import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
@@ -149,6 +151,47 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"])
 			""");
 		measured(helper, bot);
+	}
+
+	/**
+	 * Flint, a stick and a feather in a chest by a crafting table, nothing carried (#720): get crafts four arrows from them.
+	 */
+	// Measured: passes at tick 27.
+	@GameTest(maxTicks = 60)
+	public void getArrowsFromFlintSticksAndFeathersInAChest(GameTestHelper helper) {
+		chest(helper, new ItemStack(Items.FLINT), new ItemStack(Items.STICK), new ItemStack(Items.FEATHER));
+		helper.setBlock(4, 1, 3, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, """
+			from lib.get import get
+			r = get("arrow", 4)
+			print(r["ok"], count("arrow") >= 4)
+			""");
+		failOnOtherPrint(helper, bot, "True True");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
+	 * Two gravel and a Fortune III shovel carried, which always drops flint from gravel (#720): get gathers two flint by
+	 * digging the gravel, and make_cost of them is a number.
+	 */
+	// Measured: passes at tick 48.
+	@GameTest(maxTicks = 100)
+	public void getFlintDigsGravel(GameTestHelper helper) {
+		helper.setBlock(5, 1, 2, Blocks.GRAVEL);
+		helper.setBlock(5, 1, 5, Blocks.GRAVEL);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ItemStack shovel = new ItemStack(Items.IRON_SHOVEL);
+		shovel.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.FORTUNE), 3);
+		bot.getInventory().addItem(shovel);
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			c = make_cost("flint", 2)
+			r = get("flint", 2)
+			print(c is not None, r["ok"], count("flint"))
+			""");
+		failOnOtherPrint(helper, bot, "True True 2");
+		helper.succeedWhen(() -> printed(helper, bot, "True True 2"));
 	}
 
 	/**

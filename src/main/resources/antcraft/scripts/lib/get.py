@@ -148,6 +148,10 @@ SOURCES = {
                              near="minecraft:dirt"),
     "minecraft:sand": Source(dig_up("minecraft:sand"), "shovel", "hand", lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK,
                              near="minecraft:sand"),
+    # Gravel drops flint one time in ten without fortune, else itself (#720). ponytail: only the exposed gravel within
+    # radius, the gravel it drops is not put down and dug again.
+    "minecraft:flint": Source(breaking("minecraft:flint", "minecraft:gravel", "no_block"), "shovel", "hand",
+                              10 * (lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK), near="minecraft:gravel"),
 }
 for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
                                   ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 400),

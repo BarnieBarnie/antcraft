@@ -8,3 +8,5 @@ accessible	field	net/minecraft/world/level/block/entity/AbstractFurnaceBlockEnti
 # shoot fires a bot's bow or crossbow as the item would for a player, with the arrows the bot carries (#707).
 accessible	method	net/minecraft/world/item/ProjectileWeaponItem	shoot	(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/InteractionHand;Lnet/minecraft/world/item/ItemStack;Ljava/util/List;FFZLnet/minecraft/world/entity/LivingEntity;)V
 accessible	method	net/minecraft/world/item/ProjectileWeaponItem	draw	(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Ljava/util/List;
+# pick_up takes back an arrow stuck in a block that a player could pick up (#720).
+accessible	method	net/minecraft/world/entity/projectile/arrow/AbstractArrow	isInGround	()Z

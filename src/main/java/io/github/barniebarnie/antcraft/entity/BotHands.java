@@ -29,6 +29,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.Inventory;
@@ -408,6 +409,16 @@ public final class BotHands {
 	public static void collect(AntBot bot, ItemEntity entity) {
 		if (entity.isAlive() && !entity.hasPickUpDelay()) {
 			InventoryCarrier.pickUpItem((ServerLevel) bot.level(), bot, bot, entity);
+		}
+	}
+
+	/** Takes the arrow of {@code arrow}, stuck in a block, into the bot's inventory where it fits, as a player would (#720). */
+	public static void collect(AntBot bot, AbstractArrow arrow) {
+		ItemStack stack = arrow.getPickupItemStackOrigin().copy();
+		if (arrow.isAlive() && bot.getInventory().canAddItem(stack)) {
+			bot.take(arrow, 1);
+			bot.getInventory().addItem(stack);
+			arrow.discard();
 		}
 	}
 }

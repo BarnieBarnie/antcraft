@@ -633,6 +633,27 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health"));
 	}
 
+	/**
+	 * An arrow the bot shot lies on the ground for {@code pick_up} to take back, as a player's (#720): its one arrow bounces
+	 * off an invulnerable husk, so {@code shoot} ends with {@code no_item}, and {@code pick_up} returns it.
+	 */
+	// Measured: passes at tick 78.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 160)
+	public void anArrowTheBotShotCanBePickedUp(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 18);
+		husk.setNoAi(true);
+		husk.setPermanentlyInvulnerable(true);
+		AntBot bot = archer(helper, 12, 10, 1);
+		ScriptRun run = run(helper, bot, """
+			r = shoot(entities('husk', 16)[0])
+			print(r.reason, count('arrow'))
+			wait(30)
+			p = pick_up('arrow', 16)
+			print(p.ok, p.reason, count('arrow'))
+			""");
+		succeedWhenPrinted(helper, bot, run, List.of("no_item 0", "True None 1"));
+	}
+
 	/** {@code shoot(entity, min_health=...)} ends with {@code hurt} once the bot's health is under it, as {@code attack} does (#724). */
 	// Measured: passes at tick 47.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)

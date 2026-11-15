@@ -4,7 +4,7 @@
 pick_up(what=None, radius=8)
 ```
 
-Walks to dropped items around the bot and takes them.
+Walks to dropped items around the bot, and arrows stuck in blocks that a player could pick up, and takes them.
 
 ## Parameters
 
@@ -27,7 +27,7 @@ One instruction, the call itself. Its walks plan paths as [`goto`](../movement/g
 
 ## Description
 
-It goes to the nearest matching item first, then to the nearest from where it then stands. By an item still in the air, or one just dropped, it waits until it may be taken. An item it could not walk to, or got to twice without taking, it skips. Items that do not fit in its inventory stay where they lie. What it took is how many more matching items the bot carries than when it started, so items it walks over on the way count too.
+It goes to the nearest matching item first, then to the nearest from where it then stands. By an item still in the air, or one just dropped, it waits until it may be taken. An item it could not walk to, or got to twice without taking, it skips. Items that do not fit in its inventory stay where they lie. An arrow stuck in a block counts as a dropped arrow: one the bot or a player shot from a bow or crossbow without Infinity, such as those [`shoot`](../combat/shoot.md) misses with (#720); not a skeleton's. What it took is how many more matching items the bot carries than when it started, so items it walks over on the way count too.
 
 A `radius` below 0 or above 16, a malformed selector, or a name or tag the game does not know stops the script with an error.
 

@@ -8,6 +8,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
@@ -110,6 +111,11 @@ public final class Bow {
 			return false;
 		}
 		item.shoot(level, bot, InteractionHand.MAIN_HAND, weapon, arrows, speed, 1.0F, bow, null);
+		// As a player's arrow, the bot's may be picked up again (#720); an infinite or multishot one stays CREATIVE_ONLY.
+		for (AbstractArrow arrow : level.getEntitiesOfClass(AbstractArrow.class, bot.getBoundingBox().inflate(2),
+			arrow -> arrow.getOwner() == bot && arrow.tickCount == 0 && arrow.pickup == AbstractArrow.Pickup.DISALLOWED)) {
+			arrow.pickup = AbstractArrow.Pickup.ALLOWED;
+		}
 		if (bow) {
 			level.playSound(null, bot.getX(), bot.getY(), bot.getZ(), SoundEvents.ARROW_SHOOT, SoundSource.NEUTRAL, 1.0F,
 				1.0F / (bot.getRandom().nextFloat() * 0.4F + 1.2F) + 0.5F);

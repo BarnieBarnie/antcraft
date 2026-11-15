@@ -32,6 +32,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.food.FoodConstants;
 import net.minecraft.world.food.FoodProperties;
@@ -813,7 +814,7 @@ public final class WorkApi {
 		private final int radius;
 		/** Items the bot could not walk to. */
 		private final Set<Integer> unreachable = new HashSet<>();
-		private @Nullable ItemEntity goal;
+		private @Nullable Entity goal;
 		private ScriptRun.@Nullable Action walk;
 		/** How often the bot got to the current goal without taking it: it walks right onto it the second time. */
 		private int arrivals;
@@ -832,10 +833,24 @@ public final class WorkApi {
 			this.before = BotHands.count(bot, item);
 		}
 
-		private List<ItemEntity> around() {
+		/**
+		 * What {@code entity} holds for the bot to take: a dropped item's stack, or the arrow of one stuck in a block that a
+		 * player could pick up (#720); null for anything else.
+		 */
+		private static @Nullable ItemStack held(Entity entity) {
+			if (entity instanceof ItemEntity dropped) {
+				return dropped.getItem();
+			}
+			return entity instanceof AbstractArrow arrow && arrow.pickup == AbstractArrow.Pickup.ALLOWED && arrow.isInGround()
+				? arrow.getPickupItemStackOrigin() : null;
+		}
+
+		private List<Entity> around() {
 			double r2 = (double) this.radius * this.radius;
-			return this.bot.level().getEntitiesOfClass(ItemEntity.class, new AABB(this.center, this.center).inflate(this.radius),
-				entity -> entity.isAlive() && entity.distanceToSqr(this.center) <= r2 && this.item.test(entity.getItem()));
+			return this.bot.level().getEntities((Entity) null, new AABB(this.center, this.center).inflate(this.radius), entity -> {
+				ItemStack held = held(entity);
+				return held != null && entity.isAlive() && entity.distanceToSqr(this.center) <= r2 && this.item.test(held);
+			});
 		}
 
 		@Override
@@ -844,16 +859,20 @@ public final class WorkApi {
 				return true;
 			}
 			AABB grab = this.bot.getBoundingBox().inflate(GRAB, 0.5, GRAB);
-			List<ItemEntity> around = this.around();
-			for (ItemEntity entity : around) {
+			List<Entity> around = this.around();
+			for (Entity entity : around) {
 				if (entity.getBoundingBox().intersects(grab)) {
-					BotHands.collect(this.bot, entity);
+					if (entity instanceof ItemEntity dropped) {
+						BotHands.collect(this.bot, dropped);
+					} else {
+						BotHands.collect(this.bot, (AbstractArrow) entity);
+					}
 				}
 			}
 			this.taken = Math.max(0, BotHands.count(this.bot, this.item) - this.before);
-			around = around.stream().filter(ItemEntity::isAlive).toList();
-			List<ItemEntity> fitting = around.stream()
-				.filter(entity -> !this.unreachable.contains(entity.getId()) && this.bot.getInventory().canAddItem(entity.getItem()))
+			around = around.stream().filter(Entity::isAlive).toList();
+			List<Entity> fitting = around.stream()
+				.filter(entity -> !this.unreachable.contains(entity.getId()) && this.bot.getInventory().canAddItem(held(entity)))
 				.sorted(Comparator.comparingDouble(entity -> entity.distanceToSqr(this.bot)))
 				.toList();
 			if (fitting.isEmpty()) {
@@ -865,7 +884,7 @@ public final class WorkApi {
 				this.arrivals = 0;
 			}
 			if (this.walk == null) {
-				if (this.arrivals > 0 && (this.goal.hasPickUpDelay() || !this.goal.onGround())) {
+				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround())) {
 					return false; // next to it, waiting for it to land and for its pickup delay to end
 				}
 				if (this.arrivals >= 2) {
@@ -896,7 +915,7 @@ public final class WorkApi {
 		 * Done: no item left that fits and can be reached, of the matching ones {@code around}. Items it could not walk to
 		 * only fail the action when it took none.
 		 */
-		private boolean finish(List<ItemEntity> around) {
+		private boolean finish(List<Entity> around) {
 			this.stopWalk();
 			if (around.stream().anyMatch(entity -> !this.unreachable.contains(entity.getId()))) {
 				this.result = Result.fail(Result.NO_SPACE, this.taken);
