@@ -35,8 +35,11 @@ final class BotBody implements MoveApi.Body {
 	BotBody(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
+		// Where the bot is now, over the edge of the only block it rests on, its feet count as beside it (#668): that spot
+		// is no stand to break the block from either, so the walk drops off rather than arrive there and get nowhere (#753).
 		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken)
-			&& (!feet.below().equals(target) || this.landsUnhurt(target));
+			&& (!feet.below().equals(target) || this.landsUnhurt(target))
+			&& !(this.restsOnlyOn(target) && !this.landsUnhurt(target) && feet.equals(PathFollower.feet(bot)));
 	}
 
 	/**
@@ -121,8 +124,7 @@ final class BotBody implements MoveApi.Body {
 
 	@Override
 	public boolean inReach(Pos target) {
-		BlockPos pos = blockPos(target);
-		return this.reach(target).isReached(PathFollower.feet(this.bot)) && !(this.restsOnlyOn(pos) && !this.landsUnhurt(pos));
+		return this.reach(target).isReached(PathFollower.feet(this.bot));
 	}
 
 	/**

@@ -1344,20 +1344,42 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	/**
 	 * The bot rests on a lone stone block 4 over the floor, where {@code kept_void} has air, over its edge with its feet in
 	 * the block beside, which has a ledge 2 below it, so its feet count as there (see PathFollower.feet), not over the
-	 * stone: from there the stone is in sight, so its walks to it arrive at once, but the bot may not break the only block
-	 * it rests on with a fall under it that hurts (BotBody.inReach, #668). It walks there twice, then is blocked saying
-	 * the walk got nowhere (#486), and the stone stays. It waits to land first, as just spawned it plans from the air.
+	 * stone. It may not break the only block it rests on with a fall under it that hurts (BotBody.inReach, #668), and the
+	 * walk no longer counts that spot as in reach either: it drops to the ledge and clears the stone from there (#753).
+	 * Before, the stone in sight made both walks arrive at once and the build was blocked, "got nowhere twice" (#486). It
+	 * waits to land first, as just spawned it plans from the air.
 	 */
-	// Measured: passes at tick 9.
-	@GameTest(maxTicks = 20)
-	public void buildWhoseWalkGetsNowhereTwiceIsBlocked(GameTestHelper helper) {
+	// Measured: passes at tick 27 (red: False blocked 0, the walk got nowhere twice, at tick 10).
+	@GameTest(maxTicks = 60)
+	public void buildOnTheOnlyBlockItRestsOnDropsOffAndClearsIt(GameTestHelper helper) {
 		helper.setBlock(4, 5, 3, Blocks.STONE);
 		helper.setBlock(3, 3, 3, Blocks.STONE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.8, 6, 3.5));
 		bot.getInventory().addItem(new ItemStack(Items.IRON_PICKAXE));
-		expect(helper, bot, "wait(5)\nr = build('antcraft-gametest:kept_void', " + at(helper, 3, 5, 3) + ")\nprint(r.ok, r.reason, r.value)\nprint(r.detail)\n",
-			List.of("False blocked 0", "the walk to Pos" + at(helper, 4, 5, 3) + " got nowhere twice"),
-			() -> helper.assertBlockPresent(Blocks.STONE, 4, 5, 3));
+		expect(helper, bot, "wait(5)\nr = build('antcraft-gametest:kept_void', " + at(helper, 3, 5, 3) + ")\nprint(r.ok, r.reason, r.value)\n",
+			List.of("True None 0"), () -> helper.assertBlockPresent(Blocks.AIR, 4, 5, 3));
+	}
+
+	/**
+	 * The bot shut in a box of barrier, roof and all, with dirt, the cobble step outside it: no walk reaches the step, and
+	 * the detail says only that, as no spot of the blueprint is beside the bot to keep its dirt off (#753). Before, any
+	 * walk that failed with dirt carried blamed the blueprint's spots.
+	 */
+	// Measured: passes at tick 4 (red: the detail blamed the blueprint, tick 5).
+	@GameTest(maxTicks = 10)
+	public void buildWalledInByBarrierDoesNotBlameTheBlueprint(GameTestHelper helper) {
+		for (int x = 0; x <= 2; x++) {
+			for (int y = 0; y <= 3; y++) {
+				for (int z = 4; z <= 6; z++) {
+					helper.setBlock(x, y, z, x == 1 && z == 5 && y < 3 ? Blocks.AIR : Blocks.BARRIER);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 5);
+		carryCobbleStep(bot, 2);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 4, 1, 2) + ")\nprint(r.ok, r.reason, r.value)\nprint(r.detail)\n",
+			List.of("False blocked 0", "no walk reaches Pos" + at(helper, 4, 1, 2)));
 	}
 
 	/**

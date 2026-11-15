@@ -62,9 +62,10 @@ The `detail` of `blocked`, with the position of the step it stopped at:
 |---|---|
 | `no dirt to pillar up with, to reach Pos(x, y, z)` | no walk reaches the step, and the bot carries no dirt to pillar up with |
 | `no walk reaches Pos(x, y, z), and dirt goes on no spot the blueprint puts a block or air in (structure_void leaves room for it)` | no walk reaches the step, though the bot carries dirt: the dirt may not go where the blueprint has a block or air, so a schematic that fills its box with air leaves it no room; `structure_void` there does |
+| `no walk reaches Pos(x, y, z)` | no walk reaches the step, though the bot carries dirt, and no spot of the blueprint is beside it: something else walls it in, such as barrier (#753) |
 | `minecraft:armor_stand stands at Pos(x, y, z), where a block goes` | a player, mob or bot (its entity type) still stands where a block goes after two seconds |
 | `minecraft:water is in the way at Pos(x, y, z)` | a fluid fills a spot to clear |
-| `the walk to Pos(x, y, z) got nowhere twice` | the bot walked to the step twice and is still out of reach, such as when the only block it rests on is the one to break, with a fall under it that hurts |
+| `the walk to Pos(x, y, z) got nowhere twice` | the bot walked to the step twice and is still out of reach. Where the only block it rests on is the one to break, with a fall under it that hurts, it is not: the walk drops off and it breaks the block from below, as `mine` does (#753) |
 | `no step left can be placed, the next is at Pos(x, y, z)` | steps remain, but none the bot can place now, such as a portal block, which no item places |
 | `not_loaded` | a chunk the blueprint is in is not loaded and the bot could not get to it |
 | `wrong_dimension` | `at` is in another dimension than the bot's |

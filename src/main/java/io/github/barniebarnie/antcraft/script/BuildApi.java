@@ -433,13 +433,21 @@ public final class BuildApi {
 
 		/**
 		 * Why no walk reached the step last walked to: no dirt to pillar up with, or, carrying some, that scaffold goes on no
-		 * spot the blueprint puts a block or air in.
+		 * spot the blueprint puts a block or air in, where such a spot is beside the bot; else, as walled in by something
+		 * else, only that no walk reaches it (#753).
 		 */
 		private String unreachable() {
 			Pos step = EntityInfo.pos(this.walked == null ? WorkApi.blockPos(this.at) : this.walked);
 			boolean dirt = this.bot.getMainHandItem().is(PathFollower.FAST_SCAFFOLD_BLOCKS) || this.bot.getInventory().hasAnyMatching(stack -> stack.is(PathFollower.FAST_SCAFFOLD_BLOCKS));
-			return dirt ? "no walk reaches " + step + ", and dirt goes on no spot the blueprint puts a block or air in (structure_void leaves room for it)"
-				: "no dirt to pillar up with, to reach " + step;
+			if (!dirt) {
+				return "no dirt to pillar up with, to reach " + step;
+			}
+			// ponytail: only the blocks round its feet, where it would pillar or bridge first; a spot farther along the way
+			// that kept the dirt off is not blamed.
+			BlockPos feet = PathFollower.feet(this.bot);
+			boolean spotBeside = BlockPos.betweenClosedStream(feet.offset(-1, -1, -1), feet.offset(1, 1, 1)).anyMatch(this.spots::containsKey);
+			return spotBeside ? "no walk reaches " + step + ", and dirt goes on no spot the blueprint puts a block or air in (structure_void leaves room for it)"
+				: "no walk reaches " + step;
 		}
 
 		private boolean finish(@Nullable String reason) {
