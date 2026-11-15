@@ -408,6 +408,41 @@ class PathFinderTest {
 		assertFalse(path.complete(), "swam under water from one waterfall to the other: " + path.steps());
 	}
 
+	/**
+	 * A step never stands on a block an earlier step of its path broke, nor walks through one it placed: felling a giant
+	 * spruce, a path pillared up through the crown, breaking the block over its head, then stepped back up onto that
+	 * block, and the bot jumped at the air there until the step timed out (#687). Paths through scattered dirt to goals
+	 * all over it, each replayed block by block.
+	 */
+	@Test
+	void aStepStandsOnNoBlockItsPathBrokeNorWalksThroughOneItPlaced() {
+		java.util.Random random = new java.util.Random(687);
+		GridWorld world = GridWorld.flat(8);
+		for (BlockPos pos : BlockPos.betweenClosed(-6, 1, -6, 6, 9, 6)) {
+			if (random.nextInt(10) < 3 && !pos.equals(START) && !pos.equals(START.above())) {
+				world.set(pos.getX(), pos.getY(), pos.getZ(), 'D');
+			}
+		}
+		for (int i = 0; i < 60; i++) {
+			BlockPos goal = new BlockPos(random.nextInt(13) - 6, 1 + random.nextInt(10), random.nextInt(13) - 6);
+			assertEveryStepCanBeTaken(world, find(world, goal, FULL));
+		}
+	}
+
+	/** Each step, its breaks and places done as PathFollower does them, ends standing on a block with room for the bot. */
+	private static void assertEveryStepCanBeTaken(GridWorld world, Path path) {
+		java.util.Map<BlockPos, Boolean> solid = new java.util.HashMap<>();  // what the path broke (false) and placed (true)
+		for (Step step : path.steps()) {
+			step.breaks().forEach(pos -> solid.put(pos, false));
+			step.places().forEach(pos -> solid.put(pos, true));
+			BlockPos to = step.to();
+			assertTrue(solid.getOrDefault(to.below(), world.canStandOn(to.below())), "nothing under " + to + ": " + path.steps());
+			for (BlockPos pos : List.of(to, to.above())) {
+				assertFalse(solid.getOrDefault(pos, !world.isPassable(pos)), "a block at " + pos + ": " + path.steps());
+			}
+		}
+	}
+
 	@Test
 	void pillarsUpToHighGoal() {
 		GridWorld world = GridWorld.flat(5);

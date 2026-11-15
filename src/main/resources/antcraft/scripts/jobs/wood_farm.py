@@ -33,14 +33,14 @@ GROWTH = 2 * 7 * 4096 / 3
 # 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs; the others are that per log times their mean logs from
 # lib.treefarm.KINDS's trunks and branches: oak 5.5, spruce 6.5, jungle 8, acacia 9, cherry 13.5, dark and pale oak 34
 # (four trunks and branches), poplar 15 (measured). The giants are measured in WoodFarmGameTest, once fell_whole took its
-# scaffold back on its way down (#677): a giant spruce with a trunk of 24 took some 4100 to 4700 ticks (since its
-# path search breaks ties the same way whatever else is in its queue, #682; 3000 to 3800 before, by luck of a heap's order), a giant jungle of
+# scaffold back on its way down (#677): a giant spruce with a trunk of 24 took some 3200 to 3500 ticks, once a path
+# no longer stood on a block it broke on the way (#687; 4100 to 4700 with the bot falling off such a step), a giant jungle of
 # 67 logs (a trunk of 16 and its branches) some 2100 to 2600 (#669).
 # A farm learns its own (harvest, #653); these are its start.
 HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
            "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
            "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
-           "giant_spruce": 4400, "giant_jungle": 2600}
+           "giant_spruce": 3300, "giant_jungle": 2600}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
 WAIT = 100  # ticks between looks at the farm while nothing has grown

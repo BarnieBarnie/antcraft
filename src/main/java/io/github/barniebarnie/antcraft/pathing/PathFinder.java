@@ -78,7 +78,15 @@ public final class PathFinder {
 		}
 	}
 
-	private record Node(BlockPos pos, double cost, Node parent, Step step) {
+	/** {@code edited}: the nearest node before this one whose step broke or placed a block, to look back along (see {@link #edited}). */
+	private record Node(BlockPos pos, double cost, Node parent, Step step, @Nullable Node edited) {
+		Node(BlockPos pos, double cost, Node parent, Step step) {
+			this(pos, cost, parent, step, parent == null ? null : parent.edits() ? parent : parent.edited);
+		}
+
+		boolean edits() {
+			return this.step != null && (!this.step.breaks().isEmpty() || !this.step.places().isEmpty());
+		}
 	}
 
 	private record Entry(Node node, double priority, long seq) {
@@ -217,6 +225,7 @@ public final class PathFinder {
 				if (node.cost > this.bestCost.getOrDefault(node.pos, BLOCKED)) {
 					continue; // stale queue entry
 				}
+				this.planner.node = node;
 				boolean inWater = this.world.isWater(node.pos);
 				// Afloat in water whose cover the path broke, such as a pond under a lid it dug into, counts as at the surface.
 				boolean afloat = this.planner.swimmable(node.pos) || inWater && brokenOnTheWay(node, node.pos.above());
@@ -247,17 +256,25 @@ public final class PathFinder {
 	}
 
 	/** Whether the path to {@code node} broke {@code pos} and left it broken, so a goal's sight sees through it. */
-	// ponytail: walks the path back per block a sight ray crosses, only once a node is within reach; a per-node set if it shows in profiles.
 	private static boolean brokenOnTheWay(Node node, BlockPos pos) {
-		for (Node n = node; n.step != null; n = n.parent) {
+		return edited(node, pos) == Boolean.FALSE;
+	}
+
+	/**
+	 * What the path to {@code node} left at {@code pos}: true where it last placed a block, false where it last broke
+	 * one, null where it did neither and the world's block stands.
+	 */
+	// ponytail: walks back the steps that broke or placed a block, per block asked; a per-node set if it ever shows in profiles.
+	private static @Nullable Boolean edited(Node node, BlockPos pos) {
+		for (Node n = node.edits() ? node : node.edited; n != null; n = n.edited) {
 			if (n.step.places().contains(pos)) {
-				return false;
-			}
-			if (n.step.breaks().contains(pos)) {
 				return true;
 			}
+			if (n.step.breaks().contains(pos)) {
+				return false;
+			}
 		}
-		return false;
+		return null;
 	}
 
 	private static Path toPath(BlockPos start, Node end, boolean complete, int expanded) {
@@ -467,7 +484,12 @@ public final class PathFinder {
 			return b.build();
 		}
 
+		/** Open in the world as the path so far left it (see {@link PathFinder#edited}). */
 		private boolean open(BlockPos pos) {
+			Boolean edited = edited(this.node, pos);
+			if (edited != null) {
+				return !edited;
+			}
 			return this.world.isPassable(pos) && (!this.world.isHazard(pos) || this.world.isPortal(pos) && this.entersPortal(pos));
 		}
 
@@ -489,7 +511,15 @@ public final class PathFinder {
 			return this.open(pos) || this.world.canOpen(pos, dir);
 		}
 
+		/**
+		 * A floor in the world as the path so far left it: not one it broke, such as the block over its head as it
+		 * stepped up, which a later step up stood on (#687), but one it placed.
+		 */
 		private boolean canStand(BlockPos pos) {
+			Boolean edited = edited(this.node, pos);
+			if (edited != null) {
+				return edited;
+			}
 			return this.world.canStandOn(pos) && !this.world.isHazard(pos);
 		}
 
@@ -506,18 +536,13 @@ public final class PathFinder {
 			return false;
 		}
 
-		// ponytail: walks the whole path back per neighbour, only when a block is to be placed; a per-node set if it ever shows in profiles.
 		private boolean solid(BlockPos pos, List<BlockPos> breaking) {
 			if (breaking.contains(pos)) {
 				return false;
 			}
-			for (Node n = this.node; n.step != null; n = n.parent) {
-				if (n.step.places().contains(pos)) {
-					return true;
-				}
-				if (n.step.breaks().contains(pos)) {
-					return false;
-				}
+			Boolean edited = edited(this.node, pos);
+			if (edited != null) {
+				return edited;
 			}
 			return !this.world.isPassable(pos) && !this.world.isHazard(pos);
 		}

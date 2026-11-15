@@ -892,6 +892,34 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
 	}
 
+	/**
+	 * Up through dirt as through a giant spruce's crown, a path stepped up breaking the block over its head, up again
+	 * beside it, and back up onto the block it broke, and the bot fell into the gap, 2 blocks, and jumped there until
+	 * the step's time ran out (#687). Now it places a block there, or goes another way, and never lands lower than it was.
+	 */
+	// Measured: passes at tick 32 (red: fell at tick 63).
+	@GameTest(maxTicks = 80)
+	public void stepsUpOntoNoBlockItsPathBroke(GameTestHelper helper) {
+		helper.setBlock(2, 1, 3, Blocks.DIRT);
+		helper.setBlock(2, 3, 3, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		helper.setBlock(3, 2, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+		BotScripts.failOnError(helper, bot);
+		double[] highest = {1};
+		helper.onEachTick(() -> {
+			if (bot.onGround()) {
+				double y = bot.getY() - helper.absolutePos(BlockPos.ZERO).getY();
+				if (y < highest[0] - 0.5) {
+					helper.fail("fell from y " + highest[0] + " to " + y + " at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+				}
+				highest[0] = Math.max(highest[0], y);
+			}
+		});
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(2, 4, 3)), 0);
+		succeedWhenAt(helper, bot, new BlockPos(2, 4, 3));
+	}
+
 	/** The height of the top block of the pillar of {@link #upAPillar}. */
 	private static int topOf(GameTestHelper helper) {
 		int y = 12;

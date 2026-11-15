@@ -556,8 +556,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 4604 to 4862 (red: died at 4496; with 31 dirt, hurt at tick 3005 to 3640).
 	// Since #677 (scaffold taken back on the way down), 3441 to 4217 in 15 runs. Since #682, which breaks ties in the path
 	// search the same way whatever else is in its queue, 4511 to 4990 in 7 at once (the felling 4088 to 4582; 4149 to 4653
-	// in 7 more).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
+	// in 7 more). Since #687, where a path no longer stands on a block it broke (the climb to the top stand did, and the bot
+	// fell off it), 3623 to 3912 in 14 runs, 7 at once (the felling 3207 to 3495).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
 			GIANT_SPRUCE_HARVEST, false);
@@ -593,7 +594,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
-	private static final int GIANT_SPRUCE_HARVEST = 4400;
+	private static final int GIANT_SPRUCE_HARVEST = 3300;
 	private static final int GIANT_JUNGLE_HARVEST = 2600;
 
 	/** How far a giant's felling ticks may be from its HARVEST, either way. */
