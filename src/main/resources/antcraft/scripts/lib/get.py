@@ -67,6 +67,16 @@ class Source:
         itself is None then (#649); as a raw item of a plan it still costs it, as if there were some."""
         return self.near is None or lib.find.nearest(self.near, radius, self.keep) is not None
 
+    def least(self, n):
+        """A bound cost never goes under, for make_cost's limit, without the ore scan (#582): the estimate each, or for
+        a source with ore, where cost may mine an exposed vein from where it stands (#681), the mining of each with the
+        fastest pickaxe tier that drops it, where that is less."""
+        if self.ore is None:
+            return self.estimate * n
+        tiers = lib.tools.TIERS
+        ok = tiers[:tiers.index(self.tier) + 1] if self.tier in tiers else tiers
+        return min(self.estimate, min([lib.cost.BREAK["ore"][t] for t in ok])) * n
+
     def cost(self, n, radius, start=None):
         """(ticks, tier) to get n: estimate each, and deep(y) once more where none of ore is exposed within radius (one
         flight of stairs reaches a vein); the tier of a pickaxe source is that of the nearest exposed ore block
@@ -333,8 +343,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once. tools holds the tool
     costs found so far, by tool id, for one options, and under "chests" the chests of lib.stock, scanned once. With
-    limit, None as soon as the cost is likely to be over it: a source costs about its estimate each, so the ore scans
-    and tool costs of a dear one are left out (#582)."""
+    limit, None as soon as the cost is sure to be over it: a source costs at least its least, so the ore scans and tool
+    costs of a dear one are left out (#582, #681)."""
     if key(item) in GETTING:
         return None
     tools = {} if tools is None else tools
@@ -346,7 +356,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         if gather:
             ticks += stored(p, item, gather, radius, tools)
         need = {}
-        for raw, k in gather.items():
+        # The raw items with no ore first, so the bound of an ore's least counts their cost (#681).
+        for raw, k in sorted(gather.items(), key=lambda g: key(g[0]) in SOURCES and SOURCES[key(g[0])].ore is not None):
             if k <= 0:
                 continue
             s = SOURCES.get(key(raw))
@@ -365,10 +376,8 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
                     continue
             if itself and not s.there(radius):
                 return None
-            # Coal may come as charcoal for less than its estimate. ponytail: an exposed ore near costs less than its
-            # estimate too (#661, #675), so a dear tier may be left out that its ore in sight made cheaper; a bound of
-            # its mining alone would scan for ore on every options (#582).
-            if limit is not None and ticks + (0 if key(raw) == COAL else s.estimate * k) > limit:
+            # Coal may come as charcoal for less than its least.
+            if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k)) > limit:
                 return None
             # The source's walk starts at the chest get took the rest from.
             c, tier = s.cost(k, radius, chests[0] if chests else None)
@@ -476,7 +485,7 @@ def options(kind, uses=1, tier=None, radius=32):
     for chest, t in in_chests(kind, ok, need, radius):
         found.append((lib.cost.walk(pos(), chest) + work(kind, uses, t or "wooden"), "chest", t, chest))
     # The hand and the carried tools never fail, so ensure_tool tries nothing after them: a tier dearer to make is left
-    # out, told by its raw items' estimates before their ore scans (a diamond axe for a few logs, #582).
+    # out, told by its raw items' least costs before their ore scans (a diamond axe for a few logs, #582, #681).
     sure = min([o[0] for o in found if o[1] in ("hand", "carried")] or [None])
     costs = {}
     # Lowest tier first, each up to the cheapest make so far (#595): a dearer tier would only follow it in the list.

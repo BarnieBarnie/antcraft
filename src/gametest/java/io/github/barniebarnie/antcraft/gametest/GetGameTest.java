@@ -237,6 +237,26 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A stone pickaxe carried, a vein of three iron ore in sight (#681): make_cost of three raw iron with a limit of what it
+	 * costs without one is that cost, as options' limit keeps a tier whose ore in sight makes it cheapest. The limit's
+	 * bound was the source's estimate (60 each, 180), more than the vein costs, so it was None.
+	 */
+	@GameTest(maxTicks = 50)
+	public void aLimitKeepsAVeinInSightThatCostsLessThanItsEstimate(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.IRON_ORE);
+		helper.setBlock(5, 1, 4, Blocks.IRON_ORE);
+		helper.setBlock(4, 1, 5, Blocks.IRON_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		run(helper, bot, """
+			from lib.get import make_cost
+			c = make_cost("raw_iron", 3)
+			print(c < 180, make_cost("raw_iron", 3, limit=c) == c)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True True"));
+	}
+
+	/**
 	 * A vein of two coal ore and an oak in reach, four sticks, a stone pickaxe and a furnace carried (#663): get of eight
 	 * torches digs the vein (wood_for_coal gives 0) and then, with the vein gone and the coal source failing, eight more
 	 * burn the oak's logs into charcoal. Each route's make_cost is within {@link #COST_FACTOR} of the ticks get takes, and
