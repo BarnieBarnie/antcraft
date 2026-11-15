@@ -135,6 +135,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private final SayBubble sayBubble = new SayBubble(this);
 	/** What keeps the bot out of danger whatever its script does; see {@link Reflexes}. */
 	private final Reflexes reflexes = new Reflexes(this);
+	/** How many ways off its kite goal planned, for {@link #getKitePlans}. */
+	int kitePlans;
 	/** What the script's move actions walk with; made when a script first moves. */
 	private MoveApi.@Nullable Body body;
 	/** Until which {@link #tickCount} currents leave the bot alone; see {@link #holdAgainstCurrent()}. Not saved. */
@@ -404,6 +406,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	/** Its reflexes, which the kite goal asks whether it may move the bot (#725). */
 	Reflexes reflexes() {
 		return this.reflexes;
+	}
+
+	/** How many ways off from a lit creeper its kite goal planned (see {@link KiteGoal}), for the game tests (#759). */
+	public int getKitePlans() {
+		return this.kitePlans;
 	}
 
 	/** How many flights from a hostile mob its reflexes planned (see {@link Reflexes}), for the game tests. */

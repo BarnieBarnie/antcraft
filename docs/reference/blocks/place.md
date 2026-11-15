@@ -33,7 +33,7 @@ The first carried block item `item` selects goes to the bot's hand and is placed
 
 Reach is a matter of sight: the bot sees the spot when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the spot's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the spot as a wall does, so the bot walks to where it sees past them; [`mine`](mine.md) and [`use`](use.md) judge reach the same way.
 
-A soft block at the spot (grass, a fern, a flower, a sapling, snow of any depth, leaves, a vine, moss carpet) is broken first, as [`mine`](mine.md) breaks it, its drops going into the inventory, unless it is the block placed, as snow onto snow. Otherwise only air or a block that may be replaced (water) is placed in, so a slab placed onto a slab is `blocked`, not made a double slab. A fluid, fire or a block with contents such as a chest is never broken. A `facing` or `half` that is not one of the names above stops the script with an error.
+A soft block at the spot (grass, a fern, a flower, a sapling, snow of any depth, leaves, a vine, moss carpet) is broken first, as [`mine`](mine.md) breaks it, its drops going into the inventory, unless it is the block placed and takes another, as snow onto snow; a sapling onto the same sapling breaks it and plants again. Otherwise only air or a block that may be replaced (water) is placed in, so a slab placed onto a slab is `blocked`, not made a double slab. A fluid, fire or a block with contents such as a chest is never broken. A `facing` or `half` that is not one of the names above stops the script with an error.
 
 ## Examples
 

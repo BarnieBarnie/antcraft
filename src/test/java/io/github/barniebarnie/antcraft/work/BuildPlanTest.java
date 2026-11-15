@@ -688,6 +688,11 @@ class BuildPlanTest {
 		BuildPlan walls = new BuildPlan(List.of(new BuildPlan.Step(B, cobble), new BuildPlan.Step(C, cobble), BuildPlan.Step.fill(D)));
 		assertEquals(Optional.empty(), walls.needs(at(world())).item(), "a fill step takes any fill block, so it can go on without cobblestone");
 		assertEquals(Optional.of(Items.COBBLESTONE), walls.needs(at(world(D, Blocks.DIRT.defaultBlockState()))).item(), "only cobblestone is left to place");
+		BlockState grass = Blocks.SHORT_GRASS.defaultBlockState();
+		assertEquals(Optional.of(Items.COBBLESTONE), walls.needs(at(world(B, grass, C, grass, D, Blocks.DIRT.defaultBlockState()))).item(),
+			"grass is broken in passing as the cobblestone goes in, no work to go on with without it (#759)");
+		assertFalse(walls.hasStepFor(at(world(B, grass, C, grass, D, Blocks.DIRT.defaultBlockState())), item -> false),
+			"grass alone is no step to start on without the cobblestone (#759)");
 		assertEquals(Optional.empty(), walls.needs(at(world(B, cobble, C, cobble, D, Blocks.DIRT.defaultBlockState()))).item(), "nothing left to place");
 
 		assertEquals(Optional.empty(), plan().needs(at(world())).item(), "two kinds of items");

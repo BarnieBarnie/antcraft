@@ -43,6 +43,11 @@ public final class KiteGoal extends Goal {
 	private static final int AWAY_TRIES = 10;
 	/** How near the bot, in blocks, a creeper counts when it backs off, lit or not: one about to light is in the way too (#725). */
 	private static final double CREEPERS_RANGE = 2 * RANGE;
+	/**
+	 * How many ticks the bot waits to plan again where a plan found no way off and its weapon is not ready: a plan, 20 random
+	 * spots and a path, costs about 2 ms, and the next can find a spot this one did not (#759).
+	 */
+	private static final int REPLAN_TICKS = 4;
 	/** How fast the bot steps in and backs off, as a factor of its speed: faster than the melee goal's 1.2. */
 	private static final double SPEED = 1.5;
 
@@ -51,6 +56,8 @@ public final class KiteGoal extends Goal {
 	private @Nullable Path away;
 	/** Whether the bot, cornered, goes at the creeper to strike it. */
 	private boolean cornered;
+	/** The tick the last plan found no way off, for {@link #REPLAN_TICKS}. */
+	private int noWayOffAt = -REPLAN_TICKS;
 
 	KiteGoal(AntBot bot) {
 		this.bot = bot;
@@ -84,6 +91,7 @@ public final class KiteGoal extends Goal {
 	 * only a spot to the side gets out (#725).
 	 */
 	private @Nullable Path away(Creeper creeper) {
+		this.bot.kitePlans++;
 		List<Creeper> creepers = this.bot.level().getEntitiesOfClass(Creeper.class, this.bot.getBoundingBox().inflate(CREEPERS_RANGE), Creeper::isAlive);
 		double now = nearest(creepers, this.bot.position());
 		Vec3 best = null;
@@ -141,6 +149,7 @@ public final class KiteGoal extends Goal {
 		this.creeper = null;
 		this.away = null;
 		this.cornered = false;
+		this.noWayOffAt = -REPLAN_TICKS;
 		this.bot.getNavigation().stop();
 	}
 
@@ -179,12 +188,15 @@ public final class KiteGoal extends Goal {
 			return;
 		}
 		// Somewhere further from the creeper than the bot is; planned again once there.
-		if (this.away == null || this.bot.getNavigation().isDone()) {
+		// With no way off and its weapon not ready, it plans again only every few ticks, not each tick (#759).
+		if ((this.away == null || this.bot.getNavigation().isDone()) && (ready || this.bot.tickCount - this.noWayOffAt >= REPLAN_TICKS)) {
 			this.away = this.away(creeper);
 			if (this.away != null) {
 				this.bot.getNavigation().moveTo(this.away, SPEED);
-			} else if (ready) {
-				// ponytail: plans again each tick while cornered and not ready, 20 spots and a path a tick.
+				return;
+			}
+			this.noWayOffAt = this.bot.tickCount;
+			if (ready) {
 				this.cornered = true;
 				this.bot.getNavigation().stop();
 				this.bot.getMoveControl().setWantedPosition(creeper.getX(), creeper.getY(), creeper.getZ(), SPEED);

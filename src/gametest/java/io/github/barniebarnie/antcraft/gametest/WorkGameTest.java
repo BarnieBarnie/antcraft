@@ -600,6 +600,27 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> spots.forEach(spot -> helper.assertBlockPresent(Blocks.DIRT, spot)));
 	}
 
+	/**
+	 * An oak sapling goes where an oak sapling stands (#759): the one standing is broken, its drop kept, as any soft block
+	 * in the way. Only a block placed into itself, snow onto snow, stays and grows. It failed with "the game would not place".
+	 */
+	// Measured: passes at tick 3 (red: blocked).
+	@GameTest(maxTicks = 20)
+	public void placeASaplingWhereTheSameSaplingStands(GameTestHelper helper) {
+		helper.setBlock(2, 0, 3, Blocks.DIRT);
+		helper.setBlock(2, 1, 3, Blocks.OAK_SAPLING);
+		helper.setBlock(4, 1, 3, Blocks.SNOW);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING));
+		bot.getInventory().addItem(new ItemStack(Items.SNOW));
+		expect(helper, bot, "r = place(" + at(helper, 2, 1, 3) + ", 'oak_sapling')\ns = place(" + at(helper, 4, 1, 3) + ", 'snow')\n"
+				+ "print(r.reason, s.reason, count('oak_sapling'), count('snow'))\n",
+			List.of("None None 1 0"), () -> {
+				helper.assertBlockPresent(Blocks.OAK_SAPLING, 2, 1, 3);
+				helper.assertBlockProperty(new BlockPos(4, 1, 3), BlockStateProperties.LAYERS, 2);
+			});
+	}
+
 	/** A torch goes onto a spot holding grass or 3 layers of snow (#747). */
 	// Measured: passes at tick 12.
 	@GameTest(maxTicks = 30)

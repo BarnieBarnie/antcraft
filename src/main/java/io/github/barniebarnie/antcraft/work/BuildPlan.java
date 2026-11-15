@@ -916,9 +916,14 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 		return new Needs(!other && items.size() == 1 ? items.stream().findFirst() : Optional.empty(), tool);
 	}
 
-	/** Whether a step left with {@code world} as it is can be done without one particular item: see {@link Needs}. */
+	/**
+	 * Whether a step left with {@code world} as it is can be done without one particular item: see {@link Needs}. A soft
+	 * block the game would let a block replace, such as grass, is broken in passing as the item goes in, so it is no work
+	 * to go on with (#759).
+	 */
 	private static boolean takesAnyItem(Step step, BlockState current, Item item) {
-		return step.anySolid() || !step.standIns().isEmpty() || step.needsClearing(current) || item == Items.AIR || item instanceof BucketItem;
+		boolean clearing = step.needsClearing(current) && !(current.canBeReplaced() && Mining.isSoft(current));
+		return step.anySolid() || !step.standIns().isEmpty() || clearing || item == Items.AIR || item instanceof BucketItem;
 	}
 
 	/**

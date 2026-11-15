@@ -1066,6 +1066,30 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Three oak planks in a chest, no crafting table, the bot carrying nothing (#759): a wooden pickaxe and its table take
+	 * nine planks, so the plan gathers two logs and walks to the chest once. The table's planks and the pickaxe's are two
+	 * steps of the plan, and the chest's planks counted for each.
+	 */
+	// Measured: passes at tick 15 (red: printed 110 {}, the chest walked to twice and its planks counted twice).
+	@GameTest(maxTicks = 30)
+	public void storedCountsAChestOnceForTwoStepsOfOneItem(GameTestHelper helper) {
+		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.OAK_PLANKS, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		run(helper, bot, """
+			import lib.cost
+			import lib.stock
+			from lib.get import planned, stored
+			c = lib.stock.chests(32)[0]
+			tools = {}
+			p = planned("minecraft:wooden_pickaxe", 1, needs("minecraft:wooden_pickaxe"), tools)
+			ticks, last, gather, smelt = stored(p, "minecraft:wooden_pickaxe", 1, 32, tools)
+			print(ticks - lib.cost.walk(pos(), c), gather)
+			""");
+		failOnOtherPrint(helper, bot, "0 {'minecraft:oak_log': 2}");
+		helper.succeedWhen(() -> printed(helper, bot, "0 {'minecraft:oak_log': 2}"));
+	}
+
+	/**
 	 * A furnace by the bot, a raw iron in a chest across the area, more than lib.craft.REACH from the furnace, coal and no
 	 * pickaxe carried (#698): get takes the raw iron and walks back to the furnace to smelt it. From beside the chest it
 	 * saw no furnace within reach and would put one down, which it cannot mine back without a pickaxe.

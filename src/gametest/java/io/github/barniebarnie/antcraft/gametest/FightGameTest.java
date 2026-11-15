@@ -408,7 +408,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			for (Creeper creeper : creepers) {
 				if (creeper.getRemovalReason() == Entity.RemovalReason.DISCARDED) {
-					helper.fail("a creeper exploded, bot health " + bot.getHealth());
+					helper.fail("a creeper exploded " + String.format("%.1f", creeper.distanceTo(bot)) + " blocks from the bot, its health " + bot.getHealth());
 				}
 			}
 			DamageSource hurt = bot.getLastDamageSource();
@@ -593,16 +593,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 43 to 46 in 22 runs, 10 at once.
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
 	public void aBotCorneredInADeadEndStrikesTheLitCreeperAgain(GameTestHelper helper) {
-		// A closed stone tunnel along z at x = 12, two high, from z = 3 to z = 13.
-		for (int z = 2; z <= 14; z++) {
-			for (int y = 1; y <= 3; y++) {
-				for (int x = 11; x <= 13; x++) {
-					if (x != 12 || y == 3 || z == 2 || z == 14) {
-						helper.setBlock(x, y, z, Blocks.STONE);
-					}
-				}
-			}
-		}
+		deadEnd(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
 		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 6.5));
@@ -616,6 +607,43 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			health[0] = creeper.getHealth();
 		});
 		helper.succeedWhen(() -> helper.assertTrue(blows[0] >= 2, "struck the creeper " + blows[0] + " times"));
+	}
+
+	/**
+	 * A bot cornered in the dead end of {@link #aBotCorneredInADeadEndStrikesTheLitCreeperAgain} whose weapon is not ready
+	 * plans its way off only every few ticks while it waits for the weapon, not each tick, 20 spots and a path, some 2 ms
+	 * (#759).
+	 */
+	// Measured: passes at tick 18 (red: planned 4 ways off by tick 4).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 40)
+	public void aCorneredBotWaitingForItsWeaponPlansNoWayOffEachTick(GameTestHelper helper) {
+		deadEnd(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 6.5));
+		creeper.setTarget(bot);
+		creeper.setSwellDir(1);
+		bot.setLastHurtMob(creeper);
+		float health = creeper.getHealth();
+		helper.onEachTick(() -> {
+			if (bot.getKitePlans() > 2 + helper.getTick() / 3) {
+				helper.fail("planned " + bot.getKitePlans() + " ways off by tick " + helper.getTick());
+			}
+		});
+		helper.succeedWhen(() -> helper.assertTrue(creeper.getHealth() < health, "not struck"));
+	}
+
+	/** A closed stone tunnel along z at x = 12, two high, from z = 3 to z = 13. */
+	private static void deadEnd(GameTestHelper helper) {
+		for (int z = 2; z <= 14; z++) {
+			for (int y = 1; y <= 3; y++) {
+				for (int x = 11; x <= 13; x++) {
+					if (x != 12 || y == 3 || z == 2 || z == 14) {
+						helper.setBlock(x, y, z, Blocks.STONE);
+					}
+				}
+			}
+		}
 	}
 
 	/** A bot with a bow and {@code arrows} arrows, at {@code x, z} in the test area. */

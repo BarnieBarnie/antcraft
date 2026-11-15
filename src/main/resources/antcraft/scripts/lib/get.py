@@ -716,10 +716,12 @@ def stored(p, item, n, radius, tools):
     intermediate takes them (planks of any kind for planks); tools as make_cost's. Gives those ticks, the Pos of the
     last chest walked to (None: none), and the raw items (#580) and how many of each step (smelts, #709) the plan made
     again with what the chests hold of its steps counted as carried takes, so a carried item is counted once (#737). A
-    step those taken already cover is not walked to."""
+    step those taken already cover is not walked to. A chest's items count once, though a step comes twice (the table's
+    planks and the item's) or matches twice (oak planks, then any planks), and a chest is walked to once (#759)."""
     ticks = 0
     last = None
     extra = {}
+    walked = []
     left = p
     for step, k, how in reversed(p["crafts"]):
         if step == item:
@@ -730,15 +732,19 @@ def stored(p, item, n, radius, tools):
         for what in alike(step):
             k = sum([m for st, m, h in left["crafts"] if st == step])
             have = [c for c in chests if lib.stock.holds(c, what)]
-            stacks = [s for c in have for s in container(c) or [] if matches(s, what)]
-            held = min(k, sum([s.count for s in stacks]))
+            free = {}
+            for s in [s for c in have for s in container(c) or [] if matches(s, what)]:
+                free[s.item] = free.get(s.item, -extra.get(s.item, 0)) + s.count
+            held = min(k, sum([max(0, m) for m in free.values()]))
             if held <= 0:
                 continue
-            ticks += lib.cost.walk(pos(), have[0])
+            if have[0] not in walked:
+                ticks += lib.cost.walk(pos(), have[0])
+                walked.append(have[0])
             last = have[0]
-            for s in stacks:
-                m = min(held, s.count)
-                extra[s.item] = extra.get(s.item, 0) + m
+            for i, m in free.items():
+                m = min(held, max(0, m))
+                extra[i] = extra.get(i, 0) + m
                 held -= m
             left = needs(item, n, also=p.get("also") or None, extra=extra)
     return ticks, last, dict(left["gather"]), smelts(left)

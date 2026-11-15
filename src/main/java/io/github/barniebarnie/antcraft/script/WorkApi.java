@@ -434,8 +434,10 @@ public final class WorkApi {
 		@Override
 		@Nullable Result work(BlockState state) {
 			ItemStack placing = BotHands.find(this.bot, this.item);
-			// A soft block in the way is broken first, its drops kept, unless it is what is placed, as snow onto snow (#747).
-			if (Mining.isSoft(state) && !(placing != null && placing.getItem() instanceof BlockItem block && state.is(block.getBlock()))) {
+			// A soft block in the way is broken first, its drops kept, unless it is what is placed and takes it, as snow onto
+			// snow (#747); a sapling onto the same sapling is broken too, as it takes none (#759).
+			if (Mining.isSoft(state) && !(placing != null && placing.getItem() instanceof BlockItem block && state.is(block.getBlock())
+				&& state.canBeReplaced())) {
 				return this.breaker.tick(this.level, this.pos, true) ? this.work(this.level.getBlockState(this.pos)) : null;
 			}
 			BotHands.equip(this.bot, this.item);
