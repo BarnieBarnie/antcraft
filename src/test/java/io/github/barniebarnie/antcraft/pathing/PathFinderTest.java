@@ -36,11 +36,11 @@ class PathFinderTest {
 	/** A path says how many nodes its search expanded, which the per-tick pathfinding budget counts (see PathBudget). */
 	@Test
 	void aPathTellsHowManyNodesItsSearchExpanded() {
-		// Walled in: the search gives up once it has expanded its nodes.
+		// Walled in: the search gives up once it has expanded its nodes, and so does the fall search after it (#674).
 		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 3, 2, 10, '#');
 		Path stuck = find(world, new BlockPos(6, 1, 0), new PathFinder.Options(false, false, 50, 3));
 		assertFalse(stuck.complete());
-		assertEquals(50, stuck.expanded());
+		assertEquals(100, stuck.expanded());
 		Path straight = find(GridWorld.flat(10), new BlockPos(2, 1, 0), WALK_ONLY);
 		assertTrue(straight.expanded() >= 2 && straight.expanded() < 50, "expanded " + straight.expanded());
 	}
@@ -226,16 +226,30 @@ class PathFinderTest {
 	}
 
 	@Test
-	void dropsUpToMaxDropButNoFurther() {
+	void dropsUpToMaxDropButNoFurtherWhereThereIsAnotherWay() {
 		// Ledge at y=0 for x<=0; lower floor 3 down, and an even lower floor 4 down.
 		GridWorld three = new GridWorld().fill(-5, 0, -5, 0, 0, 5, '#').fill(1, -3, -5, 5, -3, 5, '#');
 		Path ok = find(three, new BlockPos(3, -2, 0), WALK_ONLY);
 		assertTrue(ok.complete());
 		assertTrue(types(ok).contains(MoveType.DROP));
 
-		GridWorld four = new GridWorld().fill(-5, 0, -5, 0, 0, 5, '#').fill(1, -4, -5, 5, -4, 5, '#');
-		Path tooFar = find(four, new BlockPos(3, -3, 0), WALK_ONLY);
-		assertFalse(tooFar.complete());
+		// The floor 4 down, and a step 2 down at z=5 to get down to it in two drops: the way round, not the leap.
+		GridWorld four = new GridWorld().fill(-5, 0, -5, 0, 0, 5, '#').fill(1, -4, -5, 5, -4, 5, '#').set(1, -2, 5, '#');
+		Path round = find(four, new BlockPos(3, -3, 0), WALK_ONLY);
+		assertTrue(round.complete(), "found no way: " + round.steps());
+		assertTrue(round.steps().contains(new Step(MoveType.DROP, new BlockPos(1, -1, 5), List.of(), List.of())), "leapt: " + round.steps());
+	}
+
+	/**
+	 * Where there is no way down within maxDrop, a path drops as far as it must, hurt or not: a bot left on a floating
+	 * platform of its own scaffold, its pillar taken back, stayed up there for good (#674).
+	 */
+	@Test
+	void dropsFartherThanMaxDropWhereThereIsNoOtherWay() {
+		GridWorld world = new GridWorld().fill(-1, 0, -1, 1, 0, 1, 'D').fill(-10, -12, -10, 10, -12, 10, '#');
+		Path path = find(world, new BlockPos(5, -11, 0), WALK_ONLY);
+		assertTrue(path.complete(), "stayed up: " + path.steps());
+		assertTrue(path.steps().contains(new Step(MoveType.DROP, new BlockPos(2, -11, 0), List.of(), List.of())), "no drop: " + path.steps());
 	}
 
 	/** A ledge at y=0 for x<=0 (feet at y=1) over water a block deep at x 1..5, its surface {@code fall} blocks down, and a bank at x=6. */
@@ -257,11 +271,11 @@ class PathFinderTest {
 	}
 
 	@Test
-	void neverDropsIntoWaterFartherThanMaxWaterDrop() {
+	void dropsIntoWaterFartherThanMaxWaterDropWhereThereIsNoOtherWay() {
 		int fall = PathFinder.MAX_WATER_DROP + 1;
-		Path path = find(ledgeOverWater(fall), new BlockPos(6, 2 - fall, 0), WALK_ONLY);
-
-		assertFalse(path.complete(), "dropped too far: " + path.steps());
+		BlockPos bank = new BlockPos(6, 2 - fall, 0);
+		Path leap = find(ledgeOverWater(fall), bank, WALK_ONLY);
+		assertTrue(leap.complete(), "stayed up: " + leap.steps());
 	}
 
 	@Test

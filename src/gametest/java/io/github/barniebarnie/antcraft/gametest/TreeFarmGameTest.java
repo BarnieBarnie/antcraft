@@ -489,6 +489,46 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The giant jungle four saplings grow with seed 37, a 2x2 trunk of 20 and 89 logs (#674): harvest, with the 33 dirt of
+	 * jobs.wood_farm's giant kit, fells it whole. A branch log in the top of its crown, leaves on every side, kept no stand
+	 * once the logs around it were mined, and mine's walk from the floor, with most of the dirt in scaffold, got nowhere:
+	 * fell_whole now mines it from the leaves over it. Mining the scaffold from that crown then cut the pillars under the
+	 * bot, which had no way down; take_back now stands on a block it is over before it mines it. Still, in some runs its
+	 * walks left it on a floating platform of its own scaffold with no way down within 3 blocks: a path now drops as far as
+	 * it must where it finds no other way (PathFinder's fall search). Health is not checked: such a fall may hurt it.
+	 */
+	// Measured: passes at tick 2849 to 7809, 39 of 39 in three runs of 13 copies (red: out_of_reach in 3 of 14 runs;
+	// with the fallback but no fall search, left up on its scaffold in 5 of 39).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 16000)
+	public void aSeed37GiantJungleIsFelledWhole(GameTestHelper helper) {
+		BlockPos spot = new BlockPos(10, 1, 8);
+		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
+			helper.setBlock(p.below(), Blocks.DIRT);
+			helper.setBlock(p, Blocks.JUNGLE_SAPLING);
+		}
+		advance(helper, helper.absolutePos(spot), 37);
+		helper.assertBlockPresent(Blocks.JUNGLE_LOG, spot.above(19));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 33), new ItemStack(Items.JUNGLE_SAPLING, 4));
+		start(helper, bot, "giant_jungle", new BlockPos(6, 0, 4), new BlockPos(15, 0, 13), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"], r["at"])
+			""");
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (!log.isEmpty() && !log.equals(List.of("True None None"))) {
+				helper.fail("printed " + log);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None None"), "printed");
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
+				helper.assertBlockNotPresent(Blocks.JUNGLE_LOG, p);
+			}
+		});
+	}
+
+	/**
 	 * Builds the 10x10 cell of the giant kind from (2, 0, 2) with the bot given its four saplings, prints materials,
 	 * grows the tree once built and checks its 2x2 trunk stands on the spots and no log of it is outside the cell.
 	 */

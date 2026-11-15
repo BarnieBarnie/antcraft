@@ -31,7 +31,7 @@ The bot picks the best tool it carries for the block and holds it; with none, it
 
 Reach is a matter of sight: the bot sees the block when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the block's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the block as a wall does, so the bot walks to where it sees past them; [`use`](use.md) and [`place`](place.md) judge reach the same way.
 
-The block the bot stands on, or rests on alone over its edge, is in reach only when, once it is broken, the bot drops at most 3 blocks, as far as a path drops it, or into water (not onto leaves with no log in range, which decay, #673): else the bot walks to another stand, and fails `out_of_reach` where there is none, rather than fall and get hurt (#668). So a bot on the last blocks of a scaffold pillar whose lower blocks are gone leaves them standing.
+The block the bot stands on, or rests on alone over its edge, is in reach only when, once it is broken, the bot drops at most 3 blocks, as far as a path drops it, or into water (not onto leaves with no log in range, which decay, #673): else the bot walks to another stand rather than fall with the block and get hurt (#668). Where no walk within a 3-block drop gets it to one, as on the last blocks of a scaffold pillar whose lower blocks are gone, it drops off the edge as far as it must, hurt or not, and mines the block from there (#674).
 
 Mining crops harvests them: `mine` on ripe wheat (`block(p).state["age"] == 7`) gives wheat and seeds.
 
@@ -52,7 +52,7 @@ if log is not None:
 | `target_gone` | air or a fluid is there, or the block went while the bot dug |
 | `protected` | the block may not be changed (outside the build height or border, spawn protection), or cannot be broken, such as bedrock |
 | `no_tool` | no carried tool makes the block drop anything, such as stone without a pickaxe |
-| `out_of_reach` | the bot could not walk to where it sees the block within reach, or only stands on it over a drop of more than 3 |
+| `out_of_reach` | the bot could not walk (or drop) to where it sees the block within reach |
 | `no_space` | the block is mined, but drops that did not fit lie on the ground |
 | `not_loaded` | the block is in a chunk that is not loaded |
 | `wrong_dimension` | `pos` is in another dimension than the bot's |

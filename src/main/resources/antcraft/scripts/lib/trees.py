@@ -350,6 +350,10 @@ def take_back(keep=()):
         rounds += 1
         took = False
         for q in sorted([q for q in placed_scaffold(False) if q not in keep], key=lambda q: -q.y):
+            # From over the block, it stands on it first, so mining it lowers the bot with the pillar: mined from beside,
+            # the pillar was cut under a bot on a giant jungle's crown, and it had no way down (#674).
+            if pos().y > q.y + 1 and block(q.up()).is_air:
+                goto(q.up())
             if mine(q):
                 took = True
     placed_scaffold(keep=keep)
@@ -395,6 +399,15 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
             # mined, a stand by it now, such as under it.
             for s in stands([p]):
                 goto(s)
+                r = mine(p)
+                if r.reason != "out_of_reach":
+                    break
+            # Else from over it: a giant jungle's branch log in the top of its crown, leaves on every side, has no stand,
+            # and mine's walk from the floor, most of the dirt in scaffold, got nowhere (#674). On the leaves over it, it
+            # mines them underfoot, then the log.
+            if r.reason == "out_of_reach" and not is_log(p.up()):
+                goto(p.up().up())
+                mine(p.up())
                 r = mine(p)
         if not r and r.reason != "target_gone":
             take_back(earlier)

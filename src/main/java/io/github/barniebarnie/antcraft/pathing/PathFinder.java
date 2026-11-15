@@ -34,6 +34,8 @@ public final class PathFinder {
 	 * leaping off cliffs they cannot swim back up.
 	 */
 	public static final int MAX_WATER_DROP = 8;
+	/** How far the last search of a {@link Search} may drop, where no other way is found: any fall in a world. */
+	public static final int FALL_ANY = 384;
 	/**
 	 * Swimming one block up a water column, such as a waterfall. Measured at about 6 ticks a block (see
 	 * {@code PathingGameTest.swimUpCostMatchesTheTimeARiseTakes}), so a climb up a long waterfall is not mistaken for
@@ -87,9 +89,12 @@ public final class PathFinder {
 	/**
 	 * A search for a path, run a slice of nodes at a time until it has found one (see {@link #find}). For a goal that may
 	 * end afloat and a bot that may break blocks, a search without breaking first, and only where it finds no way, one
-	 * with.
+	 * with. Where those find no way, a last one that drops as far as it must ({@link #FALL_ANY}), hurt or not: a bot left
+	 * on a floating platform of its own scaffold stayed up there for good (#674); a fall costs at worst a death, and the
+	 * bot respawns at home. Where that finds no way either, the path is the first searches' partial one.
 	 */
 	// ponytail: a second search where the first finds no way; one search with a cost per break if it shows in profiles.
+	// The fall search doubles the nodes a goal with no way spends; one search with a cost per block past maxDrop if that shows.
 	public static final class Search {
 		private final WorldView world;
 		private final BlockPos start;
@@ -98,6 +103,8 @@ public final class PathFinder {
 		private Phase phase;
 		/** Whether {@link #phase} is the search without breaking, to be followed by one with. */
 		private boolean swimFirst;
+		/** The partial path of the searches before the fall search, while {@link #phase} is that one. */
+		private @Nullable Path unhurt;
 		/** The nodes the searches before {@link #phase} expanded. */
 		private int expandedBefore;
 		private @Nullable Path path;
@@ -127,12 +134,19 @@ public final class PathFinder {
 				if (found == null) {
 					continue;
 				}
+				int total = this.expandedBefore + found.expanded();
 				if (this.swimFirst && !found.complete()) {
 					this.swimFirst = false;
-					this.expandedBefore = found.expanded();
+					this.expandedBefore = total;
 					this.phase = new Phase(this.world, this.start, this.goal, this.options);
+				} else if (!found.complete() && this.unhurt == null && this.options.maxDrop() < FALL_ANY) {
+					this.unhurt = found;
+					this.expandedBefore = total;
+					this.phase = new Phase(this.world, this.start, this.goal,
+						new Options(this.options.canBreak(), this.options.canPlace(), this.options.maxNodes(), FALL_ANY));
 				} else {
-					this.path = new Path(found.start(), found.steps(), found.complete(), found.cost(), this.expandedBefore + found.expanded());
+					Path p = found.complete() || this.unhurt == null ? found : this.unhurt;
+					this.path = new Path(p.start(), p.steps(), p.complete(), p.cost(), total);
 				}
 			}
 			return expanded;
