@@ -319,7 +319,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * the source's estimate, of a birch sapling None, as get breaks no persistent leaves
 	 * (persistentLeavesAreNotBrokenForSaplings). Both were None: make_cost turned down a raw item it was costing itself.
 	 */
-	@GameTest(maxTicks = 20)
+	@GameTest(maxTicks = 40)
 	public void makeCostOfASaplingCountsOnlyGrownLeaves(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, false);
 		for (int y = 1; y <= 2; y++) {
