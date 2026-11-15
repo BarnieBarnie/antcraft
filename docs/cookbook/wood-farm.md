@@ -48,25 +48,25 @@ A farm is as big as it is useful: one cell more than the bot can harvest while t
 
 ```python
 GROWTH = 2 * 7 * 4096 / 3                        # some 19,115 ticks, 16 minutes
-HARVEST["minecraft:birch_sapling"] == 400        # fell, replant and store one birch
-most(harvest(kind)) == GROWTH // harvest(kind)   # 47 cells of birch
+HARVEST["minecraft:birch_sapling"] == 250        # fell, replant and store one birch
+most(harvest(kind)) == GROWTH // harvest(kind)   # 76 cells of birch
 ```
 
 A sapling grows on random ticks: each tick, the game gives one to `randomTickSpeed` (3) blocks of each 16 by 16 by 16 section, 4096 blocks, and a sapling with light 9 or more over it moves up a stage on 1 in 7 of those, from stage 0 to 1, then from 1 to a tree. Every sapling of `KINDS` grows the same way.
 
-`harvest(kind)` is the ticks one tree takes the bot. The farm learns it: in each round that fells a tree it times, with [`game_time()`](../reference/world/game_time.md), the felling, storing and replanting, and keeps the ticks of its last 10 trees (`WINDOW`) in `memory["wood_ticks"]`, each tree of a round their mean. Once it has felled 3 trees (`SAMPLES`), `harvest` is the mean of those it keeps, so old slow trees, such as those it got an axe or dirt for, fade out, and a farm whose trees take longer than its kind's estimate stops growing sooner, and one that is quicker grows on. Until then it is `HARVEST[kind]`, which gives the ticks for one tree of each kind. The birch's is measured in `WoodFarmGameTest`, where felling, replanting and storing a birch took some 150 to 1000 ticks. The other kinds are measured too, each the mean of 11 trees grown from fixed seeds in a farm of one cell (#769), and the giants in `WoodFarmGameTest` (#669, #677):
+`harvest(kind)` is the ticks one tree takes the bot. The farm learns it: in each round that fells a tree it times, with [`game_time()`](../reference/world/game_time.md), the felling, storing and replanting, and keeps the ticks of its last 10 trees (`WINDOW`) in `memory["wood_ticks"]`, each tree of a round their mean. Once it has felled 3 trees (`SAMPLES`), `harvest` is the mean of those it keeps, so old slow trees, such as those it got an axe or dirt for, fade out, and a farm whose trees take longer than its kind's estimate stops growing sooner, and one that is quicker grows on. Until then it is `HARVEST[kind]`, which gives the ticks for one tree of each kind. Each one-sapling kind and dark and pale oak are measured, the mean of 11 trees grown from fixed seeds in a farm of one cell (#769, birch #779), and the giants in `WoodFarmGameTest` (#669, #677):
 
 | Kind | Mean logs | `HARVEST` | `most` |
 |---|---|---|---|
 | oak | 5 (measured: some 165 to 300 ticks) | 200 | 95 |
-| birch | 6 | 400 | 47 |
+| birch | 5.5 (some 175 to 325) | 250 | 76 |
 | spruce | 6.5 (some 250 to 450) | 350 | 54 |
 | jungle | 8.5 (some 175 to 550) | 350 | 54 |
 | acacia | 8 (some 200 to 450) | 300 | 63 |
 | cherry | 16 (some 400 to 1250) | 850 | 22 |
 | poplar | 15 (measured in the game; some 400 to 1000 ticks) | 600 | 31 |
 | mangrove | 16 (measured in the game: felled and its roots mined, some 250 to 3550 ticks, 1400 on average) | 1400 | 13 |
-| dark oak | 40.5 (some 850 to 1500) | 1250 | 15 |
+| dark oak | 40.5 (as pale oak: the same trees) | 950 | 20 |
 | pale oak | 40.5 (some 650 to 1200) | 950 | 20 |
 | giant spruce | 84 (measured: a trunk of 24 took some 3050 to 3300 ticks) | 3200 | 5 |
 | giant jungle | 87 (measured: 67 logs took some 2000 to 2950 ticks, 2250 on average, with no death) | 2250 | 8 |

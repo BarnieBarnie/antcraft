@@ -405,7 +405,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * The farm keeps the ticks it spends per felled tree in memory and, from SAMPLES trees on, sizes itself from their
-	 * mean instead of HARVEST (#653; memory["wood_ticks"], a list of the last WINDOW, #662). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 400; a
+	 * mean instead of HARVEST (#653; memory["wood_ticks"], a list of the last WINDOW, #662). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 250; a
 	 * third felled in the farm's first round makes the mean over GROWTH, so most() is 1 and the farm of one cell, run
 	 * with no size, is full. With HARVEST it would have gone on to a second cell.
 	 */
@@ -441,7 +441,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			lib.cells.count = lambda name: 1
 			jobs.wood_farm.farm(kind, "birch_farm", None, 12)
 			""");
-		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("400", "farm full", "3 True"), "said"));
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("250", "farm full", "3 True"), "said"));
 	}
 
 	/**
@@ -1024,8 +1024,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * HARVEST and LOGS of each one-sapling kind but birch and mangrove, and of dark and pale oak, are measured (#769), no
-	 * longer the birch's ticks a log times logs counted from the tree features.
+	 * HARVEST and LOGS of each one-sapling kind but mangrove, and of dark and pale oak, are measured (#769, birch #779),
+	 * no longer the birch's ticks a log times logs counted from the tree features. Dark oak's HARVEST is pale oak's (#779).
 	 */
 	// Measured with temporary copies of aMangroveFarmFellsItsFirstTreeAndReplants for each kind, seeds 0 to 10, 24 to 32
 	// copies at once: the ticks from the growth to the logs stored and the sapling replanted, and the logs grown.
@@ -1033,13 +1033,18 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// spruce 250 to 433, 329, 6.4 logs; jungle 176 to 539, 359, 8.7; acacia 207 to 464, 286, 7.9; cherry 378 to 1231,
 	// 865, 15.9; dark oak 867 to 1510, 1236, 40.6; pale oak (the same trees) 663 to 1209, 941; poplar 378 to 1021, 613,
 	// 14.3 (LOGS keeps its 15 of 200 trees, #650). HARVEST is the mean rounded to 50, LOGS to a half.
+	// #779, 33 copies at once: birch 176 to 323, 237 on average, 5.4 logs (5 to 7); dark oak 808 to 1608, 1235, pale oak
+	// 663 to 1275, 947, the same trees (the same logs and leaves, a seed for seed). Timed in lib.treefarm.harvest, both
+	// fell in the same ticks (dark 640 to 1153, pale 640 to 1185); dark oak then picks up apples for some 220 to 390
+	// ticks, pale oak its sticks for 0 to 47, as the game test data pack makes each dark oak leaves block drop an apple
+	// (for GetGameTest's apple test). In the game 1 in 200 does, so dark oak takes pale oak's HARVEST.
 	@GameTest(maxTicks = 10)
 	public void eachKindsHarvestAndLogsAreMeasured(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		script(helper, bot, "print([(jobs.wood_farm.HARVEST['minecraft:' + k + '_sapling'], jobs.wood_farm.LOGS['minecraft:' + k + '_sapling'])"
-			+ " for k in ['oak', 'spruce', 'jungle', 'acacia', 'cherry', 'dark_oak', 'pale_oak', 'poplar']])");
+			+ " for k in ['oak', 'spruce', 'jungle', 'acacia', 'cherry', 'dark_oak', 'pale_oak', 'poplar', 'birch']])");
 		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("[(200, 5), (350, 6.5), (350, 8.5), (300, 8), (850, 16),"
-			+ " (1250, 40.5), (950, 40.5), (600, 15)]"), "said"));
+			+ " (950, 40.5), (950, 40.5), (600, 15), (250, 5.5)]"), "said"));
 	}
 
 	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
@@ -1164,7 +1169,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished");
-			helper.assertValueEqual(said(bot), List.of("19114 47 1 True", "47 15"), "printed");
+			helper.assertValueEqual(said(bot), List.of("19114 47 1 True", "76 20"), "printed");
 		});
 	}
 

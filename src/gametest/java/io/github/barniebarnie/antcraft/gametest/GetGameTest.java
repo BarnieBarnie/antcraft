@@ -16,9 +16,11 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.MangrovePropaguleBlock;
@@ -333,6 +335,53 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			r = get("raw_iron", 3)
 			print(r["ok"])
 			""");
+		measured(helper, bot);
+	}
+
+	/**
+	 * A stone pickaxe carried, three copper ore at three corners of the area (#779): make_cost of ten raw copper, which is
+	 * three ore at 3.5 each, is within {@link #COST_FACTOR} of the ticks lib.dig.ore takes to mine all three, as for raw
+	 * iron. The drops are random (2 to 5), so the bot mines every exposed ore and digs no stairs (best_y None). Measured:
+	 * make_cost 173, lib.dig.ore 130 to 131 ticks (test tick 137 to 138), as raw iron; lapis the same with an estimate of
+	 * 60 (it was 300: make_cost 653); redstone, with the quicker iron pickaxe, make_cost 145 with 50, 107 to 108 ticks
+	 * (test tick 114 to 115; it was 400: make_cost 845). Ores all of hardness 3, an ore's estimate is a walk and its
+	 * mining; how rare it is underground is lib.get.deep's.
+	 */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfRawCopperIsCloseToItsTicks(GameTestHelper helper) {
+		threeOres(helper, Blocks.COPPER_ORE, Items.STONE_PICKAXE, "raw_copper", 10);
+	}
+
+	/** As {@link #makeCostOfRawCopperIsCloseToItsTicks}, for 19 lapis, three ore at 6.5 each (#779). */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfLapisIsCloseToItsTicks(GameTestHelper helper) {
+		threeOres(helper, Blocks.LAPIS_ORE, Items.STONE_PICKAXE, "lapis_lazuli", 19);
+	}
+
+	/** As {@link #makeCostOfRawCopperIsCloseToItsTicks}, for 13 redstone with an iron pickaxe, three ore at 4.5 (#779). */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfRedstoneIsCloseToItsTicks(GameTestHelper helper) {
+		threeOres(helper, Blocks.REDSTONE_ORE, Items.IRON_PICKAXE, "redstone", 13);
+	}
+
+	/**
+	 * Ore at three corners of the area, the bot at the fourth with pickaxe: make_cost of n of item, three ore, is within
+	 * {@link #COST_FACTOR} of the ticks lib.dig.ore takes to mine all three.
+	 */
+	private static void threeOres(GameTestHelper helper, Block ore, Item pickaxe, String item, int n) {
+		helper.setBlock(7, 1, 1, ore);
+		helper.setBlock(7, 1, 7, ore);
+		helper.setBlock(1, 1, 7, ore);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(pickaxe));
+		run(helper, bot, """
+			import lib.dig
+			from lib.get import make_cost, SOURCES
+			print(SOURCES["minecraft:%1$s"].blocks(%2$d) == 3 and make_cost("%1$s", %2$d))
+			lib.dig.best_y = lambda key: None
+			r = lib.dig.ore("%1$s", 99)
+			print(r["reason"] == "no_ore" and count("%1$s") >= 6)
+			""".formatted(item, n));
 		measured(helper, bot);
 	}
 
