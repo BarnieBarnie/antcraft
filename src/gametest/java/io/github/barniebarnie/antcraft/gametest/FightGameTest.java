@@ -696,6 +696,66 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * An idle bot with a bow and arrows that a zombie comes at shoots it of its own accord rather than strike it with the
+	 * sword in its hand (#734): only arrows hurt it. The zombie wears a helmet, so the sun does not kill it instead.
+	 */
+	// Measured: passes at tick 72 to 112 in 4 runs.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 220)
+	public void anIdleBotWithABowShootsAZombieThatComesAtIt(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 3, 16);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 18);
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		zombie.setTarget(bot);
+		failOnAnythingButArrows(helper, zombie);
+		helper.succeedWhen(() -> helper.assertTrue(zombie.isDeadOrDying(), "zombie alive with " + zombie.getHealth() + " health"));
+	}
+
+	/**
+	 * A hurt idle bot with a bow keeps its distance from a mob out of its range rather than walk closer (#734), as
+	 * {@code attack(min_health=...)} lets go once hurt: it still targets the still zombie 20 blocks off, but stays put.
+	 */
+	// Passes at tick 60, where it checks.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
+	public void aHurtBotWithABowDoesNotCloseInOnAMobOutOfRange(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 1, 16);
+		bot.setHealth(12);
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
+		zombie.setNoAi(true);
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		double z = bot.getZ();
+		helper.onEachTick(() -> helper.assertTrue(Math.abs(bot.getZ() - z) < 1, "the bot walked " + (bot.getZ() - z) + " blocks"));
+		helper.runAtTickTime(60, () -> {
+			helper.assertTrue(bot.getTarget() == zombie, "target " + bot.getTarget());
+			helper.succeed();
+		});
+	}
+
+	/**
+	 * The kite goal strikes a lit creeper with the sword the bot carries, not the bow in its hand (#734): the bot has no
+	 * arrows, so it does not shoot. The creeper stands still, lit by hand, beside the bot. The bow struck first, a blow of 1.
+	 */
+	// Measured: passes at tick 1 in 4 runs.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 10)
+	public void aKiteStrikeUsesTheSwordNotTheBow(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 8);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		// Long enough alive that a sword is ready at once: the bot strikes rather than back off first.
+		bot.tickCount = 100;
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 9.7));
+		creeper.setNoAi(true);
+		creeper.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		creeper.setHealth(200);
+		creeper.setSwellDir(1);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(creeper.getHealth() < 200, "creeper not struck");
+			helper.assertTrue(bot.getMainHandItem().is(Items.IRON_SWORD), "struck with " + bot.getMainHandItem());
+			helper.assertTrue(200 - creeper.getHealth() >= 6, "a blow of " + (200 - creeper.getHealth()));
+		});
+	}
+
+	/**
 	 * An arrow the bot shot lies on the ground for {@code pick_up} to take back, as a player's (#720): its one arrow bounces
 	 * off an invulnerable husk, so {@code shoot} ends with {@code no_item}, and {@code pick_up} returns it.
 	 */

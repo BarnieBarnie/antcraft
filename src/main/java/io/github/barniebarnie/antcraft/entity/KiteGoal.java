@@ -151,6 +151,8 @@ public final class KiteGoal extends Goal {
 			return;
 		}
 		this.bot.getLookControl().setLookAt(creeper);
+		// The weapon out before it asks whether it is ready, as the reflexes do: not the bow the shoot goal left in hand (#734).
+		Tools.equipBestWeapon(this.bot);
 		boolean ready = this.bot.tickCount - this.bot.getLastHurtMobTimestamp() >= BotHands.strikeTicks(this.bot);
 		if (ready && BotHands.inStrikingReach(this.bot, creeper)) {
 			BotHands.strike(this.bot, (ServerLevel) this.bot.level(), creeper);

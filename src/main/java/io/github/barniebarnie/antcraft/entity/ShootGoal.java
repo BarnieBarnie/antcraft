@@ -1,16 +1,21 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import java.util.EnumSet;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
-import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.entity.monster.Enderman;
+import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.entity.monster.skeleton.AbstractSkeleton;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The bot's own fight with a creeper it targets, where it carries a bow or crossbow and arrows (docs/features/bots.md,
- * Fighting creepers): it shoots it from between {@link Bow#NEAR} and {@link Bow#RANGE} blocks, as {@code shoot} does,
- * rather than close in with the melee goal, which fights on once the bow or the arrows are gone (#724). While a fuse is
- * lit near, the kite goal before it backs the bot off.
+ * The bot's own fight with a hostile mob it targets, where it carries a bow or crossbow and arrows (docs/features/bots.md,
+ * Fighting targets): it shoots it from between {@link Bow#NEAR} and {@link Bow#RANGE} blocks, as {@code shoot} does,
+ * rather than close in with the melee goal, which fights on once the bow or the arrows are gone (#724), with its best
+ * weapon in hand again. Not a skeleton, which outshoots it and is better closed in on, nor an enderman, which arrows do
+ * not hit (#734). A hurt bot does not walk closer to a mob out of range, as {@code attack(min_health=...)} lets go once
+ * hurt: it waits for it to come. While a fuse is lit near, the kite goal before it backs the bot off.
  */
 final class ShootGoal extends Goal {
 	/** How fast the bot walks closer, as a factor of its speed: as the melee goal does. */
@@ -26,7 +31,12 @@ final class ShootGoal extends Goal {
 
 	@Override
 	public boolean canUse() {
-		return this.bot.getTarget() instanceof Creeper creeper && creeper.isAlive() && Bow.armed(this.bot);
+		return shootable(this.bot.getTarget()) && Bow.armed(this.bot);
+	}
+
+	/** Whether the bot shoots {@code target} rather than strike it. */
+	private static boolean shootable(@Nullable LivingEntity target) {
+		return target instanceof Enemy && target.isAlive() && !(target instanceof AbstractSkeleton) && !(target instanceof Enderman);
 	}
 
 	@Override
@@ -39,26 +49,30 @@ final class ShootGoal extends Goal {
 		this.away = null;
 		this.bot.getNavigation().stop();
 		this.bot.stopUsingItem();
+		Tools.equipBestWeapon(this.bot);
 	}
 
 	@Override
 	public void tick() {
-		if (!(this.bot.getTarget() instanceof Creeper creeper) || !BotHands.equip(this.bot, Bow.WEAPON)) {
+		LivingEntity target = this.bot.getTarget();
+		if (!shootable(target) || !BotHands.equip(this.bot, Bow.WEAPON)) {
 			return;
 		}
-		double distance = this.bot.distanceTo(creeper);
-		boolean inRange = distance <= Bow.RANGE && this.bot.getSensing().hasLineOfSight(creeper);
+		double distance = this.bot.distanceTo(target);
+		boolean inRange = distance <= Bow.RANGE && this.bot.getSensing().hasLineOfSight(target);
 		if (!inRange) {
 			this.away = null;
-			if (this.bot.getNavigation().isDone()) {
-				this.bot.getNavigation().moveTo(creeper, SPEED);
+			if (this.bot.getHealth() < this.bot.getMaxHealth()) {
+				this.bot.getNavigation().stop();
+			} else if (this.bot.getNavigation().isDone()) {
+				this.bot.getNavigation().moveTo(target, SPEED);
 			}
 		} else if (distance < Bow.NEAR) {
-			this.away = Bow.backOff(this.bot, creeper, this.away);
+			this.away = Bow.backOff(this.bot, target, this.away);
 		} else {
 			this.away = null;
 			this.bot.getNavigation().stop();
 		}
-		Bow.draw(this.bot, creeper, inRange);
+		Bow.draw(this.bot, target, inRange);
 	}
 }

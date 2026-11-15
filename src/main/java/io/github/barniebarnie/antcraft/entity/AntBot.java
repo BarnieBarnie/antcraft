@@ -189,7 +189,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
 		// Before the melee goal, which fights a creeper only while its fuse is out (#706).
 		this.goalSelector.addGoal(1, new KiteGoal(this));
-		// Before the melee goal: a creeper is safer shot than kited, where the bot carries a bow and arrows (#724).
+		// Before the melee goal: a hostile mob is safer shot than struck or kited, where the bot carries a bow and arrows (#724, #734).
 		this.goalSelector.addGoal(2, new ShootGoal(this));
 		this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
