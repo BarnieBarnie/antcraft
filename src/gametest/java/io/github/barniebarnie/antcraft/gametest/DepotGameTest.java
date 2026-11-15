@@ -70,6 +70,30 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The bot carries 100 dirt and a chest and keeps a stack of dirt: store puts the other 36 in a chest (#762); a second
+	 * store keeping 32 puts 32 more in that chest. The module's room (#765) shadowed the room native store calls for a
+	 * chest the depot already has, so every store after a depot's first crashed (#769's follow-up).
+	 */
+	// Measured: passes at tick 11.
+	@GameTest(maxTicks = 30)
+	public void storeKeepsAStackOfDirtAndStoresTheRest(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 64));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 36));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			r = lib.depot.store("wood", [("minecraft:dirt", 64)])
+			print(r["ok"], count("minecraft:dirt"))
+			r = lib.depot.store("wood", [("minecraft:dirt", 32)])
+			print(r["ok"], count("minecraft:dirt"))
+			""");
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("True 64", "True 32"));
+			helper.assertTrue(chest(helper, 1).countItem(Items.DIRT) == 68, "chest dirt " + chest(helper, 1).countItem(Items.DIRT));
+		});
+	}
+
+	/**
 	 * A chest full of oak logs at the depot's first slot (1, 1, 1) and ten oak logs carried: store takes the chest as the
 	 * logs chest, finds it full, crafts a chest from some of the logs with lib.get and places it at (2, 1, 1) as a second,
 	 * single logs chest, and puts the rest there.

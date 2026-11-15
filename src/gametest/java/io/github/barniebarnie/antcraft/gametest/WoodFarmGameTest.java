@@ -530,7 +530,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * The empty slots the farm wants before a felling come from the kind's logs (#766): free(kind) is 5 for a birch,
 	 * more for a giant, whose logs fill more stacks, and more for a mangrove, whose roots take slots too; farm asks
-	 * lib.depot.room for free(kind).
+	 * lib.depot.make_room for free(kind).
 	 */
 	// Measured: passes at tick 6 (red: no free in jobs.wood_farm).
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
@@ -559,7 +559,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			w.reap = reaped
 			w.wait = waited
 			w.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
-			lib.depot.room = roomed
+			lib.depot.make_room = roomed
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.treefarm.grown = lambda k, low, high: tree[0]
 			lib.cells.built = lambda name: [0]

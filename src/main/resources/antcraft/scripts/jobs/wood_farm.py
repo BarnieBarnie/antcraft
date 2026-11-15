@@ -74,7 +74,7 @@ ROOTS = 2  # and for a mangrove's mangrove roots and muddy mangrove roots, which
 
 
 def free(kind):
-    """The empty slots the bot wants before it fells a tree of kind (lib.depot.room, #765, #766): stacks for twice its
+    """The empty slots the bot wants before it fells a tree of kind (lib.depot.make_room, #765, #766): stacks for twice its
     mean logs (LOGS), so a big tree of the kind fits too, OTHER, and ROOTS for a kind with roots."""
     logs = int(-(-2 * LOGS[kind] // 64))
     return logs + OTHER + (ROOTS if lib.treefarm.spec(kind).get("roots") else 0)
@@ -291,7 +291,7 @@ def farm(kind, name, size, radius):
         full_bot = False
         for b in grown:
             # Not with too few empty slots that the depot cannot empty: the tree's drops would be dropped (#765).
-            r = lib.depot.room(name, free(kind), keep, radius)
+            r = lib.depot.make_room(name, free(kind), keep, radius)
             if not r["ok"]:
                 full_bot = True
                 tell(told, f"inventory full, store: {r['reason']}; felling stops")

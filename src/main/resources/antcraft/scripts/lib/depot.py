@@ -76,7 +76,7 @@ def store(name, keep=None, radius=32):
 SKIPS = 8  # slots add_chest skips at most a call
 
 
-def room(name, free, keep=None, radius=32):
+def make_room(name, free, keep=None, radius=32):
     """Makes room in the bot's inventory for what a job gathers next (#765): where it has fewer than free empty slots,
     stores what it carries in depot name (store, with keep and radius). Gives result(): ok where it has free empty slots
     then, else the reason store gave, or full where it stored all it may and still has too few, with missing, what it

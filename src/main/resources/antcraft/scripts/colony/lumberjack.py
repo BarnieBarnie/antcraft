@@ -78,7 +78,7 @@ def scaffold(n):
 
 
 # It stores with store_all into the core after every tree and every idle look, so its inventory empties each tree, and
-# lib.depot.room, which stores into a depot's row of chests, has nothing to add here (#766).
+# lib.depot.make_room, which stores into a depot's row of chests, has nothing to add here (#766).
 # Home is beside the core, so a lumberjack that dies comes back in the colony and fetches what it dropped (#683, #690).
 settle()
 SKIP = 1200  # ticks an unreachable sapling is left before the idle lumberjack tries it again
