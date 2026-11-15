@@ -313,7 +313,13 @@ public class PathFollower {
 		this.stepIndex = 0;
 		this.stepTicks = 0;
 		this.stepBudget = this.budgetFor(world);
-		return !this.path.steps().isEmpty() || this.goal == null || this.goal.isReached(feet(this.bot));
+		BlockPos feet = feet(this.bot);
+		if (this.path.steps().isEmpty() && !this.path.start().equals(feet)) {
+			// Planned from where it no longer is, such as from the air beside a block before landing on it, the search
+			// ending ticks later for want of nodes (#680): no way from there says nothing of here.
+			return this.replan();
+		}
+		return !this.path.steps().isEmpty() || this.goal == null || this.goal.isReached(feet);
 	}
 
 	/**

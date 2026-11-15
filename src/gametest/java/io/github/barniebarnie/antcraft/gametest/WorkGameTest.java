@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.BotApi;
 import io.github.barniebarnie.antcraft.script.MoveApi;
@@ -292,6 +293,28 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	public void mineTheBlockItRestsOnFromOverTheEdgeDropsOffAndMinesIt(GameTestHelper helper) {
 		helper.setBlock(4, 5, 4, Blocks.DIRT);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.8, 6, 4.5));
+		minedFromTheFloor(helper, bot);
+	}
+
+	/**
+	 * As {@link #mineTheBlockItRestsOnFromOverTheEdgeDropsOffAndMinesIt}, with the path nodes of the ticks until it has
+	 * landed spent, as under load (#680). Just spawned, not on the ground yet, it plans from the air block beside the dirt,
+	 * from where the dirt is in reach: a path with no steps. Its search ends a tick later, with the bot landed and its feet
+	 * over the dirt, and the empty path from where it no longer is had failed the walk, out_of_reach at tick 4. Spending
+	 * the budget holds up the other tests' searches of those two ticks too.
+	 */
+	// Measured: passes at tick 25 (red: printed False out_of_reach at tick 4).
+	@GameTest(maxTicks = 50)
+	public void mineTheBlockItRestsOnFromOverTheEdgeWithItsSearchHeldUpDropsOffAndMinesIt(GameTestHelper helper) {
+		helper.setBlock(4, 5, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.8, 6, 4.5));
+		// Entities tick before onEachTick: spend the next tick's nodes.
+		helper.onEachTick(() -> {
+			if (!bot.onGround()) {
+				long next = helper.getLevel().getServer().getTickCount() + 1L;
+				PathBudget.SERVER.spend(next, PathBudget.SERVER.available(next));
+			}
+		});
 		minedFromTheFloor(helper, bot);
 	}
 
