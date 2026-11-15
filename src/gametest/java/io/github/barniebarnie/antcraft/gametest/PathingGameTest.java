@@ -28,6 +28,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LadderBlock;
@@ -292,6 +293,53 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.VINE), "the vine is gone at y " + y);
 			}
 		});
+	}
+
+	/**
+	 * A stone walkway three over the floor at z 3 from x 1 to 6, its block at x 3 jungle leaves with no log in range
+	 * (distance 7), which decay at a random tick, and a way round them at z 4: the bot goes round and never stands on
+	 * the leaves. Felling a giant jungle, it walked on leaves that decayed under it once the trunk was gone (#673).
+	 */
+	// Measured: passes at tick 36 (red: stood on the leaves at tick 12).
+	@GameTest(maxTicks = 70)
+	public void walksRoundLeavesThatDecay(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 3, 3, 6, 3, 3, Blocks.STONE);
+		fill(helper, 2, 3, 4, 4, 3, 4, Blocks.STONE);
+		BlockPos leaves = new BlockPos(3, 3, 3);
+		helper.setBlock(leaves, Blocks.JUNGLE_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, LeavesBlock.DECAY_DISTANCE));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 4, 3);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(6, 4, 3)));
+
+		helper.onEachTick(() -> {
+			if (bot.onGround() && bot.blockPosition().below().equals(helper.absolutePos(leaves))) {
+				helper.fail("stood on the leaves");
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(6, 4, 3));
+	}
+
+	/**
+	 * A stone block four over the floor at (4, 4, 4), the bot over its west edge, its feet in the air beside it, as a bot
+	 * lands that overshoots a drop, with dirt: to get a block higher, it plans from the block it rests on and pillars up
+	 * there. Felling a giant jungle, a bot that landed so planned from the block its feet were in, a step up placing a
+	 * block where its body was, and moved back to the middle of that block to make room, off the edge, and fell (#673).
+	 */
+	// Measured: passes at tick 12 (red: fell off at tick 11).
+	@GameTest(maxTicks = 25)
+	public void climbsFromOverTheEdgeOfTheBlockItRestsOn(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(4, 4, 4, Blocks.STONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.8, 5, 4.5));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+		helper.runAfterDelay(3, () -> GameTests.walkTo(bot, helper.absolutePos(new BlockPos(4, 6, 4)), 0)); // landed
+
+		helper.onEachTick(() -> {
+			if (bot.getY() < helper.absolutePos(BlockPos.ZERO).getY() + 4.5) {
+				helper.fail("fell off, at " + bot.position().subtract(Vec3.atLowerCornerOf(helper.absolutePos(BlockPos.ZERO))));
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(4, 6, 4));
 	}
 
 	/** A bedrock wall across the room with a closed oak door in it: the bot opens the door, walks through and shuts it behind it. */

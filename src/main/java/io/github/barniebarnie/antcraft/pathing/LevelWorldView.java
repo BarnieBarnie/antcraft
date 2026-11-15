@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -77,9 +78,21 @@ public class LevelWorldView implements WorldView {
 	@Override
 	public boolean canStandOn(BlockPos pos) {
 		BlockState state = this.blocks.get(pos);
+		if (decays(state)) {
+			return false;
+		}
 		// A stair is half a block lower at the front, but walkable.
 		return state.isFaceSturdy(this.level, pos, Direction.UP) || state.getBlock() instanceof StairBlock
 			|| isLowFloor(state.getCollisionShape(this.level, pos));
+	}
+
+	/**
+	 * Leaves with no log in range and not placed by hand, which vanilla decays at a random tick: no floor to stand on or
+	 * land on. Felling a giant jungle, a bot walked on leaves that decayed under it once the trunk was gone (#673).
+	 */
+	public static boolean decays(BlockState state) {
+		return state.getBlock() instanceof LeavesBlock && !state.getValue(LeavesBlock.PERSISTENT)
+			&& state.getValue(LeavesBlock.DISTANCE) == LeavesBlock.DECAY_DISTANCE;
 	}
 
 	@Override

@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.entity;
 import io.github.barniebarnie.antcraft.entity.navigation.LineOfSight;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.Path;
 import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
@@ -19,6 +20,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
@@ -41,12 +43,14 @@ final class BotBody implements MoveApi.Body {
 	 * Whether the bot standing on {@code floor} lands at most {@link PathFollower#MAX_DROP} down, as a path drops it, once
 	 * that block is broken: else standing on it is no stand to break it from. Taking back a scaffold pillar whose lower
 	 * blocks it took back from the ground before, it stood on each block left to mine it and fell to the floor (#668).
+	 * Leaves that decay are no floor to land on (#673).
 	 */
 	private boolean landsUnhurt(BlockPos floor) {
 		ServerLevel level = this.level();
 		for (int drop = 1; drop <= PathFollower.MAX_DROP; drop++) {
 			BlockPos below = floor.below(drop);
-			if (!level.getBlockState(below).getCollisionShape(level, below).isEmpty() || level.getFluidState(below).is(FluidTags.WATER)) {
+			BlockState state = level.getBlockState(below);
+			if (!state.getCollisionShape(level, below).isEmpty() && !LevelWorldView.decays(state) || state.getFluidState().is(FluidTags.WATER)) {
 				return true;
 			}
 		}

@@ -50,6 +50,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignTextSlot;
@@ -296,6 +297,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.DIRT, 4, 5, 4);
 			helper.assertValueEqual(bot.getHealth(), bot.getMaxHealth(), "health");
 		});
+	}
+
+	/**
+	 * As {@link #mineTheBlockUnderfootOverADropIsOutOfReach}, with jungle leaves with no log in range under the block: the
+	 * bot would land on them, but they decay at a random tick and drop it 4, so they are no floor to land on (#673).
+	 */
+	// Measured: passes at tick 2 (red: still mining at tick 12).
+	@GameTest(maxTicks = 10)
+	public void mineTheBlockUnderfootOverLeavesThatDecayIsOutOfReach(GameTestHelper helper) {
+		helper.setBlock(4, 4, 4, Blocks.JUNGLE_LEAVES.defaultBlockState().setValue(LeavesBlock.DISTANCE, LeavesBlock.DECAY_DISTANCE));
+		helper.setBlock(4, 5, 4, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 6, 4);
+		expect(helper, bot, "r = mine(" + at(helper, 4, 5, 4) + ")\nprint(r.ok, r.reason)\n", List.of("False out_of_reach"),
+			() -> helper.assertBlockPresent(Blocks.DIRT, 4, 5, 4));
 	}
 
 	/** The same block with a floor 3 under it: the bot breaks it from where it stands and drops 3, unhurt. */

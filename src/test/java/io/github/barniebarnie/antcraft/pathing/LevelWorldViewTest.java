@@ -12,6 +12,7 @@ import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
+import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -74,5 +75,15 @@ class LevelWorldViewTest {
 	void aTrapdoorOpensByHandButAnIronOneDoesNot() {
 		assertTrue(LevelWorldView.isOpenable(Blocks.OAK_TRAPDOOR.defaultBlockState()));
 		assertFalse(LevelWorldView.isOpenable(Blocks.IRON_TRAPDOOR.defaultBlockState()));
+	}
+
+	/** Leaves with no log in range (distance 7) and not placed by hand decay at a random tick, so are no floor (#673). */
+	@Test
+	void leavesWithNoLogInRangeDecay() {
+		BlockState leaves = Blocks.JUNGLE_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, false);
+		assertTrue(LevelWorldView.decays(leaves.setValue(LeavesBlock.DISTANCE, LeavesBlock.DECAY_DISTANCE)));
+		assertFalse(LevelWorldView.decays(leaves.setValue(LeavesBlock.DISTANCE, 6)));
+		assertFalse(LevelWorldView.decays(leaves.setValue(LeavesBlock.DISTANCE, 7).setValue(LeavesBlock.PERSISTENT, true)));
+		assertFalse(LevelWorldView.decays(Blocks.STONE.defaultBlockState()));
 	}
 }

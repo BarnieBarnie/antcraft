@@ -31,7 +31,7 @@ The bot picks the best tool it carries for the block and holds it; with none, it
 
 Reach is a matter of sight: the bot sees the block when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the block's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the block as a wall does, so the bot walks to where it sees past them; [`use`](use.md) and [`place`](place.md) judge reach the same way.
 
-The block the bot stands on, or rests on alone over its edge, is in reach only when, once it is broken, the bot drops at most 3 blocks, as far as a path drops it, or into water: else the bot walks to another stand, and fails `out_of_reach` where there is none, rather than fall and get hurt (#668). So a bot on the last blocks of a scaffold pillar whose lower blocks are gone leaves them standing.
+The block the bot stands on, or rests on alone over its edge, is in reach only when, once it is broken, the bot drops at most 3 blocks, as far as a path drops it, or into water (not onto leaves with no log in range, which decay, #673): else the bot walks to another stand, and fails `out_of_reach` where there is none, rather than fall and get hurt (#668). So a bot on the last blocks of a scaffold pillar whose lower blocks are gone leaves them standing.
 
 Mining crops harvests them: `mine` on ripe wheat (`block(p).state["age"] == 7`) gives wheat and seeds.
 

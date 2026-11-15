@@ -33,6 +33,7 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -451,15 +452,49 @@ public class PathFollower {
 	 * The block the bot's feet are in, as paths count it: the one over the block it stands on. On a block a little lower
 	 * than a full one, such as farmland, snow or a bottom slab, its block position is that block itself, which a path
 	 * never steps to (#634, #642); so too in the air over one, just spawned or mid-jump (#659), but not while climbing
-	 * inside scaffolding, whose shape out of context is a floor.
+	 * inside scaffolding, whose shape out of context is a floor. On the ground over the edge of a block with a drop that
+	 * hurts under the block it is in, the one over the block it rests on: landed so after overshooting a drop, a bot planned from
+	 * the air beside it and moved back to the middle of that, and fell (#673).
 	 */
 	public static BlockPos feet(AntBot bot) {
 		BlockPos at = bot.blockPosition();
+		BlockPos feet;
 		if (bot.getY() - at.getY() <= 1e-3) {
-			return at;
+			feet = at;
+		} else {
+			feet = bot.onGround() || !bot.onClimbable() && LevelWorldView.isLowFloor(bot.level().getBlockState(at).getCollisionShape(bot.level(), at))
+				? at.above() : at;
 		}
-		return bot.onGround() || !bot.onClimbable() && LevelWorldView.isLowFloor(bot.level().getBlockState(at).getCollisionShape(bot.level(), at))
-			? at.above() : at;
+		return bot.onGround() ? restingOver(bot, feet) : feet;
+	}
+
+	/**
+	 * {@code feet}, or if it would drop more than {@link #MAX_DROP} from there and not into water, the block over the one
+	 * under the bot's box nearest its middle it rests on. A drop a path takes, such as down a step, leaves it as it is.
+	 */
+	private static BlockPos restingOver(AntBot bot, BlockPos feet) {
+		Level level = bot.level();
+		for (int drop = 1; drop <= MAX_DROP + 1; drop++) {
+			BlockPos below = feet.below(drop);
+			BlockState state = level.getBlockState(below);
+			if (!state.getCollisionShape(level, below).isEmpty() || !state.getFluidState().isEmpty()) {
+				return feet;
+			}
+		}
+		AABB box = bot.getBoundingBox();
+		AABB under = new AABB(box.minX, box.minY - 0.05, box.minZ, box.maxX, box.minY, box.maxZ);
+		BlockPos best = feet;
+		double bestDist = Double.MAX_VALUE;
+		for (BlockPos floor : BlockPos.betweenClosed(BlockPos.containing(box.minX, feet.getY() - 1, box.minZ),
+				BlockPos.containing(box.maxX, feet.getY() - 1, box.maxZ))) {
+			VoxelShape shape = level.getBlockState(floor).getCollisionShape(level, floor);
+			double dist = Vec3.atBottomCenterOf(floor).distanceToSqr(bot.getX(), floor.getY(), bot.getZ());
+			if (!shape.isEmpty() && shape.move(floor).bounds().intersects(under) && dist < bestDist) {
+				best = floor.above();
+				bestDist = dist;
+			}
+		}
+		return best;
 	}
 
 	/** Where the current step starts: the end of the step before it, or the start of the path. */

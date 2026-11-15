@@ -487,14 +487,15 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * ticks a log (the mean of seeds 1 to 40: a trunk of 20.5, 87 logs). Seed 6 rather than a typical tree: seed 37 (a
 	 * trunk of 20, 89 logs) failed 4 of 9 runs (before and after #665, #670 and #671), the bot falling to its death or
 	 * leaving a branch log at (11, 18, 6), and seeds 8, 17 and 12 (trunks of 21, 24 and 28) killed it by falls each time
-	 * (#668). Not yet unhurt: once in a few runs the bot stands on jungle leaves by a vine that decay under it with the
-	 * trunk gone, and falls (seen at 1 and 5 damage, after the fix of #668).
+	 * (#668). It fails once the bot is hurt (#673): it walked on jungle leaves left with no log in range, which decayed
+	 * under it, and, landing over the edge of a block after a drop, planned from the air beside it and walked off. Seed 37
+	 * no longer hurt it, but still left the branch log at (11, 18, 6) in 2 of 6 runs.
 	 */
-	// Measured: passes at tick 2718 to 3402 (9 of 9, three at once), the felling 2306 to 2990 ticks; seed 37 3282 to 4448.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 6800)
+	// Measured: passes at tick 2597 to 4012 (red: hurt in 5 of 18 runs at tick 1709 to 3341), the felling 2085 to 3416 ticks.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
-			GIANT_JUNGLE_HARVEST, false);
+			GIANT_JUNGLE_HARVEST, true);
 	}
 
 	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
@@ -566,7 +567,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				}
 			}
 			for (BlockPos p : spots) {
-				helper.assertBlockPresent(saplingBlock, p);
+				helper.assertTrue(helper.getBlockState(p).is(saplingBlock), "no sapling at " + p.toShortString() + ", bot at "
+					+ TestPositions.relative(helper, bot.blockPosition()).toShortString() + "; said " + said(bot));
 			}
 			int stored = 0;
 			for (int x = 6; x < 16; x++) {
