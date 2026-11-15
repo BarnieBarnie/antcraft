@@ -387,10 +387,18 @@ public final class PathFinder {
 			}
 			// A door on the way, such as one the bot drops into the doorway of, costs its opening once.
 			double opening = this.world.canOpen(edge, dir) || this.world.canOpen(edge.above(), dir) ? OPEN_COST : 0;
+			return this.fall(edge, dir, WALK_COST + opening);
+		}
+
+		/**
+		 * Falls from {@code from} onto the first floor or into the first water under it, moving {@code dir}, for
+		 * {@code cost} and its fall: one past maxDrop at what it hurts (see {@link Death}), else not at all.
+		 */
+		private Candidate fall(BlockPos from, Direction dir, double cost) {
 			Death death = this.options.death();
 			int maxFall = death != null ? FALL_ANY : Math.max(this.options.maxDrop(), MAX_WATER_DROP);
 			for (int fall = 1; fall <= maxFall; fall++) {
-				BlockPos to = edge.below(fall);
+				BlockPos to = from.below(fall);
 				boolean water = this.swimmable(to);
 				if (!water && !this.open(to, dir)) {
 					return null;
@@ -405,8 +413,8 @@ public final class PathFinder {
 				if (hurt == BLOCKED) {
 					return null;
 				}
-				double cost = (water ? SWIM_COST : WALK_COST) + fall * FALL_COST_PER_BLOCK + opening + hurt;
-				return new Candidate(new Step(water ? MoveType.SWIM : MoveType.DROP, to, List.of(), List.of()), cost);
+				double total = cost + (water ? SWIM_COST - WALK_COST : 0) + fall * FALL_COST_PER_BLOCK + hurt;
+				return new Candidate(new Step(water ? MoveType.SWIM : MoveType.DROP, to, List.of(), List.of()), total);
 			}
 			return null;
 		}
@@ -445,15 +453,37 @@ public final class PathFinder {
 
 		/**
 		 * One block up or down a ladder, from one climbable block to the next, or down into one, or up out of the top of a
-		 * climbable block a bot stands on, such as scaffolding. Breaks nothing on the way.
+		 * climbable block a bot stands on, such as scaffolding. Breaks nothing on the way. Down into the bottom of a
+		 * column that ends in the air, such as vines, it is a fall from there: vanilla slides a mob down anything it
+		 * climbs, so the bot slides off its end (#714).
 		 */
 		private Candidate climb(BlockPos feet, MoveType type) {
 			boolean up = type == MoveType.CLIMB_UP;
 			BlockPos to = up ? feet.above() : feet.below();
+			if (!up && this.isClimbable(to) && !this.isClimbable(to.below()) && !this.canStand(to.below())) {
+				return this.fall(to, Direction.DOWN, CLIMB_COST);
+			}
 			boolean held = up
-				? this.world.isClimbable(feet) && (this.world.isClimbable(to) && this.climbable(to.above()) || this.onTop(feet) && this.open(to) && this.open(to.above()))
-				: this.world.isClimbable(to);
+				? this.isClimbable(feet) && (this.isClimbable(to) && this.climbable(to.above()) || this.onTop(feet) && this.open(to) && this.open(to.above()))
+				: this.isClimbable(to);
 			return held ? new Candidate(new Step(type, to, List.of(), List.of()), CLIMB_COST) : null;
+		}
+
+		/**
+		 * Climbable in the world as the path so far left it: not a block it broke or placed, nor one beside or under a
+		 * block it broke, such as vines on it, which drop with it (#714).
+		 */
+		// ponytail: only the climbable's own neighbours, not those of the vines it hangs from; walk up the column if that shows.
+		private boolean isClimbable(BlockPos pos) {
+			if (!this.world.isClimbable(pos) || edited(this.node, pos) != null) {
+				return false;
+			}
+			for (Direction dir : Direction.values()) {
+				if (dir != Direction.DOWN && edited(this.node, pos.relative(dir)) == Boolean.FALSE) {
+					return false;
+				}
+			}
+			return true;
 		}
 
 		/**
@@ -466,16 +496,16 @@ public final class PathFinder {
 
 		/** In a ladder or other climbable block with nothing to stand on under it, where a bot holds on rather than stands. */
 		boolean hanging(BlockPos feet) {
-			return this.world.isClimbable(feet) && !this.canStand(feet.below());
+			return this.isClimbable(feet) && !this.canStand(feet.below());
 		}
 
 		/** Open, or a ladder or hatch a bot climbs through. */
 		private boolean climbable(BlockPos pos) {
-			return this.open(pos) || this.world.isClimbable(pos);
+			return this.open(pos) || this.isClimbable(pos);
 		}
 
 		private Candidate pillar(BlockPos feet) {
-			if (this.world.isClimbable(feet) || !this.options.canPlace() || !this.world.mayPlace(feet) || this.world.jumpTop(feet.below()) < 2) {
+			if (this.isClimbable(feet) || !this.options.canPlace() || !this.world.mayPlace(feet) || this.world.jumpTop(feet.below()) < 2) {
 				return null;
 			}
 			BlockPos to = feet.above();

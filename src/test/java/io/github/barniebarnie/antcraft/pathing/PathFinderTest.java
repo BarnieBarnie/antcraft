@@ -546,6 +546,48 @@ class PathFinderTest {
 		assertEquals(List.of(MoveType.WALK, MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN), types(path).subList(0, 4));
 	}
 
+	/**
+	 * Vines from START down to y=-4 on a wall at x=1, ending in the air 7 blocks over a stone floor at y=-12: a bot
+	 * slides off the bottom of anything it climbs (vanilla slides a mob down at 0.15 a tick), so climbing down to it is a
+	 * fall from there (#714).
+	 */
+	private static GridWorld vinesOverADrop() {
+		return new GridWorld().fill(0, -4, 0, 0, 1, 0, 'V').fill(1, -4, 0, 1, 1, 0, '#').fill(-10, -12, -10, 10, -12, 10, '#');
+	}
+
+	@Test
+	void doesNotClimbDownVinesPastTheirEndIntoADropItWouldNotTake() {
+		Path path = find(vinesOverADrop(), new BlockPos(0, -11, 0), WALK_ONLY);
+		assertFalse(path.complete(), "fell: " + path.steps());
+		assertTrue(path.steps().stream().allMatch(s -> s.to().getY() > -4), "climbed down to the end: " + path.steps());
+	}
+
+	@Test
+	void theFallOffTheEndOfVinesIsCostedLikeAnyDrop() {
+		BlockPos landing = new BlockPos(0, -11, 0);
+		Path path = find(vinesOverADrop(), landing, walkOnly(death(20, landing.south(10))));
+		assertEquals(List.of(MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN, MoveType.CLIMB_DOWN, MoveType.DROP), types(path));
+		// The climb into the bottom vine, then 7 blocks down, 4 past maxDrop: 4/20 of a death 10 blocks from home.
+		double hurt = 4 / 20.0 * (200 + 10 * PathFinder.WALK_COST);
+		assertEquals(5 * PathFinder.CLIMB_COST + 7 * PathFinder.FALL_COST_PER_BLOCK + hurt, path.cost(), 1e-9);
+	}
+
+	/**
+	 * Vines on the east face of a wall, by a dirt doorway at their foot that a path breaks to reach them: the two vines on
+	 * the dirt drop with it, so the path does not climb them (#714).
+	 */
+	@Test
+	void doesNotClimbVinesOnABlockItBroke() {
+		GridWorld world = GridWorld.flat(5).fill(1, 1, -5, 1, 5, 5, 'B').fill(1, 1, 0, 1, 2, 0, 'D').fill(2, 1, 0, 2, 5, 0, 'V');
+		Path path = find(world, new BlockPos(1, 6, 0), FULL);
+		assertTrue(path.complete(), "found no way: " + path.steps());
+		BlockPos from = START;
+		for (Step step : path.steps()) {
+			assertFalse(step.type() == MoveType.CLIMB_UP && from.getY() < 3 && from.getX() == 2, "climbed a vine on the broken dirt: " + path.steps());
+			from = step.to();
+		}
+	}
+
 	@Test
 	void digsDownToLowerGoal() {
 		GridWorld world = GridWorld.flat(5).fill(-5, -5, -5, 5, -1, 5, 'D');
