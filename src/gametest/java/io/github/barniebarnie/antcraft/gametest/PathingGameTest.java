@@ -355,6 +355,31 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Bedrock from (1, 1, 1) to (6, 4, 3) but for a nook at (3, 3..4, 2), where the bot stands, and vines at (3, 2..4, 3)
+	 * hanging on their south side from a bedrock block at (3, 4, 4): the bot drops onto the vines, then off them south,
+	 * under that block, to the floor. Hanging on the vines most of a block over the one it drops off from, its head
+	 * bumped the block as it moved off, and on vines a bump climbs: it rose, slid back and tried again until goto timed
+	 * out, felling a mangrove's crown (#776).
+	 */
+	// Measured: passes at tick 34 (red: at (3, 3, 3) at its limit of 100, having climbed onto the block and dropped back).
+	@GameTest(maxTicks = 70)
+	public void dropsOffVinesUnderABlock(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 4, 3, Blocks.BEDROCK);
+		fill(helper, 3, 3, 2, 3, 4, 2, Blocks.AIR);
+		helper.setBlock(3, 4, 4, Blocks.BEDROCK);
+		for (int y = 4; y >= 2; y--) {
+			helper.setBlock(3, y, 3, Blocks.VINE.defaultBlockState().setValue(VineBlock.SOUTH, true));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 3, 2);
+		BlockPos target = helper.absolutePos(new BlockPos(3, 1, 5));
+		GameTests.walkTo(bot, target, 0);
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().equals(target) && bot.onGround(),
+			"at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO))));
+	}
+
+	/**
 	 * A bedrock shaft four high round (3, 1, 3): the bot with dirt pillars up out of it, and as it lands on its first block
 	 * a vine grows in where it stands, on the south side. The search plans no pillar out of a vine, but vines grow after it
 	 * planned, and on one a jump only climbs: the bot that jumped only from the ground never rose high enough to place its

@@ -233,10 +233,11 @@ public class PathFollower {
 			}
 			if (step.type() == MoveType.CLIMB_UP || step.type() == MoveType.CLIMB_DOWN) {
 				this.climb(step);
-			} else if (step.type() == MoveType.WALK && this.bot.onClimbable()) {
+			} else if ((step.type() == MoveType.WALK || step.type() == MoveType.DROP) && this.bot.onClimbable()) {
 				// Off a ladder, steered like a climb: turning to walk away, the move control would bump into the wall, and
-				// climb up it. Not before it has slid down to the floor it walks on, or its head bumps into the top of the way out.
-				this.climb(this.bot.getY() > step.to().getY() + 0.2 ? new Step(MoveType.CLIMB_DOWN, feet, List.of(), List.of()) : step);
+				// climb up it. Not before it has slid down to the floor it walks on, or its head bumps into the top of the way out
+				// and it climbs that: off vines, it rose, slid back and tried again until goto timed out (#776).
+				this.climb(this.bot.getY() > this.stepFrom().getY() + 0.2 ? new Step(MoveType.CLIMB_DOWN, feet, List.of(), List.of()) : step);
 			} else {
 				this.moveTo(step.to());
 			}

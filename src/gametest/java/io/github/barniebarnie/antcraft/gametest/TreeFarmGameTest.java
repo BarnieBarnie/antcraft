@@ -581,7 +581,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// its take_back 0 to 1370 of that, as the top branch logs no stand reaches each take a pillar of some 8 to 10. In 48
 	// copies of seed 13, 46 took 1250 to 2900, but two took 5761 and over 8000: a mine's walk to a log beside its stand
 	// in the crown got no nearer for 2400 ticks (MoveApi.STALL_TICKS) and timed out, the bot climbing at 0.12 a tick
-	// against a block face and slipping back (a vine the tree grew, likely), a path follower bug left for its own issue.
+	// against a block face and slipping back. That was the follower dropping off a vine under a block, its head bumping
+	// the block (#776): since, harvest of seed 13 alone, 144 temporary copies, took 2060 to 4318, no walk timing out.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
 	public void aMangroveCellIsGrownHarvestedAndReplanted(GameTestHelper helper) {
 		mangrove(helper, at -> advance(helper, at, 0));
