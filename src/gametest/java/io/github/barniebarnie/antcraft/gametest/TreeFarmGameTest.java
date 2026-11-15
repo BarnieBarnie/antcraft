@@ -371,6 +371,62 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A birch cell of 5x5 from (2, 0, 2) whose spot's dirt a path dug out, a hole under its trunk of three logs (#764):
+	 * harvest fells it, puts dirt back under the spot and plants the sapling.
+	 */
+	// Measured: passes at tick 104 (red: no dirt, no sapling at tick 372).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 220)
+	public void harvestPutsBackTheDirtUnderASpot(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.AIR);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(4, y, 4, Blocks.BIRCH_LOG);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 8, 1, 8);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 8), new ItemStack(Items.BIRCH_SAPLING));
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None"), "printed");
+			helper.assertBlockPresent(Blocks.DIRT, 4, 0, 4);
+			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 4, 1, 4);
+		});
+	}
+
+	/**
+	 * A giant spruce cell from (2, 0, 2) whose 2x2 trunk stands with the dirt of two of its spots dug out, one a hole,
+	 * one cobblestone a path put there (#764): harvest puts dirt back under both and replants all four spots.
+	 */
+	// Measured: passes at tick 314 (red: no dirt under (7, 0, 6) at tick 702).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 650)
+	public void harvestPutsBackTheDirtUnderTheSpotsOfASquareCell(GameTestHelper helper) {
+		List<BlockPos> spots = List.of(new BlockPos(6, 1, 6), new BlockPos(7, 1, 6), new BlockPos(6, 1, 7), new BlockPos(7, 1, 7));
+		for (BlockPos p : spots) {
+			helper.setBlock(p.below(), Blocks.DIRT);
+			for (int y = 0; y < 3; y++) {
+				helper.setBlock(p.above(y), Blocks.SPRUCE_LOG);
+			}
+		}
+		helper.setBlock(spots.get(1).below(), Blocks.AIR);
+		helper.setBlock(spots.get(2).below(), Blocks.COBBLESTONE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 12);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT, 8),
+			new ItemStack(Items.SPRUCE_SAPLING, 4));
+		start(helper, bot, "giant_spruce", new BlockPos(2, 0, 2), new BlockPos(11, 0, 11), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None"), "printed");
+			for (BlockPos p : spots) {
+				helper.assertBlockPresent(Blocks.DIRT, p.below());
+				helper.assertBlockPresent(Blocks.SPRUCE_SAPLING, p);
+			}
+		});
+	}
+
+	/**
 	 * A birch cell of 5x5 from (2, 0, 2) with a trunk of three logs at its spot and a log up at a corner, on leaves,
 	 * touching none of them, as a bot that died up a giant jungle, having mined the logs round a branch log, left that log
 	 * cut off from its tree (#713): harvest fells the trunk, then the log it left, so the cell is no longer grown.

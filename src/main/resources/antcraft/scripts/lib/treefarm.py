@@ -139,7 +139,7 @@ def materials(kind):
 
 def build_cell(kind, low, high):
     """Builds the cell of kind with corners low and high (low.y the floor): flattens the floor at low.y and clears the
-    clear blocks over it (lib.terrain.flatten, keeping a torch at a torch spot), puts dirt under each sapling spot, the torches and the roof, then plants.
+    clear blocks over it (lib.terrain.flatten, keeping a torch at a torch spot), puts dirt under each sapling spot (soil), the torches and the roof, then plants.
     Gives result(): ok, or the reason of the step that failed with at."""
     low = Pos(low)
     high = Pos(high)
@@ -151,14 +151,9 @@ def build_cell(kind, low, high):
     if not r["ok"]:
         return r
     for p in ps:
-        ground = p.down()
-        if not lib.trees.is_kind(ground, "#minecraft:dirt"):
-            r = mine(ground)
-            if not r and r.reason != "target_gone":
-                return result(r.reason, ground)
-            r = place(ground, DIRT)
-            if not r:
-                return result(r.reason, ground)
+        r = soil(p.down())
+        if not r["ok"]:
+            return r
     for t in torches(low, high):
         if block(t).id not in TORCHES:
             r = place(t, TORCH)
@@ -176,10 +171,40 @@ def build_cell(kind, low, high):
     lib.trees.take_back(earlier)
     for p in ps:
         if block(p).is_air:
-            r = place(p, sapling(kind))
-            if not r:
-                return result(r.reason, p)
+            r = plant(kind, p)
+            if not r["ok"]:
+                return r
     return result()
+
+
+def soil(ground, radius=32):
+    """Puts dirt at ground, a sapling spot's floor, where there is none: mines what is there, such as stone or a block a
+    path put in, getting the dirt it lacks within radius (lib.get). Gives result(): ok, or the reason with at."""
+    if lib.trees.is_kind(ground, "#minecraft:dirt"):
+        return result()
+    if not block(ground).is_air:
+        r = mine(ground)
+        if not r and r.reason != "target_gone":
+            return result(r.reason, ground)
+    if not count(DIRT):
+        # ponytail: lib.get may dig the dirt it gets from under another spot; the farm keeps a stack (#762), so seldom.
+        r = lib.get.get(DIRT, 1, radius)
+        if not r["ok"]:
+            return r
+    r = place(ground, DIRT)
+    return result() if r else result(r.reason, ground)
+
+
+def plant(kind, p, radius=32):
+    """Plants a sapling of kind at the spot p, the bot carrying one: dirt under it first where a path dug it out (soil,
+    #764), then mines what stands at p. Gives result(): ok, or the reason with at."""
+    r = soil(p.down(), radius)
+    if not r["ok"]:
+        return r
+    if not block(p).is_air:
+        mine(p)
+    r = place(p, sapling(kind))
+    return result() if r else result(r.reason, p)
 
 
 def within(what, kind, low, high):
@@ -217,8 +242,8 @@ def grown(kind, low, high):
 def harvest(kind, low, high, radius=32):
     """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), again while a log is left, such
     as one cut off from the tree, mines the roots in the cell where the kind has them (a mangrove's), picks up the
-    sticks and apples lying about, then, where it felled the tree whole, plants each empty sapling spot over dirt,
-    getting the saplings it lacks within radius (lib.get), such as a square kind with fewer than four carried; where it
+    sticks and apples lying about, then, where it felled the tree whole, plants each empty sapling spot (plant, so
+    with dirt put back under it), getting the saplings it lacks within radius (lib.get), such as a square kind with fewer than four carried; where it
     cannot, tend does later.
     Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space with at, the log left, which
     grown still sees."""
@@ -248,8 +273,8 @@ def harvest(kind, low, high, radius=32):
     lib.trees.take_back()
     # Planted last: a pillar up to the leaves fell_whole climbed took a sapling's place (#652).
     if r["ok"]:
-        empty = [p for p in spots(kind, low, high) if block(p).is_air and lib.trees.is_kind(p.down(), "#minecraft:dirt")]
+        empty = [p for p in spots(kind, low, high) if block(p).is_air]
         if empty and lib.get.get(sapling(kind), len(empty), radius)["ok"]:
             for p in empty:
-                place(p, sapling(kind))
+                plant(kind, p, radius)
     return r

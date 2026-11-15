@@ -180,20 +180,21 @@ def unplanted(kind, b):
     return [p for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id != lib.treefarm.sapling(kind) and not lib.trees.is_log(p)]
 
 
-def tend(kind, b):
-    """Puts back what cell b lacks: a sapling on each spot without one (mining what stands there first, such as a
-    scaffold block a felling left) and its torches (a walk that pillars where a torch stands breaks it, and the bot
-    picks it up), as far as the bot has them. Nothing while logs of the cell's tree stand, as a sapling under them never
-    grows (#644)."""
+def tend(kind, b, radius=32, told=None):
+    """Puts back what cell b lacks: a sapling on each spot without one (lib.treefarm.plant: dirt under it where a path dug
+    it out, getting the dirt it lacks within radius, #764, and mining what stands there first, such as a scaffold block a
+    felling left; a spot it cannot plant it says once, tell with told) and its torches (a walk that pillars where a torch
+    stands breaks it, and the bot picks it up), as far as the bot has them. Nothing while logs of the cell's tree stand,
+    as a sapling under them never grows (#644)."""
     if lib.treefarm.grown(kind, b[0], b[1]):
         return
     torches = lib.treefarm.torches(b[0], b[1])
     s = lib.treefarm.sapling(kind)
     for p in unplanted(kind, b):
         if count(s):
-            if not block(p).is_air:
-                mine(p)
-            place(p, s)
+            r = lib.treefarm.plant(kind, p, radius)
+            if not r["ok"]:
+                tell({} if told is None else told, f"plant: {r['reason']} at {r['at']}")
     for t in torches:
         if block(t).id not in lib.treefarm.TORCHES and count(lib.treefarm.TORCH):
             if not block(t).is_air:
@@ -280,7 +281,7 @@ def farm(kind, name, size, radius):
         if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
             get(s, n, radius)
         for b in boxes:
-            tend(kind, b)
+            tend(kind, b, radius, told)
         if felled:
             learn(kind, game_time() - start, trees)
             backoff = 0

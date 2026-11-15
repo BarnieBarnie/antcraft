@@ -623,6 +623,45 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("minecraft:air"), "printed"));
 	}
 
+	/** tend puts back the dirt a path dug out under the spot of a built cell, then plants (#764). */
+	// Measured: passes at tick 18 (red: printed minecraft:air minecraft:air).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 40)
+	public void tendPutsBackTheDirtUnderASpot(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.AIR);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, 2));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+		script(helper, bot, "jobs.wood_farm.tend(kind, cell)\nprint(block(spot.down()).id, block(spot).id)\n");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("minecraft:dirt minecraft:birch_sapling"), "printed"));
+	}
+
+	/**
+	 * tend for a spot with no dirt under it, the bot carrying none (#764): it gets one from the chest within radius and
+	 * plants; with none to get anywhere it says so once over two tends and goes on.
+	 */
+	// Measured: passes at tick 51 to 53 (red: tend took no radius or told).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
+	public void tendGetsTheDirtItLacksOrSaysSoOnce(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.AIR);
+		helper.setBlock(SPOT_2.below(), Blocks.AIR);
+		helper.setBlock(3, 1, 8, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, 2));
+		BlockPos other = helper.absolutePos(SPOT_2);
+		script(helper, bot, "told = {}\njobs.wood_farm.tend(kind, cell, 12, told)\nprint(block(spot.down()).id, block(spot).id)\n"
+			+ "cell2 = (cell[0] + (6, 0, 0), cell[1] + (6, 0, 0))\njobs.wood_farm.tend(kind, cell2, 12, told)\n"
+			+ "jobs.wood_farm.tend(kind, cell2, 12, told)\nprint(block(Pos(" + other.getX() + ", " + other.getY() + ", "
+			+ other.getZ() + ")).id)\n");
+		helper.succeedWhen(() -> {
+			List<String> said = said(bot);
+			helper.assertValueEqual(said.size(), 3, "said " + said);
+			helper.assertValueEqual(said.get(0), "minecraft:dirt minecraft:birch_sapling", "first cell");
+			helper.assertTrue(said.get(1).startsWith("plant: "), "said " + said);
+			helper.assertValueEqual(said.get(2), "minecraft:air", "second cell");
+		});
+	}
+
 	/**
 	 * A birch whose top logs the bot cannot reach without dirt to pillar with (#644): reap says the harvest failed and why,
 	 * gets dirt from the chest and harvests again, then tend replants the cell, its tree gone.
