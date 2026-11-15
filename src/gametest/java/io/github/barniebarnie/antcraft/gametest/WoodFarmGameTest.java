@@ -549,7 +549,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * (scaffold): with the 16 of other kinds the walks to its top stands got nowhere, the falls off the leaves left the
 	 * bot at 1 health and it died on the retry. With 31 it still fell: taking back a scaffold pillar whose lower blocks it
 	 * took back from the ground before, it stood on the last ones to mine them (#668), so the test fails once the bot is
-	 * hurt. Seed 6 rather than a random tree: the tallest, 28 and 29, took some 8000 to 9000 ticks before #677, some 4200
+	 * hurt. Since #682 a drop that hurts is costed as its share of a death and taken where it is cheaper, so the bot may
+	 * be hurt again (seen at health 11): it recovers from a fall (#679). Seed 6 rather than a random tree: the tallest, 28 and 29, took some 8000 to 9000 ticks before #677, some 4200
 	 * since (seeds 15 and 58; TreeFarmGameTest theTallestGiantSpruceIsFelledWhole fells the one of 29).
 	 */
 	// Measured: passes at tick 4604 to 4862 (red: died at 4496; with 31 dirt, hurt at tick 3005 to 3640).
@@ -557,7 +558,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8500)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
-			GIANT_SPRUCE_HARVEST, true);
+			GIANT_SPRUCE_HARVEST, false);
 	}
 
 	/**
