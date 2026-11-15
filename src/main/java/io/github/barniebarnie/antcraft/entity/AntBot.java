@@ -765,6 +765,27 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	/**
+	 * Where a bot respawning at {@code home} stands: the home itself when nothing blocks feet or head there, else the nearest
+	 * spot within 3 blocks with feet and head clear and a floor, else the home (#696, docs/features/death.md). Only loaded blocks.
+	 */
+	static BlockPos freeSpotNear(ServerLevel level, BlockPos home) {
+		if (clear(level, home) && clear(level, home.above())) {
+			return home;
+		}
+		for (BlockPos pos : BlockPos.withinManhattan(home, 3)) { // nearest first
+			if (clear(level, pos) && clear(level, pos.above())
+				&& level.isLoaded(pos.below()) && !level.getBlockState(pos.below()).getCollisionShape(level, pos.below()).isEmpty()) {
+				return pos.immutable();
+			}
+		}
+		return home;
+	}
+
+	private static boolean clear(ServerLevel level, BlockPos pos) {
+		return level.isLoaded(pos) && level.getBlockState(pos).getCollisionShape(level, pos).isEmpty();
+	}
+
+	/**
 	 * Brings back the bot of {@code respawn} at its home, with full health, and starts the script it ran when it died again
 	 * from the top: from the script library when it came from there, as it is now. Whether the bot is back, or its wait is
 	 * over anyway because it cannot be made from what was saved.
@@ -779,7 +800,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		// It starts its script again from the top below, never where a script saved with it was.
 		bot.savedScript = null;
 		BlockPos home = respawn.home();
-		bot.snapTo(Vec3.atBottomCenterOf(home), bot.getYRot(), bot.getXRot());
+		bot.snapTo(Vec3.atBottomCenterOf(freeSpotNear(level, home)), bot.getYRot(), bot.getXRot());
 		bot.setDeltaMovement(Vec3.ZERO);
 		bot.resetFallDistance();
 		bot.clearFire();

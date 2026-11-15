@@ -140,6 +140,28 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A bot whose home was built over respawns standing free beside it, not inside the block (#696). */
+	@GameTest(maxTicks = 440)
+	public void aBotWhoseHomeWasBuiltOverRespawnsStandingFreeBesideIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		BlockPos home = helper.absolutePos(new BlockPos(4, 1, 4));
+		bot.setHome(home);
+		BotScripts.run(bot, SCRIPT);
+		helper.setBlock(new BlockPos(4, 1, 4), net.minecraft.world.level.block.Blocks.CHEST);
+		helper.runAfterDelay(5, () -> bot.kill(helper.getLevel()));
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again != bot, "not respawned");
+			BlockPos at = Objects.requireNonNull(again).blockPosition();
+			ServerLevel level = helper.getLevel();
+			helper.assertTrue(level.getBlockState(at).getCollisionShape(level, at).isEmpty()
+				&& level.getBlockState(at.above()).getCollisionShape(level, at.above()).isEmpty()
+				&& !level.getBlockState(at.below()).getCollisionShape(level, at.below()).isEmpty(), "respawned at " + at + ", not free");
+			helper.assertTrue(at.distManhattan(home) <= 2, "respawned at " + at + ", home " + home);
+		});
+	}
+
 	/**
 	 * A colony member that dies stays a member while it waits, and respawns one (#353): its script, run again from the top,
 	 * sees its colony.
