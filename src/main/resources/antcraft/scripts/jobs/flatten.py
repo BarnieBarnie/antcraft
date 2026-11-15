@@ -10,6 +10,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.food
 import lib.terrain
 from lib.borrow import borrowed, give_back
 from lib.get import ensure_tool, get
@@ -29,13 +30,14 @@ def flatten(low, high, y, fill):
         r = ensure_tool(kind, uses, None if kind == "pickaxe" else "hand")
         if not r["ok"]:
             return r
-    r = lib.terrain.flatten(low, high, y, fill)
+    # Fed on a long flatten (#773): lib.terrain imports nothing above it, so the job passes upkeep.
+    r = lib.terrain.flatten(low, high, y, fill, each=lib.food.upkeep)
     if r["reason"] == "missing_ingredients":
         for item, n in r["missing"].items():
             g = get(item, n)
             if not g["ok"]:
                 return g
-        r = lib.terrain.flatten(low, high, y, fill)
+        r = lib.terrain.flatten(low, high, y, fill, each=lib.food.upkeep)
     return r
 
 

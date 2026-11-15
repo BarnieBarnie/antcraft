@@ -95,6 +95,30 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * jobs.flatten feeds the bot (#773): a bot at 5 food carrying two bread eats both before the plot is level, as the job
+	 * passes lib.food.upkeep to lib.terrain.flatten as each.
+	 */
+	// Measured: passes at tick 123 (red: flattened with the bread uneaten at tick 54).
+	@GameTest(maxTicks = 250, skyAccess = true)
+	public void theJobFeedsTheBot(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 4);
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_SHOVEL));
+		bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+		bot.getFood().setFoodLevel(5);
+		bot.getFood().setSaturation(0);
+		// Checked as the job ends: idle eats too.
+		ScriptRun[] job = new ScriptRun[1];
+		helper.onEachTick(() -> {
+			if (job[0] != null && job[0].state() == ScriptRun.State.FINISHED && bot.getInventory().countItem(Items.BREAD) > 0) {
+				helper.fail("flattened with " + bot.getInventory().countItem(Items.BREAD) + " bread uneaten, food " + bot.getFood().food());
+			}
+		});
+		runJob(helper, bot, " 2", () -> helper.assertValueEqual(bot.getInventory().countItem(Items.BREAD), 0, "bread left"));
+		job[0] = bot.getScript();
+	}
+
+	/**
 	 * flatten fills a hole of water: a source at the top of the hole, (3, 2, 3), flowing down to (3, 1, 3), is filled
 	 * level like a hole of air (#586).
 	 */

@@ -52,6 +52,36 @@ public class BuildGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * jobs.build feeds the bot (#773): a bot at 5 food carrying none, with two bread in the chest by the pickaxe, gets and
+	 * eats them while it builds, as the job passes lib.food.upkeep to build_here as each.
+	 */
+	// Measured: passes at tick 185 (red: built with the bread uneaten at tick 76).
+	@GameTest(maxTicks = 370)
+	public void theJobFeedsTheBot(GameTestHelper helper) {
+		for (int x = 5; x <= 6; x++) {
+			helper.setBlock(x, 1, 6, Blocks.STONE);
+		}
+		BlockPos at = new BlockPos(1, 1, 6);
+		helper.setBlock(at, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(at, ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.WOODEN_PICKAXE));
+		chest.setItem(1, new ItemStack(Items.BREAD, 2));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getFood().setFoodLevel(5);
+		bot.getFood().setSaturation(0);
+		// Checked as it says built: once the job ends, idle eats too.
+		helper.onEachTick(() -> {
+			int left = chest.countItem(Items.BREAD) + GameTests.carried(bot, Items.BREAD);
+			if (BotScripts.log(bot, Output.Level.PRINT).contains("built antcraft-gametest:two_palettes") && left > 0) {
+				helper.fail("built with " + left + " bread uneaten, food " + bot.getFood().food());
+			}
+		});
+		run(helper, bot, "antcraft-gametest:two_palettes " + coords(helper, 4, 1, 3) + " 0 8", "built antcraft-gametest:two_palettes", () -> {
+			helper.assertValueEqual(chest.countItem(Items.BREAD) + GameTests.carried(bot, Items.BREAD), 0, "bread left");
+		});
+	}
+
+	/**
 	 * The cobble step with its two cobblestone in a chest and no wood for its oak stairs (#585): build_here borrows the
 	 * cobblestone, fails to get the stairs, builds what it has (the two cobblestone of the bottom layer) and fails with
 	 * the stairs in missing. The cobblestone is used up, so nothing is left to give back.

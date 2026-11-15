@@ -613,12 +613,36 @@ public final class WorkApi {
 	 * (32 ticks for most food), then gives its nutrition and saturation and its effects, such as a golden apple's, and uses
 	 * it up, keeping what is left of it, such as a stew's bowl (#702).
 	 */
-	private static final class Eat implements ScriptRun.Action {
+	static final class Eat implements ScriptRun.Action {
 		private final AntBot bot;
 		private final Selector selector;
 		private final Predicate<ItemStack> item;
 		private int ticks;
 		private @Nullable Result result;
+
+		/**
+		 * The eat a hungry bot starts between the steps of a long action, as a player would (#773): the carried food with the
+		 * most points that wastes none of them, of those with no effect on eating (as {@code foods()}) and no block to place,
+		 * so a build keeps its carrots and berries; null if there is none.
+		 */
+		static @Nullable Eat ifHungry(AntBot bot) {
+			int room = FoodConstants.MAX_FOOD - bot.getFood().food();
+			if (room <= 0) {
+				return null;
+			}
+			ItemStack best = null;
+			int most = 0;
+			for (ItemStack stack : bot.getInventory().getItems()) {
+				FoodProperties food = stack.get(DataComponents.FOOD);
+				Consumable consumable = stack.get(DataComponents.CONSUMABLE);
+				if (food != null && food.nutrition() <= room && food.nutrition() > most && !(stack.getItem() instanceof BlockItem)
+					&& (consumable == null || consumable.onConsumeEffects().isEmpty())) {
+					best = stack;
+					most = food.nutrition();
+				}
+			}
+			return best == null ? null : new Eat(bot, Selector.parse(BuiltInRegistries.ITEM.getKey(best.getItem()).toString()));
+		}
 
 		Eat(AntBot bot, Selector selector) {
 			this.bot = bot;

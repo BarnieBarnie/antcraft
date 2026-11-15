@@ -1020,6 +1020,28 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
 	}
 
+	/**
+	 * A bot that goes hungry once it placed the first block of a build, carrying bread, eats it between steps before the
+	 * build ends, as a player would (#773): it eats while that wastes none of the food, so both bread at 5 food.
+	 */
+	// Measured: passes at tick 73 (red: built with both bread uneaten at tick 13).
+	@GameTest(maxTicks = 150)
+	public void buildEatsBetweenStepsWhenHungry(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		boolean[] hungry = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!hungry[0] && !helper.getBlockState(new BlockPos(3, 1, 3)).isAir()) {
+				hungry[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+				bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+			}
+		});
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, count('bread'))\n",
+			List.of("True None 0"), () -> assertCobbleStep(helper, 0));
+	}
+
 	/** A bot builds a blueprint imported from a Litematica schematic ({@code imported_step.litematic}) as any other. */
 	@GameTest(maxTicks = 25)
 	public void buildBuildsAnImportedSchematic(GameTestHelper helper) {

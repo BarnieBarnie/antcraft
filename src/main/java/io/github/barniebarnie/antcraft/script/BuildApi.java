@@ -226,6 +226,8 @@ public final class BuildApi {
 		/** The block last walked to, so a bot that walked there and is still out of reach gives up. */
 		private @Nullable BlockPos walked;
 		private @Nullable BlockPos breaking;
+		/** What the bot eats between steps once hungry, as a player would (#773). */
+		private WorkApi.@Nullable Eat eating;
 		private boolean unloaded;
 		private int waited;
 		/** The block no walk reached without breaking a block in place, so walks to it may; walks to other blocks keep them. */
@@ -306,6 +308,15 @@ public final class BuildApi {
 					return false;
 				}
 				this.breaking = null;
+			}
+			if (this.eating == null) {
+				this.eating = WorkApi.Eat.ifHungry(this.bot);
+			}
+			if (this.eating != null) {
+				if (!this.eating.tick()) {
+					return false;
+				}
+				this.eating = null;
 			}
 			if (this.takingDown) {
 				return this.takeDown();

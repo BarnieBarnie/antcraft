@@ -5,11 +5,12 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
+import lib.food
 from lib.build import build_here
 
 def run(id, at, turn=0, radius=32):
     """Builds the blueprint id at at, turned turn, and says whether it built it. Gives build_here's result()."""
-    r = build_here(id, at, turn, radius=radius)
+    r = build_here(id, at, turn, radius=radius, each=lambda: lib.food.upkeep(radius))  # fed on a long build (#773)
     say(f"built {id}" if r["ok"] else f"not built {id}: {r['reason']} {r['missing']}")
     return r
 

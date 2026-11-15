@@ -34,6 +34,8 @@ The blueprint stands as the Blueprint item's ghost shows it with the same turn a
 
 A block it cannot reach from the ground it reaches standing on blocks already built, or by pillaring up with dirt it carries, never where the blueprint puts a block. Once the blueprint stands, or the build stops short of it, it takes that dirt down again (also after a save and load). A build cancelled before that (a reflex, `stop`) leaves the dirt with the bot for its next `build` to take down, wherever that build is; five minutes on, and every five minutes after, the bot takes down at once what of it is in its reach, into its inventory, so the next build walks only to the rest. Its walks break a block of the blueprint already in place only to get to a block no other walk gets to, and place it again after.
 
+Between steps, a hungry bot eats what it carries, as a player would (#773): while the food with the most points of what it carries wastes none of them, leaving out what has an effect on eating (as [`foods`](../inventory/foods.md) does) and what places a block, such as carrots, which a build may need.
+
 Another bot standing where a block goes steps aside when asked (see [Reflexes](../../features/bots.md#reflexes)); its own action ends with `interrupted`. An idle bot keeps off while the building bot holds the job `job`, or, without `job`, while it holds any `"build"` job and until 10 seconds after its last build. The building bot steps off a spot itself. A player or mob gets two seconds to go.
 
 [`blueprint`](blueprint.md) tells a script beforehand which materials to fetch.

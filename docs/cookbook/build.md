@@ -11,11 +11,12 @@ The arguments are the blueprint's id, the lowest corner `x y z`, the quarters it
 The job, `config/antcraft/scripts/jobs/build.py`:
 
 ```python
+import lib.food
 from lib.build import build_here
 
 def run(id, at, turn=0, radius=32):
     """Builds the blueprint id at at, turned turn, and says whether it built it. Gives build_here's result()."""
-    r = build_here(id, at, turn, radius=radius)
+    r = build_here(id, at, turn, radius=radius, each=lambda: lib.food.upkeep(radius))  # fed on a long build (#773)
     say(f"built {id}" if r["ok"] else f"not built {id}: {r['reason']} {r['missing']}")
     return r
 
@@ -37,6 +38,7 @@ if args is not None:
 - [`materials(id, at, turn)`](../reference/modules/lib/build.md#materialsid-at-turn0-mirrorfalse) is what the site still lacks, so a half-built blueprint costs only the rest.
 - [`build_here`](../reference/modules/lib/build.md#build_hereid-at-turn0-mirrorfalse-radius32-eachnone) gets each of them with [`lib.get.get`](../reference/modules/lib/get.md#getitem-n1-radius32): from a chest within `radius` (borrowed), by gathering (cobblestone from stone, with a pickaxe it borrows or makes) or by crafting. Then it [`build`](../reference/building/build.md)s.
 - An item `get` cannot get does not stop it: it gets the rest and builds what it has, as far as the first block it lacks, then fails with `get`'s reason and what the bot lacks in `missing`. Without wood the cobble step gets its two cobblestone and stops at the stairs: `not built antcraft:cobble_step: no_logs {'minecraft:oak_stairs': 1}`.
+- It passes [`lib.food.upkeep(radius)`](../reference/modules/lib/food.md#upkeepradius32) to `build_here` as `each`, so a bot that goes hungry on a long build gets food and eats before each `get` and `build` (#773).
 - What it borrowed goes back at the end, also on a failure: the pickaxe to its chest, and on a failure the materials it took.
 
 `BuildGameTest` runs the job as it is: a cobblestone mined with a borrowed pickaxe and built, the pickaxe given back; `build_here` with no wood about building the cobble step's two cobblestone and failing on its oak stairs; an unknown blueprint failing with `no_blueprint`; and a round that places nothing failing with `no_progress`.
