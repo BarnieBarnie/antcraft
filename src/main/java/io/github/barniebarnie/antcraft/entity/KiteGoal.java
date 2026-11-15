@@ -4,12 +4,14 @@ import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enemy;
+import net.minecraft.world.level.pathfinder.Path;
 import net.minecraft.world.phys.Vec3;
 import org.jspecify.annotations.Nullable;
 
@@ -46,7 +48,9 @@ public final class KiteGoal extends Goal {
 
 	private final AntBot bot;
 	private @Nullable Creeper creeper;
-	private @Nullable Vec3 away;
+	private @Nullable Path away;
+	/** Whether the bot, cornered, goes at the creeper to strike it. */
+	private boolean cornered;
 
 	KiteGoal(AntBot bot) {
 		this.bot = bot;
@@ -62,18 +66,24 @@ public final class KiteGoal extends Goal {
 	 */
 	public static @Nullable Creeper litNear(AntBot bot) {
 		return TickProfiler.time("bot.kite", () -> bot.level().getEntitiesOfClass(Creeper.class, bot.getBoundingBox().inflate(RANGE),
-				creeper -> creeper.isAlive() && (creeper.getSwellDir() > 0 || creeper.getSwelling(1) > 0) && creeper.distanceTo(bot) <= RANGE)
+				creeper -> creeper.isAlive() && lit(creeper) && creeper.distanceTo(bot) <= RANGE)
 			.stream().min(Comparator.comparingDouble(creeper -> creeper.distanceToSqr(bot))).orElse(null));
+	}
+
+	/** Whether {@code creeper}'s fuse burns or has yet to go out. */
+	public static boolean lit(Creeper creeper) {
+		return creeper.getSwellDir() > 0 || creeper.getSwelling(1) > 0;
 	}
 
 	/**
 	 * Of {@link #AWAY_TRIES} spots that vanilla's AvoidEntityGoal would pick, any of them up to a right angle off straight
 	 * away from {@code creeper}, and as many anywhere around the bot, the one that takes the bot furthest from the nearest
-	 * creeper within {@link #CREEPERS_RANGE} for each block walked, or null where none does. One off to the side gains too
+	 * creeper within {@link #CREEPERS_RANGE} for each block walked, and the path there, or null where none does or the path
+	 * ends less than a block further from the creepers than the bot stands. One off to the side gains too
 	 * little before the fuse burns out (#717); straight away from one creeper can run into another, or into a corner, where
 	 * only a spot to the side gets out (#725).
 	 */
-	private @Nullable Vec3 away(Creeper creeper) {
+	private @Nullable Path away(Creeper creeper) {
 		List<Creeper> creepers = this.bot.level().getEntitiesOfClass(Creeper.class, this.bot.getBoundingBox().inflate(CREEPERS_RANGE), Creeper::isAlive);
 		double now = nearest(creepers, this.bot.position());
 		Vec3 best = null;
@@ -89,7 +99,13 @@ public final class KiteGoal extends Goal {
 				}
 			}
 		}
-		return best;
+		if (best == null) {
+			return null;
+		}
+		// The spot's straight-line gain can lie behind a wall, as all do in a dead end: only a path whose end gains a block
+		// or more counts, as one ending on the bot's own block gains nothing (#733).
+		Path path = this.bot.getNavigation().createPath(BlockPos.containing(best), 0);
+		return path != null && nearest(creepers, Vec3.atBottomCenterOf(path.getEndNode().asBlockPos())) >= now + 1 ? path : null;
 	}
 
 	/** How far {@code pos} is from the nearest of {@code creepers}. */
@@ -124,6 +140,7 @@ public final class KiteGoal extends Goal {
 	public void stop() {
 		this.creeper = null;
 		this.away = null;
+		this.cornered = false;
 		this.bot.getNavigation().stop();
 	}
 
@@ -137,6 +154,7 @@ public final class KiteGoal extends Goal {
 		boolean ready = this.bot.tickCount - this.bot.getLastHurtMobTimestamp() >= BotHands.strikeTicks(this.bot);
 		if (ready && BotHands.inStrikingReach(this.bot, creeper)) {
 			BotHands.strike(this.bot, (ServerLevel) this.bot.level(), creeper);
+			this.cornered = false;
 			return;
 		}
 		if (ready && creeper.getSwelling(1) < STRIKE_SWELL && creeper.distanceTo(this.bot) <= STEP_IN_RANGE && !this.crowded(creeper)) {
@@ -152,14 +170,20 @@ public final class KiteGoal extends Goal {
 			this.bot.getNavigation().stop();
 			return;
 		}
+		// Cornered, no spot gained: at it until it strikes, which knocks it back, rather than stand there (#725). It does not
+		// plan again on the way, where the dead end behind it gains again and would turn it back (#733).
+		if (this.cornered) {
+			this.bot.getMoveControl().setWantedPosition(creeper.getX(), creeper.getY(), creeper.getZ(), SPEED);
+			return;
+		}
 		// Somewhere further from the creeper than the bot is; planned again once there.
 		if (this.away == null || this.bot.getNavigation().isDone()) {
 			this.away = this.away(creeper);
 			if (this.away != null) {
-				this.bot.getNavigation().moveTo(this.away.x, this.away.y, this.away.z, SPEED);
+				this.bot.getNavigation().moveTo(this.away, SPEED);
 			} else if (ready) {
-				// Cornered, no spot gains: at it to strike, which knocks it back, rather than stand there (#725).
-				// ponytail: plans again each tick while cornered, 20 spots a tick.
+				// ponytail: plans again each tick while cornered and not ready, 20 spots and a path a tick.
+				this.cornered = true;
 				this.bot.getNavigation().stop();
 				this.bot.getMoveControl().setWantedPosition(creeper.getX(), creeper.getY(), creeper.getZ(), SPEED);
 			}

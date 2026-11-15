@@ -66,6 +66,7 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
@@ -195,8 +196,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
 		// A hurt bot running a script of its own starts no fight: the script decides, such as to retreat home and heal
-		// (jobs.guard), and a mob that hurts it is still fought back (HurtByTargetGoal) (#718).
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true) {
+		// (jobs.guard), and a mob that hurts it is still fought back (HurtByTargetGoal) (#718). Nor does it take on a
+		// creeper with its fuse lit, such as one it kited out of the kite goal's range: the melee goal would walk it back
+		// into the blast (#733).
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true,
+			(target, level) -> !(target instanceof Creeper creeper && KiteGoal.lit(creeper))) {
 			@Override
 			public boolean canUse() {
 				return !this.scriptDecides() && super.canUse();

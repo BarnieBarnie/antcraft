@@ -508,7 +508,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * stood until it exploded, as about 1 run in 52 of {@link #aBotKillsTwoCreepersAndAHuskWithoutAnExplosion}: it now
 	 * backs off from the nearest creeper of all, lit or not, to the side.
 	 */
-	// Measured: passes at tick 33 to 57 in 50 runs, 25 at once.
+	// Measured: passes at tick 33 to 57 in 50 runs, 25 at once; 31 to 55 in 52 more (#733).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
 	public void aBotBetweenTwoCreepersGetsOutOfBothBlastsNotCornered(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 12.5));
@@ -552,6 +552,68 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			wasLit[0] = lit;
 		});
 		succeedWhenTheFuseWentOut(helper, creeper, 1F);
+	}
+
+	/**
+	 * A hurt idle bot more than 8 blocks from a lit creeper, as after kiting there, out of reach of both the flee reflex
+	 * and the kite goal, takes the creeper for no target while its fuse burns (#733): its melee goal would walk it back
+	 * into the blast. The creeper stands still, its fuse lit by hand and then going out, so the bot stays out of range.
+	 */
+	// Measured: passes at tick 35 to 96 in 22 runs, 10 at once: the bot takes its target at random after the fuse is out.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 200)
+	public void aHurtBotFarFromALitCreeperDoesNotTargetIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 2.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		bot.setHealth(4);
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 12.5));
+		creeper.setNoAi(true);
+		creeper.setSwellDir(1);
+		failOnExplosion(helper, bot, creeper);
+		helper.onEachTick(() -> {
+			if (creeper.getSwelling(1) >= 0.6F) {
+				creeper.setSwellDir(-1);
+			}
+			if (bot.getTarget() == creeper && KiteGoal.lit(creeper)) {
+				helper.fail("targeted the creeper with its fuse lit, swell " + creeper.getSwelling(1));
+			}
+		});
+		// Once the fuse is out, it does take the creeper on: so out of range it would have seen it all along.
+		helper.succeedWhen(() -> helper.assertTrue(creeper.getSwellDir() < 0 && creeper.getSwelling(1) == 0 && bot.getTarget() == creeper,
+			"swell " + creeper.getSwelling(1) + ", target " + bot.getTarget()));
+	}
+
+	/**
+	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it each
+	 * time its weapon is ready, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the
+	 * creeper within its 30-tick fuse, so the blast still catches it: accepted, as a death costs only what the bot carries
+	 * (docs/features/bots.md, Fighting creepers; #733). Digging or pillaring out of the blast is not worth its code.
+	 */
+	// Measured: passes at tick 43 to 46 in 22 runs, 10 at once.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
+	public void aBotCorneredInADeadEndStrikesTheLitCreeperAgain(GameTestHelper helper) {
+		// A closed stone tunnel along z at x = 12, two high, from z = 3 to z = 13.
+		for (int z = 2; z <= 14; z++) {
+			for (int y = 1; y <= 3; y++) {
+				for (int x = 11; x <= 13; x++) {
+					if (x != 12 || y == 3 || z == 2 || z == 14) {
+						helper.setBlock(x, y, z, Blocks.STONE);
+					}
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 6.5));
+		creeper.setTarget(bot);
+		int[] blows = {0};
+		float[] health = {creeper.getHealth()};
+		helper.onEachTick(() -> {
+			if (creeper.getHealth() < health[0]) {
+				blows[0]++;
+			}
+			health[0] = creeper.getHealth();
+		});
+		helper.succeedWhen(() -> helper.assertTrue(blows[0] >= 2, "struck the creeper " + blows[0] + " times"));
 	}
 
 	/** A bot with a bow and {@code arrows} arrows, at {@code x, z} in the test area. */
