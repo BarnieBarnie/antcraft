@@ -656,8 +656,11 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * sideways, as it counted a block up as 1 against a reach of 20 (4 walked blocks): 17 up was in reach, so the search,
 	 * out of nodes, took the floor under the log as closest, and each replan from there got no closer: out_of_reach.
 	 */
-	// Measured: passes at tick 386 to 421 (red: printed False out_of_reach at tick 115).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1400)
+	// Measured: passes at tick 386 to 421 (red: printed False out_of_reach at tick 115). Not slower since (#727): 28 runs
+	// each at #685 (29f149c9) and at 7002a68a, alone and in 8 and 16 copies at once, spread alike: 313 to 991 then (and
+	// one False out_of_reach at 1123 among 16 copies), 291 to 1130 now; medians 568 then, 513 now. The first 386 to 421
+	// was a few lucky runs. maxTicks 2300, about twice the slowest pass (1130).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 2300)
 	public void mineReachesALogBuriedInTheTopOfAGiantJunglesCrown(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(10, 1, 8);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
