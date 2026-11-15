@@ -87,6 +87,43 @@ class TickProfilerTest {
 		assertEquals(0, profiler.report().ticks());
 	}
 
+	/**
+	 * Started and stopped mid-tick, as the bot benchmark and {@code /antcraft profile} do, the parts count only the ticks
+	 * counted, those strictly between, as the path budget's count does (#701, #716): not the rest of the start tick, nor
+	 * the start of the stop tick.
+	 */
+	@Test
+	void partsCountOnlyTheTicksCounted() {
+		Clock clock = new Clock();
+		TickProfiler profiler = new TickProfiler(() -> clock.now);
+		profiler.startTick();
+		profiler.start();
+		long a = profiler.begin();
+		clock.now += 5 * MS;
+		profiler.end("path", a);
+		profiler.endTick();
+
+		profiler.startTick();
+		long b = profiler.begin();
+		clock.now += 2 * MS;
+		profiler.end("path", b);
+		profiler.endTick();
+
+		profiler.startTick();
+		long c = profiler.begin();
+		clock.now += 7 * MS;
+		profiler.end("path", c);
+		profiler.stop();
+
+		TickProfiler.Report report = profiler.report();
+		assertEquals(1, report.ticks());
+		TickProfiler.PartReport path = report.parts().getFirst();
+		assertEquals(1, path.calls());
+		assertEquals(2.0, path.totalMs(), 1e-9);
+		assertEquals(2.0, path.msPerTick(), 1e-9);
+		assertEquals(2.0, path.worstTickMs(), 1e-9);
+	}
+
 	@Test
 	void startingAgainForgetsWhatWasMeasured() {
 		Clock clock = new Clock();

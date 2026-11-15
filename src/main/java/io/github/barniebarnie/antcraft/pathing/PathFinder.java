@@ -48,7 +48,9 @@ public final class PathFinder {
 	 * The walk back after a death, for a bot whose home is in another dimension (#688): what it dropped despawns 6000
 	 * ticks after it died (lib.cost.DESPAWN), so the walk back costs at most that, items and all.
 	 */
-	// ponytail: a fixed guess, not the way through a portal; estimate that if such bots drop where they should not.
+	// ponytail: a fixed guess, not the way through a portal (#716): the walk back costs at most this anyway, as the drops
+	// are gone by then, and an estimate needs the two ends of a portal paired (portals() lists them unpaired) and
+	// passed into Death. Estimate it if bots with a home in another dimension drop where they should not.
 	public static final double AWAY_WALK = 6000;
 
 	/** Climbing a block up or down a ladder: vanilla climbs at 0.2 blocks a tick and slides down at 0.15. */

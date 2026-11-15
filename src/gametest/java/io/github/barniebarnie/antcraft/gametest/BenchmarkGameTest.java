@@ -402,6 +402,10 @@ public class BenchmarkGameTest {
 				c.name(), report.averageTickMs(), report.p99TickMs(), report.worstTickMs(), Math.round(instructions),
 				(double) nodes.nodes() / report.ticks(), nodes.worst()));
 			this.helper.assertTrue(nodes.nodes() <= (long) nodes.worst() * report.ticks(), c.name() + ": path nodes " + nodes + " in " + report.ticks() + " ticks");
+			// The parts' times count the same ticks as the ticks and the nodes (#716).
+			for (TickProfiler.PartReport part : report.parts()) {
+				this.helper.assertTrue(part.msPerTick() <= part.worstTickMs() + 1e-9, c.name() + ": " + part.name() + " " + part.msPerTick() + " ms a tick, worst " + part.worstTickMs());
+			}
 			this.helper.assertTrue(report.averageTickMs() < TICK_BUDGET_MS, c.name() + ": average tick " + report.averageTickMs() + " ms");
 			for (AntBot bot : this.bots) {
 				ColonyManager.get(this.helper.getLevel()).leave(bot);

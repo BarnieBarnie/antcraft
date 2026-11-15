@@ -13,7 +13,9 @@ import java.util.function.Supplier;
  * Where server tick time goes, for {@code /antcraft profile} and the bot benchmark: the average and worst server tick,
  * and per part of the mod's work (pathfinding, a bot's job choice, a colony's survey, ...) the time per tick, the worst
  * tick and the calls. Measures nothing until {@link #start started}. Parts may nest, such as pathfinding inside a bot's
- * work, so their times overlap and do not add up to the tick. Server thread only.
+ * work, so their times overlap and do not add up to the tick. A part counts only in the ticks counted: started or stopped
+ * mid-tick, as the bot benchmark and the command are, neither the rest of the start tick nor the stop tick counts, the
+ * ticks {@code PathBudget.takeCount} counts too (#701, #716). Server thread only.
  */
 public final class TickProfiler {
 	/** The server's profiler; {@code /antcraft profile} starts and stops it. */
@@ -27,6 +29,7 @@ public final class TickProfiler {
 		long total;
 		long calls;
 		long thisTick;
+		long callsThisTick;
 		long worstTick;
 	}
 
@@ -109,8 +112,11 @@ public final class TickProfiler {
 			this.worstTickAt = this.ticks;
 		}
 		for (Part part : this.parts.values()) {
+			part.total += part.thisTick;
+			part.calls += part.callsThisTick;
 			part.worstTick = Math.max(part.worstTick, part.thisTick);
 			part.thisTick = 0;
+			part.callsThisTick = 0;
 		}
 	}
 
@@ -119,16 +125,18 @@ public final class TickProfiler {
 		return this.running ? this.clock.getAsLong() : OFF;
 	}
 
-	/** Counts the time since {@code begin} toward {@code part}; nothing if not running at {@code begin}. */
+	/**
+	 * Counts the time since {@code begin} toward {@code part}, once its tick is counted; nothing if not running at
+	 * {@code begin} or outside a counted tick.
+	 */
 	public void end(String part, long begin) {
-		if (!this.running || begin == OFF) {
+		if (!this.running || begin == OFF || this.tickStart == OFF) {
 			return;
 		}
 		long time = this.clock.getAsLong() - begin;
 		Part counted = this.parts.computeIfAbsent(part, name -> new Part());
-		counted.total += time;
 		counted.thisTick += time;
-		counted.calls++;
+		counted.callsThisTick++;
 	}
 
 	/** Runs {@code work}, counting its time toward {@code part} of the server's profiler. */
@@ -155,7 +163,7 @@ public final class TickProfiler {
 		long perTick = Math.max(1, this.ticks);
 		List<PartReport> parts = this.parts.entrySet().stream()
 			.map(entry -> new PartReport(entry.getKey(), entry.getValue().calls, entry.getValue().total / NANOS_PER_MS / perTick,
-				Math.max(entry.getValue().worstTick, entry.getValue().thisTick) / NANOS_PER_MS, entry.getValue().total / NANOS_PER_MS))
+				entry.getValue().worstTick / NANOS_PER_MS, entry.getValue().total / NANOS_PER_MS))
 			.sorted(Comparator.comparingDouble(PartReport::totalMs).reversed().thenComparing(PartReport::name)).toList();
 		List<Long> sorted = this.tickTimes.stream().sorted().toList();
 		double p99 = sorted.isEmpty() ? 0 : sorted.get((int) Math.ceil(0.99 * sorted.size()) - 1) / NANOS_PER_MS;

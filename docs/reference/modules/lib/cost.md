@@ -12,7 +12,7 @@ The numbers are constants, rounded from the game's, not its break-time formula: 
 - `SMELT`: ticks a furnace takes to smelt one item, `200`.
 - `RESPAWN`: ticks from a bot's death to its script running again at its home, `200`: the config `botRespawnTicks` by default (see [Death and respawn](../../../features/death.md)).
 - `DESPAWN`: ticks what a bot drops lies before it is gone, `6000` (five minutes), as a player's drops.
-- `AWAY_WALK`: ticks the walk back costs from a home in another dimension, `6000` (`DESPAWN`): a fixed guess, as the path search costs it.
+- `AWAY_WALK`: ticks the walk back costs from a home in another dimension, `6000` (`DESPAWN`): a fixed guess, as the path search costs it. It is not the way through a portal: the walk back costs at most this anyway, as what the bot dropped is gone by then, and the portals it remembers ([`portals`](../../movement/portals.md)) do not say which two ends belong together (#716).
 
 ## `walk(a, b)`
 

@@ -59,7 +59,7 @@ def death(at, start=None):
     at for what it dropped (#679). Past DESPAWN ticks that is gone, and with it what the bot carried. With no start and the
     home in another dimension the walk back is AWAY_WALK (#699)."""
     # ponytail: a death costs only ticks here; a caller that weighs the items lost compares this with DESPAWN. AWAY_WALK
-    # is a fixed guess, not the way through a portal.
+    # is a fixed guess, not the way through a portal, as PathFinder.AWAY_WALK says why (#716).
     if start is None and home_dimension() != dimension():
         return RESPAWN + AWAY_WALK
     return RESPAWN + walk(start or home(), at)
