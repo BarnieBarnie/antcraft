@@ -141,12 +141,16 @@ def back(p):
 
 def cut(p, stand, opened):
     """Digs p standing at stand, as lib.shaft.dig does: a fluid or falling block beside it is walled off, air beside it
-    is left open. None once done, else a result."""
+    is left open. None once done, else a result: outside at a block it may not mine (protected), as at the edge of
+    lib.find.WHERE, so a staircase or branch turns or stops there as lib.mine does (#697, #732)."""
     b = block(p)
     if b is not None and b.is_air:
         return None
     air = [s for s in (p.north(), p.south(), p.east(), p.west(), p.up()) if lib.find.is_air(s)]
-    return lib.shaft.dig(p, opened + air, stand)
+    failure = lib.shaft.dig(p, opened + air, stand)
+    if failure and failure["reason"] == "protected":
+        return result("outside", p)
+    return failure
 
 
 def turn(facing, tried):

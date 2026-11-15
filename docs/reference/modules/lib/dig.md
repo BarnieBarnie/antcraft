@@ -34,7 +34,7 @@ The height where the ore of the raw item `item` is most common: coal 96, raw iro
 
 ## `stairs_to(y, facing="north")`
 
-Digs a staircase one block wide from the bot's feet down to `y`, one block towards `facing` for each block down, and walks down it. Each step is three blocks tall, so the bot walks back up it, and it never digs straight down: the block under each step stays. It remembers the top in `memory["stairs"]`, and called again at the bottom of that staircase, or at the end of a branch from there, it goes on down and keeps the top. Where the bot stands at or below `y` it does nothing. It stops before a step with a block [`lib.find.WHERE`](find.md#where) leaves out.
+Digs a staircase one block wide from the bot's feet down to `y`, one block towards `facing` for each block down, and walks down it. Each step is three blocks tall, so the bot walks back up it, and it never digs straight down: the block under each step stays. It remembers the top in `memory["stairs"]`, and called again at the bottom of that staircase, or at the end of a branch from there, it goes on down and keeps the top. Where the bot stands at or below `y` it does nothing. It stops before a step with a block [`lib.find.WHERE`](find.md#where) leaves out, and at a block it may not mine (bedrock, a barrier, a protected area), which it gives `outside` for too, as that edge (#732).
 
 - **Returns** a dict: `ok`, `reason` (`None`, `outside` with `at` the first block of the next step `WHERE` leaves out, or the reason a step failed, with `at`).
 - **Pauses** yes, while it digs and walks.
@@ -56,7 +56,7 @@ Walks back up the staircase `stairs_to` dug, to its top, and forgets it. Where `
 
 ## `branch(length, every=8, facing="north", left=None, out=None)`
 
-Digs a tunnel two blocks tall `length` blocks on from the bot's feet towards `facing` and walks it, mining each ore vein in its walls and ceiling that its pickaxe drops (through `lib.mine.veins`; it leaves the others in the wall, and adds the tier each needs to the list `left` where given; the blocks of a vein `WHERE` leaves out stay too, each added to the list `out` where given) and putting a torch on the floor every `every` blocks while it carries one. It stops before a block [`lib.find.WHERE`](find.md#where) leaves out, so the tunnel stays within it. Branching from the bottom of a staircase `stairs_to` dug, it remembers in `memory["stairs"]` how far it got, so `stairs_up()` at its end still climbs that staircase.
+Digs a tunnel two blocks tall `length` blocks on from the bot's feet towards `facing` and walks it, mining each ore vein in its walls and ceiling that its pickaxe drops (through `lib.mine.veins`; it leaves the others in the wall, and adds the tier each needs to the list `left` where given; the blocks of a vein `WHERE` leaves out stay too, each added to the list `out` where given) and putting a torch on the floor every `every` blocks while it carries one. It stops before a block [`lib.find.WHERE`](find.md#where) leaves out, so the tunnel stays within it, and at a block it may not mine (bedrock, a barrier, a protected area), which it gives `outside` for too, as that edge, so `ore` turns there (#732). Branching from the bottom of a staircase `stairs_to` dug, it remembers in `memory["stairs"]` how far it got, so `stairs_up()` at its end still climbs that staircase.
 
 - **Returns** a dict: `ok`, `reason` (`None`, `outside` with `at` the next block `WHERE` leaves out, or the reason it stopped, with `at`).
 - **Pauses** yes, while it digs and walks.

@@ -222,6 +222,29 @@ public class DigGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A branch of 6 east with a block it may not mine ahead (spawn protection at x 5) stops short of it with outside, as
+	 * at the edge of lib.find.WHERE, so ore turns there rather than give protected (#732).
+	 */
+	@GameTest(maxTicks = 260)
+	public void branchStopsAtABlockItMayNotMineAsAtTheEdge(GameTestHelper helper) {
+		stone(helper, 4);
+		helper.setBlock(1, 1, 3, Blocks.AIR);
+		helper.setBlock(1, 2, 3, Blocks.AIR);
+		GameTests.protect(helper, new BlockPos(5, 2, 3));
+		AntBot bot = miner(helper, 1, 1, 3);
+		expect(helper, bot, """
+			import lib.dig
+			r = lib.dig.branch(6, 3, "east")
+			print(r["ok"], r["reason"], r["at"] == Pos%s)
+			""".formatted(at(helper, 5, 2, 3)),
+			List.of("False outside True"),
+			() -> {
+				helper.assertBlockPresent(Blocks.AIR, 4, 1, 3);
+				helper.assertBlockPresent(Blocks.STONE, 5, 2, 3);
+			});
+	}
+
+	/**
 	 * With lib.find.WHERE true only up to x 4, a branch east to its edge takes the coal in its wall inside WHERE but not
 	 * the block of the same vein outside it, nor the coal in the wall ahead, outside it; both are added to the list out
 	 * (#561).

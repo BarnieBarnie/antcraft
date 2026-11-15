@@ -113,10 +113,15 @@ class TickProfilerTest {
 		long c = profiler.begin();
 		clock.now += 7 * MS;
 		profiler.end("path", c);
+		// A part first seen in the stop tick is not listed with 0 calls (#732).
+		long d = profiler.begin();
+		clock.now += MS;
+		profiler.end("survey", d);
 		profiler.stop();
 
 		TickProfiler.Report report = profiler.report();
 		assertEquals(1, report.ticks());
+		assertEquals(List.of("path"), report.parts().stream().map(TickProfiler.PartReport::name).toList());
 		TickProfiler.PartReport path = report.parts().getFirst();
 		assertEquals(1, path.calls());
 		assertEquals(2.0, path.totalMs(), 1e-9);

@@ -162,6 +162,8 @@ public final class TickProfiler {
 	public Report report() {
 		long perTick = Math.max(1, this.ticks);
 		List<PartReport> parts = this.parts.entrySet().stream()
+			// A part first seen in the stop tick has no counted calls (#732).
+			.filter(entry -> entry.getValue().calls > 0)
 			.map(entry -> new PartReport(entry.getKey(), entry.getValue().calls, entry.getValue().total / NANOS_PER_MS / perTick,
 				entry.getValue().worstTick / NANOS_PER_MS, entry.getValue().total / NANOS_PER_MS))
 			.sorted(Comparator.comparingDouble(PartReport::totalMs).reversed().thenComparing(PartReport::name)).toList();

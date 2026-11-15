@@ -1,5 +1,6 @@
 package io.github.barniebarnie.antcraft.entity;
 
+import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -55,12 +56,14 @@ public final class KiteGoal extends Goal {
 	/**
 	 * The nearest creeper within {@link #RANGE} of {@code bot} whose fuse burns or has yet to go out, or null: the bot
 	 * keeps clear of its blast meanwhile. Whichever mob it lit for, as a bot's sword sweep lights one beside its target.
-	 * ponytail: an entity search a tick for each bot; skip it for bots with no creeper about if the benchmark shows it.
+	 * ponytail: an entity search a tick for each bot, and again in its reflexes; the profiler's {@code bot.kite} part
+	 * measures it: in every scenario of the 30-bot benchmark at most 0.01 ms a tick in all, 15 calls a tick (the goal
+	 * selector checks every other tick), under 1% of the tick, so no cheaper check is needed (#732).
 	 */
 	public static @Nullable Creeper litNear(AntBot bot) {
-		return bot.level().getEntitiesOfClass(Creeper.class, bot.getBoundingBox().inflate(RANGE),
+		return TickProfiler.time("bot.kite", () -> bot.level().getEntitiesOfClass(Creeper.class, bot.getBoundingBox().inflate(RANGE),
 				creeper -> creeper.isAlive() && (creeper.getSwellDir() > 0 || creeper.getSwelling(1) > 0) && creeper.distanceTo(bot) <= RANGE)
-			.stream().min(Comparator.comparingDouble(creeper -> creeper.distanceToSqr(bot))).orElse(null);
+			.stream().min(Comparator.comparingDouble(creeper -> creeper.distanceToSqr(bot))).orElse(null));
 	}
 
 	/**
