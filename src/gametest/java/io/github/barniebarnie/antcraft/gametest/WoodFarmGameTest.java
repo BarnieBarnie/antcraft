@@ -360,6 +360,46 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A grown birch, a bot whose inventory is full (a stone axe and 26 stacks of cobblestone) and a depot that can take
+	 * no new chest (add_chest gives blocked): the farm does not fell the tree, whose logs would have no slot and be
+	 * dropped, but says once that its inventory is full and waits (#765).
+	 */
+	// Measured: passes at tick 12 (red: tried to fell it, harvest: no_space, and stored nothing).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
+	public void aFullInventoryThatCannotBeStoredStopsTheFelling(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, SPOT, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		for (int i = 0; i < 26; i++) {
+			bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 64));
+		}
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			waits = [0]
+			def counted(ticks):
+			    waits[0] += 1
+			    if waits[0] == 3:
+			        print("waits", waits[0])
+			        stop()
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			jobs.wood_farm.wait = counted
+			lib.depot.add_chest = lambda name, cat, radius: lib.result.result("blocked")
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 1, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("inventory full, store: blocked; felling stops", "farm full", "waits 3"), "said");
+			helper.assertBlockPresent(Blocks.BIRCH_LOG, SPOT);
+			helper.assertItemEntityNotPresent(Items.BIRCH_LOG);
+		});
+	}
+
+	/**
 	 * The farm keeps the ticks it spends per felled tree in memory and, from SAMPLES trees on, sizes itself from their
 	 * mean instead of HARVEST (#653; memory["wood_ticks"], a list of the last WINDOW, #662). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 400; a
 	 * third felled in the farm's first round makes the mean over GROWTH, so most() is 1 and the farm of one cell, run

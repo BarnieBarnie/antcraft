@@ -76,6 +76,19 @@ def store(name, keep=None, radius=32):
 SKIPS = 8  # slots add_chest skips at most a call
 
 
+def room(name, free, keep=None, radius=32):
+    """Makes room in the bot's inventory for what a job gathers next (#765): where it has fewer than free empty slots,
+    stores what it carries in depot name (store, with keep and radius). Gives result(): ok where it has free empty slots
+    then, else the reason store gave, or full where it stored all it may and still has too few, with missing, what it
+    still carries beyond its keep. A job that gets no ok stops gathering rather than have what it gathers dropped."""
+    if free_slots() >= free:
+        return result()
+    r = store(name, keep, radius)
+    if free_slots() >= free:
+        return result()
+    return result(r["reason"] or "full", None, r["missing"])
+
+
 def add_chest(name, cat, radius=32):
     """Puts a chest at the next slot of depot name's row, facing along the row so it never joins its neighbour in a
     double chest, and gives it to category cat. A chest already standing there is taken if it is empty or holds only
@@ -87,6 +100,7 @@ def add_chest(name, cat, radius=32):
     step = FACING[d["facing"]]
     # ponytail: at most SKIPS slots skipped a call, so a wall along the row ends it with blocked, not a walk down it.
     found = False
+    start = d.get("next", len(d["chests"]))
     for _ in range(SKIPS + 1):
         n = d.get("next", len(d["chests"]))
         p = d["origin"] + (step[0] * n, 0, step[2] * n)
@@ -107,6 +121,7 @@ def add_chest(name, cat, radius=32):
                 return result(placed.reason, p)
         d["next"] = n + 1
     if not found:
+        d["next"] = start
         return result("blocked", p)
     d["next"] = n + 1
     d["chests"].append([cat, p])

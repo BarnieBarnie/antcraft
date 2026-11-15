@@ -60,6 +60,9 @@ CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"]
 # the crafting table lib.get makes a depot chest with.
 KEEP = [lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
 STACK = 64  # the dirt the farm keeps at least: a stack, for the fill of an uneven cell (dirt)
+# Empty slots the bot wants before it fells a tree (lib.depot.room, #765): logs, saplings, sticks, apples and the dirt it
+# takes back. ponytail: a giant's 67 logs and more take a slot more; a count from the tree's logs would size it.
+FREE = 5
 
 
 def most(harvest=HARVEST["minecraft:birch_sapling"]):
@@ -266,12 +269,20 @@ def farm(kind, name, size, radius):
         grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
         start = game_time()
         trees = 0
+        keep = KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))]
+        full_bot = False
         for b in grown:
+            # Not with too few empty slots that the depot cannot empty: the tree's drops would be dropped (#765).
+            r = lib.depot.room(name, FREE, keep, radius)
+            if not r["ok"]:
+                full_bot = True
+                tell(told, f"inventory full, store: {r['reason']}; felling stops")
+                break
             if reap(kind, b, radius, told)["ok"]:
                 trees += 1
         felled = trees > 0
-        if grown:
-            r = lib.depot.store(name, KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))], radius)
+        if grown and not full_bot:
+            r = lib.depot.store(name, keep, radius)
             # Once a reason, not every round: a full depot that takes no new chest leaves the logs carried, more each
             # round (#763).
             if not r["ok"] and "store: " + r["reason"] not in told:
