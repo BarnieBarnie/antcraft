@@ -436,6 +436,44 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * Succeeds once {@code creeper}'s fuse, lit at some point, has gone out again, the bot having backed out of its reach;
+	 * fails as soon as the fuse burns past {@code most}, as it does where the bot wastes its time.
+	 */
+	private static void succeedWhenTheFuseWentOut(GameTestHelper helper, Creeper creeper, float most) {
+		boolean[] lit = {false};
+		helper.onEachTick(() -> {
+			lit[0] |= creeper.getSwelling(1) > 0;
+			if (creeper.getSwelling(1) > most) {
+				helper.fail("the fuse burnt to " + creeper.getSwelling(1));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(lit[0], "the creeper's fuse was never lit");
+			helper.assertTrue(creeper.getSwellDir() < 0 && creeper.getSwelling(1) == 0, "fuse still lit, swell " + creeper.getSwelling(1));
+		});
+	}
+
+	/**
+	 * A bot does not step in to strike a lit creeper with another hostile mob beside it, which stands in its way there and
+	 * back (#717): it backs off at once, out of reach before three quarters of the fuse have burnt (0.5 measured). Stepping
+	 * in, it got nowhere past the husk and was out of reach only as the fuse burnt to 0.96.
+	 */
+	// Measured: passes at tick 31 to 35.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void aBotDoesNotStepInAtALitCreeperPastAnotherMob(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 8.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		// Stands still in the bot's way, and neither walks nor strikes.
+		Husk husk = helper.spawn(EntityTypes.HUSK, new Vec3(12.5, 1, 9.6));
+		husk.setNoAi(true);
+		// Near enough to light at once, before the bot's own fight strikes the husk.
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 10.9));
+		creeper.setTarget(bot);
+		failOnExplosion(helper, bot, creeper);
+		succeedWhenTheFuseWentOut(helper, creeper, 0.75F);
+	}
+
 	/** A bot with a bow and {@code arrows} arrows, at {@code x, z} in the test area. */
 	private static AntBot archer(GameTestHelper helper, int x, int z, int arrows) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, x, 1, z);
