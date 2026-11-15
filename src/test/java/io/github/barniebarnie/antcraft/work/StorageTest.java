@@ -65,4 +65,15 @@ class StorageTest {
 		container.setItem(1, new ItemStack(Items.OAK_PLANKS, 61));
 		assertFalse(Storage.fits(container, PLANKS));
 	}
+
+	@Test
+	void addItemTopsUpStacksBeforeFillingEmptySlots() {
+		SimpleContainer container = full(ItemStack.EMPTY, new ItemStack(Items.COBBLESTONE, 60), ItemStack.EMPTY, new ItemStack(Items.COBBLESTONE, 10));
+		ItemStack rest = Storage.addItem(container, new ItemStack(Items.COBBLESTONE, 4 + 54 + 64 + 10));
+		assertEquals(64, container.getItem(1).getCount());
+		assertEquals(64, container.getItem(3).getCount());
+		assertEquals(64, container.getItem(0).getCount());
+		assertEquals(10, container.getItem(2).getCount());
+		assertEquals(0, rest.getCount());
+	}
 }

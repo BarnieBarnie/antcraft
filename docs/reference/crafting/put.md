@@ -28,7 +28,7 @@ One instruction, the call itself. The walk plans its path as `goto` does.
 
 ## Description
 
-It moves items from the bot's hand and inventory into the container, from the inventory slots first and the hand last, each into the first slot of the container it fits in. A double chest takes items in both halves. An `n` below 1, a malformed selector, or a name or tag the game does not know stops the script with an error.
+It moves items from the bot's hand and inventory into the container, from the inventory slots first and the hand last, each first onto the stacks of the same item the container holds, as far as they have room, and only then into its first empty slot, so a stack is not split over two slots. A double chest takes items in both halves. An `n` below 1, a malformed selector, or a name or tag the game does not know stops the script with an error.
 
 ## Examples
 

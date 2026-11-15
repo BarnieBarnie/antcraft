@@ -323,6 +323,43 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A full depot that can take no new chest (lib.depot.store gives blocked, the logs still carried) in every round that
+	 * fells a tree: the farm says so once, not every round, and goes on farming with the logs it carries (#763). Where a
+	 * chest can be added, lib.depot.store adds it (DepotGameTest aFullChestGrowsTheRow).
+	 */
+	// Measured: passes at tick 8 (red: said the store line every round, its kept count growing).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void aFullDepotIsSaidOnceAndTheFarmGoesOn(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			waits = [0]
+			def counted(ticks):
+			    waits[0] += 1
+			    if waits[0] == 3:
+			        print("waits", waits[0])
+			        stop()
+			jobs.wood_farm.wait = counted
+			# A grown tree each round that is not felled, so the round waits.
+			jobs.wood_farm.reap = lambda k, b, radius, told: lib.result.result("no_tool")
+			lib.treefarm.grown = lambda k, low, high: True
+			# More logs kept each round, as a farm's would be.
+			lib.depot.store = lambda name, keep, radius: lib.result.result("blocked", None, {"minecraft:birch_log": 5 + waits[0]})
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 1, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("store: blocked, kept {'minecraft:birch_log': 5}", "farm full", "waits 3"),
+			"said"));
+	}
+
+	/**
 	 * The farm keeps the ticks it spends per felled tree in memory and, from SAMPLES trees on, sizes itself from their
 	 * mean instead of HARVEST (#653; memory["wood_ticks"], a list of the last WINDOW, #662). Two trees of 2 GROWTH each are in memory, so harvest() is still HARVEST's 400; a
 	 * third felled in the farm's first round makes the mean over GROWTH, so most() is 1 and the farm of one cell, run

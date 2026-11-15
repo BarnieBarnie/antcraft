@@ -660,17 +660,17 @@ public final class CraftApi {
 			ItemStack out = furnace.getItem(RESULT);
 			if (out.is(this.output)) {
 				int before = out.getCount();
-				ItemStack rest = HopperBlockEntity.addItem(null, BotHands.carried(this.bot), out.copy(), null);
+				ItemStack rest = Storage.addItem(BotHands.carried(this.bot), out.copy());
 				furnace.setItem(RESULT, rest);
 				taken = before - rest.getCount();
 				full = !rest.isEmpty();
 			}
 			if (reason != null && furnace.getItem(INPUT).is(this.input)) {
-				furnace.setItem(INPUT, HopperBlockEntity.addItem(null, BotHands.carried(this.bot), furnace.getItem(INPUT).copy(), null));
+				furnace.setItem(INPUT, Storage.addItem(BotHands.carried(this.bot), furnace.getItem(INPUT).copy()));
 			}
 			// The fuel put in ahead that the fire did not need.
 			if (this.lastFuel != null && furnace.getItem(FUEL).is(this.lastFuel)) {
-				furnace.setItem(FUEL, HopperBlockEntity.addItem(null, BotHands.carried(this.bot), furnace.getItem(FUEL).copy(), null));
+				furnace.setItem(FUEL, Storage.addItem(BotHands.carried(this.bot), furnace.getItem(FUEL).copy()));
 			}
 			furnace.setChanged();
 			swing(this.bot, this.pos);

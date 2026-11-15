@@ -87,6 +87,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True 4 True 6 0 3"), () -> helper.assertTrue(chest.countItem(Items.COBBLESTONE) == 10, "chest " + chest.countItem(Items.COBBLESTONE)));
 	}
 
+	/** An empty slot before a part stack: put tops up the stack first (#763). */
+	// Measured: passes at tick 2 (red: 20 in slot 0, slot 5 left at 10).
+	@GameTest(maxTicks = 20)
+	public void putTopsUpAStackBeforeAnEmptySlot(GameTestHelper helper) {
+		Container chest = chest(helper);
+		chest.setItem(5, new ItemStack(Items.COBBLESTONE, 10));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 20));
+		expect(helper, bot, "r = put(" + chestAt(helper) + ", 'cobblestone')\nprint(r.ok, r.value)\n", List.of("True 20"),
+			() -> helper.assertTrue(chest.getItem(5).getCount() == 30 && chest.getItem(0).isEmpty(),
+				"slot 0 " + chest.getItem(0) + ", slot 5 " + chest.getItem(5)));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void putWithoutTheItemIsNoItem(GameTestHelper helper) {
 		chest(helper);

@@ -98,6 +98,34 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A chest full of oak logs at the depot's first slot and ten oak logs carried, but no chest to be got (lib.get
+	 * fails): store gives the reason and the logs it kept, and the bot still carries them; none is dropped (#763).
+	 */
+	// Measured: passes at tick 5; it passed before the change too, as store already kept what found no room.
+	@GameTest(maxTicks = 20)
+	public void aFullDepotThatCannotGrowKeepsTheItemsCarried(GameTestHelper helper) {
+		helper.setBlock(1, 1, 1, Blocks.CHEST);
+		Container full = chest(helper, 1);
+		for (int slot = 0; slot < full.getContainerSize(); slot++) {
+			full.setItem(slot, new ItemStack(Items.OAK_LOG, 64));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 10));
+		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			import lib.get
+			import lib.result
+			lib.get.get = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			r = lib.depot.store("wood")
+			print(r["ok"], r["reason"], r["missing"], count("oak_log"))
+			""");
+		helper.succeedWhen(() -> {
+			finished(helper, bot, List.of("False no_item {'minecraft:oak_log': 10} 10"));
+			helper.assertItemEntityNotPresent(Items.OAK_LOG);
+			helper.assertTrue(full.countItem(Items.OAK_LOG) == 27 * 64, "the full chest: " + full.countItem(Items.OAK_LOG));
+		});
+	}
+
+	/**
 	 * Dirt at the depot's first slot (1, 1, 1), which store may not dig: it skips the slot and places the logs chest at
 	 * (2, 1, 1), leaving the dirt.
 	 */

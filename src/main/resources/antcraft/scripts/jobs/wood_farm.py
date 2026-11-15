@@ -269,7 +269,10 @@ def farm(kind, name, size, radius):
         felled = trees > 0
         if grown:
             r = lib.depot.store(name, KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))], radius)
-            if not r["ok"]:
+            # Once a reason, not every round: a full depot that takes no new chest leaves the logs carried, more each
+            # round (#763).
+            if not r["ok"] and "store: " + r["reason"] not in told:
+                told["store: " + r["reason"]] = True
                 say(f"store: {r['reason']}, kept {r['missing']}")
         # After the felling, so lib.get breaks the felled trees' leaves for saplings, not those of a tree still to fell.
         n = sum([len(unplanted(kind, b)) for b in boxes])

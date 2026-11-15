@@ -12,7 +12,6 @@ import net.minecraft.world.Container;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
@@ -34,12 +33,40 @@ public final class Storage {
 		return level.getBlockEntity(pos) instanceof Container container ? container : null;
 	}
 
+	/**
+	 * Puts {@code stack} into the container, topping up stacks of the same item first and only then
+	 * filling empty slots, unlike a hopper, which takes the first slot either way and so splits a stack
+	 * (#763). Shrinks {@code stack} by what fit and returns it: the rest.
+	 */
+	public static ItemStack addItem(Container to, ItemStack stack) {
+		for (int pass = 0; pass < 2 && !stack.isEmpty(); pass++) {
+			for (int i = 0; i < to.getContainerSize() && !stack.isEmpty(); i++) {
+				ItemStack slot = to.getItem(i);
+				boolean fits = pass == 0 ? ItemStack.isSameItemSameComponents(slot, stack) : slot.isEmpty();
+				if (!fits || !to.canPlaceItem(i, stack)) {
+					continue;
+				}
+				int n = Math.min(stack.getCount(), to.getMaxStackSize(stack) - slot.getCount());
+				if (n <= 0) {
+					continue;
+				}
+				if (slot.isEmpty()) {
+					to.setItem(i, stack.split(n));
+				} else {
+					slot.grow(n);
+					stack.shrink(n);
+				}
+			}
+		}
+		return stack;
+	}
+
 	/** Moves matching stacks from {@code from} into {@code to}; whatever does not fit stays behind. */
 	public static void moveItems(Container from, Container to, Predicate<ItemStack> filter) {
 		for (int i = 0; i < from.getContainerSize(); i++) {
 			ItemStack stack = from.getItem(i);
 			if (!stack.isEmpty() && filter.test(stack)) {
-				from.setItem(i, HopperBlockEntity.addItem(null, to, stack, null));
+				from.setItem(i, addItem(to, stack));
 			}
 		}
 		from.setChanged();
@@ -54,7 +81,7 @@ public final class Storage {
 			if (!stack.isEmpty() && filter.test(stack)) {
 				ItemStack taken = stack.split(max - moved);
 				int count = taken.getCount();
-				ItemStack rest = HopperBlockEntity.addItem(null, to, taken, null);
+				ItemStack rest = addItem(to, taken);
 				moved += count - rest.getCount();
 				if (!rest.isEmpty()) {
 					// Whatever did not fit goes back where it came from.
@@ -162,7 +189,7 @@ public final class Storage {
 			slots.add(container.getItem(i));
 		}
 		takeIngredients(slots, recipe);
-		HopperBlockEntity.addItem(null, container, new ItemStack(recipe.output(), recipe.count()), null);
+		addItem(container, new ItemStack(recipe.output(), recipe.count()));
 		container.setChanged();
 		return true;
 	}
