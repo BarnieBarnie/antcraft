@@ -347,11 +347,20 @@ def take_back(keep=()):
     later take_back does not try it again, but keep stays listed (#671)."""
     took = True
     rounds = 0
+    top = None
     # ponytail: a backstop, should each round's walks place a block as it mines one; raise it if a real tree needs more.
     while took and rounds < 32:
+        left = sorted([q for q in placed_scaffold(False) if q not in keep], key=lambda q: -q.y)
+        # A round whose walks placed scaffold over all it had left climbed: mine will not break the block the bot stands
+        # on alone over a drop that hurts, so its walk placed a block beside and over it to stand on, which the next round
+        # took back the same way, one up a round; a bot respawned by a giant jungle climbed so from its dead run's
+        # scaffold to the top of the test area and died of the fall down (#739). That block stays.
+        if left and top is not None and left[0].y > top:
+            break
+        top = left[0].y if left else None
         rounds += 1
         took = False
-        for q in sorted([q for q in placed_scaffold(False) if q not in keep], key=lambda q: -q.y):
+        for q in left:
             # From over the block, it stands on it first, so mining it lowers the bot with the pillar: mined from beside,
             # the pillar was cut under a bot on a giant jungle's crown, and it had no way down (#674).
             if pos().y > q.y + 1 and block(q.up()).is_air:

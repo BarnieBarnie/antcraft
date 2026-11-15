@@ -612,7 +612,11 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// Again (#731): 58 of 60 in runs of 12, 24 and 24 copies, 2751 to 7498. Both failures ran out of maxTicks with every
 	// log felled: after the kill the bot died again, of a fall (a death share drop, #682), and the third run's recover,
 	// re-felling and scaffold taken back from some 20 up ran past tick 10000. 4 of 24 in one run died twice and passed at
-	// some 5900 to 7500. No out_of_reach in those 60.
+	// some 5900 to 7500. No out_of_reach in those 60. The second death (#739): recover's take_back, on the dead run's
+	// scaffold bridge some 7 up, climbed a block a round to some 38 up, as mine's walk to each lone block it stood on
+	// placed one beside and over it, and the bot died of the drop down; 3 of 120 after #736 (all passed, at up to 6439),
+	// and 2 out_of_reach of a log some 10 up the dead run could not reach either. take_back now stops a round that
+	// climbs: 96 of 96 in 4 runs of 24, 2981 to 6076, no second death.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWholeByABotThatDiesUpIt(GameTestHelper helper) {
 		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);

@@ -571,6 +571,33 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			List.of("out", "1 True []"), () -> helper.assertBlockPresent(Blocks.COBBLESTONE, 2, 1, 2));
 	}
 
+	/**
+	 * take_back does not climb on a lone scaffold block high over air (#739): the bot pillars up 9 and the test takes away
+	 * the pillar under its top block. mine will not break the block the bot stands on over that drop, so its walk placed a
+	 * block beside and over it to mine it from, which the next round took back the same way, one up a round to the 32nd;
+	 * a bot respawned by a giant jungle climbed so from its dead run's scaffold to the top of the test area and died of the
+	 * fall down. take_back now ends once a round's walks placed scaffold over all it had left: the bot climbs one.
+	 */
+	// Measured: passes at tick 133 (red: climbed to 13 on tick 236; with a 6-block drop mine dropped off, no climb).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 280)
+	public void takeBackDoesNotClimbOnALoneBlockOverAir(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		helper.onEachTick(() -> {
+			if (WorkGameTest.printed(bot).contains("up")) {
+				for (int y = 1; y <= 8; y++) {
+					helper.setBlock(3, y, 3, Blocks.AIR);
+				}
+			}
+			if (helper.relativePos(bot.blockPosition()).getY() > 11) {
+				helper.fail("climbed to " + helper.relativePos(bot.blockPosition()).toShortString());
+			}
+		});
+		expect(helper, bot, "import lib.trees\nr = goto(Pos" + at(helper, 3, 10, 3) + ")\nprint('up')\nwait(2)\n"
+			+ "lib.trees.take_back()\nprint(r.ok)\n", List.of("up", "True"), () -> {
+			});
+	}
+
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
 	static void assertGiantFelled(GameTestHelper helper) {
 		assertGiantFelled(helper, null);
