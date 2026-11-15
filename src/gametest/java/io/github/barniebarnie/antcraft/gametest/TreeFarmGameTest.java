@@ -452,6 +452,43 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The giant spruce four saplings grow with seed 58, a 2x2 trunk of 29, the tallest a giant spruce grows (#667): its
+	 * top stand is some 28 up beside the trunk, and harvest, with the 31 dirt of jobs.wood_farm's giant kit, fells it whole.
+	 * It kept its top log until a bot stepping up onto a block it had just bridged faced it before the jump (#670): until
+	 * then harvest had not ended at tick 20000.
+	 */
+	// Measured: passes at tick 7856 to 7991.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 16000)
+	public void theTallestGiantSpruceIsFelledWhole(GameTestHelper helper) {
+		BlockPos spot = new BlockPos(6, 1, 6);
+		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
+			helper.setBlock(p.below(), Blocks.DIRT);
+			helper.setBlock(p, Blocks.SPRUCE_SAPLING);
+		}
+		advance(helper, helper.absolutePos(spot), 58);
+		helper.assertBlockPresent(Blocks.SPRUCE_LOG, spot.above(28));
+		helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, spot.above(29));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 31), new ItemStack(Items.SPRUCE_SAPLING, 4));
+		start(helper, bot, "giant_spruce", new BlockPos(2, 0, 2), new BlockPos(11, 0, 11), """
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"], r["at"])
+			""");
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (!log.isEmpty() && !log.equals(List.of("True None None"))) {
+				helper.fail("printed " + log);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None None"), "printed");
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
+				helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, p);
+			}
+		});
+	}
+
+	/**
 	 * Builds the 10x10 cell of the giant kind from (2, 0, 2) with the bot given its four saplings, prints materials,
 	 * grows the tree once built and checks its 2x2 trunk stands on the spots and no log of it is outside the cell.
 	 */

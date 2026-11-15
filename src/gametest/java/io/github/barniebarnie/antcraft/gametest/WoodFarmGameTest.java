@@ -466,7 +466,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * replants all four spots and stores logs in its depot. The kit carries 31 dirt for a giant, its cell's clear height
 	 * (scaffold): with the 16 of other kinds the walks to its top stands got nowhere, the falls off the leaves left the
 	 * bot at 1 health and it died on the retry. Seed 6 rather than a random tree: the tallest, 28 and 29, take some 8000
-	 * ticks (seed 15) or never get their top log (seed 58: goto to a stand 28 up beside the trunk gives unreachable).
+	 * to 9000 ticks (seeds 15 and 58; TreeFarmGameTest theTallestGiantSpruceIsFelledWhole fells the one of 29).
 	 */
 	// Measured: passes at tick 5185 to 5258 (red: died at 4496).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10500)
