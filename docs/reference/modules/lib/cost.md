@@ -25,7 +25,7 @@ The numbers are constants, rounded from the game's, not its break-time formula: 
 
 ## `death(at, start=None)`
 
-- **Returns** the ticks a death at [`Pos`](../../types/pos.md) `at` costs the bot: `RESPAWN`, then the walk from `start` (by default its [`home`](../../movement/home.md)) back to `at` for what it dropped. A death costs nothing else but what it drops, and only when the bot is not back for it within `DESPAWN` ticks: a long fall, even a fatal one, can be cheaper than the climb down. `jobs/wood_farm` sets its home at the farm for that (see [Grow a wood farm](../../../cookbook/wood-farm.md)).
+- **Returns** the ticks a death at [`Pos`](../../types/pos.md) `at` costs the bot: `RESPAWN`, then the walk from `start` (by default its [`home`](../../movement/home.md)) back to `at` for what it dropped. A death costs nothing else but what it drops, and only when the bot is not back for it within `DESPAWN` ticks: a long fall, even a fatal one, can be cheaper than the climb down, and a walk's path weighs it so: a fall that hurts costs its share of this, a fatal one all of it ([Bots](../../../features/bots.md), #682). `jobs/wood_farm` sets its home at the farm for that (see [Grow a wood farm](../../../cookbook/wood-farm.md)).
 - **Pauses** no.
 
 ## Example

@@ -34,7 +34,7 @@ public final class PathFinder {
 	 * leaping off cliffs they cannot swim back up.
 	 */
 	public static final int MAX_WATER_DROP = 8;
-	/** How far the last search of a {@link Search} may drop, where no other way is found: any fall in a world. */
+	/** How far a drop past its limit may fall, for a bot with a {@link Death} to cost: any fall in a world. */
 	public static final int FALL_ANY = 384;
 	/**
 	 * Swimming one block up a water column, such as a waterfall. Measured at about 6 ticks a block (see
@@ -48,7 +48,33 @@ public final class PathFinder {
 
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
-	public record Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop) {
+	/**
+	 * {@code death}, where the bot would come back from one, lets a path drop past {@code maxDrop} (and past
+	 * {@link #MAX_WATER_DROP} into water) at its cost (see {@link Death#hurt}); without it a path never does.
+	 */
+	public record Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop, @Nullable Death death) {
+		public Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop) {
+			this(canBreak, canPlace, maxNodes, maxDrop, null);
+		}
+	}
+
+	/**
+	 * What a death costs the bot, to cost a drop that hurts (#682): the bot has {@code health} left, and after a death
+	 * comes back at {@code home} {@code respawnTicks} later, then walks back for what it dropped, as
+	 * {@code lib.cost.death} counts it (docs/features/death.md). A death costs no more, so dying is a move like any other
+	 * where it is cheaper.
+	 */
+	// ponytail: the items lost past their despawn are not counted, nor a home in another dimension (no Death then).
+	public record Death(float health, BlockPos home, int respawnTicks) {
+		/** A death at {@code at}: the respawn and the walk from home back to it. */
+		double cost(BlockPos at) {
+			return this.respawnTicks + WALK_COST * this.home.distManhattan(at);
+		}
+
+		/** {@code damage} at {@code at}: a bot does not heal, so the health it loses is that share of a death, at most one. */
+		double hurt(int damage, BlockPos at) {
+			return Math.min(1, damage / (double) this.health) * this.cost(at);
+		}
 	}
 
 	private record Node(BlockPos pos, double cost, Node parent, Step step) {
@@ -89,12 +115,10 @@ public final class PathFinder {
 	/**
 	 * A search for a path, run a slice of nodes at a time until it has found one (see {@link #find}). For a goal that may
 	 * end afloat and a bot that may break blocks, a search without breaking first, and only where it finds no way, one
-	 * with. Where those find no way, a last one that drops as far as it must ({@link #FALL_ANY}), hurt or not: a bot left
-	 * on a floating platform of its own scaffold stayed up there for good (#674); a fall costs at worst a death, and the
-	 * bot respawns at home. Where that finds no way either, the path is the first searches' partial one.
+	 * with. A drop that hurts is a move like any other, at its cost (see {@link Death}), so a bot left on a floating
+	 * platform of its own scaffold drops off (#674) in the same search, not a second one (#684).
 	 */
 	// ponytail: a second search where the first finds no way; one search with a cost per break if it shows in profiles.
-	// The fall search doubles the nodes a goal with no way spends; one search with a cost per block past maxDrop if that shows.
 	public static final class Search {
 		private final WorldView world;
 		private final BlockPos start;
@@ -103,8 +127,6 @@ public final class PathFinder {
 		private Phase phase;
 		/** Whether {@link #phase} is the search without breaking, to be followed by one with. */
 		private boolean swimFirst;
-		/** The partial path of the searches before the fall search, while {@link #phase} is that one. */
-		private @Nullable Path unhurt;
 		/** The nodes the searches before {@link #phase} expanded. */
 		private int expandedBefore;
 		private @Nullable Path path;
@@ -116,7 +138,7 @@ public final class PathFinder {
 			this.options = options;
 			this.swimFirst = goal.mayEndAfloat() && options.canBreak();
 			this.phase = new Phase(world, start, goal,
-				this.swimFirst ? new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop()) : options);
+				this.swimFirst ? new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop(), options.death()) : options);
 		}
 
 		/** The path, once the search has found it: a complete one, or one toward the goal once it ran out of nodes. */
@@ -139,14 +161,8 @@ public final class PathFinder {
 					this.swimFirst = false;
 					this.expandedBefore = total;
 					this.phase = new Phase(this.world, this.start, this.goal, this.options);
-				} else if (!found.complete() && this.unhurt == null && this.options.maxDrop() < FALL_ANY) {
-					this.unhurt = found;
-					this.expandedBefore = total;
-					this.phase = new Phase(this.world, this.start, this.goal,
-						new Options(this.options.canBreak(), this.options.canPlace(), this.options.maxNodes(), FALL_ANY));
 				} else {
-					Path p = found.complete() || this.unhurt == null ? found : this.unhurt;
-					this.path = new Path(p.start(), p.steps(), p.complete(), p.cost(), total);
+					this.path = new Path(found.start(), found.steps(), found.complete(), found.cost(), total);
 				}
 			}
 			return expanded;
@@ -313,18 +329,26 @@ public final class PathFinder {
 			}
 			// A door on the way, such as one the bot drops into the doorway of, costs its opening once.
 			double opening = this.world.canOpen(edge, dir) || this.world.canOpen(edge.above(), dir) ? OPEN_COST : 0;
-			int maxFall = Math.max(this.options.maxDrop(), MAX_WATER_DROP);
+			Death death = this.options.death();
+			int maxFall = death != null ? FALL_ANY : Math.max(this.options.maxDrop(), MAX_WATER_DROP);
 			for (int fall = 1; fall <= maxFall; fall++) {
 				BlockPos to = edge.below(fall);
-				if (this.swimmable(to)) {
-					return new Candidate(new Step(MoveType.SWIM, to, List.of(), List.of()), SWIM_COST + fall * FALL_COST_PER_BLOCK + opening);
-				}
-				if (!this.open(to, dir)) {
+				boolean water = this.swimmable(to);
+				if (!water && !this.open(to, dir)) {
 					return null;
 				}
-				if (fall <= this.options.maxDrop() && this.canStand(to.below())) {
-					return new Candidate(new Step(MoveType.DROP, to, List.of(), List.of()), WALK_COST + fall * FALL_COST_PER_BLOCK + opening);
+				if (!water && !this.canStand(to.below())) {
+					continue;
 				}
+				int limit = water ? MAX_WATER_DROP : this.options.maxDrop();
+				double hurt = fall <= limit ? 0 : death != null ? death.hurt(fall - limit, to) : BLOCKED;
+				// ponytail: water breaks a fall of any height, but one past MAX_WATER_DROP is costed as if it hurt, as a
+				// bot may not swim back up such a cliff.
+				if (hurt == BLOCKED) {
+					return null;
+				}
+				double cost = (water ? SWIM_COST : WALK_COST) + fall * FALL_COST_PER_BLOCK + opening + hurt;
+				return new Candidate(new Step(water ? MoveType.SWIM : MoveType.DROP, to, List.of(), List.of()), cost);
 			}
 			return null;
 		}

@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity.navigation;
 
 import io.github.barniebarnie.antcraft.AntCraft;
+import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.pathing.Goal;
 import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
@@ -273,7 +274,16 @@ public class PathFollower {
 	}
 
 	private PathFinder.Options options() {
-		return new PathFinder.Options(this.mayBreak, this.mayPlace && this.hasScaffold(), this.maxNodes, MAX_DROP);
+		return new PathFinder.Options(this.mayBreak, this.mayPlace && this.hasScaffold(), this.maxNodes, MAX_DROP, this.death());
+	}
+
+	/** What a death costs the bot, so a path may drop farther than {@link #MAX_DROP} at that cost (#682); none where it would not come back. */
+	private PathFinder.@Nullable Death death() {
+		BlockPos home = this.bot.getHome();
+		if (!AntCraftConfig.botRespawn() || home == null || this.bot.getHomeDimension() != this.bot.level().dimension()) {
+			return null;
+		}
+		return new PathFinder.Death(this.bot.getHealth(), home, AntCraftConfig.botRespawnTicks());
 	}
 
 	/**

@@ -856,6 +856,52 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot up a dirt pillar 12 high, its home {@code homeOff} blocks east of the pillar's top, walks to the floor beside
+	 * the pillar: off the pillar, hurt, or digging down it (#682).
+	 */
+	private static AntBot upAPillar(GameTestHelper helper, int homeOff) {
+		room(helper, 0, 16);
+		fill(helper, 3, 1, 3, 3, 12, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 13, 3);
+		bot.setHome(helper.absolutePos(new BlockPos(3 + homeOff, 13, 3)));
+		BotScripts.failOnError(helper, bot);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 1, 3)));
+		return bot;
+	}
+
+	/**
+	 * With its home on the pillar, a bot jumps off it: the 9 health the fall takes are 9/20 of a death, 119 ticks, which
+	 * with the drop costs less than digging 12 dirt down (some 250) (#682).
+	 */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 60)
+	public void jumpsOffAPillarWhereThatCostsLessThanDiggingDown(GameTestHelper helper) {
+		AntBot bot = upAPillar(helper, 0);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getHealth() < bot.getMaxHealth(), "not hurt: dug down? pillar top at " + topOf(helper));
+			helper.assertTrue(helper.getBlockState(new BlockPos(3, 12, 3)).is(Blocks.DIRT), "dug the pillar");
+			helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().distManhattan(helper.absolutePos(new BlockPos(5, 1, 3))) <= 1,
+				"at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+		});
+	}
+
+	/** With its home 100 blocks off, the share of a death costs more than digging down, so the bot digs down unhurt (#682). */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 400)
+	public void digsDownAPillarWhereThatCostsLessThanJumpingOff(GameTestHelper helper) {
+		AntBot bot = upAPillar(helper, 100);
+		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt: jumped off"));
+		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
+	}
+
+	/** The height of the top block of the pillar of {@link #upAPillar}. */
+	private static int topOf(GameTestHelper helper) {
+		int y = 12;
+		while (y > 0 && !helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.DIRT)) {
+			y--;
+		}
+		return y;
+	}
+
+	/**
 	 * A band of blocks lower than a full one, from x 2 to 5 across the room on its floor (#642): the bot walks onto it,
 	 * along it and off it to a goal past it, and breaks none of it.
 	 */

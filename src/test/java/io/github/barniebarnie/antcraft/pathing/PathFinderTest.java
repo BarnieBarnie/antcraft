@@ -36,11 +36,13 @@ class PathFinderTest {
 	/** A path says how many nodes its search expanded, which the per-tick pathfinding budget counts (see PathBudget). */
 	@Test
 	void aPathTellsHowManyNodesItsSearchExpanded() {
-		// Walled in: the search gives up once it has expanded its nodes, and so does the fall search after it (#674).
+		// Walled in: the search gives up once it has expanded its nodes, also where it may drop past maxDrop: one search, not two (#684).
 		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 3, 2, 10, '#');
-		Path stuck = find(world, new BlockPos(6, 1, 0), new PathFinder.Options(false, false, 50, 3));
-		assertFalse(stuck.complete());
-		assertEquals(100, stuck.expanded());
+		for (PathFinder.Options options : List.of(new PathFinder.Options(false, false, 50, 3), new PathFinder.Options(false, false, 50, 3, death(20, START)))) {
+			Path stuck = find(world, new BlockPos(6, 1, 0), options);
+			assertFalse(stuck.complete());
+			assertEquals(50, stuck.expanded());
+		}
 		Path straight = find(GridWorld.flat(10), new BlockPos(2, 1, 0), WALK_ONLY);
 		assertTrue(straight.expanded() >= 2 && straight.expanded() < 50, "expanded " + straight.expanded());
 	}
@@ -246,10 +248,75 @@ class PathFinderTest {
 	 */
 	@Test
 	void dropsFartherThanMaxDropWhereThereIsNoOtherWay() {
-		GridWorld world = new GridWorld().fill(-1, 0, -1, 1, 0, 1, 'D').fill(-10, -12, -10, 10, -12, 10, '#');
-		Path path = find(world, new BlockPos(5, -11, 0), WALK_ONLY);
+		Path path = find(platform(12), new BlockPos(5, -11, 0), walkOnly(death(20, START)));
 		assertTrue(path.complete(), "stayed up: " + path.steps());
 		assertTrue(path.steps().contains(new Step(MoveType.DROP, new BlockPos(2, -11, 0), List.of(), List.of())), "no drop: " + path.steps());
+	}
+
+	/** A bot's death for the path search: {@code health} left, its home at {@code home}, back 200 ticks after it died. */
+	private static PathFinder.Death death(float health, BlockPos home) {
+		return new PathFinder.Death(health, home, 200);
+	}
+
+	private static PathFinder.Options walkOnly(PathFinder.Death death) {
+		return new PathFinder.Options(false, false, 10_000, 3, death);
+	}
+
+	/** A floating 3x3 dirt platform at y=0 (the bot on it at START) over a stone floor {@code fall} blocks down. */
+	private static GridWorld platform(int fall) {
+		return new GridWorld().fill(-1, 0, -1, 1, 0, 1, 'D').fill(-10, -fall, -10, 10, -fall, 10, '#');
+	}
+
+	/** A bot that would not come back from a death, or whose search is not told of it, never drops past maxDrop. */
+	@Test
+	void neverDropsFartherThanMaxDropWithoutADeathToCost() {
+		Path path = find(platform(12), new BlockPos(5, -11, 0), WALK_ONLY);
+		assertFalse(path.complete(), "dropped: " + path.steps());
+	}
+
+	/**
+	 * A drop past maxDrop hurts a point of health per block past it (vanilla's fall damage). A bot does not heal, so what
+	 * it loses is its share of a death: that share of the respawn and of the walk from home back to where it landed (#682).
+	 */
+	@Test
+	void aDropThatHurtsCostsItsShareOfADeath() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		Path path = find(platform(12), landing, walkOnly(death(20, landing.south(10))));
+		assertTrue(path.complete(), "stayed up: " + path.steps());
+		double hurt = 9 / 20.0 * (200 + 10 * PathFinder.WALK_COST);
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + hurt, path.cost(), 1e-9);
+	}
+
+	/** A drop that hurts the bot as much as the health it has or more costs a whole death, however far past that it falls. */
+	@Test
+	void aFatalDropCostsADeath() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		Path weak = find(platform(12), landing, walkOnly(death(5, landing.south(10))));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 200 + 10 * PathFinder.WALK_COST, weak.cost(), 1e-9);
+		BlockPos deep = new BlockPos(2, -39, 0);
+		Path far = find(platform(40), deep, walkOnly(death(20, deep.south(10))));
+		assertEquals(2 * PathFinder.WALK_COST + 40 * PathFinder.FALL_COST_PER_BLOCK + 200 + 10 * PathFinder.WALK_COST, far.cost(), 1e-9);
+	}
+
+	/**
+	 * Up a dirt pillar 12 high, a bot jumps off where that costs less than digging its way down, as with its home near
+	 * where it lands, and digs down where that costs less, as with its home far off (#682).
+	 */
+	@Test
+	void jumpsOffAPillarWhereThatCostsLessThanDiggingDown() {
+		GridWorld world = new GridWorld().fill(0, -11, 0, 0, 0, 0, 'D').fill(-10, -12, -10, 10, -12, 10, '#');
+		BlockPos foot = new BlockPos(1, -11, 0);
+		Path jump = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, death(20, foot)));
+		assertEquals(List.of(new Step(MoveType.DROP, foot, List.of(), List.of())), jump.steps());
+		Path dig = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, death(20, foot.east(100))));
+		assertTrue(dig.complete(), "stayed up: " + dig.steps());
+		assertTrue(types(dig).contains(MoveType.DIG_DOWN), "jumped: " + dig.steps());
+		// It may dig part of the way and drop the rest, but never farther than maxDrop.
+		BlockPos at = START;
+		for (Step step : dig.steps()) {
+			assertTrue(at.getY() - step.to().getY() <= 3, "jumped: " + dig.steps());
+			at = step.to();
+		}
 	}
 
 	/** A ledge at y=0 for x<=0 (feet at y=1) over water a block deep at x 1..5, its surface {@code fall} blocks down, and a bank at x=6. */
@@ -274,8 +341,9 @@ class PathFinderTest {
 	void dropsIntoWaterFartherThanMaxWaterDropWhereThereIsNoOtherWay() {
 		int fall = PathFinder.MAX_WATER_DROP + 1;
 		BlockPos bank = new BlockPos(6, 2 - fall, 0);
-		Path leap = find(ledgeOverWater(fall), bank, WALK_ONLY);
+		Path leap = find(ledgeOverWater(fall), bank, walkOnly(death(20, START)));
 		assertTrue(leap.complete(), "stayed up: " + leap.steps());
+		assertFalse(find(ledgeOverWater(fall), bank, WALK_ONLY).complete(), "leapt with no death to cost");
 	}
 
 	@Test
