@@ -577,9 +577,63 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * roots in the cell mined, so the spot is free, and picked up (#751), and a propagule planted again.
 	 */
 	// Measured: passes at tick 1722 to 2181. 40 seeded trees passed at tick 553 to 3875 (red: key not in KINDS).
+	// fell_whole alone, seeds 0 to 23 in temporary copies (#768): 190 to 2900 ticks (2 to 34 logs), 1000 on average;
+	// its take_back 0 to 1370 of that, as the top branch logs no stand reaches each take a pillar of some 8 to 10. In 48
+	// copies of seed 13, 46 took 1250 to 2900, but two took 5761 and over 8000: a mine's walk to a log beside its stand
+	// in the crown got no nearer for 2400 ticks (MoveApi.STALL_TICKS) and timed out, the bot climbing at 0.12 a tick
+	// against a block face and slipping back (a vine the tree grew, likely), a path follower bug left for its own issue.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
 	public void aMangroveCellIsGrownHarvestedAndReplanted(GameTestHelper helper) {
 		mangrove(helper, at -> advance(helper, at, 0));
+	}
+
+	/**
+	 * The mangrove grown with seed 12 at the spot of the cell of 11x11 from (2, 0, 2), the first of a farm of two built
+	 * cells (lib.cells), the second from (14, 0, 2): 7 of its roots reach out of the cell (#768). harvest mines the roots
+	 * up to 2 blocks out of the cell, as far as they reach, but none in the columns of the farm's other cell, such as a
+	 * root put at (14, 1, 7), which that cell's own harvest mines.
+	 */
+	// Measured: passes at tick 2081 (red: a root left at (13, 1, 7)).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
+	public void aMangroveHarvestMinesItsRootsOutOfTheCellButNotInAnotherCell(GameTestHelper helper) {
+		BlockPos spot = new BlockPos(7, 1, 7);
+		helper.setBlock(spot.below(), Blocks.DIRT);
+		helper.setBlock(spot, Blocks.MANGROVE_PROPAGULE);
+		advance(helper, helper.absolutePos(spot), 12);
+		BlockPos other = new BlockPos(14, 1, 7);
+		helper.setBlock(other, Blocks.MANGROVE_ROOTS);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 23),
+			new ItemStack(Items.MANGROVE_PROPAGULE, 2));
+		start(helper, bot, "mangrove_propagule", new BlockPos(2, 0, 2), new BlockPos(12, 0, 12), """
+			import lib.cells
+			lib.cells.layout("m", low, (11, 11))
+			lib.cells.add("m", 0)
+			lib.cells.add("m", 1)
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"])
+			""");
+		Runnable mined = () -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None"), "printed");
+			for (int x = 0; x <= 14; x++) {
+				for (int y = 1; y < 40; y++) {
+					for (int z = 0; z <= 14; z++) {
+						if (x < 14 || z < 2 || z > 12) {
+							helper.assertBlockNotPresent(Blocks.MANGROVE_ROOTS, new BlockPos(x, y, z));
+							helper.assertBlockNotPresent(Blocks.MUDDY_MANGROVE_ROOTS, new BlockPos(x, y, z));
+						}
+					}
+				}
+			}
+			helper.assertBlockPresent(Blocks.MANGROVE_ROOTS, other);
+		};
+		// Checked at once when harvest ends, so a root left fails then.
+		helper.onEachTick(() -> {
+			if (!BotScripts.log(bot, Output.Level.PRINT).isEmpty()) {
+				mined.run();
+			}
+		});
+		helper.succeedWhen(mined);
 	}
 
 	/**

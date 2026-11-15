@@ -832,6 +832,39 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * gets dirt, as stocked and first_cell get a cell's and reap its scaffold, two cells built (#768, as soil's of #767):
+	 * the dirt under the spots of both cells is nearer, but the bot digs the dirt outside the cells.
+	 */
+	// Measured: passes at tick 130 (red: the dirt under the first cell's spot dug).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 260)
+	public void getsDigsNoDirtFromUnderTheFarmsSpots(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT_2.below(), Blocks.DIRT);
+		BlockPos outside = new BlockPos(4, 0, 17);
+		helper.setBlock(outside, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 11, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			lib.cells.layout("birch_farm", cell[0], (5, 5))
+			lib.cells.add("birch_farm", 0)
+			lib.cells.add("birch_farm", 1)
+			print(jobs.wood_farm.gets("minecraft:dirt", 1, 32)["ok"], count("minecraft:dirt"))
+			""");
+		Runnable dug = () -> {
+			helper.assertValueEqual(said(bot), List.of("True 1"), "printed");
+			helper.assertBlockPresent(Blocks.DIRT, SPOT.below());
+			helper.assertBlockPresent(Blocks.DIRT, SPOT_2.below());
+			helper.assertBlockPresent(Blocks.AIR, outside);
+		};
+		helper.onEachTick(() -> {
+			if (!said(bot).isEmpty()) {
+				dug.run();
+			}
+		});
+		helper.succeedWhen(dug);
+	}
+
+	/**
 	 * A birch whose top logs the bot cannot reach without dirt to pillar with (#644): reap says the harvest failed and why,
 	 * gets dirt from the chest and harvests again, then tend replants the cell, its tree gone.
 	 */

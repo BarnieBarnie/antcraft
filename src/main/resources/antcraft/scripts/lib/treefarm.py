@@ -70,9 +70,10 @@ KINDS = {
     # propagule's spot on roots that spread out and down to the ground; UpwardsBranchingTrunkPlacer(4, 1, 9), a trunk of 4
     # to 14 (MANGROVE's (2, 1, 4)), its branches stepping out and up 1 to 6; TwoLayersFeatureSize(3, 0, 2). So clear is
     # the highest trunk top plus 2. Measured over 188 grown trees: logs up to 5 out of the trunk, roots up to 7 out and 7
-    # high (so up to 2 into the next cell, whose harvest mines them), 16 logs a tree. roots: harvest mines the roots in
-    # the cell, as one may stand at the spot and they pile up.
-    "minecraft:mangrove_propagule": {"size": 11, "square": False, "clear": 23, "roof": False, "roots": True},
+    # high (so up to 2 out of the cell), 16 logs a tree. roots: harvest mines the roots in the cell, as one may stand at
+    # the spot and they pile up, and those up to roots blocks out of it in no other cell of the farm, whose own harvest
+    # mines them (#768): in 4 of 23 seeded trees 2 to 7 roots reached out, never mined at the farm's edge.
+    "minecraft:mangrove_propagule": {"size": 11, "square": False, "clear": 23, "roof": False, "roots": 2},
 }
 TORCH = "minecraft:torch"
 # A torch at a torch spot, standing or on a wall: a wall torch is a block of its own (#760).
@@ -183,7 +184,7 @@ def build_cell(kind, low, high):
 def soil(ground, radius=32):
     """Puts dirt at ground, a sapling spot's floor, where there is none: mines what is there, such as stone or a block a
     path put in, with a pickaxe it gets where it has none (lib.get.ensure_tool), getting the dirt it lacks within radius
-    (lib.get), none from under the farm's cells (outside_cells). Gives result(): ok, or the reason with at."""
+    (get_outside), none from under the farm's cells. Gives result(): ok, or the reason with at."""
     if lib.trees.is_kind(ground, "#minecraft:dirt"):
         return result()
     if not block(ground).is_air:
@@ -197,19 +198,24 @@ def soil(ground, radius=32):
         if not r and r.reason != "target_gone":
             return result(r.reason, ground)
     if not count(DIRT):
-        # Never from under the farm's cells (#767): lib.get digs only where lib.find.WHERE allows, for this get.
-        where = lib.find.WHERE
-        edge = lib.find.resolve()
-        out = outside_cells()
-        lib.find.WHERE = lambda p: (edge is None or edge(p)) and out(p)
-        try:
-            r = lib.get.get(DIRT, 1, radius)
-        finally:
-            lib.find.WHERE = where
+        r = get_outside(DIRT, 1, radius)
         if not r["ok"]:
             return r
     r = place(ground, DIRT)
     return result() if r else result(r.reason, ground)
+
+
+def get_outside(item, n, radius=32):
+    """lib.get.get(item, n, radius), digging none from under the farm's cells (#767): for this get, lib.find.WHERE is
+    narrowed by outside_cells, on top of the WHERE in force (the colony edge). For dirt, which a get digs from the ground."""
+    where = lib.find.WHERE
+    edge = lib.find.resolve()
+    out = outside_cells()
+    lib.find.WHERE = lambda p: (edge is None or edge(p)) and out(p)
+    try:
+        return lib.get.get(item, n, radius)
+    finally:
+        lib.find.WHERE = where
 
 
 def outside_cells():
@@ -265,7 +271,8 @@ def grown(kind, low, high):
 
 def harvest(kind, low, high, radius=32):
     """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), again while a log is left, such
-    as one cut off from the tree, mines the roots in the cell where the kind has them (a mangrove's), picks up the
+    as one cut off from the tree, mines the roots in the cell where the kind has them (a mangrove's, and those up to
+    roots blocks out of the cell in no other cell of the farm, outside_cells), picks up the
     sticks and apples lying about, then, where it felled the tree whole, plants each empty sapling spot (plant, so
     with dirt put back under it), getting the saplings it lacks within radius (lib.get), such as a square kind with fewer than four carried; where it
     cannot, tend does later.
@@ -285,9 +292,15 @@ def harvest(kind, low, high, radius=32):
     # second pass, from where the bot stands then. ponytail: two passes. mine puts the roots into the inventory, so
     # none lie about (#751), and jobs.wood_farm stores them in its depot.
     if r["ok"] and spec(kind).get("roots"):
+        n = spec(kind)["roots"]
+        low = Pos(low)
+        high = Pos(high)
+        out = outside_cells()
         for _ in range(2):
-            for p in sorted(within(ROOTS, kind, low, high), key=lambda p: -p.y):
-                mine(p)
+            roots = within(ROOTS, kind, low + (-n, 0, -n), high + (n, 0, n))
+            for p in sorted(roots, key=lambda p: -p.y):
+                if low.x <= p.x <= high.x and low.z <= p.z <= high.z or out(p):
+                    mine(p)
     # A torch a pillar up to the leaves took the place of lies about too. Only what lies on the floor or a step over it:
     # pillaring or digging up to each drop on the decaying leaves took most of a dark oak's harvest, and jobs.wood_farm's
     # sweep picks those up later (#655).

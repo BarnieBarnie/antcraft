@@ -142,8 +142,11 @@ def build(kind, name, size, radius):
 
 
 def gets(item, n, radius):
-    """get(item, n, radius), but the roof's slabs (lib.treefarm.SLABS, a tag) are any wooden slabs the chests within
-    radius hold (lib.stock.take_up_to takes a tag), and those they lack are made as oak slabs (#612). Gives result()."""
+    """get(item, n, radius), but dirt none from under the farm's cells (lib.treefarm.get_outside, #768), and the roof's
+    slabs (lib.treefarm.SLABS, a tag) are any wooden slabs the chests within radius hold (lib.stock.take_up_to takes a
+    tag), and those they lack are made as oak slabs (#612). Gives result()."""
+    if item == lib.treefarm.DIRT:
+        return lib.treefarm.get_outside(item, n, radius)
     if item != lib.treefarm.SLABS:
         return get(item, n, radius)
     if lib.stock.take_up_to(item, n, radius)["ok"]:
@@ -251,7 +254,7 @@ def reap(kind, b, radius, told):
     r = lib.treefarm.harvest(kind, b[0], b[1], radius)
     if not r["ok"]:
         tell(told, f"harvest: {r['reason']} at {r['at']}")
-        get(lib.treefarm.DIRT, scaffold(kind), radius)
+        gets(lib.treefarm.DIRT, scaffold(kind), radius)
         ensure_tool("axe", 16, "hand", radius)
         lib.trees.take_back()
         r = lib.treefarm.harvest(kind, b[0], b[1], radius)
