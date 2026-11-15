@@ -191,7 +191,15 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true));
+		// A hurt bot running a script of its own starts no fight: the script decides, such as to retreat home and heal
+		// (jobs.guard), and a mob that hurts it is still fought back (HurtByTargetGoal) (#718).
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true) {
+			@Override
+			public boolean canUse() {
+				return !(AntBot.this.getHealth() < AntBot.this.getMaxHealth() && AntBot.this.isRunningScript()
+					&& !AntBot.this.isIdling()) && super.canUse();
+			}
+		});
 	}
 
 	/**

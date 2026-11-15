@@ -116,12 +116,13 @@ public final class WorkApi {
 			return run.start(new PickUp(run, bot(run, call), item, (int) radius, given.toString()), call);
 		});
 		natives.register("attack", call -> {
-			Object arg = Args.bind("attack", call, 1, "entity")[0];
-			if (!(arg instanceof EntityInfo info)) {
-				throw new ScriptError("attack() takes an Entity, not '" + Values.typeName(arg) + "'");
+			Object[] args = Args.bind("attack", call, 1, "entity", "min_health");
+			if (!(args[0] instanceof EntityInfo info)) {
+				throw new ScriptError("attack() takes an Entity, not '" + Values.typeName(args[0]) + "'");
 			}
+			long minHealth = Args.absent(args[1]) ? 0 : Args.integer(args[1]);
 			AntBot bot = bot(run, call);
-			Attack attack = new Attack(run, bot, info);
+			Attack attack = new Attack(run, bot, info, minHealth);
 			@Nullable Result refused = refuse(bot, info.entity());
 			if (refused != null) {
 				return run.done(attack.describe(), refused);
@@ -463,10 +464,12 @@ public final class WorkApi {
 	}
 
 	/**
-	 * {@code attack(entity)}: walks into melee reach of the target, following it as it moves, and strikes it with what the
+	 * {@code attack(entity, min_health)}: walks into melee reach of the target, following it as it moves, and strikes it with what the
 	 * bot holds as often as a player would with it ({@link BotHands#strikeTicks}) until it dies (ok). It fails with {@code target_gone} once the
 	 * target is gone otherwise or more than {@link SenseApi#MAX_ENTITY_RADIUS} blocks away, and with the walk's reason,
-	 * such as {@code unreachable}, when the bot cannot get to it.
+	 * such as {@code unreachable}, when the bot cannot get to it, and with {@code hurt} once the bot's health is under
+	 * {@code min_health}, letting go of the target so its own goals do not chase it on (#718). ponytail: a creeper
+	 * {@code attack} shoots ({@link Shoot}) ignores {@code min_health}, as it keeps out of the creeper's reach.
 	 */
 	private static final class Attack implements ScriptRun.Action {
 		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
@@ -477,16 +480,18 @@ public final class WorkApi {
 		private final ScriptRun run;
 		private final AntBot bot;
 		private final EntityInfo info;
+		private final long minHealth;
 		private ScriptRun.@Nullable Action walk;
 		private @Nullable Vec3 walkedTo;
 		private int arrivals;
 		private int struckAt = Integer.MIN_VALUE / 2;
 		private @Nullable Result result;
 
-		Attack(ScriptRun run, AntBot bot, EntityInfo info) {
+		Attack(ScriptRun run, AntBot bot, EntityInfo info, long minHealth) {
 			this.run = run;
 			this.bot = bot;
 			this.info = info;
+			this.minHealth = minHealth;
 		}
 
 		@Override
@@ -501,6 +506,10 @@ public final class WorkApi {
 			if (!(entity instanceof LivingEntity target) || entity.isRemoved() || entity.level() != this.bot.level()
 				|| entity.distanceTo(this.bot) > SenseApi.MAX_ENTITY_RADIUS) {
 				return this.finish(Result.fail(Result.TARGET_GONE));
+			}
+			if (this.bot.getHealth() < this.minHealth) {
+				this.bot.setTarget(null);
+				return this.finish(Result.fail(Result.HURT));
 			}
 			if (KiteGoal.litNear(this.bot) != null) {
 				// A creeper near with its fuse lit: the bot's kite goal strikes it and backs off out of the blast until it goes out (#706).

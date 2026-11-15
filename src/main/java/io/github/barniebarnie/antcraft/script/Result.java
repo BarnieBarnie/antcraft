@@ -28,6 +28,7 @@ public record Result(boolean ok, @Nullable String reason, Object value, @Nullabl
 	public static final String BLOCKED = "blocked";
 	public static final String PROTECTED = "protected";
 	public static final String TARGET_GONE = "target_gone";
+	public static final String HURT = "hurt";
 	public static final String NO_RECIPE = "no_recipe";
 	public static final String MISSING_INGREDIENTS = "missing_ingredients";
 	public static final String NO_BLUEPRINT = "no_blueprint";

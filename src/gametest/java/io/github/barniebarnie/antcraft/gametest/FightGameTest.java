@@ -371,6 +371,33 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * {@code attack(husk, min_health=12)} ends with {@code hurt} once the bot's health drops under 12, above the flee
+	 * reflex's 6 (#718), and the bot's own goals take the husk up neither then nor while the script runs on: the bot is
+	 * hurt and runs a script. The husk has 200 health, so the bot's blows do not end the fight first.
+	 */
+	// Measured: passes at tick 50 to 60.
+	@GameTest(maxTicks = 120)
+	public void attackWithMinHealthEndsWithHurtWhenHealthDropsUnderIt(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 5, 1, 5);
+		husk.setNoAi(true);
+		husk.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		husk.setHealth(200);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		ScriptRun run = run(helper, bot, "r = attack(entities('husk', 8)[0], min_health=12)\nprint(r.ok, r.reason)\nwait(20)\n");
+		boolean[] hurt = {false};
+		helper.onEachTick(() -> {
+			if (!hurt[0] && husk.getHealth() < 200) {
+				hurt[0] = true;
+				bot.setHealth(10);
+			}
+			if (!BotScripts.log(bot, Output.Level.PRINT).isEmpty() && bot.getTarget() != null) {
+				helper.fail("the bot's own goals took up " + bot.getTarget());
+			}
+		});
+		succeedWhenPrinted(helper, bot, run, List.of("False hurt"));
+	}
+
+	/**
 	 * Fails the test at once when one of {@code creepers} explodes, which discards it, or a blast hurts the bot (#706).
 	 * Registered up front, as every listener.
 	 */

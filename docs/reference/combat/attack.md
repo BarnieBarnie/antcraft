@@ -1,7 +1,7 @@
 # `attack`
 
 ```text
-attack(entity)
+attack(entity, min_health=None)
 ```
 
 Walks to a mob and strikes it with what the bot holds until it dies.
@@ -11,6 +11,7 @@ Walks to a mob and strikes it with what the bot holds until it dies.
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `entity` | [`Entity`](../types/entity.md) | | the mob to fight, as [`entities`](../world/entities.md) gives it |
+| `min_health` | `int` or `None` | `None` | end the fight with `hurt` once the bot's [`health()`](../bot/health.md) is under it; `None` fights on |
 
 ## Returns
 
@@ -18,7 +19,7 @@ A [`Result`](../types/result.md), ok once the target died.
 
 ## Pauses
 
-Yes, until the target is dead, gone or cannot be got to.
+Yes, until the target is dead, gone or cannot be got to, or the bot's health is under `min_health`.
 
 ## Cost
 
@@ -34,9 +35,11 @@ By default the bot attacks only hostile mobs, such as zombies and skeletons, and
 
 Against a creeper the bot kites: while the fuse of a creeper near it is lit, it strikes only at once and otherwise backs off out of the blast, and the attack waits until the fuse is out to walk in again (see [Fighting creepers](../../features/bots.md#fighting-creepers)). A bot that carries a bow or crossbow and arrows shoots a creeper instead, from range, as [`shoot`](shoot.md) does, so it never comes near enough to light the fuse.
 
-A bot at or below `botFleeHealth` with a hostile mob near it flees instead of fighting on: the attack ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)). Check [`health()`](../bot/health.md) between fights to retreat before that, as the bundled [`jobs.guard`](../../cookbook/guard.md) does.
+A bot at or below `botFleeHealth` with a hostile mob near it flees instead of fighting on: the attack ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)). To retreat before that, give `min_health`: once the bot's health is under it, the attack ends with `hurt` and the bot lets go of the target, so its own goals do not chase it on. The bundled [`jobs.guard`](../../cookbook/guard.md) fights with `min_health=12`, then walks home to eat and heal.
 
-An argument that is no `Entity` stops the script with an error.
+While a bot is hurt (under its full health) and runs a script of its own, its own goals start no fight with a hostile mob they see: the script decides, so a mob in sight does not draw out a bot that retreats or heals. A mob that hurts it is still fought back. An idle bot, or one at full health, fights any hostile mob it sees as before.
+
+An argument that is no `Entity`, or a `min_health` that is no `int`, stops the script with an error.
 
 ## Examples
 
@@ -57,6 +60,7 @@ for mob in entities("zombie", 8):
 | `target_gone` | the target is gone (despawned, unloaded, or more than 64 blocks away) other than by dying |
 | `unreachable` | the bot cannot walk into reach of it, or got to it three times without it being in reach |
 | `wrong_dimension` | the target is in another dimension than the bot |
+| `hurt` | the bot's health dropped under `min_health` |
 | `interrupted` | a reflex took over, such as fleeing at low health |
 | `not_loaded`, `timeout` | a walk stopped with it, as `goto` does |
 
