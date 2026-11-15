@@ -62,10 +62,15 @@ public final class PathFinder {
 	/**
 	 * {@code death}, where the bot would come back from one, lets a path drop past {@code maxDrop} (and past
 	 * {@link #MAX_WATER_DROP} into water) at its cost (see {@link Death#hurt}); without it a path never does.
+	 * {@code scaffold}: the scaffold blocks the bot carries, the most a path places (#749).
 	 */
-	public record Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop, @Nullable Death death) {
+	public record Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop, @Nullable Death death, int scaffold) {
 		public Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop) {
 			this(canBreak, canPlace, maxNodes, maxDrop, null);
+		}
+
+		public Options(boolean canBreak, boolean canPlace, int maxNodes, int maxDrop, @Nullable Death death) {
+			this(canBreak, canPlace, maxNodes, maxDrop, death, Integer.MAX_VALUE);
 		}
 	}
 
@@ -134,10 +139,14 @@ public final class PathFinder {
 		}
 	}
 
-	/** {@code edited}: the nearest node before this one whose step broke or placed a block, to look back along (see {@link #edited}). */
-	private record Node(BlockPos pos, double cost, Node parent, Step step, @Nullable Node edited) {
+	/**
+	 * {@code edited}: the nearest node before this one whose step broke or placed a block, to look back along (see
+	 * {@link #edited}); {@code placed}: the blocks the path to it placed.
+	 */
+	private record Node(BlockPos pos, double cost, Node parent, Step step, @Nullable Node edited, int placed) {
 		Node(BlockPos pos, double cost, Node parent, Step step) {
-			this(pos, cost, parent, step, parent == null ? null : parent.edits() ? parent : parent.edited);
+			this(pos, cost, parent, step, parent == null ? null : parent.edits() ? parent : parent.edited,
+				parent == null ? 0 : parent.placed + step.places().size());
 		}
 
 		boolean edits() {
@@ -213,7 +222,7 @@ public final class PathFinder {
 			this.options = options;
 			this.swimFirst = goal.mayEndAfloat() && options.canBreak();
 			this.phase = new Phase(world, start, goal,
-				this.swimFirst ? new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop(), options.death()) : options);
+				this.swimFirst ? new Options(false, options.canPlace(), options.maxNodes(), options.maxDrop(), options.death(), options.scaffold()) : options);
 		}
 
 		/** The path, once the search has found it: a complete one, or one toward the goal once it ran out of nodes. */
@@ -252,6 +261,12 @@ public final class PathFinder {
 		private final Options options;
 		private final Planner planner;
 		private final Map<BlockPos, Double> bestCost = new HashMap<>();
+		/**
+		 * Where the bot carries few scaffold blocks, the cheapest way found to each block among those that placed the
+		 * fewest, so a cheaper way that placed more does not keep it from the way on that needs them (#749).
+		 */
+		// ponytail: two ways a block, not every way that places fewer; a search per count if paths still run out.
+		private final @Nullable Map<BlockPos, Least> least;
 		private final PriorityQueue<Entry> open = new PriorityQueue<>(ORDER);
 		private long added;
 		private Node closest;
@@ -268,6 +283,7 @@ public final class PathFinder {
 			Node startNode = new Node(start, 0, null, null);
 			this.open.add(new Entry(startNode, goal.heuristic(start), this.added++));
 			this.bestCost.put(start, 0.0);
+			this.least = options.scaffold() == Integer.MAX_VALUE ? null : new HashMap<>(Map.of(start, new Least(0, 0)));
 			this.closest = startNode;
 			this.closestHeuristic = goal.heuristic(start);
 			this.closestInWater = world.isWater(start);
@@ -278,7 +294,7 @@ public final class PathFinder {
 			int limit = this.expanded + Math.min(nodes, this.options.maxNodes() - this.expanded);
 			while (!this.open.isEmpty() && this.expanded < limit) {
 				Node node = this.open.poll().node;
-				if (node.cost > this.bestCost.getOrDefault(node.pos, BLOCKED)) {
+				if (node.cost > this.bestCost.getOrDefault(node.pos, BLOCKED) && !this.least(node.pos, node.cost, node.placed, false)) {
 					continue; // stale queue entry
 				}
 				this.planner.node = node;
@@ -302,15 +318,41 @@ public final class PathFinder {
 
 				for (Candidate move : this.planner.moves(node)) {
 					double cost = node.cost + move.cost;
+					int placed = node.placed + move.step.places().size();
+					boolean least = this.least(move.step.to(), cost, placed, true);
 					if (cost < this.bestCost.getOrDefault(move.step.to(), BLOCKED)) {
 						this.bestCost.put(move.step.to(), cost);
-						Node next = new Node(move.step.to(), cost, node, move.step);
-						this.open.add(new Entry(next, cost + this.goal.heuristic(next.pos), this.added++));
+					} else if (!least) {
+						continue;
 					}
+					Node next = new Node(move.step.to(), cost, node, move.step);
+					this.open.add(new Entry(next, cost + this.goal.heuristic(next.pos), this.added++));
 				}
 			}
 			return this.open.isEmpty() || this.expanded >= this.options.maxNodes() ? toPath(this.start, this.closest, false, this.expanded) : null;
 		}
+
+		/**
+		 * Whether a way to {@code pos} that placed {@code placed} blocks at {@code cost} is the cheapest of those that
+		 * placed the fewest; {@code record} keeps it as such where it is better.
+		 */
+		private boolean least(BlockPos pos, double cost, int placed, boolean record) {
+			if (this.least == null) {
+				return false;
+			}
+			Least best = this.least.get(pos);
+			if (best != null && (placed > best.placed || placed == best.placed && cost > best.cost)) {
+				return false;
+			}
+			if (record && (best == null || placed < best.placed || cost < best.cost)) {
+				this.least.put(pos, new Least(placed, cost));
+				return true;
+			}
+			return !record;
+		}
+	}
+
+	private record Least(int placed, double cost) {
 	}
 
 	/** Whether the path to {@code node} broke {@code pos} and left it broken, so a goal's sight sees through it. */
@@ -722,7 +764,8 @@ public final class PathFinder {
 			}
 
 			Candidate build() {
-				if (this.cost == BLOCKED) {
+				// ponytail: blocks the path broke are not counted back, though the bot may pick some up as scaffold.
+				if (this.cost == BLOCKED || Planner.this.node.placed + this.places.size() > Planner.this.options.scaffold()) {
 					return null;
 				}
 				return new Candidate(new Step(this.type, this.to, List.copyOf(this.breaks), List.copyOf(this.places)), this.cost);

@@ -279,7 +279,8 @@ public class PathFollower {
 	}
 
 	private PathFinder.Options options() {
-		return new PathFinder.Options(this.mayBreak, this.mayPlace && this.hasScaffold(), this.maxNodes, MAX_DROP, this.death());
+		int scaffold = this.scaffoldCarried();
+		return new PathFinder.Options(this.mayBreak, this.mayPlace && scaffold > 0, this.maxNodes, MAX_DROP, this.death(), scaffold);
 	}
 
 	/**
@@ -613,14 +614,17 @@ public class PathFollower {
 		return stack.is(this.scaffold) && !this.keepItems.test(stack);
 	}
 
-	private boolean hasScaffold() {
+	/** The scaffold blocks the bot carries, the most a path places (#749). */
+	private int scaffoldCarried() {
 		SimpleContainer inventory = this.bot.getInventory();
+		int count = 0;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
-			if (this.isScaffold(inventory.getItem(i))) {
-				return true;
+			ItemStack stack = inventory.getItem(i);
+			if (this.isScaffold(stack)) {
+				count += stack.getCount();
 			}
 		}
-		return false;
+		return count;
 	}
 
 	public static int scaffoldCount(Container inventory) {

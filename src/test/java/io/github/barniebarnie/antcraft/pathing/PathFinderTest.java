@@ -535,6 +535,39 @@ class PathFinderTest {
 		assertEquals(List.of(MoveType.PILLAR, MoveType.PILLAR, MoveType.PILLAR), types(path));
 	}
 
+	/**
+	 * A bot carrying 2 scaffold blocks does not plan the 3 pillars up a tower 4 high, which it would run out of halfway
+	 * (#749), but walks the long way round: along a bridge on top from a staircase 9 blocks off.
+	 */
+	@Test
+	void placesNoMoreScaffoldThanTheBotCarries() {
+		GridWorld world = GridWorld.flat(14).fill(1, 1, 0, 1, 4, 8, '#')
+			.fill(1, 1, 9, 1, 3, 9, '#').fill(1, 1, 10, 1, 2, 10, '#').set(1, 1, 11, '#');
+		BlockPos top = new BlockPos(1, 5, 0);
+
+		assertEquals(3, find(world, top, FULL).steps().stream().mapToInt(s -> s.places().size()).sum());
+		Path path = find(world, top, new PathFinder.Options(false, true, 10_000, 3, null, 2));
+		assertTrue(path.complete());
+		int placed = path.steps().stream().mapToInt(s -> s.places().size()).sum();
+		assertTrue(placed <= 2, "placed " + placed + ": " + path.steps());
+	}
+
+	/**
+	 * Nor does a cheaper way to a block that placed more keep the search from the way there that placed less: with 2
+	 * scaffold blocks, the bot walks round a gap 2 wide rather than bridge it, to pillar once up a tower beyond (#749).
+	 */
+	@Test
+	void walksRoundAGapToKeepScaffoldForAPillarBeyond() {
+		GridWorld world = GridWorld.flat(14).fill(2, 0, -14, 3, 0, 8, ' ').fill(6, 1, 0, 6, 2, 0, '#');
+		BlockPos top = new BlockPos(6, 3, 0);
+
+		assertEquals(3, find(world, top, FULL).steps().stream().mapToInt(s -> s.places().size()).sum());
+		Path path = find(world, top, new PathFinder.Options(false, true, 10_000, 3, null, 2));
+		assertTrue(path.complete(), "partial: " + path.steps());
+		int placed = path.steps().stream().mapToInt(s -> s.places().size()).sum();
+		assertTrue(placed <= 2, "placed " + placed + ": " + path.steps());
+	}
+
 	@Test
 	void climbsALadderRatherThanPillarBesideIt() {
 		// A wall three high with a ladder on its west face; the goal is on top of the wall.
