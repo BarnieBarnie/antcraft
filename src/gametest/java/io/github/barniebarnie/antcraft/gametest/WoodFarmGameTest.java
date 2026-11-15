@@ -549,11 +549,12 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * (scaffold): with the 16 of other kinds the walks to its top stands got nowhere, the falls off the leaves left the
 	 * bot at 1 health and it died on the retry. With 31 it still fell: taking back a scaffold pillar whose lower blocks it
 	 * took back from the ground before, it stood on the last ones to mine them (#668), so the test fails once the bot is
-	 * hurt. Seed 6 rather than a random tree: the tallest, 28 and 29, take some 8000
-	 * to 9000 ticks (seeds 15 and 58; TreeFarmGameTest theTallestGiantSpruceIsFelledWhole fells the one of 29).
+	 * hurt. Seed 6 rather than a random tree: the tallest, 28 and 29, took some 8000 to 9000 ticks before #677, some 4200
+	 * since (seeds 15 and 58; TreeFarmGameTest theTallestGiantSpruceIsFelledWhole fells the one of 29).
 	 */
 	// Measured: passes at tick 4604 to 4862 (red: died at 4496; with 31 dirt, hurt at tick 3005 to 3640).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10500)
+	// Since #677 (scaffold taken back on the way down), 3441 to 4217 in 15 runs.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8500)
 	public void aGiantSpruceFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, Items.SPRUCE_LOG, 31, 6,
 			GIANT_SPRUCE_HARVEST, true);
@@ -573,7 +574,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * runs (a fall to the floor); a fall, even a fatal one, is a move the farm recovers from (#679), so it may be hurt.
 	 */
 	// Measured: passes at tick 2597 to 4012 (red: hurt in 5 of 18 runs at tick 1709 to 3341), the felling 2085 to 3416 ticks.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
+	// Since #677, 2548 to 3481 in 14 runs; with #679's unhurt=false, where a fall may kill it, 2520 to 4172 in 5.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8400)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
 			GIANT_JUNGLE_HARVEST, false);
@@ -588,8 +590,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
-	private static final int GIANT_SPRUCE_HARVEST = 5600;
-	private static final int GIANT_JUNGLE_HARVEST = 3200;
+	private static final int GIANT_SPRUCE_HARVEST = 3300;
+	private static final int GIANT_JUNGLE_HARVEST = 2600;
 
 	/** How far a giant's felling ticks may be from its HARVEST, either way. */
 	private static final double HARVEST_FACTOR = 1.5;

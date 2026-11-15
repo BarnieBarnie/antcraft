@@ -457,8 +457,9 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * It kept its top log until a bot stepping up onto a block it had just bridged faced it before the jump (#670): until
 	 * then harvest had not ended at tick 20000.
 	 */
-	// Measured: passes at tick 7856 to 7991.
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 16000)
+	// Measured: passes at tick 4103 to 4323 in 19 runs (was 7063 to 7991: taking its scaffold back from the floor once
+	// the tree was down took some 4100 ticks, #677).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8700)
 	public void theTallestGiantSpruceIsFelledWhole(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(6, 1, 6);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
@@ -498,8 +499,9 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * it must where it finds no other way (PathFinder's fall search). Health is not checked: such a fall may hurt it.
 	 */
 	// Measured: passes at tick 2849 to 7809, 39 of 39 in three runs of 13 copies (red: out_of_reach in 3 of 14 runs;
-	// with the fallback but no fall search, left up on its scaffold in 5 of 39).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 16000)
+	// with the fallback but no fall search, left up on its scaffold in 5 of 39). Since #677, 2657 to 4838 in 18 runs (one
+	// at 7452 before: the walk to its first stand got nowhere and each log's mine walked 305 ticks to no end).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWhole(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(10, 1, 8);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {

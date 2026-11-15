@@ -354,9 +354,26 @@ def take_back(keep=()):
             # the pillar was cut under a bot on a giant jungle's crown, and it had no way down (#674).
             if pos().y > q.y + 1 and block(q.up()).is_air:
                 goto(q.up())
-            if mine(q):
+            if _mine_back(q):
                 took = True
     placed_scaffold(keep=keep)
+
+
+def _down_to(y, keep):
+    """Takes back the scaffold placed since keep at y and over it, highest first, that it stands over or reaches: on top
+    of its pillar, it mines it underfoot and comes down with it."""
+    for q in sorted([q for q in placed_scaffold(False) if q.y >= y and q not in keep], key=lambda q: -q.y):
+        if pos().y > q.y + 1 and block(q.up()).is_air:
+            goto(q.up())
+        if reaches(pos(), q):
+            _mine_back(q)
+
+
+def _mine_back(q):
+    """Mines the scaffold block at q by hand where a hand gets it, so dirt wears no axe: taken back between stands, it
+    broke the stone axe before a giant's last logs, which then took 60 ticks each (#677)."""
+    r = mine(q, hand=True)
+    return mine(q) if r.reason == "no_tool" else r
 
 
 def fell_whole(base, replant=True, blocks=None, plan=None):
@@ -381,16 +398,25 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
     # earlier walks placed is not this tree's to take back, and stays listed for the caller (#657).
     earlier = placed_scaffold(False)
     for i, s in enumerate(plan):
-        goto(s)  # where it gets nowhere, mine walks for each log
+        there = goto(s)
         later = plan[i + 1:]
-        # The logs a later stand stands on stay for that stand to mine.
-        for p in sorted([p for p in left if reaches(s, p) and p.up() not in later], key=lambda p: -p.y):
+        # The logs a later stand stands on stay for that stand to mine. Where the walk to the stand got nowhere, only those
+        # it reaches from where it is: mine's walk to each of the others got nowhere too, some 300 ticks each, 4300 of a
+        # giant jungle's 7400 (#677). The logs left go to the later stands and the pass after them.
+        here = pos()
+        for p in sorted([p for p in left if reaches(s, p) and p.up() not in later and (there or reaches(here, p))],
+                        key=lambda p: -p.y):
             r = mine(p)
             if r or r.reason == "target_gone":
                 left.pop(p)
             elif r.reason == "no_space":
                 take_back(earlier)
                 return result("no_space", p)
+        # Down its pillar to the next stand, taking back the scaffold over it on the way: taken back after the felling,
+        # from the floor, highest first, the walks up to the top of a giant spruce's pillar took 4100 of its 7100 ticks,
+        # as mine's walks pillared again round after round (#677).
+        if later:
+            _down_to(later[0].y, earlier)
     for p in sorted(list(left), key=lambda p: -p.y):
         r = mine(p)
         if r.reason == "out_of_reach":
