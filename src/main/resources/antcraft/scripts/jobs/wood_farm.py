@@ -1,6 +1,6 @@
 # A job: grows a wood farm from nothing and farms it until a player stops it. Run it as
 # /antcraft bot run jobs.wood_farm <kind> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a kind of
-# lib.treefarm.KINDS (a sapling, or giant_spruce or giant_jungle), the farm's first corner, by default where the bot stands (or where a stopped run of the kind
+# lib.treefarm.KINDS (a sapling, mangrove_propagule, or giant_spruce or giant_jungle), the farm's first corner, by default where the bot stands (or where a stopped run of the kind
 # started), the most cells it grows to (by default most of the ticks a tree takes, learnt as it farms, else HARVEST[kind]) and how far to look for what it needs, in
 # blocks (32 by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
@@ -37,12 +37,14 @@ GROWTH = 2 * 7 * 4096 / 3
 # scaffold back on its way down (#677): a giant spruce with a trunk of 24 took some 3200 to 3500 ticks, once a path
 # no longer stood on a block it broke on the way (#687; 4100 to 4700 with the bot falling off such a step), a giant jungle of
 # 67 logs (a trunk of 16 and its branches) some 2100 to 3300, 2700 on average (#669, #695); since #713 the spruce 3300 to
-# 3550, the jungle 1950 to 2750, 2700 to 3400 with the bot killed up the tree, 2700 the mean of both (#715).
+# 3550, the jungle 1950 to 2750, 2700 to 3400 with the bot killed up the tree, 2700 the mean of both (#715). A mangrove
+# of 16 logs on average (measured over 188 trees) felled and its roots mined took some 250 to 3550 ticks in 39 seeded
+# trees of TreeFarmGameTest, 1400 on average (#650).
 # A farm learns its own (harvest, #653); these are its start.
 HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
            "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
            "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
-           "giant_spruce": 3300, "giant_jungle": 2700}
+           "minecraft:mangrove_propagule": 1400, "giant_spruce": 3300, "giant_jungle": 2700}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
 WAIT = 100  # ticks between looks at the farm while nothing has grown

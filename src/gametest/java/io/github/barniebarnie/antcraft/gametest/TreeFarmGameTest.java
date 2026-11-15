@@ -455,6 +455,74 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A mangrove cell of 11x11 from (2, 0, 2) (#650): built, grown as the game does with seed 0 (a TALL_MANGROVE), its
+	 * trunk on roots over the propagule's spot and its logs inside the cell; felled whole from the trunk's lowest log, the
+	 * roots in the cell mined, so the spot is free, and a propagule planted again.
+	 */
+	// Measured: passes at tick 1722 to 2181. 40 seeded trees passed at tick 553 to 3875 (red: key not in KINDS).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4400)
+	public void aMangroveCellIsGrownHarvestedAndReplanted(GameTestHelper helper) {
+		mangrove(helper, at -> advance(helper, at, 0));
+	}
+
+	/**
+	 * The mangrove cell of 11x11 from (2, 0, 2) built by a bot carrying 23 dirt, its tree grown with grow (given the
+	 * absolute position of (7, 1, 7)), its logs inside the cell, felled whole, its roots in the cell mined and replanted.
+	 * Fails at once on a wrong print.
+	 */
+	private static void mangrove(GameTestHelper helper, Consumer<BlockPos> grow) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 23),
+			new ItemStack(Items.MANGROVE_PROPAGULE, 2), new ItemStack(Items.TORCH, 2));
+		BlockPos spot = new BlockPos(7, 1, 7);
+		start(helper, bot, "mangrove_propagule", new BlockPos(2, 0, 2), new BlockPos(12, 0, 12), """
+			print(lib.treefarm.materials(kind))
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"])
+			while not lib.treefarm.grown(kind, low, high):
+			    wait(5)
+			r = lib.treefarm.harvest(kind, low, high)
+			print(r["ok"], r["reason"], r["at"])
+			""");
+		List<String> printed = List.of("{'minecraft:dirt': 1, 'minecraft:mangrove_propagule': 1, 'minecraft:torch': 2}",
+			"True None", "True None None");
+		boolean[] inside = {true};
+		boolean[] grew = growOnceBuilt(helper, bot, 2, spot, Blocks.MANGROVE_LOG, grow);
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (log.size() == printed.size() && !log.equals(printed)) {
+				helper.fail("printed " + log);
+			}
+			if (!grew[0] || !inside[0] || log.size() > 2) {
+				return;
+			}
+			for (int x = 0; x < 24; x++) {
+				for (int y = 1; y < 40; y++) {
+					for (int z = 0; z < 24; z++) {
+						if ((x < 2 || x > 12 || z < 2 || z > 12) && helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.MANGROVE_LOG)) {
+							inside[0] = false;
+						}
+					}
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), printed, "printed");
+			helper.assertTrue(grew[0], "the mangrove never grew");
+			helper.assertTrue(inside[0], "a mangrove log grew outside the cell");
+			assertFelled(helper, bot, Blocks.MANGROVE_LOG, Items.MANGROVE_LOG, 40, 2);
+			for (int x = 2; x <= 12; x++) {
+				for (int y = 1; y < 40; y++) {
+					for (int z = 2; z <= 12; z++) {
+						helper.assertBlockNotPresent(Blocks.MANGROVE_ROOTS, new BlockPos(x, y, z));
+					}
+				}
+			}
+			helper.assertBlockPresent(Blocks.MANGROVE_PROPAGULE, spot);
+		});
+	}
+
+	/**
 	 * A giant spruce cell from (2, 0, 2) whose 2x2 trunk the bot fells carrying 2 saplings (#650): harvest gets the 2
 	 * more from the chest and replants all four spots.
 	 */
@@ -741,7 +809,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			if (helper.getBlockState(spot).getBlock() instanceof SaplingBlock) {
 				grow.accept(helper.absolutePos(spot));
 			}
-			grew[0] = helper.getBlockState(spot).is(log);
+			// Not the log: a mangrove's trunk stands on roots over its spot (#650).
+			grew[0] = !(helper.getBlockState(spot).getBlock() instanceof SaplingBlock);
 		});
 		return grew;
 	}
@@ -763,15 +832,23 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 
 	/** No log left standing in the area nor lying about, and the bot carries 4 or more. */
 	private static void assertFelled(GameTestHelper helper, AntBot bot, Block log, Item item) {
+		assertFelled(helper, bot, log, item, 16, 4);
+	}
+
+	/**
+	 * As {@link #assertFelled(GameTestHelper, AntBot, Block, Item)} in an area height high, the bot carrying least logs or
+	 * more.
+	 */
+	private static void assertFelled(GameTestHelper helper, AntBot bot, Block log, Item item, int height, int least) {
 		for (int x = 0; x < 24; x++) {
-			for (int y = 1; y < 16; y++) {
+			for (int y = 1; y < height; y++) {
 				for (int z = 0; z < 24; z++) {
 					helper.assertBlockNotPresent(log, new BlockPos(x, y, z));
 				}
 			}
 		}
-		helper.assertTrue(GameTests.carried(bot, item) >= 4, "the bot carries " + GameTests.carried(bot, item) + " logs");
-		AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).expandTowards(24, 16, 24);
+		helper.assertTrue(GameTests.carried(bot, item) >= least, "the bot carries " + GameTests.carried(bot, item) + " logs");
+		AABB area = new AABB(helper.absolutePos(BlockPos.ZERO)).expandTowards(24, height, 24);
 		helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class, area, e -> e.getItem().is(item)).isEmpty(),
 			"logs left lying");
 	}

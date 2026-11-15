@@ -63,14 +63,20 @@ KINDS = {
     # Measured over 200 trees (#650): logs up to 3 out of the trunk and 11 over the sapling, 15 a tree on average;
     # TwoLayersFeatureSize(1, 0, 2).
     "minecraft:poplar_sapling": {"size": 7, "square": False, "clear": 13, "roof": False},
-    # Not here: MANGROVE's MangroveRootPlacer lifts the trunk 1 to 3 over roots at the propagule's spot, where standing
-    # looks for a log from, and lib.get has no source for propagules (they hang from the leaves, see lib.get's SOURCES).
+    # TALL_MANGROVE, or 15 in 100 MANGROVE (#650): MangroveRootPlacer lifts the trunk 3 to 7 (MANGROVE 1 to 3) over the
+    # propagule's spot on roots that spread out and down to the ground; UpwardsBranchingTrunkPlacer(4, 1, 9), a trunk of 4
+    # to 14 (MANGROVE's (2, 1, 4)), its branches stepping out and up 1 to 6; TwoLayersFeatureSize(3, 0, 2). So clear is
+    # the highest trunk top plus 2. Measured over 188 grown trees: logs up to 5 out of the trunk, roots up to 7 out and 7
+    # high (so up to 2 into the next cell, whose harvest mines them), 16 logs a tree. roots: harvest mines the roots in
+    # the cell, as one may stand at the spot and they pile up.
+    "minecraft:mangrove_propagule": {"size": 11, "square": False, "clear": 23, "roof": False, "roots": True},
 }
 TORCH = "minecraft:torch"
 DIRT = "minecraft:dirt"
 SLABS = "#minecraft:wooden_slabs"
 # What harvest picks up besides the logs and saplings fell_whole does: what leaves drop.
 DROPS = ["minecraft:stick", "minecraft:apple"]
+ROOTS = ["minecraft:mangrove_roots", "minecraft:muddy_mangrove_roots"]
 
 
 def key(kind):
@@ -172,11 +178,8 @@ def build_cell(kind, low, high):
     return result()
 
 
-def standing(kind, low, high):
-    """The lowest log of the cell's tree still standing, in its tree space, the cell up to clear blocks over the floor:
-    the lowest up a column over a sapling spot, so also one a failed harvest left over the sapling (#644), else the
-    lowest anywhere in it, such as a branch an acacia or cherry harvest left off the trunk (#651); None where there is
-    none."""
+def within(what, kind, low, high):
+    """The blocks what selects in the cell's tree space, the cell up to clear blocks over the floor."""
     low = Pos(low)
     high = Pos(high)
     a = Pos(low.x, low.y + 1, low.z)
@@ -185,7 +188,15 @@ def standing(kind, low, high):
     # One scan of the sphere round the tree space, its corners in, some 20,000 blocks read for a giant's (a block()
     # read of each would cost 30 instructions, the scan 1 per 8 blocks).
     r = int(max([(p.x - c.x) ** 2 + (p.y - c.y) ** 2 + (p.z - c.z) ** 2 for p in [a, b]]) ** 0.5) + 1
-    logs = [p for p in scan(lib.trees.LOGS, radius=min(r, 32), limit=1024, around=c) if lib.area.inside(p, a, b)]
+    return [p for p in scan(what, radius=min(r, 32), limit=1024, around=c) if lib.area.inside(p, a, b)]
+
+
+def standing(kind, low, high):
+    """The lowest log of the cell's tree still standing, in its tree space (within): the lowest up a column over a
+    sapling spot, so also one a failed harvest left over the sapling (#644) or a mangrove's trunk on its roots (#650),
+    else the lowest anywhere in it, such as a branch an acacia or cherry harvest left off the trunk (#651); None where
+    there is none."""
+    logs = within(lib.trees.LOGS, kind, low, high)
     if not logs:
         return None
     columns = [(p.x, p.z) for p in spots(kind, low, high)]
@@ -201,9 +212,10 @@ def grown(kind, low, high):
 
 def harvest(kind, low, high, radius=32):
     """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), again while a log is left, such
-    as one cut off from the tree, picks up the sticks and apples lying about, then, where it felled the tree whole,
-    plants each empty sapling spot over dirt, getting the saplings it lacks within radius (lib.get), such as a square
-    kind with fewer than four carried; where it cannot, tend does later.
+    as one cut off from the tree, mines the roots in the cell where the kind has them (a mangrove's), picks up the
+    sticks and apples lying about, then, where it felled the tree whole, plants each empty sapling spot over dirt,
+    getting the saplings it lacks within radius (lib.get), such as a square kind with fewer than four carried; where it
+    cannot, tend does later.
     Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space with at, the log left, which
     grown still sees."""
     # Again while a log is left standing: a bot that died up a giant jungle and had mined the logs round a branch log left
@@ -216,6 +228,12 @@ def harvest(kind, low, high, radius=32):
         r = lib.trees.fell_whole(base, False)
         if not r["ok"]:
             break
+    # The highest first, so none is left out of reach over a pillar's top; one mine could not reach is tried again in a
+    # second pass, from where the bot stands then. ponytail: two passes; the roots they drop are left lying.
+    if r["ok"] and spec(kind).get("roots"):
+        for _ in range(2):
+            for p in sorted(within(ROOTS, kind, low, high), key=lambda p: -p.y):
+                mine(p)
     # A torch a pillar up to the leaves took the place of lies about too. Only what lies on the floor or a step over it:
     # pillaring or digging up to each drop on the decaying leaves took most of a dark oak's harvest, and jobs.wood_farm's
     # sweep picks those up later (#655).

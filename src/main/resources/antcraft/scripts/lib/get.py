@@ -161,8 +161,7 @@ for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_o
 # Saplings and apples break from leaves by hand, one in chance leaves broken (the 26.3 loot tables, no fortune); LEAF
 # ticks a leaves block (hardness 0.2: 6 by hand) and the step to the next. By hand, as shears or a silk touch tool would
 # break them into leaves (#609), and only a grown tree's: persistent leaves are a player's, placed. The mangrove
-# propagule drops from no leaves and has no source. ponytail: a mangrove's hanging propagules are not picked, add them
-# when a script needs mangroves.
+# propagule drops from no leaves: it hangs from them, and drops only ripe (age 4, its loot table's condition), see below.
 LEAF = 6 + lib.cost.WALK
 
 
@@ -192,6 +191,21 @@ for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapli
                              ("apple", ["oak_leaves", "dark_oak_leaves"], 200)]:
     SOURCES["minecraft:" + item] = Source(climbing(breaking("minecraft:" + item, leaves, "no_tree", True, grown)),
                                           estimate=LEAF * chance, near=leaves, keep=grown)
+
+
+def ripe(p):
+    """Whether the mangrove propagule at p hangs from leaves and is ripe (age 4), so it drops itself when broken: a
+    younger one drops nothing, and a planted one is a farm's (#650)."""
+    s = block(p).state
+    return s.get("hanging", False) and s.get("age", 0) == 4
+
+
+# A mangrove's leaves get hanging propagules as it grows (TreeFeatures MANGROVE and TALL_MANGROVE's attached_to_leaves
+# decorator, at a random age; measured over 188 grown trees some 6 a tree, 1.2 of them ripe). One a block broken, by
+# hand, so no tool. ponytail: unripe ones are left to ripen, not bone-mealed.
+SOURCES["minecraft:mangrove_propagule"] = Source(
+    climbing(breaking("minecraft:mangrove_propagule", "minecraft:mangrove_propagule", "no_tree", True, ripe)),
+    estimate=LEAF, near="minecraft:mangrove_propagule", keep=ripe)
 
 
 # Ticks to kill an animal (#719): with a sword, two or three blows 13 ticks apart and the pick-up; by hand ten 1-damage

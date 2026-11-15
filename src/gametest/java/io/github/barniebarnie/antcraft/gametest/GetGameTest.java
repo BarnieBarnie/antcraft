@@ -21,7 +21,9 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.MangrovePropaguleBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1499,6 +1501,35 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			printed(helper, bot, "True 2");
 			helper.assertTrue(BotScripts.warnings(bot).isEmpty(), "warned " + BotScripts.warnings(bot));
+		});
+	}
+
+	/**
+	 * A mangrove of {@link TreesGameTest#plantTree} with two ripe propagules (age 4) and one unripe hanging from its leaves,
+	 * and a ripe one planted on dirt (#650): get picks the two ripe hanging ones, the only ones whose loot drops a
+	 * propagule, and leaves the unripe and the planted one.
+	 */
+	// Measured: passes at tick 27 (red: "False 0", no source).
+	@GameTest(maxTicks = 60)
+	public void getMangrovePropagulesPicksTheRipeHangingOnes(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.MANGROVE_LOG, Blocks.MANGROVE_LEAVES, false);
+		BlockState hanging = Blocks.MANGROVE_PROPAGULE.defaultBlockState().setValue(MangrovePropaguleBlock.HANGING, true);
+		helper.setBlock(6, 2, 4, hanging.setValue(MangrovePropaguleBlock.AGE, 4));
+		helper.setBlock(4, 2, 6, hanging.setValue(MangrovePropaguleBlock.AGE, 4));
+		helper.setBlock(2, 2, 4, hanging.setValue(MangrovePropaguleBlock.AGE, 1));
+		helper.setBlock(1, 0, 7, Blocks.DIRT);
+		helper.setBlock(1, 1, 7, Blocks.MANGROVE_PROPAGULE.defaultBlockState().setValue(MangrovePropaguleBlock.AGE, 4));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, where(helper, 7) + """
+			from lib.get import get
+			r = get("mangrove_propagule", 2)
+			print(r["ok"], count("mangrove_propagule"))
+			""");
+		failOnOtherPrint(helper, bot, "True 2");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True 2");
+			helper.assertBlockPresent(Blocks.MANGROVE_PROPAGULE, 2, 2, 4);
+			helper.assertBlockPresent(Blocks.MANGROVE_PROPAGULE, 1, 1, 7);
 		});
 	}
 

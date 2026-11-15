@@ -8,7 +8,7 @@ The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms i
 /antcraft bot run jobs.wood_farm spruce_sapling 10 64 10 12 16
 ```
 
-The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar) or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most` of the ticks a tree takes, which the farm learns, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells. A full farm that learns it may grow (see How big) says its new limit, `cells 3/5`, and builds on.
+The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar), `mangrove_propagule` or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most` of the ticks a tree takes, which the farm learns, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells. A full farm that learns it may grow (see How big) says its new limit, `cells 3/5`, and builds on.
 
 The farm, from the corner `x y z` (the cells' floor is the block under it):
 
@@ -65,6 +65,7 @@ A sapling grows on random ticks: each tick, the game gives one to `randomTickSpe
 | acacia | 9 | 600 | 31 |
 | cherry | 13.5 | 900 | 21 |
 | poplar | 15 (measured in the game) | 1000 | 19 |
+| mangrove | 16 (measured in the game: felled and its roots mined, some 250 to 3550 ticks, 1400 on average) | 1400 | 13 |
 | dark oak, pale oak | 34 | 2250 | 8 |
 | giant spruce | 84 (measured: a trunk of 24 took some 3300 to 3550 ticks) | 3300 | 5 |
 | giant jungle | 87 (measured: 67 logs took some 1950 to 3400 ticks, 2700 on average with a death in half the runs) | 2700 | 7 |
