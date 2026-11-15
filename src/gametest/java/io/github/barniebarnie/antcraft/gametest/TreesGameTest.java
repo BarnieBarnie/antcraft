@@ -740,21 +740,24 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * fell_whole picks up a sapling on the floor but does not pillar up to one on three persistent leaves (#656): of a
-	 * poplar, pillaring up to each sapling its decaying leaves let fall on the leaves took up to 800 ticks.
+	 * poplar, pillaring up to each sapling its decaying leaves let fall on the leaves took up to 800 ticks. It checks the two
+	 * saplings, not how many the bot carries: items_near sees dropped items outside the test's area, and a neighbouring
+	 * test's sapling on the floor within 8 is picked up too (#780).
 	 */
-	// Measured: passes at tick 133 (red: True 2 8, it pillared up to the sapling on the leaves).
+	// Measured: passes at tick 133 (red: the sapling on the leaves picked up, it pillared up to it).
 	@GameTest(maxTicks = 270)
 	public void fellWholeDoesNotPillarToASaplingOnLeaves(GameTestHelper helper) {
 		for (int y = 1; y <= 3; y++) {
 			helper.setBlock(1, y, 1, Blocks.BIRCH_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
 		}
 		ItemEntity high = helper.spawnItem(Items.OAK_SAPLING, new BlockPos(1, 4, 1));
-		helper.spawnItem(Items.OAK_SAPLING, new BlockPos(1, 1, 6));
+		ItemEntity low = helper.spawnItem(Items.OAK_SAPLING, new BlockPos(1, 1, 6));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 8));
 		expect(helper, bot, "import lib.trees\nr = lib.trees.fell_whole(" + tree(helper) + ", False)\n"
-			+ "print(r['ok'], count('oak_sapling'), count('dirt'))\n", List.of("True 1 8"), () -> {
+			+ "print(r['ok'], count('oak_sapling') >= 1, count('dirt'))\n", List.of("True True 8"), () -> {
+				helper.assertFalse(low.isAlive(), "the sapling on the floor was not picked up");
 				helper.assertTrue(high.isAlive(), "the sapling on the leaves was picked up");
 				helper.assertBlockNotPresent(Blocks.OAK_LOG, TREE.above(3));
 			});
