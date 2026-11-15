@@ -718,6 +718,8 @@ public final class WorkApi {
 				return this.finish(Result.fail(Result.TARGET_GONE));
 			}
 			if (this.bot.getHealth() < this.minHealth) {
+				// As attack: a target its own goal took at full health would outlast the shoot by a tick (#724).
+				this.bot.setTarget(null);
 				return this.finish(Result.fail(Result.HURT));
 			}
 			if (!BotHands.equip(this.bot, Bow.WEAPON)) {
