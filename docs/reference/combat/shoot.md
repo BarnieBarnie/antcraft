@@ -1,7 +1,7 @@
 # `shoot`
 
 ```text
-shoot(entity)
+shoot(entity, min_health=None)
 ```
 
 Shoots arrows at a mob with the bot's bow or crossbow until it dies, keeping its distance.
@@ -11,6 +11,7 @@ Shoots arrows at a mob with the bot's bow or crossbow until it dies, keeping its
 | Name | Type | Default | Meaning |
 |---|---|---|---|
 | `entity` | [`Entity`](../types/entity.md) | | the mob to shoot, as [`entities`](../world/entities.md) gives it |
+| `min_health` | `int` or `None` | `None` | end the fight with `hurt` once the bot's [`health()`](../bot/health.md) is under it, as [`attack`](attack.md) does; `None` fights on |
 
 ## Returns
 
@@ -18,7 +19,7 @@ A [`Result`](../types/result.md), ok once the target died.
 
 ## Pauses
 
-Yes, until the target is dead, gone or cannot be got to, or the arrows run out.
+Yes, until the target is dead, gone or cannot be got to, the arrows run out, or the bot's health is under `min_health`.
 
 ## Cost
 
@@ -36,7 +37,7 @@ Any arrow shoots: plain, tipped or spectral; a crossbow's fireworks do not. Arro
 
 A bot at or below `botFleeHealth` with a hostile mob near it flees instead: the action ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)).
 
-An argument that is no `Entity` stops the script with an error.
+An argument that is no `Entity`, or a `min_health` that is no `int`, stops the script with an error.
 
 ## Examples
 
@@ -58,6 +59,7 @@ for mob in entities("creeper", 16):
 | `target_gone` | the target is gone (despawned, unloaded, or more than 64 blocks away) other than by dying |
 | `unreachable` | the bot cannot walk to where it can see the target |
 | `wrong_dimension` | the target is in another dimension than the bot |
+| `hurt` | the bot's health dropped under `min_health` |
 | `interrupted` | a reflex took over, such as fleeing at low health |
 | `not_loaded`, `timeout` | a walk stopped with it, as `goto` does |
 

@@ -24,8 +24,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.OwnableEntity;
@@ -128,15 +126,16 @@ public final class WorkApi {
 				return run.done(attack.describe(), refused);
 			}
 			// A creeper is safer shot than kited, where the bot carries a bow and arrows (#707).
-			return run.start(info.entity() instanceof Creeper && Bow.armed(bot) ? new Shoot(run, bot, info) : attack, call);
+			return run.start(info.entity() instanceof Creeper && Bow.armed(bot) ? new Shoot(run, bot, info, minHealth) : attack, call);
 		});
 		natives.register("shoot", call -> {
-			Object arg = Args.bind("shoot", call, 1, "entity")[0];
-			if (!(arg instanceof EntityInfo info)) {
-				throw new ScriptError("shoot() takes an Entity, not '" + Values.typeName(arg) + "'");
+			Object[] args = Args.bind("shoot", call, 1, "entity", "min_health");
+			if (!(args[0] instanceof EntityInfo info)) {
+				throw new ScriptError("shoot() takes an Entity, not '" + Values.typeName(args[0]) + "'");
 			}
+			long minHealth = Args.absent(args[1]) ? 0 : Args.integer(args[1]);
 			AntBot bot = bot(run, call);
-			Shoot shoot = new Shoot(run, bot, info);
+			Shoot shoot = new Shoot(run, bot, info, minHealth);
 			@Nullable Result refused = refuse(bot, info.entity());
 			if (refused == null && BotHands.find(bot, Bow.WEAPON) == null) {
 				refused = Result.fail(Result.NO_TOOL);
@@ -468,8 +467,8 @@ public final class WorkApi {
 	 * bot holds as often as a player would with it ({@link BotHands#strikeTicks}) until it dies (ok). It fails with {@code target_gone} once the
 	 * target is gone otherwise or more than {@link SenseApi#MAX_ENTITY_RADIUS} blocks away, and with the walk's reason,
 	 * such as {@code unreachable}, when the bot cannot get to it, and with {@code hurt} once the bot's health is under
-	 * {@code min_health}, letting go of the target so its own goals do not chase it on (#718). ponytail: a creeper
-	 * {@code attack} shoots ({@link Shoot}) ignores {@code min_health}, as it keeps out of the creeper's reach.
+	 * {@code min_health}, letting go of the target so its own goals do not chase it on (#718). A creeper {@code attack}
+	 * shoots ({@link Shoot}) ends with {@code hurt} likewise (#724).
 	 */
 	private static final class Attack implements ScriptRun.Action {
 		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
@@ -667,31 +666,30 @@ public final class WorkApi {
 	}
 
 	/**
-	 * {@code shoot(entity)}: draws the bot's bow or crossbow and shoots arrows at the target ({@link Bow#fire}), keeping
-	 * between {@link #NEAR} and {@link #RANGE} blocks of it: it walks closer while the target is further or out of sight,
+	 * {@code shoot(entity, min_health)}: draws the bot's bow or crossbow and shoots arrows at the target ({@link Bow#fire}), keeping
+	 * between {@link Bow#NEAR} and {@link Bow#RANGE} blocks of it: it walks closer while the target is further or out of sight,
 	 * and backs off while it is nearer, leaving that to the kite goal while a creeper's fuse is lit. It ends ok once the
-	 * target dies, fails as {@code attack} does and with {@code no_tool} or {@code no_item} once the bow or the arrows are gone.
+	 * target dies, fails as {@code attack} does and with {@code no_tool} or {@code no_item}
+	 * once the bow or the arrows are gone, and with {@code hurt} as {@code attack} does (#724).
 	 */
 	private static final class Shoot implements ScriptRun.Action {
-		/** How far, in blocks, the bot shoots from: further, it walks closer. */
-		private static final double RANGE = 16;
-		/** How near, in blocks, it lets the target come before it backs off: well outside a creeper's 3 that lights its fuse. */
-		private static final double NEAR = 6;
 		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
 		private static final double MOVED = 2;
 
 		private final ScriptRun run;
 		private final AntBot bot;
 		private final EntityInfo info;
+		private final long minHealth;
 		private ScriptRun.@Nullable Action walk;
 		private @Nullable Vec3 walkedTo;
 		private @Nullable Vec3 away;
 		private @Nullable Result result;
 
-		Shoot(ScriptRun run, AntBot bot, EntityInfo info) {
+		Shoot(ScriptRun run, AntBot bot, EntityInfo info, long minHealth) {
 			this.run = run;
 			this.bot = bot;
 			this.info = info;
+			this.minHealth = minHealth;
 		}
 
 		@Override
@@ -707,6 +705,9 @@ public final class WorkApi {
 				|| entity.distanceTo(this.bot) > SenseApi.MAX_ENTITY_RADIUS) {
 				return this.finish(Result.fail(Result.TARGET_GONE));
 			}
+			if (this.bot.getHealth() < this.minHealth) {
+				return this.finish(Result.fail(Result.HURT));
+			}
 			if (!BotHands.equip(this.bot, Bow.WEAPON)) {
 				return this.finish(Result.fail(Result.NO_TOOL));
 			}
@@ -716,7 +717,7 @@ public final class WorkApi {
 			this.bot.setTarget(null);
 			double distance = this.bot.distanceTo(target);
 			boolean inSight = this.bot.getSensing().hasLineOfSight(target);
-			boolean inRange = inSight && distance <= RANGE;
+			boolean inRange = inSight && distance <= Bow.RANGE;
 			if (!inRange && KiteGoal.litNear(this.bot) == null) {
 				Result walked = this.walkTo(target);
 				if (walked != null) {
@@ -724,21 +725,14 @@ public final class WorkApi {
 				}
 			} else {
 				this.stopWalk();
-				if (distance < NEAR && KiteGoal.litNear(this.bot) == null) {
-					this.backOff(target);
+				if (distance < Bow.NEAR && KiteGoal.litNear(this.bot) == null) {
+					this.away = Bow.backOff(this.bot, target, this.away);
 				} else if (this.away != null) {
 					this.away = null;
 					this.bot.getNavigation().stop();
 				}
 			}
-			if (!this.bot.isUsingItem()) {
-				this.bot.startUsingItem(InteractionHand.MAIN_HAND);
-			}
-			this.bot.getLookControl().setLookAt(target);
-			if (inRange && this.bot.getTicksUsingItem() >= Bow.drawTicks(this.bot, this.bot.getMainHandItem())
-				&& Bow.fire(this.bot, (ServerLevel) this.bot.level(), target)) {
-				this.bot.stopUsingItem();
-			}
+			Bow.draw(this.bot, target, inRange);
 			return false;
 		}
 
@@ -757,17 +751,6 @@ public final class WorkApi {
 			Result walked = (Result) this.walk.result();
 			this.walk = null;
 			return walked.ok() ? null : walked;
-		}
-
-		/** Backs off to somewhere further from {@code target}, as the kite goal does from a creeper. */
-		private void backOff(LivingEntity target) {
-			if (this.away == null || this.bot.getNavigation().isDone()) {
-				Vec3 to = DefaultRandomPos.getPosAway(this.bot, 16, 7, target.position());
-				this.away = to != null && to.distanceToSqr(target.position()) > this.bot.distanceToSqr(target) ? to : null;
-				if (this.away != null) {
-					this.bot.getNavigation().moveTo(this.away.x, this.away.y, this.away.z, 1.5);
-				}
-			}
 		}
 
 		private boolean finish(Result result) {

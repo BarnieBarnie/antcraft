@@ -618,6 +618,45 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * An idle bot with a bow and arrows that a creeper comes at shoots it of its own accord rather than kite it (#724):
+	 * only arrows hurt it, and it neither explodes nor hurts the bot.
+	 */
+	// Measured: passes at tick 68 to 79.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	public void anIdleBotWithABowShootsACreeperThatComesAtIt(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 3, 16);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 12, 1, 18);
+		creeper.setTarget(bot);
+		failOnExplosion(helper, bot, creeper);
+		failOnAnythingButArrows(helper, creeper);
+		helper.succeedWhen(() -> helper.assertTrue(creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health"));
+	}
+
+	/** {@code shoot(entity, min_health=...)} ends with {@code hurt} once the bot's health is under it, as {@code attack} does (#724). */
+	// Measured: passes at tick 47.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
+	public void shootWithMinHealthEndsWithHurtWhenHealthDropsUnderIt(GameTestHelper helper) {
+		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 14);
+		husk.setNoAi(true);
+		husk.getAttribute(Attributes.MAX_HEALTH).setBaseValue(200);
+		husk.setHealth(200);
+		AntBot bot = archer(helper, 12, 3, 16);
+		ScriptRun run = run(helper, bot, "r = shoot(entities('husk', 16)[0], min_health=10)\nprint(r.ok, r.reason)\nwait(20)\n");
+		boolean[] hurt = {false};
+		helper.onEachTick(() -> {
+			if (!hurt[0] && husk.getHealth() < 200) {
+				hurt[0] = true;
+				bot.setHealth(9);
+			}
+			if (!BotScripts.log(bot, Output.Level.PRINT).isEmpty() && bot.getTarget() != null) {
+				helper.fail("the bot's own goals took up " + bot.getTarget());
+			}
+		});
+		succeedWhenPrinted(helper, bot, run, List.of("False hurt"));
+	}
+
+	/**
 	 * {@code shoot} with no bow or crossbow fails with {@code no_tool}, with a bow but no arrows with {@code no_item}, and
 	 * a target it may not attack is {@code protected} (#707).
 	 */

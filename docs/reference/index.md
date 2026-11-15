@@ -108,7 +108,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | Builtin | Signature | Does |
 |---|---|---|
 | [`attack`](combat/attack.md) | `attack(entity, min_health=None)` | action: walk to a hostile mob or animal and strike it until it dies, or the bot's health is under `min_health` |
-| [`shoot`](combat/shoot.md) | `shoot(entity)` | action: shoot arrows at a mob with a bow or crossbow from range until it dies |
+| [`shoot`](combat/shoot.md) | `shoot(entity, min_health=None)` | action: shoot arrows at a mob with a bow or crossbow from range until it dies, or the bot's health is under `min_health` |
 
 ## Colony and jobs
 

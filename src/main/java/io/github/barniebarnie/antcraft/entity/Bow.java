@@ -7,11 +7,13 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.util.DefaultRandomPos;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ProjectileWeaponItem;
 import net.minecraft.world.phys.Vec3;
+import org.jspecify.annotations.Nullable;
 
 /**
  * A bot's bow or crossbow (docs/reference/combat/shoot.md): how long it draws, and a shot of a real arrow from the
@@ -22,6 +24,10 @@ public final class Bow {
 	public static final Predicate<ItemStack> WEAPON = stack -> stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
 	/** What it shoots: arrows, tipped and spectral ones too, not a crossbow's fireworks. */
 	public static final Predicate<ItemStack> ARROWS = ProjectileWeaponItem.ARROW_ONLY;
+	/** How far, in blocks, the bot shoots from: further, it walks closer. */
+	public static final double RANGE = 16;
+	/** How near, in blocks, it lets the target come before it backs off: well outside a creeper's 3 that lights its fuse. */
+	public static final double NEAR = 6;
 
 	private Bow() {
 	}
@@ -34,6 +40,36 @@ public final class Bow {
 	/** How many ticks {@code bot} draws {@code weapon} for a full-power shot: 20 for a bow, a crossbow's charge time. */
 	public static int drawTicks(AntBot bot, ItemStack weapon) {
 		return weapon.getItem() instanceof CrossbowItem ? CrossbowItem.getChargeDuration(weapon, bot) : BowItem.MAX_DRAW_DURATION;
+	}
+
+	/**
+	 * Backs {@code bot} off to somewhere further from {@code target}, as the kite goal does from a creeper, planning anew
+	 * once it got to {@code away}, where it last backed off to; where it backs off to now, or null where it found nowhere.
+	 */
+	public static @Nullable Vec3 backOff(AntBot bot, LivingEntity target, @Nullable Vec3 away) {
+		if (away != null && !bot.getNavigation().isDone()) {
+			return away;
+		}
+		Vec3 to = DefaultRandomPos.getPosAway(bot, 16, 7, target.position());
+		if (to == null || to.distanceToSqr(target.position()) <= bot.distanceToSqr(target)) {
+			return null;
+		}
+		bot.getNavigation().moveTo(to.x, to.y, to.z, 1.5);
+		return to;
+	}
+
+	/**
+	 * Draws the bow or crossbow in {@code bot}'s hand at {@code target}, and once fully drawn with the target {@code inRange}
+	 * shoots it ({@link #fire}) and draws again.
+	 */
+	public static void draw(AntBot bot, LivingEntity target, boolean inRange) {
+		if (!bot.isUsingItem()) {
+			bot.startUsingItem(InteractionHand.MAIN_HAND);
+		}
+		bot.getLookControl().setLookAt(target);
+		if (inRange && bot.getTicksUsingItem() >= drawTicks(bot, bot.getMainHandItem()) && fire(bot, (ServerLevel) bot.level(), target)) {
+			bot.stopUsingItem();
+		}
 	}
 
 	/**
