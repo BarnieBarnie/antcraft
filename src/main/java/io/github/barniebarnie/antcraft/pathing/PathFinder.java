@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.pathing;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,8 +81,18 @@ public final class PathFinder {
 	private record Node(BlockPos pos, double cost, Node parent, Step step) {
 	}
 
-	private record Entry(Node node, double priority) {
+	private record Entry(Node node, double priority, long seq) {
 	}
+
+	/**
+	 * The open set's order: the lowest priority first; among equals the farthest along (the least left to go), then the
+	 * first added. Ties so broken do not hang on what else is in the queue: a heap's own order among equals did, so a move
+	 * a search never takes, such as a costly drop (#682), changed which of two equal paths it found, and with it how a
+	 * giant spruce's felling went. Among equals the first added alone, settling a base made no bucket of its chest's iron.
+	 */
+	private static final Comparator<Entry> ORDER = Comparator.comparingDouble(Entry::priority)
+		.thenComparing(Comparator.comparingDouble((Entry e) -> e.node().cost()).reversed())
+		.thenComparingLong(Entry::seq);
 
 	private PathFinder() {
 	}
@@ -177,7 +188,8 @@ public final class PathFinder {
 		private final Options options;
 		private final Planner planner;
 		private final Map<BlockPos, Double> bestCost = new HashMap<>();
-		private final PriorityQueue<Entry> open = new PriorityQueue<>((a, b) -> Double.compare(a.priority, b.priority));
+		private final PriorityQueue<Entry> open = new PriorityQueue<>(ORDER);
+		private long added;
 		private Node closest;
 		private double closestHeuristic;
 		private boolean closestInWater;
@@ -190,7 +202,7 @@ public final class PathFinder {
 			this.options = options;
 			this.planner = new Planner(world, options, goal);
 			Node startNode = new Node(start, 0, null, null);
-			this.open.add(new Entry(startNode, goal.heuristic(start)));
+			this.open.add(new Entry(startNode, goal.heuristic(start), this.added++));
 			this.bestCost.put(start, 0.0);
 			this.closest = startNode;
 			this.closestHeuristic = goal.heuristic(start);
@@ -226,7 +238,7 @@ public final class PathFinder {
 					if (cost < this.bestCost.getOrDefault(move.step.to(), BLOCKED)) {
 						this.bestCost.put(move.step.to(), cost);
 						Node next = new Node(move.step.to(), cost, node, move.step);
-						this.open.add(new Entry(next, cost + this.goal.heuristic(next.pos)));
+						this.open.add(new Entry(next, cost + this.goal.heuristic(next.pos), this.added++));
 					}
 				}
 			}

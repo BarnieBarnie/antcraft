@@ -66,7 +66,7 @@ A sapling grows on random ticks: each tick, the game gives one to `randomTickSpe
 | cherry | 13.5 | 900 | 21 |
 | poplar | 15 (measured in the game) | 1000 | 19 |
 | dark oak, pale oak | 34 | 2250 | 8 |
-| giant spruce | 84 (measured: a trunk of 24 took some 3000 to 3800 ticks) | 3300 | 5 |
+| giant spruce | 84 (measured: a trunk of 24 took some 4100 to 4700 ticks) | 4400 | 4 |
 | giant jungle | 87 (measured: 67 logs took some 2100 to 2600 ticks) | 2600 | 7 |
 
 Pass the most cells as an argument for a farm of another size: the farm keeps to it, whatever it learns.

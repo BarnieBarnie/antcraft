@@ -267,6 +267,20 @@ class PathFinderTest {
 		return new GridWorld().fill(-1, 0, -1, 1, 0, 1, 'D').fill(-10, -fall, -10, 10, -fall, 10, '#');
 	}
 
+	/**
+	 * Of equal paths, a search finds the same one whether or not it may drop past maxDrop where it never does: a drop it
+	 * did not take changed which, and with it how a giant spruce's felling went (#682).
+	 */
+	@Test
+	void aDropItDoesNotTakeLeavesWhichOfEqualPathsItFindsAlone() {
+		GridWorld world = platform(12).fill(-6, 0, -6, 6, 0, 6, 'D');
+		for (BlockPos goal : BlockPos.betweenClosed(-6, 1, -6, 6, 1, 6)) {
+			Path safe = find(world, goal.immutable(), WALK_ONLY);
+			Path costed = find(world, goal.immutable(), walkOnly(death(20, START)));
+			assertEquals(safe.steps(), costed.steps(), "to " + goal);
+		}
+	}
+
 	/** A bot that would not come back from a death, or whose search is not told of it, never drops past maxDrop. */
 	@Test
 	void neverDropsFartherThanMaxDropWithoutADeathToCost() {
