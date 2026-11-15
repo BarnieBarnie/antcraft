@@ -6,7 +6,11 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -30,6 +34,7 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.AABB;
+import org.jspecify.annotations.Nullable;
 
 /**
  * {@code lib/treefarm.py} (#605): tree cells per sapling kind, built, grown, harvested and replanted. In the 24x16x24
@@ -496,16 +501,44 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * once the logs around it were mined, and mine's walk from the floor, with most of the dirt in scaffold, got nowhere:
 	 * fell_whole now mines it from the leaves over it. Mining the scaffold from that crown then cut the pillars under the
 	 * bot, which had no way down; take_back now stands on a block it is over before it mines it. Still, in some runs its
-	 * walks left it on a floating platform of its own scaffold with no way down within 3 blocks: a path now drops as far as
-	 * it must where it finds no other way (PathFinder's fall search). Health is not checked: such a fall may hurt it.
+	 * walks left it on a floating platform of its own scaffold with no way down within 3 blocks: a path now drops past
+	 * MAX_DROP for a share of a death (#682), its spawn its home. Such drops hurt it, and as it does not heal, about one
+	 * harvest in a hundred ends in a fall that kills it (#694): it respawns and runs the script again, recover first.
 	 */
 	// Measured: passes at tick 2849 to 7809, 39 of 39 in three runs of 13 copies (red: out_of_reach in 3 of 14 runs;
 	// with the fallback but no fall search, left up on its scaffold in 5 of 39). Since #677, 2657 to 4838 in 18 runs (one
 	// at 7452 before: the walk to its first stand got nowhere and each log's mine walked 305 ticks to no end).
 	// Without #674's walk onto the leaves over the buried log, which #685 made dead code (#691): 268 of 273 in 21 runs of
-	// 13 copies, 2409 to 4909 and one at 6865; 5 ran out of maxTicks after the last stand, never out_of_reach.
+	// 13 copies, 2409 to 4909 and one at 6865; 5 ran out of maxTicks after the last stand, never out_of_reach. Those were
+	// deaths (#694): logged per tick, 9 of 13 copies dropped 4 to 10 blocks on purpose, and in 8 of some 870 copies the
+	// bot died; the test read the dead entity's log, not the respawned bot's. Watching the bot by its UUID: 144 of 144 in
+	// 12 runs of 12 copies.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWhole(GameTestHelper helper) {
+		fellsTheSeed37GiantJungle(helper, bot -> false);
+	}
+
+	/**
+	 * A bot that dies on its way up the seed 37 giant jungle, killed 4 up, as one whose path drops past MAX_DROP for a share
+	 * of a death (#682) may once its falls add up (#694), respawns at its home, where it was spawned, and runs its script
+	 * again: recover takes back its scaffold and picks up its drops, and harvest fells the rest of the tree whole.
+	 */
+	// Measured: passes at tick 2571 to 5850, 52 of 52 in 4 runs of 13 copies (red, watching the first entity: printed
+	// nothing at tick 10002). Killed 12 up, harvest after the respawn gave out_of_reach in 3 of 12 (not looked into:
+	// perhaps drops left on the leaves, so too little dirt to reach the crown).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
+	public void aSeed37GiantJungleIsFelledWholeByABotThatDiesUpIt(GameTestHelper helper) {
+		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);
+	}
+
+	/**
+	 * Grows the seed 37 giant jungle and harvests it as jobs.wood_farm does, recover first, so a bot that died and runs
+	 * the script again once it respawns takes back the dead run's scaffold and picks up its drops. Kills the bot the first
+	 * time {@code killWhen} holds for it. Watches the bot by its UUID: the bot that respawns is a new entity, and a test
+	 * that read the first one's log saw nothing printed till maxTicks (#694). Passes once the script printed an ok harvest
+	 * and no log of the tree is left.
+	 */
+	private static void fellsTheSeed37GiantJungle(GameTestHelper helper, Predicate<AntBot> killWhen) {
 		BlockPos spot = new BlockPos(10, 1, 8);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
 			helper.setBlock(p.below(), Blocks.DIRT);
@@ -513,20 +546,36 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		}
 		advance(helper, helper.absolutePos(spot), 37);
 		helper.assertBlockPresent(Blocks.JUNGLE_LOG, spot.above(19));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
-		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 33), new ItemStack(Items.JUNGLE_SAPLING, 4));
-		start(helper, bot, "giant_jungle", new BlockPos(6, 0, 4), new BlockPos(15, 0, 13), """
-			r = lib.treefarm.harvest(kind, low, high)
-			print(r["ok"], r["reason"], r["at"])
-			""");
+		AntBot first = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
+		UUID id = first.getUUID();
+		give(first, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 33), new ItemStack(Items.JUNGLE_SAPLING, 4));
+		BlockPos l = helper.absolutePos(new BlockPos(6, 0, 4));
+		BlockPos h = helper.absolutePos(new BlockPos(15, 0, 13));
+		BotScripts.run(first, "import lib.trees\nimport lib.treefarm\nlib.trees.recover()\n"
+			+ "r = lib.treefarm.harvest(\"giant_jungle\", Pos(" + l.getX() + ", " + l.getY() + ", " + l.getZ() + "), Pos("
+			+ h.getX() + ", " + h.getY() + ", " + h.getZ() + "))\nprint(r[\"ok\"], r[\"reason\"], r[\"at\"])\n");
+		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
+		BotScripts.failOnError(helper, bot);
+		boolean[] killed = {false};
 		helper.onEachTick(() -> {
-			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			AntBot now = bot.get();
+			if (now == null) {
+				return;
+			}
+			if (!killed[0] && killWhen.test(now)) {
+				killed[0] = true;
+				now.kill(helper.getLevel());
+				return;
+			}
+			List<String> log = BotScripts.log(now, Output.Level.PRINT);
 			if (!log.isEmpty() && !log.equals(List.of("True None None"))) {
 				helper.fail("printed " + log);
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None None"), "printed");
+			AntBot now = bot.get();
+			helper.assertTrue(now != null, "no bot alive");
+			helper.assertValueEqual(BotScripts.log(Objects.requireNonNull(now), Output.Level.PRINT), List.of("True None None"), "printed");
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
 				helper.assertBlockNotPresent(Blocks.JUNGLE_LOG, p);
 			}
