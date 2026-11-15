@@ -622,8 +622,8 @@ public final class WorkApi {
 
 		/**
 		 * The eat a hungry bot starts between the steps of a long action, as a player would (#773): the carried food with the
-		 * most points that wastes none of them, of those with no effect on eating (as {@code foods()}) and no block to place,
-		 * so a build keeps its carrots and berries; null if there is none.
+		 * most points that wastes none of them, of those with no effect on eating (as {@code foods()}, and no suspicious stew,
+		 * as lib.food, #781) and no block to place, so a build keeps its carrots and berries; null if there is none.
 		 */
 		static @Nullable Eat ifHungry(AntBot bot) {
 			int room = FoodConstants.MAX_FOOD - bot.getFood().food();
@@ -636,7 +636,8 @@ public final class WorkApi {
 				FoodProperties food = stack.get(DataComponents.FOOD);
 				Consumable consumable = stack.get(DataComponents.CONSUMABLE);
 				if (food != null && food.nutrition() <= room && food.nutrition() > most && !(stack.getItem() instanceof BlockItem)
-					&& (consumable == null || consumable.onConsumeEffects().isEmpty())) {
+					&& (consumable == null || consumable.onConsumeEffects().isEmpty())
+					&& !stack.has(DataComponents.SUSPICIOUS_STEW_EFFECTS)) { // its effects are its own, as lib.food's LEFT_OUT
 					best = stack;
 					most = food.nutrition();
 				}

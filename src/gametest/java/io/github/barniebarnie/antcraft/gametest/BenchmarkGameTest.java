@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -23,13 +24,19 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,14 +62,22 @@ public class BenchmarkGameTest {
 
 	/**
 	 * One measured script: {@code instructions} is the per-bot instruction budget a tick it runs with, {@code ticks} how
-	 * long it is measured and {@code equip} what each bot gets to carry.
+	 * long it is measured, {@code equip} what each bot gets to carry and {@code mobs} what tops up its mobs, every
+	 * {@link #MOB_TICKS} ticks from its start; they go when it ends (#781).
 	 */
-	record Case(String name, String script, int instructions, int ticks, Consumer<AntBot> equip) {
+	record Case(String name, String script, int instructions, int ticks, Consumer<AntBot> equip, Consumer<GameTestHelper> mobs) {
+		Case(String name, String script, int instructions, int ticks, Consumer<AntBot> equip) {
+			this(name, script, instructions, ticks, equip, helper -> {
+			});
+		}
+
 		Case(String name, String script, int ticks) {
 			this(name, script, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, ticks, bot -> {
 			});
 		}
 	}
+
+	private static final int MOB_TICKS = 20;
 
 	/** A loop that only computes, using the whole instruction budget every tick. */
 	private static final String LOOP = """
@@ -261,6 +276,25 @@ public class BenchmarkGameTest {
 	 * case's average tick to tick, vanilla's work rather than the scripts' (#328).
 	 */
 	private static final Consumer<AntBot> FEW_LOGS = bot -> bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 4));
+	/** Waits, while the bots' own goals fight the creepers that come at them, kiting their blasts (#706, #781). */
+	private static final String IDLE = """
+		while True:
+		    wait(100)
+		""";
+	/** The guard job, radius 24 (#705), against the husks and blazes about (#781). */
+	private static final String GUARD = """
+		import jobs.guard
+		jobs.guard.run(24)
+		""";
+	private static final Consumer<AntBot> SWORD = bot -> bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+	/** What a guard carries: a sword, a bow and arrows to shoot what it cannot get to (#756), and bread. */
+	private static final Consumer<AntBot> GUARD_KIT = bot -> {
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		bot.getInventory().addItem(new ItemStack(Items.BOW));
+		bot.getInventory().addItem(new ItemStack(Items.ARROW, 64));
+		bot.getInventory().addItem(new ItemStack(Items.BREAD, 16));
+	};
+	/** The cases with mobs come last: creepers blast the ground, and the bots fight and die. */
 	static final List<Case> CASES = List.of(
 		new Case("loop", LOOP, 1200),
 		new Case("loop at the cap", LOOP, AntCraftConfig.MAX_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, bot -> {
@@ -289,7 +323,52 @@ public class BenchmarkGameTest {
 		new Case("mineshaft", MINESHAFT, 600),
 		new Case("mineshaft none", MINESHAFT_NONE, 600),
 		WORK,
-		new Case("build", BUILD, 600));
+		new Case("build", BUILD, 600),
+		new Case("creepers", IDLE, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, SWORD,
+			helper -> topUp(helper, EntityTypes.CREEPER, 8, false)),
+		new Case("guard", GUARD, AntCraftConfig.DEFAULT_SCRIPT_INSTRUCTIONS_PER_TICK, 1200, GUARD_KIT, helper -> {
+			topUp(helper, EntityTypes.HUSK, 8, false);
+			topUp(helper, EntityTypes.BLAZE, 8, true);
+		}));
+
+	private static final Random MOB_SPOTS = new Random(781);
+
+	/**
+	 * Spawns mobs of {@code type} until there are {@code n} alive about the area, at random spots at least 14 blocks from
+	 * where the bots start, on the ground or, {@code hovering}, without AI 6 blocks over it, out of a sword's reach. Husks,
+	 * as they do not burn in daylight. A mob on the ground with no target goes for the nearest bot: from 14 blocks off
+	 * none sees one, and a bot's own goals fight only what comes near.
+	 */
+	private static void topUp(GameTestHelper helper, EntityType<? extends Mob> type, int n, boolean hovering) {
+		List<? extends Mob> mobs = helper.getLevel().getEntities(type, mobBounds(helper), Entity::isAlive);
+		if (!hovering) {
+			for (Mob mob : mobs) {
+				if (mob.getTarget() == null || !mob.getTarget().isAlive()) {
+					helper.getLevel().getEntitiesOfClass(AntBot.class, mobBounds(helper), AntBot::isAlive).stream()
+						.min(Comparator.comparingDouble(mob::distanceToSqr)).ifPresent(mob::setTarget);
+				}
+			}
+		}
+		int alive = mobs.size();
+		for (int i = alive; i < n; i++) {
+			int x;
+			int z;
+			do {
+				x = 2 + MOB_SPOTS.nextInt(SIZE - 4);
+				z = 2 + MOB_SPOTS.nextInt(SIZE - 4);
+			} while (Math.hypot(x - 24, z - 23) < 14);
+			Mob mob = helper.spawn(type, x, hovering ? GROUND + 7 : GROUND + 1, z);
+			if (hovering) {
+				mob.setNoAi(true);
+				mob.setNoGravity(true);
+			}
+		}
+	}
+
+	/** The area and some way around it, where its mobs may have wandered. */
+	private static AABB mobBounds(GameTestHelper helper) {
+		return helper.getBounds().inflate(32);
+	}
 
 	private static int totalTicks() {
 		return CASES.stream().mapToInt(c -> WARM_UP_TICKS + c.ticks() + 1).sum();
@@ -356,6 +435,9 @@ public class BenchmarkGameTest {
 				return;
 			}
 			long since = tick - this.caseStart;
+			if (since % MOB_TICKS == 0) {
+				CASES.get(this.index).mobs().accept(this.helper);
+			}
 			if (since == WARM_UP_TICKS) {
 				this.executedAtStart = this.executed();
 				TickProfiler.SERVER.start();
@@ -389,6 +471,7 @@ public class BenchmarkGameTest {
 				BotScripts.run(bot, c.script());
 				this.bots.add(bot);
 			}
+			c.mobs().accept(this.helper);
 		}
 
 		private void finish(Case c) {
@@ -413,6 +496,10 @@ public class BenchmarkGameTest {
 			}
 			this.bots.clear();
 			this.helper.getLevel().getEntitiesOfClass(ItemEntity.class, this.helper.getBounds()).forEach(ItemEntity::discard);
+			// The mobs, and a bot that died and came back at its home, or would yet.
+			this.helper.getLevel().getEntitiesOfClass(Mob.class, mobBounds(this.helper)).forEach(Mob::discard);
+			GameTests.forgetRespawns(this.helper.getLevel().getServer(), this.helper.getBounds());
+			this.helper.getLevel().getEntitiesOfClass(AbstractArrow.class, mobBounds(this.helper)).forEach(AbstractArrow::discard);
 		}
 
 		private long serverTick() {

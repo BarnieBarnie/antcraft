@@ -1042,6 +1042,29 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None 0"), () -> assertCobbleStep(helper, 0));
 	}
 
+	/**
+	 * A hungry bot building eats none of its suspicious stew, which lib.food leaves out too (#781): its effects are a
+	 * component of its own, not on eating, so it eats the bread, though the stew has more points.
+	 */
+	@GameTest(maxTicks = 150)
+	public void buildEatsNoSuspiciousStew(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		boolean[] hungry = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!hungry[0] && !helper.getBlockState(new BlockPos(3, 1, 3)).isAir()) {
+				hungry[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+				bot.getInventory().addItem(new ItemStack(Items.SUSPICIOUS_STEW));
+				bot.getInventory().addItem(new ItemStack(Items.BREAD));
+			}
+		});
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\n"
+				+ "print(r.ok, r.reason, count('suspicious_stew'), count('bread'))\n",
+			List.of("True None 1 0"), () -> assertCobbleStep(helper, 0));
+	}
+
 	/** A bot builds a blueprint imported from a Litematica schematic ({@code imported_step.litematic}) as any other. */
 	@GameTest(maxTicks = 25)
 	public void buildBuildsAnImportedSchematic(GameTestHelper helper) {

@@ -400,9 +400,14 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("False hurt"));
 	}
 
+	/** Whether {@code creeper}'s fuse is out: it went out, or the creeper exploded. */
+	private static boolean out(Creeper creeper) {
+		return creeper.isRemoved() || creeper.getSwelling(1) == 0;
+	}
+
 	/**
-	 * Fails the test at once when one of {@code creepers} explodes, which discards it, or a blast hurts the bot (#706).
-	 * Registered up front, as every listener.
+	 * Fails the test at once when one of {@code creepers} explodes, which discards it, or a blast hurts the bot (#706);
+	 * with no creepers, only on a blast that hurts it (#781). Registered up front, as every listener.
 	 */
 	private static void failOnExplosion(GameTestHelper helper, AntBot bot, Creeper... creepers) {
 		helper.onEachTick(() -> {
@@ -508,9 +513,11 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * A bot between a creeper whose fuse lights at once and another 5 blocks off gets out of both blasts (#725). It ran
 	 * straight away from the lit one, into the other, which lit in turn and cornered it at the edge of the area, where it
 	 * stood until it exploded, as about 1 run in 52 of {@link #aBotKillsTwoCreepersAndAHuskWithoutAnExplosion}: it now
-	 * backs off from the nearest creeper of all, lit or not, to the side.
+	 * backs off from the nearest creeper of all, lit or not, to the side. A creeper may explode with the bot out of its
+	 * blast, 6 to 7 blocks off, where the fuse burns on (SwellGoal): that passes, as only a blast that hurts the bot fails
+	 * it (#781). It failed once so in a full run (#759: an explosion at tick 32, the bot at full health).
 	 */
-	// Measured: passes at tick 33 to 57 in 50 runs, 25 at once; 31 to 55 in 52 more (#733).
+	// Measured: passes at tick 33 to 57 in 50 runs, 25 at once; 31 to 55 in 52 more (#733); 31 to 76 in 100, 25 at once (#781).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
 	public void aBotBetweenTwoCreepersGetsOutOfBothBlastsNotCornered(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 12.5));
@@ -519,12 +526,12 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		lit.setTarget(bot);
 		Creeper other = helper.spawn(EntityTypes.CREEPER, new Vec3(17.5, 1, 12.5));
 		other.setTarget(bot);
-		failOnExplosion(helper, bot, lit, other);
+		failOnExplosion(helper, bot);
 		boolean[] wasLit = {false};
 		helper.onEachTick(() -> wasLit[0] |= lit.getSwelling(1) > 0);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(wasLit[0], "the fuse was never lit");
-			helper.assertTrue(KiteGoal.litNear(bot) == null && lit.getSwelling(1) == 0 && other.getSwelling(1) == 0, "a fuse burns");
+			helper.assertTrue(KiteGoal.litNear(bot) == null && out(lit) && out(other), "a fuse burns");
 		});
 	}
 
