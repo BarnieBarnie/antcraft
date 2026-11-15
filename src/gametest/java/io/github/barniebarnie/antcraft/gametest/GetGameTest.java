@@ -709,6 +709,52 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A crafting table by the bot, eight cobblestone in a chest across the area (#698): make_cost of a furnace is the walk
+	 * to the chest and the walk from it back to the table, as get walks; it counted the walk to the table from where the
+	 * bot stood.
+	 */
+	// Measured: passes at tick 5 to 13 (red: printed -55, the walk to the table from the bot less the walk back from the chest).
+	@GameTest(maxTicks = 30)
+	public void makeCostCountsTheWalkBackToTheTable(GameTestHelper helper) {
+		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.COBBLESTONE, 8));
+		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		run(helper, bot, """
+			import lib.cost
+			import lib.stock
+			from lib.get import make_cost
+			c = lib.stock.chests(32)[0]
+			t = find_nearest("crafting_table", radius=4)
+			print(make_cost("furnace", 1) - lib.cost.walk(pos(), c) - lib.cost.walk(c, t))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "0"));
+	}
+
+	/**
+	 * A furnace by the bot, a raw iron in a chest across the area, more than lib.craft.REACH from the furnace, coal and no
+	 * pickaxe carried (#698): get takes the raw iron and walks back to the furnace to smelt it. From beside the chest it
+	 * saw no furnace within reach and would put one down, which it cannot mine back without a pickaxe.
+	 */
+	// Measured: passes at tick 283 to 294 (red: printed False no_logs 0 at tick 51).
+	@GameTest(maxTicks = 570)
+	public void walksBackToTheFurnaceAfterTakingFromAFarChest(GameTestHelper helper) {
+		Container chest = chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.RAW_IRON));
+		helper.setBlock(1, 1, 1, Blocks.FURNACE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.COAL));
+		run(helper, bot, """
+			from lib.get import get
+			r = get("iron_ingot")
+			print(r["ok"], r["reason"], count("iron_ingot"))
+			""");
+		failOnOtherPrint(helper, bot, "True None 1");
+		helper.succeedWhen(() -> {
+			printed(helper, bot, "True None 1");
+			helper.assertTrue(chest.isEmpty(), "the chest is not empty");
+		});
+	}
+
+	/**
 	 * 4 birch planks in a chest, no log or tree in the area (#580): the plan picks oak planks for a crafting table, whose
 	 * recipe takes any planks, so get borrows the birch ones.
 	 */

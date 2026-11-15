@@ -233,11 +233,11 @@ def resolve(item, n, radius):
     if item.startswith("#"):
         return result("no_recipe", None, {item: n - count(item)})
     tried = []
-    table = find_nearest("crafting_table", radius=lib.craft.REACH)
+    start = by_stations()
     for _ in range(ROUNDS):
-        p = plan_by(table, item, n)
+        p = plan_by(start, item, n)
         while p["gather"] and intermediate(p, item, chests, tried):
-            p = plan_by(table, item, n)
+            p = plan_by(start, item, n)
         if item in p["gather"]:
             return result("no_recipe", None, {item: n - count(item)})
         if p["no_tool"]:
@@ -260,23 +260,32 @@ def resolve(item, n, radius):
             r = get(raw, count(key(raw)) + k, radius)
             if not r["ok"]:
                 return r
-    back_to(table)
+    back_to(start)
     return lib.craft.craft_here(item, n)
 
 
-def back_to(table):
-    """Walks back to table, the crafting table within lib.craft.REACH where get began, where taking from a chest or
-    gathering took the bot out of its reach (#692). lib.craft.plan and craft_here look for a table within REACH of where
-    the bot stands, so from beside a chest far from it they would plan to craft another, and fail no_logs with no wood;
-    whether they did hung on where the bot stood to open the chest, which of several equal paths it walked. ponytail: a
-    furnace within reach where get began is not walked back to; it is put down and mined back instead."""
-    if table is not None and not lib.craft.table_near():
-        goto(table, 2)
+def by_stations():
+    """The spot get begins on with the crafting table and furnace within lib.craft.REACH there, by Pos (None: none), for
+    back_to. ponytail: a smoker or blast furnace is not walked back to."""
+    return pos(), find_nearest("crafting_table", radius=lib.craft.REACH), find_nearest("furnace", radius=lib.craft.REACH)
 
 
-def plan_by(table, item, n):
-    """lib.craft.plan(item, n) once the bot is back by table (back_to)."""
-    back_to(table)
+def back_to(start):
+    """Walks back to the spot of start (by_stations) where taking from a chest or gathering took the bot out of reach of
+    the crafting table or furnace within lib.craft.REACH there (#692, #698). lib.craft.plan and craft_here look for
+    stations within REACH of where the bot stands, so from beside a chest far from them they would plan to make and put
+    down others, and fail no_logs with no wood, or no_tool with no pickaxe to mine a furnace back; whether they did hung
+    on where the bot stood to open the chest, which of several equal paths it walked. The spot itself, as both stations
+    were within REACH of it."""
+    spot, table, furnace = start
+    if (table is not None and not lib.craft.table_near()
+            or furnace is not None and find_nearest("furnace", radius=lib.craft.REACH) is None):
+        goto(spot)
+
+
+def plan_by(start, item, n):
+    """lib.craft.plan(item, n) once the bot is back by its stations (back_to)."""
+    back_to(start)
     return lib.craft.plan(item, n)
 
 
@@ -356,7 +365,9 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     chests of lib.stock within radius hold, as get takes them, and the raw items those cover left out (stored); the cost
     of each other raw item lib.craft.plan lists, the item itself where it is raw too: the walk to the nearest chest of
     lib.stock within radius that holds some, for as much as the chests hold, as get takes them first (#661), the rest
-    from its source (coal from logs as charcoal where that is cheaper), SMELT for each item smelted, the walk to or the mining back of its crafting table and furnace (stations),
+    from its source (coal from logs as charcoal where that is cheaper), SMELT for each item smelted, the walk to or the mining back of its crafting table and furnace (stations), the walk
+    from the last chest get takes from where it takes from one, as get walks back to them (#698; ponytail: not from a
+    source's ore or tree),
     and for each kind of tool their sources need the tool_cost of the highest
     tier any needs; None where a raw item has no source, or it or that tool is being got or costed, or where item is
     raw and neither the chests nor its source have any of it within radius (Source.there), as get then fails at once. tools holds the tool
@@ -369,10 +380,13 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     GETTING.append(key(item))
     try:
         p = lib.craft.plan(item, n)
-        ticks = sum([lib.cost.SMELT * k for step, k, how in p["crafts"] if how == "smelt"]) + stations(p)
+        ticks = sum([lib.cost.SMELT * k for step, k, how in p["crafts"] if how == "smelt"])
         gather = dict(p["gather"])
+        # The last chest get takes from, where its walk back to the stations starts (#698).
+        back = None
         if gather:
-            ticks += stored(p, item, gather, radius, tools)
+            c, back = stored(p, item, gather, radius, tools)
+            ticks += c
         need = {}
         # The raw items with no ore first, so the bound of an ore's least counts their cost (#681).
         for raw, k in sorted(gather.items(), key=lambda g: key(g[0]) in SOURCES and SOURCES[key(g[0])].ore is not None):
@@ -389,6 +403,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             chests, held = chest_held(key(raw), radius, tools["chests"])
             if chests:
                 ticks += lib.cost.walk(pos(), chests[0])
+                back = chests[0]
                 k -= held
                 if k <= 0:
                     continue
@@ -408,6 +423,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if s.tool and tier != "hand":
                 t, uses = need.get(s.tool, ("wooden", 0))
                 need[s.tool] = (min([t, tier or "wooden"], key=lib.tools.TIERS.index), uses + k)
+        ticks += stations(p, back)
         if limit is not None and ticks > limit:
             return None
         for kind, (t, uses) in need.items():
@@ -420,27 +436,27 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         GETTING.pop()
 
 
-def stations(p):
+def stations(p, start=None):
     """The ticks the stations of p, a plan, add (#630): for its crafting table and its furnace (or smoker or blast furnace)
-    each, the walk to the one lib.craft.plan counts within lib.craft.REACH, as craft_here walks to one craft or smelt does
+    each, the walk from start (None: the bot's Pos) to the one lib.craft.plan counts within lib.craft.REACH, as craft_here walks to one craft or smelt does
     not see, else the ticks to mine back the one craft_here puts down, with the best axe or pickaxe carried (a furnace at
     least with a wooden pickaxe, which get gets before it smelts), a furnace once for each stack of lib.craft.STACK a step
     smelts, as smelt_here puts one down for each (#635); what makes one is in p already."""
     ticks = 0
     if p["table"]:
-        ticks += station(find_nearest("crafting_table", radius=lib.craft.REACH), "axe", "table", None)
+        ticks += station(find_nearest("crafting_table", radius=lib.craft.REACH), "axe", "table", None, start=start)
     inputs = lib.craft.smelt_inputs(p)
     if inputs:
         stacks = sum([(k + lib.craft.STACK - 1) // lib.craft.STACK for step, k, how in p["crafts"] if how == "smelt"])
-        ticks += station(lib.craft.furnace_at(inputs), "pickaxe", "furnace", "wooden", stacks)
+        ticks += station(lib.craft.furnace_at(inputs), "pickaxe", "furnace", "wooden", stacks, start)
     return ticks
 
 
-def station(at, kind, material, least, n=1):
-    """The walk to at, a station's Pos; where it is None, the ticks to break n of material with the best tool of kind
-    carried, else with one of tier least (None: the hand)."""
+def station(at, kind, material, least, n=1, start=None):
+    """The walk from start (None: the bot's Pos) to at, a station's Pos; where it is None, the ticks to break n of
+    material with the best tool of kind carried, else with one of tier least (None: the hand)."""
     if at is not None:
-        return lib.cost.walk(pos(), at)
+        return lib.cost.walk(pos() if start is None else start, at)
     tool = lib.tools.best(kind)
     return lib.cost.breaking(n, material, least if tool is None else lib.tools.tier(tool))
 
@@ -448,9 +464,10 @@ def station(at, kind, material, least, n=1):
 def stored(p, item, gather, radius, tools):
     """The walk to the nearest chest of lib.stock within radius that holds each step of p, a plan for item, as
     intermediate takes them (planks of any kind for planks), lowering gather by the raw items the steps they cover take
-    (#580); tools as make_cost's. ponytail: needs of the step alone, so a carried item the plan used for another step
-    may count twice."""
+    (#580); tools as make_cost's. Gives those ticks and the Pos of the last chest walked to (None: none). ponytail: needs
+    of the step alone, so a carried item the plan used for another step may count twice."""
     ticks = 0
+    last = None
     for step, k, how in reversed(p["crafts"]):
         if step == item:
             continue
@@ -463,11 +480,12 @@ def stored(p, item, gather, radius, tools):
             if held <= 0:
                 continue
             ticks += lib.cost.walk(pos(), have[0])
+            last = have[0]
             left = needs(step, k - held)["gather"] if held < k else {}
             for raw, m in needs(step, k)["gather"].items():
                 gather[raw] = gather.get(raw, 0) - m + left.get(raw, 0)
             k -= held
-    return ticks
+    return ticks, last
 
 
 def tool_cost(kind, tier, uses, radius, tools):
