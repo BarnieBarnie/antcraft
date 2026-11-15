@@ -465,7 +465,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 */
 	// Measured: passes at tick 4103 to 4323 in 19 runs (was 7063 to 7991: taking its scaffold back from the floor once
 	// the tree was down took some 4100 ticks, #677).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8700)
+	// Since #687, where a path no longer stands on a block it broke, 4451 to 4787 in 12 runs, 6 at once (#695).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 9600)
 	public void theTallestGiantSpruceIsFelledWhole(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(6, 1, 6);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
@@ -475,24 +476,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		advance(helper, helper.absolutePos(spot), 58);
 		helper.assertBlockPresent(Blocks.SPRUCE_LOG, spot.above(28));
 		helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, spot.above(29));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
-		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 31), new ItemStack(Items.SPRUCE_SAPLING, 4));
-		start(helper, bot, "giant_spruce", new BlockPos(2, 0, 2), new BlockPos(11, 0, 11), """
-			r = lib.treefarm.harvest(kind, low, high)
-			print(r["ok"], r["reason"], r["at"])
-			""");
-		helper.onEachTick(() -> {
-			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
-			if (!log.isEmpty() && !log.equals(List.of("True None None"))) {
-				helper.fail("printed " + log);
-			}
-		});
-		helper.succeedWhen(() -> {
-			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None None"), "printed");
-			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
-				helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, p);
-			}
-		});
+		fellsWhole(helper, "giant_spruce", Items.SPRUCE_SAPLING, Blocks.SPRUCE_LOG, new BlockPos(16, 1, 16), 31,
+			new BlockPos(2, 0, 2), new BlockPos(11, 0, 11), bot -> false);
 	}
 
 	/**
@@ -512,7 +497,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// 13 copies, 2409 to 4909 and one at 6865; 5 ran out of maxTicks after the last stand, never out_of_reach. Those were
 	// deaths (#694): logged per tick, 9 of 13 copies dropped 4 to 10 blocks on purpose, and in 8 of some 870 copies the
 	// bot died; the test read the dead entity's log, not the respawned bot's. Watching the bot by its UUID: 144 of 144 in
-	// 12 runs of 12 copies.
+	// 12 runs of 12 copies. Again (#695): 2467 to 3757 in 12 runs, 6 at once; maxTicks stays at some twice the 4909 of
+	// #691's 273 runs (one at 6865).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWhole(GameTestHelper helper) {
 		fellsTheSeed37GiantJungle(helper, bot -> false);
@@ -531,13 +517,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);
 	}
 
-	/**
-	 * Grows the seed 37 giant jungle and harvests it as jobs.wood_farm does, recover first, so a bot that died and runs
-	 * the script again once it respawns takes back the dead run's scaffold and picks up its drops. Kills the bot the first
-	 * time {@code killWhen} holds for it. Watches the bot by its UUID: the bot that respawns is a new entity, and a test
-	 * that read the first one's log saw nothing printed till maxTicks (#694). Passes once the script printed an ok harvest
-	 * and no log of the tree is left.
-	 */
+	/** Grows the seed 37 giant jungle and fells it as {@link #fellsWhole} does. */
 	private static void fellsTheSeed37GiantJungle(GameTestHelper helper, Predicate<AntBot> killWhen) {
 		BlockPos spot = new BlockPos(10, 1, 8);
 		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
@@ -546,13 +526,26 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		}
 		advance(helper, helper.absolutePos(spot), 37);
 		helper.assertBlockPresent(Blocks.JUNGLE_LOG, spot.above(19));
-		AntBot first = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
+		fellsWhole(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, new BlockPos(4, 1, 18), 33,
+			new BlockPos(6, 0, 4), new BlockPos(15, 0, 13), killWhen);
+	}
+
+	/**
+	 * Harvests the grown giant of kind in the cell from low to high as jobs.wood_farm does, recover first, with a bot at
+	 * botAt given a stone axe, dirt and four saplings, so a bot that died and runs the script again once it respawns takes
+	 * back the dead run's scaffold and picks up its drops. Kills the bot the first time {@code killWhen} holds for it.
+	 * Watches the bot by its UUID: the bot that respawns is a new entity, and a test that read the first one's log saw
+	 * nothing printed till maxTicks (#694). Passes once the script printed an ok harvest and no log of the tree is left.
+	 */
+	private static void fellsWhole(GameTestHelper helper, String kind, Item sapling, Block log, BlockPos botAt, int dirt,
+			BlockPos low, BlockPos high, Predicate<AntBot> killWhen) {
+		AntBot first = helper.spawn(ModEntities.ANT_BOT, botAt);
 		UUID id = first.getUUID();
-		give(first, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 33), new ItemStack(Items.JUNGLE_SAPLING, 4));
-		BlockPos l = helper.absolutePos(new BlockPos(6, 0, 4));
-		BlockPos h = helper.absolutePos(new BlockPos(15, 0, 13));
+		give(first, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, dirt), new ItemStack(sapling, 4));
+		BlockPos l = helper.absolutePos(low);
+		BlockPos h = helper.absolutePos(high);
 		BotScripts.run(first, "import lib.trees\nimport lib.treefarm\nlib.trees.recover()\n"
-			+ "r = lib.treefarm.harvest(\"giant_jungle\", Pos(" + l.getX() + ", " + l.getY() + ", " + l.getZ() + "), Pos("
+			+ "r = lib.treefarm.harvest(\"" + kind + "\", Pos(" + l.getX() + ", " + l.getY() + ", " + l.getZ() + "), Pos("
 			+ h.getX() + ", " + h.getY() + ", " + h.getZ() + "))\nprint(r[\"ok\"], r[\"reason\"], r[\"at\"])\n");
 		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
 		BotScripts.failOnError(helper, bot);
@@ -567,9 +560,9 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 				now.kill(helper.getLevel());
 				return;
 			}
-			List<String> log = BotScripts.log(now, Output.Level.PRINT);
-			if (!log.isEmpty() && !log.equals(List.of("True None None"))) {
-				helper.fail("printed " + log);
+			List<String> printed = BotScripts.log(now, Output.Level.PRINT);
+			if (!printed.isEmpty() && !printed.equals(List.of("True None None"))) {
+				helper.fail("printed " + printed);
 			}
 		});
 		helper.succeedWhen(() -> {
@@ -577,7 +570,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(now != null, "no bot alive");
 			helper.assertValueEqual(BotScripts.log(Objects.requireNonNull(now), Output.Level.PRINT), List.of("True None None"), "printed");
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
-				helper.assertBlockNotPresent(Blocks.JUNGLE_LOG, p);
+				helper.assertBlockNotPresent(log, p);
 			}
 		});
 	}
