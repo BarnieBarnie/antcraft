@@ -32,6 +32,8 @@ Every blow is fully charged, never a player's weak, hurried hit. Of the extras a
 
 By default the bot attacks only hostile mobs, such as zombies and skeletons, and animals that are neither tamed nor named. Players, other bots, tamed or named animals and anything else, such as villagers or dropped items, are `protected`. A server can allow players, other bots and tamed or named animals as targets with the config keys `botsAttackPlayers`, `botsAttackBots` and `botsAttackTamed` (see [Config](../../features/config.md)). The bot never attacks itself.
 
+Against a creeper the bot kites: while the fuse of a creeper near it is lit, it strikes only at once and otherwise backs off out of the blast, and the attack waits until the fuse is out to walk in again (see [Fighting creepers](../../features/bots.md#fighting-creepers)).
+
 A bot at or below `botFleeHealth` with a hostile mob near it flees instead of fighting on: the attack ends with `interrupted` (see [Reflexes](../../features/bots.md#reflexes)). Check [`health()`](../bot/health.md) to stop a fight before that.
 
 An argument that is no `Entity` stops the script with an error.

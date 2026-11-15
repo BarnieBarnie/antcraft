@@ -13,6 +13,9 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.network.chat.Component;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -20,6 +23,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.item.ItemStack;
@@ -363,6 +367,72 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		// Once the bot attacks.
 		helper.runAfterDelay(3, () -> bot.setHealth(4));
 		succeedWhenPrinted(helper, bot, run, List.of("False interrupted"));
+	}
+
+	/**
+	 * Fails the test at once when one of {@code creepers} explodes, which discards it, or a blast hurts the bot (#706).
+	 * Registered up front, as every listener.
+	 */
+	private static void failOnExplosion(GameTestHelper helper, AntBot bot, Creeper... creepers) {
+		helper.onEachTick(() -> {
+			for (Creeper creeper : creepers) {
+				if (creeper.getRemovalReason() == Entity.RemovalReason.DISCARDED) {
+					helper.fail("a creeper exploded, bot health " + bot.getHealth());
+				}
+			}
+			DamageSource hurt = bot.getLastDamageSource();
+			if (hurt != null && hurt.is(DamageTypeTags.IS_EXPLOSION)) {
+				helper.fail("a blast hurt the bot, health " + bot.getHealth());
+			}
+		});
+	}
+
+	/**
+	 * A bot with an iron sword fights a creeper of its own accord and kills it without it exploding (#706): it strikes,
+	 * backs off out of the blast while the creeper's fuse is lit and strikes again once it went out. Wide, for room to back off.
+	 */
+	// Measured: passes at tick 145 to 177 in 6 runs.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 360)
+	public void aBotKillsACreeperWithoutItExploding(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 8);
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 12, 1, 13);
+		failOnExplosion(helper, bot, creeper);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health");
+			helper.assertTrue(bot.isAlive(), "bot dead");
+		});
+	}
+
+	/** {@code attack(creeper)} kites as the bot's own fight does: the creeper dies without exploding, and the attack is ok (#706). */
+	// Measured: passes at tick 129 to 165 in 6 runs.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 340)
+	public void attackKillsACreeperWithoutItExploding(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 8);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 12, 1, 13);
+		failOnExplosion(helper, bot, creeper);
+		ScriptRun run = run(helper, bot, attackThe("creeper"));
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
+	/** A bot with an iron sword kills two creepers and a husk that come at it together, and neither creeper explodes (#706). */
+	// Measured: passes at tick 477 to 485 in 3 runs alone, 802 in a full run.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1600)
+	public void aBotKillsTwoCreepersAndAHuskWithoutAnExplosion(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 8);
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper[] creepers = {helper.spawn(EntityTypes.CREEPER, 9, 1, 14), helper.spawn(EntityTypes.CREEPER, 15, 1, 14)};
+		// Husks do not burn in daylight, so only the bot can kill it.
+		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 15);
+		failOnExplosion(helper, bot, creepers);
+		helper.succeedWhen(() -> {
+			for (Creeper creeper : creepers) {
+				helper.assertTrue(creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health");
+			}
+			helper.assertTrue(husk.isDeadOrDying(), "husk alive with " + husk.getHealth() + " health");
+			helper.assertTrue(bot.isAlive(), "bot dead");
+		});
 	}
 
 	/** By default the bot refuses to attack a player, another bot, a named animal or a tamed one, and leaves them unhurt. */

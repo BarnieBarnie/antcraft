@@ -60,7 +60,6 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.npc.InventoryCarrier;
 import net.minecraft.world.entity.player.Player;
@@ -178,13 +177,13 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	@Override
 	protected void registerGoals() {
 		this.goalSelector.addGoal(0, new FloatGoal(this));
-		this.goalSelector.addGoal(1, new MeleeAttackGoal(this, 1.2, true));
+		// Before the melee goal, which fights a creeper only while its fuse is out (#706).
+		this.goalSelector.addGoal(1, new KiteGoal(this));
+		this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.2, true));
 		this.goalSelector.addGoal(6, new LookAtPlayerGoal(this, Player.class, 8.0F));
 		this.goalSelector.addGoal(7, new RandomLookAroundGoal(this));
 		this.targetSelector.addGoal(1, new HurtByTargetGoal(this, Player.class, AntBot.class));
-		// Creepers are left alone until bots can fight at range.
-		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true,
-			(target, level) -> !(target instanceof Creeper)));
+		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true));
 	}
 
 	/**

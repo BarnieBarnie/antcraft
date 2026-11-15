@@ -25,7 +25,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityTypes;
-import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -59,18 +58,6 @@ public class AntBotGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(!husk.isAlive(), "husk still alive");
 			helper.assertTrue(husk.getLastHurtByMob() == bot, "husk was not killed by the bot");
-		});
-	}
-
-	@GameTest(maxTicks = 100)
-	public void ignoresCreepers(GameTestHelper helper) {
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
-		Creeper creeper = helper.spawn(EntityTypes.CREEPER, 6, 1, 6);
-		creeper.setNoAi(true);
-
-		helper.runAfterDelay(60, () -> {
-			helper.assertTrue(bot.getTarget() == null, "bot targeted a creeper");
-			helper.succeed();
 		});
 	}
 

@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.script;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.BotHands;
+import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
@@ -461,6 +462,11 @@ public final class WorkApi {
 			if (!(entity instanceof LivingEntity target) || entity.isRemoved() || entity.level() != this.bot.level()
 				|| entity.distanceTo(this.bot) > SenseApi.MAX_ENTITY_RADIUS) {
 				return this.finish(Result.fail(Result.TARGET_GONE));
+			}
+			if (KiteGoal.litNear(this.bot) != null) {
+				// A creeper near with its fuse lit: the bot's kite goal strikes it and backs off out of the blast until it goes out (#706).
+				this.stopWalk();
+				return false;
 			}
 			if (BotHands.inStrikingReach(this.bot, target)) {
 				this.stopWalk();
