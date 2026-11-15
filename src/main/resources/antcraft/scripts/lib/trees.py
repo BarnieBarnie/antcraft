@@ -399,7 +399,8 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)
     # Picks up first: logs that fell on the leaves it may pillar up to, and that scaffold comes down too. Saplings only
     # where they lie on the floor or a step over it: pillaring up to each one the decaying leaves let fall on the
-    # leaves took up to 800 ticks of a poplar's felling; a later sweep picks those up, as harvest leaves its drops (#655, #656).
+    # leaves took up to 800 ticks of a poplar's felling; the leaves decay and let them fall to the floor, where a later
+    # sweep or the next felling within 8 picks them up, as harvest leaves its drops (#655, #656, #672).
     pick_up(LOGS)
     for e in items_near(SAPLINGS, 8):
         if e.valid and e.pos.y <= base.y + 1 and goto(e.pos, keep="#antcraft:scaffold_blocks"):

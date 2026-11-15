@@ -322,6 +322,40 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.OAK_SAPLING, TREE));
 	}
 
+	/**
+	 * A sapling that fell onto leaves is not lost to logs (#672): fell_whole leaves it there (#656), the leaves decay once
+	 * the tree is down and it falls to the floor, and the next tree's felling picks it up. The first oak's leaves stand in
+	 * as a column of three at (1, 1..3, 3) with a birch sapling on top; the test takes them away, as decay would but without
+	 * loot, once the first oak (nearest the bot) is felled and replanted. Before #656 fell_whole pillared up to it: one birch
+	 * sapling then too.
+	 */
+	// Measured: passes at tick 598 (with fell_whole's sapling pick-up off: printed True 8 0).
+	@GameTest(maxTicks = 1200)
+	public void logsPicksUpASaplingTheLeavesDropAfterAFelling(GameTestHelper helper) {
+		plantTree(helper, NEAR_TREE, Blocks.OAK_LOG, Blocks.OAK_LEAVES);
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(1, y, 3, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		}
+		ItemEntity high = helper.spawnItem(Items.BIRCH_SAPLING, new BlockPos(1, 4, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_SAPLING, 2));
+		AtomicBoolean decayed = new AtomicBoolean();
+		helper.onEachTick(() -> {
+			if (!decayed.get() && helper.getBlockState(NEAR_TREE).is(Blocks.OAK_SAPLING)) {
+				helper.assertTrue(high.isAlive(), "the sapling on the leaves was picked up before they decayed");
+				decayed.set(true);
+				for (int y = 1; y <= 3; y++) {
+					helper.setBlock(1, y, 3, Blocks.AIR);
+				}
+			}
+		});
+		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(8)\nprint(r['ok'], count('oak_log'), count('birch_sapling'))\n",
+			List.of("True 8 1"), () -> {
+				helper.assertBlockPresent(Blocks.OAK_SAPLING, NEAR_TREE);
+				helper.assertBlockPresent(Blocks.OAK_SAPLING, TREE);
+			});
+	}
+
 	/** logs(2, kind="spruce_log") passes over the nearer oak for the spruce. */
 	@GameTest(maxTicks = 360)
 	public void logsOfAKindTakesOnlyThatTree(GameTestHelper helper) {
