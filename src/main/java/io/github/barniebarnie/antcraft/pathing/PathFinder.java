@@ -44,6 +44,13 @@ public final class PathFinder {
 	 */
 	public static final double SWIM_UP_COST = 6.0;
 
+	/**
+	 * The walk back after a death, for a bot whose home is in another dimension (#688): what it dropped despawns 6000
+	 * ticks after it died (lib.cost.DESPAWN), so the walk back costs at most that, items and all.
+	 */
+	// ponytail: a fixed guess, not the way through a portal; estimate that if such bots drop where they should not.
+	public static final double AWAY_WALK = 6000;
+
 	/** Climbing a block up or down a ladder: vanilla climbs at 0.2 blocks a tick and slides down at 0.15. */
 	public static final double CLIMB_COST = 6.0;
 
@@ -62,14 +69,15 @@ public final class PathFinder {
 	/**
 	 * What a death costs the bot, to cost a drop that hurts (#682): the bot has {@code health} left, and after a death
 	 * comes back at {@code home} {@code respawnTicks} later, then walks back for what it dropped, as
-	 * {@code lib.cost.death} counts it (docs/features/death.md). A death costs no more, so dying is a move like any other
+	 * {@code lib.cost.death} counts it (docs/features/death.md); {@code home} is null where it is in another dimension,
+	 * and the walk back then costs {@link #AWAY_WALK} (#688). A death costs no more, so dying is a move like any other
 	 * where it is cheaper.
 	 */
-	// ponytail: the items lost past their despawn are not counted, nor a home in another dimension (no Death then).
-	public record Death(float health, BlockPos home, int respawnTicks) {
+	// ponytail: the items lost past their despawn are not counted.
+	public record Death(float health, @Nullable BlockPos home, int respawnTicks) {
 		/** A death at {@code at}: the respawn and the walk from home back to it. */
 		double cost(BlockPos at) {
-			return this.respawnTicks + WALK_COST * this.home.distManhattan(at);
+			return this.respawnTicks + (this.home == null ? AWAY_WALK : WALK_COST * this.home.distManhattan(at));
 		}
 
 		/** {@code damage} at {@code at}: a bot does not heal, so the health it loses is that share of a death, at most one. */

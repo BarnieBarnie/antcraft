@@ -9,6 +9,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 
 class PathFinderTest {
 	private static final BlockPos START = new BlockPos(0, 1, 0);
@@ -254,7 +255,7 @@ class PathFinderTest {
 	}
 
 	/** A bot's death for the path search: {@code health} left, its home at {@code home}, back 200 ticks after it died. */
-	private static PathFinder.Death death(float health, BlockPos home) {
+	private static PathFinder.Death death(float health, @Nullable BlockPos home) {
 		return new PathFinder.Death(health, home, 200);
 	}
 
@@ -298,6 +299,19 @@ class PathFinderTest {
 		Path path = find(platform(12), landing, walkOnly(death(20, landing.south(10))));
 		assertTrue(path.complete(), "stayed up: " + path.steps());
 		double hurt = 9 / 20.0 * (200 + 10 * PathFinder.WALK_COST);
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + hurt, path.cost(), 1e-9);
+	}
+
+	/**
+	 * A bot whose home is in another dimension (no home here) still drops where there is no other way: its walk back is
+	 * the fixed {@link PathFinder#AWAY_WALK} (#688).
+	 */
+	@Test
+	void aDropWithItsHomeInAnotherDimensionCostsAFixedWalkBack() {
+		BlockPos landing = new BlockPos(2, -11, 0);
+		Path path = find(platform(12), landing, walkOnly(death(20, null)));
+		assertTrue(path.complete(), "stayed up: " + path.steps());
+		double hurt = 9 / 20.0 * (200 + PathFinder.AWAY_WALK);
 		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + hurt, path.cost(), 1e-9);
 	}
 

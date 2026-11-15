@@ -26,6 +26,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
@@ -889,6 +890,21 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	public void digsDownAPillarWhereThatCostsLessThanJumpingOff(GameTestHelper helper) {
 		AntBot bot = upAPillar(helper, 100);
 		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt: jumped off"));
+		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
+	}
+
+	/**
+	 * A bot up a bedrock pillar 12 high, which it cannot dig, its home in the Nether: the drop is its only way down, and it
+	 * takes it, costed with a fixed walk back from the other dimension (#688). Before, it had no death to cost and stayed up.
+	 */
+	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 60)
+	public void dropsOffAPillarWithItsHomeInAnotherDimension(GameTestHelper helper) {
+		room(helper, 0, 16);
+		fill(helper, 3, 1, 3, 3, 12, 3, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 13, 3);
+		bot.setHome(helper.absolutePos(new BlockPos(3, 13, 3)), Level.NETHER);
+		BotScripts.failOnError(helper, bot);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 1, 3)));
 		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
 	}
 

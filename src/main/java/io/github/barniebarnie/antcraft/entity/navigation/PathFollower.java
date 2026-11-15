@@ -277,13 +277,17 @@ public class PathFollower {
 		return new PathFinder.Options(this.mayBreak, this.mayPlace && this.hasScaffold(), this.maxNodes, MAX_DROP, this.death());
 	}
 
-	/** What a death costs the bot, so a path may drop farther than {@link #MAX_DROP} at that cost (#682); none where it would not come back. */
+	/**
+	 * What a death costs the bot, so a path may drop farther than {@link #MAX_DROP} at that cost (#682); none where it
+	 * would not come back. A home in another dimension is a death with no home here (#688).
+	 */
 	private PathFinder.@Nullable Death death() {
 		BlockPos home = this.bot.getHome();
-		if (!AntCraftConfig.botRespawn() || home == null || this.bot.getHomeDimension() != this.bot.level().dimension()) {
+		if (!AntCraftConfig.botRespawn() || home == null) {
 			return null;
 		}
-		return new PathFinder.Death(this.bot.getHealth(), home, AntCraftConfig.botRespawnTicks());
+		boolean here = this.bot.getHomeDimension() == this.bot.level().dimension();
+		return new PathFinder.Death(this.bot.getHealth(), here ? home : null, AntCraftConfig.botRespawnTicks());
 	}
 
 	/**
