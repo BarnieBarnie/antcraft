@@ -12,9 +12,11 @@ from lib.result import result
 
 # The food a bot eats, best first, with the food points each gives. Left out: what poisons or hurts (raw chicken, rotten
 # flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, which teleports, golden apples, kept for a fight,
-# and stews and drinks. ponytail: the vanilla values by hand; a modded food is not eaten unless added here.
+# and stews and drinks but beetroot soup, which colony.farmer makes (#721); eat keeps its bowl. ponytail: the vanilla
+# values by hand; a modded food is not eaten unless added here.
 FOODS = [("minecraft:golden_carrot", 6), ("minecraft:cooked_beef", 8), ("minecraft:cooked_porkchop", 8),
          ("minecraft:cooked_mutton", 6), ("minecraft:cooked_salmon", 6), ("minecraft:cooked_chicken", 6),
+         ("minecraft:beetroot_soup", 6),
          ("minecraft:baked_potato", 5), ("minecraft:bread", 5), ("minecraft:cooked_rabbit", 5),
          ("minecraft:cooked_cod", 5), ("minecraft:pumpkin_pie", 8), ("minecraft:apple", 4), ("minecraft:carrot", 3),
          ("minecraft:beef", 3), ("minecraft:porkchop", 3), ("minecraft:rabbit", 3), ("minecraft:mutton", 2),

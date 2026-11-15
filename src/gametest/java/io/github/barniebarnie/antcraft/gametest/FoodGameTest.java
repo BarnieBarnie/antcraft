@@ -157,4 +157,44 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(core.countItem(Items.OAK_LOG), 2, "logs back in the core");
 		});
 	}
+
+	/** A farmer makes beetroot soup from the core's 6 beetroot and bowl at the colony's crafting table and keeps it in the core (#721). Measured: 9 ticks. */
+	@GameTest(maxTicks = 40)
+	public void aFarmerMakesBeetrootSoupFromTheCoresBeetroot(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		helper.setBlock(4, 1, 1, Blocks.CRAFTING_TABLE);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.BEETROOT, 6));
+		core.setItem(1, new ItemStack(Items.BOWL));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(core.countItem(Items.BEETROOT_SOUP), 1, "beetroot soup in the core");
+			helper.assertValueEqual(core.countItem(Items.BEETROOT), 0, "beetroot left in the core");
+		});
+	}
+
+	/**
+	 * A farmer with no crafting table or furnace in reach places the core's table and furnace beside the core and bakes the
+	 * core's wheat and potato into bread and a baked potato there (#721). Measured: 245 ticks.
+	 */
+	@GameTest(maxTicks = 500)
+	public void aFarmerPlacesTheCoresTableAndFurnaceToBake(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.WHEAT, 3));
+		core.setItem(1, new ItemStack(Items.POTATO));
+		core.setItem(2, new ItemStack(Items.OAK_LOG, 3));
+		core.setItem(3, new ItemStack(Items.CRAFTING_TABLE));
+		core.setItem(4, new ItemStack(Items.FURNACE));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(core.countItem(Items.BREAD), 1, "bread in the core");
+			helper.assertValueEqual(core.countItem(Items.BAKED_POTATO), 1, "baked potatoes in the core");
+			helper.assertValueEqual(core.countItem(Items.CRAFTING_TABLE) + core.countItem(Items.FURNACE), 0, "stations left in the core");
+		});
+	}
 }

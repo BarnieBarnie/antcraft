@@ -7,8 +7,9 @@
 # felling the colony's trees for it.
 # What it harvests it replants with the same crop, and it keeps one of each
 # harvest that is its own seed; spare seeds and poisonous potatoes go into the
-# core. It bakes the harvest into food for the colony (#704): bread from the core's wheat at the colony's crafting
-# table, potatoes in its furnace with the core's fuel, until the core holds lib.food.STOCK meals (lib.food.MEALS) for each
+# core. It bakes the harvest into food for the colony (#704): bread from the core's wheat and beetroot soup from its
+# beetroot and bowls at the colony's crafting table, potatoes in its furnace with the core's fuel (a table or furnace the
+# colony lacks it places beside the core, from the core or made with lib.get, #721), until the core holds lib.food.STOCK meals (lib.food.MEALS) for each
 # member, so members take it with lib.food.upkeep. Run it on a colony member with `/antcraft bot run colony.farmer`.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -44,19 +45,38 @@ def short():
     return lib.food.STOCK * len(colony()["members"]) - in_core(lib.food.MEALS)
 
 
+def station(kind):
+    """The nearest kind ("crafting_table" or "furnace"), else one placed beside the core where none is (#721): carried,
+    from the core or made with lib.get.get; None where it gets none. ponytail: lib.craft.place_beside the bot at its
+    home, so it may take a side of the core another station or a chest wanted."""
+    near = find_nearest(kind)
+    if near is not None or not get(kind)["ok"]:
+        return near
+    go_home()
+    return place_beside(kind)
+
+
 def stock_food():
-    """Bakes bread from the core's wheat at the nearest crafting table and the core's potatoes in the nearest furnace while
-    the core is short() of meals, and stores them in the core. ponytail: no station of its own; a colony without a table
-    or furnace gets none of that food. A smelt waits 10 seconds a potato."""
+    """Bakes bread from the core's wheat and makes beetroot soup from its beetroot and bowls at the nearest crafting table,
+    and bakes the core's potatoes in the nearest furnace, while the core is short() of meals, and stores them in the core.
+    A table or furnace it lacks it places by the core (station). A smelt waits 10 seconds a potato."""
     n = min(short(), in_core("minecraft:wheat") // 3)
-    table = find_nearest("crafting_table") if n > 0 else None
+    table = station("crafting_table") if n > 0 else None
     if table is not None:
         take_up_to("minecraft:wheat", 3 * n, chests=[core()])
         craft("minecraft:bread", count("minecraft:wheat") // 3, table=table)
         store("minecraft:bread")
         store("minecraft:wheat")
+    n = min(short(), in_core("minecraft:beetroot") // 6, in_core("minecraft:bowl"))
+    table = station("crafting_table") if n > 0 else None
+    if table is not None:
+        take_up_to("minecraft:beetroot", 6 * n, chests=[core()])
+        take_up_to("minecraft:bowl", n, chests=[core()])
+        craft("minecraft:beetroot_soup", min(count("minecraft:beetroot") // 6, count("minecraft:bowl")), table=table)
+        for item in ["minecraft:beetroot_soup", "minecraft:beetroot", "minecraft:bowl"]:
+            store(item)
     n = min(short(), in_core("minecraft:potato"))
-    furnace = find_nearest("furnace") if n > 0 else None
+    furnace = station("furnace") if n > 0 else None
     if furnace is not None:
         seed = count("minecraft:potato")  # the one it keeps to replant
         take_up_to("minecraft:potato", seed + n, chests=[core()])
@@ -74,7 +94,9 @@ def stock_food():
 
 core()  # a bot in no colony says so and stops
 # Imported after it: lib.get and what it imports take a bot in no colony some ticks to load.
-from lib.get import ensure_tool
+from lib.craft import place_beside
+from lib.get import ensure_tool, get
+from lib.home import go_home
 settle()
 while True:
     lib.food.upkeep()
