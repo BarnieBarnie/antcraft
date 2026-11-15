@@ -32,13 +32,13 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 10)
 	public void spiralGivesTheWaypointsFromTheCentreOut(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.explore
 			w = lib.explore.spiral(Pos(0, 64, 0), 2, 1)
 			print([(p.x, p.z) for p in w], all([p.y == 64 for p in w]))
 			print(len(lib.explore.spiral(Pos(0, 64, 0))), lib.explore.spiral(Pos(0, 64, 0))[-1])
 			""");
-		succeedWhenPrinted(helper, bot, List.of("[(0, 0), (2, 0), (2, 2), (0, 2), (-2, 2), (-2, 0), (-2, -2), (0, -2), (2, -2)] True",
+		succeedWhenPrinted(helper, job, bot, List.of("[(0, 0), (2, 0), (2, 2), (0, 2), (-2, 2), (-2, 0), (-2, -2), (0, -2), (2, -2)] True",
 			"81 Pos(128, 64, -128)"));
 	}
 
@@ -46,7 +46,7 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 10)
 	public void lookRecordsTheBiomeOncePerPlace(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.explore
 			for _ in range(2):
 			    lib.explore.look(4, 0)
@@ -55,35 +55,35 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 			""");
 		String biome = helper.getLevel().getBiome(helper.absolutePos(new BlockPos(3, 1, 3))).getRegisteredName();
 		String line = "{'" + biome + "': [" + printed(helper, 3, 1, 3) + "]} {}";
-		succeedWhenPrinted(helper, bot, List.of(line, line));
+		succeedWhenPrinted(helper, job, bot, List.of(line, line));
 	}
 
 	/** seen("#minecraft:is_forest") gives the remembered biomes of that biome tag (biome_tags), not the others. */
 	@GameTest(maxTicks = 10)
 	public void seenTakesABiomeTag(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.explore
 			memory["seen"] = {"biomes": {"minecraft:forest": [Pos(1, 64, 1)], "minecraft:plains": [Pos(2, 64, 2)],
 			    "minecraft:birch_forest": [Pos(3, 64, 3)]}, "structures": {}}
 			print(sorted([p.x for p in lib.explore.seen("#minecraft:is_forest")]), lib.explore.seen("#minecraft:is_ocean"))
 			print("#minecraft:is_forest" in biome_tags("minecraft:forest"), biome_tags("minecraft:nothing"))
 			""");
-		succeedWhenPrinted(helper, bot, List.of("[1, 3] []", "True []"));
+		succeedWhenPrinted(helper, job, bot, List.of("[1, 3] []", "True []"));
 	}
 
 	/** seen("#minecraft:village") gives the remembered structures of that structure tag (structure_tags), not the others. */
 	@GameTest(maxTicks = 10)
 	public void seenTakesAStructureTag(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.explore
 			memory["seen"] = {"biomes": {"minecraft:plains": [Pos(4, 64, 4)]}, "structures": {"minecraft:village_plains": [Pos(1, 64, 1)],
 			    "minecraft:mineshaft": [Pos(2, 64, 2)], "minecraft:village_desert": [Pos(3, 64, 3)]}}
 			print(sorted([p.x for p in lib.explore.seen("#minecraft:village")]), lib.explore.seen("#minecraft:is_forest"))
 			print("#minecraft:village" in structure_tags("minecraft:village_plains"), structure_tags("minecraft:nothing"))
 			""");
-		succeedWhenPrinted(helper, bot, List.of("[1, 3] []", "True []"));
+		succeedWhenPrinted(helper, job, bot, List.of("[1, 3] []", "True []"));
 	}
 
 	/**
@@ -96,7 +96,7 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	public void aWaypointNotLoadedYetGoesToTheSurfaceOnceItLoads(GameTestHelper helper) {
 		helper.setBlock(5, 1, 5, Blocks.DIRT);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.explore
 			asked = {}
 			real = surface
@@ -113,12 +113,7 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 			lib.explore.explore(1, 2, until)
 			print(at[2], block(at[2] + (0, -1, 0)).id)
 			""");
-		// Not succeedWhenPrinted: the script ends away from home, so the bot's idle.py takes over at once.
-		List<String> expected = List.of(printed(helper, 5, 2, 5) + " minecraft:dirt");
-		helper.succeedWhen(() -> {
-			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
-			helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
-		});
+		succeedWhenPrinted(helper, job, bot, List.of(printed(helper, 5, 2, 5) + " minecraft:dirt"));
 	}
 
 	/**
@@ -130,14 +125,14 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	public void exploreStopsAtTheFirstWaypointThatSeesAMatch(GameTestHelper helper) {
 		SenseGameTest.village(helper, new BlockPos(6, 1, 6), new BlockPos(7, 3, 7));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.explore
 			r = lib.explore.explore(1, 2, lambda s: "minecraft:village_plains" in s["structures"])
 			print(r["ok"], r["at"])
 			lib.explore.look(2, 1)
 			print(lib.explore.seen("village"), lib.explore.seen("minecraft:village_plains"))
 			""");
-		succeedWhenPrinted(helper, bot, List.of("True " + printed(helper, 5, 1, 5),
+		succeedWhenPrinted(helper, job, bot, List.of("True " + printed(helper, 5, 1, 5),
 			"[" + printed(helper, 7, 2, 7) + "] [" + printed(helper, 7, 2, 7) + "]"));
 	}
 
@@ -151,10 +146,11 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	public void theJobWalksTheSpiralGoesHomeAndReports(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.explore nothing 1 2");
+		ScriptRun job = bot.getScript();
 		BotScripts.failOnError(helper, bot);
 		String biome = helper.getLevel().getBiome(helper.absolutePos(new BlockPos(3, 1, 3))).getRegisteredName();
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state());
 			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(new BlockPos(3, 1, 3))), "not home: " + bot.blockPosition());
 			List<String> printed = BotScripts.log(bot, Output.Level.WARN);
 			helper.assertTrue(printed.get(0).equals(biome + " at " + printed(helper, 3, 1, 3)), "printed " + printed);
@@ -174,9 +170,10 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 		bot.getFood().setSaturation(0);
 		bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.explore nothing 1 2");
+		ScriptRun job = bot.getScript();
 		BotScripts.failOnError(helper, bot);
 		helper.onEachTick(() -> {
-			if (bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED
+			if (job.state() == ScriptRun.State.FINISHED
 					&& bot.getInventory().countItem(Items.BREAD) > 0) {
 				helper.fail("explored with " + bot.getInventory().countItem(Items.BREAD) + " bread uneaten, food " + bot.getFood().food());
 			}
@@ -187,15 +184,16 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	private static void run(GameTestHelper helper, AntBot bot, String source) {
-		BotScripts.run(bot, source);
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
+		ScriptRun job = BotScripts.run(bot, source);
 		BotScripts.failOnError(helper, bot);
+		return job;
 	}
 
 
-	private static void succeedWhenPrinted(GameTestHelper helper, AntBot bot, List<String> expected) {
+	private static void succeedWhenPrinted(GameTestHelper helper, ScriptRun job, AntBot bot, List<String> expected) {
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state());
 			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
 			helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
 		});

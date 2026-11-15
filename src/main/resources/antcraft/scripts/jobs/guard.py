@@ -3,9 +3,9 @@
 # (16 by default). It runs until stopped: each round, under RETREAT health it walks home and eats until it has HEALED
 # health (heal), keeps itself fed (lib.food.upkeep), then attacks the mob of MOBS nearest the bot within radius of
 # home until it dies or the bot's health drops under RETREAT (#718), or waits at home (docs/cookbook/guard.md); a mob it
-# cannot get to it shoots, with a bow and arrows, or else leaves alone for SKIP ticks (#745). The flee
-# reflex, at botFleeHealth (6 by default), stays the last line: a fight it ends with interrupted is followed by the same
-# retreat. Another script runs it with run(radius); imported, this runs nothing.
+# cannot get to it shoots, with a bow and arrows, from where it stands (#756), or else leaves alone for SKIP ticks
+# (#745). The flee reflex, at botFleeHealth (6 by default), stays the last line: a fight it ends with interrupted is
+# followed by the same retreat. Another script runs it with run(radius); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -45,6 +45,11 @@ def heal():
     return True
 
 
+def can_shoot():
+    """Whether it carries a bow or crossbow and arrows, all shoot needs (#756)."""
+    return has(["bow", "crossbow"]) and has("#minecraft:arrows")
+
+
 def mobs(radius):
     """The mobs of MOBS within radius of home, nearest the bot first, but those it skips."""
     now = game_time()
@@ -60,10 +65,13 @@ def run(radius=16):
         lib.food.upkeep()
         near = mobs(radius)
         if near:
-            hold("sword")
-            r = attack(near[0], min_health=least)
-            if not r and r.reason == "unreachable":
-                r = shoot(near[0], min_health=least)  # a bow reaches what a sword cannot, such as a flying mob
+            if can_shoot() and not reachable(near[0].pos, near=1):
+                r = shoot(near[0], min_health=least)  # from where it stands, not from under a flying mob (#756)
+            else:
+                hold("sword")
+                r = attack(near[0], min_health=least)
+                if not r and r.reason == "unreachable":
+                    r = shoot(near[0], min_health=least)  # a bow reaches what a sword cannot, such as a flying mob
             if not r and r.reason not in ("interrupted", "hurt"):
                 now = game_time()
                 for i in [i for i in skipped if skipped[i] <= now]:

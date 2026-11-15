@@ -45,9 +45,9 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 3));
-		run(helper, bot, "");
+		ScriptRun job = run(helper, bot, "");
 		helper.succeedWhen(() -> {
-			felled(helper, bot);
+			felled(helper, job, bot);
 			helper.assertTrue(GameTests.carried(bot, Items.STONE_AXE) == 1, "no stone axe made");
 			helper.assertTrue(chest.countItem(Items.DIRT) == 6 && chest.countItem(Items.SPRUCE_SAPLING) == 0,
 				"the chest holds " + chest.countItem(Items.DIRT) + " dirt, " + chest.countItem(Items.SPRUCE_SAPLING) + " saplings");
@@ -67,9 +67,9 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 		}
 		helper.setBlock(6, 5, 6, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
-		run(helper, bot, "");
+		ScriptRun job = run(helper, bot, "");
 		helper.succeedWhen(() -> {
-			felled(helper, bot);
+			felled(helper, job, bot);
 			helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(6, 1, 6));
 		});
 	}
@@ -81,9 +81,9 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 			new ItemStack(Items.SPRUCE_SAPLING, 4));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos tree = helper.absolutePos(new BlockPos(4, 1, 4));
-		run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
+		ScriptRun job = run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
 		helper.succeedWhen(() -> {
-			felled(helper, bot);
+			felled(helper, job, bot);
 			helper.assertTrue(GameTests.carried(bot, Items.IRON_AXE) == 0, "the bot kept the iron axe");
 			ItemStack axe = ItemStack.EMPTY;
 			for (int i = 0; i < chest.getContainerSize(); i++) {
@@ -107,10 +107,9 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 			new ItemStack(Items.SPRUCE_SAPLING, 2));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos tree = helper.absolutePos(new BlockPos(4, 1, 4));
-		run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
+		ScriptRun job = run(helper, bot, tree.getX() + " " + tree.getY() + " " + tree.getZ());
 		helper.succeedWhen(() -> {
-			ScriptRun run = bot.getScript();
-			helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
+			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "the job " + job.state());
 			int planted = 0;
 			for (int x = 3; x <= 4; x++) {
 				for (int z = 3; z <= 4; z++) {
@@ -123,8 +122,7 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The job finished, said it felled 26 logs, the bot carries them, and the tree is gone with four saplings planted. */
-	private static void felled(GameTestHelper helper, AntBot bot) {
-		ScriptRun run = bot.getScript();
+	private static void felled(GameTestHelper helper, ScriptRun run, AntBot bot) {
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(log.equals(List.of("felled a giant tree: 26 logs")), "printed " + log);
 		helper.assertTrue(GameTests.carried(bot, Items.SPRUCE_LOG) == 26,
@@ -143,9 +141,10 @@ public class GiantTreeGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Runs the job with args on bot and fails the test at once when it fails. */
-	private static void run(GameTestHelper helper, AntBot bot, String args) {
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String args) {
 		List<String> started = BotScripts.command(helper, ("antcraft bot " + bot.getStringUUID() + " run jobs.giant_tree " + args).strip());
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[jobs.giant_tree, 1]")), "run answered " + started);
 		BotScripts.failOnError(helper, bot);
+		return bot.getScript();
 	}
 }

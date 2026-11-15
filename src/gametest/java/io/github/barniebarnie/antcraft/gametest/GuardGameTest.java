@@ -122,11 +122,12 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A guard with a bow and arrows, and no blocks to pillar up with, shoots a blaze hovering out of its reach (#745), as
-	 * attack ends with unreachable. The bot walked about under it, so it shoots near straight up (Aim's steep shot).
+	 * A guard with a bow and arrows, and no blocks to pillar up with, shoots a blaze hovering out of its reach (#745), from
+	 * where it stands, about 8 blocks off it sideways: it checks it can walk to the blaze before closing in, not only after
+	 * attack ended with unreachable under it, shooting near straight up (#756).
 	 */
-	// Measured: passes at tick 132.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 280)
+	// Measured: passes at tick 72 to 93 (132 when it shot from under the blaze).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 200)
 	public void aGuardShootsAMobItCannotGetToWithABow(GameTestHelper helper) {
 		Blaze blaze = helper.spawn(EntityTypes.BLAZE, 12, 12, 12);
 		blaze.setNoAi(true);
@@ -135,7 +136,15 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.BOW));
 		bot.getInventory().addItem(new ItemStack(Items.ARROW, 16));
 		// Without AI the blaze keeps the knockback of a hit as its movement for ever, and the bot would aim ahead of it.
-		helper.onEachTick(() -> blaze.setDeltaMovement(Vec3.ZERO));
+		boolean[] shot = {false};
+		helper.onEachTick(() -> {
+			blaze.setDeltaMovement(Vec3.ZERO);
+			if (!shot[0] && bot.getInventory().countItem(Items.ARROW) < 16) {
+				shot[0] = true;
+				double sideways = bot.position().subtract(blaze.position()).horizontalDistance();
+				helper.assertTrue(sideways >= 5, "first arrow shot from " + sideways + " blocks off the blaze sideways");
+			}
+		});
 		bot.setHealth(19);
 		bot.getFood().setFoodLevel(17);
 		bot.getFood().setSaturation(0);

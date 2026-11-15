@@ -99,8 +99,9 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
 	public void nothingAroundWarnsNoSaplings(GameTestHelper helper) {
 		AntBot bot = run(helper, false);
+		ScriptRun job = bot.getScript();
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getScript().state() == ScriptRun.State.FINISHED, "not finished: " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(BotScripts.warnings(bot).stream().anyMatch(w -> w.contains("no_saplings")), "warned " + BotScripts.warnings(bot));
 		});
 	}

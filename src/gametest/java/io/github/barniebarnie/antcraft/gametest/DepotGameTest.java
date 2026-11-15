@@ -51,12 +51,12 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 4));
 		bot.getInventory().addItem(new ItemStack(Items.APPLE, 2));
 		bot.getInventory().addItem(new ItemStack(Items.CHEST, 4));
-		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
 			r = lib.depot.store("wood")
 			print(r["ok"], len(inventory()), len(lib.depot.chests("wood")), len(lib.depot.chests("wood", "sticks")))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0 4 1"));
+			finished(helper, job, bot, List.of("True 0 4 1"));
 			List<Item> kinds = List.of(Items.OAK_LOG, Items.OAK_SAPLING, Items.STICK, Items.APPLE);
 			int[] counts = {5, 3, 4, 2};
 			for (int i = 0; i < kinds.size(); i++) {
@@ -84,12 +84,12 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 10));
-		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
 			r = lib.depot.store("wood")
 			print(r["ok"], count("oak_log"), len(lib.depot.chests("wood", "logs")))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0 2"));
+			finished(helper, job, bot, List.of("True 0 2"));
 			helper.assertBlockPresent(Blocks.CHEST, 2, 1, 1);
 			helper.assertTrue(helper.getBlockState(new BlockPos(2, 1, 1)).getValue(ChestBlock.TYPE) == ChestType.SINGLE, "the new chest is part of a double chest");
 			helper.assertTrue(chest(helper, 2).countItem(Items.OAK_LOG) > 0, "no logs in the new chest");
@@ -111,7 +111,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 10));
-		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
 			import lib.get
 			import lib.result
 			lib.get.get = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
@@ -119,7 +119,7 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 			print(r["ok"], r["reason"], r["missing"], count("oak_log"))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("False no_item {'minecraft:oak_log': 10} 10"));
+			finished(helper, job, bot, List.of("False no_item {'minecraft:oak_log': 10} 10"));
 			helper.assertItemEntityNotPresent(Items.OAK_LOG);
 			helper.assertTrue(full.countItem(Items.OAK_LOG) == 27 * 64, "the full chest: " + full.countItem(Items.OAK_LOG));
 		});
@@ -136,12 +136,12 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 5));
 		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
-		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
 			r = lib.depot.store("wood")
 			print(r["ok"], count("oak_log"), len(lib.depot.chests("wood")))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0 1"));
+			finished(helper, job, bot, List.of("True 0 1"));
 			helper.assertBlockPresent(Blocks.DIRT, 1, 1, 1);
 			helper.assertTrue(chest(helper, 2).countItem(Items.OAK_LOG) == 5, "logs in the chest: " + chest(helper, 2).countItem(Items.OAK_LOG));
 		});
@@ -182,12 +182,12 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 5));
 		bot.getInventory().addItem(new ItemStack(Items.CHEST, 1));
-		run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
 			r = lib.depot.store("wood")
 			print(r["ok"], count("oak_log"), len(lib.depot.chests("wood")))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0 1"));
+			finished(helper, job, bot, List.of("True 0 1"));
 			helper.assertTrue(foreign.countItem(Items.OAK_LOG) == 0, "logs in the cobblestone chest");
 			helper.assertTrue(foreign.countItem(Items.COBBLESTONE) == 10, "cobblestone: " + foreign.countItem(Items.COBBLESTONE));
 			helper.assertTrue(chest(helper, 2).countItem(Items.OAK_LOG) == 5, "logs in the new chest: " + chest(helper, 2).countItem(Items.OAK_LOG));
@@ -200,13 +200,14 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 		return (Container) helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(x, 1, 1)));
 	}
 
-	private static void run(GameTestHelper helper, AntBot bot, String source) {
-		BotScripts.run(bot, source);
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
+		ScriptRun job = BotScripts.run(bot, source);
 		BotScripts.failOnWarning(helper, bot);
+		return job;
 	}
 
-	private static void finished(GameTestHelper helper, AntBot bot, List<String> expected) {
-		helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+	private static void finished(GameTestHelper helper, ScriptRun job, AntBot bot, List<String> expected) {
+		helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state());
 		List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
 	}

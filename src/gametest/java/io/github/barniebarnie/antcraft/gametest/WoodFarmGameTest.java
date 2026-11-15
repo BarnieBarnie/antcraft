@@ -935,7 +935,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 10)
 	public void mostIsTheGrowthTimeOverTheHarvestTime(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
-		BotScripts.run(bot, """
+		ScriptRun job = BotScripts.run(bot, """
 			import jobs.wood_farm
 			import lib.treefarm
 			h = jobs.wood_farm.HARVEST
@@ -944,7 +944,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			""");
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished");
 			helper.assertValueEqual(said(bot), List.of("19114 47 1 True", "47 8"), "printed");
 		});
 	}

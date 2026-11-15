@@ -277,10 +277,11 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	public void aBotSavedHalfWayDownResumesAndFinishes(GameTestHelper helper) {
 		AntBot first = miner(helper, COLUMN.size() - 1);
 		dig(helper, first);
+		ScriptRun job = first.getScript();
 		AntBot[] bot = {first};
 		helper.onEachTick(() -> {
 			if (bot[0] == first && helper.getBlockState(COLUMN.get(3)).isAir()) {
-				helper.assertTrue(first.getScript().running(), "script " + first.getScript().state());
+				helper.assertTrue(job.running(), "script " + job.state());
 				bot[0] = ScriptGameTest.saveAndLoad(helper, first);
 			}
 		});

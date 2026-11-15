@@ -48,8 +48,8 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 1000)
 	public void minesTheSeededCoalAndComesBackUp(GameTestHelper helper) {
 		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
-		run(helper, bot, "coal 3 %d");
-		helper.succeedWhen(() -> mined(helper, bot, START, 3));
+		ScriptRun job = run(helper, bot, "coal 3 %d");
+		helper.succeedWhen(() -> mined(helper, job, bot, START, 3));
 	}
 
 	/**
@@ -63,9 +63,9 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		}
 		BlockPos start = new BlockPos(0, 1, 3);
 		AntBot bot = miner(helper, start, new ItemStack(Items.STONE_PICKAXE));
-		run(helper, bot, "coal 2 %d 32 east");
+		ScriptRun job = run(helper, bot, "coal 2 %d 32 east");
 		helper.succeedWhen(() -> {
-			mined(helper, bot, start, 2);
+			mined(helper, job, bot, start, 2);
 			helper.assertBlockPresent(Blocks.AIR, 4, -2, 2);
 			helper.assertBlockPresent(Blocks.COAL_ORE, 2, -1, 0);
 		});
@@ -91,9 +91,9 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 			lib.find.WHERE = lambda p: %d <= p.x <= %d and p.z >= %d
 			jobs.strip_mine.run("coal", 2, int(ARGS[0]))
 			""".formatted(corner.getX(), corner.getX() + 7, corner.getZ() + 3));
-		run(helper, bot, name, "%d");
+		ScriptRun job = run(helper, bot, name, "%d");
 		helper.succeedWhen(() -> {
-			mined(helper, bot, START, 2);
+			mined(helper, job, bot, START, 2);
 			helper.assertBlockPresent(Blocks.AIR, 7, -2, 3);
 			helper.assertBlockPresent(Blocks.STONE, 3, -2, 2);
 			helper.assertBlockPresent(Blocks.STONE, 3, -1, 2);
@@ -119,9 +119,9 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		colony.setRadius(5);
 		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
 		ColonyManager.get(helper.getLevel()).join(bot, colony);
-		run(helper, bot, "coal 2 %d");
+		ScriptRun job = run(helper, bot, "coal 2 %d");
 		helper.succeedWhen(() -> {
-			mined(helper, bot, START, 2);
+			mined(helper, job, bot, START, 2);
 			helper.assertBlockPresent(Blocks.STONE, 3, -2, 3);
 			helper.assertBlockPresent(Blocks.STONE, 3, -1, 3);
 			helper.assertBlockPresent(Blocks.COAL_ORE, 4, -2, 2);
@@ -138,9 +138,9 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		worn.setDamageValue(worn.getMaxDamage() - 10);
 		AntBot bot = miner(helper, START, worn);
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
-		run(helper, bot, "coal 3 %d");
+		ScriptRun job = run(helper, bot, "coal 3 %d");
 		helper.succeedWhen(() -> {
-			mined(helper, bot, START, 3);
+			mined(helper, job, bot, START, 3);
 			helper.assertTrue(GameTests.carried(bot, Items.STONE_PICKAXE) == 1, "carries " + GameTests.carried(bot, Items.STONE_PICKAXE)
 				+ " stone pickaxes: " + bot.getMainHandItem() + " in hand, " + bot.getInventory().getItems());
 			helper.assertTrue(GameTests.carried(bot, Items.STICK) == 0, "the sticks are left: no pickaxe was made");
@@ -168,8 +168,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The job finished and said so, the bot stands back at start, the top of its stairs, and carries n coal. */
-	private static void mined(GameTestHelper helper, AntBot bot, BlockPos start, int n) {
-		ScriptRun run = bot.getScript();
+	private static void mined(GameTestHelper helper, ScriptRun run, AntBot bot, BlockPos start, int n) {
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(log.equals(List.of("strip mined " + n + " coal")), "printed " + log);
 		helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
@@ -181,12 +180,12 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	 * Runs jobs.strip_mine with args, %d in them the absolute y of y=-2, and fails the test at once when it fails or
 	 * warns.
 	 */
-	private static void run(GameTestHelper helper, AntBot bot, String args) {
-		run(helper, bot, "jobs.strip_mine", args);
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String args) {
+		return run(helper, bot, "jobs.strip_mine", args);
 	}
 
 	/** As {@link #run(GameTestHelper, AntBot, String)}, running the script {@code script} that runs the job. */
-	private static void run(GameTestHelper helper, AntBot bot, String script, String args) {
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String script, String args) {
 		int y = helper.absolutePos(new BlockPos(0, -2, 0)).getY();
 		List<String> started = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run " + script + " " + args.formatted(y));
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + script + ", 1]")), "run answered " + started);
@@ -197,5 +196,6 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 				helper.fail("job failed: " + log + ", " + BotScripts.carries(bot));
 			}
 		});
+		return bot.getScript();
 	}
 }

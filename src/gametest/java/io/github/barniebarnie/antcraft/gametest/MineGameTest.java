@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -434,10 +435,11 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = MAX_TICKS)
 	public void aBotSavedMidBranchResumesAndFinishesTheLevel(GameTestHelper helper) {
 		AntBot first = mine(helper, LANDING, 1);
+		ScriptRun job = first.getScript();
 		AntBot[] bot = {first};
 		helper.onEachTick(() -> {
 			if (bot[0] == first && helper.getBlockState(SOUTH.getFirst()).isAir() && !helper.getBlockState(SOUTH.getLast()).isAir()) {
-				helper.assertTrue(first.getScript().running(), "script " + first.getScript().state());
+				helper.assertTrue(job.running(), "script " + job.state());
 				bot[0] = ScriptGameTest.saveAndLoad(helper, first);
 			}
 		});

@@ -45,13 +45,13 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
 		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 10));
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 3));
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.storage
 			r = lib.storage.deposit()
 			print(r["ok"], count("cobblestone"), count("dirt"), has("stone_pickaxe"))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0 0 True"));
+			finished(helper, job, bot, List.of("True 0 0 True"));
 			helper.assertTrue(far.countItem(Items.COBBLESTONE) == 11, "cobblestone in the far chest: " + far.countItem(Items.COBBLESTONE));
 			helper.assertTrue(near.countItem(Items.COBBLESTONE) == 0, "cobblestone in the near chest");
 			helper.assertTrue(near.countItem(Items.DIRT) == 3, "dirt in the near chest: " + near.countItem(Items.DIRT));
@@ -68,12 +68,12 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 5));
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.storage
 			r = lib.storage.deposit()
 			print(r["ok"], r["reason"], r["missing"], count("dirt"))
 			""");
-		helper.succeedWhen(() -> finished(helper, bot, List.of("False no_space {'minecraft:dirt': 5} 5")));
+		helper.succeedWhen(() -> finished(helper, job, bot, List.of("False no_space {'minecraft:dirt': 5} 5")));
 	}
 
 	/**
@@ -96,13 +96,13 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 				helper.fail("walked towards the full chest: at " + bot.blockPosition());
 			}
 		});
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.storage
 			r = lib.storage.deposit()
 			print(r["ok"], count("stone"))
 			""");
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0"));
+			finished(helper, job, bot, List.of("True 0"));
 			helper.assertTrue(near.countItem(Items.STONE) == 5, "stone in the near chest: " + near.countItem(Items.STONE));
 		});
 	}
@@ -117,10 +117,10 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		}
 		chest.setItem(0, new ItemStack(Items.STONE, 60));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			print(room(%s, "stone"), room(%s, "dirt"), room(%s, "stone"))
 			""".formatted(printed(helper, 2, 1, 1), printed(helper, 2, 1, 1), printed(helper, 5, 1, 5)));
-		helper.succeedWhen(() -> finished(helper, bot, List.of("4 0 None")));
+		helper.succeedWhen(() -> finished(helper, job, bot, List.of("4 0 None")));
 	}
 
 	/**
@@ -137,13 +137,13 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		b.setItem(0, new ItemStack(Items.COBBLESTONE, 20));
 		b.setItem(1, new ItemStack(Items.DIRT, 3));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
-		run(helper, bot, """
+		ScriptRun job = run(helper, bot, """
 			import lib.storage
 			r = lib.storage.sort([%s, %s])
 			print(r["ok"], len(inventory()))
 			""".formatted(printed(helper, 2, 1, 1), printed(helper, 6, 1, 6)));
 		helper.succeedWhen(() -> {
-			finished(helper, bot, List.of("True 0"));
+			finished(helper, job, bot, List.of("True 0"));
 			helper.assertTrue(a.countItem(Items.COBBLESTONE) == 0 && a.countItem(Items.DIRT) == 8,
 				"a: " + a.countItem(Items.COBBLESTONE) + " cobblestone, " + a.countItem(Items.DIRT) + " dirt");
 			helper.assertTrue(b.countItem(Items.COBBLESTONE) == 30 && b.countItem(Items.DIRT) == 0,
@@ -159,9 +159,10 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 5));
 		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.store 8");
+		ScriptRun job = bot.getScript();
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
-			helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state());
 			helper.assertTrue(chest.countItem(Items.DIRT) == 5, "dirt in the chest: " + chest.countItem(Items.DIRT));
 			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(new BlockPos(2, 1, 2))), "not home: " + bot.blockPosition());
 		});
@@ -172,14 +173,15 @@ public class StorageGameTest implements CustomTestMethodInvoker {
 		return (Container) Objects.requireNonNull(helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(x, y, z))));
 	}
 
-	private static void run(GameTestHelper helper, AntBot bot, String source) {
-		BotScripts.run(bot, source);
+	private static ScriptRun run(GameTestHelper helper, AntBot bot, String source) {
+		ScriptRun job = BotScripts.run(bot, source);
 		BotScripts.failOnError(helper, bot);
+		return job;
 	}
 
 
-	private static void finished(GameTestHelper helper, AntBot bot, List<String> expected) {
-		helper.assertTrue(bot.getScript() != null && bot.getScript().state() == ScriptRun.State.FINISHED, "not finished");
+	private static void finished(GameTestHelper helper, ScriptRun job, AntBot bot, List<String> expected) {
+		helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished: " + job.state());
 		List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(printed.equals(expected), "printed " + printed + ", expected " + expected);
 	}
