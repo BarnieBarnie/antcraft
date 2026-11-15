@@ -29,7 +29,7 @@ One instruction, the call itself. The walk plans its path as `goto` does.
 
 ## Description
 
-The first carried block item `item` selects goes to the bot's hand and is placed through the game's own code with a stand-in player at the bot, so the block behaves as when a player places it. Without `facing` or `half`, the block turns as it would for that player.
+The first carried block item `item` selects goes to the bot's hand and is placed through the game's own code with a stand-in player at the bot, so the block behaves as when a player places it. Without `facing` or `half`, the block turns as it would for that player. A block that stands or hangs on a wall, such as a torch, a sign or a head, stands on the block under the spot when that block holds it, as when a player clicks that block's top, and goes on a wall beside the spot only where it cannot (#760).
 
 Reach is a matter of sight: the bot sees the spot when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the spot's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the spot as a wall does, so the bot walks to where it sees past them; [`mine`](mine.md) and [`use`](use.md) judge reach the same way.
 

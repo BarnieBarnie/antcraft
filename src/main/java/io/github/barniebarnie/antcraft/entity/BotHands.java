@@ -35,6 +35,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.StandingAndWallBlockItem;
 import net.minecraft.world.item.component.SwingAnimation;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.block.state.BlockState;
@@ -254,7 +255,10 @@ public final class BotHands {
 	 * Places the held block item at {@code pos}, which must be air or another block that may be replaced, turned to
 	 * {@code facing} if given and the block can face that way, and to {@code half} if given and it has one (a trapdoor,
 	 * stairs or a slab). False when it cannot be placed there, such as where an
-	 * entity stands or where the block cannot stay.
+	 * entity stands or where the block cannot stay. A block that stands or hangs on a wall (a torch, a sign, a head) with
+	 * no {@code facing} stands on the block under {@code pos} where it can, as when a player clicks that block's top;
+	 * only where it cannot does it go on a wall. Clicking {@code pos} itself let the bot's look pick, so a torch went on a
+	 * wall the bot looked towards, and a script that wanted a torch there broke it and placed it again (#760).
 	 */
 	public static boolean place(AntBot bot, BlockPos pos, @Nullable Direction facing, @Nullable Half half) {
 		if (!(bot.getMainHandItem().getItem() instanceof BlockItem item)) {
@@ -262,7 +266,10 @@ public final class BotHands {
 		}
 		ServerLevel level = (ServerLevel) bot.level();
 		return withHand(bot, pos, player -> {
-			BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
+			BlockPos below = pos.below();
+			BlockHitResult hit = item instanceof StandingAndWallBlockItem && facing == null && !level.getBlockState(below).canBeReplaced()
+				? new BlockHitResult(Vec3.atBottomCenterOf(pos), Direction.UP, below, false)
+				: new BlockHitResult(Vec3.atCenterOf(pos), Direction.UP, pos, false);
 			BlockPlaceContext context = new BlockPlaceContext(player, InteractionHand.MAIN_HAND, player.getMainHandItem(), hit);
 			if (!context.getClickedPos().equals(pos) || !item.place(context).consumesAction()) {
 				return false;

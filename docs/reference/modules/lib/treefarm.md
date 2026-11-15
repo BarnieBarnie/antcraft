@@ -73,7 +73,7 @@ print(lib.treefarm.materials("minecraft:oak_sapling"))
 
 ## `build_cell(kind, low, high)`
 
-Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over it ([`lib.terrain.flatten`](terrain.md)), puts dirt under each sapling spot in the cell's middle where the ground is no dirt, a torch on the floor at the `low` and `high` corners (torch light reaches every floor block of each kind's cell, the cherry's 11 wide too, under its grown tree), the roof where the spec has one (taking back the scaffold it pillared up with), then plants.
+Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over it ([`lib.terrain.flatten`](terrain.md)), puts dirt under each sapling spot in the cell's middle where the ground is no dirt, a torch on the floor at the `low` and `high` corners where no torch, standing or on a wall, is there already (`flatten` keeps one there, so a build tried again leaves them; #760) (torch light reaches every floor block of each kind's cell, the cherry's 11 wide too, under its grown tree), the roof where the spec has one (taking back the scaffold it pillared up with), then plants.
 
 - **Returns** a [`result()`](result.md): ok, or the reason of the step that failed with `at`.
 - **Pauses** yes.

@@ -31,6 +31,7 @@ import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.VineBlock;
+import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.SlabType;
@@ -78,6 +79,66 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 					helper.assertTrue(light > 0, "dark at (" + x + ", 1, " + z + ")");
 				}
 			}
+		});
+	}
+
+	/**
+	 * A birch cell built again over its own torches, one on the wall of a block beside its corner, one standing (#760):
+	 * neither is mined (flatten keeps them) nor placed again; the bot keeps its 2 torches.
+	 */
+	// Measured: passes at tick 68 (red: torches mined by flatten / a wall torch).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 150)
+	public void buildCellLeavesTheTorchesThereAlone(GameTestHelper helper) {
+		BlockPos wall = new BlockPos(2, 1, 2);
+		BlockPos standing = new BlockPos(6, 1, 6);
+		BlockState wallTorch = Blocks.WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, Direction.EAST);
+		helper.setBlock(wall.west(), Blocks.STONE);
+		helper.setBlock(wall, wallTorch);
+		helper.setBlock(standing, Blocks.TORCH);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 10, 1, 10);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT), new ItemStack(Items.BIRCH_SAPLING),
+			new ItemStack(Items.TORCH, 2));
+		helper.onEachTick(() -> {
+			if (helper.getBlockState(wall) != wallTorch || !helper.getBlockState(standing).is(Blocks.TORCH)) {
+				helper.fail("a torch was touched: " + helper.getBlockState(wall) + ", " + helper.getBlockState(standing));
+			}
+		});
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"], count("minecraft:torch"))
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None 2"), "printed");
+			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 4, 1, 4);
+		});
+	}
+
+	/**
+	 * A birch cell whose corners have a 1-high wall just outside them and part of its floor 1 higher (#760): its torches
+	 * stand on the floor, not on the wall, each placed once.
+	 */
+	// Measured: passes at tick 71 (red: torches mined by flatten / a wall torch).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 150)
+	public void aCellBesideAOneHighWallGetsStandingTorches(GameTestHelper helper) {
+		for (int i = 0; i <= 8; i++) {
+			helper.setBlock(new BlockPos(1, 1, i), Blocks.STONE);
+			helper.setBlock(new BlockPos(i, 1, 1), Blocks.STONE);
+			helper.setBlock(new BlockPos(7, 1, i), Blocks.STONE);
+			helper.setBlock(new BlockPos(i, 1, 7), Blocks.STONE);
+		}
+		helper.setBlock(new BlockPos(3, 1, 2), Blocks.DIRT);
+		helper.setBlock(new BlockPos(5, 1, 6), Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT), new ItemStack(Items.BIRCH_SAPLING),
+			new ItemStack(Items.TORCH, 2));
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"], count("minecraft:torch"))
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None 0"), "printed");
+			helper.assertBlockPresent(Blocks.TORCH, 2, 1, 2);
+			helper.assertBlockPresent(Blocks.TORCH, 6, 1, 6);
 		});
 	}
 

@@ -45,9 +45,9 @@ The `Pos` in the middle of the box, each coordinate rounded down.
 
 - **Pauses** no.
 
-## `clear(a, b)`
+## `clear(a, b, keep=())`
 
-Mines every block of the cuboid but air and fluids, top down, so nothing falls on the bot. The drops go into the bot's inventory as `mine` puts them there. Passing failures (`interrupted`, `timeout`, `blocked`) are tried again with `lib.retry.retry`.
+Mines every block of the cuboid but air, fluids and the blocks at the positions `keep` lists, top down, so nothing falls on the bot. The drops go into the bot's inventory as `mine` puts them there. Passing failures (`interrupted`, `timeout`, `blocked`) are tried again with `lib.retry.retry`.
 
 - **Returns** a dict as [`dig_shaft`](shaft.md#dig_shaftlevels) gives: `ok`, `reason`, `at` and `missing` (always `{}`).
 - **Pauses** yes, while it walks and digs.

@@ -194,7 +194,7 @@ def tend(kind, b):
                 mine(p)
             place(p, s)
     for t in torches:
-        if block(t).id != lib.treefarm.TORCH and count(lib.treefarm.TORCH):
+        if block(t).id not in lib.treefarm.TORCHES and count(lib.treefarm.TORCH):
             if not block(t).is_air:
                 mine(t)
             place(t, lib.treefarm.TORCH)

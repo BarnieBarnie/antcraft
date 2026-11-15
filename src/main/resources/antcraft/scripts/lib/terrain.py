@@ -60,17 +60,17 @@ def needs(low, high, y):
     return {"fill": sum([t.y - b.y + 1 for b, t in holes(low, high, y)]), "dig": len(dug), "tools": tools}
 
 
-def flatten(low, high, y, fill="minecraft:dirt"):
+def flatten(low, high, y, fill="minecraft:dirt", keep=()):
     """Mines every block of the box above y (lib.area.clear), then fills each hole at y down to solid ground with fill,
     layer by layer bottom up, water and lava sources first in each layer, so the plot's top is level at y. fill is an item
-    or a list of items, of which each block takes the first the bot has. Gives result(): ok, the reason of the mine or
+    or a list of items, of which each block takes the first the bot has. keep: positions whose blocks it leaves. Gives result(): ok, the reason of the mine or
     place that failed with at, or missing_ingredients with missing {fill (the first of a list): blocks left to place}
     once the bot runs out of fill."""
     fills = [fill] if isinstance(fill, str) else fill
     low = Pos(low)
     high = Pos(high)
     if max(low.y, high.y) > y:
-        r = lib.area.clear(Pos(low.x, y + 1, low.z), Pos(high.x, max(low.y, high.y), high.z))
+        r = lib.area.clear(Pos(low.x, y + 1, low.z), Pos(high.x, max(low.y, high.y), high.z), keep)
         if not r["ok"]:
             return r
     ps = []

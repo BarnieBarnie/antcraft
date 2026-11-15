@@ -72,6 +72,8 @@ KINDS = {
     "minecraft:mangrove_propagule": {"size": 11, "square": False, "clear": 23, "roof": False, "roots": True},
 }
 TORCH = "minecraft:torch"
+# A torch at a torch spot, standing or on a wall: a wall torch is a block of its own (#760).
+TORCHES = [TORCH, "minecraft:wall_torch"]
 DIRT = "minecraft:dirt"
 SLABS = "#minecraft:wooden_slabs"
 # What harvest picks up besides the logs and saplings fell_whole does: what leaves drop.
@@ -137,13 +139,15 @@ def materials(kind):
 
 def build_cell(kind, low, high):
     """Builds the cell of kind with corners low and high (low.y the floor): flattens the floor at low.y and clears the
-    clear blocks over it (lib.terrain.flatten), puts dirt under each sapling spot, the torches and the roof, then plants.
+    clear blocks over it (lib.terrain.flatten, keeping a torch at a torch spot), puts dirt under each sapling spot, the torches and the roof, then plants.
     Gives result(): ok, or the reason of the step that failed with at."""
     low = Pos(low)
     high = Pos(high)
     s = spec(kind)
     ps = spots(kind, low, high)
-    r = lib.terrain.flatten(low, Pos(high.x, low.y + s["clear"], high.z), low.y)
+    # The cell's own torches stay, as when a build that failed is tried again (#760).
+    kept = [t for t in torches(low, high) if block(t).id in TORCHES]
+    r = lib.terrain.flatten(low, Pos(high.x, low.y + s["clear"], high.z), low.y, keep=kept)
     if not r["ok"]:
         return r
     for p in ps:
@@ -156,7 +160,7 @@ def build_cell(kind, low, high):
             if not r:
                 return result(r.reason, ground)
     for t in torches(low, high):
-        if not lib.trees.is_kind(t, TORCH):
+        if block(t).id not in TORCHES:
             r = place(t, TORCH)
             if not r:
                 return result(r.reason, t)

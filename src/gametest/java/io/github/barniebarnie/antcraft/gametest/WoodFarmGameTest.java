@@ -14,6 +14,7 @@ import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.Container;
@@ -24,6 +25,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
+import net.minecraft.world.level.block.WallTorchBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -503,6 +505,29 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			assertCell(helper, bot, SPOT);
 			helper.assertBlockNotPresent(Blocks.BIRCH_SAPLING, SPOT_2);
 		});
+	}
+
+	/** tend leaves a cell's torches alone, one on the wall of a block beside its corner, one standing (#760). */
+	// Measured: passes at tick 5.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void tendLeavesAWallTorchAlone(GameTestHelper helper) {
+		BlockPos wall = new BlockPos(6, 1, 2);
+		BlockPos standing = new BlockPos(10, 1, 6);
+		BlockState wallTorch = Blocks.WALL_TORCH.defaultBlockState().setValue(WallTorchBlock.FACING, Direction.EAST);
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		helper.setBlock(wall.west(), Blocks.STONE);
+		helper.setBlock(wall, wallTorch);
+		helper.setBlock(standing, Blocks.TORCH);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 8, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.TORCH, 2));
+		helper.onEachTick(() -> {
+			if (helper.getBlockState(wall) != wallTorch || !helper.getBlockState(standing).is(Blocks.TORCH)) {
+				helper.fail("a torch was touched: " + helper.getBlockState(wall) + ", " + helper.getBlockState(standing));
+			}
+		});
+		script(helper, bot, "jobs.wood_farm.tend(kind, cell)\njobs.wood_farm.tend(kind, cell)\nprint(count('minecraft:torch'))\n");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("2"), "printed"));
 	}
 
 	/** tend plants no sapling under a log a failed harvest left of the cell's tree (#644): the log would stop it growing. */

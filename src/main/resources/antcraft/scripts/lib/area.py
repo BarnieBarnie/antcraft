@@ -48,14 +48,14 @@ def centre(low, high):
     return Pos((low.x + high.x) // 2, (low.y + high.y) // 2, (low.z + high.z) // 2)
 
 
-def clear(a, b):
-    """Mines every block of the cuboid but air and fluids, top down; the drops go into the bot's inventory. Gives
+def clear(a, b, keep=()):
+    """Mines every block of the cuboid but air, fluids and those at the positions keep, top down; the drops go into the bot's inventory. Gives
     result(): ok, or the reason of the mine that failed with at, where."""
     for p in reversed(box(a, b)):
         k = block(p)
         if k is None:
             return result("not_loaded", p)
-        if k.is_air or k.is_fluid:
+        if k.is_air or k.is_fluid or p in keep:
             continue
         r = lib.retry.retry(mine, (p,))
         if not r and r.reason != "target_gone":
