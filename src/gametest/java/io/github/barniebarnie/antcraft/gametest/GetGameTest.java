@@ -1080,6 +1080,19 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far (#595); 46,500 (26 ticks)
 	 * since make_cost finds each plan's crafting table and furnace within reach (#630). The limit keeps it there.
 	 */
+	/**
+	 * An empty bot whose scans read radius 32 (#700): make_cost of three diamonds with a limit of 500 is None without the
+	 * ore scan, as no iron pickaxe is carried or in a chest and its three iron ingots take three SMELT to make, more than
+	 * the limit. Source.least, a vein in sight, was 30, so the diamond ore scan ran.
+	 */
+	@GameTest(maxTicks = 100)
+	public void aLimitLeavesOutTheOreScanOfATierWhosePickaxeCostsMore(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		GameTests.scansFreely(helper, bot);
+		GameTests.cost(helper, bot, "from lib.get import make_cost\n", "print(make_cost('diamond', 3, limit=500))\n",
+			List.of("None"), "diamond limit", 25_000);
+	}
+
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);

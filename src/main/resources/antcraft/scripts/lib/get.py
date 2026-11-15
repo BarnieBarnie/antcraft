@@ -410,7 +410,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
             if itself and not s.there(radius):
                 return None
             # Coal may come as charcoal for less than its least.
-            if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k)) > limit:
+            if limit is not None and ticks + (0 if key(raw) == COAL else s.least(k) + smelted_pickaxe(s, tools)) > limit:
                 return None
             # The source's walk starts at the chest get took the rest from.
             c, tier = s.cost(k, radius, chests[0] if chests else None)
@@ -434,6 +434,28 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         return ticks
     finally:
         GETTING.pop()
+
+
+# The ingot a pickaxe of each tier is made of, where it is smelted, for smelted_pickaxe (#700).
+INGOTS = {"copper": "minecraft:copper_ingot", "iron": "minecraft:iron_ingot", "golden": "minecraft:gold_ingot"}
+
+
+def smelted_pickaxe(s, tools):
+    """A bound make_cost's tool_cost of the pickaxe source s needs never goes under, without a plan or scan (#700): where
+    the tier of s is made of an ingot (INGOTS) and the bot carries no pickaxe of that tier or better, nor do the chests in
+    tools["chests"] hold one or that ingot, a SMELT for each of the three ingots it does not carry; else 0. ponytail:
+    ingots from nuggets or blocks carried are not seen, and only the smelting is counted, not the raw items."""
+    ingot = INGOTS.get(s.tier) if s.tool == "pickaxe" else None
+    if ingot is None:
+        return 0
+    ok = lib.tools.TIERS[:lib.tools.TIERS.index(s.tier) + 1]
+    if any([lib.tools.tier(t) in ok for t in lib.tools.carried("pickaxe")]):
+        return 0
+    for c in tools.get("chests", []):
+        for t in container(c) or []:
+            if matches(t, ingot) or matches(t, "#minecraft:pickaxes") and lib.tools.tier(t) in ok:
+                return 0
+    return lib.cost.SMELT * max(0, 3 - count(ingot))
 
 
 def stations(p, start=None):
