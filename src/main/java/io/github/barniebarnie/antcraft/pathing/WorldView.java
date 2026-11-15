@@ -103,6 +103,11 @@ public interface WorldView {
 		return false;
 	}
 
+	/** Broken by the bot, this block drops a scaffold block it may place, such as dirt or grass, for its dirt (#771). */
+	default boolean dropsScaffold(BlockPos pos) {
+		return false;
+	}
+
 	/** Bedrock, which no shaft digs through; not other blocks that cannot be broken, such as a barrier. */
 	default boolean isBedrock(BlockPos pos) {
 		return false;

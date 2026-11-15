@@ -568,6 +568,24 @@ class PathFinderTest {
 		assertTrue(placed <= 2, "placed " + placed + ": " + path.steps());
 	}
 
+	/**
+	 * A block the path breaks that drops a scaffold block, which the follower picks up, counts back: shut in a bedrock
+	 * box with 1 dirt, the bot digs out through 2 dirt and pillars twice up a tower beyond (#771).
+	 */
+	@Test
+	void countsBrokenDirtBackAsScaffold() {
+		GridWorld world = GridWorld.flat(10).fill(-1, 0, -1, 1, 3, 1, 'B').set(0, 1, 0, ' ').set(0, 2, 0, ' ')
+			.set(1, 1, 0, 'D').set(1, 2, 0, 'D').fill(5, 1, 0, 5, 3, 0, '#');
+		BlockPos top = new BlockPos(5, 4, 0);
+
+		Path path = find(world, top, new PathFinder.Options(true, true, 10_000, 3, null, 1));
+		assertTrue(path.complete(), "partial: " + path.steps());
+		long dirt = path.steps().stream().flatMap(s -> s.breaks().stream()).filter(p -> world.at(p) == 'D').count();
+		int placed = path.steps().stream().mapToInt(s -> s.places().size()).sum();
+		assertEquals(2, dirt);
+		assertTrue(placed >= 2 && placed <= 1 + dirt, "placed " + placed + ": " + path.steps());
+	}
+
 	@Test
 	void climbsALadderRatherThanPillarBesideIt() {
 		// A wall three high with a ladder on its west face; the goal is on top of the wall.

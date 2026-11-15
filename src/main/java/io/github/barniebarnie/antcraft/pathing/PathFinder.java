@@ -141,12 +141,12 @@ public final class PathFinder {
 
 	/**
 	 * {@code edited}: the nearest node before this one whose step broke or placed a block, to look back along (see
-	 * {@link #edited}); {@code placed}: the blocks the path to it placed.
+	 * {@link #edited}); {@code placed}: the scaffold blocks the path to it used, those it placed less those it broke
+	 * that drop one, which the follower picks up (#771).
 	 */
 	private record Node(BlockPos pos, double cost, Node parent, Step step, @Nullable Node edited, int placed) {
-		Node(BlockPos pos, double cost, Node parent, Step step) {
-			this(pos, cost, parent, step, parent == null ? null : parent.edits() ? parent : parent.edited,
-				parent == null ? 0 : parent.placed + step.places().size());
+		Node(BlockPos pos, double cost, Node parent, Step step, int placed) {
+			this(pos, cost, parent, step, parent == null ? null : parent.edits() ? parent : parent.edited, placed);
 		}
 
 		boolean edits() {
@@ -262,10 +262,13 @@ public final class PathFinder {
 		private final Planner planner;
 		private final Map<BlockPos, Double> bestCost = new HashMap<>();
 		/**
-		 * Where the bot carries few scaffold blocks, the cheapest way found to each block among those that placed the
-		 * fewest, so a cheaper way that placed more does not keep it from the way on that needs them (#749).
+		 * Where the bot carries few scaffold blocks, the cheapest way found to each block among those that used the
+		 * fewest (placed less broken back), so a cheaper way that used more does not keep it from the way on that needs
+		 * them (#749). A third way a block is not kept (#771): the rest of a path that fits the scaffold left after any
+		 * way there fits after the one that used the fewest too, so a path ends partial only where its rest leans on a
+		 * block a dearer way placed or broke, a face to place against or a way dug through. Every such way a block is a
+		 * search over whole paths, not blocks, for a layout no test or game run has shown.
 		 */
-		// ponytail: two ways a block, not every way that places fewer; a search per count if paths still run out.
 		private final @Nullable Map<BlockPos, Least> least;
 		private final PriorityQueue<Entry> open = new PriorityQueue<>(ORDER);
 		private long added;
@@ -280,10 +283,11 @@ public final class PathFinder {
 			this.goal = goal;
 			this.options = options;
 			this.planner = new Planner(world, options, goal);
-			Node startNode = new Node(start, 0, null, null);
+			Node startNode = new Node(start, 0, null, null, 0);
 			this.open.add(new Entry(startNode, goal.heuristic(start), this.added++));
 			this.bestCost.put(start, 0.0);
-			this.least = options.scaffold() == Integer.MAX_VALUE ? null : new HashMap<>(Map.of(start, new Least(0, 0)));
+			// A path that places nothing needs no second way, though it breaks blocks that count back (#771).
+			this.least = options.scaffold() == Integer.MAX_VALUE || !options.canPlace() ? null : new HashMap<>(Map.of(start, new Least(0, 0)));
 			this.closest = startNode;
 			this.closestHeuristic = goal.heuristic(start);
 			this.closestInWater = world.isWater(start);
@@ -318,14 +322,14 @@ public final class PathFinder {
 
 				for (Candidate move : this.planner.moves(node)) {
 					double cost = node.cost + move.cost;
-					int placed = node.placed + move.step.places().size();
+					int placed = node.placed + move.scaffold;
 					boolean least = this.least(move.step.to(), cost, placed, true);
 					if (cost < this.bestCost.getOrDefault(move.step.to(), BLOCKED)) {
 						this.bestCost.put(move.step.to(), cost);
 					} else if (!least) {
 						continue;
 					}
-					Node next = new Node(move.step.to(), cost, node, move.step);
+					Node next = new Node(move.step.to(), cost, node, move.step, placed);
 					this.open.add(new Entry(next, cost + this.goal.heuristic(next.pos), this.added++));
 				}
 			}
@@ -386,7 +390,11 @@ public final class PathFinder {
 		return new Path(start, List.copyOf(steps), complete, end.cost, expanded);
 	}
 
-	private record Candidate(Step step, double cost) {
+	/** {@code scaffold}: the scaffold blocks the move uses, those it places less those it breaks that drop one. */
+	private record Candidate(Step step, double cost, int scaffold) {
+		Candidate(Step step, double cost) {
+			this(step, cost, step.places().size());
+		}
 	}
 
 	/** Generates the possible moves from a position. */
@@ -774,11 +782,24 @@ public final class PathFinder {
 			}
 
 			Candidate build() {
-				// ponytail: blocks the path broke are not counted back, though the bot may pick some up as scaffold.
-				if (this.cost == BLOCKED || Planner.this.node.placed + this.places.size() > Planner.this.options.scaffold()) {
+				if (this.cost == BLOCKED) {
 					return null;
 				}
-				return new Candidate(new Step(this.type, this.to, List.copyOf(this.breaks), List.copyOf(this.places)), this.cost);
+				// A block broken that drops a scaffold block counts back, as the follower breaks into its inventory (#771);
+				// the follower breaks before it places, so it may place it in the same step.
+				// ponytail: one the path placed and breaks again is not counted back, nor drops a full inventory spills.
+				int scaffold = this.places.size();
+				if (Planner.this.options.scaffold() != Integer.MAX_VALUE && Planner.this.options.canPlace()) {
+					for (BlockPos pos : this.breaks) {
+						if (Planner.this.world.dropsScaffold(pos)) {
+							scaffold--;
+						}
+					}
+					if (Planner.this.node.placed + scaffold > Planner.this.options.scaffold()) {
+						return null;
+					}
+				}
+				return new Candidate(new Step(this.type, this.to, List.copyOf(this.breaks), List.copyOf(this.places)), this.cost, scaffold);
 			}
 		}
 	}

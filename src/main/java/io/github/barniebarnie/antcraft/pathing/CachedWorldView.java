@@ -128,6 +128,12 @@ final class CachedWorldView implements WorldView {
 		return number(this.breakTicks, pos, this.world::breakTicks);
 	}
 
+	// ponytail: not cached here, asked only of blocks a move breaks with few scaffold blocks; LevelWorldView keeps it per block state.
+	@Override
+	public boolean dropsScaffold(BlockPos pos) {
+		return this.world.dropsScaffold(pos);
+	}
+
 	/** The number {@code ask} gives for {@code pos}, asking the world the first time. */
 	private static float number(Long2FloatOpenHashMap known, BlockPos pos, ToDoubleFunction<BlockPos> ask) {
 		long key = pos.asLong();

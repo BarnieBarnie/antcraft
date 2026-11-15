@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.entity.navigation.PathFollower;
 import io.github.barniebarnie.antcraft.pathing.Goal;
+import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -12,6 +13,7 @@ import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -21,6 +23,7 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.ProblemReporter;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -121,6 +124,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.assertFalse(level.hasChunk(x, z), "the far chunk is loaded already");
 		helper.assertTrue(blocks.loaded(far) == null, "a state for a chunk that is not loaded");
 		helper.assertFalse(level.hasChunk(x, z), "the far chunk was loaded");
+		helper.succeed();
+	}
+
+	/**
+	 * A block a path breaks counts back as scaffold where its drop, broken with the bot's best tool, is one the bot
+	 * places (#771): dirt and grass by hand, stone with a pickaxe only, not dirt the bot keeps.
+	 */
+	@GameTest(maxTicks = 5)
+	public void aBlockDroppingAScaffoldBlockCountsBack(GameTestHelper helper) {
+		helper.setBlock(2, 1, 2, Blocks.DIRT);
+		helper.setBlock(3, 1, 2, Blocks.GRASS_BLOCK);
+		helper.setBlock(4, 1, 2, Blocks.STONE);
+		BlockPos dirt = helper.absolutePos(new BlockPos(2, 1, 2));
+		BlockPos grass = helper.absolutePos(new BlockPos(3, 1, 2));
+		BlockPos stone = helper.absolutePos(new BlockPos(4, 1, 2));
+		Predicate<ItemStack> scaffold = stack -> stack.is(PathFollower.SCAFFOLD_BLOCKS);
+		LevelWorldView hand = new LevelWorldView(helper.getLevel(), new SimpleContainer(9), ItemStack.EMPTY, Set.of()).scaffold(scaffold);
+		helper.assertTrue(hand.dropsScaffold(dirt), "dirt does not count back");
+		helper.assertTrue(hand.dropsScaffold(grass), "grass does not count back");
+		helper.assertFalse(hand.dropsScaffold(stone), "stone counts back without a pickaxe");
+		LevelWorldView pickaxe = new LevelWorldView(helper.getLevel(), new SimpleContainer(9), new ItemStack(Items.STONE_PICKAXE), Set.of()).scaffold(scaffold);
+		helper.assertTrue(pickaxe.dropsScaffold(stone), "stone does not count back with a pickaxe");
+		LevelWorldView keeping = new LevelWorldView(helper.getLevel(), new SimpleContainer(9), ItemStack.EMPTY, Set.of()).scaffold(scaffold.and(stack -> !stack.is(Items.DIRT)));
+		helper.assertFalse(keeping.dropsScaffold(dirt), "kept dirt counts back");
 		helper.succeed();
 	}
 

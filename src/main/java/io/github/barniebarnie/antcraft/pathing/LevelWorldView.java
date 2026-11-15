@@ -1,6 +1,8 @@
 package io.github.barniebarnie.antcraft.pathing;
 
 import io.github.barniebarnie.antcraft.entity.Tools;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 import net.fabricmc.fabric.api.tag.convention.v2.ConventionalBlockTags;
@@ -10,7 +12,9 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
@@ -38,6 +42,9 @@ public class LevelWorldView implements WorldView {
 	/** The level's blocks, looked up fast (see {@link LoadedBlocks}). */
 	private final LoadedBlocks blocks;
 	private float jumpBoost;
+	private Predicate<ItemStack> scaffold = stack -> false;
+	/** Per block state, whether it drops a scaffold block (see {@link #dropsScaffold}). */
+	private final Map<BlockState, Boolean> dropsScaffold = new HashMap<>();
 
 	/** {@code keep} are blocks never to break, such as scaffolding other bots placed. */
 	public LevelWorldView(Level level, SimpleContainer inventory, ItemStack hand, Set<BlockPos> keep) {
@@ -57,6 +64,12 @@ public class LevelWorldView implements WorldView {
 	/** Jumps are planned with this added to their speed: the bot's Jump Boost, its {@code getJumpBoostPower} (#665). */
 	public LevelWorldView jumpBoost(float boost) {
 		this.jumpBoost = boost;
+		return this;
+	}
+
+	/** The items the bot places as scaffold, so a block whose drop is one counts back (see {@link #dropsScaffold}). */
+	public LevelWorldView scaffold(Predicate<ItemStack> scaffold) {
+		this.scaffold = scaffold;
 		return this;
 	}
 
@@ -268,6 +281,17 @@ public class LevelWorldView implements WorldView {
 			return -1;
 		}
 		return breakTicks(state, this.level, pos, Tools.bestToolFor(this.inventory, this.hand, state));
+	}
+
+	/** Its drops broken with the bot's best tool for it, as the follower breaks it, hold a scaffold block (#771). */
+	// ponytail: one roll of its loot per block state, so gravel's flint or not is decided by the first ask.
+	@Override
+	public boolean dropsScaffold(BlockPos pos) {
+		return this.dropsScaffold.computeIfAbsent(this.blocks.get(pos), state -> {
+			ItemStack tool = Tools.bestToolFor(this.inventory, this.hand, state);
+			return this.level instanceof ServerLevel server && Tools.canHarvest(tool, state)
+				&& Block.getDrops(state, server, pos, null, null, tool).stream().anyMatch(this.scaffold);
+		});
 	}
 
 	/**

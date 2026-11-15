@@ -83,6 +83,11 @@ public final class LoadedWorldView implements WorldView {
 	}
 
 	@Override
+	public boolean dropsScaffold(BlockPos pos) {
+		return this.loaded.test(pos) && this.world.dropsScaffold(pos);
+	}
+
+	@Override
 	public boolean isBedrock(BlockPos pos) {
 		return this.loaded.test(pos) && this.world.isBedrock(pos);
 	}

@@ -177,6 +177,12 @@ public final class GridWorld implements WorldView {
 		return this.at(pos) == 'W';
 	}
 
+	/** Dirt drops a scaffold block. */
+	@Override
+	public boolean dropsScaffold(BlockPos pos) {
+		return this.at(pos) == 'D';
+	}
+
 	@Override
 	public float breakTicks(BlockPos pos) {
 		return switch (this.at(pos)) {
