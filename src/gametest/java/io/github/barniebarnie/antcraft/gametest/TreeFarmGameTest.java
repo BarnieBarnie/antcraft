@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.features.TreeFeatures;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -527,6 +528,43 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
 				helper.assertBlockNotPresent(Blocks.JUNGLE_LOG, p);
 			}
+		});
+	}
+
+	/**
+	 * The seed 37 giant jungle's branch log in the top of its crown, leaves on all six sides (#685): mine from the floor, with
+	 * the 6 dirt goto(p.up().up()) needs, walks up and breaks it. Its reach goal's heuristic was 0 anywhere within 4 blocks
+	 * sideways, as it counted a block up as 1 against a reach of 20 (4 walked blocks): 17 up was in reach, so the search,
+	 * out of nodes, took the floor under the log as closest, and each replan from there got no closer: out_of_reach.
+	 */
+	// Measured: passes at tick 386 to 421 (red: printed False out_of_reach at tick 115).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 900)
+	public void mineReachesALogBuriedInTheTopOfAGiantJunglesCrown(GameTestHelper helper) {
+		BlockPos spot = new BlockPos(10, 1, 8);
+		for (BlockPos p : List.of(spot, spot.east(), spot.south(), spot.east().south())) {
+			helper.setBlock(p.below(), Blocks.DIRT);
+			helper.setBlock(p, Blocks.JUNGLE_SAPLING);
+		}
+		advance(helper, helper.absolutePos(spot), 37);
+		BlockPos log = new BlockPos(11, 18, 6);
+		helper.assertBlockPresent(Blocks.JUNGLE_LOG, log);
+		for (Direction side : Direction.values()) {
+			helper.assertBlockPresent(Blocks.JUNGLE_LEAVES, log.relative(side));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
+		give(bot, new ItemStack(Items.STONE_AXE), new ItemStack(Items.DIRT, 6));
+		BlockPos at = helper.absolutePos(log);
+		BotScripts.run(bot, "r = mine(Pos(" + at.getX() + ", " + at.getY() + ", " + at.getZ() + "))\nprint(r.ok, r.reason)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			if (!printed.isEmpty() && !printed.equals(List.of("True None"))) {
+				helper.fail("printed " + printed);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None"), "printed");
+			helper.assertBlockNotPresent(Blocks.JUNGLE_LOG, log);
 		});
 	}
 

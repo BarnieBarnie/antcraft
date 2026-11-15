@@ -36,6 +36,15 @@ class GoalTest {
 	}
 
 	@Test
+	void reachIsStillFarUnderABlockHighOverhead() {
+		// A log 17 up, as in a giant jungle's crown (#685): from the floor under it, it is no closer than half way up.
+		Goal.Reach high = new Goal.Reach(new BlockPos(0, 18, 0), 4.0);
+		assertTrue(high.heuristic(new BlockPos(0, 1, 0)) > high.heuristic(new BlockPos(0, 9, 0)));
+		assertTrue(high.heuristic(new BlockPos(0, 9, 0)) > 0);
+		assertTrue(high.heuristic(new BlockPos(1, 16, 0)) == 0);
+	}
+
+	@Test
 	void inSightIsNotMetWithinReachWhenTheBlockCannotBeSeen() {
 		assertFalse(new Goal.InSight(LOG, 4.5, (feet, target, broken) -> false).isReached(new BlockPos(1, 1, 0)));
 	}

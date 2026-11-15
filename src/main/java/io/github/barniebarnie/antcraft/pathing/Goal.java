@@ -185,9 +185,15 @@ public interface Goal {
 			return dx * dx + dy * dy + dz * dz <= this.reach * this.reach;
 		}
 
+		/**
+		 * The reach off each way apart: taken off the whole estimate, it took 20 blocks up (a block up counts 1, a block
+		 * sideways 5), so a log 17 up was in reach from the floor under it, and a search out of nodes ended there (#685).
+		 */
 		@Override
 		public double heuristic(BlockPos feet) {
-			return Math.max(0, estimate(feet, this.pos) - this.reach * PathFinder.WALK_COST);
+			int horizontal = Math.abs(feet.getX() - this.pos.getX()) + Math.abs(feet.getZ() - this.pos.getZ());
+			double vertical = Math.abs(feet.getY() + EYE_HEIGHT - (this.pos.getY() + 0.5));
+			return Math.max(0, horizontal - this.reach) * PathFinder.WALK_COST + Math.max(0, vertical - this.reach) * PathFinder.FALL_COST_PER_BLOCK;
 		}
 	}
 }
