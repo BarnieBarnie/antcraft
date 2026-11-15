@@ -879,6 +879,32 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A crafting table by the bot, which carries an oak log, 4 sticks in a chest across the area, no tree (#737): the
+	 * plan of a wooden pickaxe makes its 5 planks from the log and one more to gather; with the sticks from the chest the
+	 * carried log makes the 3 planks left, so make_cost is the walk to the chest and back to the table. It made the sticks'
+	 * plan alone, which used the carried log too, so the log counted twice and it costed one more to gather.
+	 */
+	// Measured: passes at tick 9 (red: printed 55).
+	@GameTest(maxTicks = 30)
+	public void makeCostCountsACarriedItemTwoStepsUseOnce(GameTestHelper helper) {
+		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.STICK, 4));
+		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG));
+		run(helper, bot, """
+			import lib.cost
+			import lib.stock
+			from lib.get import make_cost
+			c = lib.stock.chests(32)[0]
+			t = find_nearest("crafting_table", radius=4)
+			r = make_cost("wooden_pickaxe", 1)
+			print(r if r is None else r - lib.cost.walk(pos(), c) - lib.cost.walk(c, t))
+			""");
+		failOnOtherPrint(helper, bot, "0");
+		helper.succeedWhen(() -> printed(helper, bot, "0"));
+	}
+
+	/**
 	 * A furnace by the bot, a raw iron in a chest across the area, more than lib.craft.REACH from the furnace, coal and no
 	 * pickaxe carried (#698): get takes the raw iron and walks back to the furnace to smelt it. From beside the chest it
 	 * saw no furnace within reach and would put one down, which it cannot mine back without a pickaxe.
@@ -1241,19 +1267,22 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far
 	 * (#595); 46,500 (26 ticks) since make_cost finds each plan's crafting table and furnace within reach (#630); 33,900
 	 * (19 ticks, 44,600 before) since make_cost bounds a tier by its needs alone before lib.craft.plan (#710), which leaves
-	 * out the plans of copper, iron and diamond; 34,500-34,700 since #728. The limit keeps it there.
+	 * out the plans of copper, iron and diamond; 34,500-34,700 since #728; 30,500 since make_cost puts the crafting table's
+	 * steps, planned once, before a plan's (#737), where lib.craft.plan planned each again with the table. The limit keeps
+	 * it there.
 	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
-			List.of("('make', 'stone')"), "choose", 45_000);
+			List.of("('make', 'stone')"), "choose", 36_000);
 	}
 
 	/**
 	 * What one choose of a pickaxe costs an empty bot with no chest near (#728): the stone pickaxe's cobblestone needs a
 	 * wooden pickaxe, whose needs and plan options has as the wooden tier already, so make_cost takes them from its cache.
-	 * Measured 28,500 instructions; 34,500 before, the two needs of the wooden pickaxe made again 6,000 of it.
+	 * Measured 28,500 instructions; 34,500 before, the two needs of the wooden pickaxe made again 6,000 of it; 27,200 since
+	 * the crafting table's steps are planned once (#737).
 	 */
 	@GameTest(maxTicks = 60)
 	public void choosePickaxeCost(GameTestHelper helper) {

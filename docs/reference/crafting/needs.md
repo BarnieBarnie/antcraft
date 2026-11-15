@@ -1,7 +1,7 @@
 # `needs`
 
 ```text
-needs(item, n=1, also=None)
+needs(item, n=1, also=None, extra=None)
 ```
 
 What the bot still has to gather, and what to craft and smelt from it, to make `n` of `item` from what it carries, and one of each item of `also` before it.
@@ -13,6 +13,7 @@ What the bot still has to gather, and what to craft and smelt from it, to make `
 | `item` | str | | the one item to make, such as `"stone_pickaxe"`; a tag or a list is an error |
 | `n` | int | `1` | how many to make, from 1 to 1000000 |
 | `also` | list of str | `None` | items to make one each of first, from the same carried items, such as `["crafting_table"]`; each one item as `item` |
+| `extra` | dict of str to int | `None` | items to count as carried besides what the bot carries, such as those a chest holds: item id to count, each one item as `item` and a count of at least 0 |
 
 ## Returns
 
@@ -40,6 +41,15 @@ needs("wooden_pickaxe", also=["crafting_table"])
  "inputs": {}, "fuel": {}, "table": True}
 ```
 
+With `extra`, those items are used as if carried, so a plan can count what a chest holds without taking it first. With four sticks in a chest and one oak log carried, a wooden pickaxe needs only the log's planks:
+
+```text
+needs("wooden_pickaxe", extra={"stick": 4})
+{"gather": {},
+ "crafts": [("minecraft:oak_planks", 4, "craft"), ("minecraft:wooden_pickaxe", 1, "craft")],
+ "inputs": {}, "fuel": {}, "table": True}
+```
+
 [`lib/craft`](../modules/lib/craft.md)'s `craft_all` runs these steps for a script, and its `plan` adds the crafting table and furnace the bot must craft with `also`.
 
 ## Pauses
@@ -56,7 +66,7 @@ It works through the game's recipes, data packs included, down to raw items: tho
 
 A smelting step also needs fuel: it counts on burning what the bot carries (coal, then charcoal, then logs and planks), and what is short is in `gather`, as coal, unless making charcoal from carried logs uses up less, which adds that smelting step. `fuel` says which it burns: eight torches from one coal and one log put the coal in the torches and burn a plank to smelt the log into charcoal, where `smelt` without `fuel` would burn the coal. `smelt` loads at most a stack a call, so a `"smelt"` step of more than 64 takes several calls.
 
-An item no recipe makes and that is not in the tag, such as an elytra, is in `gather` itself. An `n` outside 1 to 1000000, or an item the game does not know, in `item` or `also`, stops the script with an error.
+An item no recipe makes and that is not in the tag, such as an elytra, is in `gather` itself. An `n` outside 1 to 1000000, an item the game does not know, in `item`, `also` or `extra`, or an `extra` that is not a dict or has a count under 0, stops the script with an error.
 
 ## Examples
 

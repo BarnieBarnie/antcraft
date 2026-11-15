@@ -18,6 +18,7 @@ from lib.result import result
 
 LOGS = lib.trees.LOGS
 PLANKS = "#minecraft:planks"
+LOG = "minecraft:oak_log"
 COBBLESTONE = lib.dig.COBBLESTONE
 COAL = "minecraft:coal"
 # How often get plans and gets the raw items again before it crafts with what it has.
@@ -468,7 +469,7 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     GETTING.append(key(item))
     try:
         if cached[1] is None:
-            cached[1] = lib.craft.plan(item, n, p)
+            cached[1] = planned(item, n, p, tools)
         p = cached[1]
         ticks = 0
         gather = dict(p["gather"])
@@ -476,12 +477,11 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         back = None
         smelt = smelts(p)
         if gather:
-            c, back, smelt = stored(p, item, gather, radius, tools)
+            c, back, gather, smelt = stored(p, item, n, radius, tools)
             if sum([max(0, k) for k in smelt.values()]) <= 0 < smelted(p):
                 # The chests hold all the plan smelts: no furnace to make, nor fuel to burn (#709).
                 p = without_furnace(item, n)
-                gather = dict(p["gather"])
-                c, back, smelt = stored(p, item, gather, radius, tools)
+                c, back, gather, smelt = stored(p, item, n, radius, tools)
             ticks += c
         ticks += lib.cost.SMELT * sum([max(0, k) for k in smelt.values()])
         need = {}
@@ -532,6 +532,24 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         return ticks
     finally:
         GETTING.pop()
+
+
+def planned(item, n, p, tools):
+    """lib.craft.plan(item, n, p) for make_cost: where it would plan only a crafting table, p with the steps of
+    needs("crafting_table"), made once for one options in tools["table"], put first, which is the same where the table
+    takes none of what the bot carries: it gathers one oak log and the bot carries no planks (#737). Its four planks are
+    one log's whole output, so the item's planks keep their leftovers."""
+    if lib.craft.smelt_inputs(p) or not p["table"] or lib.craft.table_near():
+        return lib.craft.plan(item, n, p)
+    if "table" not in tools:
+        tools["table"] = needs("crafting_table")
+    t = tools["table"]
+    if t["gather"] != {LOG: 1} or count(PLANKS):
+        return lib.craft.plan(item, n, p)
+    gather = dict(p["gather"])
+    gather[LOG] = gather.get(LOG, 0) + 1
+    return {"gather": gather, "crafts": t["crafts"] + p["crafts"], "inputs": p["inputs"], "fuel": p["fuel"],
+            "table": True, "also": ["crafting_table"], "no_tool": False}
 
 
 def least_make(p, radius, tools):
@@ -593,7 +611,9 @@ def without_furnace(item, n):
     """lib.craft.plan(item, n) as it is where a furnace is in reach: with the crafting table it puts down first, where
     one is not near, but not the furnace (#709)."""
     also = ["crafting_table"] if needs(item, n)["table"] and not lib.craft.table_near() else None
-    return needs(item, n, also=also)
+    p = needs(item, n, also=also)
+    p["also"] = also
+    return p
 
 
 def stations(p, start=None, smelting=None):
@@ -624,16 +644,16 @@ def station(at, kind, material, least, n=1, start=None):
     return lib.cost.breaking(n, material, least if tool is None else lib.tools.tier(tool))
 
 
-def stored(p, item, gather, radius, tools):
-    """The walk to the nearest chest of lib.stock within radius that holds each step of p, a plan for item, as
-    intermediate takes them (planks of any kind for planks), lowering gather by the raw items the steps they cover take
-    (#580), and the items smelted by those the steps they cover smelt (#709); tools as make_cost's. Gives those ticks,
-    the Pos of the last chest walked to (None: none) and how many of each step p still smelts (smelts; under 0 where the
-    chests hold more than it smelts). ponytail: needs of the step alone, so
-    a carried item the plan used for another step may count twice."""
+def stored(p, item, n, radius, tools):
+    """The walk to the nearest chest of lib.stock within radius that holds each step of p, a plan for n of item, as
+    intermediate takes them (planks of any kind for planks); tools as make_cost's. Gives those ticks, the Pos of the
+    last chest walked to (None: none), and the raw items (#580) and how many of each step (smelts, #709) the plan made
+    again with what the chests hold of its steps counted as carried takes, so a carried item is counted once (#737). A
+    step those taken already cover is not walked to."""
     ticks = 0
     last = None
-    smelt = smelts(p)
+    extra = {}
+    left = p
     for step, k, how in reversed(p["crafts"]):
         if step == item:
             continue
@@ -641,20 +661,20 @@ def stored(p, item, gather, radius, tools):
             tools["chests"] = lib.stock.chests(radius)
         chests = tools["chests"]
         for what in alike(step):
+            k = sum([m for st, m, h in left["crafts"] if st == step])
             have = [c for c in chests if lib.stock.holds(c, what)]
-            held = min(k, sum([s.count for c in have for s in container(c) or [] if matches(s, what)]))
+            stacks = [s for c in have for s in container(c) or [] if matches(s, what)]
+            held = min(k, sum([s.count for s in stacks]))
             if held <= 0:
                 continue
             ticks += lib.cost.walk(pos(), have[0])
             last = have[0]
-            full = needs(step, k)
-            left = needs(step, k - held) if held < k else {"gather": {}, "crafts": []}
-            for raw, m in full["gather"].items():
-                gather[raw] = gather.get(raw, 0) - m + left["gather"].get(raw, 0)
-            for st, m in smelts(full).items():
-                smelt[st] = smelt.get(st, 0) - m + smelts(left).get(st, 0)
-            k -= held
-    return ticks, last, smelt
+            for s in stacks:
+                m = min(held, s.count)
+                extra[s.item] = extra.get(s.item, 0) + m
+                held -= m
+            left = needs(item, n, also=p.get("also") or None, extra=extra)
+    return ticks, last, dict(left["gather"]), smelts(left)
 
 
 def tool_cost(kind, tier, uses, radius, tools):

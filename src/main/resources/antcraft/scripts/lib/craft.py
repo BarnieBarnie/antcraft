@@ -63,7 +63,7 @@ def plan(item, n=1, p=None):
     craft_here must craft for it planned first from the same items: those its steps need that the bot neither carries
     nor finds within REACH (a furnace takes a table). A smoker or blast furnace within REACH that cooks every smelted
     input stands in for the furnace. Its no_tool is True where a step smelts in a furnace craft_here could not mine back
-    (can_take_back_furnace)."""
+    (can_take_back_furnace), and its also the stations planned."""
     p = needs(item, n) if p is None else p
     stations = []
     inputs = smelt_inputs(p)
@@ -73,6 +73,8 @@ def plan(item, n=1, p=None):
         stations.insert(0, "crafting_table")
     if stations:
         p = needs(item, n, also=stations)
+    # The stations planned, so lib.get.stored can plan again with them (#737).
+    p["also"] = stations
     p["no_tool"] = bool(inputs) and not can_take_back_furnace(inputs)
     return p
 

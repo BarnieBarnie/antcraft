@@ -259,6 +259,15 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("{} [('minecraft:stick', 4, 'craft'), ('minecraft:stone_pickaxe', 1, 'craft')]", "1 2 0 0"));
 	}
 
+	/** One oak log carried, four sticks counted as carried with extra (#737): the pickaxe needs only the log's planks. */
+	@GameTest(maxTicks = 20)
+	public void needsCountsExtraItemsAsCarried(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG));
+		expect(helper, bot, "r = needs('wooden_pickaxe', extra={'stick': 4})\nprint(r['gather'], r['crafts'])\n",
+			List.of("{} [('minecraft:oak_planks', 4, 'craft'), ('minecraft:wooden_pickaxe', 1, 'craft')]"));
+	}
+
 	@GameTest(maxTicks = 20)
 	public void needsOfAnUnknownItemStopsTheScript(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);

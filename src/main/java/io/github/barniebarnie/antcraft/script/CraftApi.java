@@ -16,6 +16,7 @@ import io.github.barniebarnie.antcraft.work.GameRecipeBook;
 import io.github.barniebarnie.antcraft.work.Storage;
 import io.github.barniebarnie.antcraft.work.TaskPlanner;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -100,12 +101,26 @@ public final class CraftApi {
 			return craft(run, WorkApi.bot(run, call), item, n, table, call);
 		});
 		natives.register("needs", NEEDS_COST, call -> {
-			Object[] args = Args.bind("needs", call, 1, "item", "n", "also");
+			Object[] args = Args.bind("needs", call, 1, "item", "n", "also", "extra");
 			Item item = oneItem("needs", args[0]);
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
 			List<Item> also = Args.absent(args[2]) ? List.of() : Values.elements(args[2]).stream().map(one -> oneItem("needs", one)).toList();
 			AntBot bot = WorkApi.bot(run, call);
-			return needs(item, n, Storage.stock(BotHands.carried(bot)), also, GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
+			Map<Item, Integer> stock = new HashMap<>(Storage.stock(BotHands.carried(bot)));
+			if (!Args.absent(args[3])) {
+				if (!(args[3] instanceof PyDict extra)) {
+					throw new ScriptError("needs() extra must be a dict of item to count, not " + args[3]);
+				}
+				// Items to count as carried besides what the bot carries, such as those a chest holds (#737).
+				for (Map.Entry<Object, Object> entry : extra.items()) {
+					long count = Args.integer(entry.getValue());
+					if (count < 0) {
+						throw new ScriptError("needs() extra counts must be at least 0, not " + count);
+					}
+					stock.merge(oneItem("needs", entry.getKey()), (int) Math.min(count, MAX_NEEDS), Integer::sum);
+				}
+			}
+			return needs(item, n, stock, also, GameRecipeBook.of(((ServerLevel) bot.level()).getServer()), GATHERABLE);
 		});
 		natives.register("cooks_in", 15, call -> {
 			Object[] args = Args.bind("cooks_in", call, 1, "item");
