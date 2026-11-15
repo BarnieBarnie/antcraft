@@ -17,7 +17,7 @@ from lib.borrow import give_back
 from lib.get import ensure_tool
 from lib.inv import store_all
 from lib.stock import take_up_to
-from lib.trees import LOGS, SCAFFOLD, SEEDLINGS, fell_whole, is_log, next_tree, pillar, sapling, square, stands, tree_blocks, tree_logs
+from lib.trees import LOGS, SAPLINGS, SCAFFOLD, SEEDLINGS, fell_whole, is_log, next_tree, pillar, sapling, square, stands, tree_blocks, tree_logs
 
 
 def ready(base):
@@ -80,6 +80,11 @@ while True:
     # Remnants too: what lib.trees.logs leaves of a tree it took the bottom logs of for an axe.
     tree = next_tree(remnants=True)
     if tree is None:
+        # Saplings lying in the colony: fell_whole picks up those within 8 of the tree it fells, not the rest. It walks
+        # to them on no blocks of its own, which nothing would take back (#676).
+        for e in items_near(SAPLINGS):
+            if e.valid and lib.find.allowed(e.pos) and goto(e.pos, keep="#antcraft:scaffold_blocks"):
+                pick_up(SAPLINGS, 1)
         store_all(core(), keep=SEEDLINGS)
         wait(200)
     else:

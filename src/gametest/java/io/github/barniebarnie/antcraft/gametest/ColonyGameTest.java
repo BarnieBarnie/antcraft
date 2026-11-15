@@ -791,6 +791,23 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * An idle lumberjack, no tree in the colony, picks up a sapling lying on the floor and keeps it, so a sapling dropped
+	 * more than 8 blocks from the next tree it fells is still replanted (#676).
+	 */
+	@GameTest(maxTicks = 100)
+	public void anIdleLumberjackPicksUpAFloorSapling(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		helper.spawnItem(Items.OAK_SAPLING, new BlockPos(6, 1, 6));
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		failOnWarning(helper, lumberjack);
+		BotScripts.failOnError(helper, lumberjack);
+		helper.succeedWhen(() -> helper.assertTrue(GameTests.carried(lumberjack, Items.OAK_SAPLING) == 1,
+			"the lumberjack carries " + GameTests.carried(lumberjack, Items.OAK_SAPLING) + " saplings"));
+	}
+
+	/**
 	 * An empty-handed lumberjack, no axe in the core, by the giant spruce of {@link TreesGameTest#plantGiant}: it makes an
 	 * axe from the logs of an oak of four logs at (6, 1, 6), not the giant's, then fells the giant whole with dirt and
 	 * saplings from the core, takes back its scaffold, replants four saplings and stores the 26 logs (#541). Passes at about tick 1700.
