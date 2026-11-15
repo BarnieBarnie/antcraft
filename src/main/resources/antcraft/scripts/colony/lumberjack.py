@@ -76,6 +76,9 @@ def scaffold(n):
         take_up_to(item, count(item) + short, chests=chests)
 
 
+# Home is on the core, so a lumberjack that dies comes back in the colony and fetches what it dropped (#683).
+set_home(core().up())
+lib.trees.recover()
 while True:
     # Remnants too: what lib.trees.logs leaves of a tree it took the bottom logs of for an axe.
     tree = next_tree(remnants=True)

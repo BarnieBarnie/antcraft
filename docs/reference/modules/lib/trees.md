@@ -98,6 +98,13 @@ Mines the blocks the script's walks placed since it last called [`placed_scaffol
 - **Returns** `None`.
 - **Pauses** yes, while it walks and mines.
 
+## `recover()`
+
+After a death, at the top of a script that sets its home where it works ([`set_home`](../../movement/set_home.md)), so the bot respawned there and runs the script again from the top: it sees the death as [`deaths()`](../../bot/deaths.md) above `memory["wood_deaths"]`, takes back the scaffold the run it died in left (`take_back`, the pillar it died on first), walks to [`last_death()`](../../bot/last_death.md), picks up what it dropped within 8 blocks and takes back what that walk placed. On a first run it only notes `deaths()`. `jobs/wood_farm` and `colony.lumberjack` call it (#679, #683).
+
+- **Returns** `None`.
+- **Pauses** yes, after a death, while it walks, mines and picks up.
+
 ## `low_log(radius=32, skip=None)`
 
 The lowest log within 8 blocks, else within 16, else within `radius`, the nearest among those, leaving out the positions in the dict `skip` and in `KEEP`; `None` if there is none. Looking near first, a log by the bot costs some 2,000 blocks of the [block search budget](../../world/scan.md) rather than the 137,000 of the whole radius of 32.

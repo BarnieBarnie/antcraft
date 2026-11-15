@@ -359,6 +359,22 @@ def take_back(keep=()):
     placed_scaffold(keep=keep)
 
 
+def recover():
+    """After a death, which the restarted run sees as deaths() above memory["wood_deaths"], takes back the scaffold the
+    run it died in left (the pillar it died on first), picks up what it dropped round last_death() and takes back what
+    that walk placed (#679, #683). Call it at the top of a script that set its home where it works (set_home), so the bot
+    respawned there. On a first run it only notes deaths()."""
+    if deaths() <= memory.get("wood_deaths", deaths()):
+        memory["wood_deaths"] = deaths()
+        return
+    memory["wood_deaths"] = deaths()
+    take_back()
+    p = last_death()
+    goto(Pos(p.x, pos().y, p.z), near=2)
+    pick_up(radius=8)
+    take_back()
+
+
 def _down_to(y, keep):
     """Takes back the scaffold placed since keep at y and over it, highest first, that it stands over or reaches: on top
     of its pillar, it mines it underfoot and comes down with it."""

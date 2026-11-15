@@ -875,6 +875,62 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The lumberjack of {@link #aLumberjackFellsATreeTallerThanItReaches}, killed up its scaffold: it respawns on the
+	 * core, its home, takes back the scaffold it died on, picks up what it dropped and fells the rest of the tree: no log
+	 * or dirt left above the floor, nothing it dropped lying about, the logs and dirt in the core (#683).
+	 */
+	// Measured: passes at tick 443 to 446 (red: respawned where first spawned, not on the core).
+	@GameTest(maxTicks = 900)
+	public void aLumberjackKilledWhileFellingComesBackAndFinishesTheTree(GameTestHelper helper) {
+		helper.setBlock(4, 0, 4, Blocks.DIRT);
+		for (int y = 1; y <= 6; y++) {
+			helper.setBlock(4, y, 4, Blocks.OAK_LOG);
+		}
+		helper.setBlock(4, 7, 4, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		Colony colony = colonyAt(helper, 1, 1, 6);
+		colony.setRadius(7);
+		Container core = container(helper, 1, 1, 6);
+		core.setItem(0, new ItemStack(Items.DIRT, 6));
+		core.setItem(1, new ItemStack(Items.OAK_SAPLING));
+		AntBot lumberjack = member(helper, colony, 1, 1, 1);
+		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		UUID id = lumberjack.getUUID();
+		runDefault(helper, lumberjack, "colony.lumberjack");
+		long[] died = {-1};
+		long[] respawned = {-1};
+		BlockPos home = helper.absolutePos(new BlockPos(1, 2, 6));
+		helper.onEachTick(() -> {
+			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
+			if (now != null && now != lumberjack && BotScripts.log(now, Output.Level.WARN).stream().anyMatch(l -> !l.startsWith("died at"))) {
+				helper.fail("stuck after the respawn: " + BotScripts.log(now, Output.Level.DEBUG));
+			}
+			if (died[0] < 0 && lumberjack.isAlive() && helper.relativePos(lumberjack.blockPosition()).getY() >= 2) {
+				lumberjack.kill(helper.getLevel());
+				died[0] = helper.getTick();
+			} else if (died[0] >= 0 && respawned[0] < 0 && now != null && now != lumberjack) {
+				respawned[0] = helper.getTick();
+				helper.assertTrue(now.blockPosition().distManhattan(home) <= 1, "respawned at " + now.blockPosition() + ", home " + home);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(respawned[0] >= 0, "not killed and respawned: killed at " + died[0]);
+			for (int x = 0; x < 8; x++) {
+				for (int z = 0; z < 8; z++) {
+					for (int y = 1; y < 8; y++) {
+						helper.assertBlockNotPresent(Blocks.OAK_LOG, new BlockPos(x, y, z));
+						helper.assertBlockNotPresent(Blocks.DIRT, new BlockPos(x, y, z));
+					}
+				}
+			}
+			helper.assertBlockPresent(Blocks.OAK_SAPLING, new BlockPos(4, 1, 4));
+			helper.assertTrue(helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, helper.getBounds(),
+				e -> e.getItem().is(Items.STONE_AXE) || e.getItem().is(Items.DIRT) || e.getItem().is(Items.OAK_LOG)).isEmpty(), "its drops left lying");
+			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
+			helper.assertTrue(core.countItem(Items.DIRT) == 6, "dirt in the core: " + core.countItem(Items.DIRT));
+		});
+	}
+
+	/**
 	 * A lumberjack with a stone axe by an oak of six logs, the core holding three dirt and three cobblestone: it climbs on
 	 * the core's blocks, not on dirt dug from the colony's ground (four exposed dirt blocks in the floor), and puts them
 	 * back (#553). Passes at about tick 225, alone or with the other colony tests.

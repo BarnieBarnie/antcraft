@@ -6,7 +6,7 @@
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
 # logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
 # what one takes (docs/cookbook/wood-farm.md). Its home is by the depot, so after a death it comes back to the farm and
-# recovers (#679). Another job starts a farm with run(kind, at); imported, this runs nothing.
+# recovers (lib.trees.recover, #679). Another job starts a farm with run(kind, at); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -291,20 +291,6 @@ def farm(kind, name, size, radius):
             wait(WAIT)
 
 
-def recover():
-    """After a death, which the restarted run sees as deaths() above memory["wood_deaths"], takes back the scaffold the
-    run it died in left (the pillar it died on first) and picks up what it dropped round last_death() (#679). The bot
-    respawned at the farm, its home. On a first run it only notes deaths()."""
-    if deaths() <= memory.get("wood_deaths", deaths()):
-        memory["wood_deaths"] = deaths()
-        return
-    memory["wood_deaths"] = deaths()
-    lib.trees.take_back()
-    p = last_death()
-    goto(Pos(p.x, pos().y, p.z), near=2)
-    pick_up(radius=8)
-
-
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a wood farm of kind (a kind of lib.treefarm.KINDS) with its first corner at at (where the bot
     stands, or where the last farm of kind started), up to size cells (limit: most of the ticks a tree takes, learnt,
@@ -323,7 +309,7 @@ def run(kind, at=None, size=None, radius=32):
     # Home is the path by the depot, so a bot that dies comes back at the farm, and recover fetches what it dropped: a
     # death costs it no more than lib.cost.death (#679).
     set_home(at + (0, 0, -1))
-    recover()
+    lib.trees.recover()
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
     steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius)),
              Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
