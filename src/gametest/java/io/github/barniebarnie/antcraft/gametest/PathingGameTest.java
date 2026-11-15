@@ -890,8 +890,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * With its home 100 blocks off but full with 20 saturation, the bot heals the 9 health in 90 ticks, which costs less
-	 * than digging down, so it jumps off (#708).
+	 * With its home 100 blocks off but full with 20 saturation, the bot heals the 9 health in 90 ticks with 13.5 points of
+	 * food (some 70 ticks, #730), which costs less than digging down, so it jumps off (#708).
 	 */
 	@GameTest(structure = "antcraft-gametest:tall", maxTicks = 60)
 	public void aWellFedBotJumpsOffAPillarWithItsHomeFarOff(GameTestHelper helper) {

@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.PriorityQueue;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.food.FoodConstants;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -74,14 +75,23 @@ public final class PathFinder {
 	 * {@code lib.cost.death} counts it (docs/features/death.md); {@code home} is null where it is in another dimension,
 	 * and the walk back then costs {@link #AWAY_WALK} (#688). A death costs no more, so dying is a move like any other
 	 * where it is cheaper. Its food heals {@code quickHeal} health at {@link #QUICK_HEAL_TICKS} a point, then
-	 * {@code slowHeal} at {@link #SLOW_HEAL_TICKS} (#708, docs/features/bots.md, Hunger); none where it does not heal.
+	 * {@code slowHeal} at {@link #SLOW_HEAL_TICKS} (#708, docs/features/bots.md, Hunger), each point also costing the food
+	 * it uses, {@link #HEAL_FOOD} (#730); none where it does not heal.
 	 */
-	// ponytail: the items lost past their despawn, and the food healing uses up, are not counted.
+	// ponytail: the items lost past their despawn are not counted; food costs a flat FOOD_POINT_TICKS, not what it takes to make.
 	public record Death(float health, @Nullable BlockPos home, int respawnTicks, float quickHeal, float slowHeal) {
 		/** Healing a point full with saturation, as a player's FoodData. */
 		public static final int QUICK_HEAL_TICKS = 10;
 		/** Healing a point at 18 food or more without saturation. */
 		public static final int SLOW_HEAL_TICKS = 80;
+		/**
+		 * A point of food or saturation, a flat guess at getting and eating it: eating bread takes 32 ticks for its 11
+		 * points, a steak 32 for 20.8, and growing or hunting it more. At 10 a well-fed bot digs 12 dirt down rather than
+		 * jump (PathingGameTest aWellFedBotJumpsOffAPillarWithItsHomeFarOff).
+		 */
+		public static final double FOOD_POINT_TICKS = 5;
+		/** The food a healed point uses: 6 exhaustion, and every 4 takes a point of saturation or food. */
+		public static final double HEAL_FOOD = FOOD_POINT_TICKS * FoodConstants.EXHAUSTION_HEAL / FoodConstants.EXHAUSTION_DROP;
 
 		/** A bot that does not heal. */
 		public Death(float health, @Nullable BlockPos home, int respawnTicks) {
@@ -94,8 +104,9 @@ public final class PathFinder {
 		}
 
 		/**
-		 * {@code damage} at {@code at}: a fatal one a death; else each point the ticks it takes to heal, its quick points
-		 * first, but at most its share of a death, which is what a point it does not heal costs.
+		 * {@code damage} at {@code at}: a fatal one a death; else each point the ticks it takes to heal and the food that
+		 * uses, its quick points first, but at most its share of a death, which is what a point it does not heal costs (a
+		 * death refills the food).
 		 */
 		double hurt(int damage, BlockPos at) {
 			double death = this.cost(at);
@@ -105,7 +116,8 @@ public final class PathFinder {
 			double share = death / this.health;
 			double quick = Math.min(damage, this.quickHeal);
 			double slow = Math.min(damage - quick, this.slowHeal);
-			return quick * Math.min(QUICK_HEAL_TICKS, share) + slow * Math.min(SLOW_HEAL_TICKS, share) + (damage - quick - slow) * share;
+			return quick * Math.min(QUICK_HEAL_TICKS + HEAL_FOOD, share) + slow * Math.min(SLOW_HEAL_TICKS + HEAL_FOOD, share)
+				+ (damage - quick - slow) * share;
 		}
 	}
 

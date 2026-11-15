@@ -320,15 +320,18 @@ class PathFinderTest {
 		return new PathFinder.Death(health, home, 200, quick, slow);
 	}
 
+	/** What the food healing a point uses costs: 1.5 food points (6 exhaustion, 4 a point), 5 ticks each (#730). */
+	private static final double HEAL_FOOD = 1.5 * 5;
+
 	/**
 	 * A bot whose food heals the health a drop takes counts the ticks healing it takes rather than its share of a death
-	 * (#708): 9 health at 10 ticks a point, full with saturation.
+	 * (#708), and the food that healing uses (#730): 9 health at 10 ticks a point, full with saturation, its home far enough off that a point's share of a death costs more.
 	 */
 	@Test
-	void aDropThatHurtsAFedBotCostsTheTicksItTakesToHeal() {
+	void aDropThatHurtsAFedBotCostsTheTicksItTakesToHealAndTheFoodItUses() {
 		BlockPos landing = new BlockPos(2, -11, 0);
-		Path path = find(platform(12), landing, walkOnly(fed(20, landing.south(10), 20, 0)));
-		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 9 * 10, path.cost(), 1e-9);
+		Path path = find(platform(12), landing, walkOnly(fed(20, landing.south(100), 20, 0)));
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 9 * (10 + HEAL_FOOD), path.cost(), 1e-9);
 	}
 
 	/**
@@ -342,7 +345,7 @@ class PathFinderTest {
 		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 9 / 20.0 * (200 + 10 * PathFinder.WALK_COST), near.cost(), 1e-9);
 		Path away = find(platform(12), landing, walkOnly(fed(20, null, 3, 2)));
 		double share = (200 + PathFinder.AWAY_WALK) / 20;
-		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 3 * 10 + 2 * 80 + 4 * share, away.cost(), 1e-9);
+		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 3 * (10 + HEAL_FOOD) + 2 * (80 + HEAL_FOOD) + 4 * share, away.cost(), 1e-9);
 	}
 
 	/** Food makes a fatal drop no cheaper: it costs a whole death. */
@@ -353,14 +356,17 @@ class PathFinderTest {
 		assertEquals(2 * PathFinder.WALK_COST + 12 * PathFinder.FALL_COST_PER_BLOCK + 200 + 10 * PathFinder.WALK_COST, weak.cost(), 1e-9);
 	}
 
-	/** Up the pillar of {@link #jumpsOffAPillarWhereThatCostsLessThanDiggingDown}, its home far off: a fed bot jumps off where a hungry one digs down. */
+	/**
+	 * Up a pillar as that of {@link #jumpsOffAPillarWhereThatCostsLessThanDiggingDown} but of stone, its home far off: a fed
+	 * bot jumps off where a hungry one digs down. Of dirt, digging costs less than the food healing the fall takes (#730).
+	 */
 	@Test
 	void aFedBotJumpsOffAPillarWhereAHungryOneDigsDown() {
-		GridWorld world = new GridWorld().fill(0, -11, 0, 0, 0, 0, 'D').fill(-10, -12, -10, 10, -12, 10, '#');
+		GridWorld world = new GridWorld().fill(0, -11, 0, 0, 0, 0, '#').fill(-10, -12, -10, 10, -12, 10, '#');
 		BlockPos foot = new BlockPos(1, -11, 0);
-		Path jump = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, fed(20, foot.east(100), 20, 0)));
+		Path jump = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, fed(20, foot.east(1000), 20, 0)));
 		assertEquals(List.of(new Step(MoveType.DROP, foot, List.of(), List.of())), jump.steps());
-		Path dig = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, fed(20, foot.east(100), 0, 0)));
+		Path dig = find(world, foot, new PathFinder.Options(true, false, 10_000, 3, fed(20, foot.east(1000), 0, 0)));
 		assertTrue(types(dig).contains(MoveType.DIG_DOWN), "jumped: " + dig.steps());
 	}
 

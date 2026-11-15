@@ -129,4 +129,45 @@ class BotFoodTest {
 			assertEquals(quickHealed, quick, 1, at);
 		}
 	}
+
+	/**
+	 * On peaceful with natural regeneration on, a player's tickRegeneration (#730): every 20 ticks of its age a point of
+	 * health while hurt and a point of saturation under 20, every 10 a point of food under 20.
+	 */
+	@Test
+	void onPeacefulItHealsAPointEveryTwentyTicksAndGainsFoodEveryTen() {
+		BotFood food = new BotFood();
+		food.setFoodLevel(10);
+		food.setSaturation(0);
+		assertEquals(1, food.peaceful(20, 10, 20));
+		assertEquals(11, food.food());
+		assertEquals(1, food.saturation());
+		assertEquals(0, food.peaceful(21, 10, 20));
+		assertEquals(11, food.food());
+		assertEquals(0, food.peaceful(30, 10, 20));
+		assertEquals(12, food.food());
+		assertEquals(1, food.saturation());
+		assertEquals(0, food.peaceful(40, 20, 20));
+		assertEquals(13, food.food());
+		assertEquals(2, food.saturation());
+		food.setFoodLevel(20);
+		food.setSaturation(20);
+		assertEquals(1, food.peaceful(60, 19, 20));
+		assertEquals(20, food.food());
+		assertEquals(20, food.saturation());
+	}
+
+	/** The Saturation effect feeds a bot as a player each tick it lasts: food of its level plus one, twice that saturation (#730). */
+	@Test
+	void theSaturationEffectFeedsAsAPlayer() {
+		BotFood food = new BotFood();
+		food.setFoodLevel(10);
+		food.setSaturation(0);
+		food.saturate(0);
+		assertEquals(11, food.food());
+		assertEquals(2, food.saturation());
+		food.saturate(1);
+		assertEquals(13, food.food());
+		assertEquals(6, food.saturation());
+	}
 }

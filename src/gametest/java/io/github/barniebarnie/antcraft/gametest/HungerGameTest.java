@@ -13,6 +13,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.damagesource.DamageTypes;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -85,6 +86,19 @@ public class HungerGameTest implements CustomTestMethodInvoker {
 		bot.getFood().setSaturation(0);
 		bot.setHealth(10);
 		helper.succeedWhen(() -> helper.assertTrue(bot.getHealth() == 11, "health " + bot.getHealth()));
+	}
+
+	/** The Saturation effect feeds a bot as it does a player, though vanilla's feeds only players (#730). */
+	@GameTest(maxTicks = 20)
+	public void theSaturationEffectFeedsABot(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getFood().setFoodLevel(10);
+		bot.getFood().setSaturation(0);
+		bot.addEffect(new MobEffectInstance(MobEffects.SATURATION, 5));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(bot.getFood().food() >= 12, "food " + bot.getFood().food());
+			helper.assertTrue(bot.getFood().saturation() >= 4, "saturation " + bot.getFood().saturation());
+		});
 	}
 
 	/** A bot at 0 food starves: it loses a point every 80 ticks. */

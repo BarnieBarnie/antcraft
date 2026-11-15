@@ -45,6 +45,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.food.FoodConstants;
 import net.minecraft.world.level.gamerules.GameRules;
 import net.minecraft.world.damagesource.DamageSource;
@@ -293,7 +294,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	/**
 	 * A tick of the bot's hunger, a player's (#702): swimming and the hunger effect add exhaustion as they do for a player
-	 * (walking costs a player none), then {@link BotFood#tick} heals or starves the bot.
+	 * (walking costs a player none), the Saturation effect feeds it and peaceful regenerates it as a player (#730), then
+	 * {@link BotFood#tick} heals or starves the bot.
 	 */
 	private void tickFood(ServerLevel level) {
 		if (this.isInWater()) {
@@ -304,8 +306,18 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		if (hunger != null) {
 			this.exhaust(0.005F * (hunger.getAmplifier() + 1)); // HungerMobEffect, which feeds only players
 		}
-		float change = this.food.tick(this.getHealth(), this.getMaxHealth(), level.getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION),
-			level.getDifficulty());
+		MobEffectInstance saturation = this.getEffect(MobEffects.SATURATION);
+		if (saturation != null) {
+			this.food.saturate(saturation.getAmplifier()); // SaturationMobEffect, likewise (#730)
+		}
+		boolean regeneration = level.getGameRules().get(GameRules.NATURAL_HEALTH_REGENERATION);
+		if (regeneration && level.getDifficulty() == Difficulty.PEACEFUL) {
+			float heal = this.food.peaceful(this.tickCount, this.getHealth(), this.getMaxHealth());
+			if (heal > 0) {
+				this.heal(heal);
+			}
+		}
+		float change = this.food.tick(this.getHealth(), this.getMaxHealth(), regeneration, level.getDifficulty());
 		if (change > 0) {
 			this.heal(change);
 		} else if (change < 0) {

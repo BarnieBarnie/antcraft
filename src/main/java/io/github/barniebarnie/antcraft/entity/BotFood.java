@@ -49,6 +49,30 @@ public final class BotFood {
 		this.saturation = Mth.clamp(saturation + this.saturation, 0, this.food);
 	}
 
+	/** A tick of the Saturation effect at {@code amplifier}: {@code SaturationMobEffect}, which feeds only players (#730). */
+	public void saturate(int amplifier) {
+		this.eat(amplifier + 1, FoodConstants.saturationByModifier(amplifier + 1, 1));
+	}
+
+	/**
+	 * {@code ServerPlayer.tickRegeneration}, on peaceful with natural regeneration on, for a bot {@code tickCount} ticks old
+	 * at {@code health} of {@code maxHealth} (#730): every 20 ticks a point of health while hurt and a point of saturation
+	 * under 20, every 10 ticks a point of food under 20. Gives the health to heal, or 0.
+	 */
+	public float peaceful(int tickCount, float health, float maxHealth) {
+		float heal = 0;
+		if (tickCount % 20 == 0) {
+			heal = health < maxHealth ? 1 : 0;
+			if (this.saturation < FoodConstants.MAX_SATURATION) {
+				this.saturation++;
+			}
+		}
+		if (tickCount % 10 == 0 && this.food < FoodConstants.MAX_FOOD) {
+			this.food++;
+		}
+		return heal;
+	}
+
 	/**
 	 * One tick of {@code FoodData.tick} for a bot at {@code health} of {@code maxHealth}: the health to heal, -1 for the point
 	 * starving takes, or 0. {@code regeneration} is the {@code naturalHealthRegeneration} game rule.
