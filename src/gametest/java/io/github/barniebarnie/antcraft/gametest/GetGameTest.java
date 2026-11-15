@@ -731,6 +731,29 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A crafting table by the bot, three iron ingots in a chest across the area, no furnace (#709): make_cost of a bucket
+	 * is the walk to the chest and the walk from it back to the table, as get takes the ingots and crafts; it counted the
+	 * smelting of the ingots and the furnace to smelt them in. get takes the ingots and crafts in 70 ticks
+	 * (walksBackToTheTableAfterTakingFromAFarChest); make_cost gives 115, was 1147.
+	 */
+	// Measured: passes at tick 21 (red: printed 1032, three SMELT and the furnace).
+	@GameTest(maxTicks = 45)
+	public void makeCostLeavesOutTheSmeltingOfIngotsAChestHolds(GameTestHelper helper) {
+		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.IRON_INGOT, 3));
+		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
+		run(helper, bot, """
+			import lib.cost
+			import lib.stock
+			from lib.get import make_cost
+			c = lib.stock.chests(32)[0]
+			t = find_nearest("crafting_table", radius=4)
+			print(make_cost("bucket", 1) - lib.cost.walk(pos(), c) - lib.cost.walk(c, t))
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "0"));
+	}
+
+	/**
 	 * A furnace by the bot, a raw iron in a chest across the area, more than lib.craft.REACH from the furnace, coal and no
 	 * pickaxe carried (#698): get takes the raw iron and walks back to the furnace to smelt it. From beside the chest it
 	 * saw no furnace within reach and would put one down, which it cannot mine back without a pickaxe.
