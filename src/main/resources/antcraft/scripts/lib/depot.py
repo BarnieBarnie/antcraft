@@ -69,7 +69,9 @@ def store(name, keep=None, radius=32):
                 reason = reason or r["reason"]
                 missing[item] = count(item) - cap
                 break
-            put(r["at"], item, count(item) - cap)
+            # The chest may be crafted from the very logs being stored, leaving none over the cap (#783).
+            if count(item) > cap:
+                put(r["at"], item, count(item) - cap)
     return result(reason, None, missing)
 
 

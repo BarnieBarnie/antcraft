@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
@@ -1012,11 +1013,33 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// felling took 2150 once, past 1400's window (#782): 33 temporary copies at once, seeds 0 to 10, three each, felled
 	// 437 to 3123 ticks, 1724 on average over the 25 trees of 8 seeds (seed 0 1336 to 1664, 16 logs; the logs 6 to 26,
 	// 16.25 on average), so HARVEST 1700 (LOGS keeps its 16 of 188 trees). This test passed at tick 1915 alongside them,
-	// 2187 alone, once 2400 (#782). Seed 4 never grew from the test's advanceTree; seeds 2 and 6 left their logs unstored.
+	// 2187 alone, once 2400 (#782). Seed 4 never grew from the test's advanceTree; seeds 2 and 6 left their logs unstored (too few
+	// for a chest; the tests below, #783).
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 4800)
 	public void aMangroveFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		farm(helper, "mangrove_propagule", Items.MANGROVE_PROPAGULE, Blocks.MANGROVE_PROPAGULE, Blocks.MANGROVE_LOG,
-			Items.MANGROVE_LOG, 23, 0, MANGROVE_HARVEST, 0, 11, List.of(new BlockPos(11, 1, 9)));
+			Items.MANGROVE_LOG, 23, 0, MANGROVE_HARVEST, 0, 11, List.of(new BlockPos(11, 1, 9)), 1);
+	}
+
+	/**
+	 * The mangrove farm above with a small tree (#783): seed 2 grows one of 2 logs, too few for the depot's first chest
+	 * and the crafting table it is made on. The farm replants, keeps the logs with one store message, and the test grows
+	 * the replanted propagule again (up to 3 trees) until the depot holds logs. lib.depot.store crashed there (put of 0)
+	 * when the new chest was crafted from all the logs it was storing. A tree this small is no typical one, so its felling
+	 * ticks are not checked against HARVEST.
+	 */
+	// Measured: passes at tick 1588 (red: the script died on put() n 0 at tick 738), seed 6 at 1594 (red: at 916).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 3200)
+	public void aMangroveFarmWithASmallTreeStillReplantsAndStores(GameTestHelper helper) {
+		farm(helper, "mangrove_propagule", Items.MANGROVE_PROPAGULE, Blocks.MANGROVE_PROPAGULE, Blocks.MANGROVE_LOG,
+			Items.MANGROVE_LOG, 23, 2, 0, 0, 11, List.of(new BlockPos(11, 1, 9)), 3);
+	}
+
+	/** As aMangroveFarmWithASmallTreeStillReplantsAndStores with seed 6's small tree of one log (#783). */
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 3200)
+	public void aMangroveFarmWithAnotherSmallTreeStillReplantsAndStores(GameTestHelper helper) {
+		farm(helper, "mangrove_propagule", Items.MANGROVE_PROPAGULE, Blocks.MANGROVE_PROPAGULE, Blocks.MANGROVE_LOG,
+			Items.MANGROVE_LOG, 23, 6, 0, 0, 11, List.of(new BlockPos(11, 1, 9)), 3);
 	}
 
 	/**
@@ -1071,7 +1094,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * A giant farm of kind from (6, 0, 4) in the giant structure: a stone axe, dirt, 2 torches and 8 saplings in a chest;
 	 * once the cell is built and planted, the test grows its four saplings as the game does with seed. It passes when no
 	 * log of the tree is left in the area, the four spots hold saplings and the depot holds logs, the ticks from the
-	 * growth to then within {@link #HARVEST_FACTOR} of harvest. It watches the bot by its UUID,
+	 * growth to then within {@link #HARVEST_FACTOR} of harvest (unless it is 0). It watches the bot by its UUID,
 	 * as one that dies (#694) respawns as a new entity and runs the job again, which recovers. It fails on a warning but
 	 * a death's ("died at"), as a fall may kill the bot (#715). With killAt above 0 it kills the bot the first time it
 	 * stands at that y once the giant grew, and passes only once the bot died.
@@ -1079,15 +1102,17 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	private static void giantFarm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
 		Item logItem, int dirt, long seed, int harvest, int killAt) {
 		farm(helper, kind, saplingItem, saplingBlock, logBlock, logItem, dirt, seed, harvest, killAt, 10,
-			List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9)));
+			List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9)), 1);
 	}
 
 	/**
 	 * As {@link #giantFarm} for any kind: its cell size wide from (6, 0, 4) on dirt, its sapling spots spots, the tree
-	 * grown at the first, which then no longer holds a sapling (a mangrove's holds air or a root).
+	 * grown at the first, which then no longer holds a sapling (a mangrove's holds air or a root). While the depot holds
+	 * no logs, it grows the replanted sapling again, up to trees trees in all (#783: a small tree's logs make no chest),
+	 * harvest timing the last. The bot may say one store message, no more.
 	 */
 	private static void farm(GameTestHelper helper, String kind, Item saplingItem, Block saplingBlock, Block logBlock,
-		Item logItem, int dirt, long seed, int harvest, int killAt, int size, List<BlockPos> spots) {
+		Item logItem, int dirt, long seed, int harvest, int killAt, int size, List<BlockPos> spots, int trees) {
 		for (int x = 6; x < 6 + size; x++) {
 			for (int z = 4; z < 4 + size; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
@@ -1107,7 +1132,17 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(first.getScript() != null, "not run: " + out);
 		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
 		BotScripts.failOnWarningButDeath(helper, bot);
-		long[] grewAt = {-1};  // the tick the giant grew on
+		long[] grewAt = {-1};  // the tick the giant grew on, the last one where it grows more
+		int[] grown = {0};
+		IntSupplier stored = () -> {
+			int n = 0;
+			for (int x = 6; x < 16; x++) {
+				if (helper.getBlockState(new BlockPos(x, 1, 2)).is(Blocks.CHEST)) {
+					n += helper.getBlockEntity(new BlockPos(x, 1, 2), ChestBlockEntity.class).countItem(logItem);
+				}
+			}
+			return n;
+		};
 		long[] took = {-1};  // the ticks from then to the first tick all is done
 		boolean[] killed = {false};
 		helper.onEachTick(() -> {
@@ -1123,13 +1158,15 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				now.kill(helper.getLevel());
 				return;
 			}
-			if (grewAt[0] < 0 && said(now).contains(kind + "_farm 4/4: farm") && helper.getBlockState(spots.get(0)).is(saplingBlock)) {
+			if (grown[0] < trees && (grown[0] == 0 || stored.getAsInt() == 0) && said(now).contains(kind + "_farm 4/4: farm")
+				&& helper.getBlockState(spots.get(0)).is(saplingBlock)) {
 				BlockPos a = helper.absolutePos(spots.get(0));
 				BlockState sapling = helper.getLevel().getBlockState(a);
 				((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), a, sapling.setValue(SaplingBlock.STAGE, 1),
 					RandomSource.create(seed));
 				if (!helper.getBlockState(spots.get(0)).is(saplingBlock)) {
 					grewAt[0] = helper.getTick();
+					grown[0]++;
 				}
 			}
 		});
@@ -1148,17 +1185,12 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(helper.getBlockState(p).is(saplingBlock), "no sapling at " + p.toShortString() + ", bot at "
 					+ TestPositions.relative(helper, now.blockPosition()).toShortString() + "; said " + said(now));
 			}
-			int stored = 0;
-			for (int x = 6; x < 16; x++) {
-				if (helper.getBlockState(new BlockPos(x, 1, 2)).is(Blocks.CHEST)) {
-					stored += helper.getBlockEntity(new BlockPos(x, 1, 2), ChestBlockEntity.class).countItem(logItem);
-				}
-			}
-			helper.assertTrue(stored > 0, "no logs in the depot; said " + said(now));
+			helper.assertTrue(said(now).stream().filter(l -> l.startsWith("store: ")).count() <= 1, "said " + said(now));
+			helper.assertTrue(stored.getAsInt() > 0, "no logs in the depot after " + grown[0] + " trees; said " + said(now));
 			if (took[0] < 0) {
 				took[0] = helper.getTick() - grewAt[0];
 			}
-			helper.assertTrue(took[0] >= harvest / HARVEST_FACTOR && took[0] <= harvest * HARVEST_FACTOR,
+			helper.assertTrue(harvest == 0 || took[0] >= harvest / HARVEST_FACTOR && took[0] <= harvest * HARVEST_FACTOR,
 				"felled in " + took[0] + " ticks, HARVEST " + harvest);
 		});
 	}
