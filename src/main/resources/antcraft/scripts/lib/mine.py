@@ -135,7 +135,7 @@ def veins(cells, opened, stand, chest=None, left=None, out=None):
     vein its pickaxe does not drop (lib.tools.drops) stays in the wall (#547), and the tier that drops it
     (lib.tools.tier_for) is added to the list left where given (#555). The blocks of a vein lib.find.WHERE leaves out
     stay too, and are added to the list out where given (#561), each once (#632), so a colony miner's veins end at the colony's edge, a
-    column (in_colony, #576). With a chest, it empties the bot into it (room) when its inventory is nearly full."""
+    column (in_colony, #576). So do the blocks it may not mine (protected, #712). With a chest, it empties the bot into it (room) when its inventory is nearly full."""
     for c in cells:
         for p in (c.north(), c.south(), c.east(), c.west(), c.up()):
             if p in opened:
@@ -150,7 +150,15 @@ def veins(cells, opened, stand, chest=None, left=None, out=None):
                     if out is not None and b not in out:
                         out.append(b)
                     continue
-                failure = (room(chest) if chest is not None else None) or dig(b, opened + vein, stand)
+                failure = room(chest) if chest is not None else None
+                if failure:
+                    return failure
+                failure = dig(b, opened + vein, stand)
+                if failure and failure["reason"] == "protected":
+                    # A block it may not mine stays as one past the edge does (#712).
+                    if out is not None and b not in out:
+                        out.append(b)
+                    continue
                 if failure:
                     return failure
     return None

@@ -1740,7 +1740,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A colony at (o, 6, o) whose colony_memory["mineshaft"] asks for a level at each of {@code levels} (test-area heights).
 	 * Its radius of 10 holds the whole 8x8 area from the core at its corner, so the veins of the halls and branches are in
-	 * the colony (lib.mine keeps to its edge, #576).
+	 * the colony (lib.mine keeps to its edge, #576). It reaches past the area's barrier walls too, which lib.mine ends a
+	 * tunnel at and leaves of a vein as it does the colony's edge, as mine gives protected there (#697, #712).
 	 */
 	private static Colony mineColony(GameTestHelper helper, int o, int... levels) {
 		Colony colony = colonyAt(helper, o, 6, o);

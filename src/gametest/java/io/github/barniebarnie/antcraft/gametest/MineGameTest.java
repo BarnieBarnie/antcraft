@@ -204,6 +204,29 @@ public class MineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A block of a vein it may not mine is left as one past the edge of lib.find.WHERE (#712): of the iron vein beside the
+	 * south branch's end, the block at x 7 is under spawn protection, so mine gives protected there; the bot mines the
+	 * rest, finishes the level rather than stopping on protected, and its result's outside names that block.
+	 */
+	@GameTest(maxTicks = MAX_TICKS)
+	public void aVeinWithABlockItMayNotMineIsMinedAroundIt(GameTestHelper helper) {
+		List<BlockPos> vein = List.of(new BlockPos(6, 1, 5), new BlockPos(6, 2, 5), new BlockPos(6, 2, 6));
+		BlockPos kept = new BlockPos(7, 2, 5);
+		vein.forEach(pos -> helper.setBlock(pos, Blocks.IRON_ORE));
+		helper.setBlock(kept, Blocks.IRON_ORE);
+		GameTests.protect(helper, kept);
+		AntBot bot = mine(helper, LANDING, 1, "start = pos()\n", ", r[\"outside\"] == [start + (5, 1, 2)]");
+		failOnError(helper, () -> bot, "True None 0 True");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(List.of("True None 0 True")), "not done");
+			assertLevelDug(helper);
+			vein.forEach(pos -> helper.assertTrue(helper.getBlockState(pos).isAir(), "ore left at " + pos.toShortString()));
+			helper.assertTrue(helper.getBlockState(kept).is(Blocks.IRON_ORE), "the protected ore was mined");
+			helper.assertTrue(inChest(helper, Items.RAW_IRON) == 3, "raw iron in the chest: " + inChest(helper, Items.RAW_IRON));
+		});
+	}
+
+	/**
 	 * A vein past the edge of lib.find.WHERE along a branch's wall, met again from each block of the branch, is named once
 	 * in outside (#632): with the edge at x 5, the iron east of both blocks of the south branch stays and outside lists
 	 * each of its blocks once.
