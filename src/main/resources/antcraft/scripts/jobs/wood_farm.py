@@ -31,21 +31,23 @@ from lib.result import result
 # then from 1 to a tree. So a tree takes 2 * 7 * 4096 / 3 ticks on average, some 16 minutes.
 GROWTH = 2 * 7 * 4096 / 3
 # The ticks the bot takes for one tree of each kind: fell it, replant and store the logs. Birch is measured, some 150 to
-# 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs; the others are that per log times their mean logs from
-# lib.treefarm.KINDS's trunks and branches: oak 5.5, spruce 6.5, jungle 8, acacia 9, cherry 13.5, dark and pale oak 34
-# (four trunks and branches), poplar 15 (measured). The giants are measured in WoodFarmGameTest, once fell_whole took its
+# 1050 in WoodFarmGameTest, so 400 for its mean of 6 logs. The other one-sapling kinds and dark and pale oak are measured
+# as the mangrove's farm test, 11 seeded trees each (WoodFarmGameTest eachKindsHarvestAndLogsAreMeasured, #769): oak 165
+# to 302, 207 on average, spruce 250 to 433, 329, jungle 176 to 539, 359, acacia 207 to 464, 286, cherry 378 to 1231,
+# 865, dark oak 867 to 1510, 1236, pale oak 663 to 1209, 941 (trees of the same logs, a seed for seed; why quicker is not
+# known), poplar 378 to 1021, 613; each the mean rounded to 50. The giants are measured in WoodFarmGameTest, once fell_whole took its
 # scaffold back on its way down (#677): a giant spruce with a trunk of 24 took some 3200 to 3500 ticks, once a path
 # no longer stood on a block it broke on the way (#687; 4100 to 4700 with the bot falling off such a step), a giant jungle of
 # 67 logs (a trunk of 16 and its branches) some 2100 to 3300, 2700 on average (#669, #695); since #713 the spruce 3300 to
 # 3550, the jungle 1950 to 2750, 2700 to 3400 with the bot killed up the tree, 2700 the mean of both (#715); since #752
-# the spruce 3050 to 3300, 3200 on average, the jungle 2000 to 2950, 2250 on average, its mean with no death (2450 to
-# 3750 killed up the tree, which its test checks on its own, #761). A mangrove
+# the spruce 3050 to 3300, 3200 on average, the jungle 2000 to 2950, 2250 on average, its mean with no death (2300 to
+# 3400 killed up the tree, 3750 with 36 giants felled at once, which its test checks on its own, #761, #769). A mangrove
 # of 16 logs on average (measured over 188 trees) felled and its roots mined took some 250 to 3550 ticks in 39 seeded
 # trees of TreeFarmGameTest, 1400 on average (#650).
 # A farm learns its own (harvest, #653); these are its start.
-HARVEST = {"minecraft:oak_sapling": 350, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 450,
-           "minecraft:jungle_sapling": 550, "minecraft:acacia_sapling": 600, "minecraft:cherry_sapling": 900,
-           "minecraft:dark_oak_sapling": 2250, "minecraft:pale_oak_sapling": 2250, "minecraft:poplar_sapling": 1000,
+HARVEST = {"minecraft:oak_sapling": 200, "minecraft:birch_sapling": 400, "minecraft:spruce_sapling": 350,
+           "minecraft:jungle_sapling": 350, "minecraft:acacia_sapling": 300, "minecraft:cherry_sapling": 850,
+           "minecraft:dark_oak_sapling": 1250, "minecraft:pale_oak_sapling": 950, "minecraft:poplar_sapling": 600,
            "minecraft:mangrove_propagule": 1400, "giant_spruce": 3200, "giant_jungle": 2250}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
@@ -60,10 +62,12 @@ CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"]
 # the crafting table lib.get makes a depot chest with.
 KEEP = [lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
 STACK = 64  # the dirt the farm keeps at least: a stack, for the fill of an uneven cell (dirt)
-# The mean logs of a tree of each kind, as HARVEST's comment counts them; a giant spruce's trunk of 24 is 96 (#766).
-LOGS = {"minecraft:oak_sapling": 5.5, "minecraft:birch_sapling": 6, "minecraft:spruce_sapling": 6.5,
-        "minecraft:jungle_sapling": 8, "minecraft:acacia_sapling": 9, "minecraft:cherry_sapling": 13.5,
-        "minecraft:dark_oak_sapling": 34, "minecraft:pale_oak_sapling": 34, "minecraft:poplar_sapling": 15,
+# The mean logs of a tree of each kind: birch counted from its trunk, poplar over 200 grown trees and mangrove over 188
+# (#650), the others the 11 seeded trees HARVEST's comment measures, rounded to a half (oak 4.9, spruce 6.4, jungle 8.7,
+# acacia 7.9, cherry 15.9, dark and pale oak 40.6, #769); a giant spruce's trunk of 24 is 96 (#766).
+LOGS = {"minecraft:oak_sapling": 5, "minecraft:birch_sapling": 6, "minecraft:spruce_sapling": 6.5,
+        "minecraft:jungle_sapling": 8.5, "minecraft:acacia_sapling": 8, "minecraft:cherry_sapling": 16,
+        "minecraft:dark_oak_sapling": 40.5, "minecraft:pale_oak_sapling": 40.5, "minecraft:poplar_sapling": 15,
         "minecraft:mangrove_propagule": 16, "giant_spruce": 96, "giant_jungle": 67}
 OTHER = 4  # empty slots for a felling's saplings, sticks, apples and the dirt it takes back
 ROOTS = 2  # and for a mangrove's mangrove roots and muddy mangrove roots, which harvest mines too

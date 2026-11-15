@@ -956,6 +956,10 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 2972 to 4098 in 3 runs before #713, 3140 to 3855 in 8 since, the felling 2672 to 3385.
 	// Since #752 (#761), 2899 to 4259 in 6 copies at once, the felling 2426 to 3763 (3112 on average): past
 	// HARVEST_FACTOR of HARVEST["giant_jungle"] 2250, so it checks KILLED_GIANT_JUNGLE_HARVEST, 3100.
+	// The slower felling of #761 is load, not a regression (#769): those 6 copies ran with 30 more giant farms (16 giant
+	// jungles, 8 giant spruces, 6 mangroves), whose bots share the scan and path budgets. 6 copies alone felled in 2313 to
+	// 3326 (2838 on average), as before #713; with 16 giant jungle farms at once 2531 to 3372 (3031), those 16 1929 to
+	// 3206 (2338). The spread is where the bot is killed (118 to 159 ticks after the growth) and the way back up.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8500)
 	public void aBotKilledWhileFellingAGiantJungleComesBackAndFinishesTheFarm(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
@@ -983,6 +987,25 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
 		script(helper, bot, "print(jobs.wood_farm.HARVEST['giant_spruce'], jobs.wood_farm.HARVEST['giant_jungle'])");
 		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of(GIANT_SPRUCE_HARVEST + " " + GIANT_JUNGLE_HARVEST), "said"));
+	}
+
+	/**
+	 * HARVEST and LOGS of each one-sapling kind but birch and mangrove, and of dark and pale oak, are measured (#769), no
+	 * longer the birch's ticks a log times logs counted from the tree features.
+	 */
+	// Measured with temporary copies of aMangroveFarmFellsItsFirstTreeAndReplants for each kind, seeds 0 to 10, 24 to 32
+	// copies at once: the ticks from the growth to the logs stored and the sapling replanted, and the logs grown.
+	// oak 165 to 302, 207 on average (10 trees; a tree of 4 logs went into the depot's chest, none stored), 4.9 logs;
+	// spruce 250 to 433, 329, 6.4 logs; jungle 176 to 539, 359, 8.7; acacia 207 to 464, 286, 7.9; cherry 378 to 1231,
+	// 865, 15.9; dark oak 867 to 1510, 1236, 40.6; pale oak (the same trees) 663 to 1209, 941; poplar 378 to 1021, 613,
+	// 14.3 (LOGS keeps its 15 of 200 trees, #650). HARVEST is the mean rounded to 50, LOGS to a half.
+	@GameTest(maxTicks = 10)
+	public void eachKindsHarvestAndLogsAreMeasured(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		script(helper, bot, "print([(jobs.wood_farm.HARVEST['minecraft:' + k + '_sapling'], jobs.wood_farm.LOGS['minecraft:' + k + '_sapling'])"
+			+ " for k in ['oak', 'spruce', 'jungle', 'acacia', 'cherry', 'dark_oak', 'pale_oak', 'poplar']])");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("[(200, 5), (350, 6.5), (350, 8.5), (300, 8), (850, 16),"
+			+ " (1250, 40.5), (950, 40.5), (600, 15)]"), "said"));
 	}
 
 	/** jobs.wood_farm's HARVEST of each giant, as aGiantsHarvestIsWhatItsFarmTestMeasures checks. */
@@ -1107,7 +1130,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(job.state() == ScriptRun.State.FINISHED, "not finished");
-			helper.assertValueEqual(said(bot), List.of("19114 47 1 True", "47 8"), "printed");
+			helper.assertValueEqual(said(bot), List.of("19114 47 1 True", "47 15"), "printed");
 		});
 	}
 
