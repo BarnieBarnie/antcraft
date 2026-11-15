@@ -177,6 +177,43 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A farmer crafts bowls from the core's planks where the core has beetroot but no bowls, and makes beetroot soup (#744). Measured: 11 ticks. */
+	@GameTest(maxTicks = 30)
+	public void aFarmerCraftsBowlsForBeetrootSoup(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		helper.setBlock(4, 1, 1, Blocks.CRAFTING_TABLE);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.BEETROOT, 6));
+		core.setItem(1, new ItemStack(Items.OAK_PLANKS, 3));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(core.countItem(Items.BEETROOT_SOUP), 1, "beetroot soup in the core");
+			helper.assertValueEqual(core.countItem(Items.BOWL), 3, "bowls in the core");
+			helper.assertValueEqual(core.countItem(Items.OAK_PLANKS), 0, "planks left in the core");
+		});
+	}
+
+	/**
+	 * A farmer with wheat to bake but no crafting table in reach, nor one or logs in the core or trees in the colony, warns
+	 * that it has none and tries again only after lib.food.RETRY (1200) ticks, not every round of 400 ticks (#744): 3 tries by tick 950 before.
+	 */
+	@GameTest(maxTicks = 1000)
+	public void aFarmerWithNoTableTriesOncePerRetry(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.WHEAT, 3));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnError(helper, farmer);
+		helper.runAtTickTime(950, () -> {
+			List<String> tries = BotScripts.warnings(farmer).stream().filter(w -> w.contains("crafting_table")).toList();
+			helper.assertValueEqual(tries.size(), 1, "warnings about the crafting table " + BotScripts.warnings(farmer));
+			helper.succeed();
+		});
+	}
+
 	/** A farmer makes beetroot soup from the core's 6 beetroot and bowl at the colony's crafting table and keeps it in the core (#721). Measured: 9 ticks. */
 	@GameTest(maxTicks = 40)
 	public void aFarmerMakesBeetrootSoupFromTheCoresBeetroot(GameTestHelper helper) {
