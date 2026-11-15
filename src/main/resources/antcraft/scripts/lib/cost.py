@@ -31,7 +31,8 @@ SMELT = 200
 
 def walk(a, b):
     """The ticks the bot takes to walk from Pos a to Pos b: WALK for each block along x, y and z."""
-    # ponytail: the blocks along each axis, not a path; reachable() or goto tell the real way.
+    # ponytail: the blocks along each axis, not a path; reachable() or goto tell the real way. A path steps along x or z,
+    # never both at once, so a diagonal takes as long as this counts (#664).
     return WALK * (abs(a.x - b.x) + abs(a.y - b.y) + abs(a.z - b.z))
 
 

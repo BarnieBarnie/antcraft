@@ -13,7 +13,7 @@ The numbers are constants, rounded from the game's, not its break-time formula: 
 
 ## `walk(a, b)`
 
-- **Returns** the ticks the bot takes to walk from [`Pos`](../../types/pos.md) `a` to `b`: `WALK` for each block along x, y and z. It does not look for a path; [`reachable`](../../movement/reachable.md) tells whether there is one.
+- **Returns** the ticks the bot takes to walk from [`Pos`](../../types/pos.md) `a` to `b`: `WALK` for each block along x, y and z. A path steps along x or z, never both at once, so a diagonal walk takes that long too. It does not look for a path; [`reachable`](../../movement/reachable.md) tells whether there is one.
 - **Pauses** no.
 
 ## `breaking(n, material, tier)`

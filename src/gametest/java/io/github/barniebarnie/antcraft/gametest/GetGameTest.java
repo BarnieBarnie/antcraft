@@ -193,6 +193,26 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Two raw iron in a chest 20 blocks off the bot along each of x and z (#664): make_cost of two raw iron, the walk to the
+	 * chest, is within {@link #DIAGONAL_FACTOR} of the ticks get takes. A path steps along x or z, never both at once, so a
+	 * diagonal walk takes as long as the blocks along x and z: lib.cost.walk counted as max(dx, dz) + 0.41 min(dx, dz)
+	 * gave 141 for 200 ticks. Measured: make_cost 200, get 193 to 200 ticks (test tick 225); 20 blocks along x alone
+	 * 100 for 101, 10 along each 100 for 92.
+	 */
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 400)
+	public void makeCostOfADiagonalChestIsCloseToItsTicks(GameTestHelper helper) {
+		chest(helper, new BlockPos(21, 1, 21), new ItemStack(Items.RAW_IRON, 2));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("raw_iron", 2))
+			r = get("raw_iron", 2)
+			print(r["ok"])
+			""");
+		measured(helper, bot, DIAGONAL_FACTOR);
+	}
+
+	/**
 	 * A stone pickaxe carried, a vein of three iron ore a few blocks off (#661): make_cost of three raw iron is the source's
 	 * estimate for the first and the mining of the rest of the vein, within {@link #COST_FACTOR} of get's ticks; it was the
 	 * estimate, which counts a walk, for each. Measured: make_cost 106 (180 before), get 80 to 85 ticks (test tick 98).
@@ -235,11 +255,19 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	/** How far make_cost may be from the ticks get takes, either way. */
 	private static final double COST_FACTOR = 1.5;
 
+	/** How far make_cost of a walk alone may be from the ticks get takes, either way (#664). */
+	private static final double DIAGONAL_FACTOR = 1.2;
+
 	/**
 	 * Succeeds where the bot printed an estimate and then True, and the ticks from the first print to the second are
 	 * within COST_FACTOR of that estimate; fails at once where they cannot be any more, or the bot printed anything else.
 	 */
 	private static void measured(GameTestHelper helper, AntBot bot) {
+		measured(helper, bot, COST_FACTOR);
+	}
+
+	/** As {@link #measured(GameTestHelper, AntBot)}, within factor rather than COST_FACTOR. */
+	private static void measured(GameTestHelper helper, AntBot bot, double factor) {
 		long[] start = {-1};
 		boolean[] close = {false};
 		helper.onEachTick(() -> {
@@ -255,8 +283,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			String measured = "make_cost " + log.get(0) + ", measured " + ticks + " ticks";
 			if (log.size() > 1 && !log.subList(1, log.size()).equals(List.of("True"))) {
 				helper.fail("printed " + log + ", log " + BotScripts.log(bot, Output.Level.DEBUG));
-			} else if (cost * COST_FACTOR < ticks || log.size() > 1 && cost > ticks * COST_FACTOR) {
-				helper.fail(measured + ", more than a factor " + COST_FACTOR + " apart");
+			} else if (cost * factor < ticks || log.size() > 1 && cost > ticks * factor) {
+				helper.fail(measured + ", more than a factor " + factor + " apart");
 			} else if (log.size() > 1) {
 				LOGGER.info(measured);
 				close[0] = true;
