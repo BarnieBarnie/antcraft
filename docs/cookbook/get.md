@@ -6,7 +6,7 @@ The job `jobs/get` gets any item from what is around, the tools to get it includ
 /antcraft bot run jobs.get iron_pickaxe
 ```
 
-A script in a folder runs by its dotted name: `jobs.get`, not `jobs/get`. The arguments are the item, how many (default 1) and how far to look, in blocks (default 32): `/antcraft bot run jobs.get torch 16 48`. The bot says `got 1 iron_pickaxe`, or why not, such as `no feather: no_recipe {'minecraft:feather': 1}`.
+A script in a folder runs by its dotted name: `jobs.get`, not `jobs/get`. The arguments are the item, how many (default 1) and how far to look, in blocks (default 32): `/antcraft bot run jobs.get torch 16 48`. The bot says `got 1 iron_pickaxe`, or why not, such as `no ender_pearl: no_recipe {'minecraft:ender_pearl': 1}`.
 
 The job, `config/antcraft/scripts/jobs/get.py`:
 
@@ -43,4 +43,4 @@ if args is not None:
 - `get` takes from a chest within `radius` before it makes anything. What it takes it borrows, through [`lib/borrow`](../reference/modules/lib/borrow.md). Where `get` fails it gives back what it borrowed itself. [`give_back()`](../reference/modules/lib/borrow.md#give_backradius16-since0) in `finally` returns the rest, also when the script stops with an error (see [Catching errors](../language/errors.md#catching-errors)). A tool goes back worn. The `n` asked for are the job's result, so [`keep(key(item), n)`](../reference/modules/lib/borrow.md#keepitem-nnone) strikes `n` of them, less what the bot owned of the item already, off the borrowed list first and the bot keeps them; what it borrowed of the item beyond `n` goes back. [`key`](../reference/modules/lib/get.md#keyitem) turns a log into `#minecraft:logs`, and `keep` matches a selector to the items it selects, so `jobs.get #minecraft:planks 2` keeps 2 borrowed oak planks.
 - An item that no source gathers and no recipe makes fails with `no_recipe`, and `missing` names it and how many. A failed step gives its own reason, such as `no_stone` when the stone within `radius` runs out. [`SOURCES`](../reference/modules/lib/get.md) lists what `get` can gather. Add your own there in a script that imports `lib.get`.
 
-`GetJobGameTest` runs the job as it is: an iron pickaxe from nothing, feathers that fail with `no_recipe`, an iron pickaxe taken from a chest and kept, and 2 of 5 borrowed planks kept and the other 3 given back.
+`GetJobGameTest` runs the job as it is: an iron pickaxe from nothing, ender pearls that fail with `no_recipe`, an iron pickaxe taken from a chest and kept, and 2 of 5 borrowed planks kept and the other 3 given back.

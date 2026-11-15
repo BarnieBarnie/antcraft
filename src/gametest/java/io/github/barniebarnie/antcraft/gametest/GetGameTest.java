@@ -13,6 +13,8 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -212,6 +214,39 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(r["ok"])
 			""");
 		measured(helper, bot, DIAGONAL_FACTOR);
+	}
+
+	/**
+	 * A stone sword carried and a still cow 6 blocks off (#719): make_cost of a beef, the walk to the cow and a kill with
+	 * a sword, is within {@link #COST_FACTOR} of the ticks get takes to kill it and pick up what it drops. Radius 6, so no
+	 * neighbouring test's animal is found: entities are not kept to the test's area.
+	 */
+	@GameTest(maxTicks = 200)
+	public void makeCostOfBeefFromACowIsCloseToItsTicks(GameTestHelper helper) {
+		Cow cow = helper.spawn(EntityTypes.COW, 7, 1, 1);
+		cow.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_SWORD));
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("beef", 1, 6))
+			r = get("beef", 1, 6)
+			print(r["ok"])
+			""");
+		measured(helper, bot);
+	}
+
+	/** No animal within radius (#719): get of a beef fails at once with no_animal, and make_cost of it is None. */
+	@GameTest(maxTicks = 40)
+	public void getBeefFailsWithNoAnimalInRange(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		run(helper, bot, """
+			from lib.get import get, make_cost
+			print(make_cost("beef", 1, 6))
+			r = get("beef", 2, 6)
+			print(r["ok"], r["reason"], r["missing"])
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "None", "False no_animal {'minecraft:beef': 2}"));
 	}
 
 	/**

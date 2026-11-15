@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.Memory;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -16,6 +17,8 @@ import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.Container;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
@@ -84,6 +87,32 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(hauler.getFood().food() > 5, "food " + hauler.getFood().food());
 			helper.assertValueEqual(core.countItem(Items.WHEAT), 0, "wheat left in the core");
+		});
+	}
+
+	/**
+	 * A hungry bot with a stone sword and a furnace kit (a furnace, a wooden pickaxe to take it back and coal) and no food
+	 * kills the cow 5 blocks off, cooks its beef and eats (#719): food 12 to 20 only on cooked beef (8), as raw beef (3)
+	 * twice stops at 18. Radius 6, as entities are not kept to the test's area. Measured: 378 ticks with one beef dropped,
+	 * 646 to 655 with two, as ensure_food cooks the raw beef one at a time (200 ticks each); three would take some 920.
+	 */
+	@GameTest(maxTicks = 1300)
+	public void aHungryBotWithASwordHuntsACowAndEatsItsCookedBeef(GameTestHelper helper) {
+		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 3);
+		cow.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getFood().setFoodLevel(12);
+		bot.getFood().setSaturation(0);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_SWORD));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.WOODEN_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 2));
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.upkeep(6)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertTrue(cow.isDeadOrDying(), "cow alive " + BotScripts.warnings(bot));
+			helper.assertValueEqual(bot.getFood().food(), 20, "food");
 		});
 	}
 

@@ -190,6 +190,61 @@ for item, leaves, chance in [("oak_sapling", ["oak_leaves"], 20), ("spruce_sapli
                                           estimate=LEAF * chance, near=leaves, keep=grown)
 
 
+# Ticks to kill an animal (#719): with a sword, two or three blows 13 ticks apart and the pick-up; by hand ten 1-damage
+# blows, one each time the cow's invulnerability ends (FightGameTest attackKillsACow: 113 ticks with a 5-block walk); and
+# the walk from one animal to the next. ponytail: a cow's 10 health for every animal; a chicken's 4 dies sooner.
+SWORD_KILL = 30
+HAND_KILL = 90
+BETWEEN = 8 * lib.cost.WALK
+
+
+class Hunt(Source):
+    """The Source of what animals drop (#719): mobs, an entity selector, within radius (at most entities' 64), nearest
+    first, killed with attack and a sword where the bot carries one; per is how many of item one drops on average. There
+    is nothing to get where none is in range, so get fails at once with no_animal and make_cost is None. ponytail: a baby
+    is killed for nothing, and an animal that cannot be got to is skipped."""
+
+    def __init__(self, item, mobs, per):
+        super().__init__(self.hunt, estimate=int(SWORD_KILL / per))
+        self.item = item
+        self.mobs = mobs
+        self.per = per
+
+    def near_mobs(self, radius):
+        return entities(self.mobs, min(radius, 64))
+
+    def there(self, radius):
+        return len(self.near_mobs(radius)) > 0
+
+    def cost(self, n, radius, start=None):
+        """(ticks, None): the walk from start (None: the bot's Pos) to the nearest animal, a kill for each per of n, with
+        a sword where one is carried, else by hand, and BETWEEN from each animal to the next."""
+        mobs = self.near_mobs(radius)
+        walk = 0 if not mobs else lib.cost.walk(pos() if start is None else start, mobs[0].pos)
+        kills = max(1, int(-(-n // self.per)))
+        kill = SWORD_KILL if count("#minecraft:swords") else HAND_KILL
+        return int(walk + kills * kill + (kills - 1) * BETWEEN), None
+
+    def hunt(self, n, radius):
+        target = count(self.item) + n
+        tried = []
+        while count(self.item) < target:
+            mobs = [m for m in self.near_mobs(radius) if m not in tried]
+            if not mobs:
+                return result("no_animal", None, {self.item: target - count(self.item)})
+            if not tried:
+                lib.tools.hold("sword")
+            tried.append(mobs[0])
+            if attack(mobs[0]):
+                pick_up(self.item, 6)
+        return result()
+
+
+for item, mobs, per in [("beef", ["cow", "mooshroom"], 2), ("leather", ["cow", "mooshroom"], 1), ("porkchop", "pig", 2),
+                        ("mutton", "sheep", 1.5), ("chicken", "chicken", 1), ("feather", "chicken", 1)]:
+    SOURCES["minecraft:" + item] = Hunt("minecraft:" + item, mobs, per)
+
+
 def key(item):
     """item's full id, and LOGS for a log without a source of its own (any log makes planks)."""
     if item.startswith("#"):

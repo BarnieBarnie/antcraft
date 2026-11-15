@@ -20,7 +20,7 @@ Eats the best food of `FOODS` the bot carries, one after another, while none of 
 
 ## `ensure_food(n=STOCK, radius=32)`
 
-Makes the bot carry at least `n` food of `FOODS` (`STOCK` is 4). It first takes food from the chests of [`lib.stock.chests(radius)`](stock.md#chestsradius32), best first: the Colony Core's plainly, others' borrowed and kept ([`lib.borrow.keep`](borrow.md)), so `give_back` does not take food back. Short of that, it makes one at a time with [`lib.get.get`](get.md), the first of `MADE` it can: bread from wheat, a baked potato, cooked meat or fish, smelting with a furnace as `get` does. A fed bot never loads `lib.get`.
+Makes the bot carry at least `n` food of `FOODS` (`STOCK` is 4). It first takes food from the chests of [`lib.stock.chests(radius)`](stock.md#chestsradius32), best first: the Colony Core's plainly, others' borrowed and kept ([`lib.borrow.keep`](borrow.md)), so `give_back` does not take food back. Short of that, it makes one at a time with [`lib.get.get`](get.md), the first of `MADE` it can: bread from wheat, a baked potato, cooked meat or fish, smelting with a furnace as `get` does. Raw meat comes from the chests or, where none holds any, from hunting the animals within `radius` (#719, [`SOURCES`](get.md#sources)): a hungry bot with a sword, a furnace, a pickaxe to take it back and coal kills a cow, cooks its beef and eats it. A fed bot never loads `lib.get`.
 
 - **Returns** a [`result()`](result.md): `ok`, or `no_item` with `missing` `{"food": k}`, how much food it is still short, keeping what it got.
 - **Pauses** yes, while it walks to chests, gathers, crafts and smelts.

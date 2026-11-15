@@ -51,11 +51,11 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertTrue(GameTests.carried(bot, Items.IRON_PICKAXE) == 1, "no iron pickaxe"));
 	}
 
-	/** Feathers come from no source and no recipe: no_recipe, with what is missing. */
+	/** Ender pearls come from no source and no recipe: no_recipe, with what is missing (feathers did, until hunting, #719). */
 	@GameTest(maxTicks = 20)
 	public void unknownRawItemFailsWithNoRecipe(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
-		run(helper, bot, "feather 2", "no feather: no_recipe {'minecraft:feather': 2}", () -> { });
+		run(helper, bot, "ender_pearl 2", "no ender_pearl: no_recipe {'minecraft:ender_pearl': 2}", () -> { });
 	}
 
 	/** The item asked for, taken from a chest, is kept: only what was borrowed on the way goes back. */
