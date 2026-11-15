@@ -198,8 +198,20 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Monster.class, true) {
 			@Override
 			public boolean canUse() {
-				return !(AntBot.this.getHealth() < AntBot.this.getMaxHealth() && AntBot.this.isRunningScript()
-					&& !AntBot.this.isIdling()) && super.canUse();
+				return !this.scriptDecides() && super.canUse();
+			}
+
+			/**
+			 * Also once running: TargetGoal sets its own target back where the mob's is null, so a target it took at full
+			 * health would undo attack's letting go once hurt (#718).
+			 */
+			@Override
+			public boolean canContinueToUse() {
+				return !this.scriptDecides() && super.canContinueToUse();
+			}
+
+			private boolean scriptDecides() {
+				return AntBot.this.getHealth() < AntBot.this.getMaxHealth() && AntBot.this.isRunningScript() && !AntBot.this.isIdling();
 			}
 		});
 	}
