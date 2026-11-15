@@ -399,6 +399,11 @@ public class PathFollower {
 		BlockPos below = to.below();
 		VoxelShape floor = this.bot.level().getBlockState(below).getCollisionShape(this.bot.level(), below);
 		double y = floor.isEmpty() || floor.max(Direction.Axis.Y) > 1 ? to.getY() : below.getY() + floor.max(Direction.Axis.Y);
+		if (y > this.bot.getY() + this.bot.maxUpStep()) {
+			// The move control jumps at once, keeping in the air the way it faces, but turns at most 90 degrees a tick: still
+			// turning, such as just after it stepped back to place the block, it would jump sideways off its target (#670).
+			this.bot.setYRot((float) (Mth.atan2(to.getZ() + 0.5 - this.bot.getZ(), to.getX() + 0.5 - this.bot.getX()) * Mth.RAD_TO_DEG) - 90.0F);
+		}
 		this.bot.getMoveControl().setWantedPosition(to.getX() + 0.5, y, to.getZ() + 0.5, SPEED);
 	}
 

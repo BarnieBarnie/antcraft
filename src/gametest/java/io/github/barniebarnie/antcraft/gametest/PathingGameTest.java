@@ -571,8 +571,9 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * (#656): it steps back off the edge to place it, as its own body was in the way, where it waited till it gave up
 	 * unreachable, such as beside a felled poplar's trunk.
 	 */
-	// Measured: passes at tick 96, after it falls off as it steps up and climbs back (red: still walking at tick 300).
-	@GameTest(maxTicks = 200)
+	// Measured: passes at tick 16, jumping straight onto the block it placed (#670: tick 96, as it jumped mid-turn and
+	// fell off; #656 red: still walking at tick 300).
+	@GameTest(maxTicks = 35)
 	public void bridgesOutFromTheEdgeOfABlock(GameTestHelper helper) {
 		helper.setBlock(3, 1, 3, Blocks.STONE);
 		helper.setBlock(3, 2, 5, Blocks.STONE); // the face the bridged block goes against
