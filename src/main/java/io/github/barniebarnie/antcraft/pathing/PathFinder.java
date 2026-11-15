@@ -96,7 +96,7 @@ public final class PathFinder {
 	 * The open set's order: the lowest priority first; among equals the farthest along (the least left to go), then the
 	 * first added. Ties so broken do not hang on what else is in the queue: a heap's own order among equals did, so a move
 	 * a search never takes, such as a costly drop (#682), changed which of two equal paths it found, and with it how a
-	 * giant spruce's felling went. Among equals the first added alone, settling a base made no bucket of its chest's iron.
+	 * giant spruce's felling went. Among equals the first added alone, settling a base made no bucket of its chest's iron, as lib.get planned again from the chest out of the table's reach (fixed there, #692).
 	 */
 	private static final Comparator<Entry> ORDER = Comparator.comparingDouble(Entry::priority)
 		.thenComparing(Comparator.comparingDouble((Entry e) -> e.node().cost()).reversed())
