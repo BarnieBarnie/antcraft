@@ -1,6 +1,6 @@
 # `lib/cost`
 
-The numbers the library's estimates use: how long the bot takes to walk, to break blocks and to smelt, and how many blocks a tool lasts. A module of the mod's default library: `import lib.cost` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/cost.py`, and a primitive: its functions are finders, they take no ticks, and it imports nothing (see [Writing library functions](../../index.md#writing-library-functions)).
+The numbers the library's estimates use: how long the bot takes to walk, to break blocks and to smelt, what a death costs, and how many blocks a tool lasts. A module of the mod's default library: `import lib.cost` (see [Modules & import](../../../language/modules.md)). It is a script like any other, in `config/antcraft/scripts/lib/cost.py`, and a primitive: its functions are finders, they take no ticks, and it imports nothing (see [Writing library functions](../../index.md#writing-library-functions)).
 
 The numbers are constants, rounded from the game's, not its break-time formula: good enough to choose between a stone and an iron tool, not to time a job to the tick.
 
@@ -10,6 +10,8 @@ The numbers are constants, rounded from the game's, not its break-time formula: 
 - `BREAK`: ticks to break one block, `BREAK[material][tier]`. `material` is `"stone"` (stone, cobblestone, deepslate: a pickaxe), `"ore"` (an ore: a pickaxe), `"wood"` (a log: an axe), `"dirt"` (dirt, sand, gravel: a shovel), `"table"` (a crafting table: an axe) or `"furnace"` (a furnace: a pickaxe), each as the game times a tool that drops the block; `tier` is `"wooden"`, `"stone"`, `"copper"`, `"iron"`, `"diamond"`, `"netherite"`, `"golden"` or `"hand"` (no tool). An ore broken with a pickaxe of too low a tier takes longer and drops nothing: check [`lib.tools.tier_for`](tools.md#tier_forwhat) first.
 - `USES`: how many blocks a tool of each tier breaks before it is used up: wooden 59, stone 131, copper 190, iron 250, diamond 1561, golden 32, netherite 2031.
 - `SMELT`: ticks a furnace takes to smelt one item, `200`.
+- `RESPAWN`: ticks from a bot's death to its script running again at its home, `200`: the config `botRespawnTicks` by default (see [Death and respawn](../../../features/death.md)).
+- `DESPAWN`: ticks what a bot drops lies before it is gone, `6000` (five minutes), as a player's drops.
 
 ## `walk(a, b)`
 
@@ -19,6 +21,11 @@ The numbers are constants, rounded from the game's, not its break-time formula: 
 ## `breaking(n, material, tier)`
 
 - **Returns** the ticks the bot takes to break `n` blocks of `material` with a tool of `tier` (`None` or `"hand"`: no tool): `n * BREAK[material][tier]`.
+- **Pauses** no.
+
+## `death(at, start=None)`
+
+- **Returns** the ticks a death at [`Pos`](../../types/pos.md) `at` costs the bot: `RESPAWN`, then the walk from `start` (by default its [`home`](../../movement/home.md)) back to `at` for what it dropped. A death costs nothing else but what it drops, and only when the bot is not back for it within `DESPAWN` ticks: a long fall, even a fatal one, can be cheaper than the climb down. `jobs/wood_farm` sets its home at the farm for that (see [Grow a wood farm](../../../cookbook/wood-farm.md)).
 - **Pauses** no.
 
 ## Example

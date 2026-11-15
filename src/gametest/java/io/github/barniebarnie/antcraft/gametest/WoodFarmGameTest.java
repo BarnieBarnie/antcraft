@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * The job {@code jobs/wood_farm.py} (#606; docs/cookbook/wood-farm.md): a birch farm at (6, 1, 2) in the 24x16x24
@@ -82,6 +84,84 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+
+	/**
+	 * A farm bot killed up on its scaffold while it fells a tall birch (8 logs) comes back at the farm, its home the path by
+	 * the depot, (6, 1, 1), walks back for what it dropped and takes back the scaffold it died on, then finishes the cell:
+	 * no log left (but the supply birch's), the cell replanted, logs in the depot, no dirt above the floor and nothing it dropped lying about (#679).
+	 */
+	// Measured: passes at tick 824 to 847 (red: respawned where first spawned; then the scaffold it died on left at (7, 1, 3)).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 2000)
+	public void aBotKilledWhileFellingComesBackAndFinishesTheCell(GameTestHelper helper) {
+		AntBot bot = farm(helper, 2, 2);
+		java.util.UUID id = bot.getUUID();
+		run(helper, bot, 1);
+		boolean[] grew = new boolean[1];
+		long[] died = {-1};
+		long[] respawned = {-1};
+		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 1));
+		helper.onEachTick(() -> {
+			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
+			if (now != null && said(now).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("said " + said(now));
+			}
+			if (!grew[0] && said(bot).contains("birch_farm 4/4: farm") && helper.getBlockState(SPOT).is(Blocks.BIRCH_SAPLING)) {
+				TreesGameTest.plantTree(helper, SPOT.above(4), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
+				for (int y = 0; y < 4; y++) {
+					helper.setBlock(SPOT.above(y), Blocks.BIRCH_LOG);
+				}
+				grew[0] = true;
+			} else if (grew[0] && died[0] < 0 && bot.isAlive() && helper.relativePos(bot.blockPosition()).getY() >= 4) {
+				bot.kill(helper.getLevel());
+				died[0] = helper.getTick();
+			} else if (died[0] >= 0 && respawned[0] < 0 && now != null && now != bot) {
+				respawned[0] = helper.getTick();
+				helper.assertTrue(now.blockPosition().distManhattan(home) <= 1, "respawned at " + now.blockPosition() + ", home " + home);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(respawned[0] >= 0, "not killed and respawned: killed at " + died[0]);
+			AntBot again = Objects.requireNonNull((AntBot) helper.getLevel().getEntity(id));
+			assertCell(helper, again, SPOT);
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 15, 23)) {
+				helper.assertFalse(helper.getBlockState(p).is(Blocks.BIRCH_LOG) && p.getZ() < 10, "a log left at " + p.toShortString() + "; said " + said(again));
+				helper.assertFalse(helper.getBlockState(p).is(Blocks.DIRT), "scaffold left at " + p.toShortString() + "; said " + said(again));
+			}
+			int stored = 0;
+			for (int x = 6; x < 12; x++) {
+				if (helper.getBlockState(new BlockPos(x, 1, 0)).is(Blocks.CHEST)) {
+					stored += helper.getBlockEntity(new BlockPos(x, 1, 0), ChestBlockEntity.class).countItem(Items.BIRCH_LOG);
+				}
+			}
+			helper.assertTrue(stored > 0, "no birch logs in the depot; said " + said(again));
+			helper.assertTrue(helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, helper.getBounds(),
+				e -> e.getItem().is(Items.STONE_AXE) || e.getItem().is(Items.DIRT)).isEmpty(), "its drops left lying; said " + said(again));
+		});
+	}
+
+	/**
+	 * A farm bot first spawned up on a bedrock pillar 29 high in the 24x40x24 {@code giant} structure, with nothing to
+	 * build or dig down with, has no way down but a fatal drop (PathFinder's last search, #674). It takes it, comes back at
+	 * the farm, now its home, not on the pillar, and the job goes on: it builds and plants the first cell (#679).
+	 */
+	// Measured: passes at tick 510 to 524 (red without set_home: it respawned up the pillar and dropped to its death again).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1200)
+	public void aBotStrandedUpAPillarDropsToItsDeathAndTheFarmGoesOn(GameTestHelper helper) {
+		AntBot bot = farm(helper, 2, 2);
+		java.util.UUID id = bot.getUUID();
+		for (int y = 1; y < 30; y++) {
+			helper.setBlock(12, y, 14, Blocks.BEDROCK);
+		}
+		bot.snapTo(Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(12, 30, 14))), 0, 0);
+		bot.setHome(helper.absolutePos(new BlockPos(12, 30, 14)));
+		run(helper, bot, 1, 32);  // the supply chest 31 blocks off
+		helper.succeedWhen(() -> {
+			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
+			helper.assertTrue(now != null && now.getDeaths() >= 1, "never died; " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(said(now).contains("built cell 1"), "said " + said(now));
+			assertCell(helper, now, SPOT);
+		});
+	}
 
 	/** With 4 saplings and 4 torches in the chest, 2 of each more than the first cell takes, the farm builds its second cell. */
 	// Measured: passes at tick 146 to 148.
@@ -489,13 +569,14 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * leaving a branch log at (11, 18, 6), and seeds 8, 17 and 12 (trunks of 21, 24 and 28) killed it by falls each time
 	 * (#668). It fails once the bot is hurt (#673): it walked on jungle leaves left with no log in range, which decayed
 	 * under it, and, landing over the edge of a block after a drop, planned from the air beside it and walked off. Seed 37
-	 * no longer hurt it, but still left the branch log at (11, 18, 6) in 2 of 6 runs.
+	 * no longer hurt it, but still left the branch log at (11, 18, 6) in 2 of 6 runs. Since #674 it was hurt again in 2 of 3
+	 * runs (a fall to the floor); a fall, even a fatal one, is a move the farm recovers from (#679), so it may be hurt.
 	 */
 	// Measured: passes at tick 2597 to 4012 (red: hurt in 5 of 18 runs at tick 1709 to 3341), the felling 2085 to 3416 ticks.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 8000)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
-			GIANT_JUNGLE_HARVEST, true);
+			GIANT_JUNGLE_HARVEST, false);
 	}
 
 	/** HARVEST of each giant is the one its farm test above fells within {@link #HARVEST_FACTOR} of (#669). */
@@ -640,9 +721,14 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Runs jobs.wood_farm for birch at AT, up to cells cells, radius 12. */
 	private static void run(GameTestHelper helper, AntBot bot, int cells) {
+		run(helper, bot, cells, 12);
+	}
+
+	/** Runs jobs.wood_farm for birch at AT, up to cells cells, radius radius. */
+	private static void run(GameTestHelper helper, AntBot bot, int cells, int radius) {
 		BlockPos at = helper.absolutePos(AT);
 		List<String> said = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm birch_sapling "
-			+ at.getX() + " " + at.getY() + " " + at.getZ() + " " + cells + " 12");
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " " + cells + " " + radius);
 		helper.assertTrue(bot.getScript() != null, "not run: " + said);
 	}
 

@@ -40,3 +40,18 @@ def breaking(n, material, tier):
     """The ticks the bot takes to break n blocks of material ("stone", "ore", "wood", "dirt", "table" or "furnace") with a tool of tier
     ("wooden", "stone", "copper", "iron", "diamond", "netherite", "golden", or "hand" or None for none)."""
     return n * BREAK[material][tier or "hand"]
+
+
+# Ticks from a bot's death to its script running again at its home: botRespawnTicks (config, default 200), as
+# DeathGameTest aDeathCostsTheRespawnAndTheWalkBack measures it.
+RESPAWN = 200
+
+# Ticks what a bot drops lies before it despawns, as a player's drops: five minutes.
+DESPAWN = 6000
+
+
+def death(at, start=None):
+    """The ticks a death at Pos at costs the bot: RESPAWN, then the walk from start (the bot's home() by default) back to
+    at for what it dropped (#679). Past DESPAWN ticks that is gone, and with it what the bot carried."""
+    # ponytail: a death costs only ticks here; a caller that weighs the items lost compares this with DESPAWN.
+    return RESPAWN + walk(start or home(), at)

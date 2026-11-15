@@ -108,6 +108,39 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * lib.cost.death(at) is what a death at {@code at} costs in ticks (#679): lib.cost.RESPAWN, which the test measures as
+	 * the ticks from the kill to the script's first line run again at home, plus the walk from home back to {@code at}.
+	 */
+	@GameTest(maxTicks = 440)
+	public void aDeathCostsTheRespawnAndTheWalkBack(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		BotScripts.run(bot, """
+			import lib.cost
+			print('started', game_time(), lib.cost.death(home()), lib.cost.death(home() + (-5, 0, -5)) - lib.cost.death(home()))
+			while True:
+			    wait(5)
+			""");
+		long[] died = {-1};
+		helper.runAfterDelay(5, () -> {
+			bot.kill(helper.getLevel());
+			died[0] = helper.getLevel().getGameTime();
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again != bot, "not respawned");
+			List<String> printed = BotScripts.log(Objects.requireNonNull(again), Output.Level.PRINT);
+			helper.assertTrue(printed.size() == 2, "printed " + printed);
+			String[] words = printed.get(1).split(" ");
+			long respawn = Long.parseLong(words[1]) - died[0];
+			int cost = Integer.parseInt(words[2]);
+			helper.assertTrue(Math.abs(cost - respawn) <= 5, "death(home()) " + cost + ", measured " + respawn + " ticks to the script's first line");
+			helper.assertValueEqual(words[3], String.valueOf(10 * 5), "the walk back from home 10 blocks off");
+		});
+	}
+
+	/**
 	 * A colony member that dies stays a member while it waits, and respawns one (#353): its script, run again from the top,
 	 * sees its colony.
 	 */

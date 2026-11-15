@@ -177,7 +177,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/cells`](modules/lib/cells.md): `layout(name, origin, size, row=4, gap=1)`, `cell(name, i)`, `built(name)`, `add(name, i)`, `next(name)`, `count(name)`, a grid of farm cells that grows one cell at a time, kept in `memory["cells"]`.
 - [`lib/treefarm`](modules/lib/treefarm.md): `KINDS`, `sapling(kind)`, `materials(kind)`, `build_cell(kind, low, high)`, `grown(kind, low, high)`, `harvest(kind, low, high, radius=32)`, tree cells per kind (a sapling, or a giant spruce or jungle) for a wood farm.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
-- [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `walk(a, b)`, `breaking(n, material, tier)`.
+- [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `RESPAWN`, `DESPAWN`, `walk(a, b)`, `breaking(n, material, tier)`, `death(at, start=None)`.
 - [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(what)`, `hold(kind)`.
 - [`lib/borrow`](modules/lib/borrow.md): `borrow(chest, item, n=1)`, `borrowed()`, `give_back(radius=16)`, `keep(item, n=None)`.
 - [`lib/find`](modules/lib/find.md): `nearest(what, radius=32, where=None)`, `exposed(what, radius=32, skip=None)`, `is_open(p)`, `is_air(p)`, `in_colony(p)`, `WHERE`, `resolve()`.

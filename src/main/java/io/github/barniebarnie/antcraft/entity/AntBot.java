@@ -147,6 +147,12 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	private long lastBuilt;
 	/** The nether portals the bot went through, both ends, newest first ({@link MoveApi#remember}). Saved. */
 	private List<Pos> portals = List.of();
+	/**
+	 * Where the walks of the script the bot died running placed scaffold that still stands, which the run it respawns with
+	 * gets from {@code placed_scaffold()} to take back (#679). Saved, as the bot waits to respawn.
+	 * ponytail: a block changed while it waits is not seen, as no run owns it then; take_back would mine it.
+	 */
+	private List<Pos> scaffoldLeft = List.of();
 	/** Whether the bot came through a nether portal and has yet to remember where it came out, on its first tick. Not saved. */
 	private boolean arriving;
 
@@ -746,6 +752,7 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		ScriptRun last = this.idling ? null : this.script;
 		boolean library = this.scriptSource != null;
 		Code code = this.scriptCode;
+		this.scaffoldLeft = last != null ? last.peekPlaced() : List.of();
 		this.stopScriptKeepingJobs();
 		respawnTime.ifPresent(time -> {
 			TagValueOutput output = TagValueOutput.createWithContext(ProblemReporter.DISCARDING, level.registryAccess());
@@ -795,6 +802,10 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				bot.log.add(level.getGameTime(), Output.Level.WARN, "cannot run " + name + " again: it is not in the script library");
 			}
 		});
+		if (bot.isRunningScript()) {
+			bot.scaffoldLeft.forEach(bot.script::notePlaced);
+		}
+		bot.scaffoldLeft = List.of();
 		return true;
 	}
 
@@ -892,10 +903,11 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 			running.store(output);
 			output.putBoolean("ScriptIdling", this.isRunningScript() ? this.idling : this.savedIdling);
 		}
+		if (!this.scaffoldLeft.isEmpty()) {
+			output.store("ScaffoldLeft", GlobalPos.CODEC.listOf(), globalPositions(this.scaffoldLeft));
+		}
 		if (!this.portals.isEmpty()) {
-			output.store("Portals", GlobalPos.CODEC.listOf(), this.portals.stream().map(portal -> GlobalPos.of(
-				ResourceKey.create(Registries.DIMENSION, Identifier.parse(Objects.requireNonNull(portal.dimension()))),
-				new BlockPos((int) portal.x(), (int) portal.y(), (int) portal.z()))).toList());
+			output.store("Portals", GlobalPos.CODEC.listOf(), globalPositions(this.portals));
 		}
 		if (!this.opened.isEmpty()) {
 			output.store("Opened", BlockPos.CODEC.listOf(), List.copyOf(this.opened.keySet()));
@@ -905,6 +917,17 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 				.collect(Collectors.toMap(Map.Entry::getKey, entry -> List.copyOf(entry.getValue()))));
 			output.putInt("BuildScaffoldTicks", this.buildScaffoldUntil - this.tickCount);
 		}
+	}
+
+	/** {@code positions}, each with its dimension, as saved. */
+	private static List<GlobalPos> globalPositions(List<Pos> positions) {
+		return positions.stream().map(at -> GlobalPos.of(ResourceKey.create(Registries.DIMENSION, Identifier.parse(Objects.requireNonNull(at.dimension()))),
+			new BlockPos((int) at.x(), (int) at.y(), (int) at.z()))).toList();
+	}
+
+	/** The positions {@link #globalPositions} saved. */
+	private static List<Pos> positions(List<GlobalPos> saved) {
+		return saved.stream().map(at -> new Pos(at.pos().getX(), at.pos().getY(), at.pos().getZ()).in(at.dimension().identifier().toString())).toList();
 	}
 
 	private static final Codec<Map<String, List<BlockPos>>> BUILD_SCAFFOLD_CODEC = Codec.unboundedMap(Codec.STRING, BlockPos.CODEC.listOf());
@@ -927,9 +950,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.savedScript = ScriptRun.Saved.read(input).orElse(null);
 		this.memory = Memory.load(input, this.savedScript == null ? null : this.savedScript.vm());
 		this.savedIdling = input.getBooleanOr("ScriptIdling", false);
-		this.portals = input.read("Portals", GlobalPos.CODEC.listOf()).orElse(List.of()).stream()
-			.map(portal -> new Pos(portal.pos().getX(), portal.pos().getY(), portal.pos().getZ()).in(portal.dimension().identifier().toString()))
-			.toList();
+		this.portals = positions(input.read("Portals", GlobalPos.CODEC.listOf()).orElse(List.of()));
+		this.scaffoldLeft = positions(input.read("ScaffoldLeft", GlobalPos.CODEC.listOf()).orElse(List.of()));
 		this.opened.clear();
 		// Walked through long ago, as far as a loaded bot knows: shut once it is clear of them.
 		input.read("Opened", BlockPos.CODEC.listOf()).ifPresent(doors -> doors.forEach(pos -> this.opened.put(pos, Long.MIN_VALUE)));
