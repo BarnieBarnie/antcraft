@@ -23,6 +23,10 @@ public final class PathBudget {
 	private final int perTick;
 	private long tick = Long.MIN_VALUE;
 	private int left;
+	/** What {@link #takeCount} gives next: the nodes spent since it was last called, and in this tick of them. */
+	private long spent;
+	private int worst;
+	private int spentThisTick;
 	/** The searches paused last tick that have not asked for their {@link #share} yet this tick. */
 	private Set<Object> waiting = new HashSet<>();
 	/** The searches paused this tick. */
@@ -39,6 +43,7 @@ public final class PathBudget {
 			this.paused = new HashSet<>();
 			this.tick = tick;
 			this.left = this.perTick;
+			this.spentThisTick = 0;
 		}
 		return this.left;
 	}
@@ -63,5 +68,21 @@ public final class PathBudget {
 	/** Counts {@code nodes} expanded in {@code tick}. */
 	public void spend(long tick, int nodes) {
 		this.left = Math.max(0, this.available(tick) - nodes);
+		this.spent += nodes;
+		this.spentThisTick += nodes;
+		this.worst = Math.max(this.worst, this.spentThisTick);
+	}
+
+	/** The nodes expanded since the last call and the most of them in one tick, for the bot benchmark (#693). */
+	public Count takeCount() {
+		Count count = new Count(this.spent, this.worst);
+		this.spent = 0;
+		this.worst = 0;
+		this.spentThisTick = 0;
+		return count;
+	}
+
+	/** Nodes expanded in all and in the tick with the most. */
+	public record Count(long nodes, int worst) {
 	}
 }

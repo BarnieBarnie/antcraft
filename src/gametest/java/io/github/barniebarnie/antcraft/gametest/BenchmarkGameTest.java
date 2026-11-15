@@ -4,6 +4,7 @@ import io.github.barniebarnie.antcraft.colony.ColonyManager;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.gametest.mixin.AutosaveAccessor;
+import io.github.barniebarnie.antcraft.pathing.PathBudget;
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.registry.ModBlocks;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
@@ -358,6 +359,7 @@ public class BenchmarkGameTest {
 			if (since == WARM_UP_TICKS) {
 				this.executedAtStart = this.executed();
 				TickProfiler.SERVER.start();
+				PathBudget.SERVER.takeCount();
 			}
 			if (since > WARM_UP_TICKS && since % 100 == 0) {
 				for (AntBot bot : this.bots) {
@@ -392,10 +394,12 @@ public class BenchmarkGameTest {
 			TickProfiler.SERVER.stop();
 			TickProfiler.Report report = TickProfiler.SERVER.report();
 			double instructions = (double) (this.executed() - this.executedAtStart) / report.ticks();
+			PathBudget.Count nodes = PathBudget.SERVER.takeCount();
 			LOGGER.info("Benchmark: {}, {} bots, {} instructions a tick each at most, {} ticks: {} instructions run a tick\n  {}\n  bots at (samples every 100 ticks) {}",
 				c.name(), BOTS, c.instructions(), c.ticks(), Math.round(instructions), String.join("\n  ", report.lines()), this.doing);
-			this.summary.add(String.format(Locale.ROOT, "%-18s average %6.2f ms, p99 %6.2f ms, worst %6.2f ms, %8d instructions a tick", c.name(),
-				report.averageTickMs(), report.p99TickMs(), report.worstTickMs(), Math.round(instructions)));
+			this.summary.add(String.format(Locale.ROOT, "%-18s average %6.2f ms, p99 %6.2f ms, worst %6.2f ms, %8d instructions a tick, path nodes a tick %6.0f average, %5d worst",
+				c.name(), report.averageTickMs(), report.p99TickMs(), report.worstTickMs(), Math.round(instructions),
+				(double) nodes.nodes() / report.ticks(), nodes.worst()));
 			this.helper.assertTrue(report.averageTickMs() < TICK_BUDGET_MS, c.name() + ": average tick " + report.averageTickMs() + " ms");
 			for (AntBot bot : this.bots) {
 				ColonyManager.get(this.helper.getLevel()).leave(bot);
