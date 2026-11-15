@@ -450,13 +450,6 @@ def fell_whole(base, replant=True, blocks=None, plan=None):
                 r = mine(p)
                 if r.reason != "out_of_reach":
                     break
-            # Else from over it: a giant jungle's branch log in the top of its crown, leaves on every side, has no stand,
-            # and mine's walk from the floor, most of the dirt in scaffold, got nowhere (#674). On the leaves over it, it
-            # mines them underfoot, then the log.
-            if r.reason == "out_of_reach" and not is_log(p.up()):
-                goto(p.up().up())
-                mine(p.up())
-                r = mine(p)
         if not r and r.reason != "target_gone":
             take_back(earlier)
             return result("no_space" if r.reason == "no_space" else "out_of_reach", p)

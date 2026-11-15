@@ -502,6 +502,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// Measured: passes at tick 2849 to 7809, 39 of 39 in three runs of 13 copies (red: out_of_reach in 3 of 14 runs;
 	// with the fallback but no fall search, left up on its scaffold in 5 of 39). Since #677, 2657 to 4838 in 18 runs (one
 	// at 7452 before: the walk to its first stand got nowhere and each log's mine walked 305 ticks to no end).
+	// Without #674's walk onto the leaves over the buried log, which #685 made dead code (#691): 268 of 273 in 21 runs of
+	// 13 copies, 2409 to 4909 and one at 6865; 5 ran out of maxTicks after the last stand, never out_of_reach.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWhole(GameTestHelper helper) {
 		BlockPos spot = new BlockPos(10, 1, 8);
