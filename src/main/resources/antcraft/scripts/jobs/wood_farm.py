@@ -60,9 +60,20 @@ CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"]
 # the crafting table lib.get makes a depot chest with.
 KEEP = [lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
 STACK = 64  # the dirt the farm keeps at least: a stack, for the fill of an uneven cell (dirt)
-# Empty slots the bot wants before it fells a tree (lib.depot.room, #765): logs, saplings, sticks, apples and the dirt it
-# takes back. ponytail: a giant's 67 logs and more take a slot more; a count from the tree's logs would size it.
-FREE = 5
+# The mean logs of a tree of each kind, as HARVEST's comment counts them; a giant spruce's trunk of 24 is 96 (#766).
+LOGS = {"minecraft:oak_sapling": 5.5, "minecraft:birch_sapling": 6, "minecraft:spruce_sapling": 6.5,
+        "minecraft:jungle_sapling": 8, "minecraft:acacia_sapling": 9, "minecraft:cherry_sapling": 13.5,
+        "minecraft:dark_oak_sapling": 34, "minecraft:pale_oak_sapling": 34, "minecraft:poplar_sapling": 15,
+        "minecraft:mangrove_propagule": 16, "giant_spruce": 96, "giant_jungle": 67}
+OTHER = 4  # empty slots for a felling's saplings, sticks, apples and the dirt it takes back
+ROOTS = 2  # and for a mangrove's mangrove roots and muddy mangrove roots, which harvest mines too
+
+
+def free(kind):
+    """The empty slots the bot wants before it fells a tree of kind (lib.depot.room, #765, #766): stacks for twice its
+    mean logs (LOGS), so a big tree of the kind fits too, OTHER, and ROOTS for a kind with roots."""
+    logs = int(-(-2 * LOGS[kind] // 64))
+    return logs + OTHER + (ROOTS if lib.treefarm.spec(kind).get("roots") else 0)
 
 
 def most(harvest=HARVEST["minecraft:birch_sapling"]):
@@ -249,7 +260,7 @@ def reap(kind, b, radius, told):
 
 def farm(kind, name, size, radius):
     """Farms forever: each round fells every grown tree (reap, so logs a failed felling left are felled again), stores
-    what it fell, tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
+    what it carries (each round, #766), tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
     lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
     where it felled nothing picks up the drops in the farm (sweep) and waits. Each round takes back the scaffold its walks
@@ -273,7 +284,7 @@ def farm(kind, name, size, radius):
         full_bot = False
         for b in grown:
             # Not with too few empty slots that the depot cannot empty: the tree's drops would be dropped (#765).
-            r = lib.depot.room(name, FREE, keep, radius)
+            r = lib.depot.room(name, free(kind), keep, radius)
             if not r["ok"]:
                 full_bot = True
                 tell(told, f"inventory full, store: {r['reason']}; felling stops")
@@ -281,7 +292,9 @@ def farm(kind, name, size, radius):
             if reap(kind, b, radius, told)["ok"]:
                 trees += 1
         felled = trees > 0
-        if grown and not full_bot:
+        # Every round, not only one that fells: what builds up between fellings, such as the dirt flatten and walks dig,
+        # goes in the depot too (#766). A store with nothing over keep walks nowhere.
+        if not full_bot:
             r = lib.depot.store(name, keep, radius)
             # Once a reason, not every round: a full depot that takes no new chest leaves the logs carried, more each
             # round (#763).

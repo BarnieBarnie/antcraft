@@ -220,6 +220,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		script(helper, bot, """
 			import lib.cells
+			import lib.depot
 			import lib.result
 			waits = [0]
 			def counted(ticks):
@@ -229,6 +230,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			        stop()
 			jobs.wood_farm.wait = counted
 			jobs.wood_farm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
+			lib.depot.store = lambda name, keep, radius: lib.result.result()  # no depot: a farm with no store
 			lib.cells.layout("birch_farm", cell[0], (5, 5))
 			lib.cells.add("birch_farm", 0)
 			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
@@ -257,12 +259,14 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
 		script(helper, bot, """
 			import lib.cells
+			import lib.depot
 			import lib.result
 			def counted(ticks):
 			    print("wait", count(kind), count("dirt"))
 			    stop()
 			jobs.wood_farm.wait = counted
 			jobs.wood_farm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
+			lib.depot.store = lambda name, keep, radius: lib.result.result()  # no depot: a farm with no store
 			lib.cells.layout("birch_farm", cell[0], (5, 5))
 			lib.cells.add("birch_farm", 0)
 			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
@@ -485,6 +489,88 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As storesItsDirtButAStack in a round that fells nothing (#766): no tree is grown, yet the bot stores all but a
+	 * stack of its 5 stacks of dirt before it waits, so what builds up between fellings does not fill its inventory.
+	 */
+	// Measured: passes at tick 23 (red: kept all 320 dirt).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
+	public void aRoundWithNoGrownTreeStoresItsSurplus(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		for (int i = 0; i < 5; i++) {
+			bot.getInventory().addItem(new ItemStack(Items.DIRT, 64));
+		}
+		bot.getInventory().addItem(new ItemStack(Items.CHEST));
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			def waited(ticks):
+			    print(count("minecraft:dirt"))
+			    stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.grown = lambda k, low, high: False
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 1, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("farm full", "64"), "dirt carried");
+			helper.assertValueEqual(helper.getBlockEntity(new BlockPos(6, 1, 0), ChestBlockEntity.class).countItem(Items.DIRT), 256,
+				"dirt in the depot");
+		});
+	}
+
+	/**
+	 * The empty slots the farm wants before a felling come from the kind's logs (#766): free(kind) is 5 for a birch,
+	 * more for a giant, whose logs fill more stacks, and more for a mangrove, whose roots take slots too; farm asks
+	 * lib.depot.room for free(kind).
+	 */
+	// Measured: passes at tick 6 (red: no free in jobs.wood_farm).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void theSlotsAFellingWantsComeFromTheKindsLogs(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			w = jobs.wood_farm
+			print(w.free("minecraft:birch_sapling"), w.free("minecraft:dark_oak_sapling"), w.free("minecraft:mangrove_propagule"),
+			      w.free("giant_jungle"), w.free("giant_spruce"))
+			tree = [True]
+			def roomed(name, free, keep, radius):
+			    print("room", free)
+			    return lib.result.result()
+			def reaped(k, b, radius, told):
+			    tree[0] = False
+			    return lib.result.result()
+			def waited(ticks):
+			    stop()
+			w.free = lambda k: 9
+			w.reap = reaped
+			w.wait = waited
+			w.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.depot.room = roomed
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.treefarm.grown = lambda k, low, high: tree[0]
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			w.farm(kind, "birch_farm", 1, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("5 6 7 7 7", "room 9", "farm full"), "said"));
+	}
+
+	/**
 	 * harvest() is the mean of the last WINDOW trees only (#662): after three slow trees of 2 GROWTH, WINDOW quick ones
 	 * of 100 ticks (one round of two, the rest one a round) make it 100. A mean over every tree would still be some
 	 * 9000.
@@ -517,6 +603,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		script(helper, bot, """
 			import lib.cells
+			import lib.depot
 			import lib.result
 			import lib.treefarm
 			slow = 2 * jobs.wood_farm.GROWTH
