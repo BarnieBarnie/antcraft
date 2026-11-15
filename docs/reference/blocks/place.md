@@ -33,7 +33,7 @@ The first carried block item `item` selects goes to the bot's hand and is placed
 
 Reach is a matter of sight: the bot sees the spot when a line from its eyes, taken over the middle of the block it stands in wherever in it it stands, reaches the spot's middle or the middle of one of its faces with no other block's outline in the way. Tall grass, flowers, a torch or a cobweb in front hide the spot as a wall does, so the bot walks to where it sees past them; [`mine`](mine.md) and [`use`](use.md) judge reach the same way.
 
-Only air or a block that may be replaced (grass, water) is placed in, so a slab placed onto a slab is `blocked`, not made a double slab. A `facing` or `half` that is not one of the names above stops the script with an error.
+A soft block at the spot (grass, a fern, a flower, a sapling, snow of any depth, leaves, a vine, moss carpet) is broken first, as [`mine`](mine.md) breaks it, its drops going into the inventory, unless it is the block placed, as snow onto snow. Otherwise only air or a block that may be replaced (water) is placed in, so a slab placed onto a slab is `blocked`, not made a double slab. A fluid, fire or a block with contents such as a chest is never broken. A `facing` or `half` that is not one of the names above stops the script with an error.
 
 ## Examples
 
@@ -53,7 +53,7 @@ place((10, 64, -3), "oak_stairs", facing="east", half="bottom")
 |---|---|
 | `no_item` | the bot carries no block item `item` selects |
 | `protected` | the spot may not be changed: outside the build height or border, or under spawn protection |
-| `blocked` | a block that cannot be replaced is there, an entity stands there, or the block cannot stay there; `detail` says which, one of the ones below |
+| `blocked` | a block that cannot be replaced and is not soft is there, an entity stands there, or the block cannot stay there; `detail` says which, one of the ones below |
 | `out_of_reach` | the bot could not walk to where it sees the spot within reach |
 | `not_loaded` | the spot is in a chunk that is not loaded |
 | `wrong_dimension` | `pos` is in another dimension than the bot's |
@@ -63,7 +63,7 @@ The `detail` of `blocked`:
 
 | `detail` | When |
 |---|---|
-| `minecraft:glass at Pos(x, y, z) cannot be replaced` | a block (its id) that cannot be replaced is at the spot |
+| `minecraft:glass at Pos(x, y, z) cannot be replaced` | a block (its id) that cannot be replaced, and is not soft, is at the spot |
 | `the game would not place minecraft:dirt at Pos(x, y, z)` | the game refused to place the item (its id) there, such as where an entity stands or where the block cannot stay |
 
 ## See also

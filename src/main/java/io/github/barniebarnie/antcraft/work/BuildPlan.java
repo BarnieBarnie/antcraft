@@ -536,9 +536,12 @@ public record BuildPlan(List<Step> steps, List<Batch> batches, Kind kind, Option
 			return true;
 		}
 
-		/** Whether {@code world} has to be broken first, including the same block placed the wrong way round. */
+		/**
+		 * Whether {@code world} has to be broken first, including the same block placed the wrong way round and a soft block
+		 * such as grass, snow or leaves ({@link Mining#isSoft}), so its drops are kept.
+		 */
 		public boolean needsClearing(BlockState world) {
-			return !world.isAir() && !this.isPlaced(world) && (this.isClear() || !world.canBeReplaced());
+			return !world.isAir() && !this.isPlaced(world) && (this.isClear() || !world.canBeReplaced() || Mining.isSoft(world));
 		}
 
 		/**

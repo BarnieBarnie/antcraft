@@ -59,6 +59,8 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.properties.SlabType;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.FurnaceBlock;
@@ -565,6 +567,56 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.GLASS, 2, 1, 2));
 	}
 
+	/**
+	 * Grass, tall grass (onto either half), snow of 1 and 3 layers, leaves and a flower in the way are broken, their drops
+	 * kept, and the block placed (#747).
+	 */
+	// Measured: passes at tick 62.
+	@GameTest(maxTicks = 130)
+	public void placeBreaksSoftBlocksInTheWay(GameTestHelper helper) {
+		BlockState upper = Blocks.TALL_GRASS.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER);
+		for (BlockPos plant : List.of(new BlockPos(2, 0, 3), new BlockPos(4, 0, 3), new BlockPos(6, 0, 3), new BlockPos(2, 0, 7))) {
+			helper.setBlock(plant, Blocks.DIRT);
+		}
+		helper.setBlock(2, 1, 3, Blocks.SHORT_GRASS);
+		helper.setBlock(4, 1, 3, Blocks.TALL_GRASS);
+		helper.setBlock(4, 2, 3, upper);
+		helper.setBlock(6, 1, 3, Blocks.TALL_GRASS);
+		helper.setBlock(6, 2, 3, upper);
+		helper.setBlock(2, 1, 5, Blocks.SNOW);
+		helper.setBlock(4, 1, 5, Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS, 3));
+		helper.setBlock(6, 1, 5, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
+		helper.setBlock(2, 1, 7, Blocks.POPPY);
+		List<BlockPos> spots = List.of(new BlockPos(2, 1, 3), new BlockPos(4, 1, 3), new BlockPos(6, 2, 3), new BlockPos(2, 1, 5),
+			new BlockPos(4, 1, 5), new BlockPos(6, 1, 5), new BlockPos(2, 1, 7));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, spots.size()));
+		StringBuilder source = new StringBuilder("r = []\n");
+		for (BlockPos spot : spots) {
+			source.append("r.append(place(").append(at(helper, spot.getX(), spot.getY(), spot.getZ())).append(", 'dirt').reason)\n");
+		}
+		source.append("print(r, count('dirt'), count('poppy'))\n");
+		expect(helper, bot, source.toString(), List.of("[None, None, None, None, None, None, None] 0 1"),
+			() -> spots.forEach(spot -> helper.assertBlockPresent(Blocks.DIRT, spot)));
+	}
+
+	/** A torch goes onto a spot holding grass or 3 layers of snow (#747). */
+	// Measured: passes at tick 12.
+	@GameTest(maxTicks = 30)
+	public void placeATorchOnGrassOrSnow(GameTestHelper helper) {
+		helper.setBlock(2, 0, 3, Blocks.DIRT);
+		helper.setBlock(2, 1, 3, Blocks.SHORT_GRASS);
+		helper.setBlock(4, 1, 3, Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.TORCH, 2));
+		expect(helper, bot, "r = place(" + at(helper, 2, 1, 3) + ", 'torch')\ns = place(" + at(helper, 4, 1, 3) + ", 'torch')\n"
+				+ "print(r.reason, s.reason, count('torch'))\n",
+			List.of("None None 0"), () -> {
+				helper.assertBlockPresent(Blocks.TORCH, 2, 1, 3);
+				helper.assertBlockPresent(Blocks.TORCH, 4, 1, 3);
+			});
+	}
+
 	/** A pig stands where the block would go. */
 	@GameTest(maxTicks = 20)
 	public void placeWhereAnEntityStandsIsBlocked(GameTestHelper helper) {
@@ -927,6 +979,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 60)
 	public void buildBuildsTheCobbleStepAtTurn0(GameTestHelper helper) {
 		helper.setBlock(4, 2, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
+		carryCobbleStep(bot, 2);
+		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",
+			List.of("True None 3 0"), () -> assertCobbleStep(helper, 0));
+	}
+
+	/** Grass, 3 layers of snow and leaves where the cobble step goes are broken and the step built (#747). */
+	// Measured: passes at tick 28.
+	@GameTest(maxTicks = 60)
+	public void buildBuildsOverGrassSnowAndLeaves(GameTestHelper helper) {
+		helper.setBlock(3, 0, 3, Blocks.DIRT);
+		helper.setBlock(3, 1, 3, Blocks.SHORT_GRASS);
+		helper.setBlock(4, 1, 3, Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS, 3));
+		helper.setBlock(3, 2, 3, Blocks.OAK_LEAVES.defaultBlockState().setValue(LeavesBlock.PERSISTENT, true));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 6);
 		carryCobbleStep(bot, 2);
 		expect(helper, bot, "r = build('antcraft:cobble_step', " + at(helper, 3, 1, 3) + ")\nprint(r.ok, r.reason, r.value, count('cobblestone'))\n",

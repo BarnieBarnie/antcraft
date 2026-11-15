@@ -467,8 +467,27 @@ class BuildPlanTest {
 		assertTrue(new BuildPlan.Step(D, stairs(Direction.EAST)).needsClearing(stairs(Direction.WEST)));
 		assertTrue(cobble.needsClearing(Blocks.DIRT.defaultBlockState()));
 		assertFalse(cobble.needsClearing(Blocks.AIR.defaultBlockState()));
-		// Placing replaces grass, so it need not be broken first.
-		assertFalse(cobble.needsClearing(Blocks.SHORT_GRASS.defaultBlockState()));
+	}
+
+	/** Grass, snow, leaves and other soft blocks are broken first, keeping their drops (#747); fluids, fire and block entities are not. */
+	@Test
+	void softBlocksInTheWayNeedClearing() {
+		BuildPlan.Step cobble = new BuildPlan.Step(B, Blocks.COBBLESTONE.defaultBlockState());
+		for (BlockState soft : List.of(Blocks.SHORT_GRASS.defaultBlockState(), Blocks.TALL_GRASS.defaultBlockState(),
+			Blocks.TALL_GRASS.defaultBlockState().setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.UPPER),
+			Blocks.SNOW.defaultBlockState(), Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS, 3),
+			Blocks.OAK_LEAVES.defaultBlockState(), Blocks.POPPY.defaultBlockState(), Blocks.OAK_SAPLING.defaultBlockState(),
+			Blocks.MOSS_CARPET.defaultBlockState(), Blocks.VINE.defaultBlockState(), Blocks.DEAD_BUSH.defaultBlockState())) {
+			assertTrue(Mining.isSoft(soft), "not soft: " + soft);
+			assertTrue(cobble.needsClearing(soft), "not cleared: " + soft);
+		}
+		for (BlockState hard : List.of(Blocks.AIR.defaultBlockState(), Blocks.WATER.defaultBlockState(), Blocks.FIRE.defaultBlockState(),
+			Blocks.CHEST.defaultBlockState(), Blocks.TORCH.defaultBlockState(), Blocks.STRUCTURE_VOID.defaultBlockState(),
+			Blocks.OAK_LEAVES.defaultBlockState().setValue(BlockStateProperties.WATERLOGGED, true))) {
+			assertFalse(Mining.isSoft(hard), "soft: " + hard);
+		}
+		// Leaves the blueprint wants stay.
+		assertFalse(new BuildPlan.Step(B, Blocks.OAK_LEAVES.defaultBlockState()).needsClearing(Blocks.OAK_LEAVES.defaultBlockState()));
 	}
 
 	@Test

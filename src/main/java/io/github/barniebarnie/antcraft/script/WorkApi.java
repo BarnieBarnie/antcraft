@@ -7,6 +7,7 @@ import io.github.barniebarnie.antcraft.entity.Bow;
 import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
+import io.github.barniebarnie.antcraft.work.Mining;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
@@ -402,6 +403,7 @@ public final class WorkApi {
 		private final Predicate<ItemStack> item;
 		private final @Nullable Direction facing;
 		private final @Nullable Half half;
+		private final BlockBreaker breaker;
 
 		Place(ScriptRun run, AntBot bot, Pos target, Selector selector, @Nullable Direction facing, @Nullable Half half) {
 			super(run, bot, target);
@@ -410,6 +412,12 @@ public final class WorkApi {
 			this.item = stack -> selected.test(stack) && stack.getItem() instanceof BlockItem;
 			this.facing = facing;
 			this.half = half;
+			this.breaker = new BlockBreaker(bot);
+		}
+
+		@Override
+		void stopWork() {
+			this.breaker.reset();
 		}
 
 		@Override
@@ -419,12 +427,17 @@ public final class WorkApi {
 
 		@Override
 		@Nullable Result check(BlockState state) {
-			return state.canBeReplaced() ? null
+			return state.canBeReplaced() || Mining.isSoft(state) ? null
 				: Result.fail(Result.BLOCKED, PyNone.NONE, BuiltInRegistries.BLOCK.getKey(state.getBlock()) + " at " + EntityInfo.pos(this.pos) + " cannot be replaced");
 		}
 
 		@Override
-		Result work(BlockState state) {
+		@Nullable Result work(BlockState state) {
+			ItemStack placing = BotHands.find(this.bot, this.item);
+			// A soft block in the way is broken first, its drops kept, unless it is what is placed, as snow onto snow (#747).
+			if (Mining.isSoft(state) && !(placing != null && placing.getItem() instanceof BlockItem block && state.is(block.getBlock()))) {
+				return this.breaker.tick(this.level, this.pos, true) ? this.work(this.level.getBlockState(this.pos)) : null;
+			}
 			BotHands.equip(this.bot, this.item);
 			Item held = this.bot.getMainHandItem().getItem();
 			return BotHands.place(this.bot, this.pos, this.facing, this.half) ? Result.OK
