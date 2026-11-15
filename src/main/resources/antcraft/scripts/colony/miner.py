@@ -23,7 +23,7 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-from colony.common import core, store
+from colony.common import core, settle, store
 
 core()  # a bot in no colony says so and stops, before the imports below spend its player's instruction budget
 import lib.get
@@ -169,6 +169,7 @@ def mine(job):
         wait(200)
 
 
+settle()
 while True:
     if site() is None:
         warn("there is no spot near the core to dig a shaft")

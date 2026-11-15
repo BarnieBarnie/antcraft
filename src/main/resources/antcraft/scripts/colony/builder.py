@@ -21,7 +21,7 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-from colony.common import core, store
+from colony.common import core, settle, store
 from lib.borrow import give_back
 from lib.build import materials
 from lib.stock import take_up_to
@@ -76,7 +76,7 @@ def build_job(job):
     finish_job(job["id"])
 
 
-core()  # a bot in no colony says so and stops
+settle()  # a bot in no colony says so and stops
 while True:
     job = take_job("build")
     if job is None:

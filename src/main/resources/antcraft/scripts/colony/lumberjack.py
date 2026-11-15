@@ -6,7 +6,7 @@
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
-from colony.common import core
+from colony.common import core, settle
 
 core()  # a bot in no colony says so and stops, before it loads the rest of the library
 
@@ -76,9 +76,8 @@ def scaffold(n):
         take_up_to(item, count(item) + short, chests=chests)
 
 
-# Home is on the core, so a lumberjack that dies comes back in the colony and fetches what it dropped (#683).
-set_home(core().up())
-lib.trees.recover()
+# Home is beside the core, so a lumberjack that dies comes back in the colony and fetches what it dropped (#683, #690).
+settle()
 SKIP = 1200  # ticks an unreachable sapling is left before the idle lumberjack tries it again
 failed = {}  # entity id of a sapling it could not walk to: the game time it tried
 while True:

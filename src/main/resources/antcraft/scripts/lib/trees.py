@@ -362,17 +362,23 @@ def take_back(keep=()):
 def recover():
     """After a death, which the restarted run sees as deaths() above memory["wood_deaths"], takes back the scaffold the
     run it died in left (the pillar it died on first), picks up what it dropped round last_death() and takes back what
-    that walk placed (#679, #683). Call it at the top of a script that set its home where it works (set_home), so the bot
-    respawned there. On a first run it only notes deaths()."""
+    that walk placed (#679, #683). It walks to the ground under last_death(), where the drops fell, so also down a shaft
+    (#689). Call it at the top of a script that set its home where it works (set_home), so the bot respawned there. Gives
+    whether there was a death to recover from; on a first run it only notes deaths()."""
     if deaths() <= memory.get("wood_deaths", deaths()):
         memory["wood_deaths"] = deaths()
-        return
+        return False
     memory["wood_deaths"] = deaths()
     take_back()
     p = last_death()
-    goto(Pos(p.x, pos().y, p.z), near=2)
+    for _ in range(64):
+        if not block(p.down()).is_air:
+            break
+        p = p.down()
+    goto(p, near=2)
     pick_up(radius=8)
     take_back()
+    return True
 
 
 def _down_to(y, keep):

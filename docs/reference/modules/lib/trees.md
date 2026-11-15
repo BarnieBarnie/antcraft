@@ -100,9 +100,9 @@ Mines the blocks the script's walks placed since it last called [`placed_scaffol
 
 ## `recover()`
 
-After a death, at the top of a script that sets its home where it works ([`set_home`](../../movement/set_home.md)), so the bot respawned there and runs the script again from the top: it sees the death as [`deaths()`](../../bot/deaths.md) above `memory["wood_deaths"]`, takes back the scaffold the run it died in left (`take_back`, the pillar it died on first), walks to [`last_death()`](../../bot/last_death.md), picks up what it dropped within 8 blocks and takes back what that walk placed. On a first run it only notes `deaths()`. `jobs/wood_farm` and `colony.lumberjack` call it (#679, #683).
+After a death, at the top of a script that sets its home where it works ([`set_home`](../../movement/set_home.md)), so the bot respawned there and runs the script again from the top: it sees the death as [`deaths()`](../../bot/deaths.md) above `memory["wood_deaths"]`, takes back the scaffold the run it died in left (`take_back`, the pillar it died on first), walks to the ground under [`last_death()`](../../bot/last_death.md), where its drops fell, so also down a mine shaft (#689), picks up what it dropped within 8 blocks and takes back what that walk placed. On a first run it only notes `deaths()`. `jobs/wood_farm` calls it, and every colony script through [`colony.common.settle`](../colony/common.md#settle) (#679, #683, #689).
 
-- **Returns** `None`.
+- **Returns** whether there was a death to recover from.
 - **Pauses** yes, after a death, while it walks, mines and picks up.
 
 ## `low_log(radius=32, skip=None)`

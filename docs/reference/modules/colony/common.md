@@ -14,6 +14,17 @@ The position of the colony's Colony Core, where members store what they bring in
 
 Whether the position `p` lies within the colony's radius of its core, measured across (x and z): the colony's edge is a column, so a block 40 below the core within the radius is in the colony (#576). `False` for a bot in no colony. Done at once. It is [`lib.find.in_colony`](../lib/find.md#in_colonyp), which `lib.find.WHERE` starts as for a bot in a colony, so a member keeps to the colony in any script, not only one that imports this module (#594).
 
+## `home_spot()`
+
+A free standing spot beside the core: the first of its four sides with air at the feet and head over a block that is neither air nor a fluid, else the block on top of the core (#690). Done at once.
+
+## `settle()`
+
+What each colony script calls at its top: sets the bot's home to `home_spot()` ([`set_home`](../../movement/set_home.md)), so a member that dies respawns standing beside the core, and after a death recovers with [`lib.trees.recover`](../lib/trees.md#recover) (takes back its scaffold, picks up its drops under [`last_death()`](../../bot/last_death.md)) and gives back every job it held ([`drop_job`](../../colony/drop_job.md)), as a bot that dies keeps its jobs, so the restarted script, or another member, takes them up again (#689). A bot in no colony says so and stops, as at `core()`.
+
+- **Returns** `None`.
+- **Pauses** yes, after a death, while it walks, mines and picks up.
+
 ## `store(item)`
 
 Puts all the bot carries of `item` (an item id or a [selector](../../types/selectors.md)) into the core.

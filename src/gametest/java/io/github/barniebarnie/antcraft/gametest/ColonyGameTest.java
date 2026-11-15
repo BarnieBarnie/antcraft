@@ -36,6 +36,7 @@ import net.minecraft.tags.ItemTags;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -268,11 +269,15 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.assertTrue(started.equals(List.of("commands.antcraft.bot.run[" + script + ", 1]")), "run answered " + started);
 	}
 
-	/** Fails at once when a bot logs a warning or worse, or says something: the colony scripts do only when stuck. */
+	/**
+	 * Fails at once when a bot logs a warning or worse, or says something: the colony scripts do only when stuck. Its death
+	 * ("died at") does not count, and a bot that died and respawned is followed by its UUID (#689).
+	 */
 	private static void failOnWarning(GameTestHelper helper, AntBot... bots) {
 		helper.onEachTick(() -> {
-			for (AntBot bot : bots) {
-				if (!BotScripts.log(bot, Output.Level.WARN).isEmpty()) {
+			for (AntBot first : bots) {
+				AntBot bot = helper.getLevel().getEntity(first.getUUID()) instanceof AntBot b ? b : first;
+				if (BotScripts.log(bot, Output.Level.WARN).stream().anyMatch(l -> !l.startsWith("died at"))) {
 					StringBuilder at = new StringBuilder();
 					for (AntBot each : bots) {
 						at.append(' ').append(TestPositions.relative(helper, each.blockPosition()).toShortString());
@@ -281,6 +286,44 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		});
+	}
+
+	/**
+	 * Kills the bot once {@code when} holds for it, and fails at once when it respawns anywhere but standing free (air at
+	 * its feet and head) beside the core at {@code core} (#689, #690). Gives a check for succeedWhen: it was killed and
+	 * respawned, and none of the items it carried when killed lie in the area, as it picked them up again.
+	 */
+	private static Runnable killedOnce(GameTestHelper helper, AntBot bot, BlockPos core, java.util.function.Predicate<AntBot> when) {
+		UUID id = bot.getUUID();
+		BlockPos at = helper.absolutePos(core);
+		long[] died = {-1};
+		boolean[] respawned = {false};
+		Set<Item> carried = new HashSet<>();
+		helper.onEachTick(() -> {
+			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
+			if (died[0] < 0 && now != null && when.test(now)) {
+				for (int i = 0; i < now.getInventory().getContainerSize(); i++) {
+					carried.add(now.getInventory().getItem(i).getItem());
+				}
+				carried.add(now.getMainHandItem().getItem());
+				carried.remove(Items.AIR);
+				died[0] = helper.getTick();
+				now.kill(helper.getLevel());
+			} else if (died[0] >= 0 && !respawned[0] && now != null && now != bot) {
+				respawned[0] = true;
+				BlockPos p = now.blockPosition();
+				ServerLevel level = helper.getLevel();
+				helper.assertTrue(p.getY() == at.getY() && p.distManhattan(at) == 1 && level.getBlockState(p).isAir()
+						&& level.getBlockState(p.above()).isAir(),
+					"respawned at " + helper.relativePos(p).toShortString() + ", not standing free beside the core at " + core.toShortString());
+			}
+		});
+		return () -> {
+			helper.assertTrue(respawned[0], "not killed and respawned: killed at " + died[0]);
+			List<ItemStack> lying = helper.getLevel().getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, helper.getBounds(),
+				e -> carried.contains(e.getItem().getItem())).stream().map(e -> e.getItem()).toList();
+			helper.assertTrue(lying.isEmpty(), "its drops left lying: " + lying);
+		};
 	}
 
 	private static Container container(GameTestHelper helper, int x, int y, int z) {
@@ -898,11 +941,12 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * The lumberjack of {@link #aLumberjackFellsATreeTallerThanItReaches}, killed up its scaffold: it respawns on the
-	 * core, its home, takes back the scaffold it died on, picks up what it dropped and fells the rest of the tree: no log
-	 * or dirt left above the floor, nothing it dropped lying about, the logs and dirt in the core (#683).
+	 * The lumberjack of {@link #aLumberjackFellsATreeTallerThanItReaches}, killed up its scaffold, a block on top of the
+	 * core: it respawns standing free beside the core, its home (#690), takes back the scaffold it died on, picks up what
+	 * it dropped and fells the rest of the tree: no log or dirt left above the floor, nothing it dropped lying about, the
+	 * logs and dirt in the core (#683).
 	 */
-	// Measured: passes at tick 443 to 446 (red: respawned where first spawned, not on the core).
+	// Measured: passes at tick 425 (red with a block on the core: respawned in it, #690).
 	@GameTest(maxTicks = 900)
 	public void aLumberjackKilledWhileFellingComesBackAndFinishesTheTree(GameTestHelper helper) {
 		helper.setBlock(4, 0, 4, Blocks.DIRT);
@@ -917,26 +961,13 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		core.setItem(1, new ItemStack(Items.OAK_SAPLING));
 		AntBot lumberjack = member(helper, colony, 1, 1, 1);
 		lumberjack.getInventory().addItem(new ItemStack(Items.STONE_AXE));
-		UUID id = lumberjack.getUUID();
+		// Something on top of the core: its home is a free standing spot beside it, not in this (#690).
+		helper.setBlock(1, 2, 6, Blocks.STONE);
 		runDefault(helper, lumberjack, "colony.lumberjack");
-		long[] died = {-1};
-		long[] respawned = {-1};
-		BlockPos home = helper.absolutePos(new BlockPos(1, 2, 6));
-		helper.onEachTick(() -> {
-			AntBot now = helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
-			if (now != null && now != lumberjack && BotScripts.log(now, Output.Level.WARN).stream().anyMatch(l -> !l.startsWith("died at"))) {
-				helper.fail("stuck after the respawn: " + BotScripts.log(now, Output.Level.DEBUG));
-			}
-			if (died[0] < 0 && lumberjack.isAlive() && helper.relativePos(lumberjack.blockPosition()).getY() >= 2) {
-				lumberjack.kill(helper.getLevel());
-				died[0] = helper.getTick();
-			} else if (died[0] >= 0 && respawned[0] < 0 && now != null && now != lumberjack) {
-				respawned[0] = helper.getTick();
-				helper.assertTrue(now.blockPosition().distManhattan(home) <= 1, "respawned at " + now.blockPosition() + ", home " + home);
-			}
-		});
+		failOnWarning(helper, lumberjack);
+		Runnable recovered = killedOnce(helper, lumberjack, new BlockPos(1, 1, 6), b -> helper.relativePos(b.blockPosition()).getY() >= 2);
 		helper.succeedWhen(() -> {
-			helper.assertTrue(respawned[0] >= 0, "not killed and respawned: killed at " + died[0]);
+			recovered.run();
 			for (int x = 0; x < 8; x++) {
 				for (int z = 0; z < 8; z++) {
 					for (int y = 1; y < 8; y++) {
@@ -951,6 +982,96 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(core.countItem(Items.OAK_LOG) == 6, "logs in the core: " + core.countItem(Items.OAK_LOG));
 			helper.assertTrue(core.countItem(Items.DIRT) == 6, "dirt in the core: " + core.countItem(Items.DIRT));
 		});
+	}
+
+	/**
+	 * A hauler killed with the birch logs it took from a chest for a haul job respawns beside the core, picks them up,
+	 * takes the job it held up again and brings them to the core (#689).
+	 */
+	// Measured: passes at tick 243 (red: respawned where first spawned).
+	@GameTest(maxTicks = 500)
+	public void aHaulerKilledMidHaulComesBackAndFinishesIt(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		helper.setBlock(1, 1, 1, Blocks.CHEST);
+		container(helper, 1, 1, 1).setItem(0, new ItemStack(Items.BIRCH_LOG, 3));
+		Container core = container(helper, 6, 1, 1);
+		AntBot hauler = member(helper, colony, 6, 1, 4);
+		PyDict data = new PyDict();
+		data.put("item", "#minecraft:logs");
+		colony.jobs().post("haul", Memory.encode(data), hauler.getUUID());
+		runDefault(helper, hauler, "colony.hauler");
+		failOnWarning(helper, hauler);
+		Runnable recovered = killedOnce(helper, hauler, new BlockPos(6, 1, 1), b -> GameTests.carried(b, Items.BIRCH_LOG) > 0);
+		helper.succeedWhen(() -> {
+			recovered.run();
+			helper.assertTrue(core.countItem(Items.BIRCH_LOG) == 3, "birch logs in the core: " + core.countItem(Items.BIRCH_LOG));
+			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
+		});
+	}
+
+	/**
+	 * A builder killed once it placed the cobble step's first block respawns beside the core, picks up the rest of the
+	 * materials, takes its build job up again and finishes the step (#689).
+	 */
+	// Measured: passes at tick 252 (red: respawned where first spawned).
+	@GameTest(maxTicks = 500)
+	public void aBuilderKilledMidBuildComesBackAndFinishesIt(GameTestHelper helper) {
+		Colony colony = colonyAt(helper, 6, 1, 1);
+		colony.setRadius(7);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.COBBLESTONE, 2));
+		core.setItem(1, new ItemStack(Items.OAK_STAIRS));
+		AntBot builder = member(helper, colony, 4, 1, 6);
+		PyDict data = new PyDict();
+		data.put("blueprint", "antcraft:cobble_step");
+		data.put("at", pos(helper, 3, 1, 3));
+		colony.jobs().post("build", Memory.encode(data), builder.getUUID());
+		runDefault(helper, builder, "colony.builder");
+		failOnWarning(helper, builder);
+		Runnable recovered = killedOnce(helper, builder, new BlockPos(6, 1, 1),
+			b -> helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.COBBLESTONE) || helper.getBlockState(new BlockPos(4, 1, 3)).is(Blocks.COBBLESTONE));
+		helper.succeedWhen(() -> {
+			recovered.run();
+			WorkGameTest.assertCobbleStep(helper, 0);
+			helper.assertTrue(colony.jobs().jobs(null).isEmpty(), "jobs left: " + colony.jobs().jobs(null));
+		});
+	}
+
+	/**
+	 * The farmer of {@link #aFarmerTillsPlantsAndHarvestsAFarm}, killed once it carries harvested wheat: it respawns beside
+	 * the core, picks up what it dropped and farms on, every spot planted and the wheat in the core (#689).
+	 */
+	// Measured: passes at tick 403 (red: respawned where first spawned).
+	@GameTest(maxTicks = 800)
+	public void aFarmerKilledMidHarvestComesBackAndFarmsOn(GameTestHelper helper) {
+		List<BlockPos> spots = farm(helper, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
+				new ItemStack(Items.WHEAT_SEEDS, 24));
+		Container core = container(helper, 7, 1, 7);
+		AntBot farmer = helper.getLevel().getEntitiesOfClass(AntBot.class, helper.getBounds()).getFirst();
+		Runnable recovered = killedOnce(helper, farmer, new BlockPos(7, 1, 7), b -> GameTests.carried(b, Items.WHEAT) > 0);
+		helper.succeedWhen(() -> {
+			recovered.run();
+			for (BlockPos spot : spots) {
+				helper.assertBlockPresent(Blocks.FARMLAND, spot);
+				helper.assertBlockPresent(Blocks.WHEAT, spot.above());
+			}
+			helper.assertTrue(core.countItem(Items.WHEAT) == 2, "wheat in the core: " + core.countItem(Items.WHEAT));
+		});
+	}
+
+	/**
+	 * The miner of {@link #aMinerDigsTheShaftMinesTheHallAndBringsTheIronToTheCore}, killed in the hall once it carries raw iron: it respawns
+	 * beside the core, goes back down for what it dropped, takes its mine job up again and brings the iron to the core
+	 * (#689).
+	 */
+	// Measured: passes at tick 921.
+	@GameTest(maxTicks = 1900)
+	public void aMinerKilledInTheHallComesBackAndMinesOn(GameTestHelper helper) {
+		Colony colony = mineColony(helper);
+		AntBot miner = miners(helper, colony, new BlockPos(1, 6, 1)).getFirst();
+		Runnable recovered = killedOnce(helper, miner, new BlockPos(0, 6, 0), b -> GameTests.carried(b, Items.RAW_IRON) > 0);
+		succeedWhenMined(helper, colony, recovered);
 	}
 
 	/**
