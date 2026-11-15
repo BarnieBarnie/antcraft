@@ -234,6 +234,64 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A vein of two coal ore and an oak in reach, four sticks, a stone pickaxe and a furnace carried (#663): get of eight
+	 * torches digs the vein (wood_for_coal gives 0) and then, with the vein gone and the coal source failing, eight more
+	 * burn the oak's logs into charcoal. Each route's make_cost is within {@link #COST_FACTOR} of the ticks get takes, and
+	 * the coal it chose is the faster route: the coal source costs 40 an ore, a vein's rest 23, charcoal 55 a log and SMELT
+	 * a coal, so a vein in sight wins and #661's cheaper vein does not change the choice. Measured: coal make_cost 80, get
+	 * 70 to 71 ticks; charcoal 620, get 739 to 740 (test tick 820).
+	 */
+	@GameTest(maxTicks = 1650)
+	public void coalFromAVeinInSightBeatsCharcoal(GameTestHelper helper) {
+		TreesGameTest.plantTree(helper);
+		helper.setBlock(1, 1, 7, Blocks.COAL_ORE);
+		helper.setBlock(2, 1, 7, Blocks.COAL_ORE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.STICK, 4));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		run(helper, bot, """
+			from lib.get import get, make_cost, wood_for_coal, SOURCES
+			from lib.result import result
+			def timed(n):
+			    c = make_cost("torch", n)
+			    t = game_time()
+			    ok = get("torch", n)["ok"]
+			    return str(c) + " " + str(game_time() - t) + " " + str(ok)
+			print(wood_for_coal(2, 32))
+			print(timed(8))
+			SOURCES["minecraft:coal"].do = lambda n, radius: result("dug_for_coal")
+			print(timed(16))
+			""");
+		helper.onEachTick(() -> {
+			List<String> log = BotScripts.log(bot, Output.Level.PRINT);
+			if (log.size() < 3) {
+				return;
+			}
+			String[] coal = log.get(1).split(" ");
+			String[] wood = log.get(2).split(" ");
+			String measured = "printed " + log + ", log " + BotScripts.log(bot, Output.Level.DEBUG);
+			if (!log.get(0).equals("0") || !coal[2].equals("True") || !wood[2].equals("True")) {
+				helper.fail(measured);
+			}
+			long coalTicks = Long.parseLong(coal[1]);
+			long woodTicks = Long.parseLong(wood[1]);
+			for (String[] route : List.of(coal, wood)) {
+				double cost = Double.parseDouble(route[0]);
+				long ticks = Long.parseLong(route[1]);
+				if (cost * COST_FACTOR < ticks || cost > ticks * COST_FACTOR) {
+					helper.fail("make_cost and ticks more than a factor " + COST_FACTOR + " apart: " + measured);
+				}
+			}
+			if (coalTicks >= woodTicks) {
+				helper.fail("the coal route was not the faster: " + measured);
+			}
+			LOGGER.info("coal or wood: " + log);
+			helper.succeed();
+		});
+	}
+
+	/**
 	 * A grown cherry tree and two persistent birch leaves, as a player places them (#649): make_cost of a cherry sapling is
 	 * the source's estimate, of a birch sapling None, as get breaks no persistent leaves
 	 * (persistentLeavesAreNotBrokenForSaplings). Both were None: make_cost turned down a raw item it was costing itself.

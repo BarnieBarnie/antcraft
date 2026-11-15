@@ -113,7 +113,7 @@ Its `cost(n, radius)` is a tuple `(ticks, tier)`, a finder: `ticks` is `estimate
 
 ## `wood_for_coal(k, radius)`
 
-How many logs `get` gets instead of `k` coal, less the coal the chests of [`lib.stock`](stock.md) within `radius` hold (#564): that many to smelt into charcoal and two thirds as many to burn doing it, which as planks also burn as long as the coal would. `0` where the chests hold all `k`, or the coal source's `cost` for the rest is less than the logs' plus `SMELT` for each charcoal. A finder, done at once.
+How many logs `get` gets instead of `k` coal, less the coal the chests of [`lib.stock`](stock.md) within `radius` hold (#564): that many to smelt into charcoal and two thirds as many to burn doing it, which as planks also burn as long as the coal would. `0` where the chests hold all `k`, or the coal source's `cost` for the rest is less than the logs' plus `SMELT` for each charcoal. A finder, done at once. With coal ore exposed within `radius` the coal source wins at any `k` (40 an ore, the rest of its vein 23, against some 310 a charcoal): 8 torches from a vein of two coal cost 80 and took some 70 ticks, from an oak's logs as charcoal 620 and some 740 (#663, `coalFromAVeinInSightBeatsCharcoal`).
 
 ## `key(item)`
 
