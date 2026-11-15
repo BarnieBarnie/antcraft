@@ -61,17 +61,22 @@ class PathBudgetTest {
 		assertEquals(1000, budget.share(7, "b"), "nothing searched in tick 6");
 	}
 
-	/** The bot benchmark logs the nodes expanded a tick, on average and in the worst tick (#693). */
+	/**
+	 * The bot benchmark logs the nodes expanded a tick, on average and in the worst tick (#693), over the ticks strictly
+	 * between two takes, as the tick profiler started and stopped in those ticks counts them, so the average is never above
+	 * the worst (#701).
+	 */
 	@Test
-	void countsTheNodesExpandedAndTheMostInOneTick() {
+	void countsTheNodesExpandedAndTheMostInOneTickBetweenTwoTakes() {
 		PathBudget budget = new PathBudget(1000);
 		budget.spend(5, 300);
 		budget.spend(5, 900);
 		budget.spend(6, 200);
-		assertEquals(new PathBudget.Count(1400, 1200), budget.takeCount(), "spent past the budget counts too");
-		budget.spend(6, 100);
-		budget.spend(7, 50);
-		assertEquals(new PathBudget.Count(150, 100), budget.takeCount(), "counted since the last take, the rest of tick 6 too");
-		assertEquals(new PathBudget.Count(0, 0), budget.takeCount());
+		assertEquals(new PathBudget.Count(1400, 1200), budget.takeCount(7), "spent past the budget counts too");
+		budget.spend(7, 100);
+		budget.spend(8, 50);
+		budget.spend(9, 10);
+		assertEquals(new PathBudget.Count(50, 50), budget.takeCount(9), "neither the tick of the last take nor this one");
+		assertEquals(new PathBudget.Count(0, 0), budget.takeCount(10));
 	}
 }

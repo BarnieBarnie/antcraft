@@ -23,10 +23,11 @@ public final class PathBudget {
 	private final int perTick;
 	private long tick = Long.MIN_VALUE;
 	private int left;
-	/** What {@link #takeCount} gives next: the nodes spent since it was last called, and in this tick of them. */
+	/** What {@link #takeCount} gives next: the nodes spent in the ticks after {@link #takenAt} that are over, and the most in one. */
 	private long spent;
 	private int worst;
 	private int spentThisTick;
+	private long takenAt = Long.MIN_VALUE;
 	/** The searches paused last tick that have not asked for their {@link #share} yet this tick. */
 	private Set<Object> waiting = new HashSet<>();
 	/** The searches paused this tick. */
@@ -39,6 +40,7 @@ public final class PathBudget {
 	/** The nodes left in {@code tick}. */
 	public int available(long tick) {
 		if (tick != this.tick) {
+			this.countTickOver();
 			this.waiting = tick == this.tick + 1 ? this.paused : new HashSet<>();
 			this.paused = new HashSet<>();
 			this.tick = tick;
@@ -68,18 +70,32 @@ public final class PathBudget {
 	/** Counts {@code nodes} expanded in {@code tick}. */
 	public void spend(long tick, int nodes) {
 		this.left = Math.max(0, this.available(tick) - nodes);
-		this.spent += nodes;
 		this.spentThisTick += nodes;
-		this.worst = Math.max(this.worst, this.spentThisTick);
 	}
 
-	/** The nodes expanded since the last call and the most of them in one tick, for the bot benchmark (#693). */
-	public Count takeCount() {
+	/**
+	 * The nodes expanded in the ticks strictly between the last call's {@code tick} and this one, and the most of them in
+	 * one tick, for the bot benchmark (#693): the ticks its tick profiler counts, started and stopped within those two
+	 * ticks, so the average a tick is never above the worst (#701).
+	 */
+	public Count takeCount(long tick) {
+		if (this.tick < tick) {
+			this.countTickOver();
+		}
 		Count count = new Count(this.spent, this.worst);
 		this.spent = 0;
 		this.worst = 0;
-		this.spentThisTick = 0;
+		this.takenAt = tick;
 		return count;
+	}
+
+	/** Counts {@link #tick}'s nodes toward {@link #takeCount}, once, if it came after the last take. */
+	private void countTickOver() {
+		if (this.tick > this.takenAt) {
+			this.spent += this.spentThisTick;
+			this.worst = Math.max(this.worst, this.spentThisTick);
+			this.spentThisTick = 0;
+		}
 	}
 
 	/** Nodes expanded in all and in the tick with the most. */

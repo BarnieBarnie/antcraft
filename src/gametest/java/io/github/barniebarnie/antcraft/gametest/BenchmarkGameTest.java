@@ -359,7 +359,8 @@ public class BenchmarkGameTest {
 			if (since == WARM_UP_TICKS) {
 				this.executedAtStart = this.executed();
 				TickProfiler.SERVER.start();
-				PathBudget.SERVER.takeCount();
+				// The path budget's clock; its count spans the ticks the profiler counts, those after this one (#701).
+				PathBudget.SERVER.takeCount(this.serverTick());
 			}
 			if (since > WARM_UP_TICKS && since % 100 == 0) {
 				for (AntBot bot : this.bots) {
@@ -394,12 +395,13 @@ public class BenchmarkGameTest {
 			TickProfiler.SERVER.stop();
 			TickProfiler.Report report = TickProfiler.SERVER.report();
 			double instructions = (double) (this.executed() - this.executedAtStart) / report.ticks();
-			PathBudget.Count nodes = PathBudget.SERVER.takeCount();
+			PathBudget.Count nodes = PathBudget.SERVER.takeCount(this.serverTick());
 			LOGGER.info("Benchmark: {}, {} bots, {} instructions a tick each at most, {} ticks: {} instructions run a tick\n  {}\n  bots at (samples every 100 ticks) {}",
 				c.name(), BOTS, c.instructions(), c.ticks(), Math.round(instructions), String.join("\n  ", report.lines()), this.doing);
 			this.summary.add(String.format(Locale.ROOT, "%-18s average %6.2f ms, p99 %6.2f ms, worst %6.2f ms, %8d instructions a tick, path nodes a tick %6.0f average, %5d worst",
 				c.name(), report.averageTickMs(), report.p99TickMs(), report.worstTickMs(), Math.round(instructions),
 				(double) nodes.nodes() / report.ticks(), nodes.worst()));
+			this.helper.assertTrue(nodes.nodes() <= (long) nodes.worst() * report.ticks(), c.name() + ": path nodes " + nodes + " in " + report.ticks() + " ticks");
 			this.helper.assertTrue(report.averageTickMs() < TICK_BUDGET_MS, c.name() + ": average tick " + report.averageTickMs() + " ms");
 			for (AntBot bot : this.bots) {
 				ColonyManager.get(this.helper.getLevel()).leave(bot);
@@ -407,6 +409,10 @@ public class BenchmarkGameTest {
 			}
 			this.bots.clear();
 			this.helper.getLevel().getEntitiesOfClass(ItemEntity.class, this.helper.getBounds()).forEach(ItemEntity::discard);
+		}
+
+		private long serverTick() {
+			return this.helper.getLevel().getServer().getTickCount();
 		}
 
 		/** The instructions all bots' scripts ran so far. */
