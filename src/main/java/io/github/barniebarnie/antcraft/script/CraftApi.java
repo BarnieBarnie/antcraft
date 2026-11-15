@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.script.lang.NativeCall;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.PyDict;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
@@ -560,8 +561,11 @@ public final class CraftApi {
 		private @Nullable Result load(AbstractFurnaceBlockEntity furnace) {
 			ItemStack in = furnace.getItem(INPUT);
 			ItemStack out = furnace.getItem(RESULT);
-			if (!in.isEmpty() && !in.is(this.input) || !out.isEmpty() && !out.is(this.output)) {
-				return Result.fail(Result.BLOCKED);
+			if (!in.isEmpty() && !in.is(this.input)) {
+				return Result.fail(Result.BLOCKED, PyNone.NONE, "the furnace holds " + BuiltInRegistries.ITEM.getKey(in.getItem()) + " in its input slot");
+			}
+			if (!out.isEmpty() && !out.is(this.output)) {
+				return Result.fail(Result.BLOCKED, PyNone.NONE, "the furnace holds " + BuiltInRegistries.ITEM.getKey(out.getItem()) + " in its result slot");
 			}
 			Container carried = BotHands.carried(this.bot);
 			int amount = (int) Math.min(this.n, Math.min(carried.countItem(this.input), this.input.getDefaultMaxStackSize() - in.getCount()));
@@ -569,7 +573,7 @@ public final class CraftApi {
 				return Result.fail(Result.MISSING_INGREDIENTS);
 			}
 			if (amount <= 0) {
-				return Result.fail(Result.BLOCKED);
+				return Result.fail(Result.BLOCKED, PyNone.NONE, "the furnace's input slot is full of " + BuiltInRegistries.ITEM.getKey(this.input));
 			}
 			if (!isLit(furnace) && furnace.getItem(FUEL).isEmpty() && BotHands.find(this.bot, this.fuel()) == null) {
 				return Result.fail(Result.MISSING_INGREDIENTS);

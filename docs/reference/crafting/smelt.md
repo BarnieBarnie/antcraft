@@ -53,11 +53,19 @@ smelt("#minecraft:logs", 4, fuel="#minecraft:planks")
 | `no_recipe` | no furnace, blast furnace or smoker cooks `item`, or the one at `furnace` does not, such as ore in a smoker |
 | `missing_ingredients` | none of `item` carried, or no fuel to burn when the fire goes out |
 | `no_furnace` | no furnace, blast furnace or smoker at `furnace`, or none within reach that cooks `item` |
-| `blocked` | the furnace holds another input or output, or its input slot is full |
+| `blocked` | the furnace holds another input or output, or its input slot is full; `detail` says which, one of the ones below |
 | `no_space` | the output does not fit and stays in the furnace; `value` is how many it took |
 | `timeout` | the furnace made nothing for 1200 ticks (a minute), or the walk got stuck |
 | `protected`, `out_of_reach`, `not_loaded` | at `furnace`, as for [`use`](../blocks/use.md) |
 | `wrong_dimension` | `furnace` is in another dimension than the bot's |
+
+The `detail` of `blocked`, with the item in the way:
+
+| `detail` | When |
+|---|---|
+| `the furnace holds minecraft:sand in its input slot` | another item waits to be smelted |
+| `the furnace holds minecraft:glass in its result slot` | another item waits to be taken out, which `item`'s output cannot join |
+| `the furnace's input slot is full of minecraft:raw_iron` | a full stack of `item` already waits, so there is no room for more |
 
 ## See also
 

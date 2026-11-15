@@ -858,8 +858,34 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
 		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
 		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
-		expect(helper, bot, "r = smelt('raw_iron')\nprint(r.ok, r.reason, count('raw_iron'))\n", List.of("False blocked 1"),
+		expect(helper, bot, "r = smelt('raw_iron')\nprint(r.ok, r.reason, r.value, count('raw_iron'))\nprint(r.detail)\n",
+			List.of("False blocked None 1", "the furnace holds minecraft:sand in its input slot"),
 			() -> helper.assertTrue(furnace.getItem(0).is(Items.SAND), "the sand was taken out"));
+	}
+
+	/** Glass waits in the result slot, which iron ingots cannot join: blocked, naming it (#487). */
+	@GameTest(maxTicks = 20)
+	public void smeltWithAnotherItemInTheResultSlotIsBlocked(GameTestHelper helper) {
+		Container furnace = furnace(helper);
+		furnace.setItem(2, new ItemStack(Items.GLASS, 1));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, "r = smelt('raw_iron')\nprint(r.ok, r.reason, r.value, count('raw_iron'))\nprint(r.detail)\n",
+			List.of("False blocked None 1", "the furnace holds minecraft:glass in its result slot"),
+			() -> helper.assertTrue(furnace.getItem(2).is(Items.GLASS), "the glass was taken out"));
+	}
+
+	/** A full stack of raw iron already waits in the input slot: no room for the bot's, blocked saying so (#487). */
+	@GameTest(maxTicks = 20)
+	public void smeltIntoAFullInputSlotIsBlocked(GameTestHelper helper) {
+		Container furnace = furnace(helper);
+		furnace.setItem(0, new ItemStack(Items.RAW_IRON, 64));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 5);
+		bot.getInventory().addItem(new ItemStack(Items.RAW_IRON, 1));
+		bot.getInventory().addItem(new ItemStack(Items.COAL, 1));
+		expect(helper, bot, "r = smelt('raw_iron')\nprint(r.ok, r.reason, r.value, count('raw_iron'))\nprint(r.detail)\n",
+			List.of("False blocked None 1", "the furnace's input slot is full of minecraft:raw_iron"));
 	}
 
 	/** The ingot is smelted, but every slot and the hand are taken: it stays in the furnace. */

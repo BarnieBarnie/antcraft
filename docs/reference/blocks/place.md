@@ -53,11 +53,18 @@ place((10, 64, -3), "oak_stairs", facing="east", half="bottom")
 |---|---|
 | `no_item` | the bot carries no block item `item` selects |
 | `protected` | the spot may not be changed: outside the build height or border, or under spawn protection |
-| `blocked` | a block that cannot be replaced is there, an entity stands there, or the block cannot stay there |
+| `blocked` | a block that cannot be replaced is there, an entity stands there, or the block cannot stay there; `detail` says which, one of the ones below |
 | `out_of_reach` | the bot could not walk to where it sees the spot within reach |
 | `not_loaded` | the spot is in a chunk that is not loaded |
 | `wrong_dimension` | `pos` is in another dimension than the bot's |
 | `timeout` | the walk got stuck |
+
+The `detail` of `blocked`:
+
+| `detail` | When |
+|---|---|
+| `minecraft:glass at Pos(x, y, z) cannot be replaced` | a block (its id) that cannot be replaced is at the spot |
+| `the game would not place minecraft:dirt at Pos(x, y, z)` | the game refused to place the item (its id) there, such as where an entity stands or where the block cannot stay |
 
 ## See also
 

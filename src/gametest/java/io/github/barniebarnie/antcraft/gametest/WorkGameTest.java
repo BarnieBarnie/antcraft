@@ -560,8 +560,9 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(2, 1, 2, Blocks.GLASS);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT));
-		expect(helper, bot, "r = place(" + at(helper, 2, 1, 2) + ", 'dirt')\nprint(r.ok, r.reason, count('dirt'))\n",
-			List.of("False blocked 1"), () -> helper.assertBlockPresent(Blocks.GLASS, 2, 1, 2));
+		expect(helper, bot, "r = place(" + at(helper, 2, 1, 2) + ", 'dirt')\nprint(r.ok, r.reason, r.value, count('dirt'))\nprint(r.detail)\n",
+			List.of("False blocked None 1", "minecraft:glass at Pos" + at(helper, 2, 1, 2) + " cannot be replaced"),
+			() -> helper.assertBlockPresent(Blocks.GLASS, 2, 1, 2));
 	}
 
 	/** A pig stands where the block would go. */
@@ -570,8 +571,9 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		helper.spawnWithNoFreeWill(EntityTypes.PIG, 3, 1, 3);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.DIRT));
-		expect(helper, bot, "r = place(" + at(helper, 3, 1, 3) + ", 'dirt')\nprint(r.ok, r.reason, count('dirt'))\n",
-			List.of("False blocked 1"), () -> helper.assertBlockPresent(Blocks.AIR, 3, 1, 3));
+		expect(helper, bot, "r = place(" + at(helper, 3, 1, 3) + ", 'dirt')\nprint(r.ok, r.reason, r.value, count('dirt'))\nprint(r.detail)\n",
+			List.of("False blocked None 1", "the game would not place minecraft:dirt at Pos" + at(helper, 3, 1, 3)),
+			() -> helper.assertBlockPresent(Blocks.AIR, 3, 1, 3));
 	}
 
 	@GameTest(maxTicks = 20)
@@ -834,7 +836,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	public void useThatDoesNothingIsBlocked(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.WOODEN_HOE));
-		expect(helper, bot, "r = use(" + at(helper, 2, 0, 2) + ", 'wooden_hoe')\nprint(r.ok, r.reason)\n", List.of("False blocked"),
+		expect(helper, bot, "r = use(" + at(helper, 2, 0, 2) + ", 'wooden_hoe')\nprint(r.ok, r.reason, r.value)\nprint(r.detail)\n",
+			List.of("False blocked None", "using minecraft:wooden_hoe on minecraft:stone at Pos" + at(helper, 2, 0, 2) + " did nothing"),
 			() -> helper.assertBlockPresent(Blocks.STONE, 2, 0, 2));
 	}
 

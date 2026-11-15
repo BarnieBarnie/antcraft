@@ -11,6 +11,7 @@ import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
+import io.github.barniebarnie.antcraft.script.lang.PyNone;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import io.github.barniebarnie.antcraft.script.lang.Values;
 import java.util.Comparator;
@@ -23,6 +24,7 @@ import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -36,6 +38,7 @@ import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.food.FoodConstants;
 import net.minecraft.world.food.FoodProperties;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.Consumable;
 import net.minecraft.world.level.block.state.BlockState;
@@ -416,13 +419,16 @@ public final class WorkApi {
 
 		@Override
 		@Nullable Result check(BlockState state) {
-			return state.canBeReplaced() ? null : Result.fail(Result.BLOCKED);
+			return state.canBeReplaced() ? null
+				: Result.fail(Result.BLOCKED, PyNone.NONE, BuiltInRegistries.BLOCK.getKey(state.getBlock()) + " at " + EntityInfo.pos(this.pos) + " cannot be replaced");
 		}
 
 		@Override
 		Result work(BlockState state) {
 			BotHands.equip(this.bot, this.item);
-			return BotHands.place(this.bot, this.pos, this.facing, this.half) ? Result.OK : Result.fail(Result.BLOCKED);
+			Item held = this.bot.getMainHandItem().getItem();
+			return BotHands.place(this.bot, this.pos, this.facing, this.half) ? Result.OK
+				: Result.fail(Result.BLOCKED, PyNone.NONE, "the game would not place " + BuiltInRegistries.ITEM.getKey(held) + " at " + EntityInfo.pos(this.pos));
 		}
 
 		@Override
@@ -453,7 +459,12 @@ public final class WorkApi {
 			if (this.item != null) {
 				BotHands.equip(this.bot, this.item);
 			}
+			ItemStack held = this.bot.getMainHandItem();
+			String using = held.isEmpty() ? "an empty hand" : BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
 			String failed = BotHands.use(this.bot, this.pos);
+			if (Result.BLOCKED.equals(failed)) {
+				return Result.fail(failed, PyNone.NONE, "using " + using + " on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()) + " at " + EntityInfo.pos(this.pos) + " did nothing");
+			}
 			return failed == null ? Result.OK : Result.fail(failed);
 		}
 

@@ -49,7 +49,7 @@ if water is not None:
 |---|---|
 | `no_item` | `item` is given and the bot carries nothing it selects |
 | `protected` | the block may not be changed: outside the build height or border, or under spawn protection |
-| `blocked` | the use did nothing, such as a hoe on stone |
+| `blocked` | the use did nothing, such as a hoe on stone; `detail` says so, such as `using minecraft:wooden_hoe on minecraft:stone at Pos(x, y, z) did nothing` (or `using an empty hand on ...`) |
 | `out_of_reach` | the bot could not walk into reach, or from where it stands every line from its eyes to the block hits another block first |
 | `not_loaded` | the block is in a chunk that is not loaded |
 | `wrong_dimension` | `pos` is in another dimension than the bot's |
