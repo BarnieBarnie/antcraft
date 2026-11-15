@@ -136,6 +136,80 @@ public class SettleGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot that goes hungry once it has mined the first block of a dirt wall on the plot (z = 9, x 3 to 12, two high)
+	 * eats the bread it is given before the wall is gone (#757): jobs.settle passes lib.food.upkeep to lib.terrain.flatten
+	 * as each, which calls it before each block.
+	 */
+	// Measured: passes at tick 320 (red: the wall flattened with the bread uneaten at tick 236).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 650)
+	public void aBotThatGoesHungryMidFlattenEatsBeforeTheFlattenEnds(GameTestHelper helper) {
+		plot(helper);
+		List<BlockPos> wall = new ArrayList<>();
+		for (int x = 3; x <= 12; x++) {
+			for (int y = 1; y <= 2; y++) {
+				helper.setBlock(x, y, 9, Blocks.DIRT);
+				wall.add(new BlockPos(x, y, 9));
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12 antcraft:cobble_step");
+		BotScripts.failOnError(helper, bot);
+		boolean[] hungry = new boolean[1];
+		helper.onEachTick(() -> {
+			long gone = wall.stream().filter(p -> helper.getBlockState(p).isAir()).count();
+			if (!hungry[0] && gone > 0) {
+				hungry[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+				bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+			}
+			if (gone == wall.size() && bot.getInventory().countItem(Items.BREAD) > 0) {
+				helper.fail("the wall is flattened with " + bot.getInventory().countItem(Items.BREAD) + " bread uneaten, food " + bot.getFood().food());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settle 3/7: hut"), "not building the hut");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BREAD), 0, "bread left");
+		});
+	}
+
+	/**
+	 * A bot that goes hungry once it has got the hut's first material eats the bread it is given before it furnishes
+	 * (#757): jobs.settle passes lib.food.upkeep to lib.build.build_here as each, which calls it before each get and build.
+	 */
+	// Measured: passes at tick 223 (red: furnishing with the bread uneaten at tick 157).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 450)
+	public void aBotThatGoesHungryMidHutEatsBeforeItFurnishes(GameTestHelper helper) {
+		plot(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.settle " + at.getX() + " " + at.getY() + " " + at.getZ()
+			+ " 12 antcraft:cobble_step");
+		BotScripts.failOnError(helper, bot);
+		boolean[] hungry = new boolean[1];
+		helper.onEachTick(() -> {
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT);
+			if (!hungry[0] && said.contains("settle 3/7: hut")
+				&& (bot.getInventory().countItem(Items.COBBLESTONE) > 0 || bot.getInventory().countItem(Items.OAK_STAIRS) > 0)) {
+				hungry[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+				bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+			}
+			if (said.contains("settle 4/7: furnish") && bot.getInventory().countItem(Items.BREAD) > 0) {
+				helper.fail("furnishing with " + bot.getInventory().countItem(Items.BREAD) + " bread uneaten, food " + bot.getFood().food());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(hungry[0], "never got a material");
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("settle 4/7: furnish"), "not furnishing");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BREAD), 0, "bread left");
+		});
+	}
+
+	/**
 	 * With an empty bucket in the chest instead of a water bucket and a one-block water pool at (16, 1, 10), the bot fills
 	 * the bucket at the pool and pours it in the middle of the field (#592).
 	 */

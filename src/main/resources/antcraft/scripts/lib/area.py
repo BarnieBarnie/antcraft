@@ -48,8 +48,9 @@ def centre(low, high):
     return Pos((low.x + high.x) // 2, (low.y + high.y) // 2, (low.z + high.z) // 2)
 
 
-def clear(a, b, keep=()):
-    """Mines every block of the cuboid but air, fluids and those at the positions keep, top down; the drops go into the bot's inventory. Gives
+def clear(a, b, keep=(), each=None):
+    """Mines every block of the cuboid but air, fluids and those at the positions keep, top down; the drops go into the bot's inventory. each,
+    where given, is called with no arguments before each block it mines (jobs.settle feeds the bot with it, #757). Gives
     result(): ok, or the reason of the mine that failed with at, where."""
     for p in reversed(box(a, b)):
         k = block(p)
@@ -57,6 +58,8 @@ def clear(a, b, keep=()):
             return result("not_loaded", p)
         if k.is_air or k.is_fluid or p in keep:
             continue
+        if each is not None:
+            each()
         r = lib.retry.retry(mine, (p,))
         if not r and r.reason != "target_gone":
             return result(r.reason, p)

@@ -35,7 +35,7 @@ if args is not None:
 ## How it works
 
 - [`materials(id, at, turn)`](../reference/modules/lib/build.md#materialsid-at-turn0-mirrorfalse) is what the site still lacks, so a half-built blueprint costs only the rest.
-- [`build_here`](../reference/modules/lib/build.md#build_hereid-at-turn0-mirrorfalse-radius32) gets each of them with [`lib.get.get`](../reference/modules/lib/get.md#getitem-n1-radius32): from a chest within `radius` (borrowed), by gathering (cobblestone from stone, with a pickaxe it borrows or makes) or by crafting. Then it [`build`](../reference/building/build.md)s.
+- [`build_here`](../reference/modules/lib/build.md#build_hereid-at-turn0-mirrorfalse-radius32-eachnone) gets each of them with [`lib.get.get`](../reference/modules/lib/get.md#getitem-n1-radius32): from a chest within `radius` (borrowed), by gathering (cobblestone from stone, with a pickaxe it borrows or makes) or by crafting. Then it [`build`](../reference/building/build.md)s.
 - An item `get` cannot get does not stop it: it gets the rest and builds what it has, as far as the first block it lacks, then fails with `get`'s reason and what the bot lacks in `missing`. Without wood the cobble step gets its two cobblestone and stops at the stairs: `not built antcraft:cobble_step: no_logs {'minecraft:oak_stairs': 1}`.
 - What it borrowed goes back at the end, also on a failure: the pickaxe to its chest, and on a failure the materials it took.
 

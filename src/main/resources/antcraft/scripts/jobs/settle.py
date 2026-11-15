@@ -38,21 +38,21 @@ WATER = (7, -1, 3)
 
 def flatten(at, radius):
     """Levels the plot, house, chest and field with a block round them, at ground, getting the dirt it falls short of."""
-    lib.food.upkeep(radius)  # lib.terrain and lib.build keep no bot fed: the job does, before each long step (#743)
+    # lib.terrain and lib.build import nothing above them, so keep no bot fed: the job passes upkeep (#743, #757).
+    each = lambda: lib.food.upkeep(radius)
     low = at + (-1, -1 - DEEP, -1)
     high = at + (9, TALL - 1, 5)
-    r = lib.terrain.flatten(low, high, at.y - 1)
+    r = lib.terrain.flatten(low, high, at.y - 1, each=each)
     if r["reason"] == "missing_ingredients":
         g = get("dirt", r["missing"]["minecraft:dirt"], radius)
         if not g["ok"]:
             return g
-        r = lib.terrain.flatten(low, high, at.y - 1)
+        r = lib.terrain.flatten(low, high, at.y - 1, each=each)
     return r
 
 
 def build_hut(id, at, radius):
-    lib.food.upkeep(radius)
-    return build_here(id, at, 0, False, radius)
+    return build_here(id, at, 0, False, radius, lambda: lib.food.upkeep(radius))
 
 
 def furnish(at):
