@@ -134,6 +134,20 @@ public final class BotScripts {
 		});
 	}
 
+	/**
+	 * As {@link #failOnWarning} for the bot {@code bot} gives (null while there is none, such as while it is dead), but its
+	 * death's warning ("died at") does not count: for tests where a fall may kill the bot, or the test kills it, and it
+	 * respawns as a new entity and recovers (#715, #731). Give a supplier that finds the bot by its UUID.
+	 */
+	public static void failOnWarningButDeath(GameTestHelper helper, Supplier<@Nullable AntBot> bot) {
+		helper.onEachTick(() -> {
+			AntBot now = bot.get();
+			if (now != null && warnings(now).stream().anyMatch(line -> !line.startsWith("died at"))) {
+				helper.fail("failed or warned: " + log(now, Output.Level.DEBUG) + ", " + carries(now));
+			}
+		});
+	}
+
 	private static void failIfError(GameTestHelper helper, AntBot bot) {
 		if (!errors(bot).isEmpty()) {
 			helper.fail("script error: " + log(bot, Output.Level.DEBUG) + ", " + carries(bot));

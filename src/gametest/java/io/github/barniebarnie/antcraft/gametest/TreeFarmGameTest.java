@@ -541,6 +541,10 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// walked to the leaves or branch under where it died, out of reach of the dirt that fell past them; and in some runs a
 	// branch log was left cut off from the tree by the dead run's mining, which harvest left standing. Killed 12 up since:
 	// 57 of 60 in 5 runs of 12 copies, some 3000 to 7000; 2 ran out of maxTicks with nothing printed, 1 gave out_of_reach.
+	// Again (#731): 58 of 60 in runs of 12, 24 and 24 copies, 2751 to 7498. Both failures ran out of maxTicks with every
+	// log felled: after the kill the bot died again, of a fall (a death share drop, #682), and the third run's recover,
+	// re-felling and scaffold taken back from some 20 up ran past tick 10000. 4 of 24 in one run died twice and passed at
+	// some 5900 to 7500. No out_of_reach in those 60.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWholeByABotThatDiesUpIt(GameTestHelper helper) {
 		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);
@@ -623,7 +627,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 			+ "r = lib.treefarm.harvest(\"" + kind + "\", Pos(" + l.getX() + ", " + l.getY() + ", " + l.getZ() + "), Pos("
 			+ h.getX() + ", " + h.getY() + ", " + h.getZ() + "))\nprint(r[\"ok\"], r[\"reason\"], r[\"at\"])\n");
 		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarningButDeath(helper, bot);
 		boolean[] killed = {false};
 		helper.onEachTick(() -> {
 			AntBot now = bot.get();

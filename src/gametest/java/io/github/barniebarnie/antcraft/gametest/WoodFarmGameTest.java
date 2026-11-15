@@ -588,6 +588,10 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// job again and passed at 3534 to 3671 in 3 (red, watching for a warning: failed on its death warning at tick 784).
 	// Since #713 (#715), 2427 to 3197 in 6 runs with no death, the felling 1948 to 2757 (2270 on average); HARVEST stays
 	// 2700, the mean of these and the 8 killed runs below (2714), within HARVEST_FACTOR of both.
+	// No seed 12 (trunk 28) farm test (#731): 6 temporary copies at once passed at tick 4489 to 7397, the felling 4057 to
+	// 6953, no death. That is slower than the suite's slowest test (the seed 37 giant jungle, TreeFarmGameTest, 2467 to
+	// 4909, once 7809) and would need maxTicks some 15000, so a full run would last longer; and its felling is past
+	// HARVEST_FACTOR of HARVEST["giant_jungle"] (at most 4050), as a typical giant jungle is no trunk of 28.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 7600)
 	public void aGiantJungleFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
 		giantFarm(helper, "giant_jungle", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, Blocks.JUNGLE_LOG, Items.JUNGLE_LOG, 33, 6,
@@ -649,7 +653,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 1 20");
 		helper.assertTrue(first.getScript() != null, "not run: " + out);
 		Supplier<@Nullable AntBot> bot = () -> helper.getLevel().getEntity(id) instanceof AntBot b && b.isAlive() ? b : null;
-		BotScripts.failOnError(helper, bot);
+		BotScripts.failOnWarningButDeath(helper, bot);
 		List<BlockPos> spots = List.of(new BlockPos(10, 1, 8), new BlockPos(11, 1, 8), new BlockPos(10, 1, 9), new BlockPos(11, 1, 9));
 		long[] grewAt = {-1};  // the tick the giant grew on
 		long[] took = {-1};  // the ticks from then to the first tick all is done
@@ -659,8 +663,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			if (now == null) {
 				return;
 			}
-			if (said(now).stream().anyMatch(l -> l.contains("stopped"))
-				|| BotScripts.warnings(now).stream().anyMatch(l -> !l.startsWith("died at"))) {
+			if (said(now).stream().anyMatch(l -> l.contains("stopped"))) {
 				helper.fail("said " + BotScripts.log(now, Output.Level.DEBUG));
 			}
 			if (killAt > 0 && grewAt[0] >= 0 && !killed[0] && helper.relativePos(now.blockPosition()).getY() >= killAt) {
