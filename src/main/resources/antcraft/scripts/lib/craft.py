@@ -58,12 +58,13 @@ def obtain(item, n=1, chests=None):
     return lib.get.get(item, n)
 
 
-def plan(item, n=1):
-    """needs(item, n), with the crafting table and furnace craft_here must craft for it planned first from the same
-    items: those its steps need that the bot neither carries nor finds within REACH (a furnace takes a table). A smoker
-    or blast furnace within REACH that cooks every smelted input stands in for the furnace. Its no_tool is True where a
-    step smelts in a furnace craft_here could not mine back (can_take_back_furnace)."""
-    p = needs(item, n)
+def plan(item, n=1, p=None):
+    """needs(item, n) (p where the caller has it, as lib.get.make_cost does, #710), with the crafting table and furnace
+    craft_here must craft for it planned first from the same items: those its steps need that the bot neither carries
+    nor finds within REACH (a furnace takes a table). A smoker or blast furnace within REACH that cooks every smelted
+    input stands in for the furnace. Its no_tool is True where a step smelts in a furnace craft_here could not mine back
+    (can_take_back_furnace)."""
+    p = needs(item, n) if p is None else p
     stations = []
     inputs = smelt_inputs(p)
     if inputs and not count("furnace") and not furnace_in_reach(inputs):

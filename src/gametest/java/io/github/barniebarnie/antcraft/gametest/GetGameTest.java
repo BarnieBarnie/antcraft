@@ -1095,15 +1095,6 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
-	 * of it lib.craft.plan of each tier's tool (needs costs 3000); 45,600 (24 ticks) since the make cost counts the pickaxe
-	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks; 48,200
-	 * (26 ticks) since that tool may come from a chest (#536), a chest scan for each tool costed; 61,000-64,400 (32-35
-	 * ticks, 52,000-56,000 before) since copper is a tier it makes (#578): 5,600 more, 3,600 of it its
-	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far (#595); 46,500 (26 ticks)
-	 * since make_cost finds each plan's crafting table and furnace within reach (#630). The limit keeps it there.
-	 */
-	/**
 	 * An empty bot whose scans read radius 32 (#700): make_cost of three diamonds with a limit of 500 is None without the
 	 * ore scan, as no iron pickaxe is carried or in a chest and its three iron ingots take three SMELT to make, more than
 	 * the limit. Source.least, a vein in sight, was 30, so the diamond ore scan ran.
@@ -1116,11 +1107,35 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			List.of("None"), "diamond limit", 25_000);
 	}
 
+	/**
+	 * What one choose call costs an empty bot with no chest near (#522): measured at 27,000 instructions (14 ticks), most
+	 * of it lib.craft.plan of each tier's tool (needs costs 3000); 45,600 (24 ticks) since the make cost counts the pickaxe
+	 * a raw item needs (#529), a plan of each pickaxe tier more, and some 1000 of it the ore scans of Source.ticks; 48,200
+	 * (26 ticks) since that tool may come from a chest (#536), a chest scan for each tool costed; 61,000-64,400 (32-35
+	 * ticks, 52,000-56,000 before) since copper is a tier it makes (#578): 5,600 more, 3,600 of it its
+	 * plan; 41,000-44,500 (22-24 ticks) since options costs the tiers lowest first, each up to the cheapest make so far
+	 * (#595); 46,500 (26 ticks) since make_cost finds each plan's crafting table and furnace within reach (#630); 33,900
+	 * (19 ticks, 44,600 before) since make_cost bounds a tier by its needs alone before lib.craft.plan (#710), which leaves
+	 * out the plans of copper, iron and diamond. The limit keeps it there.
+	 */
 	@GameTest(maxTicks = 60)
 	public void chooseCost(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		GameTests.cost(helper, bot, "from lib.get import choose\n", "print(choose('axe', 30, radius=8)[1:3])\n",
 			List.of("('make', 'stone')"), "choose", 60_000);
+	}
+
+	/**
+	 * An empty bot with no chest near (#710): make_cost of an iron axe with a limit of 300 is None without
+	 * lib.craft.plan and its second needs, as the needs of the axe alone cost more: SMELT for each of three iron ingots,
+	 * the least of their raw iron and of the sticks' log, and the furnace and crafting table mined back (stations).
+	 * Measured 1,400 instructions; 5,100 before, most of it the plan.
+	 */
+	@GameTest(maxTicks = 15)
+	public void aLimitLeavesOutThePlanOfADearTier(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		GameTests.cost(helper, bot, "from lib.get import make_cost\n", "print(make_cost('iron_axe', 1, radius=8, limit=300))\n",
+			List.of("None"), "iron axe limit", 2_500);
 	}
 
 	/**

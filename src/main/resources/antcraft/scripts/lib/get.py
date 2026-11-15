@@ -377,9 +377,12 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
     if key(item) in GETTING:
         return None
     tools = {} if tools is None else tools
+    p = needs(item, n)
+    if limit is not None and least_make(p, radius, tools) > limit:
+        return None
     GETTING.append(key(item))
     try:
-        p = lib.craft.plan(item, n)
+        p = lib.craft.plan(item, n, p)
         ticks = 0
         gather = dict(p["gather"])
         # The last chest get takes from, where its walk back to the stations starts (#698).
@@ -441,6 +444,25 @@ def make_cost(item, n, radius=32, tools=None, limit=None):
         return ticks
     finally:
         GETTING.pop()
+
+
+def least_make(p, radius, tools):
+    """A bound make_cost never goes under, from p, a needs() plan, alone (#710): before lib.craft.plan, whose needs with
+    the stations costs as much again, and the ore scans. SMELT for each item p smelts, its stations and the least of each
+    raw item's source with smelted_pickaxe (coal none, as it may come as charcoal); 0 where the chests in tools["chests"]
+    hold any of p's items, raw or a step, as make_cost then takes those for less."""
+    if "chests" not in tools:
+        tools["chests"] = lib.stock.chests(radius)
+    for what in list(p["gather"]) + [step for step, k, how in p["crafts"]]:
+        for c in tools["chests"]:
+            if any([lib.stock.holds(c, w) for w in alike(what)]):
+                return 0
+    ticks = lib.cost.SMELT * smelted(p) + stations(p)
+    for raw, k in p["gather"].items():
+        s = SOURCES.get(key(raw))
+        if s is not None and key(raw) != COAL:
+            ticks += s.least(k) + smelted_pickaxe(s, tools)
+    return ticks
 
 
 # The ingot a pickaxe of each tier is made of, where it is smelted, for smelted_pickaxe (#700).
