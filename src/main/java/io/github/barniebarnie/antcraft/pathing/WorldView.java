@@ -82,8 +82,9 @@ public interface WorldView {
 
 	/**
 	 * The faces this {@link #isClimbable climbable} block holds on to, one bit per {@link Direction#get3DDataValue}: a
-	 * ladder the block behind it, a vine each block it clings to (or, beside open air, the vine above on that face). 0
-	 * for one that holds on to nothing, such as scaffolding or a hatch (#735).
+	 * ladder the block behind it, a vine each block it clings to (or, beside open air, the vine above on that face),
+	 * weeping and cave vines the block above, twisting vines and scaffolding the block below (or, up or down, the
+	 * climbable there that holds on the same way; #752). 0 for one that holds on to nothing, such as a hatch (#735).
 	 */
 	default int climbFaces(BlockPos pos) {
 		return 0;

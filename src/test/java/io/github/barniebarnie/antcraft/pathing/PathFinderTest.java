@@ -679,6 +679,44 @@ class PathFinderTest {
 	}
 
 	/**
+	 * In bedrock, a column of climbables at x=2, y=1 to 5, each holding on to {@code face} only, at the end of a corridor;
+	 * the goal is on the ledge east of its third block.
+	 */
+	private static Path upAColumnHoldingOn(Direction face) {
+		GridWorld world = new GridWorld().fill(-2, -1, -2, 5, 8, 2, 'B').fill(0, 1, 0, 1, 2, 0, ' ')
+			.fill(2, 1, 0, 2, 5, 0, 'C').fill(3, 4, 0, 3, 5, 0, ' ');
+		for (int y = 1; y <= 5; y++) {
+			world.hangsOn(2, y, 0, face);
+		}
+		return PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(3, 4, 0)), WALK_ONLY);
+	}
+
+	/**
+	 * Weeping and cave vines hang from the block over the top one, through the vines above; a vine of them whose
+	 * column the path broke the top of drops (#752).
+	 */
+	@Test
+	void climbsVinesHangingFromTheVinesAbove() {
+		Path path = upAColumnHoldingOn(Direction.UP);
+		assertTrue(path.complete(), "did not climb the vines: " + path.steps());
+	}
+
+	/** Twisting vines and scaffolding stand on the block under the bottom one, through those below (#752). */
+	@Test
+	void climbsVinesStandingOnTheVinesBelow() {
+		Path path = upAColumnHoldingOn(Direction.DOWN);
+		assertTrue(path.complete(), "did not climb the vines: " + path.steps());
+	}
+
+	/** A vine on the dirt the path breaks still hangs from the vine above it on that face, on the bedrock (#752). */
+	@Test
+	void climbsAVineOnABlockItBrokeHangingFromTheVineAbove() {
+		GridWorld world = besideADoorway('V').hangsOn(2, 1, 0, Direction.WEST).hangsOn(2, 2, 0, Direction.WEST).hangsOn(2, 3, 0, Direction.WEST);
+		Path path = upBesideADoorway(world);
+		assertTrue(path.complete(), "did not climb the vines: " + path.steps());
+	}
+
+	/**
 	 * In bedrock, a dirt doorway a path breaks to reach a climbable column three high against the bedrock east of it, the
 	 * only way up to the goal on the ledge at its top; the doorway is beside the bottom two (#735).
 	 */

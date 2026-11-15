@@ -9,11 +9,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.EmptyBlockGetter;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.junit.jupiter.api.BeforeAll;
@@ -89,13 +91,36 @@ class LevelWorldViewTest {
 		assertFalse(LevelWorldView.decays(Blocks.STONE.defaultBlockState()));
 	}
 
-	/** A ladder holds on to the block behind it, a vine to the faces it clings to, scaffolding to none (#735). */
+	/** A ladder holds on to the block behind it, a vine to the faces it clings to (#735). */
 	@Test
 	void aClimbableHoldsOnToItsFaces() {
 		BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
 		assertEquals(1 << Direction.SOUTH.get3DDataValue(), LevelWorldView.climbFaces(ladder));
 		BlockState vine = Blocks.VINE.defaultBlockState().setValue(VineBlock.WEST, true).setValue(VineBlock.UP, true);
 		assertEquals(1 << Direction.WEST.get3DDataValue() | 1 << Direction.UP.get3DDataValue(), LevelWorldView.climbFaces(vine));
-		assertEquals(0, LevelWorldView.climbFaces(Blocks.SCAFFOLDING.defaultBlockState()));
+	}
+
+	/**
+	 * Weeping and cave vines hang from the block above, twisting vines stand on the block below (#752); scaffolding
+	 * stands on the block below, or overhanging, holds on to the scaffolding beside it; a hatch to none, as it is
+	 * climbed only from the ladder under it.
+	 */
+	@Test
+	void otherClimbablesHoldOnUpOrDown() {
+		int up = 1 << Direction.UP.get3DDataValue(), down = 1 << Direction.DOWN.get3DDataValue();
+		for (Block block : new Block[] {Blocks.WEEPING_VINES, Blocks.WEEPING_VINES_PLANT, Blocks.CAVE_VINES, Blocks.CAVE_VINES_PLANT}) {
+			assertEquals(up, LevelWorldView.climbFaces(block.defaultBlockState()), block.toString());
+		}
+		assertEquals(down, LevelWorldView.climbFaces(Blocks.TWISTING_VINES.defaultBlockState()));
+		assertEquals(down, LevelWorldView.climbFaces(Blocks.TWISTING_VINES_PLANT.defaultBlockState()));
+		BlockState scaffolding = Blocks.SCAFFOLDING.defaultBlockState();
+		assertEquals(down, LevelWorldView.climbFaces(scaffolding.setValue(ScaffoldingBlock.DISTANCE, 0).setValue(ScaffoldingBlock.BOTTOM, false)));
+		assertEquals(down, LevelWorldView.climbFaces(scaffolding.setValue(ScaffoldingBlock.DISTANCE, 2).setValue(ScaffoldingBlock.BOTTOM, false)));
+		int sides = 0;
+		for (Direction dir : Direction.Plane.HORIZONTAL) {
+			sides |= 1 << dir.get3DDataValue();
+		}
+		assertEquals(sides, LevelWorldView.climbFaces(scaffolding.setValue(ScaffoldingBlock.DISTANCE, 2).setValue(ScaffoldingBlock.BOTTOM, true)));
+		assertEquals(0, LevelWorldView.climbFaces(Blocks.OAK_TRAPDOOR.defaultBlockState()));
 	}
 }

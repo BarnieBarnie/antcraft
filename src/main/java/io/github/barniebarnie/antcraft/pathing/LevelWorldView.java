@@ -16,6 +16,7 @@ import net.minecraft.world.level.block.DoorBlock;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
 import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
@@ -188,12 +189,28 @@ public class LevelWorldView implements WorldView {
 	}
 
 	/**
-	 * A ladder's block behind it, a vine's faces, as bits by {@link Direction#get3DDataValue}; 0 for other climbables.
+	 * A ladder's block behind it, a vine's faces, as bits by {@link Direction#get3DDataValue}; up for weeping and cave
+	 * vines, which hang from the block above, down for twisting vines and scaffolding, which stand on the block below,
+	 * or the sides for overhanging scaffolding (#752). 0 for a hatch, climbed only from the ladder under it.
 	 */
-	// ponytail: weeping, twisting and cave vines, scaffolding and hatches hold on to nothing here; give them faces if paths through what holds them show.
+	// ponytail: overhanging scaffolding holds on to any block beside it, not only scaffolding nearer its support.
 	static int climbFaces(BlockState state) {
 		if (state.getBlock() instanceof LadderBlock) {
 			return 1 << state.getValue(LadderBlock.FACING).getOpposite().get3DDataValue();
+		}
+		if (state.is(Blocks.WEEPING_VINES) || state.is(Blocks.WEEPING_VINES_PLANT) || state.is(Blocks.CAVE_VINES) || state.is(Blocks.CAVE_VINES_PLANT)) {
+			return 1 << Direction.UP.get3DDataValue();
+		}
+		if (state.is(Blocks.TWISTING_VINES) || state.is(Blocks.TWISTING_VINES_PLANT)
+			|| state.getBlock() instanceof ScaffoldingBlock && !state.getValue(ScaffoldingBlock.BOTTOM)) {
+			return 1 << Direction.DOWN.get3DDataValue();
+		}
+		if (state.getBlock() instanceof ScaffoldingBlock) {
+			int sides = 0;
+			for (Direction dir : Direction.Plane.HORIZONTAL) {
+				sides |= 1 << dir.get3DDataValue();
+			}
+			return sides;
 		}
 		int faces = 0;
 		if (state.getBlock() instanceof VineBlock) {

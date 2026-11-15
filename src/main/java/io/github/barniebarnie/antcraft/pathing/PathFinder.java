@@ -546,7 +546,8 @@ public final class PathFinder {
 		/**
 		 * Climbable in the world as the path so far left it: not a block it broke or placed, and still held on one of its
 		 * faces: a ladder by the block behind it, a vine by a block beside it or the vine above it on that face, as vines
-		 * on a block the path broke drop with it (#714), and so do those hanging from them (#726, #735).
+		 * on a block the path broke drop with it (#714), and so do those hanging from them (#726, #735); weeping and cave
+		 * vines by the block above, twisting vines and scaffolding by the block below (#752).
 		 */
 		private boolean isClimbable(BlockPos pos) {
 			if (!this.world.isClimbable(pos) || edited(this.node, pos) != null) {
@@ -564,9 +565,18 @@ public final class PathFinder {
 			return false;
 		}
 
-		/** The climbable at {@code pos} still holds on to {@code face}: the block there stands, or for a vine, the vine above holds that face. */
+		/**
+		 * The climbable at {@code pos} still holds on to {@code face}: the block there stands, or, up or down, is a
+		 * climbable still held that does not hold on back to this one, such as the weeping vine above a weeping vine or
+		 * the scaffolding under scaffolding; or for a vine, the vine above holds that face.
+		 */
 		private boolean holds(BlockPos pos, Direction face) {
-			if (this.solid(pos.relative(face), List.of())) {
+			BlockPos next = pos.relative(face);
+			if (face.getAxis().isVertical() && this.world.isClimbable(next) && edited(this.node, next) == null
+				&& (this.world.climbFaces(next) & 1 << face.getOpposite().get3DDataValue()) == 0) {
+				return this.isClimbable(next);
+			}
+			if (this.solid(next, List.of())) {
 				return true;
 			}
 			BlockPos above = pos.above();

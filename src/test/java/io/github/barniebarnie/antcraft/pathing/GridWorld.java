@@ -13,11 +13,12 @@ import net.minecraft.core.Direction;
  * 'W' = water (a hazard like any fluid, but swimmable), 'S' = a stair block, set with {@link #stair} (stood on, and walked up onto without a jump in the way it faces),
  * 'O' = a door, set with {@link #door} (unbreakable, but opened by a bot walking through it along its axis),
  * 'H' = a ladder (climbed, unbreakable), 'V' = a vine (climbed, and walked and fallen through), 'T' = a trapdoor over a ladder (stood on shut, climbed through open),
+ * 'C' = another climbable, such as weeping, twisting or cave vines or scaffolding (climbed, and walked and fallen through, unbreakable),
  * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal),
  * 'l' = a bottom slab (stood on, but too low to jump a full block up from), 's' = snow two layers deep (an eighth high),
  * 'h' = a honey block (stood on, but halves the jump).
- * A ladder or vine holds on to the faces set with {@link #hangsOn}, or else to every solid neighbour beside it (and
- * above, for a vine); a vine with none hangs from the vine above, on its faces.
+ * A climbable holds on to the faces set with {@link #hangsOn}, or else a ladder or vine to every solid neighbour beside it
+ * (and above, for a vine), a vine with none hanging from the vine above, on its faces; other climbables to none.
  */
 public final class GridWorld implements WorldView {
 	private final Map<BlockPos, Character> blocks = new HashMap<>();
@@ -62,7 +63,7 @@ public final class GridWorld implements WorldView {
 		return this.set(x, y, z, 'O').set(x, y + 1, z, 'O');
 	}
 
-	/** The ladder or vine at the given block holds on to these faces only. */
+	/** The climbable at the given block holds on to these faces only. */
 	GridWorld hangsOn(int x, int y, int z, Direction... faces) {
 		int bits = 0;
 		for (Direction face : faces) {
@@ -96,7 +97,7 @@ public final class GridWorld implements WorldView {
 	@Override
 	public boolean isPassable(BlockPos pos) {
 		char c = this.at(pos);
-		return c == ' ' || c == 'F' || c == 'P' || c == 'V';
+		return c == ' ' || c == 'F' || c == 'P' || c == 'V' || c == 'C';
 	}
 
 	@Override
@@ -123,7 +124,7 @@ public final class GridWorld implements WorldView {
 	@Override
 	public boolean isClimbable(BlockPos pos) {
 		char c = this.at(pos);
-		return c == 'H' || c == 'T' || c == 'V';
+		return c == 'H' || c == 'T' || c == 'V' || c == 'C';
 	}
 
 	@Override
@@ -133,13 +134,13 @@ public final class GridWorld implements WorldView {
 
 	@Override
 	public int climbFaces(BlockPos pos) {
+		Integer set = this.faces.get(pos);
+		if (set != null && this.isClimbable(pos)) {
+			return set;
+		}
 		char c = this.at(pos);
 		if (c != 'V' && c != 'H') {
 			return 0;
-		}
-		Integer set = this.faces.get(pos);
-		if (set != null) {
-			return set;
 		}
 		int bits = 0;
 		for (Direction dir : Direction.values()) {
