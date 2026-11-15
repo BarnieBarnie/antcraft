@@ -901,4 +901,54 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 		helper.assertValueEqual(search.path().orElseThrow().start(), helper.absolutePos(new BlockPos(2, 2, 3)), "path start");
 		helper.succeed();
 	}
+
+	/**
+	 * A bot not sneaking stands on scaffolding under its feet anywhere in a column, as vanilla gives it the full top from
+	 * above (#666), so paths read scaffolding mid-column as a floor. These pin that down: a walk through the column between
+	 * two ledges, a climb down it out onto a ledge, and a stop inside it.
+	 */
+	@GameTest(maxTicks = 50)
+	public void walksThroughAColumnOfScaffoldingMidway(GameTestHelper helper) {
+		room(helper, 0);
+		scaffoldingColumn(helper);
+		fill(helper, 3, 2, 1, 3, 2, 2, Blocks.BEDROCK);
+		fill(helper, 3, 2, 4, 3, 2, 5, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 3, 1);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 3, 5)), 0);
+
+		succeedWhenAtWithTheColumnStanding(helper, bot, new BlockPos(3, 3, 5));
+	}
+
+	/** Like {@link #walksThroughAColumnOfScaffoldingMidway}: down the column from its top and out onto a ledge midway. */
+	@GameTest(maxTicks = 40)
+	public void climbsDownAColumnOfScaffoldingOntoALedgeMidway(GameTestHelper helper) {
+		room(helper, 0);
+		scaffoldingColumn(helper);
+		helper.setBlock(3, 2, 4, Blocks.BEDROCK);
+		// No drop from the top onto the ledge: the way down is inside the column.
+		helper.setBlock(3, 5, 4, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 5, 3);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 3, 4)), 0);
+
+		succeedWhenAtWithTheColumnStanding(helper, bot, new BlockPos(3, 3, 4));
+	}
+
+	/** Like {@link #walksThroughAColumnOfScaffoldingMidway}: a walk that ends inside the column stays there, standing. */
+	@GameTest(maxTicks = 60)
+	public void stopsInsideAColumnOfScaffoldingMidway(GameTestHelper helper) {
+		room(helper, 0);
+		scaffoldingColumn(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		BlockPos target = helper.absolutePos(new BlockPos(3, 3, 3));
+		GameTests.walkTo(bot, target, 0);
+		int[] standing = {0};
+		helper.onEachTick(() -> {
+			if (GameTests.walked(bot)) {
+				helper.assertTrue(bot.blockPosition().equals(target) && bot.onGround(), "at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)) + ", on the ground " + bot.onGround());
+				if (++standing[0] >= 10) {
+					helper.succeed();
+				}
+			}
+		});
+	}
 }
