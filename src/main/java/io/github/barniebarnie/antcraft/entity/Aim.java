@@ -16,6 +16,11 @@ final class Aim {
 	private static final int MAX_TICKS = 100;
 	/** The highest pitch it tries, unless the target is steeper: about the furthest-reaching one, above which shots only lob. */
 	private static final double HIGHEST = Math.toRadians(45);
+	/**
+	 * How steep, up or down, a target is shot straight at, as gravity then all but only slows the arrow along its line,
+	 * such as a flying mob the bot walked under (#745): the low shot, at most 85 degrees up, would pass under it.
+	 */
+	private static final double STEEP = Math.toRadians(80);
 
 	/** A shot: the pitch in radians, up positive, and the ticks the arrow takes to get there. */
 	record Shot(double pitch, int ticks) {
@@ -26,6 +31,9 @@ final class Aim {
 
 	/** The shot at {@code speed} blocks a tick onto a target {@code across} away and {@code rise} up, or null if none reaches it. */
 	static @Nullable Shot at(double across, double rise, double speed) {
+		if (Math.abs(Math.atan2(rise, across)) > STEEP) {
+			return straight(across, rise, speed);
+		}
 		double highest = Math.max(HIGHEST, Math.min(Math.atan2(rise, across) + 0.2, Math.toRadians(85)));
 		if (height(across, highest, speed)[0] < rise) {
 			return null;
@@ -41,6 +49,24 @@ final class Aim {
 			}
 		}
 		return new Shot(high, (int) height(across, high, speed)[1]);
+	}
+
+	/**
+	 * The shot straight at a steep target above (or below, for a negative {@code rise}), timed as one straight up or down,
+	 * or null if it climbs not so high.
+	 */
+	private static @Nullable Shot straight(double across, double rise, double speed) {
+		double sign = rise < 0 ? -1 : 1;
+		double y = 0;
+		double vy = sign * speed;
+		for (int tick = 1; tick <= MAX_TICKS && (sign < 0 || vy > 0); tick++) {
+			y += vy;
+			if (sign * y >= sign * rise) {
+				return new Shot(Math.atan2(rise, across), tick);
+			}
+			vy = vy * DRAG - GRAVITY;
+		}
+		return null;
 	}
 
 	/** The height an arrow shot at {@code pitch} has once it came {@code across}, and the tick it got there. */

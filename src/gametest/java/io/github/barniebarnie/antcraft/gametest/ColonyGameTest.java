@@ -763,22 +763,26 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * Each default colony script on a bot in no colony says so at once and stops (#452): no error, such as the miner's
-	 * {@code colony_memory.setdefault} on None, and no endless wait for a job, as the hauler and builder did.
+	 * {@code colony_memory.setdefault} on None, and no endless wait for a job, as the hauler and builder did. Each stops on
+	 * tick 1 after 170 (miner, lumberjack) to 1,780 (farmer) instructions (#745). It checks the script it started, not the
+	 * bot's: a tick after it stopped the bot falls back to idle.py, which runs on, so a check that came a tick late failed.
 	 */
 	@GameTest(maxTicks = 20)
 	public void eachColonyScriptOnABotInNoColonySaysSoAndStops(GameTestHelper helper) {
 		String[] scripts = {"colony.miner", "colony.hauler", "colony.builder", "colony.farmer", "colony.lumberjack"};
 		AntBot[] bots = new AntBot[scripts.length];
+		ScriptRun[] runs = new ScriptRun[scripts.length];
 		for (int i = 0; i < scripts.length; i++) {
 			bots[i] = helper.spawn(ModEntities.ANT_BOT, 1 + i, 1, 1);
 			runDefault(helper, bots[i], scripts[i]);
+			runs[i] = bots[i].getScript();
 		}
 		BotScripts.failOnError(helper, bots);
 		helper.succeedWhen(() -> {
 			for (int i = 0; i < scripts.length; i++) {
 				helper.assertTrue(printed(bots[i]).equals(List.of("I am in no colony: place a Colony Core and let me join it")),
 					scripts[i] + " printed " + printed(bots[i]));
-				helper.assertTrue(!bots[i].getScript().running(), scripts[i] + " still runs");
+				helper.assertTrue(!runs[i].running(), scripts[i] + " still runs");
 			}
 		});
 	}

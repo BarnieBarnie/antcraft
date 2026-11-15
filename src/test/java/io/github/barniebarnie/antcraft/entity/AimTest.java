@@ -55,4 +55,19 @@ class AimTest {
 		// An arrow shot straight up climbs some 60 blocks.
 		assertNull(Aim.at(10, 80, 3.0));
 	}
+
+	/**
+	 * A target right above the bot, as a flying mob it walked under (#745), is shot straight up; below, straight down; one
+	 * steeper than 80 degrees straight at.
+	 */
+	@Test
+	void aTargetRightAboveIsShotStraightUp() {
+		Aim.Shot up = Aim.at(0, 11, 3.0);
+		assertNotNull(up, "no shot straight up");
+		assertEquals(Math.PI / 2, up.pitch(), 1e-9);
+		assertEquals(4, up.ticks());
+		assertEquals(Math.atan2(11, 0.5), Aim.at(0.5, 11, 3.0).pitch(), 1e-9);
+		assertEquals(-Math.PI / 2, Aim.at(0, -5, 3.0).pitch(), 1e-9);
+		assertNull(Aim.at(0, 80, 3.0));
+	}
 }

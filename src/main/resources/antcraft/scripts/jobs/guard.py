@@ -2,7 +2,8 @@
 # (#705). Run it as /antcraft bot run jobs.guard [radius], such as jobs.guard 24: radius how far from home it fights
 # (16 by default). It runs until stopped: each round, under RETREAT health it walks home and eats until it has HEALED
 # health (heal), keeps itself fed (lib.food.upkeep), then attacks the mob of MOBS nearest the bot within radius of
-# home until it dies or the bot's health drops under RETREAT (#718), or waits at home (docs/cookbook/guard.md). The flee
+# home until it dies or the bot's health drops under RETREAT (#718), or waits at home (docs/cookbook/guard.md); a mob it
+# cannot get to it shoots, with a bow and arrows, or else leaves alone for SKIP ticks (#745). The flee
 # reflex, at botFleeHealth (6 by default), stays the last line: a fight it ends with interrupted is followed by the same
 # retreat. Another script runs it with run(radius); imported, this runs nothing.
 #
@@ -23,6 +24,8 @@ MOBS = [m for m in monsters() if m not in LEFT_OUT]
 RETREAT = 12
 HEALED = 18
 WAIT = 20  # ticks between looks for mobs, and between looks at its health while it heals
+SKIP = 600  # ticks it leaves a mob it could not get to, nor shoot, alone (#745)
+skipped = {}  # the id of each such mob: the game time it tries it again
 
 
 def heal():
@@ -43,8 +46,9 @@ def heal():
 
 
 def mobs(radius):
-    """The mobs of MOBS within radius of home, nearest the bot first."""
-    return [m for m in entities(MOBS, 64) if m.pos.distance(home()) <= radius]
+    """The mobs of MOBS within radius of home, nearest the bot first, but those it skips."""
+    now = game_time()
+    return [m for m in entities(MOBS, 64) if m.pos.distance(home()) <= radius and skipped.get(m.id, 0) <= now]
 
 
 def run(radius=16):
@@ -58,8 +62,13 @@ def run(radius=16):
         if near:
             hold("sword")
             r = attack(near[0], min_health=least)
+            if not r and r.reason == "unreachable":
+                r = shoot(near[0], min_health=least)  # a bow reaches what a sword cannot, such as a flying mob
             if not r and r.reason not in ("interrupted", "hurt"):
-                wait(WAIT)  # cannot get to it, say: not straight at the next try
+                now = game_time()
+                for i in [i for i in skipped if skipped[i] <= now]:
+                    skipped.pop(i)  # so the ids of mobs long dead do not pile up
+                skipped[near[0].id] = now + SKIP  # cannot get to it, say: the next mob first
         else:
             go_home()
             wait(WAIT)

@@ -11,10 +11,13 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.monster.Blaze;
 import net.minecraft.world.entity.monster.Endermite;
+import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /** The guard job (#705, docs/cookbook/guard.md): fights the hostile mobs near home, retreats home to eat and heal. */
@@ -88,6 +91,59 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 		bot.getFood().setSaturation(0);
 		guard(helper, bot);
 		helper.succeedWhen(() -> helper.assertTrue(endermite.isDeadOrDying(), "endermite alive: " + endermite.getHealth()));
+	}
+
+	/**
+	 * A guard skips a husk it cannot get to, shut in bedrock nearer than a zombie, and kills the zombie (#745): before, it
+	 * tried the husk again every WAIT ticks, for ever.
+	 */
+	// Measured: passes at tick 140.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 300)
+	public void aGuardSkipsAMobItCannotGetTo(GameTestHelper helper) {
+		for (int x = 5; x <= 7; x++) {
+			for (int z = 5; z <= 7; z++) {
+				for (int y = 0; y <= 3; y++) {
+					if (x != 6 || z != 6 || y == 0 || y == 3) {
+						helper.setBlock(x, y, z, Blocks.BEDROCK);
+					}
+				}
+			}
+		}
+		Husk husk = helper.spawn(EntityTypes.HUSK, 6, 1, 6);
+		husk.setNoAi(true);
+		Zombie zombie = zombie(helper, 14, 14);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.DIAMOND_SWORD));
+		bot.setHealth(19);
+		bot.getFood().setFoodLevel(17);
+		bot.getFood().setSaturation(0);
+		guard(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(zombie.isDeadOrDying(), "zombie alive: " + zombie.getHealth()));
+	}
+
+	/**
+	 * A guard with a bow and arrows, and no blocks to pillar up with, shoots a blaze hovering out of its reach (#745), as
+	 * attack ends with unreachable. The bot walked about under it, so it shoots near straight up (Aim's steep shot).
+	 */
+	// Measured: passes at tick 132.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 280)
+	public void aGuardShootsAMobItCannotGetToWithABow(GameTestHelper helper) {
+		Blaze blaze = helper.spawn(EntityTypes.BLAZE, 12, 12, 12);
+		blaze.setNoAi(true);
+		blaze.setNoGravity(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.BOW));
+		bot.getInventory().addItem(new ItemStack(Items.ARROW, 16));
+		// Without AI the blaze keeps the knockback of a hit as its movement for ever, and the bot would aim ahead of it.
+		helper.onEachTick(() -> blaze.setDeltaMovement(Vec3.ZERO));
+		bot.setHealth(19);
+		bot.getFood().setFoodLevel(17);
+		bot.getFood().setSaturation(0);
+		guard(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(blaze.isDeadOrDying(), "blaze alive: " + blaze.getHealth());
+			helper.assertTrue(bot.getInventory().countItem(Items.ARROW) < 16, "shot no arrow");
+		});
 	}
 
 	/** Runs {@code jobs.guard 32} on {@code bot}, failing the test as soon as the script fails. */
