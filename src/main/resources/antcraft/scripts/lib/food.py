@@ -22,6 +22,8 @@ FOODS = [("minecraft:golden_carrot", 6), ("minecraft:cooked_beef", 8), ("minecra
          ("minecraft:glow_berries", 2), ("minecraft:cookie", 2), ("minecraft:beetroot", 1), ("minecraft:potato", 1),
          ("minecraft:dried_kelp", 1)]
 ITEMS = [f[0] for f in FOODS]
+# The meals of FOODS, 5 food points or more, as colony.farmer counts the core's stock: raw crops are seeds as well.
+MEALS = [f[0] for f in FOODS if f[1] >= 5]
 # What ensure_food makes with lib.get where the chests hold no food, in turn: bread from wheat, the rest cooked.
 MADE = ["minecraft:bread", "minecraft:baked_potato", "minecraft:cooked_beef", "minecraft:cooked_porkchop",
         "minecraft:cooked_mutton", "minecraft:cooked_chicken", "minecraft:cooked_salmon", "minecraft:cooked_cod"]
@@ -85,10 +87,13 @@ def ensure_food(n=STOCK, radius=32):
 
 def upkeep(radius=32):
     """Call it once a round of a long loop: at LOW food or under, carrying none, it gets some (ensure_food, not again for
-    RETRY ticks after it found none), then eats as eat_if_hungry. Costs a sense or two when the bot is fed. Gives whether it
+    RETRY ticks after it found none, and warns), then eats as eat_if_hungry. Costs a sense or two when the bot is fed. Gives whether it
     ate."""
     if food() <= LOW and best() is None and (TRIED["at"] is None or game_time() - TRIED["at"] >= RETRY):
         ensure_food(STOCK, radius)
         if best() is None:
             TRIED["at"] = game_time()
+            # So the player sees why the bot goes hungry (#704).
+            warn("hungry with no food: put food, or wheat and a crafting table, by a chest" if colony() is None else
+                 "hungry with no food in the colony core: a colony.farmer keeps it stocked")
     return eat_if_hungry()

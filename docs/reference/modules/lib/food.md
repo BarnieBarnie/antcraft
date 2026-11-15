@@ -6,7 +6,7 @@ The default jobs and colony scripts that run long call `upkeep()` each round: [`
 
 ## `upkeep(radius=32)`
 
-Call it once a round of a loop that runs long. At `LOW` food (14) or under, carrying no food of `FOODS`, it gets some with `ensure_food(STOCK, radius)`; where that finds none it does not try again for `RETRY` ticks (1200). Then it eats as `eat_if_hungry`.
+Call it once a round of a loop that runs long. At `LOW` food (14) or under, carrying no food of `FOODS`, it gets some with `ensure_food(STOCK, radius)`; where that finds none it warns (`hungry with no food in the colony core: ...` in a colony) and does not try again for `RETRY` ticks (1200). Then it eats as `eat_if_hungry`.
 
 - **Returns** whether the bot ate.
 - **Pauses** only while it gets food or eats; a fed bot costs a sense or two.
@@ -25,9 +25,9 @@ Makes the bot carry at least `n` food of `FOODS` (`STOCK` is 4). It first takes 
 - **Returns** a [`result()`](result.md): `ok`, or `no_item` with `missing` `{"food": k}`, how much food it is still short, keeping what it got.
 - **Pauses** yes, while it walks to chests, gathers, crafts and smelts.
 
-## `FOODS`, `MADE`
+## `FOODS`, `MADE`, `MEALS`
 
-`FOODS` is the food a bot eats, best first, as `(item, food points)`: cooked meat and fish, golden carrots, bread, baked potatoes, then apples, carrots, raw meat, berries and the like. It leaves out what poisons or hurts (raw chicken, rotten flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, golden apples and stews. A script adds a modded food with `lib.food.FOODS.append(("mymod:pie", 8))` and `lib.food.ITEMS.append("mymod:pie")`. `MADE` is what `ensure_food` makes, in turn.
+`FOODS` is the food a bot eats, best first, as `(item, food points)`: cooked meat and fish, golden carrots, bread, baked potatoes, then apples, carrots, raw meat, berries and the like. It leaves out what poisons or hurts (raw chicken, rotten flesh, spider eyes, pufferfish, poisonous potatoes), chorus fruit, golden apples and stews. A script adds a modded food with `lib.food.FOODS.append(("mymod:pie", 8))` and `lib.food.ITEMS.append("mymod:pie")`. `MADE` is what `ensure_food` makes, in turn. `MEALS` are the items of `FOODS` worth 5 food points or more, the meals [`colony.farmer`](../../../features/colony-scripts.md) keeps in the core, `STOCK` for each member (#704).
 
 ```python
 import lib.food

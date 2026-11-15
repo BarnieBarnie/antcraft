@@ -1547,6 +1547,36 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The farmer bakes its harvest into bread at the colony's crafting table and keeps it in the core (#704): the 2 wheat it
+	 * harvests and the core's 4 make 2 bread, short of the 4 a member it keeps. A hauler of the colony made hungry only once
+	 * that bread is in the core, with no wheat left there to make its own, takes some and eats.
+	 */
+	@GameTest(maxTicks = 540)
+	public void aFarmersBreadFeedsAHungryMember(GameTestHelper helper) {
+		helper.setBlock(7, 1, 3, Blocks.CRAFTING_TABLE);
+		farm(helper, Blocks.WHEAT.defaultBlockState().setValue(CropBlock.AGE, 7), 2,
+				new ItemStack(Items.WHEAT_SEEDS, 24), new ItemStack(Items.WHEAT, 4));
+		Colony colony = ColonyManager.get(helper.getLevel()).byCore(helper.absolutePos(new BlockPos(7, 1, 7))).orElseThrow();
+		AntBot hauler = member(helper, colony, 6, 1, 6);
+		runDefault(helper, hauler, "colony.hauler");
+		failOnWarning(helper, hauler);
+		Container core = container(helper, 7, 1, 7);
+		boolean[] hungry = {false};
+		helper.onEachTick(() -> {
+			if (!hungry[0] && core.countItem(Items.BREAD) > 0) {
+				helper.assertValueEqual(core.countItem(Items.WHEAT), 0, "wheat left in the core with the bread");
+				hungry[0] = true;
+				hauler.getFood().setFoodLevel(5);
+				hauler.getFood().setSaturation(0);
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(hungry[0], "no bread in the core: " + contents(core));
+			helper.assertTrue(hauler.getFood().food() > 5, "the hauler's food " + hauler.getFood().food());
+		});
+	}
+
+	/**
 	 * With no hoe in the core, a farmer by a small oak fells it, makes a hoe with lib.get and tills and plants its farm
 	 * (#544).
 	 */

@@ -4,6 +4,8 @@
 
 They share `colony/common.py`. Scripts know their colony: `colony()` gives a member its colony's core (with the core's dimension), radius, members and owner, and `colony_memory` is a dict every member shares, saved with the colony. Members split work through the colony's job board: `post_job(kind, data)`, `take_job(kind)`, `finish_job(id)`, and a job whose taker's script ends or is stopped goes back to the board. A member stays one in another dimension than its core. Worlds saved with a goal-driven colony load: the colony keeps its core, members, radius, owner and trusted players, and its jobs, stock targets, orders, projects, builds and mineshaft are dropped. Breaking the core dissolves the colony and drops its contents.
 
+A colony needs food: members get [hungry](bots.md#hunger), and the default colony scripts eat what the core holds ([`lib.food.upkeep`](../reference/modules/lib/food.md#upkeepradius32)). Run a [`colony.farmer`](colony-scripts.md) with a farm, a crafting table and a furnace in the colony: it bakes its harvest into bread and baked potatoes and keeps 4 meals for each member in the core. A hungry member that finds no food warns in its log.
+
 ## Jobs
 
 A colony has a job board, so its members split work by role: one posts "haul these logs", another takes it, and no two take the same job. A script can pause anywhere when it uses up its budget, so a board kept in `colony_memory` could not claim a job in one step; these natives do, at once:

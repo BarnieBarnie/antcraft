@@ -7,7 +7,9 @@
 # felling the colony's trees for it.
 # What it harvests it replants with the same crop, and it keeps one of each
 # harvest that is its own seed; spare seeds and poisonous potatoes go into the
-# core. Run it on a colony member with `/antcraft bot run colony.farmer`.
+# core. It bakes the harvest into food for the colony (#704): bread from the core's wheat at the colony's crafting
+# table, potatoes in its furnace with the core's fuel, until the core holds lib.food.STOCK meals (lib.food.MEALS) for each
+# member, so members take it with lib.food.upkeep. Run it on a colony member with `/antcraft bot run colony.farmer`.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -26,6 +28,48 @@ def farm_spots():
         if plan is not None and plan["role"] == "farm":
             spots.extend(plan["work_spots"])
     return rows(spots)
+
+
+# What the farmer burns to bake potatoes, best first, as smelt does.
+FUELS = ["minecraft:coal", "minecraft:charcoal", "#minecraft:logs", "#minecraft:planks"]
+
+
+def in_core(item):
+    """How many of item (an id or selector) the core holds."""
+    return sum([s.count for s in container(core()) or [] if matches(s, item)])
+
+
+def short():
+    """How many meals the core lacks for lib.food.STOCK a member."""
+    return lib.food.STOCK * len(colony()["members"]) - in_core(lib.food.MEALS)
+
+
+def stock_food():
+    """Bakes bread from the core's wheat at the nearest crafting table and the core's potatoes in the nearest furnace while
+    the core is short() of meals, and stores them in the core. ponytail: no station of its own; a colony without a table
+    or furnace gets none of that food. A smelt waits 10 seconds a potato."""
+    n = min(short(), in_core("minecraft:wheat") // 3)
+    table = find_nearest("crafting_table") if n > 0 else None
+    if table is not None:
+        take_up_to("minecraft:wheat", 3 * n, chests=[core()])
+        craft("minecraft:bread", count("minecraft:wheat") // 3, table=table)
+        store("minecraft:bread")
+        store("minecraft:wheat")
+    n = min(short(), in_core("minecraft:potato"))
+    furnace = find_nearest("furnace") if n > 0 else None
+    if furnace is not None:
+        seed = count("minecraft:potato")  # the one it keeps to replant
+        take_up_to("minecraft:potato", seed + n, chests=[core()])
+        for f in FUELS:
+            if not count(FUELS):
+                take_up_to(f, (2 * n + 2) // 3, chests=[core()])
+        if count("minecraft:potato") > seed:
+            smelt("minecraft:potato", count("minecraft:potato") - seed, furnace=furnace)
+        store("minecraft:baked_potato")
+        if count("minecraft:potato") > seed:
+            put(core(), "minecraft:potato", count("minecraft:potato") - seed)
+        for f in FUELS:
+            store(f)
 
 
 core()  # a bot in no colony says so and stops
@@ -61,5 +105,6 @@ while True:
         if count(c[1]) > keep:
             put(core(), c[1], count(c[1]) - keep)
     store(POISON)
+    stock_food()
     give_back()
     wait(200 if spots else 400)

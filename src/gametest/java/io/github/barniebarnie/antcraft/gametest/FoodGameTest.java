@@ -86,4 +86,31 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 			helper.assertValueEqual(core.countItem(Items.WHEAT), 0, "wheat left in the core");
 		});
 	}
+
+	/** A hungry member of a colony that has no food, nor wheat or a table to make some, warns so the player sees why (#704). */
+	@GameTest(maxTicks = 150)
+	public void aHungryMemberOfAColonyWithNoFoodWarns(GameTestHelper helper) {
+		AntBot hauler = hungryMember(helper);
+		runDefault(helper, hauler, "colony.hauler");
+		BotScripts.failOnError(helper, hauler);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.warnings(hauler).stream().anyMatch(w -> w.contains("no food")),
+				"warnings " + BotScripts.warnings(hauler)));
+	}
+
+	/** A farmer bakes the core's potato in the colony's furnace with the core's logs and keeps the baked potato in the core (#704). */
+	@GameTest(maxTicks = 420)
+	public void aFarmerBakesTheCoresPotatoes(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		helper.setBlock(4, 1, 1, Blocks.FURNACE);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.POTATO));
+		core.setItem(1, new ItemStack(Items.OAK_LOG, 3));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(core.countItem(Items.BAKED_POTATO), 1, "baked potatoes in the core");
+			helper.assertValueEqual(core.countItem(Items.OAK_LOG), 2, "logs back in the core");
+		});
+	}
 }
