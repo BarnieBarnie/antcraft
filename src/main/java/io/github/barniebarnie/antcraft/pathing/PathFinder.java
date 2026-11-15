@@ -266,8 +266,10 @@ public final class PathFinder {
 				}
 				this.expanded++;
 
+				// A partial path ends where the bot stands, not hanging on vines it slides off (#726).
 				double h = this.goal.heuristic(node.pos);
-				if (this.closestInWater && !inWater || inWater == this.closestInWater && h < this.closestHeuristic) {
+				if (!this.planner.hanging(node.pos)
+						&& (this.closestInWater && !inWater || inWater == this.closestInWater && h < this.closestHeuristic)) {
 					this.closest = node;
 					this.closestHeuristic = h;
 					this.closestInWater = inWater;
@@ -457,11 +459,14 @@ public final class PathFinder {
 		 * One block up or down a ladder, from one climbable block to the next, or down into one, or up out of the top of a
 		 * climbable block a bot stands on, such as scaffolding. Breaks nothing on the way. Down into the bottom of a
 		 * column that ends in the air, such as vines, it is a fall from there: vanilla slides a mob down anything it
-		 * climbs, so the bot slides off its end (#714).
+		 * climbs, so the bot slides off its end (#714). From that bottom block it lets go and falls straight down (#726).
 		 */
 		private Candidate climb(BlockPos feet, MoveType type) {
 			boolean up = type == MoveType.CLIMB_UP;
 			BlockPos to = up ? feet.above() : feet.below();
+			if (!up && this.hanging(feet) && !this.isClimbable(to)) {
+				return this.fall(feet, Direction.DOWN, CLIMB_COST);
+			}
 			if (!up && this.isClimbable(to) && !this.isClimbable(to.below()) && !this.canStand(to.below())) {
 				return this.fall(to, Direction.DOWN, CLIMB_COST);
 			}
@@ -473,19 +478,24 @@ public final class PathFinder {
 
 		/**
 		 * Climbable in the world as the path so far left it: not a block it broke or placed, nor one beside or under a
-		 * block it broke, such as vines on it, which drop with it (#714).
+		 * block it broke, such as vines on it, which drop with it (#714), nor one hanging from such a one up its column,
+		 * as vines hang from the vine above (#726).
 		 */
-		// ponytail: only the climbable's own neighbours, not those of the vines it hangs from; walk up the column if that shows.
+		// ponytail: the whole column up counts, ladders too, which hang from nothing; tell vines apart if that shows.
 		private boolean isClimbable(BlockPos pos) {
 			if (!this.world.isClimbable(pos) || edited(this.node, pos) != null) {
 				return false;
 			}
-			for (Direction dir : Direction.values()) {
-				if (dir != Direction.DOWN && edited(this.node, pos.relative(dir)) == Boolean.FALSE) {
-					return false;
+			for (BlockPos p = pos; ; p = p.above()) {
+				for (Direction dir : Direction.values()) {
+					if (dir != Direction.DOWN && edited(this.node, p.relative(dir)) == Boolean.FALSE) {
+						return false;
+					}
+				}
+				if (!this.world.isClimbable(p.above()) || edited(this.node, p.above()) != null) {
+					return true;
 				}
 			}
-			return true;
 		}
 
 		/**

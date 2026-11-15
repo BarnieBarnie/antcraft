@@ -588,6 +588,41 @@ class PathFinderTest {
 		}
 	}
 
+	/** A partial path ends where the bot stands, not up a vine it would hang on and slide off (#726). */
+	@Test
+	void aPartialPathDoesNotEndHangingOnVines() {
+		GridWorld world = GridWorld.flat(5).fill(1, 1, -5, 1, 8, 5, 'B').fill(0, 1, 0, 0, 5, 0, 'V');
+		Path path = find(world, new BlockPos(0, 10, 0), WALK_ONLY);
+		assertFalse(path.complete(), "reached the goal: " + path.steps());
+		BlockPos end = path.end();
+		assertFalse(world.isClimbable(end) && !world.canStandOn(end.below()), "ended hanging at " + end + ": " + path.steps());
+	}
+
+	/** From the bottom vine a bot lets go and falls straight down, rather than first stepping off sideways (#726). */
+	@Test
+	void fallsStraightOffTheBottomVine() {
+		BlockPos landing = new BlockPos(0, -11, 0);
+		Path path = PathFinder.find(vinesOverADrop(), new BlockPos(0, -4, 0), new Goal.Block(landing), walkOnly(death(20, landing.south(10))));
+		assertEquals(List.of(MoveType.DROP), types(path), "" + path.steps());
+		double hurt = 4 / 20.0 * (200 + 10 * PathFinder.WALK_COST);
+		assertEquals(PathFinder.CLIMB_COST + 7 * PathFinder.FALL_COST_PER_BLOCK + hurt, path.cost(), 1e-9);
+	}
+
+	/**
+	 * Vines hanging from a vine on the dirt a path breaks drop with it, as vines with nothing to hang on do (#726): in
+	 * bedrock, a corridor whose dirt head block the path breaks, beside the top of a vine shaft that is the only way up to
+	 * the goal ledge, climbed one vine up from its foot.
+	 */
+	@Test
+	void doesNotClimbVinesHangingFromVinesOnABlockItBroke() {
+		GridWorld world = new GridWorld().fill(-3, 0, -2, 5, 6, 2, 'B')
+			.fill(-1, 2, 0, 1, 3, 0, ' ').set(1, 3, 0, 'D')
+			.fill(2, 1, 0, 2, 3, 0, 'V').set(2, 4, 0, ' ')
+			.fill(3, 3, 0, 3, 4, 0, ' ');
+		Path path = PathFinder.find(world, new BlockPos(0, 2, 0), new Goal.Block(new BlockPos(3, 3, 0)), new PathFinder.Options(true, false, 10_000, 3));
+		assertFalse(path.complete(), "climbed the vines under the one on the broken dirt: " + path.steps());
+	}
+
 	@Test
 	void digsDownToLowerGoal() {
 		GridWorld world = GridWorld.flat(5).fill(-5, -5, -5, 5, -1, 5, 'D');
