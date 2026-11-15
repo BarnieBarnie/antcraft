@@ -64,6 +64,31 @@ public class BootstrapGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A bot that goes hungry once it made its pickaxe eats its two bread before the next item of the kit (#723). */
+	@GameTest(maxTicks = 4000)
+	public void aBotThatGoesHungryMidKitEats(GameTestHelper helper) {
+		woods(helper);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.BREAD, 2));
+		run(helper, bot);
+		// hungry: set to food 5 once it carries the pickaxe; ate: it carried no bread before the kit was ready.
+		boolean[] state = {false, false};
+		helper.onEachTick(() -> {
+			if (!state[0] && GameTests.carried(bot, Items.STONE_PICKAXE) > 0) {
+				state[0] = true;
+				bot.getFood().setFoodLevel(5);
+				bot.getFood().setSaturation(0);
+			}
+			if (state[0] && GameTests.carried(bot, Items.BREAD) == 0 && !BotScripts.log(bot, Output.Level.DEBUG).contains("kit ready")) {
+				state[1] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			finished(helper, bot);
+			helper.assertTrue(state[1], "did not eat before the kit was ready, food " + bot.getFood().food());
+		});
+	}
+
 	/** An iron pickaxe in a chest: it is borrowed and used instead of a stone one, and back in the chest at the end. */
 	@GameTest(maxTicks = 3200)
 	public void borrowsAChestPickaxeAndGivesItBack(GameTestHelper helper) {

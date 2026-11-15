@@ -44,7 +44,18 @@ def to_home_dimension():
     return False
 
 
+try:
+    # Eats while hungry, getting food at 14 or under where it carries none (lib.food.upkeep, #723). ponytail: a broken
+    # lib/food.py (or lib.stock, lib.borrow) leaves idle bots unfed rather than stopped (#352).
+    import lib.food
+    upkeep = lib.food.upkeep
+except Exception:
+    upkeep = None
+
+
 while True:
+    if upkeep is not None:
+        upkeep()
     at_home = pos() == home() and dimension() == home_dimension()
     if not at_home and (not to_home_dimension() or not goto(home())):
         # No way home for now: try again in a while.

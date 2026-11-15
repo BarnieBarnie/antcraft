@@ -5,6 +5,7 @@
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
+import lib.food
 import lib.tools
 from lib.get import get, ensure_tool
 from lib.result import result
@@ -20,6 +21,7 @@ def kit(items=KIT, radius=32):
     "stone_pickaxe", by ensure_tool instead, so a carried or chest tool of its kind and at least its tier does (borrowed).
     Gives result(): ok, or the reason the first that failed gave, with missing; what it got before it keeps."""
     for item, n in items:
+        lib.food.upkeep(radius)  # a kit can take thousands of ticks (#723)
         tier, kind = (item.split("_", 1) + [""])[:2]
         if tier in lib.tools.TIERS and kind in KINDS:
             r = ensure_tool(kind, 1, tier, radius)
