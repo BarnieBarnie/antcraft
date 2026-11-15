@@ -317,6 +317,50 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A farmer makes planks from the core's log for bowls where the core has beetroot but no bowls or planks, and makes beetroot soup (#755). */
+	@GameTest(maxTicks = 40)
+	public void aFarmerMakesBowlsFromTheCoresLogsForBeetrootSoup(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		helper.setBlock(4, 1, 1, Blocks.CRAFTING_TABLE);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.BEETROOT, 6));
+		core.setItem(1, new ItemStack(Items.OAK_LOG));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnWarning(helper, farmer);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(core.countItem(Items.BEETROOT_SOUP), 1, "beetroot soup in the core");
+			helper.assertValueEqual(core.countItem(Items.OAK_LOG), 0, "logs left in the core");
+		});
+	}
+
+	/**
+	 * A farmer that warned it has no crafting table and is restarted does not try again before lib.food.RETRY ticks
+	 * (#755): the time it last tried is kept in memory, not in the script.
+	 */
+	@GameTest(maxTicks = 700)
+	public void aFarmerWithNoTableKeepsItsRetryTimeAcrossARestart(GameTestHelper helper) {
+		AntBot farmer = hungryMember(helper);
+		farmer.getFood().setFoodLevel(20);
+		Container core = container(helper, 6, 1, 1);
+		core.setItem(0, new ItemStack(Items.WHEAT, 3));
+		runDefault(helper, farmer, "colony.farmer");
+		BotScripts.failOnError(helper, farmer);
+		long[] restarted = {-1};
+		helper.onEachTick(() -> {
+			if (restarted[0] < 0 && BotScripts.warnings(farmer).stream().anyMatch(w -> w.contains("crafting_table"))) {
+				restarted[0] = helper.getTick();
+				runDefault(helper, farmer, "colony.farmer");
+			}
+		});
+		helper.runAtTickTime(650, () -> {
+			helper.assertTrue(restarted[0] >= 0, "never warned about the crafting table");
+			List<String> tries = BotScripts.warnings(farmer).stream().filter(w -> w.contains("crafting_table")).toList();
+			helper.assertValueEqual(tries.size(), 1, "warnings about the crafting table, restarted at tick " + restarted[0] + ": " + BotScripts.warnings(farmer));
+			helper.succeed();
+		});
+	}
+
 	/** A farmer makes beetroot soup from the core's 6 beetroot and bowl at the colony's crafting table and keeps it in the core (#721). Measured: 9 ticks. */
 	@GameTest(maxTicks = 40)
 	public void aFarmerMakesBeetrootSoupFromTheCoresBeetroot(GameTestHelper helper) {

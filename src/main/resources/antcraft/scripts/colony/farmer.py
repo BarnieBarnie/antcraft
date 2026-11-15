@@ -8,8 +8,8 @@
 # What it harvests it replants with the same crop, and it keeps one of each
 # harvest that is its own seed; spare seeds and poisonous potatoes go into the
 # core. It bakes the harvest into food for the colony (#704): bread from the core's wheat and beetroot soup from its
-# beetroot and bowls (made from its planks where it has none, #744) at the colony's crafting table, potatoes in its furnace with the core's fuel (a table or furnace the
-# colony lacks it places beside the core, from the core or made with lib.get, #721, trying again lib.food.RETRY ticks after it got none, #744), until the core holds lib.food.STOCK meals (lib.food.MEALS) for each
+# beetroot and bowls (made from its planks, or logs, where it has none, #744, #755) at the colony's crafting table, potatoes in its furnace with the core's fuel (a table or furnace the
+# colony lacks it places beside the core, from the core or made with lib.get, #721, trying again lib.food.RETRY ticks after it got none, #744, also once restarted, #755), until the core holds lib.food.STOCK meals (lib.food.MEALS) for each
 # member, so members take it with lib.food.upkeep. Run it on a colony member with `/antcraft bot run colony.farmer`.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -45,8 +45,9 @@ def short():
     return lib.food.STOCK * len(colony()["members"]) - in_core(lib.food.MEALS)
 
 
-# The game time station last failed to get each kind, so it tries again only lib.food.RETRY ticks later (#744).
-TRIED = {}
+# The memory key before a kind whose value is the game time station last failed to get it, so it tries again only
+# lib.food.RETRY ticks later (#744); in memory, so a restarted farmer waits too (#755).
+TRIED = "farmer_tried_"
 
 
 def station(kind):
@@ -55,10 +56,11 @@ def station(kind):
     lib.food.RETRY ticks (#744), as lib.get may fell trees or mine stone each try. ponytail: lib.craft.place_beside the
     bot at its home, so it may take a side of the core another station or a chest wanted."""
     near = find_nearest(kind)
-    if near is not None or game_time() - TRIED.get(kind, -lib.food.RETRY) < lib.food.RETRY:
+    tried = memory.get(TRIED + kind)
+    if near is not None or (tried is not None and game_time() - tried < lib.food.RETRY):
         return near
     if not get(kind)["ok"]:
-        TRIED[kind] = game_time()
+        memory[TRIED + kind] = game_time()
         warn(f"no {kind} to bake: put one, or what makes one, in the colony core")
         return None
     go_home()
@@ -67,7 +69,7 @@ def station(kind):
 
 def stock_food():
     """Bakes bread from the core's wheat and makes beetroot soup from its beetroot and bowls (crafted from its planks, 3 for 4
-    bowls, where it has too few, #744) at the nearest crafting table,
+    bowls, or from its logs, 4 planks each, where it has too few, #744, #755) at the nearest crafting table,
     and bakes the core's potatoes in the nearest furnace, while the core is short() of meals, and stores them in the core.
     A table or furnace it lacks it places by the core (station). A smelt waits 10 seconds a potato."""
     n = min(short(), in_core("minecraft:wheat") // 3)
@@ -79,16 +81,20 @@ def stock_food():
         store("minecraft:wheat")
     n = min(short(), in_core("minecraft:beetroot") // 6)
     bowls = in_core("minecraft:bowl")
-    n = min(n, bowls + 4 * (in_core("#minecraft:planks") // 3 if bowls < n else 0))
+    planks = in_core("#minecraft:planks") + 4 * in_core("#minecraft:logs")  # a log makes 4 planks (#755)
+    n = min(n, bowls + 4 * (planks // 3 if bowls < n else 0))
     table = station("crafting_table") if n > 0 else None
     if table is not None:
         take_up_to("minecraft:beetroot", 6 * n, chests=[core()])
         take_up_to("minecraft:bowl", n, chests=[core()])
-        if count("minecraft:bowl") < n:  # 3 planks make 4 bowls (#744)
-            take_up_to("#minecraft:planks", 3 * ((n - count("minecraft:bowl") + 3) // 4), chests=[core()])
-            craft("minecraft:bowl", n - count("minecraft:bowl"), table=table)
+        if count("minecraft:bowl") < n:  # 3 planks make 4 bowls (#744), a log 4 planks (#755)
+            planks = 3 * ((n - count("minecraft:bowl") + 3) // 4)
+            take_up_to("#minecraft:planks", planks, chests=[core()])
+            if count("#minecraft:planks") < planks:
+                take_up_to("#minecraft:logs", (planks - count("#minecraft:planks") + 3) // 4, chests=[core()])
+            craft_all("minecraft:bowl", n - count("minecraft:bowl"), table=table)
         craft("minecraft:beetroot_soup", min(count("minecraft:beetroot") // 6, count("minecraft:bowl")), table=table)
-        for item in ["minecraft:beetroot_soup", "minecraft:beetroot", "minecraft:bowl", "#minecraft:planks"]:
+        for item in ["minecraft:beetroot_soup", "minecraft:beetroot", "minecraft:bowl", "#minecraft:planks", "#minecraft:logs"]:
             store(item)
     n = min(short(), in_core("minecraft:potato"))
     furnace = station("furnace") if n > 0 else None
@@ -109,7 +115,7 @@ def stock_food():
 
 core()  # a bot in no colony says so and stops
 # Imported after it: lib.get and what it imports take a bot in no colony some ticks to load.
-from lib.craft import place_beside
+from lib.craft import craft_all, place_beside
 from lib.get import ensure_tool, get
 from lib.home import go_home
 settle()
