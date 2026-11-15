@@ -208,14 +208,14 @@ def table_near():
     return count("crafting_table") > 0 or find_nearest("crafting_table", radius=REACH) is not None
 
 
-def place_beside(block):
-    """Places a carried block on the first free spot beside the bot's feet, beside its head or above its head, else on a
-    spot beside its feet it mines out first, keeping what it mined (a bot in a 1x1 pit); that Pos, or None where none
-    takes it."""
+def place_beside(block, above=True):
+    """Places a carried block on the first free spot beside the bot's feet, beside its head or above its head (not with
+    above False, as for gravel, which would fall on the bot, #754), else on a spot beside its feet it mines out first,
+    keeping what it mined (a bot in a 1x1 pit); that Pos, or None where none takes it."""
     here = pos()
     head = here.up()
     feet = [here.north(), here.south(), here.east(), here.west()]
-    for spot in feet + [head.north(), head.south(), head.east(), head.west(), head.up()]:
+    for spot in feet + [head.north(), head.south(), head.east(), head.west()] + ([head.up()] if above else []):
         if place(spot, block):
             return spot
     for spot in feet:

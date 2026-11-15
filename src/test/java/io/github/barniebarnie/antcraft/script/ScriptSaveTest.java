@@ -305,6 +305,7 @@ class ScriptSaveTest {
 	void valuesOfTheBotApiAreSavedAsPlainData() {
 		SavedValues values = new SavedValues(uuid -> null);
 		for (Object value : List.of(new Pos(1, -2, 3), new Stack("minecraft:dirt", 3), new Stack("minecraft:stone_pickaxe", 1, 10, 131),
+				new Stack("minecraft:iron_shovel", 1, 2, 250, Map.of("minecraft:fortune", 3L, "minecraft:efficiency", 1L)),
 				new BlockInfo("minecraft:oak_log", new Pos(1, 2, 3), false, false, List.of("#minecraft:logs"), Map.of("axis", "y")),
 				new BlockInfo("minecraft:wheat", new Pos(1, 2, 3), false, false, List.of(), Map.of("age", 7L)),
 				Result.ok(4L), Result.fail(Result.UNREACHABLE), Result.fail(Result.BLOCKED, 2L, "minecraft:water is in the way at Pos(1, 2, 3)"))) {
@@ -317,6 +318,8 @@ class ScriptSaveTest {
 		assertEquals(new Pos(1, 2, 3), values.load(PyTuple.of(Pos.TYPE, 1L, 2L, 3L)), "a Pos saved before #349");
 		assertNull(((Pos) values.load(PyTuple.of(Pos.TYPE, 1L, 2L, 3L))).dimension());
 		assertEquals(new Stack("minecraft:dirt", 3, 0, 0), values.load(PyTuple.of(Stack.TYPE, "minecraft:dirt", 3L)), "a Stack saved before #503");
+		assertEquals(new Stack("minecraft:iron_shovel", 1, 2, 250), values.load(PyTuple.of(Stack.TYPE, "minecraft:iron_shovel", 1L, 2L, 250L)),
+			"a Stack saved before #754");
 		assertEquals(new BlockInfo("minecraft:dirt", new Pos(1, 2, 3), false, false, List.of(), Map.of()),
 			values.load(PyTuple.of(BlockInfo.TYPE, "minecraft:dirt", new Pos(1, 2, 3), false, false, new PyTuple(List.of()))), "a Block saved before #369");
 		UUID id = UUID.randomUUID();

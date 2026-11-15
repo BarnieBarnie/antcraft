@@ -51,7 +51,7 @@ Mining the furnace back takes a pickaxe: where it would put one down and the bot
 - **Returns** `needs`'s dict, with `no_tool`.
 - **Pauses** no, unless `find_nearest` does.
 
-The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block)` places a carried block on the first of those spots that takes it and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
+The two halves `craft_here` and `smelt_here` use are in the module too: `place_beside(block, above=True)` places a carried block on the first of those spots that takes it (with `above` false, never the one over the bot's head, as for gravel, which would fall on it, #754) and gives its [`Pos`](../../types/pos.md), `None` where no spot took it; `take_back(spot, block)` [`mine`](../../blocks/mine.md)s it and [`pick_up`](../../inventory/pick_up.md)s it where it did not fit.
 
 ## Example
 

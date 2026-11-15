@@ -385,8 +385,12 @@ public final class SenseApi {
 	}
 
 	static Stack stack(ItemStack stack) {
+		Map<String, Long> enchantments = new HashMap<>();
+		for (var e : stack.getEnchantments().entrySet()) {
+			e.getKey().unwrapKey().ifPresent(key -> enchantments.put(key.identifier().toString(), (long) e.getIntValue()));
+		}
 		return new Stack(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), stack.getCount(), stack.getDamageValue(),
-			stack.getMaxDamage());
+			stack.getMaxDamage(), enchantments);
 	}
 
 	private static BlockInfo block(BlockState state, Pos pos) {

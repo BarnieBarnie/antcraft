@@ -50,10 +50,12 @@ class Source:
     pays; None: any tier); estimate is the ticks one takes, for options; ore the block or tag it digs, for cost, and y
     the height it digs down to for it (lib.dig.best_y; None: DEEP); near the block or tag do gets it from, where none
     within radius means there is nothing to get (None: not known), and keep(p) whether do would take the one at p (None:
-    any, as the leaves sources take no persistent leaves, #649)."""
+    any, as the leaves sources take no persistent leaves, #649); drops(level) the mean items a block drops with a tool of
+    that Fortune level (None: one each), so estimate is the ticks of one block then (#754)."""
 
-    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None, keep=None):
+    def __init__(self, do, tool=None, tier=None, estimate=None, ore=None, near=None, y=None, keep=None, drops=None):
         self.do = do
+        self.drops = drops
         self.keep = keep
         self.y = y
         self.tool = tool
@@ -69,10 +71,20 @@ class Source:
         still costs it, as if there were some."""
         return self.near is None or lib.find.nearest(self.near, radius, self.keep) is not None
 
+    def blocks(self, n):
+        """How many blocks drop n of the item (#754): n where drops is None, else by the mean drops with the Fortune of
+        the best tool of its kind carried (lib.tools.best), which lib.tools.hold holds for do."""
+        if self.drops is None:
+            return n
+        best = None if self.tool is None else lib.tools.best(self.tool)
+        level = 0 if best is None else best.enchantments.get(FORTUNE, 0)
+        return int(n / self.drops(level) + 0.99)
+
     def least(self, n):
         """A bound cost never goes under, for make_cost's limit, without the ore scan (#582): the estimate each, or for
         a source with ore, where cost may mine an exposed vein from where it stands (#681), the mining of each with the
-        fastest pickaxe tier that drops it, where that is less."""
+        fastest pickaxe tier that drops it, where that is less; each of blocks(n)."""
+        n = self.blocks(n)
         if self.ore is None:
             return self.estimate * n
         tiers = lib.tools.TIERS
@@ -85,8 +97,10 @@ class Source:
         (lib.tools.tier_for its Pos), so a modded ore in a needs_*_tool tag gets the tier it needs, else self.tier. Where
         one is exposed, its vein (ore_vein), up to n, costs lib.cost.walk from start (None: the bot's Pos) to that block
         (#675) and the mining of each, with the best pickaxe carried where it drops the ore, else with that tier, as
-        lib.dig.ore mines a vein from where it stands (#661); the rest costs the estimate, which counts a walk, each.
+        lib.dig.ore mines a vein from where it stands (#661); the rest costs the estimate, which counts a walk, each. n
+        counts as blocks(n), the blocks that drop it.
         ponytail: the nearest vein only."""
+        n = self.blocks(n)
         p = None if self.ore is None else lib.find.exposed(self.ore, radius)
         tier = lib.tools.tier_for(p) if p is not None and self.tool == "pickaxe" else self.tier
         if p is None:
@@ -133,10 +147,19 @@ def breaking(item, what, reason, hand=False, keep=None):
     return do
 
 
+FORTUNE = "minecraft:fortune"
+
+
+def ore_drops(level):
+    """The mean bonus of the game's ore_drops loot function at a Fortune level (#754): 1, 1.33, 1.75, 2.2 for 0 to 3.
+    ponytail: the bonus alone; redstone's uniform bonus and a base count over one, such as copper's, are not read."""
+    return 1 + level * (level + 1) / 2 / (level + 2)
+
+
 def ore(item, block, estimate):
     """The Source of a raw item lib.dig.ore digs, with a pickaxe that drops block."""
     return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate,
-                  lib.dig.ORES[item], y=lib.dig.best_y(item))
+                  lib.dig.ORES[item], y=lib.dig.best_y(item), drops=ore_drops)
 
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =
@@ -154,8 +177,8 @@ SOURCES = {
 
 def flint(n, radius):
     """The flint Source's do (#720): breaks the exposed gravel within radius, nearest first, and where none is left puts
-    down a gravel it carries beside it and breaks that (#746), until the bot carries n more flint; no_block once it has
-    neither."""
+    down a gravel it carries beside it and breaks that (#746), never over its head, where it would fall on the bot
+    (#754), until the bot carries n more flint; no_block once it has neither."""
     target = count(FLINT) + n
     skip = {}
     while count(FLINT) < target:
@@ -163,7 +186,7 @@ def flint(n, radius):
         if p is not None:
             skip[p] = True
         elif count(GRAVEL_BLOCK) > 0:
-            p = lib.craft.place_beside(GRAVEL_BLOCK)
+            p = lib.craft.place_beside(GRAVEL_BLOCK, above=False)
             if p is None:
                 return result("no_space", None)
         else:
@@ -176,8 +199,8 @@ def flint(n, radius):
 
 class Flint(Source):
     """Gravel drops flint one time in ten without fortune, else itself, so the source digs what it drops again (#746)
-    and there is flint to get where gravel is carried too. ponytail: estimate counts ten gravel a flint, as fortune is
-    not read; a Stack enchantments sense if fortune shovels matter."""
+    and there is flint to get where gravel is carried too. Its estimate is one gravel; drops, the game's flint chance by
+    the shovel's Fortune (#754), makes it ten gravel a flint without, one with Fortune III."""
 
     def there(self, radius):
         return count(GRAVEL_BLOCK) > 0 or super().there(radius)
@@ -185,9 +208,12 @@ class Flint(Source):
 
 FLINT = "minecraft:flint"
 GRAVEL_BLOCK = "minecraft:gravel"
-# Ticks to break one gravel by hand and step to the next; a flint takes ten of them without fortune.
+# Ticks to break one gravel by hand and step to the next.
 GRAVEL = lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK
-SOURCES[FLINT] = Flint(flint, "shovel", "hand", 10 * GRAVEL, near=GRAVEL_BLOCK)
+# The chance gravel drops flint at Fortune 0 to 3 (the 26.3 loot table's table_bonus).
+FLINT_CHANCE = [0.1, 0.14285715, 0.25, 1.0]
+SOURCES[FLINT] = Flint(flint, "shovel", "hand", GRAVEL, near=GRAVEL_BLOCK,
+                       drops=lambda level: FLINT_CHANCE[min(level, len(FLINT_CHANCE) - 1)])
 for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
                                   ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 400),
                                   ("lapis_lazuli", "lapis_ore", 300), ("diamond", "diamond_ore", 2000),

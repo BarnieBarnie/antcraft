@@ -39,6 +39,7 @@ import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.storage.TagValueInput;
@@ -343,6 +344,18 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 			+ "print([(s.item, s.damage, s.max_damage) for s in container(" + at(helper, 5, 1, 3) + ")])\n");
 		succeedWhenPrinted(helper, bot, run, List.of("10 131",
 			"[('minecraft:wooden_axe', 3, 59), ('minecraft:oak_log', 0, 0)]"));
+	}
+
+	/** A held iron shovel with Fortune III gives its enchantments by id (#754); a plain one gives none. */
+	@GameTest(maxTicks = 10)
+	public void stacksGiveTheEnchantmentsOfATool(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ItemStack shovel = new ItemStack(Items.IRON_SHOVEL);
+		shovel.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.FORTUNE), 3);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, shovel);
+		bot.getInventory().addItem(new ItemStack(Items.STONE_SHOVEL));
+		ScriptRun run = run(helper, bot, "print(held().enchantments, [s.enchantments for s in inventory() if s.item == 'minecraft:stone_shovel'])\n");
+		succeedWhenPrinted(helper, bot, run, List.of("{'minecraft:fortune': 3} [{}]"));
 	}
 
 	@GameTest(maxTicks = 10)

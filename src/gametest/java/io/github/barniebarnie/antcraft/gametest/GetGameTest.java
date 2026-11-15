@@ -215,10 +215,62 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot in a 1x1 shaft of dirt two deep, open above, with one gravel and a Fortune III shovel (#754): get puts the
+	 * gravel beside its feet, digging a spot out, never over its head, where it would fall on the bot. Measured: passes at
+	 * tick 19.
+	 */
+	@GameTest(maxTicks = 40)
+	public void getFlintInAShaftNeverPutsGravelOverItsHead(GameTestHelper helper) {
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 2; z <= 4; z++) {
+				if (x != 3 || z != 3) {
+					helper.setBlock(x, 1, z, Blocks.DIRT);
+					helper.setBlock(x, 2, z, Blocks.DIRT);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		bot.getInventory().addItem(fortuneShovel(helper));
+		bot.getInventory().addItem(new ItemStack(Items.GRAVEL));
+		helper.onEachTick(() -> {
+			for (int y = 1; y <= 4; y++) {
+				if (helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.GRAVEL)) {
+					helper.fail("gravel over the bot at y " + y);
+				}
+			}
+		});
+		run(helper, bot, """
+			from lib.get import get
+			r = get("flint", 1)
+			print(r["ok"], count("flint"))
+			""");
+		failOnOtherPrint(helper, bot, "True 1");
+		helper.succeedWhen(() -> printed(helper, bot, "True 1"));
+	}
+
+	/**
+	 * A Fortune III pickaxe and no shovel carried (#754): the coal source counts 2.2 coal an ore, the mean of the game's
+	 * ore_drops bonus, so 11 coal are 5 ore; the flint source, with no Fortune shovel, ten gravel a flint.
+	 */
+	@GameTest(maxTicks = 10)
+	public void sourcesCountTheFortuneOfTheirTool(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		ItemStack pickaxe = new ItemStack(Items.IRON_PICKAXE);
+		pickaxe.enchant(helper.getLevel().registryAccess().lookupOrThrow(Registries.ENCHANTMENT).getOrThrow(Enchantments.FORTUNE), 3);
+		bot.getInventory().addItem(pickaxe);
+		run(helper, bot, """
+			from lib.get import SOURCES
+			print(SOURCES["minecraft:coal"].blocks(11), SOURCES["minecraft:flint"].blocks(3))
+			""");
+		failOnOtherPrint(helper, bot, "5 30");
+		helper.succeedWhen(() -> printed(helper, bot, "5 30"));
+	}
+
+	/**
 	 * Three gravel at the area's far corners and a Fortune III shovel carried, which drops flint from each gravel (#746):
-	 * make_cost of three flint, with the source's estimate cut to one gravel a flint (lib.get.GRAVEL, as the ten gravel a
-	 * flint it counts are the chance without fortune), is within {@link #COST_FACTOR} of the ticks get takes. Measured:
-	 * make_cost 75, get 72 to 78 ticks (test tick 78 to 92).
+	 * make_cost of three flint, which counts one gravel a flint as it reads the shovel's Fortune (#754), is within
+	 * {@link #COST_FACTOR} of the ticks get takes; it counted ten. Measured: make_cost 75, get 72 to 78 ticks (test tick 78
+	 * to 92).
 	 */
 	@GameTest(maxTicks = 160)
 	public void makeCostOfFlintIsCloseToItsTicks(GameTestHelper helper) {
@@ -228,9 +280,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(fortuneShovel(helper));
 		run(helper, bot, """
-			import lib.get
 			from lib.get import get, make_cost
-			lib.get.SOURCES["minecraft:flint"].estimate = lib.get.GRAVEL
 			print(make_cost("flint", 3))
 			r = get("flint", 3)
 			print(r["ok"])
