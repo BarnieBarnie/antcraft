@@ -281,7 +281,8 @@ public class PathFollower {
 
 	private PathFinder.Options options() {
 		int scaffold = this.scaffoldCarried();
-		return new PathFinder.Options(this.mayBreak, this.mayPlace && scaffold > 0, this.maxNodes, MAX_DROP, this.death(), scaffold);
+		// With none, it may still place what it digs, as broken blocks that drop one count back (#778).
+		return new PathFinder.Options(this.mayBreak, this.mayPlace && (scaffold > 0 || this.mayBreak), this.maxNodes, MAX_DROP, this.death(), scaffold);
 	}
 
 	/**

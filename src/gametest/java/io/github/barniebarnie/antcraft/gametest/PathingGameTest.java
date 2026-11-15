@@ -710,6 +710,24 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot with no scaffold block at the bottom of a bedrock shaft three deep, its walls dirt at the bottom two blocks
+	 * on the two sides away from its goal, so no path without placing comes nearer: it digs the dirt, which it picks
+	 * up, and pillars out with it (#778).
+	 */
+	@GameTest(maxTicks = 160)
+	public void digsDirtToPillarOutOfAPitWithNoScaffold(GameTestHelper helper) {
+		fill(helper, 1, 1, 1, 6, 3, 6, Blocks.BEDROCK);
+		fill(helper, 3, 1, 3, 3, 3, 3, Blocks.AIR);
+		fill(helper, 2, 1, 3, 2, 2, 3, Blocks.DIRT);
+		fill(helper, 3, 1, 2, 3, 2, 2, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		BotScripts.failOnError(helper, bot);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 4, 3)));
+
+		succeedWhenAt(helper, bot, new BlockPos(5, 4, 3));
+	}
+
+	/**
 	 * A bot pillars up a one-wide shaft from a spot holding a torch: the torch is broken with its drop before the
 	 * scaffold goes there (#608), so it ends up in the bot's inventory or on the ground, not deleted.
 	 */
