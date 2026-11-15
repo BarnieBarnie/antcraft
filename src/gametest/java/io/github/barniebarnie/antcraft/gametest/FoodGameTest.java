@@ -177,6 +177,64 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A bot at food 12 carrying one raw beef and a furnace kit, and no animal near, cooks the beef before it eats it (#748): food 20 only on cooked beef (8), as raw beef (3) stops at 15. */
+	// Measured: 316 ticks.
+	@GameTest(maxTicks = 640)
+	public void aHungryBotCooksItsRawBeefBeforeItEats(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getFood().setFoodLevel(12);
+		bot.getFood().setSaturation(0);
+		bot.getInventory().addItem(new ItemStack(Items.BEEF));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.COAL));
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.upkeep()\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(bot.getFood().food(), 20, "food");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BEEF), 0, "raw beef");
+		});
+	}
+
+	/** A hungry bot carrying raw beef and nothing to cook it with eats the raw beef rather than go hungry (#748): food 5 + 3 + 3. */
+	// Measured: 66 to 104 ticks.
+	@GameTest(maxTicks = 220)
+	public void aHungryBotWithNoWayToCookEatsItsRawBeef(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getFood().setFoodLevel(5);
+		bot.getFood().setSaturation(0);
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 2));
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nlib.food.upkeep()\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(bot.getFood().food(), 11, "food");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BEEF), 0, "raw beef");
+		});
+	}
+
+	/**
+	 * cook smelts no more raw beef than the fuel carried burns for (#748): one oak plank smelts 1.5, so of three raw beef it
+	 * cooks one, where it would get wood for all three and, with no tree near, cook none.
+	 */
+	// Measured: 243 ticks.
+	@GameTest(maxTicks = 500)
+	public void cookCapsTheBatchToTheFuelCarried(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.BEEF, 3));
+		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_PICKAXE));
+		bot.getInventory().addItem(new ItemStack(Items.OAK_PLANKS));
+		ScriptRun run = BotScripts.run(bot, "import lib.food\nassert lib.food.cook(\"minecraft:cooked_beef\", 6)[\"ok\"]\n");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(run.state() == ScriptRun.State.FINISHED, "script " + run.state());
+			helper.assertValueEqual(bot.getInventory().countItem(Items.COOKED_BEEF), 1, "cooked beef");
+			helper.assertValueEqual(bot.getInventory().countItem(Items.BEEF), 2, "raw beef");
+		});
+	}
+
 	/** A hungry member of a colony that has no food, nor wheat or a table to make some, warns so the player sees why (#704). */
 	@GameTest(maxTicks = 150)
 	public void aHungryMemberOfAColonyWithNoFoodWarns(GameTestHelper helper) {
