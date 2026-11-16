@@ -253,8 +253,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * jobs.wood_farm's kit holds (#652): with none, a tree whose leaves it could not climb kept a log out_of_reach.
 	 */
 	// Measured: passes at tick 1376 to 1743 in 3 runs, since harvest leaves the drops on the leaves to the sweep (#655);
-	// at tick 988 once its leaves drop no apples (#790).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
+	// at tick 988 once its leaves drop no apples (#790); 1006 to 1302 in 4 runs at once (#795), so maxTicks 2600.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 2600)
 	public void aDarkOakCellOfFourSaplingsIsGrownAndHarvested(GameTestHelper helper) {
 		darkOak(helper, at -> advance(helper, at));
 	}
@@ -264,8 +264,9 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * trunk that lower logs and leaves hid from it, and once those were mined no walk got in sight of it. Felled whole too.
 	 * harvest no longer pillars up to the sticks and apples the decaying leaves drop (#655), which took most of its time.
 	 */
-	// Measured: passes at tick 1520 to 1933 in 3 runs (3250 to 4248 before #655); at tick 1065 with no apples (#790).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 4000)
+	// Measured: passes at tick 1520 to 1933 in 3 runs (3250 to 4248 before #655); at tick 1065 with no apples (#790);
+	// 1064 to 1198 in 4 runs at once (#795), so maxTicks 2400.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 2400)
 	public void aDarkOakWithATopLogHiddenFromItsStandIsFelled(GameTestHelper helper) {
 		darkOak(helper, at -> advance(helper, at, 36));
 	}

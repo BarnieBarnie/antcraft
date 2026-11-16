@@ -1081,7 +1081,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * HARVEST and LOGS of each one-sapling kind but mangrove, and of dark and pale oak, are measured (#769, birch #779),
-	 * no longer the birch's ticks a log times logs counted from the tree features. Dark oak's HARVEST is pale oak's (#779).
+	 * no longer the birch's ticks a log times logs counted from the tree features (dark oak again #795).
 	 */
 	// Measured with temporary copies of aMangroveFarmFellsItsFirstTreeAndReplants for each kind, seeds 0 to 10, 24 to 32
 	// copies at once: the ticks from the growth to the logs stored and the sapling replanted, and the logs grown.
@@ -1094,7 +1094,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// fell in the same ticks (dark 640 to 1153, pale 640 to 1185); dark oak then picks up apples for some 220 to 390
 	// ticks, pale oak its sticks for 0 to 47, as the game test data pack makes each dark oak leaves block drop an apple
 	// (for GetGameTest's apple test). In the game 1 in 200 does, so dark oak takes pale oak's HARVEST.
-	// Since #790 the data pack drops an apple to GetGameTest's apple bot only, none otherwise.
+	// Since #790 the data pack drops an apple to GetGameTest's apple bot only, none otherwise. #795, 33 copies at once of a
+	// dark oak farm (a cell of 8 from (6, 0, 4), 16 dirt): 665 to 1251, 943 on average, 40.6 logs (31 to 50), so dark oak's
+	// HARVEST stays 950 and LOGS 40.5, now its own measure.
 	@GameTest(maxTicks = 10)
 	public void eachKindsHarvestAndLogsAreMeasured(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);

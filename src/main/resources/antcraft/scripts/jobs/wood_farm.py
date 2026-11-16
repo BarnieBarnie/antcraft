@@ -34,9 +34,9 @@ GROWTH = 2 * 7 * 4096 / 3
 # and pale oak are measured as the mangrove's farm test, 11 seeded trees each (WoodFarmGameTest
 # eachKindsHarvestAndLogsAreMeasured, #769, birch #779): oak 165 to 302, 207 on average, birch 176 to 323, 237, spruce
 # 250 to 433, 329, jungle 176 to 539, 359, acacia 207 to 464, 286, cherry 378 to 1231, 865, pale oak 663 to 1209, 941,
-# poplar 378 to 1021, 613; each the mean rounded to 50. Dark oak grows the same trees as pale oak, a seed for seed, of
-# blocks as hard, so it takes pale oak's: it measured 867 to 1510, 1236, only as the game test data pack makes every
-# dark oak leaves block drop an apple (1 in 200 in the game) and harvest picks up the 110 to 130 apples (#779).
+# poplar 378 to 1021, 613, dark oak 665 to 1251, 943; each the mean rounded to 50. Dark oak grows the same trees as
+# pale oak, a seed for seed; it measured 1236 only while the game test data pack made every dark oak leaves block drop an
+# apple for harvest to pick up (#779), measured again since they drop none (#790, #795).
 # The giants are measured in WoodFarmGameTest, once fell_whole took its scaffold back on its way down (#677): a giant spruce with a trunk of 24 took some 3200 to 3500 ticks, once a path
 # no longer stood on a block it broke on the way (#687; 4100 to 4700 with the bot falling off such a step), a giant jungle of
 # 67 logs (a trunk of 16 and its branches) some 2100 to 3300, 2700 on average (#669, #695); since #713 the spruce 3300 to
