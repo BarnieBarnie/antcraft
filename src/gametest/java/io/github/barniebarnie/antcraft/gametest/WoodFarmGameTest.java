@@ -653,6 +653,126 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A full farm whose bot has more than EXTRA (32) saplings beyond what replanting keeps composts them (#804): it carries
+	 * 66 birch saplings (2 kept), 7 birch slabs, a crafting table and a chest. It makes a composter at (4, 1, 0), 2 west of
+	 * the depot, composts the 64 extras into bone meal (at least 1: the first sapling always fills a layer, the rest 30% of
+	 * the time) and, with no sapling of the farm to use it on (no cell built), stores it in the depot's bone_meal chest.
+	 */
+	// Measured: passes at tick 253 (red: no composter).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 500)
+	public void aFullFarmCompostsItsExtraSaplingsIntoBoneMeal(GameTestHelper helper) {
+		AntBot bot = compostBot(helper, 66);
+		farmScript(helper, bot, 1, 2);
+		helper.succeedWhen(() -> {
+			helper.assertBlockPresent(Blocks.COMPOSTER, 4, 1, 0);
+			helper.assertValueEqual(said(bot), List.of("farm full", "2"), "said");
+			helper.assertTrue(depotHolds(helper, Items.BONE_MEAL) > 0, "no bone meal in the depot");
+		});
+	}
+
+	/** As aFullFarmCompostsItsExtraSaplingsIntoBoneMeal with 32 extras: no composter (#804). */
+	// Measured: passes at tick 8.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void aFullFarmWith32ExtraSaplingsMakesNoComposter(GameTestHelper helper) {
+		AntBot bot = compostBot(helper, 34);
+		farmScript(helper, bot, 1, 2);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("farm full", "34"), "said");
+			helper.assertBlockNotPresent(Blocks.COMPOSTER, 4, 1, 0);
+		});
+	}
+
+	/** As aFullFarmCompostsItsExtraSaplingsIntoBoneMeal in a farm that still builds cells: no composter (#804). */
+	// Measured: passes at tick 7.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	public void aFarmStillBuildingMakesNoComposter(GameTestHelper helper) {
+		AntBot bot = compostBot(helper, 66);
+		farmScript(helper, bot, 2, 2);
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("next cell: no_item, lacks {'minecraft:dirt': 1}", "66"), "said");
+			helper.assertBlockNotPresent(Blocks.COMPOSTER, 4, 1, 0);
+		});
+	}
+
+	/**
+	 * fertilize uses the bot's bone meal on the farm's saplings (#804): 16 bone meal on the birch sapling of cell 1 grow
+	 * it into a tree (each advances it a stage 45% of the time, 2 stages make a tree), and it keeps the rest.
+	 */
+	// Measured: passes at tick 27 (red: no fertilize).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
+	public void fertilizeGrowsTheFarmsSaplingsWithBoneMeal(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.BONE_MEAL, 16));
+		script(helper, bot, """
+			jobs.wood_farm.fertilize(kind, [cell])
+			print(0 < count("minecraft:bone_meal") < 16)
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("True"), "said");
+			helper.assertBlockPresent(Blocks.BIRCH_LOG, SPOT);
+		});
+	}
+
+	/**
+	 * A bot for the compost tests: saplings birch saplings, 7 birch slabs, a crafting table and a chest for the depot,
+	 * at (4, 1, 6).
+	 */
+	private static AntBot compostBot(GameTestHelper helper, int saplings) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		for (int n = saplings; n > 0; n -= 64) {
+			bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING, Math.min(n, 64)));
+		}
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SLAB, 7));
+		bot.getInventory().addItem(new ItemStack(Items.CRAFTING_TABLE));
+		bot.getInventory().addItem(new ItemStack(Items.CHEST));
+		return bot;
+	}
+
+	/**
+	 * Runs jobs.wood_farm.farm for birch up to size cells, its depot at (6, 1, 0), with one cell counted but none built
+	 * (no sapling to tend), no tree grown and gets failing; at the waits'th wait of a round prints the saplings carried and stops.
+	 */
+	private static void farmScript(GameTestHelper helper, AntBot bot, int size, int waits) {
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			waits = [0]
+			def waited(ticks):
+			    if ticks != jobs.wood_farm.WAIT:
+			        return  # the composter's
+			    waits[0] += 1
+			    if waits[0] == %d:
+			        print(count(kind))
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.grown = lambda k, low, high: False
+			lib.cells.built = lambda name: []
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", %d, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ(), waits, size));
+	}
+
+	/** The items of item in the chests of the depot row, (6, 1, 0) to (15, 1, 0). */
+	private static int depotHolds(GameTestHelper helper, Item item) {
+		int n = 0;
+		for (int x = 6; x < 16; x++) {
+			if (helper.getBlockState(new BlockPos(x, 1, 0)).is(Blocks.CHEST)) {
+				n += helper.getBlockEntity(new BlockPos(x, 1, 0), ChestBlockEntity.class).countItem(item);
+			}
+		}
+		return n;
+	}
+
+	/**
 	 * A branch log a harvest left off the trunk column, such as an acacia's or a cherry's, is seen in the cell's tree
 	 * space and felled (#651): grown looked only over the sapling spots.
 	 */

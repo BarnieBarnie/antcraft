@@ -6,7 +6,8 @@
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
 # logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
 # what one takes (docs/cookbook/wood-farm.md). A spruce or jungle farm farms giants (GIANTS) once the bot has 4 saplings
-# of the kind, from the start or as a farm of its own beside the small one (#803). Its home is by the depot, so after a death it comes back to the farm and
+# of the kind, from the start or as a farm of its own beside the small one (#803). A full farm composts its extra saplings
+# into bone meal for its saplings (compost, #804). Its home is by the depot, so after a death it comes back to the farm and
 # recovers (lib.trees.recover, #679). Another job starts a farm with run(kind, at); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -62,7 +63,7 @@ KIT = [("stone_axe", 1), (lib.treefarm.DIRT, 16)]  # dirt to climb a tall tree w
 # A mangrove's roots and moss carpet, which harvest mines too (#768), go with the logs, not in a chest of their own (#788).
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"],
               "logs": ["#minecraft:logs", "minecraft:mangrove_roots", "minecraft:muddy_mangrove_roots", "minecraft:moss_carpet"],
-              "sticks": ["minecraft:stick"]}
+              "sticks": ["minecraft:stick"], "bone_meal": ["minecraft:bone_meal"]}
 # What the farm keeps on the bot instead of storing it, besides its own saplings and its dirt (dirt): what a cell takes and
 # the crafting table lib.get makes a depot chest with.
 KEEP = [lib.treefarm.TORCH, lib.treefarm.SLABS, "minecraft:crafting_table"]
@@ -344,7 +345,8 @@ def farm(kind, name, size, radius):
     what it carries (each round, #766), tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
     lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
-    where it felled nothing picks up the drops in the farm (sweep) and waits. Each round takes back the scaffold its walks
+    once full composts the extra saplings (compost), and where it felled nothing picks up the drops in the farm (sweep)
+    and waits. Each round takes back the scaffold its walks
     placed (lib.trees.take_back) before it waits, and before each felling and build (#654). Where size is None the farm grows to
     limit(kind, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
     felled (learn)."""
@@ -413,11 +415,67 @@ def farm(kind, name, size, radius):
         elif not full:
             say("farm full")
             full = True
+        if full:
+            r = compost(kind, name, boxes, radius)
+            if not r["ok"]:
+                tell(told, f"compost: {r['reason']}")
         if not felled:
             sweep(kind, boxes)
         lib.trees.take_back()
         if not felled:
             wait(WAIT)
+
+
+EXTRA = 32  # the saplings beyond what replanting keeps (materials) over which a full farm composts them (#804)
+COMPOSTER = "minecraft:composter"
+BONE_MEAL = "minecraft:bone_meal"
+
+
+def compost(kind, name, boxes, radius):
+    """Where the bot and the saplings chests of the depot name hold more than EXTRA saplings of kind beyond materials(kind)
+    keeps (#804): makes a composter 2 west of the depot's first chest (lib.get) unless one stands there, composts all
+    but those it keeps in it (use), takes out the bone meal and uses it on the saplings of boxes (fertilize); what is
+    left the next store puts in the depot's bone_meal chest. Gives result(): ok, or the reason the composter could not
+    be made or used; ok with nothing done where no depot name was laid out (a farm of swapped functions)."""
+    if name not in memory.get("depots", {}):
+        return result()
+    s = lib.treefarm.sapling(kind)
+    keep = materials(kind)[s]
+    depot = lib.depot.chests(name, "saplings")
+    held = chest_held(s, radius, depot)[1]
+    if count(s) + held - keep <= EXTRA:
+        return result()
+    c = lib.depot.depot(name)["origin"] + (-2, 0, 0)
+    if block(c).id != COMPOSTER:
+        r = get(COMPOSTER, 1, radius)
+        if not r["ok"]:
+            return r
+        r = place(c, COMPOSTER)
+        if not r:
+            return result(r.reason, c)
+    lib.stock.take_up_to(s, count(s) + held, radius, depot)  # ponytail: what fits on the bot; the rest next round
+    while True:
+        level = block(c).state["level"]
+        if level == 7:
+            wait(5)  # the composter turns to 8, bone meal, 20 ticks after it reaches 7
+            continue
+        if level < 8 and count(s) <= keep:
+            break
+        r = use(c) if level == 8 else use(c, s)  # at 8 the use takes the bone meal out, whatever the bot holds
+        if not r:
+            return result(r.reason, c)
+    pick_up(BONE_MEAL)
+    fertilize(kind, boxes)
+    return result()
+
+
+def fertilize(kind, boxes):
+    """Uses the bot's bone meal on each sapling of kind in the cells boxes until it has grown (#804)."""
+    s = lib.treefarm.sapling(kind)
+    for b in boxes:
+        for p in lib.treefarm.spots(kind, b[0], b[1]):
+            while count(BONE_MEAL) and block(p).id == s and use(p, BONE_MEAL):
+                pass
 
 
 def run(kind, at=None, size=None, radius=32):
