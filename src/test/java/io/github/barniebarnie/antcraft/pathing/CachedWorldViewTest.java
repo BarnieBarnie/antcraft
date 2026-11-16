@@ -92,6 +92,12 @@ class CachedWorldViewTest {
 		}
 
 		@Override
+		public boolean dropsScaffold(BlockPos pos) {
+			this.ask("dropsScaffold", pos);
+			return this.world.dropsScaffold(pos);
+		}
+
+		@Override
 		public boolean mayPlace(BlockPos pos) {
 			this.ask("mayPlace", pos);
 			return this.world.mayPlace(pos);
@@ -107,6 +113,20 @@ class CachedWorldViewTest {
 		Path path = PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(8, 1, 0)), new PathFinder.Options(true, false, 2000, 3));
 
 		assertFalse(path.complete());
+		Map.Entry<String, Integer> most = world.asked.entrySet().stream().max(Map.Entry.comparingByValue()).orElseThrow();
+		assertEquals(1, most.getValue(), "asked " + most.getKey() + " " + most.getValue() + " times");
+	}
+
+	/** Whether a broken block drops a scaffold block is asked once per block too, from every move that breaks it (#797). */
+	@Test
+	void aSearchAsksWhetherABlockDropsScaffoldOncePerBlock() {
+		// A dirt wall round the goal, breaking and placing allowed with few scaffold blocks: moves break the dirt from many nodes.
+		GridWorld grid = GridWorld.flat(12).fill(-12, -3, -12, 12, -1, 12, 'D').fill(4, -3, -12, 4, 20, 12, 'B').fill(-3, 1, -3, 3, 3, 3, 'D').fill(-2, 1, -2, 2, 2, 2, ' ');
+		Counting world = new Counting(grid);
+		Path path = PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(8, 1, 0)), new PathFinder.Options(true, true, 2000, 3, null, 2));
+
+		assertFalse(path.complete());
+		assertTrue(world.asked.keySet().stream().anyMatch(key -> key.startsWith("dropsScaffold")), "dropsScaffold never asked");
 		Map.Entry<String, Integer> most = world.asked.entrySet().stream().max(Map.Entry.comparingByValue()).orElseThrow();
 		assertEquals(1, most.getValue(), "asked " + most.getKey() + " " + most.getValue() + " times");
 	}
@@ -129,6 +149,7 @@ class CachedWorldViewTest {
 				assertEquals(grid.climbFaces(pos), view.climbFaces(pos), "climbFaces " + pos);
 				assertEquals(grid.isBedrock(pos), view.isBedrock(pos), "bedrock " + pos);
 				assertEquals(grid.mayPlace(pos), view.mayPlace(pos), "mayPlace " + pos);
+				assertEquals(grid.dropsScaffold(pos), view.dropsScaffold(pos), "dropsScaffold " + pos);
 				assertEquals(grid.floorTop(pos), view.floorTop(pos), "floorTop " + pos);
 				assertEquals(grid.jumpTop(pos), view.jumpTop(pos), "jumpTop " + pos);
 				for (Direction dir : Direction.values()) {

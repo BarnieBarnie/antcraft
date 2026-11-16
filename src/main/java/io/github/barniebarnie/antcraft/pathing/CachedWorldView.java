@@ -1,7 +1,7 @@
 package io.github.barniebarnie.antcraft.pathing;
 
 import it.unimi.dsi.fastutil.longs.Long2FloatOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import java.util.List;
 import java.util.function.Predicate;
 import java.util.function.ToDoubleFunction;
@@ -29,16 +29,17 @@ final class CachedWorldView implements WorldView {
 	private static final int CAN_OPEN = 7;
 	private static final int STAIR_UP = 11;
 	private static final int VINE = 15;
+	private static final int DROPS_SCAFFOLD = 16;
 
 	private final WorldView world;
 	/** Per block, the answers so far, two bits per question. */
-	private final Long2IntOpenHashMap answers = new Long2IntOpenHashMap();
+	private final Long2LongOpenHashMap answers = new Long2LongOpenHashMap();
 	private final Long2FloatOpenHashMap breakTicks = new Long2FloatOpenHashMap();
 	private final Long2FloatOpenHashMap floorTop = new Long2FloatOpenHashMap();
 	private final Long2FloatOpenHashMap jumpTop = new Long2FloatOpenHashMap();
 	/** The block asked about last and its answers, as a search asks several questions about a block in a row. */
 	private long lastKey = Long.MIN_VALUE;
-	private int lastKnown;
+	private long lastKnown;
 	/** The world's questions, made once rather than per question asked. */
 	private final Predicate<BlockPos> passable;
 	private final Predicate<BlockPos> standOn;
@@ -48,6 +49,7 @@ final class CachedWorldView implements WorldView {
 	private final Predicate<BlockPos> vine;
 	private final Predicate<BlockPos> bedrock;
 	private final Predicate<BlockPos> mayPlace;
+	private final Predicate<BlockPos> dropsScaffold;
 	/** {@code canOpen} and {@code stairUp}, by {@link Direction#get2DDataValue}. */
 	private final List<Predicate<BlockPos>> canOpen;
 	private final List<Predicate<BlockPos>> stairUp;
@@ -65,6 +67,7 @@ final class CachedWorldView implements WorldView {
 		this.vine = world::isVine;
 		this.bedrock = world::isBedrock;
 		this.mayPlace = world::mayPlace;
+		this.dropsScaffold = world::dropsScaffold;
 		this.canOpen = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
 			.<Predicate<BlockPos>>map(dir -> pos -> world.canOpen(pos, dir)).toList();
 		this.stairUp = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
@@ -74,12 +77,12 @@ final class CachedWorldView implements WorldView {
 	/** The answer to {@code question} about {@code pos}, asking the world the first time. */
 	private boolean answer(BlockPos pos, int question, Predicate<BlockPos> ask) {
 		long key = pos.asLong();
-		int known = key == this.lastKey ? this.lastKnown : this.answers.get(key);
+		long known = key == this.lastKey ? this.lastKnown : this.answers.get(key);
 		int shift = 2 * question;
-		int bits = known >>> shift & 3;
+		int bits = (int) (known >>> shift & 3);
 		if (bits == 0) {
 			bits = ask.test(pos) ? YES : NO;
-			known |= bits << shift;
+			known |= (long) bits << shift;
 			this.answers.put(key, known);
 		}
 		this.lastKey = key;
@@ -128,10 +131,9 @@ final class CachedWorldView implements WorldView {
 		return number(this.breakTicks, pos, this.world::breakTicks);
 	}
 
-	// ponytail: not cached here, asked only of blocks a move breaks with few scaffold blocks; LevelWorldView keeps it per block state.
 	@Override
 	public boolean dropsScaffold(BlockPos pos) {
-		return this.world.dropsScaffold(pos);
+		return this.answer(pos, DROPS_SCAFFOLD, this.dropsScaffold);
 	}
 
 	/** The number {@code ask} gives for {@code pos}, asking the world the first time. */

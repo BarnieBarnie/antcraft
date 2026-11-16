@@ -2,7 +2,6 @@ package io.github.barniebarnie.antcraft.pathing;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -157,18 +156,29 @@ public final class PathFinder {
 		}
 	}
 
-	private record Entry(Node node, double priority, long seq) {
+	/** An open node, its cost kept beside it so the queue's order reads no node (see {@link #compareTo}). */
+	private record Entry(Node node, double priority, double cost, long seq) implements Comparable<Entry> {
+		Entry(Node node, double priority, long seq) {
+			this(node, priority, node.cost(), seq);
+		}
+
+		/**
+		 * The open set's order: the lowest priority first; among equals the farthest along (the least left to go), then the
+		 * first added. Ties so broken do not hang on what else is in the queue: a heap's own order among equals did, so a move
+		 * a search never takes, such as a costly drop (#682), changed which of two equal paths it found, and with it how a
+		 * giant spruce's felling went. Among equals the first added alone, settling a base made no bucket of its chest's iron, as lib.get planned again from the chest out of the table's reach (fixed there, #692).
+		 * Written out rather than a chain of {@link java.util.Comparator}s, which cost some 10% of a node (#791, #797).
+		 */
+		@Override
+		public int compareTo(Entry other) {
+			int order = Double.compare(this.priority, other.priority);
+			if (order == 0) {
+				order = Double.compare(other.cost, this.cost);
+			}
+			return order != 0 ? order : Long.compare(this.seq, other.seq);
+		}
 	}
 
-	/**
-	 * The open set's order: the lowest priority first; among equals the farthest along (the least left to go), then the
-	 * first added. Ties so broken do not hang on what else is in the queue: a heap's own order among equals did, so a move
-	 * a search never takes, such as a costly drop (#682), changed which of two equal paths it found, and with it how a
-	 * giant spruce's felling went. Among equals the first added alone, settling a base made no bucket of its chest's iron, as lib.get planned again from the chest out of the table's reach (fixed there, #692).
-	 */
-	private static final Comparator<Entry> ORDER = Comparator.comparingDouble(Entry::priority)
-		.thenComparing(Comparator.comparingDouble((Entry e) -> e.node().cost()).reversed())
-		.thenComparingLong(Entry::seq);
 
 	/** How many nodes a search expands between asking whether to stop (see {@link Search#run(int, BooleanSupplier)}): a look at the clock costs some 20 ns, a node some 10 µs. */
 	static final int CHECK_EVERY = 16;
@@ -284,7 +294,7 @@ public final class PathFinder {
 		 * search over whole paths, not blocks, for a layout no test or game run has shown.
 		 */
 		private final @Nullable Map<BlockPos, Least> least;
-		private final PriorityQueue<Entry> open = new PriorityQueue<>(ORDER);
+		private final PriorityQueue<Entry> open = new PriorityQueue<>();
 		private long added;
 		private Node closest;
 		private double closestHeuristic;
