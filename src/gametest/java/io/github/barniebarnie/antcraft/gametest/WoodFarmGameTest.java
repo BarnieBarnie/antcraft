@@ -791,6 +791,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.corner = lambda name: None
 			jobs.wood_farm.stocked = lambda k, radius: lib.result.result()
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result()
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.terrain.needs = lambda low, high, y: {"tools": {}}
 			lib.treefarm.build_cell = lambda k, low, high: lib.result.result()
@@ -1238,6 +1239,53 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		return grew;
+	}
+
+	/**
+	 * A farm whose corner is a block up, (6, 2, 2), so cell 1's floor at y 1 is a pit of 25 blocks of air over the area's
+	 * stone, more fill than the kit's 16 dirt and materials' 1 (#821). With 32 more dirt in the chest and none to dig (a
+	 * stone floor), the bot gets the fill before it builds the cell: it carries the 26 dirt the floor and the sapling take
+	 * when build_cell starts, taken from the chest (red: dirt 16). build_cell only says the dirt the bot carries: a bot
+	 * standing in the pit can block flatten's place beside it, which this test is not about.
+	 */
+	// Measured: passes at tick 40 to 48 (red: dirt 16).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
+	public void aCellOverAPitGetsItsFillFromTheChest(GameTestHelper helper) {
+		AntBot bot = farm(helper, 2, 2, false);
+		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class);
+		chest.setItem(5, new ItemStack(Items.DIRT, 32));
+		runInPit(helper, bot, """
+			import lib.result
+			import lib.treefarm
+			def build_cell(kind, low, high):
+			    print(f"dirt {count('minecraft:dirt')}")
+			    return lib.result.result()
+			lib.treefarm.build_cell = build_cell
+			""");
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
+			helper.assertTrue(said(bot).stream().anyMatch(l -> l.startsWith("dirt ") && Integer.parseInt(l.substring(5)) >= 26), "said " + said(bot));
+			helper.assertTrue(chest.countItem(Items.DIRT) <= 48 - 26, "dirt left in the chest: " + chest.countItem(Items.DIRT));
+		});
+	}
+
+	/**
+	 * The pit of aCellOverAPitGetsItsFillFromTheChest with only the kit's 16 dirt in the chest and none to dig: the farm
+	 * stops at its cell step and says what it lacks, the dirt and how many (#821).
+	 */
+	// Measured: passes at tick 61 to 69 (red: birch_farm stopped: blocked at cell, the fill not got first).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 140)
+	public void aCellThatLacksFillSaysHowMuch(GameTestHelper helper) {
+		AntBot bot = farm(helper, 2, 2, false);
+		runInPit(helper, bot, "");
+		helper.succeedWhen(() -> helper.assertTrue(said(bot).stream().anyMatch(
+			l -> l.startsWith("birch_farm stopped: ") && l.contains(" at cell, missing minecraft:dirt x")), "said " + said(bot)));
+	}
+
+	/** Runs before, then jobs.wood_farm for birch at AT a block up, one cell, radius 12: cell 1's floor a pit at y 1. */
+	private static void runInPit(GameTestHelper helper, AntBot bot, String before) {
+		script(helper, bot, before + "jobs.wood_farm.run(kind, cell[0] + (0, 2, 0), 1, 12)\n");
 	}
 
 	/** With no sapling to spare (only the cell's own), first_cell still fails with no_logs where there is no tree (#802). */

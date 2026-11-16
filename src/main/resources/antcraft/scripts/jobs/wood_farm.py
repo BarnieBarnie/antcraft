@@ -232,10 +232,15 @@ def following(kind, name, size):
 
 def build(kind, name, size, radius):
     """Builds the next cell of the farm name with the tools lib.terrain.needs for its ground and for the ground under
-    its sapling spots, marks it built and says so. Gives result()."""
+    its sapling spots, and the dirt its floor's holes take on top of lib.treefarm.materials' (gets, #821), marks it
+    built and says so. Gives result()."""
     i = following(kind, name, size)
     low, high = lib.cells.cell(name, i)
-    tools = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)["tools"]
+    needs = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)
+    r = gets(lib.treefarm.DIRT, needs.get("fill", 0) + lib.treefarm.materials(kind)[lib.treefarm.DIRT], radius)
+    if not r["ok"]:
+        return r
+    tools = needs["tools"]
     # build_cell mines the ground under each sapling spot that is not SOIL to put dirt there, such as stone (#612, #805).
     for p in lib.treefarm.spots(kind, low, high):
         if not lib.trees.is_kind(p.down(), lib.treefarm.SOIL):
@@ -682,7 +687,8 @@ def run(kind, at=None, size=None, radius=32):
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]
     r = lib.project.run(name, steps)
-    say(f"{name} stopped: {r['reason']} at {r['at']}")
+    lacks = ", ".join([f"{k} x{v}" for k, v in r.get("lacks", {}).items()])
+    say(f"{name} stopped: {r['reason']} at {r['at']}" + (f", missing {lacks}" if lacks else ""))
     return r
 
 

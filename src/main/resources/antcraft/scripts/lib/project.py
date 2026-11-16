@@ -48,10 +48,12 @@ def save(name, s):
 def run(name, steps):
     """Does the steps of the project name in order, each a Step, skipping those it has done before, and says one line
     per step it starts. Gives result(): ok, or the reason the first required step that failed gave, at its name; missing
-    is the list of the names of the steps not done (an optional step that failed too). Gives back what it borrowed at
-    the end, also when a step failed."""
+    is the list of the names of the steps not done (an optional step that failed too), and lacks the missing of the
+    failed step's result(), item to how many it lacks (#821). Gives back what it borrowed at the end, also when a step
+    failed."""
     s = status(name)
     stop = None
+    lacks = {}
     for i, step in enumerate(steps):
         if step.name in s["done"]:
             continue
@@ -72,9 +74,11 @@ def run(name, steps):
         save(name, s)
         if reason is not None and not step.optional:
             stop = step
+            lacks = r["missing"] if isinstance(r, dict) else {}
             break
     give_back()
     missing = [step.name for step in steps if step.name not in s["done"]]
     r = result(None if stop is None else s["failed"][stop.name], None if stop is None else stop.name)
     r["missing"] = missing  # a list, also when empty: result() makes an empty one {}
+    r["lacks"] = lacks
     return r
