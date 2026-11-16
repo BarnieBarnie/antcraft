@@ -451,9 +451,21 @@ public final class WorkApi {
 			}
 			// The bot's own body over the edge of the block, as it stands off the middle of the one beside (never in it: not in
 			// reach from there), keeps the game from placing there: it steps back to the middle of its block first (#822).
-			if (this.stepped++ < STEP_TICKS && this.bot.getBoundingBox().intersects(new AABB(this.pos))) {
-				this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
-				return null;
+			// Another bot standing there is asked to make way, as build asks (#824); a player or mob is not waited for.
+			if (this.stepped++ < STEP_TICKS) {
+				AABB spot = new AABB(this.pos);
+				boolean waiting = false;
+				if (this.bot.getBoundingBox().intersects(spot)) {
+					this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
+					waiting = true;
+				}
+				for (Entity other : this.level.getEntities(this.bot, spot, entity -> entity instanceof AntBot)) {
+					((AntBot) other).makeWay(Set.of(this.pos), () -> false);
+					waiting = true;
+				}
+				if (waiting) {
+					return null;
+				}
 			}
 			return Result.fail(Result.BLOCKED, PyNone.NONE, "the game would not place " + BuiltInRegistries.ITEM.getKey(held) + " at " + EntityInfo.pos(this.pos));
 		}

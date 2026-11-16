@@ -649,6 +649,20 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.AIR, 3, 1, 3));
 	}
 
+	/** An idle bot stands where the block goes: it is asked to make way, steps aside, and the block is placed (#824). */
+	// Measured: passes at tick 9.
+	@GameTest(maxTicks = 20)
+	public void placeWhereAnotherBotStandsAsksItToMakeWay(GameTestHelper helper) {
+		AntBot other = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		expect(helper, bot, "r = place(" + at(helper, 3, 1, 3) + ", 'dirt')\nprint(r.ok, r.reason, count('dirt'))\n",
+			List.of("True None 0"), () -> {
+				helper.assertBlockPresent(Blocks.DIRT, 3, 1, 3);
+				helper.assertValueEqual(other.getWaysMade() > 0, true, "the other bot made way");
+			});
+	}
+
 	@GameTest(maxTicks = 20)
 	public void placeAboveTheWorldIsProtected(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
