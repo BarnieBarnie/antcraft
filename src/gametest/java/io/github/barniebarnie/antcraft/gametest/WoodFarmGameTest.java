@@ -1244,28 +1244,23 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A farm whose corner is a block up, (6, 2, 2), so cell 1's floor at y 1 is a pit of 25 blocks of air over the area's
 	 * stone, more fill than the kit's 16 dirt and materials' 1 (#821). With 32 more dirt in the chest and none to dig (a
-	 * stone floor), the bot gets the fill before it builds the cell: it carries the 26 dirt the floor and the sapling take
-	 * when build_cell starts, taken from the chest (red: dirt 16). build_cell only says the dirt the bot carries: a bot
-	 * standing in the pit can block flatten's place beside it, which this test is not about.
+	 * stone floor), the bot gets the fill from the chest and builds the cell: every hole of the pit filled with dirt, the
+	 * sapling planted on it, though the bot walks into the pit it fills (#822; red: blocked at cell).
 	 */
-	// Measured: passes at tick 40 to 48 (red: dirt 16).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
+	// Measured: passes at tick 161 (red: birch_farm stopped: blocked at cell at tick 202).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 320)
 	public void aCellOverAPitGetsItsFillFromTheChest(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, 2, false);
 		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class);
 		chest.setItem(5, new ItemStack(Items.DIRT, 32));
-		runInPit(helper, bot, """
-			import lib.result
-			import lib.treefarm
-			def build_cell(kind, low, high):
-			    print(f"dirt {count('minecraft:dirt')}")
-			    return lib.result.result()
-			lib.treefarm.build_cell = build_cell
-			""");
+		runInPit(helper, bot, "");
 		BotScripts.failOnWarning(helper, bot);
 		helper.succeedWhen(() -> {
 			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
-			helper.assertTrue(said(bot).stream().anyMatch(l -> l.startsWith("dirt ") && Integer.parseInt(l.substring(5)) >= 26), "said " + said(bot));
+			for (BlockPos p : BlockPos.betweenClosed(6, 1, 2, 10, 1, 6)) {
+				helper.assertBlockPresent(Blocks.DIRT, p);
+			}
+			helper.assertTrue(helper.getBlockState(SPOT.above()).is(Blocks.BIRCH_SAPLING), "no sapling: " + helper.getBlockState(SPOT.above()));
 			helper.assertTrue(chest.countItem(Items.DIRT) <= 48 - 26, "dirt left in the chest: " + chest.countItem(Items.DIRT));
 		});
 	}

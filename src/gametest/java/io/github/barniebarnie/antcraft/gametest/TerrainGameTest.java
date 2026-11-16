@@ -19,6 +19,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * {@code lib/terrain.py} and {@code jobs/flatten.py} (#573; docs/reference/modules/lib/terrain.md). The plot is the 4 by 4
@@ -215,6 +216,37 @@ public class TerrainGameTest implements CustomTestMethodInvoker {
 		runJob(helper, bot, " 2 cobblestone", () -> {
 			helper.assertBlockPresent(Blocks.COBBLESTONE, new BlockPos(3, 1, 3));
 			helper.assertBlockPresent(Blocks.COBBLESTONE, new BlockPos(3, 2, 3));
+		});
+	}
+
+	/**
+	 * flatten fills a pit one block deep, the 25 holes from (1, 1, 1) to (5, 1, 5) in a ring of dirt, from a bot standing
+	 * in it off the middle of its block, with the dirt it carries: every hole is filled, though the bot's body is in a
+	 * hole beside the one it fills (#822).
+	 */
+	// Measured: passes at tick 80 (red: blocked, the game would not place the dirt, at tick 37).
+	@GameTest(maxTicks = 160)
+	public void flattenFillsAPitTheBotStandsIn(GameTestHelper helper) {
+		for (int x = 0; x <= 6; x++) {
+			for (int z = 0; z <= 6; z++) {
+				boolean pit = x >= 1 && x <= 5 && z >= 1 && z <= 5;
+				helper.setBlock(x, 1, z, pit ? Blocks.AIR : Blocks.DIRT);
+				for (int y = 2; y <= 4; y++) {
+					helper.setBlock(x, y, z, Blocks.AIR);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.25, 1, 3.75));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 32));
+		expect(helper, bot, "import lib.terrain\no = Pos(" + at(helper, 0, 0, 0) + ")\n" + """
+				r = lib.terrain.flatten(o + (1, 1, 1), o + (5, 1, 5), o.y + 1)
+				print(r["ok"], r.get("reason"), count("dirt"))
+				""", List.of("True None 7"), () -> {
+			for (int x = 1; x <= 5; x++) {
+				for (int z = 1; z <= 5; z++) {
+					helper.assertBlockPresent(Blocks.DIRT, new BlockPos(x, 1, z));
+				}
+			}
 		});
 	}
 

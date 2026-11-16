@@ -404,6 +404,9 @@ public final class WorkApi {
 		private final @Nullable Direction facing;
 		private final @Nullable Half half;
 		private final BlockBreaker breaker;
+		/** How long, in ticks, the bot may step out of the block it places before it gives up. */
+		private static final int STEP_TICKS = 20;
+		private int stepped;
 
 		Place(ScriptRun run, AntBot bot, Pos target, Selector selector, @Nullable Direction facing, @Nullable Half half) {
 			super(run, bot, target);
@@ -442,8 +445,16 @@ public final class WorkApi {
 			}
 			BotHands.equip(this.bot, this.item);
 			Item held = this.bot.getMainHandItem().getItem();
-			return BotHands.place(this.bot, this.pos, this.facing, this.half) ? Result.OK
-				: Result.fail(Result.BLOCKED, PyNone.NONE, "the game would not place " + BuiltInRegistries.ITEM.getKey(held) + " at " + EntityInfo.pos(this.pos));
+			if (BotHands.place(this.bot, this.pos, this.facing, this.half)) {
+				return Result.OK;
+			}
+			// The bot's own body over the edge of the block, as it stands off the middle of the one beside (never in it: not in
+			// reach from there), keeps the game from placing there: it steps back to the middle of its block first (#822).
+			if (this.stepped++ < STEP_TICKS && this.bot.getBoundingBox().intersects(new AABB(this.pos))) {
+				this.bot.getMoveControl().setWantedPosition(this.bot.getBlockX() + 0.5, this.bot.getY(), this.bot.getBlockZ() + 0.5, 1.0);
+				return null;
+			}
+			return Result.fail(Result.BLOCKED, PyNone.NONE, "the game would not place " + BuiltInRegistries.ITEM.getKey(held) + " at " + EntityInfo.pos(this.pos));
 		}
 
 		@Override

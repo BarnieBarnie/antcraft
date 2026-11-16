@@ -35,6 +35,8 @@ Reach is a matter of sight: the bot sees the spot when a line from its eyes, tak
 
 A soft block at the spot (grass, a fern, a flower, a sapling, snow of any depth, leaves, a vine, moss carpet) is broken first, as [`mine`](mine.md) breaks it, its drops going into the inventory, unless it is the block placed and takes another, as snow onto snow; a sapling onto the same sapling breaks it and plants again. Otherwise only air or a block that may be replaced (water) is placed in, so a slab placed onto a slab is `blocked`, not made a double slab. A fluid, fire or a block with contents such as a chest is never broken. A `facing` or `half` that is not one of the names above stops the script with an error.
 
+Where the bot's own body is over the edge of the spot, as it stands off the middle of the block beside, the game will not place there: the bot steps back to the middle of its block, for up to 20 ticks, and places then (#822). Another entity at the spot still makes it `blocked`.
+
 ## Examples
 
 ```python
