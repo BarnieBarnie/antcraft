@@ -106,8 +106,8 @@ final class BotBody implements MoveApi.Body {
 	}
 
 	@Override
-	public void startReach(Pos target) {
-		this.follower.start(this.reach(target));
+	public void startReach(Pos target, double reach) {
+		this.follower.start(new Goal.InSight(blockPos(target), reach, this.sight));
 	}
 
 	@Override

@@ -25,6 +25,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.animal.cow.Cow;
 import net.minecraft.world.entity.animal.pig.Pig;
 import net.minecraft.world.entity.animal.wolf.Wolf;
+import net.minecraft.world.entity.monster.Blaze;
 import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.entity.monster.Enderman;
 import net.minecraft.world.entity.monster.zombie.Husk;
@@ -885,6 +886,52 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(bot.getTarget() == zombie, "target " + bot.getTarget());
 			helper.succeed();
 		});
+	}
+
+	/**
+	 * A bot with a bow that cannot get nearer to a mob out of its range does not plan a way to it every tick (#792): it
+	 * stands in a ring of fences it sees over but cannot cross, the still zombie 18 blocks off. Its vanilla navigation
+	 * searched each tick it was done, as a way to the zombie never got it anywhere.
+	 */
+	// Passes at tick 60, where it checks; it planned 58 times before.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
+	public void aBotWithABowPlansAWayToAMobItCannotGetNearerToOnlyNowAndThen(GameTestHelper helper) {
+		for (int x = 11; x <= 13; x++) {
+			for (int z = 2; z <= 4; z++) {
+				if (x != 12 || z != 3) {
+					helper.setBlock(x, 1, z, Blocks.OAK_FENCE);
+				}
+			}
+		}
+		AntBot bot = archer(helper, 12, 3, 16);
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, 12, 1, 21);
+		zombie.setNoAi(true);
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		helper.runAtTickTime(60, () -> {
+			helper.assertTrue(bot.getTarget() == zombie, "target " + bot.getTarget());
+			int plans = PathCounts.plans(bot);
+			helper.assertTrue(plans <= 8, plans + " plans in 60 ticks");
+			helper.succeed();
+		});
+	}
+
+	/**
+	 * {@code shoot} plans a walk only to where it sees the mob within its bow's range, not up to it (#792): the blaze
+	 * hovers 11 blocks over the stone floor, 19 off, where no walk gets near it. Its walk to within 1 block of the blaze
+	 * searched 1152 nodes for a way up; the walk into sight, 50.
+	 */
+	// Measured: passes at tick 91.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 200)
+	public void shootWalksOnlyIntoRangeOfAMobItCannotGetTo(GameTestHelper helper) {
+		AntBot bot = archer(helper, 12, 2, 16);
+		Blaze blaze = helper.spawn(EntityTypes.BLAZE, 12, 12, 21);
+		blaze.setNoAi(true);
+		blaze.setNoGravity(true);
+		// Without AI the blaze keeps the knockback of a hit as its movement for ever, and the bot would aim ahead of it.
+		helper.onEachTick(() -> blaze.setDeltaMovement(Vec3.ZERO));
+		ScriptRun run = run(helper, bot, "r = shoot(entities('blaze', 32)[0])\nprint(r.ok, r.reason)\n");
+		helper.onEachTick(() -> helper.assertTrue(PathCounts.nodes(bot) <= 300, PathCounts.nodes(bot) + " nodes searched"));
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
 	}
 
 	/**

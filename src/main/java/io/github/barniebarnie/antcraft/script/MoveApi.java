@@ -85,8 +85,8 @@ public final class MoveApi {
 		/** Starts walking to within {@code near} blocks (Manhattan) of {@code target}, with the bot's path follower. */
 		void startPath(Pos target, int near);
 
-		/** Starts walking to where the bot sees {@code target} within {@link #REACH}, to work on it. */
-		void startReach(Pos target);
+		/** Starts walking to where the bot sees {@code target} within {@code reach}, such as {@link #REACH} to work on it. */
+		void startReach(Pos target, double reach);
 
 		/**
 		 * How the next walks pillar up: with {@code mayPlace} set, as {@code build} does, only with scaffold blocks the bot
@@ -206,7 +206,7 @@ public final class MoveApi {
 				throw new ScriptError("goto() near must be at least 0, not " + near);
 			}
 			Selector keep = Args.absent(args[2]) ? null : Selector.parse(args[2]);
-			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), false, keep), call, target);
+			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), 0, keep), call, target);
 		});
 		natives.register("travel", call -> {
 			Pos portal = Pos.of(Args.bind("travel", call, 1, "portal")[0]);
@@ -316,7 +316,7 @@ public final class MoveApi {
 			}
 			body.clearPortalCooldown();
 			if (walk == null && waited == 0) {
-				walk = new Goto(host, body.portalFloor(portal), 0, false, null);
+				walk = new Goto(host, body.portalFloor(portal), 0, 0, null);
 			}
 			if (walk != null) {
 				if (!walk.tick()) {
@@ -433,12 +433,17 @@ public final class MoveApi {
 	 * {@link #REACH}; {@code unreachable} when it cannot get there.
 	 */
 	static ScriptRun.Action reach(ScriptRun.Host host, Pos target) {
-		return new Goto(host, target, 0, true, null);
+		return reach(host, target, REACH);
+	}
+
+	/** Like {@link #reach(ScriptRun.Host, Pos)}, to where the bot sees {@code target} within {@code reach}, such as a bow's. */
+	static ScriptRun.Action reach(ScriptRun.Host host, Pos target, double reach) {
+		return new Goto(host, target, 0, reach, null);
 	}
 
 	/** Like {@code goto(target, near)}, for the actions that walk to something first, such as {@code pick_up}. */
 	static ScriptRun.Action walk(ScriptRun.Host host, Pos target, int near) {
-		return new Goto(host, target, near, false, null);
+		return new Goto(host, target, near, 0, null);
 	}
 
 	/**
@@ -452,7 +457,8 @@ public final class MoveApi {
 		private final ScriptRun.Host host;
 		private final Pos target;
 		private final int near;
-		private final boolean reach;
+		/** Where above 0, it walks to where the bot sees the target within this far instead. */
+		private final double reach;
 		private final @Nullable Selector keep;
 		private @Nullable Body body;
 		private @Nullable Result result;
@@ -462,7 +468,7 @@ public final class MoveApi {
 		private long closest = Long.MAX_VALUE;
 		private int stalled;
 
-		Goto(ScriptRun.Host host, Pos target, int near, boolean reach, @Nullable Selector keep) {
+		Goto(ScriptRun.Host host, Pos target, int near, double reach, @Nullable Selector keep) {
 			this.host = host;
 			this.target = target;
 			this.near = near;
@@ -501,8 +507,8 @@ public final class MoveApi {
 				if (keep != null) {
 					body.setKeepItems(keep.items());
 				}
-				if (reach) {
-					body.startReach(target);
+				if (reach > 0) {
+					body.startReach(target, reach);
 				} else {
 					body.startPath(target, near);
 				}

@@ -727,6 +727,12 @@ public final class WorkApi {
 	private static final class Shoot implements ScriptRun.Action {
 		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
 		private static final double MOVED = 2;
+		/**
+		 * How far, in blocks from the bot's eyes to the target's block, it walks to see the target from: within the bow's
+		 * {@link Bow#RANGE} from its feet, which are up to 1.62 lower and half a block off. Not up to the target, which for
+		 * a flyer is a long search that fails (#792).
+		 */
+		private static final double SIGHT = Bow.RANGE - 2;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -734,6 +740,8 @@ public final class WorkApi {
 		private final long minHealth;
 		private ScriptRun.@Nullable Action walk;
 		private @Nullable Vec3 walkedTo;
+		/** Whether it got to where its walk saw the target but the bot still does not: it walks right up to it then. */
+		private boolean closeIn;
 		private @Nullable Vec3 away;
 		private @Nullable Result result;
 
@@ -790,13 +798,18 @@ public final class WorkApi {
 			return false;
 		}
 
-		/** Walks on towards {@code target}, planning again when it moved; the walk's failure, or null while it goes on. */
+		/**
+		 * Walks on to where the bot sees {@code target} within {@link #SIGHT}, or right up to it once it got there and still
+		 * does not, planning again when it moved; the walk's failure, or null while it goes on.
+		 */
 		private @Nullable Result walkTo(LivingEntity target) {
-			if (this.walk != null && this.walkedTo != null && target.position().distanceTo(this.walkedTo) > MOVED) {
+			if (this.walkedTo != null && target.position().distanceTo(this.walkedTo) > MOVED) {
 				this.stopWalk();
+				this.closeIn = false;
 			}
 			if (this.walk == null) {
-				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(target.blockPosition()), 1);
+				Pos at = EntityInfo.pos(target.blockPosition());
+				this.walk = this.closeIn ? MoveApi.walk(this.run.host(), at, 1) : MoveApi.reach(this.run.host(), at, SIGHT);
 				this.walkedTo = target.position();
 			}
 			if (!this.walk.tick()) {
@@ -804,6 +817,7 @@ public final class WorkApi {
 			}
 			Result walked = (Result) this.walk.result();
 			this.walk = null;
+			this.closeIn = walked.ok();
 			return walked.ok() ? null : walked;
 		}
 

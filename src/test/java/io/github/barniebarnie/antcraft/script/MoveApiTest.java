@@ -109,7 +109,7 @@ class MoveApiTest {
 		}
 
 		@Override
-		public void startReach(Pos target) {
+		public void startReach(Pos target, double reach) {
 			paths.add(target + " in reach");
 		}
 

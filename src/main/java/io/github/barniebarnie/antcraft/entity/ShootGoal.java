@@ -22,9 +22,16 @@ final class ShootGoal extends Goal {
 	private static final double SPEED = 1.2;
 	/** Health under which the bot waits for a mob out of range rather than close in: jobs.guard's RETREAT (#750). */
 	static final float LOW_HEALTH = 12;
+	/**
+	 * Ticks between plans of a way closer: a way to a mob it cannot get nearer to ends at once, and planning again each
+	 * tick searched as often (#792). As the melee goal waits between plans.
+	 */
+	static final int REPLAN_TICKS = 20;
 
 	private final AntBot bot;
 	private @Nullable Vec3 away;
+	/** The bot's tick from which it may plan a way closer again. */
+	private int planAt;
 
 	ShootGoal(AntBot bot) {
 		this.bot = bot;
@@ -66,7 +73,8 @@ final class ShootGoal extends Goal {
 			this.away = null;
 			if (this.bot.getHealth() < LOW_HEALTH) {
 				this.bot.getNavigation().stop();
-			} else if (this.bot.getNavigation().isDone()) {
+			} else if (this.bot.getNavigation().isDone() && this.bot.tickCount >= this.planAt) {
+				this.planAt = this.bot.tickCount + REPLAN_TICKS;
 				this.bot.getNavigation().moveTo(target, SPEED);
 			}
 		} else if (distance < Bow.NEAR) {

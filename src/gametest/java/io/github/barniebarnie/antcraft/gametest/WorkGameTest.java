@@ -478,9 +478,9 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		}
 
 		@Override
-		public void startReach(Pos target) {
+		public void startReach(Pos target, double reach) {
 			if (!this.standStill) {
-				this.body.startReach(target);
+				this.body.startReach(target, reach);
 			}
 		}
 
