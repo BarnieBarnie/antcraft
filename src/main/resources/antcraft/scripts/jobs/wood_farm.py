@@ -58,7 +58,9 @@ WAIT = 100  # ticks between looks at the farm while nothing has grown
 # be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
 BACKOFF = 10
 KIT = [("stone_axe", 1), (lib.treefarm.DIRT, 16)]  # dirt to climb a tall tree with and to put under the saplings; more for a giant (kit)
-CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"], "logs": ["#minecraft:logs"],
+# A mangrove's roots and moss carpet, which harvest mines too (#768), go with the logs, not in a chest of their own (#788).
+CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"],
+              "logs": ["#minecraft:logs", "minecraft:mangrove_roots", "minecraft:muddy_mangrove_roots", "minecraft:moss_carpet"],
               "sticks": ["minecraft:stick"]}
 # What the farm keeps on the bot instead of storing it, besides its own saplings and its dirt (dirt): what a cell takes and
 # the crafting table lib.get makes a depot chest with.

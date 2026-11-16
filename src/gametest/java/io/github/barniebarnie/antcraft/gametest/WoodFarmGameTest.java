@@ -490,6 +490,30 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A mangrove's mangrove roots, muddy mangrove roots and moss carpet, which harvest brings in (#768), go in the
+	 * logs chest of the farm's depot, not a chest of their own (#788). The bot carries a chest and some logs; it stores
+	 * them all with lib.depot.store and the depot has the one logs chest.
+	 */
+	// Measured: passes at tick 27 (red: a second chest, other, for the roots and moss).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
+	public void aMangrovesRootsAndMossGoInTheLogsChest(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.CHEST));
+		bot.getInventory().addItem(new ItemStack(Items.MANGROVE_LOG, 4));
+		bot.getInventory().addItem(new ItemStack(Items.MANGROVE_ROOTS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.MUDDY_MANGROVE_ROOTS, 4));
+		bot.getInventory().addItem(new ItemStack(Items.MOSS_CARPET, 4));
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.depot
+			lib.depot.depot("mangrove_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			print(lib.depot.store("mangrove_farm", [], 12)["ok"])
+			print([c[0] for c in lib.depot.depot("mangrove_farm")["chests"]])
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("True", "['logs']"), "said"));
+	}
+
+	/**
 	 * As storesItsDirtButAStack in a round that fells nothing (#766): no tree is grown, yet the bot stores all but a
 	 * stack of its 5 stacks of dirt before it waits, so what builds up between fellings does not fill its inventory.
 	 */
