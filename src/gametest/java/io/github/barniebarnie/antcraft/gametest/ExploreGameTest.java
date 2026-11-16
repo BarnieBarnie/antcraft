@@ -89,9 +89,8 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A waypoint whose column is not loaded yet (surface() gives None the first time it is asked about each column) goes
 	 * to the surface once its chunk loads: the third waypoint, (5, 1, 5), is a dirt block, so the bot stands on it at y 2
-	 * rather than digging it out to stand at the centre's y. The test area's barrier ceiling at y 8 is every column's
-	 * surface() here, which no bot reaches, so once loaded the fake surface is the top of the area's own blocks; with
-	 * the ceiling as its goal, a bot with no scaffold may dig the dirt to pillar toward it (#778).
+	 * rather than digging it out to stand at the centre's y. surface() leaves the test area's barrier ceiling out (#790):
+	 * with the ceiling as its goal, a bot with no scaffold may dig the dirt to pillar toward it (#778).
 	 */
 	// Measured: passes at tick 39.
 	@GameTest(maxTicks = 80)
@@ -105,12 +104,7 @@ public class ExploreGameTest implements CustomTestMethodInvoker {
 			    k = (p.x, p.z)
 			    n = asked.get(k, 0)
 			    asked[k] = n + 1
-			    if n == 0:
-			        return None
-			    t = p + (0, 6, 0)
-			    while block(t).id == "minecraft:air":
-			        t = t + (0, -1, 0)
-			    return t + (0, 1, 0)
+			    return surface(p) if n else None
 			lib.explore.surface = first_none
 			at = []
 			def until(s):

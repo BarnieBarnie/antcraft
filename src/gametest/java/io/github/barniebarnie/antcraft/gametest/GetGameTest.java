@@ -1783,7 +1783,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 
 	/**
 	 * A dark oak tree (#602): get("apple") breaks its leaves. The game test data pack makes every dark oak leaves block
-	 * drop an apple (1 in 200 in the game); no other test breaks dark oak leaves.
+	 * drop an apple (1 in 200 in the game) to a bot tagged {@link #APPLES}, as leavesTest's is (#790).
 	 */
 	@GameTest(maxTicks = 60)
 	public void getsApplesFromDarkOakLeaves(GameTestHelper helper) {
@@ -1791,9 +1791,38 @@ public class GetGameTest implements CustomTestMethodInvoker {
 		leavesTest(helper, "apple");
 	}
 
-	/** A bot carrying only carried by the tree gets two of item with radius 8 and prints "True 2", with no warnings. */
+	/** The entity tag of a bot that gets an apple from every dark oak leaves block it breaks (the game test data pack). */
+	private static final String APPLES = "antcraft_apples";
+
+	/**
+	 * Dark oak leaves drop the game's loot but its 1 apple in 200 to any other bot and when they decay (#790): with an
+	 * apple each, dark oak farm tests picked up apples for some 300 ticks (#779). A bot tagged {@link #APPLES} gets one
+	 * each. With no apple at all, the test does not wait on chance.
+	 */
+	@GameTest(maxTicks = 10)
+	public void darkOakLeavesDropAnAppleOnlyToABotTaggedForIt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos at = helper.absolutePos(new BlockPos(4, 1, 4));
+		BlockState leaves = Blocks.DARK_OAK_LEAVES.defaultBlockState();
+		for (int i = 0; i < 20; i++) {
+			helper.assertFalse(Block.getDrops(leaves, helper.getLevel(), at, null, bot, ItemStack.EMPTY).stream()
+				.anyMatch(s -> s.is(Items.APPLE)), "an apple to an untagged bot");
+			helper.assertFalse(Block.getDrops(leaves, helper.getLevel(), at, null).stream().anyMatch(s -> s.is(Items.APPLE)),
+				"an apple with no bot");
+		}
+		bot.addTag(APPLES);
+		helper.assertTrue(Block.getDrops(leaves, helper.getLevel(), at, null, bot, ItemStack.EMPTY).stream()
+			.anyMatch(s -> s.is(Items.APPLE)), "no apple to a tagged bot");
+		helper.succeed();
+	}
+
+	/**
+	 * A bot carrying only carried by the tree gets two of item with radius 8 and prints "True 2", with no warnings. It is
+	 * tagged {@link #APPLES}.
+	 */
 	private static void leavesTest(GameTestHelper helper, String item, ItemStack... carried) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.addTag(APPLES);
 		for (ItemStack stack : carried) {
 			bot.getInventory().addItem(stack);
 		}

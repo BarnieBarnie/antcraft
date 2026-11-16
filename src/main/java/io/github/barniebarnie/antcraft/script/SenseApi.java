@@ -211,10 +211,7 @@ public final class SenseApi {
 			BlockPos at = blockPos(pos);
 			LevelChunk chunk = level.getChunkSource()
 				.getChunkNow(SectionPos.blockToSectionCoord(at.getX()), SectionPos.blockToSectionCoord(at.getZ()));
-			// The heightmap is up to date with every block change, which sky light is not; leaves let a bot out under a tree.
-			return chunk == null ? PyNone.NONE
-				: new Pos(pos.x(), chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX() & 15, at.getZ() & 15) + 1, pos.z(),
-					pos.dimension());
+			return chunk == null ? PyNone.NONE : new Pos(pos.x(), surfaceY(chunk, at), pos.z(), pos.dimension());
 		});
 		natives.register("biome", 10, call -> {
 			Object[] args = Args.bind("biome", call, 0, "pos");
@@ -479,6 +476,14 @@ public final class SenseApi {
 	 */
 	private static BoundingBox box(StructureStart start) {
 		return BoundingBox.encapsulatingBoxes(start.getPieces().stream().map(StructurePiece::getBoundingBox).toList()).orElseThrow();
+	}
+
+	/**
+	 * The y of surface() at {@code at} in its loaded {@code chunk}: above the highest block that blocks motion, leaves left
+	 * out. The heightmap is up to date with every block change, which sky light is not; leaves let a bot out under a tree.
+	 */
+	private static int surfaceY(LevelChunk chunk, BlockPos at) {
+		return chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, at.getX() & 15, at.getZ() & 15) + 1;
 	}
 
 	private static <T extends Entity> PyList near(AntBot bot, Class<T> type, Predicate<? super T> what, int radius) {

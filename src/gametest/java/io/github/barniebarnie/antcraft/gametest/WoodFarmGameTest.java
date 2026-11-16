@@ -1094,6 +1094,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	// fell in the same ticks (dark 640 to 1153, pale 640 to 1185); dark oak then picks up apples for some 220 to 390
 	// ticks, pale oak its sticks for 0 to 47, as the game test data pack makes each dark oak leaves block drop an apple
 	// (for GetGameTest's apple test). In the game 1 in 200 does, so dark oak takes pale oak's HARVEST.
+	// Since #790 the data pack drops an apple to GetGameTest's apple bot only, none otherwise.
 	@GameTest(maxTicks = 10)
 	public void eachKindsHarvestAndLogsAreMeasured(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);

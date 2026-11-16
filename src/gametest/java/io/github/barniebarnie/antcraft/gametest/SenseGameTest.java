@@ -410,6 +410,22 @@ public class SenseGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 2, 4, 2), printed(helper, 5, 1, 5), printed(helper, 6, 1, 6)));
 	}
 
+	/**
+	 * Under the barrier ceiling the framework puts one block above an area (#753), surface(pos) is above the highest
+	 * block of the area's own (#790): in game tests it leaves barrier out, which the heightmap counts, so a bot is not
+	 * sent to y 9, on top of the ceiling.
+	 */
+	@GameTest(maxTicks = 10)
+	public void surfaceIsUnderTheBarrierCeiling(GameTestHelper helper) {
+		for (int y = 1; y <= 3; y++) {
+			helper.setBlock(2, y, 2, Blocks.STONE);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 4);
+		ScriptRun run = run(helper, bot, "print(surface(%s))\nprint(surface(%s))\n"
+			.formatted(at(helper, 2, 1, 2), at(helper, 5, 6, 5)));
+		succeedWhenPrinted(helper, bot, run, List.of(printed(helper, 2, 4, 2), printed(helper, 5, 1, 5)));
+	}
+
 	/** biome() is the biome at the bot's feet, biome(pos) the one at pos, and None where pos is not loaded (#567). */
 	@GameTest(maxTicks = 10)
 	public void biomeIsTheBiomeAtAPosOrNoneWhereNotLoaded(GameTestHelper helper) {
