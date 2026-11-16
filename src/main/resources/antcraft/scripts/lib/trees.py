@@ -43,8 +43,9 @@ def trunk_base(log):
     return log
 
 
-# What a tree stands on: dirt, or nylium for a huge fungus (#563).
-GROUND = ["#minecraft:dirt", "#minecraft:nylium"]
+# What a tree stands on: dirt, grass, podzol, mud or moss, or nylium for a huge fungus (#563). #minecraft:dirt is only
+# dirt, coarse dirt and rooted dirt: a giant spruce turns the dirt round it to podzol, and was no tree on it (#801).
+GROUND = ["#minecraft:substrate_overworld", "#minecraft:nylium"]
 # What crowns a tree: leaves, or a huge fungus's wart blocks (#563).
 CROWN = ["#minecraft:leaves", "#minecraft:wart_blocks"]
 # What a tree is made of, which drops fall past: its logs, crown, and a jungle tree's vines and cocoa (#713).
@@ -60,10 +61,11 @@ def on_ground(p):
 def is_tree(base):
     """A trunk standing on GROUND with a CROWN at its top, so a log wall or a cabin is left alone. A mangrove's on its
     roots too (#751; muddy roots are dirt). A huge fungus's stem on netherrack too: the nylium under it turns to
-    netherrack in the dark (#575, #582), though no fungus grows there."""
+    netherrack in the dark (#575, #582), though no fungus grows there. A 2x2 trunk (is_giant) needs no crown: no wall
+    or cabin is one, and a giant whose crown was cleared is still felled (#801)."""
     under = base.down()
     return (on_ground(under) or is_kind(under, "minecraft:mangrove_roots")
-            or sapling(block(base).id) in FUNGI and is_kind(under, "netherrack")) and crowned(base)
+            or sapling(block(base).id) in FUNGI and is_kind(under, "netherrack")) and (crowned(base) or is_giant(base))
 
 
 def is_remnant(base):

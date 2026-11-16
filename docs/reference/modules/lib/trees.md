@@ -18,7 +18,7 @@ giant = lib.trees.next_tree(where=lib.trees.is_giant, around=Pos(100, 64, -20))
 
 ## `is_tree(base)`
 
-Whether the trunk with its lowest log at `base` is a tree: it stands on `GROUND` (dirt, or nylium for a huge fungus) and has a `CROWN` (leaves, or a huge fungus's wart blocks) at its top, so a log wall or a log cabin is not. A mangrove's trunk on its roots is a tree too (#751). A huge fungus's stem on netherrack is a tree too: the nylium under a stem turns to netherrack in the dark, though no fungus is replanted there. The top is reached log by log up, straight up first, else at an edge or corner over the last log, so the trunk of an acacia, which bends with its logs touching only at a corner, is a tree too. Done at once.
+Whether the trunk with its lowest log at `base` is a tree: it stands on `GROUND` (dirt, grass, podzol, mud or moss, or nylium for a huge fungus) and has a `CROWN` (leaves, or a huge fungus's wart blocks) at its top, so a log wall or a log cabin is not. A 2x2 trunk (`is_giant`) needs no crown, as no wall or cabin is one: a giant whose crown was cleared is still a tree (#801). A mangrove's trunk on its roots is a tree too (#751). A huge fungus's stem on netherrack is a tree too: the nylium under a stem turns to netherrack in the dark, though no fungus is replanted there. The top is reached log by log up, straight up first, else at an edge or corner over the last log, so the trunk of an acacia, which bends with its logs touching only at a corner, is a tree too. Done at once.
 
 ## `tree_logs(logs)`
 
@@ -123,7 +123,7 @@ The item that grows the tree of `log`, a block id such as `"minecraft:spruce_log
 
 ## `LOGS`, `SAPLINGS`, `FUNGI`, `SEEDLINGS`, `SCAFFOLD`, `GROUND`, `CROWN`
 
-The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`; `FUNGI`, the crimson and warped fungus, and `SEEDLINGS`, `SAPLINGS` and `FUNGI` together, what grows any tree, which the colony lumberjack keeps; `GROUND`, the tags a tree stands on (`#minecraft:dirt`, `#minecraft:nylium`), and `CROWN`, those that crown it (`#minecraft:leaves`, `#minecraft:wart_blocks`), lists a script may add a mod's tags to; and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which walks pillar and bridge with.
+The selectors `"#minecraft:logs"` and `"#minecraft:saplings"`; `FUNGI`, the crimson and warped fungus, and `SEEDLINGS`, `SAPLINGS` and `FUNGI` together, what grows any tree, which the colony lumberjack keeps; `GROUND`, the tags a tree stands on (`#minecraft:substrate_overworld`, `#minecraft:nylium`; `#minecraft:dirt` has no grass or podzol, and a giant spruce turns the dirt round it to podzol, #801), and `CROWN`, those that crown it (`#minecraft:leaves`, `#minecraft:wart_blocks`), lists a script may add a mod's tags to; and the blocks of the item tag `antcraft:scaffold_blocks` as the server's data packs have it when the module is imported ([`tag_items`](../../inventory/tag_items.md)), which walks pillar and bridge with.
 
 ## Example
 

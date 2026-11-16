@@ -15,12 +15,14 @@ import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SaplingBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
@@ -727,6 +729,62 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 		GameTests.cost(helper, bot, "import lib.trees\n", "b = lib.trees.tree_blocks(Pos" + at(helper, 3, 1, 3) + ")\n"
 			+ "s = lib.trees.stands(b)\nprint(len(b), sorted([(c.x - b[0].x, c.y - b[0].y, c.z - b[0].z) for c in s]))\n", List.of("100 [(-1, 20, -1), (-1, 20, 2), (1, 2, 2), (1, 9, 2), (1, 13, 2), (2, 20, -1), (2, 20, 2)]"),
 			"tree_blocks and stands of 100 logs", 700_000);
+	}
+
+	/**
+	 * A bot with 16 dirt and a stone axe, no log, by a giant spruce grown as the game does with seed 6 (a 2x2 trunk of 24
+	 * at (10..11, 1..24, 10..11)), which turns the dirt round it to podzol: logs(4) takes its bottom logs. Podzol is not in
+	 * #minecraft:dirt, so the tree stood on no GROUND and logs gave no_logs at once (#801).
+	 */
+	// Measured: passes at tick 74 (red: no_logs at tick 23).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 160)
+	public void logsTakesAFewLogsOfAGrownGiantSpruce(GameTestHelper helper) {
+		growGiantSpruce(helper, 6);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 7);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(4, kind='spruce_log')\nprint(r['ok'], r['reason'], count('spruce_log'))\n",
+			List.of("True None 4"));
+	}
+
+	/**
+	 * The giant spruce of {@link #logsTakesAFewLogsOfAGrownGiantSpruce} with all its leaves removed, as walks that cleared
+	 * its crown leave it: a 2x2 trunk is still a tree, so logs(4) takes its bottom logs rather than giving no_logs (#801).
+	 */
+	// Measured: passes at tick 74 (red: no_logs at tick 25 once podzol was GROUND).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 160)
+	public void logsTakesTheLogsOfAGiantSpruceWithoutLeaves(GameTestHelper helper) {
+		growGiantSpruce(helper, 6);
+		for (int x = 0; x < 24; x++) {
+			for (int y = 1; y < 40; y++) {
+				for (int z = 0; z < 24; z++) {
+					if (helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.SPRUCE_LEAVES)) {
+						helper.setBlock(x, y, z, Blocks.AIR);
+					}
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 7);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		bot.getInventory().addItem(new ItemStack(Items.STONE_AXE));
+		expect(helper, bot, "import lib.trees\nr = lib.trees.logs(4, kind='spruce_log')\nprint(r['ok'], r['reason'], count('spruce_log'))\n",
+			List.of("True None 4"));
+	}
+
+	/** Four spruce saplings on dirt at (10..11, 1, 10..11), grown into a giant spruce with the random of seed. */
+	static void growGiantSpruce(GameTestHelper helper, long seed) {
+		for (int x = 10; x <= 11; x++) {
+			for (int z = 10; z <= 11; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+				helper.setBlock(x, 1, z, Blocks.SPRUCE_SAPLING);
+			}
+		}
+		BlockPos at = helper.absolutePos(new BlockPos(10, 1, 10));
+		BlockState sapling = helper.getLevel().getBlockState(at);
+		((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), at, sapling.setValue(SaplingBlock.STAGE, 1),
+			RandomSource.create(seed));
+		helper.assertBlockPresent(Blocks.SPRUCE_LOG, new BlockPos(10, 1, 10));
+		helper.assertBlockPresent(Blocks.SPRUCE_LOG, new BlockPos(11, 1, 11));
 	}
 
 	/** Persistent spruce leaves over the giant spruce of {@link #plantGiant}, so it is a tree. */
