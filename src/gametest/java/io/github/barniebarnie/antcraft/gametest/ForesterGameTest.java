@@ -33,15 +33,15 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 		method.invoke(this, helper);
 	}
 
-	/** Spruce saplings in a chest and a birch nearby: a stored sapling comes first, so it farms spruce. */
-	// Measured: passes at tick 4 to 5.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	/** 4 spruce saplings in a chest and a birch nearby: a stored sapling comes first, so it farms spruce, giants as it has 4 (#803). */
+	// Measured: passes at tick 8, the others at 8 too; over 12 with 83 tests at once, the others at 10 to 11 (the giant check scans the chests, #803).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 24)
 	public void choosesTheStoredSaplingOverANearbyTree(GameTestHelper helper) {
 		helper.setBlock(CHEST, Blocks.CHEST);
 		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.SPRUCE_SAPLING, 4));
 		TreesGameTest.plantTree(helper, BIRCH, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);
 		AntBot bot = run(helper, true);
-		helper.succeedWhen(() -> assertStarted(helper, bot, "forester: spruce_sapling, saplings in a chest", "spruce_farm 1/4: kit"));
+		helper.succeedWhen(() -> assertStarted(helper, bot, "forester: spruce_sapling, saplings in a chest", "giant_spruce_farm 1/4: kit"));
 	}
 
 	/** No saplings in a chest, a birch nearby: it farms birch. */

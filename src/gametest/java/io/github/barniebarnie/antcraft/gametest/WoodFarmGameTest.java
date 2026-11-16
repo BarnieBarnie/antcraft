@@ -746,6 +746,97 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("no_logs"), "said"));
 	}
 
+	/**
+	 * jobs.wood_farm spruce_sapling with 4 spruce saplings in the chest farms giants (#803): its first cell is a giant
+	 * spruce cell from (6, 0, 2), its four spots (10, 1, 6) to (11, 1, 7) planted.
+	 */
+	// Measured: passes at tick 427 to 516 (jungle 443 to 533), the slower with 83 tests at once.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 900)
+	public void aSpruceFarmWithFourSaplingsBuildsAGiantCell(GameTestHelper helper) {
+		fourSaplings(helper, "spruce_sapling", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING);
+	}
+
+	/** As aSpruceFarmWithFourSaplingsBuildsAGiantCell, for jungle (#803). */
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 900)
+	public void aJungleFarmWithFourSaplingsBuildsAGiantCell(GameTestHelper helper) {
+		fourSaplings(helper, "jungle_sapling", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING);
+	}
+
+	/**
+	 * jobs.wood_farm spruce_sapling with 1 spruce sapling builds a one-sapling cell, its spot (9, 1, 5); once the test
+	 * puts 4 more in the chest, the next cell is a giant one, a farm of its own south of the small cells' rows: from (6, 0,
+	 * 12), its spots (10, 1, 16) to (11, 1, 17) (#803).
+	 */
+	// Measured: passes at tick 586 to 680 (jungle 570 to 668), the slower with 83 tests at once.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1200)
+	public void aSpruceFarmWithOneSaplingMovesToGiantsOnceItHasFour(GameTestHelper helper) {
+		oneThenFour(helper, "spruce_sapling", Items.SPRUCE_SAPLING, Blocks.SPRUCE_SAPLING, new BlockPos(9, 1, 5), 12);
+	}
+
+	/** As aSpruceFarmWithOneSaplingMovesToGiantsOnceItHasFour, for jungle: a cell of 5, its spot (8, 1, 4), the giant from z 10. */
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1200)
+	public void aJungleFarmWithOneSaplingMovesToGiantsOnceItHasFour(GameTestHelper helper) {
+		oneThenFour(helper, "jungle_sapling", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, new BlockPos(8, 1, 4), 10);
+	}
+
+	private static void fourSaplings(GameTestHelper helper, String kind, Item item, Block sapling) {
+		AntBot bot = saplingFarm(helper, kind, item, 4);
+		BotScripts.failOnWarning(helper, bot);
+		helper.succeedWhen(() -> assertGiantCell(helper, bot, sapling, 2));
+	}
+
+	private static void oneThenFour(GameTestHelper helper, String kind, Item item, Block sapling, BlockPos spot, int giantZ) {
+		AntBot bot = saplingFarm(helper, kind, item, 1);
+		BotScripts.failOnWarning(helper, bot);
+		boolean[] gave = new boolean[1];
+		helper.onEachTick(() -> {
+			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("said " + said(bot));
+			}
+			if (!gave[0] && said(bot).contains("built cell 1")) {
+				helper.assertTrue(helper.getBlockState(spot).is(sapling), "no one-sapling cell at " + spot.toShortString() + "; said " + said(bot));
+				helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class).setItem(3, new ItemStack(item, 4));
+				gave[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(gave[0], "no first cell; said " + said(bot));
+			helper.assertTrue(helper.getBlockState(spot).is(sapling), "the one-sapling cell gone; said " + said(bot));
+			assertGiantCell(helper, bot, sapling, giantZ);
+		});
+	}
+
+	/**
+	 * A farm of kind at (6, 1, 2) in the giant structure, radius 20, up to 2 cells, on dirt from (6, 0, 2) to (15, 0, 21):
+	 * a stone axe, 64 dirt, 4 torches and saplings of item in a chest at (3, 1, 16), the bot by it.
+	 */
+	private static AntBot saplingFarm(GameTestHelper helper, String kind, Item item, int saplings) {
+		for (int x = 6; x < 16; x++) {
+			for (int z = 2; z < 22; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+			}
+		}
+		helper.setBlock(3, 1, 16, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.STONE_AXE));
+		chest.setItem(1, new ItemStack(Items.DIRT, 64));
+		chest.setItem(2, new ItemStack(Items.TORCH, 4));
+		chest.setItem(3, new ItemStack(item, saplings));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 18);
+		BlockPos at = helper.absolutePos(AT);
+		List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm " + kind + " "
+			+ at.getX() + " " + at.getY() + " " + at.getZ() + " 2 20");
+		helper.assertTrue(bot.getScript() != null, "not run: " + out);
+		return bot;
+	}
+
+	/** A giant cell from (6, 0, z): its four spots (10, 1, z + 4) to (11, 1, z + 5) hold sapling. */
+	private static void assertGiantCell(GameTestHelper helper, AntBot bot, Block sapling, int z) {
+		for (BlockPos p : BlockPos.betweenClosed(10, 1, z + 4, 11, 1, z + 5)) {
+			helper.assertTrue(helper.getBlockState(p).is(sapling), "no sapling at " + p.toShortString() + "; said " + said(bot));
+		}
+	}
+
 	/** An oak farm roofs its cell with the birch slabs a chest holds (#612): any wooden slabs do, not only oak ones. */
 	// Measured: passes at tick 236 to 253.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 500)

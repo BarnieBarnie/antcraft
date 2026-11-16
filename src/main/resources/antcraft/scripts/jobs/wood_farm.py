@@ -5,7 +5,8 @@
 # blocks (32 by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
 # logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
-# what one takes (docs/cookbook/wood-farm.md). Its home is by the depot, so after a death it comes back to the farm and
+# what one takes (docs/cookbook/wood-farm.md). A spruce or jungle farm farms giants (GIANTS) once the bot has 4 saplings
+# of the kind, from the start or as a farm of its own beside the small one (#803). Its home is by the depot, so after a death it comes back to the farm and
 # recovers (lib.trees.recover, #679). Another job starts a farm with run(kind, at); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -22,7 +23,7 @@ import lib.stock
 import lib.terrain
 import lib.treefarm
 import lib.trees
-from lib.get import ensure_tool, get
+from lib.get import chest_held, ensure_tool, get
 from lib.project import Step
 from lib.result import result
 
@@ -75,6 +76,35 @@ LOGS = {"minecraft:oak_sapling": 5, "minecraft:birch_sapling": 5.5, "minecraft:s
         "minecraft:mangrove_propagule": 16, "giant_spruce": 96, "giant_jungle": 67}
 OTHER = 4  # empty slots for a felling's saplings, sticks, apples and the dirt it takes back
 ROOTS = 2  # and for a mangrove's mangrove roots and muddy mangrove roots, which harvest mines too
+# The giant a one-sapling kind grows from 4 of its saplings: a farm of the kind farms it once it has them (#803).
+GIANTS = {"minecraft:spruce_sapling": "giant_spruce", "minecraft:jungle_sapling": "giant_jungle"}
+
+
+def giant(kind, radius):
+    """The kind a farm of kind grows (#803): its giant (GIANTS) where a farm of the giant was started, or no farm of kind
+    was and the bot can have the 4 saplings a giant cell takes (fours); else kind."""
+    g = GIANTS.get(kind)
+    farms = memory.get("wood_farms", {})
+    return g if g and (g in farms or kind not in farms and fours(kind, radius)) else kind
+
+
+def fours(kind, radius):
+    """Whether the bot carries and the chests within radius hold the 4 saplings of kind a giant cell takes."""
+    return count(kind) + chest_held(kind, radius)[1] >= 4
+
+
+def beside(name):
+    """The first corner of a farm south of the rows of the farm name's cells built, its depot a path's width off them."""
+    row = lib.cells.farm(name)["row"]
+    return lib.cells.cell(name, (lib.cells.built(name)[-1] // row + 1) * row)[0] + (0, 1, 2)
+
+
+def saplings(kind, n, radius):
+    """get(sapling, 2 * n, radius): a spare for each of a cell's n spots; ok with the n the first cell takes where no
+    more can be had (#803). Gives result()."""
+    s = lib.treefarm.sapling(kind)
+    r = get(s, 2 * n, radius)
+    return result() if not r["ok"] and lib.stock.take_up_to(s, n, radius)["ok"] else r
 
 
 def free(kind):
@@ -359,6 +389,11 @@ def farm(kind, name, size, radius):
             get(s, n, radius)
         for b in boxes:
             tend(kind, b, radius, told)
+        # Once the bot has the saplings for a giant, the next cells are giants: a farm of its own beside this one, whose
+        # run never returns but on a failed setup step (#803).
+        # ponytail: a chest scan a round (stocked's gets scan too), and the small cells are left; farm both if worth it.
+        if kind in GIANTS and fours(kind, radius):
+            return run(GIANTS[kind], beside(name), None, radius)
         if felled:
             learn(kind, game_time() - start, trees)
             backoff = 0
@@ -390,7 +425,7 @@ def run(kind, at=None, size=None, radius=32):
     stands, or where the last farm of kind started), up to size cells (limit: most of the ticks a tree takes, learnt,
     else HARVEST[kind]). Never returns but on a
     failed setup step: gives lib.project.run's result() then."""
-    kind = lib.treefarm.key(kind)
+    kind = giant(lib.treefarm.key(kind), radius)
     name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
     farms = memory.get("wood_farms", {})
     at = Pos(at) if at is not None else farms.get(kind, pos())
@@ -406,7 +441,7 @@ def run(kind, at=None, size=None, radius=32):
     lib.trees.recover()
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
     steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius, gets)),
-             Step("sapling", get, (lib.treefarm.sapling(kind), 2 * n, radius)),
+             Step("sapling", saplings, (kind, n, radius)),
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]
     r = lib.project.run(name, steps)
