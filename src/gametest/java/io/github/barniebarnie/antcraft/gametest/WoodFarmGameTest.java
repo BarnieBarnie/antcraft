@@ -662,7 +662,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
 	public void aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
-		capScript(helper, bot, "None", 10);
+		capScript(helper, bot, "None", 10, "[]");
 		List<Integer> cells = List.of(1, 2, 3, 5, 6, 7, 9, 10, 11);
 		List<String> said = new java.util.ArrayList<>();
 		for (int i = 0; i < cells.size(); i++) {
@@ -679,7 +679,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 90)
 	public void aSizeBuildsThatManyCellsPastTheRandomTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
-		capScript(helper, bot, "12", 13);
+		capScript(helper, bot, "12", 13, "[]");
 		List<String> said = new java.util.ArrayList<>();
 		for (int i = 1; i <= 12; i++) {
 			said.add("built cell " + i);
@@ -691,11 +691,32 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks with cells 4, 8 and 12, outside the cells that tick, built
+	 * already (under a size, or before #812): they do not count toward the cap, so the farm still builds the 9 cells that
+	 * tick, then says full (#815). Red: "farm full" after 6 cells.
+	 */
+	// Measured: passes at tick 48 (red: farm full at cells 9/9 after 6 built).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
+	public void cellsOutsideTheTicksDoNotCountTowardTheCap(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		capScript(helper, bot, "None", 10, "[3, 7, 11]");
+		List<Integer> cells = List.of(1, 2, 3, 5, 6, 7, 9, 10, 11);
+		List<String> said = new java.util.ArrayList<>();
+		for (int i = 0; i < cells.size(); i++) {
+			said.add("built cell " + cells.get(i));
+			said.add("cells " + (i + 1) + "/9");
+		}
+		said.add("farm full");
+		said.add("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), said, "said"));
+	}
+
+	/**
 	 * Runs jobs.wood_farm.farm for birch up to size cells (a Python expression), laid out from a corner at x and z 15 of
 	 * the chunk of the test's spot, each cell built by a stub, no tree grown; at the waits'th wait prints the cells built
-	 * and stops.
+	 * and stops. The cells of built (a Python list of indices) are marked built first.
 	 */
-	private static void capScript(GameTestHelper helper, AntBot bot, String size, int waits) {
+	private static void capScript(GameTestHelper helper, AntBot bot, String size, int waits, String built) {
 		script(helper, bot, """
 			import lib.cells
 			import lib.depot
@@ -703,6 +724,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			import lib.terrain
 			import lib.treefarm
 			lib.cells.layout("birch_farm", Pos(spot.x // 16 * 16 + 15, cell[0].y, spot.z // 16 * 16 + 15), (5, 5))
+			for i in %s:
+			    lib.cells.add("birch_farm", i)
 			waits = [0]
 			def waited(ticks):
 			    if ticks != jobs.wood_farm.WAIT:
@@ -724,7 +747,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			lib.treefarm.build_cell = lambda k, low, high: lib.result.result()
 			lib.treefarm.grown = lambda k, low, high: False
 			jobs.wood_farm.farm(kind, "birch_farm", %s, 12)
-			""".formatted(waits, size));
+			""".formatted(built, waits, size));
 	}
 
 	/**

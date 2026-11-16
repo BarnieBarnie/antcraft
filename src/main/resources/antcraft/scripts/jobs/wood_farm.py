@@ -155,6 +155,14 @@ def limit(kind, name, size):
     return size or min(most(harvest(kind)), len(ticking(kind, name)))
 
 
+def built(kind, name, size):
+    """How many cells of the farm name of kind count toward limit: all built, else with no size those built that keep
+    growing (ticking), so cells outside them built under a size or before #812 leave its room (#815)."""
+    if size:
+        return lib.cells.count(name)
+    return len([i for i in lib.cells.built(name) if i in ticking(kind, name)])
+
+
 TICKING = {}  # a farm's name to ticking's cells, worked out once a run: a farm's layout does not change
 
 
@@ -208,7 +216,7 @@ def build(kind, name, size, radius):
     if r["ok"]:
         lib.cells.add(name, i)
         say(f"built cell {i + 1}")
-        say(f"cells {lib.cells.count(name)}/{limit(kind, name, size)}")
+        say(f"cells {built(kind, name, size)}/{limit(kind, name, size)}")
     return r
 
 
@@ -487,12 +495,13 @@ def farm(kind, name, size, radius):
             learn(kind, game_time() - start, trees)
             backoff = 0
         most_cells = limit(kind, name, size)
-        if full and lib.cells.count(name) < most_cells:
-            say(f"cells {lib.cells.count(name)}/{most_cells}")  # it learnt it may grow (#662); "farm full" again once it is
+        have = built(kind, name, size)
+        if full and have < most_cells:
+            say(f"cells {have}/{most_cells}")  # it learnt it may grow (#662); "farm full" again once it is
             full = False
-        if lib.cells.count(name) < most_cells and backoff:
+        if have < most_cells and backoff:
             backoff -= 1
-        elif lib.cells.count(name) < most_cells:
+        elif have < most_cells:
             r = stocked(kind, radius)
             if r["ok"]:
                 build(kind, name, size, radius)
