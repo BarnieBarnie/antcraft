@@ -899,6 +899,41 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		oneThenFour(helper, "jungle_sapling", Items.JUNGLE_SAPLING, Blocks.JUNGLE_SAPLING, new BlockPos(8, 1, 4), 10);
 	}
 
+	/**
+	 * As aSpruceFarmWithOneSaplingMovesToGiantsOnceItHasFour; once the giant cell stands, the test grows the small cell's
+	 * spruce: the giant farm's rounds fell it and do not replant its spot (9, 1, 5) (#807).
+	 */
+	// Measured: passes at tick 748 to 856, the slower with 84 tests at once (red: the small spruce stood at tick 2002).
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1700)
+	public void theSmallCellsTreeIsFelledAndNotReplantedOnceTheFarmMovesToGiants(GameTestHelper helper) {
+		BlockPos spot = new BlockPos(9, 1, 5);
+		AntBot bot = saplingFarm(helper, "spruce_sapling", Items.SPRUCE_SAPLING, 1);
+		BotScripts.failOnWarning(helper, bot);
+		boolean[] gave = new boolean[2];
+		helper.onEachTick(() -> {
+			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("said " + said(bot));
+			}
+			if (!gave[0] && said(bot).contains("built cell 1")) {
+				helper.getBlockEntity(new BlockPos(3, 1, 16), ChestBlockEntity.class).setItem(3, new ItemStack(Items.SPRUCE_SAPLING, 4));
+				gave[0] = true;
+			}
+			if (gave[0] && !gave[1] && said(bot).stream().filter(l -> l.contains("built cell 1")).count() == 2
+				&& helper.getBlockState(spot).is(Blocks.SPRUCE_SAPLING)) {
+				TreesGameTest.plantTree(helper, spot, Blocks.SPRUCE_LOG, Blocks.SPRUCE_LEAVES, false);
+				gave[1] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(gave[1], "the small spruce never grew; said " + said(bot));
+			for (int y = 1; y < 6; y++) {
+				helper.assertBlockNotPresent(Blocks.SPRUCE_LOG, spot.getX(), y, spot.getZ());
+			}
+			helper.assertTrue(helper.getBlockState(spot).isAir(), "the small cell replanted; said " + said(bot));
+			assertGiantCell(helper, bot, Blocks.SPRUCE_SAPLING, 12);
+		});
+	}
+
 	private static void fourSaplings(GameTestHelper helper, String kind, Item item, Block sapling) {
 		AntBot bot = saplingFarm(helper, kind, item, 4);
 		BotScripts.failOnWarning(helper, bot);

@@ -271,13 +271,13 @@ def grown(kind, low, high):
     return standing(kind, low, high) is not None
 
 
-def harvest(kind, low, high, radius=32):
+def harvest(kind, low, high, radius=32, replant=True):
     """Fells the cell's tree whole from its lowest log standing (lib.trees.fell_whole), again while a log is left, such
     as one cut off from the tree, mines the roots in the cell where the kind has them (a mangrove's, and those up to
     roots blocks out of the cell in no other cell of the farm, outside_cells), picks up the
     sticks and apples lying about, then, where it felled the tree whole, plants each empty sapling spot (plant, so
     with dirt put back under it), getting the saplings it lacks within radius (lib.get), such as a square kind with fewer than four carried; where it
-    cannot, tend does later.
+    cannot, tend does later; none without replant, for a cell given up (jobs.wood_farm, #807).
     Gives fell_whole's result(): ok, also where nothing stands; out_of_reach or no_space with at, the log left, which
     grown still sees."""
     # Again while a log is left standing: a bot that died up a giant jungle and had mined the logs round a branch log left
@@ -311,7 +311,7 @@ def harvest(kind, low, high, radius=32):
             pick_up(DROPS + [TORCH], 1)
     lib.trees.take_back()
     # Planted last: a pillar up to the leaves fell_whole climbed took a sapling's place (#652).
-    if r["ok"]:
+    if r["ok"] and replant:
         empty = [p for p in spots(kind, low, high) if block(p).is_air]
         if empty and lib.get.get(sapling(kind), len(empty), radius)["ok"]:
             for p in empty:

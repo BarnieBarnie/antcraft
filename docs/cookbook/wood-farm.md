@@ -49,7 +49,7 @@ r = lib.project.run(name, steps)
 A giant spruce or giant jungle gives far more logs per sapling and per felling than a one-sapling tree (`LOGS`: 96 and 67 against 6.5 and 8.5), so a farm of `spruce_sapling` or `jungle_sapling` farms giants (`GIANTS`) whenever the bot has the saplings for one (#803):
 
 - run with 4 saplings of the kind on the bot and in the chests within the radius together (`fours`), it is a `giant_spruce` or `giant_jungle` farm from the start, named `giant_spruce_farm` or `giant_jungle_farm`;
-- with fewer, it starts a one-sapling farm, and in the first round after tending its cells that the bot has 4 (from the trees it fells or the chests), it starts a giant farm of its own south of the small farm's rows of cells, its corner 2 blocks south of the next row (`beside`), its depot on the path between: `jobs.wood_farm.run` of the giant kind, which never returns. The small cells are left standing as they are, no longer farmed;
+- with fewer, it starts a one-sapling farm, and in the first round after tending its cells that the bot has 4 (from the trees it fells or the chests), it starts a giant farm of its own south of the small farm's rows of cells, its corner 2 blocks south of the next row (`beside`), its depot on the path between: `jobs.wood_farm.run` of the giant kind, which never returns. The small cells are no longer replanted: each round of the giant farm fells the trees their saplings grow into, as a round of their own would, but leaves their spots empty (`small`, #807), so their saplings go to the giant farm and no tree is left standing;
 - run again, it goes on with the giant farm once one was started, else with the small farm.
 
 `giant_spruce` and `giant_jungle` as kinds still start a giant farm at once.
