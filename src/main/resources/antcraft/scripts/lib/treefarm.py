@@ -129,6 +129,12 @@ def torches(low, high):
     return [Pos(low.x, low.y + 1, low.z), Pos(high.x, low.y + 1, high.z)]
 
 
+def loaded(kind, low, high):
+    """Whether the bot can read the cell: the blocks of its sapling spots and torches are loaded (block is not None), as
+    a cell more than BotChunks' 3 chunks off the bot may not be (#810)."""
+    return all([block(p) is not None for p in spots(kind, low, high) + torches(low, high)])
+
+
 def materials(kind):
     """The items one cell of kind takes, item to count: dirt under each sapling, the saplings, torches, roof slabs and,
     for a roof, clear more dirt to pillar up to it with, which build_cell takes back. The fill to level the cell depends

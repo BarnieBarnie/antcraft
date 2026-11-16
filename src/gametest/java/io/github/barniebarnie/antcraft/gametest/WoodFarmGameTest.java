@@ -758,6 +758,53 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A built cell in a chunk that is not loaded, 30000 blocks off, where block() gives None (#810): the farm's round
+	 * leaves it alone and tends cell 1 (sapling and torches); once the cell lies where the bot can read it (the test moves
+	 * it to cell 2's place at the first wait), the next round plants it too. Red: the round crashed on None.id.
+	 */
+	// Measured: passes at tick 70 (red: jobs/wood_farm.py:308: 'NoneType' object has no attribute 'id' at tick 8).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 140)
+	public void aCellOutOfLoadedRangeIsLeftUntilTheBotCanReadIt(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT_2.below(), Blocks.DIRT);
+		AntBot bot = compostBot(helper, 4);
+		bot.getInventory().addItem(new ItemStack(Items.TORCH, 4));
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		BlockPos s2 = helper.absolutePos(SPOT_2);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			far = (cell[0] + (-30000, 0, -30000), cell[1] + (-30000, 0, -30000))
+			boxes = {0: cell, 1: far}
+			waits = [0]
+			def waited(ticks):
+			    if ticks != jobs.wood_farm.WAIT:
+			        return
+			    waits[0] += 1
+			    if waits[0] == 1:
+			        print(block(spot).id, block(far[0]) is None)
+			        boxes[1] = (cell[0] + (6, 0, 0), cell[1] + (6, 0, 0))
+			    else:
+			        print(block(Pos(%d, %d, %d)).id)
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.cells.built = lambda name: [0, 1]
+			lib.cells.cell = lambda name, i: boxes[i]
+			lib.cells.count = lambda name: 2
+			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ(), s2.getX(), s2.getY(), s2.getZ()));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("farm full", "minecraft:birch_sapling True", "minecraft:birch_sapling"), "said");
+			assertCell(helper, bot, SPOT);
+		});
+	}
+
+	/**
 	 * A bot for the compost tests: saplings birch saplings, 7 birch slabs, a crafting table and a chest for the depot,
 	 * at (4, 1, 6).
 	 */

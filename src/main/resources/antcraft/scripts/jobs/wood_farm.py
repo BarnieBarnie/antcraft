@@ -304,7 +304,10 @@ def sweep(kind, boxes):
 
 
 def unplanted(kind, b):
-    """The spots of cell b, a (low, high) box, that hold neither a sapling of kind nor a log."""
+    """The spots of cell b, a (low, high) box, that hold neither a sapling of kind nor a log; none where the bot cannot
+    read the cell (lib.treefarm.loaded, #810)."""
+    if not lib.treefarm.loaded(kind, b[0], b[1]):
+        return []
     return [p for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id != lib.treefarm.sapling(kind) and not lib.trees.is_log(p)]
 
 
@@ -313,8 +316,8 @@ def tend(kind, b, radius=32, told=None):
     it out, getting the dirt it lacks within radius, #764, and mining what stands there first, such as a scaffold block a
     felling left; a spot it cannot plant it says once, tell with told) and its torches (a walk that pillars where a torch
     stands breaks it, and the bot picks it up), as far as the bot has them. Nothing while logs of the cell's tree stand,
-    as a sapling under them never grows (#644)."""
-    if lib.treefarm.grown(kind, b[0], b[1]):
+    as a sapling under them never grows (#644), nor where the bot cannot read the cell (lib.treefarm.loaded, #810)."""
+    if not lib.treefarm.loaded(kind, b[0], b[1]) or lib.treefarm.grown(kind, b[0], b[1]):
         return
     torches = lib.treefarm.torches(b[0], b[1])
     s = lib.treefarm.sapling(kind)
@@ -390,7 +393,8 @@ def farm(kind, name, size, radius):
         # build's own taken back by them, sweep, tend, get, reap's retry) comes down at its end (#654).
         placed_scaffold()
         own()
-        boxes = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
+        # Only the cells the bot can read: one out of its loaded chunks waits for a round it is nearer (#810).
+        boxes = [b for b in [lib.cells.cell(name, i) for i in lib.cells.built(name)] if lib.treefarm.loaded(kind, b[0], b[1])]
         grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
         keep = KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))]
         full_bot = False
@@ -520,7 +524,7 @@ def stored_bone_meal(kind, name, boxes, radius):
     if name not in memory.get("depots", {}):
         return
     s = lib.treefarm.sapling(kind)
-    if not [p for b in boxes for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id == s]:
+    if not [p for b in boxes for p in lib.treefarm.spots(kind, b[0], b[1]) if lib.trees.is_kind(p, s)]:
         return
     lib.stock.take_up_to(BONE_MEAL, STACK, radius, lib.depot.chests(name, "bone_meal"))
     fertilize(kind, boxes)
@@ -531,7 +535,7 @@ def fertilize(kind, boxes):
     s = lib.treefarm.sapling(kind)
     for b in boxes:
         for p in lib.treefarm.spots(kind, b[0], b[1]):
-            while count(BONE_MEAL) and block(p).id == s and use(p, BONE_MEAL):
+            while count(BONE_MEAL) and lib.trees.is_kind(p, s) and use(p, BONE_MEAL):
                 pass
 
 
