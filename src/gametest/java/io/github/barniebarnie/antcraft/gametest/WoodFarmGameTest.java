@@ -760,7 +760,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A built cell in a chunk that is not loaded, 30000 blocks off, where block() gives None (#810): the farm's round
 	 * leaves it alone and tends cell 1 (sapling and torches); once the cell lies where the bot can read it (the test moves
-	 * it to cell 2's place at the first wait), the next round plants it too. Red: the round crashed on None.id.
+	 * it to cell 2's place at the first wait), the next round plants it too. Red: the round crashed on None.id. The farm's
+	 * walk to a cell out of range (visit, #811) is left out here.
 	 */
 	// Measured: passes at tick 70 (red: jobs/wood_farm.py:308: 'NoneType' object has no attribute 'id' at tick 8).
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 140)
@@ -791,6 +792,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			        print(block(Pos(%d, %d, %d)).id)
 			        stop()
 			jobs.wood_farm.wait = waited
+			jobs.wood_farm.visit = lambda k, b: None  # not 30000 blocks off: #811's test walks to a far cell
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.cells.built = lambda name: [0, 1]
@@ -801,6 +803,50 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(said(bot), List.of("farm full", "minecraft:birch_sapling True", "minecraft:birch_sapling"), "said");
 			assertCell(helper, bot, SPOT);
+		});
+	}
+
+	/**
+	 * A farm whose cell 2, 12 blocks south-east of cell 1, lies out of the bot's loaded range (#811): the test's
+	 * lib.treefarm.loaded stands in for the chunks a bot keeps loaded, a cell loaded only within 6 blocks of the bot (of
+	 * its low corner), and nothing else brings the bot there. The farm walks to it and tends it (sapling and torches), as well as
+	 * cell 1. Red: cell 2 was never tended.
+	 */
+	// Measured: passes at tick 293 (red: cell 2 never tended).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 600)
+	public void aCellOutOfLoadedRangeIsVisitedAndTended(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		BlockPos far = SPOT.offset(12, 0, 12);
+		helper.setBlock(far.below(), Blocks.DIRT);
+		AntBot bot = compostBot(helper, 4);
+		bot.getInventory().addItem(new ItemStack(Items.TORCH, 4));
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			boxes = {0: cell, 1: (cell[0] + (12, 0, 12), cell[1] + (12, 0, 12))}
+			waits = [0]
+			def waited(ticks):
+			    if ticks != jobs.wood_farm.WAIT:
+			        return
+			    waits[0] += 1
+			    if waits[0] == 3:
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.loaded = lambda k, low, high: pos().distance(low) <= 6
+			lib.cells.built = lambda name: [0, 1]
+			lib.cells.cell = lambda name, i: boxes[i]
+			lib.cells.count = lambda name: 2
+			jobs.wood_farm.farm(kind, "birch_farm", 2, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> {
+			assertCell(helper, bot, SPOT);
+			assertCell(helper, bot, far);
 		});
 	}
 

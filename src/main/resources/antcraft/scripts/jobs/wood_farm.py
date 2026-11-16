@@ -303,6 +303,14 @@ def sweep(kind, boxes):
             return
 
 
+def visit(kind, b):
+    """Walks to cell b where the bot cannot read it (lib.treefarm.loaded), as a bot keeps only the chunks within 3 of
+    its own loaded and goto loads those on its way (#811)."""
+    # ponytail: a goto that fails (botsLoadChunks off) leaves the cell for another round.
+    if not lib.treefarm.loaded(kind, b[0], b[1]):
+        goto(lib.treefarm.torches(b[0], b[1])[0], 2)
+
+
 def unplanted(kind, b):
     """The spots of cell b, a (low, high) box, that hold neither a sapling of kind nor a log; none where the bot cannot
     read the cell (lib.treefarm.loaded, #810)."""
@@ -387,14 +395,22 @@ def farm(kind, name, size, radius):
     full = False
     told = {}
     backoff = 0  # rounds until stocked is tried again
+    visits = 0  # rounds that looked for a cell out of loaded range, to visit those in turn (#811)
     while True:
         lib.food.upkeep(radius)
         # What the setup steps' walks placed is not the round's; what the round's walks place (the felling's and the
         # build's own taken back by them, sweep, tend, get, reap's retry) comes down at its end (#654).
         placed_scaffold()
         own()
-        # Only the cells the bot can read: one out of its loaded chunks waits for a round it is nearer (#810).
-        boxes = [b for b in [lib.cells.cell(name, i) for i in lib.cells.built(name)] if lib.treefarm.loaded(kind, b[0], b[1])]
+        # Only the cells the bot can read (#810), but each round it walks to one it cannot, in turn, so every cell is
+        # farmed (#811).
+        cells = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
+        far = [b for b in cells if not lib.treefarm.loaded(kind, b[0], b[1])]
+        visited = far[visits % len(far)] if far else None
+        visits += 1
+        if visited:
+            visit(kind, visited)
+        boxes = [b for b in cells if lib.treefarm.loaded(kind, b[0], b[1])]
         grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
         keep = KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))]
         full_bot = False
@@ -436,6 +452,8 @@ def farm(kind, name, size, radius):
         s = lib.treefarm.sapling(kind)
         if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
             get(s, n, radius)
+        if visited:
+            visit(kind, visited)  # again where the store walked away from it
         for b in boxes:
             tend(kind, b, radius, told)
         stored_bone_meal(kind, name, boxes, radius)
