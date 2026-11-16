@@ -8,7 +8,7 @@
 # what one takes (docs/cookbook/wood-farm.md). A spruce or jungle farm farms giants (GIANTS) once the bot has 4 saplings
 # of the kind, from the start or as a farm of its own beside the small one, which fells the small cells' trees and leaves
 # them unplanted (#803, #807). A full farm composts its extra saplings
-# into bone meal for its saplings (compost, #804). Its home is by the depot, so after a death it comes back to the farm and
+# into bone meal for its saplings (compost, #804), and uses the bone meal stored in its depot on them (#809). Its home is by the depot, so after a death it comes back to the farm and
 # recovers (lib.trees.recover, #679). Another job starts a farm with run(kind, at); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -434,6 +434,7 @@ def farm(kind, name, size, radius):
             get(s, n, radius)
         for b in boxes:
             tend(kind, b, radius, told)
+        stored_bone_meal(kind, name, boxes, radius)
         # Once the bot has the saplings for a giant, the next cells are giants: a farm of its own beside this one, whose
         # run never returns but on a failed setup step (#803).
         # Its trees the giant farm's rounds fell, its cells not replanted (small, #807).
@@ -511,6 +512,18 @@ def compost(kind, name, boxes, radius):
     pick_up(BONE_MEAL)
     fertilize(kind, boxes)
     return result()
+
+
+def stored_bone_meal(kind, name, boxes, radius):
+    """Where a cell of boxes has a sapling of kind, takes the bone meal of the depot name's bone_meal chests (a stack at
+    most) and uses it on them (fertilize, #809); the next store puts back what is left."""
+    if name not in memory.get("depots", {}):
+        return
+    s = lib.treefarm.sapling(kind)
+    if not [p for b in boxes for p in lib.treefarm.spots(kind, b[0], b[1]) if block(p).id == s]:
+        return
+    lib.stock.take_up_to(BONE_MEAL, STACK, radius, lib.depot.chests(name, "bone_meal"))
+    fertilize(kind, boxes)
 
 
 def fertilize(kind, boxes):

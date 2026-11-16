@@ -716,6 +716,48 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The farm uses the bone meal stored in its depot on its saplings (#809): the bot carries 32 bone meal, which the
+	 * first round's store puts in the depot's bone_meal chest; the farm takes it out again for the birch sapling of cell 1,
+	 * which grows into a tree, and the next round's store puts back what is left.
+	 */
+	// Measured: passes at tick 36 (red: the sapling never grows).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
+	public void theFarmUsesTheBoneMealStoredInItsDepot(GameTestHelper helper) {
+		helper.setBlock(SPOT.below(), Blocks.DIRT);
+		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
+		AntBot bot = compostBot(helper, 2);
+		bot.getInventory().addItem(new ItemStack(Items.BONE_MEAL, 32));
+		BlockPos depot = helper.absolutePos(new BlockPos(6, 1, 0));
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			waits = [0]
+			def waited(ticks):
+			    waits[0] += 1
+			    if waits[0] == 2:
+			        print(count("minecraft:bone_meal"))
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.treefarm.grown = lambda k, low, high: False
+			lib.cells.built = lambda name: [0]
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 1, 12)
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(said(bot), List.of("farm full", "0"), "said");
+			helper.assertBlockPresent(Blocks.BIRCH_LOG, SPOT);
+			int left = depotHolds(helper, Items.BONE_MEAL);
+			helper.assertTrue(0 < left && left < 32, "bone meal in the depot: " + left);
+		});
+	}
+
+	/**
 	 * A bot for the compost tests: saplings birch saplings, 7 birch slabs, a crafting table and a chest for the depot,
 	 * at (4, 1, 6).
 	 */
