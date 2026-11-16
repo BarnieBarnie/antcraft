@@ -646,18 +646,29 @@ def fertilize(kind, boxes):
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a wood farm of kind (a kind of lib.treefarm.KINDS) with its first corner at at (where the bot
     stands, or where the last farm of kind started), up to size cells (limit: most of the ticks a tree takes, learnt,
-    else HARVEST[kind]). Never returns but on a
-    failed setup step: gives lib.project.run's result() then."""
+    else HARVEST[kind]). An at other than the stored corner of kind moves the farm there,
+    laid out afresh (#818). Never returns but on a failed setup step: gives lib.project.run's result() then."""
     kind = giant(lib.treefarm.key(kind), radius)
     name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
     farms = memory.get("wood_farms", {})
     new = kind not in farms
     at = Pos(at) if at is not None else farms.get(kind, pos())
+    moved = not new and at != farms[kind]
     farms[kind] = at
     memory["wood_farms"] = farms
+    if moved:
+        # A new corner lays the farm out afresh there, its depot and project with it (#818). The old cells and chests
+        # are left standing, forgotten.
+        for key in ("cells", "depots"):
+            m = memory.get(key, {})
+            m.pop(name, None)
+            memory[key] = m
+        TICKING.pop(name, None)
+        lib.project.reset(name)
+        say(f"farm moved to {at.x} {at.y} {at.z}")
     w = lib.treefarm.spec(kind)["size"]
     lib.cells.layout(name, at.down(), (w, w))
-    if new:
+    if new or moved:
         hint(kind, name, at)
     # The depot north of the farm, a path's width off its first row, going east along it.
     lib.depot.depot(name, at + (0, 0, -2), "east", CATEGORIES)

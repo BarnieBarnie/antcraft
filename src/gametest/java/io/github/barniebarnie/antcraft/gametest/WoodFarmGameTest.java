@@ -1431,6 +1431,37 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A farm of one cell at AT, stopped once it farms and run again with its corner 6 blocks east, where its second cell
+	 * would be, lays it out afresh there (#818): it says it moved, builds its cell 0 round SPOT_2 and leaves the old cell
+	 * standing. Red: it kept the old layout, full, and built nothing at SPOT_2.
+	 */
+	// Measured: passes at tick 188 (red: farm full at the old corner).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 400)
+	public void aFarmRunWithANewCornerMovesThere(GameTestHelper helper) {
+		AntBot bot = farm(helper, 4, 4);
+		run(helper, bot, 1);
+		BlockPos to = helper.absolutePos(AT.east(6));
+		boolean[] moved = new boolean[1];
+		BotScripts.failOnWarning(helper, bot);
+		helper.onEachTick(() -> {
+			if (!moved[0] && said(bot).contains("birch_farm 4/4: farm")) {
+				moved[0] = true;
+				bot.stopScript();
+				List<String> out = BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.wood_farm birch_sapling "
+					+ to.getX() + " " + to.getY() + " " + to.getZ() + " 1 12");
+				helper.assertTrue(bot.getScript() != null, "not run: " + out);
+			}
+		});
+		helper.succeedWhen(() -> {
+			List<String> said = said(bot);
+			helper.assertTrue(said.contains("farm moved to " + to.getX() + " " + to.getY() + " " + to.getZ()), "said " + said);
+			helper.assertTrue(Collections.frequency(said, "built cell 1") == 2, "said " + said);
+			assertCell(helper, bot, SPOT);
+			assertCell(helper, bot, SPOT_2);
+		});
+	}
+
 	/** tend leaves a cell's torches alone, one on the wall of a block beside its corner, one standing (#760). */
 	// Measured: passes at tick 5.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
