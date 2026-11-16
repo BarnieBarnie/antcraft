@@ -211,17 +211,35 @@ def first_cell(kind, name, size, radius):
     no tree stands within radius, grows a tree of its own (grow) and gets again, up to GROWS times (#802). Gives
     result()."""
     for item, n in lib.treefarm.materials(kind).items():
-        r = gets(item, n, radius)
-        for _ in range(GROWS):
-            if r["ok"] or r["reason"] != "no_logs" or not grow(kind, name)["ok"]:
-                break
-            r = gets(item, n, radius)
+        r = growing(kind, name, lambda: gets(item, n, radius))
         if not r["ok"]:
             return r
     return build(kind, name, size, radius)
 
 
-GROWS = 3  # trees first_cell grows at most, so a get that keeps failing no_logs for some other cause ends
+def kits(kind, name, n, radius):
+    """lib.bootstrap.kit(kit(kind)); where it fails with no_logs, as the stone axe takes sticks and no tree stands within
+    radius, gets the saplings (saplings, n spots) so grow has one to spare and grows a tree, as first_cell does, which it
+    fells by hand (#808). Gives result()."""
+    again = lambda: lib.bootstrap.kit(kit(kind), radius, gets)
+    r = again()
+    if not r["ok"] and r["reason"] == "no_logs":
+        saplings(kind, n, radius)
+        r = growing(kind, name, again)
+    return r
+
+
+def growing(kind, name, again):
+    """again(), a get's result(); while it fails with no_logs, grows a tree (grow) and calls it again, up to GROWS times."""
+    r = again()
+    for _ in range(GROWS):
+        if r["ok"] or r["reason"] != "no_logs" or not grow(kind, name)["ok"]:
+            break
+        r = again()
+    return r
+
+
+GROWS = 3  # trees growing grows at most, so a get that keeps failing no_logs for some other cause ends
 AROUND = 8  # how far from the farm's corner grow looks for ground to plant on
 
 
@@ -524,7 +542,7 @@ def run(kind, at=None, size=None, radius=32):
     set_home(at + (0, 0, -1))
     lib.trees.recover()
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
-    steps = [Step("kit", lib.bootstrap.kit, (kit(kind), radius, gets)),
+    steps = [Step("kit", kits, (kind, name, n, radius)),
              Step("sapling", saplings, (kind, n, radius)),
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]

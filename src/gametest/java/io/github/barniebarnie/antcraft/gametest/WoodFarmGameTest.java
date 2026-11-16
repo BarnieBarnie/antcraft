@@ -823,6 +823,40 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class).setItem(4, new ItemStack(Items.COAL));
 		run(helper, bot, 1);
 		BotScripts.failOnWarning(helper, bot);
+		boolean[] grew = growsWhenWaiting(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grew[0], "no tree grew; said " + said(bot));
+			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
+			helper.assertValueEqual(said(bot).stream().filter(l -> l.equals("waiting for a tree to grow")).count(), 1L, "waits said");
+			assertCell(helper, bot, SPOT);
+		});
+	}
+
+	/**
+	 * Only saplings, no axe, no tree and no logs (#808): the kit step, whose stone axe takes sticks, grows a tree of its
+	 * own as first_cell does, fells it by hand and gets the axe (red: birch_farm stopped: no_logs at kit).
+	 */
+	// Measured: passes at tick 710 (red: stopped with no_logs at kit at tick 12).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 1400)
+	public void theKitGrowsItsOwnTreeWhereThereIsNone(GameTestHelper helper) {
+		AntBot bot = farm(helper, 4, 0, true, false);
+		Container chest = helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class);
+		chest.setItem(0, ItemStack.EMPTY);
+		chest.setItem(4, new ItemStack(Items.COAL));
+		run(helper, bot, 1);
+		BotScripts.failOnWarning(helper, bot);
+		boolean[] grew = growsWhenWaiting(helper, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grew[0], "no tree grew; said " + said(bot));
+			helper.assertTrue(bot.getInventory().hasAnyMatching(i -> i.is(Items.STONE_AXE)), "no stone axe; said " + said(bot));
+		});
+	}
+
+	/**
+	 * Fails the test once the bot says it stopped, and grows the birch sapling it planted off SPOT once it says it waits
+	 * for a tree (#802); gives whether it grew.
+	 */
+	private static boolean[] growsWhenWaiting(GameTestHelper helper, AntBot bot) {
 		boolean[] grew = new boolean[1];
 		helper.onEachTick(() -> {
 			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
@@ -842,12 +876,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		});
-		helper.succeedWhen(() -> {
-			helper.assertTrue(grew[0], "no tree grew; said " + said(bot));
-			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
-			helper.assertValueEqual(said(bot).stream().filter(l -> l.equals("waiting for a tree to grow")).count(), 1L, "waits said");
-			assertCell(helper, bot, SPOT);
-		});
+		return grew;
 	}
 
 	/** With no sapling to spare (only the cell's own), first_cell still fails with no_logs where there is no tree (#802). */
