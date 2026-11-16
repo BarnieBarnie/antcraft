@@ -1046,6 +1046,19 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A dark oak farm, its kind given as a sapling id (#800): farm() waits for the job's own farm name, dark_oak_farm, not
+	 * the kind's. The cell of 8, the four saplings grown with seed 0, felled, replanted and logs in the depot, the felling
+	 * within {@link #HARVEST_FACTOR} of HARVEST["minecraft:dark_oak_sapling"].
+	 */
+	// Measured: passes at tick 986 (red: the tree never grew, at tick 4002); #795's 33 copies felled in up to 1251 ticks.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 2600)
+	public void aDarkOakFarmFellsItsFirstTreeAndReplants(GameTestHelper helper) {
+		farm(helper, "dark_oak_sapling", Items.DARK_OAK_SAPLING, Blocks.DARK_OAK_SAPLING, Blocks.DARK_OAK_LOG,
+			Items.DARK_OAK_LOG, 16, 0, 950, 0, 8, List.of(new BlockPos(9, 1, 7), new BlockPos(10, 1, 7), new BlockPos(9, 1, 8),
+				new BlockPos(10, 1, 8)), 1);
+	}
+
+	/**
 	 * The mangrove farm above with a small tree (#783): seed 2 grows one of 2 logs, too few for the depot's first chest
 	 * and the crafting table it is made on. The farm replants, keeps the logs with one store message, and the test grows
 	 * the replanted propagule again (up to 3 trees) until the depot holds logs. lib.depot.store crashed there (put of 0)
@@ -1185,7 +1198,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 				now.kill(helper.getLevel());
 				return;
 			}
-			if (grown[0] < trees && (grown[0] == 0 || stored.getAsInt() == 0) && said(now).contains(kind + "_farm 4/4: farm")
+			// The job's farm name: a sapling id's without "_sapling", as jobs.wood_farm names it (#800).
+			if (grown[0] < trees && (grown[0] == 0 || stored.getAsInt() == 0) && said(now).contains(kind.replace("_sapling", "") + "_farm 4/4: farm")
 				&& helper.getBlockState(spots.get(0)).is(saplingBlock)) {
 				BlockPos a = helper.absolutePos(spots.get(0));
 				BlockState sapling = helper.getLevel().getBlockState(a);
