@@ -13,8 +13,11 @@ import java.util.function.LongSupplier;
  */
 public final class PathBudget {
 	/**
-	 * Half a search of the most nodes a bot plans with (see PathFollower): some 7 milliseconds of a tick on average, and up
-	 * to 15 in the worst tick, in the bot benchmark's reachable case, where 30 bots plan all the time (#329).
+	 * Half a search of the most nodes a bot plans with (see PathFollower): some 13 milliseconds of a tick on average (about
+	 * 6.5 µs a node), and up to 20 in the worst tick, in the bot benchmark's reachable case, where 30 bots plan all the
+	 * time (#798). It was 7.5 ms at #329; sharing the budget (#532), low floors (#647, #659), the queue's tie order (#682),
+	 * paths that keep off what they broke (#687), digging for scaffold (#778) and steps up off a low floor (#794) each
+	 * added 0.3 to 1.7 ms, for what the planner now does (docs/design/index.md, #798).
 	 */
 	// ponytail: fixed share; measured with the bot benchmark (BenchmarkGameTest), tune from play-tests.
 	public static final int NODES_PER_TICK = 2000;
