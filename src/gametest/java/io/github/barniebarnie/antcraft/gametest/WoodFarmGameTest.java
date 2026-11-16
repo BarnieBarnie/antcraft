@@ -691,6 +691,61 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * No tree in the area, 4 birch saplings, a coal, a stone axe and 16 dirt in the chest: the first cell's torches take a
+	 * stick, so logs, and there are none (#802). The bot plants a spare sapling off the farm, says once that it waits for
+	 * it, the test grows it, and the bot fells it and builds the first cell (red: birch_farm stopped: no_logs at cell).
+	 */
+	// Measured: passes at tick 314 to 339 (red: stopped with no_logs at cell).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 650)
+	public void growsItsOwnFirstTreeWhereThereIsNone(GameTestHelper helper) {
+		AntBot bot = farm(helper, 4, 0, true, false);
+		helper.getBlockEntity(new BlockPos(3, 1, 8), ChestBlockEntity.class).setItem(4, new ItemStack(Items.COAL));
+		run(helper, bot, 1);
+		BotScripts.failOnWarning(helper, bot);
+		boolean[] grew = new boolean[1];
+		helper.onEachTick(() -> {
+			if (said(bot).stream().anyMatch(l -> l.contains("stopped"))) {
+				helper.fail("said " + said(bot));
+			}
+			if (grew[0] || !said(bot).contains("waiting for a tree to grow")) {
+				return;
+			}
+			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 1, 23)) {
+				if (!p.equals(SPOT) && helper.getBlockState(p).is(Blocks.BIRCH_SAPLING)) {
+					BlockPos a = helper.absolutePos(p);
+					BlockState sapling = helper.getLevel().getBlockState(a);
+					((SaplingBlock) sapling.getBlock()).advanceTree(helper.getLevel(), a, sapling.setValue(SaplingBlock.STAGE, 1),
+						RandomSource.create(0));
+					grew[0] = !helper.getBlockState(p).is(Blocks.BIRCH_SAPLING);
+					return;
+				}
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grew[0], "no tree grew; said " + said(bot));
+			helper.assertTrue(said(bot).contains("built cell 1"), "said " + said(bot));
+			helper.assertValueEqual(said(bot).stream().filter(l -> l.equals("waiting for a tree to grow")).count(), 1L, "waits said");
+			assertCell(helper, bot, SPOT);
+		});
+	}
+
+	/** With no sapling to spare (only the cell's own), first_cell still fails with no_logs where there is no tree (#802). */
+	// Measured: passes at tick 10.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
+	public void theFirstCellWithNoSaplingToSpareFailsWithNoLogs(GameTestHelper helper) {
+		AntBot bot = farm(helper, 0, 0, true, false);
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_SAPLING));
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		bot.getInventory().addItem(new ItemStack(Items.COAL));
+		script(helper, bot, """
+			import lib.cells
+			lib.cells.layout("birch_farm", cell[0], (5, 5))
+			print(jobs.wood_farm.first_cell(kind, "birch_farm", 1, 12)["reason"])
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("no_logs"), "said"));
+	}
+
 	/** An oak farm roofs its cell with the birch slabs a chest holds (#612): any wooden slabs do, not only oak ones. */
 	// Measured: passes at tick 236 to 253.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 500)
@@ -1267,6 +1322,11 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/** As farm(helper, saplings, torches), the cells' floor of dirt (up to z 8, an oak cell's) or else the area's stone. */
 	private static AntBot farm(GameTestHelper helper, int saplings, int torches, boolean dirt) {
+		return farm(helper, saplings, torches, dirt, true);
+	}
+
+	/** As farm(helper, saplings, torches, dirt), with the birch only where tree. */
+	private static AntBot farm(GameTestHelper helper, int saplings, int torches, boolean dirt, boolean tree) {
 		for (int x = 6; dirt && x <= 16; x++) {
 			for (int z = 2; z <= 8; z++) {
 				helper.setBlock(x, 0, z, Blocks.DIRT);
@@ -1280,7 +1340,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		if (saplings > 0) {
 			chest.setItem(3, new ItemStack(Items.BIRCH_SAPLING, saplings));
 		}
-		TreesGameTest.plantTree(helper, new BlockPos(3, 1, 12), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
+		if (tree) {
+			TreesGameTest.plantTree(helper, new BlockPos(3, 1, 12), Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
+		}
 		return helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 	}
 

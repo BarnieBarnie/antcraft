@@ -164,12 +164,52 @@ def gets(item, n, radius):
 
 
 def first_cell(kind, name, size, radius):
-    """Gets what the first cell takes (gets) and builds it. Gives result()."""
+    """Gets what the first cell takes (gets) and builds it. Where a get fails with no_logs, as torches take a stick and
+    no tree stands within radius, grows a tree of its own (grow) and gets again, up to GROWS times (#802). Gives
+    result()."""
     for item, n in lib.treefarm.materials(kind).items():
         r = gets(item, n, radius)
+        for _ in range(GROWS):
+            if r["ok"] or r["reason"] != "no_logs" or not grow(kind, name)["ok"]:
+                break
+            r = gets(item, n, radius)
         if not r["ok"]:
             return r
     return build(kind, name, size, radius)
+
+
+GROWS = 3  # trees first_cell grows at most, so a get that keeps failing no_logs for some other cause ends
+AROUND = 8  # how far from the farm's corner grow looks for ground to plant on
+
+
+def grow(kind, name):
+    """Plants a spare sapling of kind (one more than a cell takes) on the GROUND (lib.trees) nearest the farm name's
+    corner within AROUND, its tree's room, 2 blocks round it, off the farm's cells (lib.treefarm.outside_cells) and its
+    depot's row, the air over it clear (the kind's sapling's) high; says once "waiting for a tree to grow" and waits until it
+    has grown, at most 4 times GROWTH. Gives result(): ok, or no_logs where it has no sapling to spare, no ground or the
+    sapling did not grow."""
+    s = lib.treefarm.sapling(kind)
+    if count(s) <= lib.treefarm.materials(kind)[s]:
+        return result("no_logs")
+    at = memory["wood_farms"][kind]
+    out = lib.treefarm.outside_cells()
+    clear = lib.treefarm.spec(s)["clear"]
+    spot = None
+    for g in scan(lib.trees.GROUND, radius=AROUND, limit=1024, around=at):
+        p = g.up()
+        if (not at.z - 3 <= p.z < at.z and all([out(p + (dx, 0, dz)) for dx in [-2, 2] for dz in [-2, 2]])
+                and all([block(p.up(i)).is_air for i in range(clear)])):
+            spot = p
+            break
+    # ponytail: only ground the scan finds near the corner, of the farm's kind; dirt put on stone and any sapling if needed.
+    if spot is None or not lib.treefarm.plant(kind, spot)["ok"]:
+        return result("no_logs")
+    say("waiting for a tree to grow")
+    for _ in range(int(4 * GROWTH // WAIT)):
+        if block(spot).id != s:
+            return result()
+        wait(WAIT)
+    return result("no_logs", spot)
 
 
 def stocked(kind, radius):
