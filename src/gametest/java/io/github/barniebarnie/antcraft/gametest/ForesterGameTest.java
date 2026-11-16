@@ -34,8 +34,8 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** 4 spruce saplings in a chest and a birch nearby: a stored sapling comes first, so it farms spruce, giants as it has 4 (#803). */
-	// Measured: passes at tick 8, the others at 8 too; over 12 with 83 tests at once, the others at 10 to 11 (the giant check scans the chests, #803).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 24)
+	// Measured: passes at tick 18, the others at 15: a new farm counts the growing cells of 2 corners first (#813), some 10 ticks; before that 8, over 12 with 83 tests at once (the giant check scans the chests, #803).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 36)
 	public void choosesTheStoredSaplingOverANearbyTree(GameTestHelper helper) {
 		helper.setBlock(CHEST, Blocks.CHEST);
 		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.SPRUCE_SAPLING, 4));
@@ -45,8 +45,8 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** No saplings in a chest, a birch nearby: it farms birch. */
-	// Measured: passes at tick 4 to 5.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	// Measured: passes at tick 15 (4 to 5 before #813's corner check).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
 	public void choosesANearbyTreeWithoutStoredSaplings(GameTestHelper helper) {
 		helper.setBlock(CHEST, Blocks.CHEST);
 		helper.getBlockEntity(CHEST, ChestBlockEntity.class).setItem(0, new ItemStack(Items.DIRT, 4));
@@ -56,8 +56,8 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Oak saplings in the nearer chest, birch in the farther: birch has no roof, so it is cheaper and wins (#613). */
-	// Measured: passes at tick 4.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	// Measured: passes at tick 15.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
 	public void choosesTheCheaperOfTwoStoredKinds(GameTestHelper helper) {
 		chest(helper, CHEST, Items.OAK_SAPLING);
 		chest(helper, new BlockPos(12, 1, 6), Items.BIRCH_SAPLING);
@@ -66,8 +66,8 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An oak nearer than a birch: birch has no roof, so it is cheaper and wins (#613). */
-	// Measured: passes at tick 5.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	// Measured: passes at tick 15.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
 	public void choosesTheCheaperOfTwoNearbyTrees(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(12, 1, 8), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
 		TreesGameTest.plantTree(helper, BIRCH, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);

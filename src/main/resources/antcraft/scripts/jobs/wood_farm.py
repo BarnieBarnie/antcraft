@@ -171,11 +171,37 @@ def ticking(kind, name):
     low corner of cell 0, where its depot is (lib.treefarm.ticking, #812): a cell farther off grows only while the bot
     is near it."""
     if name not in TICKING:
-        corner = lib.cells.cell(name, 0)[0]
-        # ponytail: the first 32 cells; 8 rows of 4 of the narrowest kind (5 and a path) reach past the 2 chunks east and
-        # south of the corner's that tick. Some 5 ticks of instructions, once.
-        TICKING[name] = [i for i in range(32) if lib.treefarm.ticking(kind, corner, *lib.cells.cell(name, i))]
+        TICKING[name] = ticking_at(kind, name, lib.cells.cell(name, 0)[0])
     return TICKING[name]
+
+
+def ticking_at(kind, name, corner):
+    """ticking's cells of the farm name were its cell 0's low corner at corner instead."""
+    low = lib.cells.cell(name, 0)[0]
+    d = (corner.x - low.x, 0, corner.z - low.z)
+    # ponytail: the first 32 cells; 8 rows of 4 of the narrowest kind (5 and a path) reach past the 2 chunks east and
+    # south of the corner's that tick. Some 5 ticks of instructions a corner.
+    return [i for i in range(32) if lib.treefarm.ticking(kind, corner, *[p + d for p in lib.cells.cell(name, i)])]
+
+
+def hint(kind, name, at):
+    """Says where a corner fits more cells that keep growing than at, the new farm name's (#813). A corner at the
+    north-west block of a chunk (x and z a multiple of 16) fits the most, the same at any chunk, so it counts one such
+    corner and names the nearest of those of at's chunk and of the chunks east, south and south-east. How many fit
+    depends on where at lies in its chunk: from x and z 15, 9 birch cells, from 0, 20. The farm keeps at."""
+    if at.x % 16 == 0 and at.z % 16 == 0:
+        return  # the most already; nothing counted
+    x, z = at.x // 16 * 16, at.z // 16 * 16
+    best = len(ticking_at(kind, name, Pos(x, at.y, z)))
+    n = len(ticking(kind, name))
+    if best > n:
+        c = None
+        for dx in (0, 16):
+            for dz in (0, 16):
+                p = Pos(x + dx, at.y, z + dz)
+                if c is None or p.distance(at) < c.distance(at):
+                    c = p
+        say(f"a corner at {c.x} {c.y} {c.z} fits {best} growing cells, this one {n}")
 
 
 def materials(kind):
@@ -605,11 +631,14 @@ def run(kind, at=None, size=None, radius=32):
     kind = giant(lib.treefarm.key(kind), radius)
     name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
     farms = memory.get("wood_farms", {})
+    new = kind not in farms
     at = Pos(at) if at is not None else farms.get(kind, pos())
     farms[kind] = at
     memory["wood_farms"] = farms
     w = lib.treefarm.spec(kind)["size"]
     lib.cells.layout(name, at.down(), (w, w))
+    if new:
+        hint(kind, name, at)
     # The depot north of the farm, a path's width off its first row, going east along it.
     lib.depot.depot(name, at + (0, 0, -2), "east", CATEGORIES)
     # Home is the path by the depot, so a bot that dies comes back at the farm, and recover fetches what it dropped: a

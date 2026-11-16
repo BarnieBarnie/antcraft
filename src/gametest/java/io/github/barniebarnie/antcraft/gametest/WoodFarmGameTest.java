@@ -712,6 +712,47 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A new birch farm started at chunk-local x and z 15 has 9 cells that tick; the corner at the north-west block of
+	 * the chunk south-east of it, one block off, has 20, so run says so, once: run again from the stored corner, it says
+	 * nothing more (#813). The project's steps are stubbed.
+	 */
+	// Measured: passes at tick 13, two corners' cells counted (red: no hint).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 26)
+	public void aCornerThatFitsFewerCellsSaysWhereMoreFit(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BlockPos s = helper.absolutePos(SPOT);
+		int x = Math.floorDiv(s.getX(), 16) * 16 + 15;
+		int z = Math.floorDiv(s.getZ(), 16) * 16 + 15;
+		cornerScript(helper, bot, x, z);
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of(
+			"a corner at " + (x + 1) + " " + s.getY() + " " + (z + 1) + " fits 20 growing cells, this one 9",
+			"birch_farm stopped: stub at kit", "birch_farm stopped: stub at kit"), "said"));
+	}
+
+	/** As aCornerThatFitsFewerCellsSaysWhereMoreFit from chunk-local x and z 0, which fits the most: no hint (#813). */
+	// Measured: passes at tick 5, nothing counted.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	public void aCornerThatFitsTheMostCellsSaysNothing(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BlockPos s = helper.absolutePos(SPOT);
+		cornerScript(helper, bot, Math.floorDiv(s.getX(), 16) * 16, Math.floorDiv(s.getZ(), 16) * 16);
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot),
+			List.of("birch_farm stopped: stub at kit", "birch_farm stopped: stub at kit"), "said"));
+	}
+
+	/** Runs jobs.wood_farm.run for birch twice, first from x, spot.y, z, its project's steps stubbed. */
+	private static void cornerScript(GameTestHelper helper, AntBot bot, int x, int z) {
+		script(helper, bot, """
+			import lib.project
+			import lib.trees
+			lib.project.run = lambda name, steps: {"reason": "stub", "at": "kit"}
+			lib.trees.recover = lambda: None
+			jobs.wood_farm.run(kind, Pos(%d, spot.y, %d))
+			jobs.wood_farm.run(kind)
+			""".formatted(x, z));
+	}
+
+	/**
 	 * Runs jobs.wood_farm.farm for birch up to size cells (a Python expression), laid out from a corner at x and z 15 of
 	 * the chunk of the test's spot, each cell built by a stub, no tree grown; at the waits'th wait prints the cells built
 	 * and stops. The cells of built (a Python list of indices) are marked built first.
