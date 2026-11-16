@@ -193,13 +193,21 @@ def own():
         lib.borrow.keep(b["item"])
 
 
+def following(kind, name, size):
+    """The index of the cell build builds next: lib.cells.next, else with no size the lowest cell that keeps growing not
+    built (ticking, #812). Kept as "next" in the farm's memory["cells"][name], so lib.treefarm.outside_cells keeps dirt
+    gets off it (#816)."""
+    i = lib.cells.next(name)
+    if not size:
+        i = ([j for j in ticking(kind, name) if j not in lib.cells.built(name)] + [i])[0]
+    lib.cells.farm(name)["next"] = i
+    return i
+
+
 def build(kind, name, size, radius):
     """Builds the next cell of the farm name with the tools lib.terrain.needs for its ground and for the ground under
     its sapling spots, marks it built and says so. Gives result()."""
-    i = lib.cells.next(name)
-    if not size:
-        # The lowest cell that keeps growing not built (#812).
-        i = ([j for j in ticking(kind, name) if j not in lib.cells.built(name)] + [i])[0]
+    i = following(kind, name, size)
     low, high = lib.cells.cell(name, i)
     tools = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)["tools"]
     # build_cell mines the ground under each sapling spot that is not SOIL to put dirt there, such as stone (#612, #805).
@@ -502,6 +510,9 @@ def farm(kind, name, size, radius):
         if have < most_cells and backoff:
             backoff -= 1
         elif have < most_cells:
+            # Before stocked's dirt get (#816); a farm not laid out, as a test's with lib.cells stubbed, has no cell to keep.
+            if name in memory.get("cells", {}):
+                following(kind, name, size)
             r = stocked(kind, radius)
             if r["ok"]:
                 build(kind, name, size, radius)

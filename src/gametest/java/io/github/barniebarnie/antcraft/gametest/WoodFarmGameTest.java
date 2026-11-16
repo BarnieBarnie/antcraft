@@ -1453,6 +1453,59 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A round of a farm with no size whose next cell to build is a later one than lib.cells.next, as the cells between do
+	 * not get random ticks (#812; here ticking is stubbed to cells 1 and 3, cell 1 built): the dirt its stocked gets is not
+	 * dug from under the sapling spot of cell 3, the nearer, but outside the cells (#816). Red: the dirt under cell 3 dug.
+	 */
+	// Measured: passes at tick 191 alone, 290 in the class run (red: the dirt under cell 3 dug, tick 79).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 600)
+	public void getsDigsNoDirtFromUnderTheCellBuiltNext(GameTestHelper helper) {
+		BlockPos next = new BlockPos(20, 0, 4);
+		helper.setBlock(next, Blocks.DIRT);
+		BlockPos outside = new BlockPos(4, 0, 17);
+		helper.setBlock(outside, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 20, 1, 7);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.terrain
+			import lib.treefarm
+			lib.cells.layout("birch_farm", cell[0], (5, 5))
+			lib.cells.add("birch_farm", 0)
+			def waited(ticks):
+			    if ticks == jobs.wood_farm.WAIT:
+			        print(lib.cells.built("birch_farm"), count("minecraft:dirt"))
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.ticking = lambda k, name: [0, 2]
+			jobs.wood_farm.visit = lambda k, b: None
+			jobs.wood_farm.unplanted = lambda k, b: []
+			jobs.wood_farm.tend = lambda k, b, radius, told: None
+			jobs.wood_farm.stored_bone_meal = lambda k, name, boxes, radius: None
+			jobs.wood_farm.compost = lambda k, name, boxes, radius: lib.result.result()
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.stocked = lambda k, radius: jobs.wood_farm.gets("minecraft:dirt", 1, 32)
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.terrain.needs = lambda low, high, y: {"tools": {}}
+			lib.treefarm.build_cell = lambda k, low, high: lib.result.result()
+			lib.treefarm.grown = lambda k, low, high: False
+			jobs.wood_farm.farm(kind, "birch_farm", None, 32)
+			""");
+		Runnable dug = () -> {
+			helper.assertValueEqual(said(bot), List.of("built cell 3", "cells 2/2", "[0, 2] 1"), "said");
+			helper.assertBlockPresent(Blocks.DIRT, next);
+			helper.assertBlockPresent(Blocks.AIR, outside);
+		};
+		helper.onEachTick(() -> {
+			if (said(bot).size() == 3) {
+				dug.run();
+			}
+		});
+		helper.succeedWhen(dug);
+	}
+
+	/**
 	 * The job's kit step on a resumed farm, two cells built and no dirt carried (#777): the dirt under the spots of both
 	 * cells is nearer, but the kit's 16 dirt are dug outside the cells (lib.bootstrap.kit with gets).
 	 */

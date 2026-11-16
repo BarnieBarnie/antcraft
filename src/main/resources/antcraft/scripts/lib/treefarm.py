@@ -242,8 +242,10 @@ def get_outside(item, n, radius=32):
 
 def outside_cells():
     """A function of a Pos: whether it lies outside the columns of every farm's built cells and of the cell each builds
-    next (lib.cells, memory["cells"]), so a dirt get takes none from under a spot or floor of the farm (#767)."""
-    boxes = [lib.cells.cell(n, i) for n in memory.get("cells", {}) for i in lib.cells.built(n) + [lib.cells.next(n)]]
+    next (lib.cells, memory["cells"]): lib.cells.next, and the farm's "next" where a job keeps the one it builds next,
+    such as the wood farm's with no size (#816), so a dirt get takes none from under a spot or floor of the farm (#767)."""
+    farms = memory.get("cells", {})
+    boxes = [lib.cells.cell(n, i) for n in farms for i in lib.cells.built(n) + [lib.cells.next(n), farms[n].get("next", 0)]]
     return lambda p: not any([a.x <= p.x <= b.x and a.z <= p.z <= b.z for a, b in boxes])
 
 
