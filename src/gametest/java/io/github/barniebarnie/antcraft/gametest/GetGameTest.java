@@ -365,6 +365,30 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As {@link #makeCostOfRawCopperIsCloseToItsTicks}, for 3 raw gold with the iron pickaxe it needs, one each (#789).
+	 * Gold, diamond and emerald ore are of hardness 3 as well, so their estimate is redstone's, a walk and its mining; it
+	 * was 400 for gold and 2000 for diamond and emerald, which counted how rare they are, deep()'s part. Measured with
+	 * 50: make_cost 145, lib.dig.ore 107 to 110 ticks (test tick 114 to 127) for each (it was 845 for gold, 4045 for
+	 * diamond and emerald).
+	 */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfRawGoldIsCloseToItsTicks(GameTestHelper helper) {
+		threeOres(helper, Blocks.GOLD_ORE, Items.IRON_PICKAXE, "raw_gold", 3);
+	}
+
+	/** As {@link #makeCostOfRawGoldIsCloseToItsTicks}, for 3 diamonds (#789). */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfDiamondIsCloseToItsTicks(GameTestHelper helper) {
+		threeOres(helper, Blocks.DIAMOND_ORE, Items.IRON_PICKAXE, "diamond", 3);
+	}
+
+	/** As {@link #makeCostOfRawGoldIsCloseToItsTicks}, for 3 emeralds (#789). */
+	@GameTest(maxTicks = 270)
+	public void makeCostOfEmeraldIsCloseToItsTicks(GameTestHelper helper) {
+		threeOres(helper, Blocks.EMERALD_ORE, Items.IRON_PICKAXE, "emerald", 3);
+	}
+
+	/**
 	 * Ore at three corners of the area, the bot at the fourth with pickaxe: make_cost of n of item, three ore, is within
 	 * {@link #COST_FACTOR} of the ticks lib.dig.ore takes to mine all three.
 	 */
@@ -380,7 +404,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 			print(SOURCES["minecraft:%1$s"].blocks(%2$d) == 3 and make_cost("%1$s", %2$d))
 			lib.dig.best_y = lambda key: None
 			r = lib.dig.ore("%1$s", 99)
-			print(r["reason"] == "no_ore" and count("%1$s") >= 6)
+			print(r["reason"] == "no_ore" and count("%1$s") >= min(6, %2$d))
 			""".formatted(item, n));
 		measured(helper, bot);
 	}

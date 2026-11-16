@@ -222,12 +222,13 @@ GRAVEL = lib.cost.BREAK["dirt"]["hand"] + 2 * lib.cost.WALK
 FLINT_CHANCE = [0.1, 0.14285715, 0.25, 1.0]
 SOURCES[FLINT] = Flint(flint, "shovel", "hand", GRAVEL, near=GRAVEL_BLOCK,
                        drops=lambda level: FLINT_CHANCE[min(level, len(FLINT_CHANCE) - 1)])
-# Copper, lapis and redstone measured as raw iron, one exposed ore after another (#779): an ore a walk and its mining,
-# redstone's quicker with the iron pickaxe it needs. Where none is exposed, deep() costs the digging down to it.
+# Copper, lapis and redstone measured as raw iron, one exposed ore after another (#779), gold, diamond and emerald as
+# redstone (#789): an ore a walk and its mining, quicker with the iron pickaxe the last four need. Where none is exposed,
+# deep() costs the digging down to it, so how rare an ore is stays out of its estimate.
 for item, ore_block, estimate in [("coal", "coal_ore", 40), ("raw_iron", "iron_ore", 60), ("raw_copper", "copper_ore", 60),
-                                  ("raw_gold", "gold_ore", 400), ("redstone", "redstone_ore", 50),
-                                  ("lapis_lazuli", "lapis_ore", 60), ("diamond", "diamond_ore", 2000),
-                                  ("emerald", "emerald_ore", 2000)]:
+                                  ("raw_gold", "gold_ore", 50), ("redstone", "redstone_ore", 50),
+                                  ("lapis_lazuli", "lapis_ore", 60), ("diamond", "diamond_ore", 50),
+                                  ("emerald", "emerald_ore", 50)]:
     SOURCES["minecraft:" + item] = ore(item, ore_block, estimate)
 # Saplings and apples break from leaves by hand, one in chance leaves broken (the 26.3 loot tables, no fortune); LEAF
 # ticks a leaves block (hardness 0.2: 6 by hand) and the step to the next. By hand, as shears or a silk touch tool would
