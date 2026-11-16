@@ -76,6 +76,8 @@ def store(name, keep=None, radius=32):
 
 
 SKIPS = 8  # slots add_chest skips at most a call
+# add_chest calls a depot skips at most after a failed get (#787): each failure doubles them, 1, 2, 4 up to this.
+BACKOFF = 16
 
 
 def make_room(name, free, keep=None, radius=32):
@@ -96,8 +98,10 @@ def add_chest(name, cat, radius=32):
     double chest, and gives it to category cat. A chest already standing there is taken if it is empty or holds only
     items of cat. A slot holding another chest, or a block place may not replace (blocked), is skipped for good, at most
     SKIPS a call (then blocked): the depot never digs, so it leaves what someone else put there. The chest is got with
-    lib.get within radius, so crafted from planks where none is carried or stored. Gives result(): ok with at, the chest, or the reason getting
-    or placing it failed with."""
+    lib.get within radius, so crafted from planks where none is carried or stored. After a failed get the next calls skip
+    it and fail with its reason, 1, 2, 4 calls up to BACKOFF, unless the bot carries the logs or planks for a chest; a
+    chest got ends the backoff (#787). Gives result(): ok with at, the chest, or the reason getting or placing it failed
+    with."""
     d = depot(name)
     step = FACING[d["facing"]]
     # ponytail: at most SKIPS slots skipped a call, so a wall along the row ends it with blocked, not a walk down it.
@@ -112,9 +116,18 @@ def add_chest(name, cat, radius=32):
                 found = True
                 break
         else:
+            # ponytail: a backoff in add_chest calls, not ticks, so a job that stores each round backs off in rounds.
+            if d.get("skip") and 4 * count("#minecraft:logs") + count("#minecraft:planks") < 8:
+                d["skip"] -= 1
+                return result(d["failed"], p)
             r = lib.get.get(CHEST, 1, radius)
             if not r["ok"]:
+                d["backoff"] = min(BACKOFF, 2 * d.get("backoff", 0) or 1)
+                d["skip"] = d["backoff"]
+                d["failed"] = r["reason"]
                 return r
+            d.pop("skip", None)
+            d.pop("backoff", None)
             placed = place(p, CHEST, d["facing"])
             if placed:
                 found = True

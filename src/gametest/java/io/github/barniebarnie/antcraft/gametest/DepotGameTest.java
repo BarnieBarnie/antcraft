@@ -150,6 +150,47 @@ public class DepotGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * One oak log carried, too few for a chest, and no chest to be got (lib.get counted and failing): of 9 stores only
+	 * the 1st, 3rd and 6th try lib.get, each failure doubling the stores skipped (#787). Then the test gives the bot 9
+	 * more logs: the next store, though within its backoff, gets the chest with the real lib.get and stores the rest.
+	 */
+	// Measured: passes at tick 97 (red: printed 9, every store tried lib.get).
+	@GameTest(maxTicks = 190)
+	public void aDepotThatCannotGetAChestBacksOffUntilItHasTheLogs(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 1));
+		ScriptRun job = run(helper, bot, DEPOT.formatted(printed(helper, 1, 1, 1)) + """
+			import lib.get
+			import lib.result
+			real = lib.get.get
+			calls = []
+			def failing(item, n, radius):
+			    calls.append(item)
+			    return lib.result.result("no_item", None, {item: n})
+			lib.get.get = failing
+			for _ in range(9):
+			    lib.depot.store("wood")
+			print(len(calls))
+			lib.get.get = real
+			while count("minecraft:oak_log") < 10:
+			    wait(1)
+			r = lib.depot.store("wood")
+			print(r["ok"], count("minecraft:oak_log"), len(lib.depot.chests("wood", "logs")))
+			""");
+		boolean[] given = {false};
+		helper.onEachTick(() -> {
+			if (!given[0] && BotScripts.log(bot, Output.Level.PRINT).size() == 1) {
+				given[0] = true;
+				bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 9));
+			}
+		});
+		helper.succeedWhen(() -> {
+			finished(helper, job, bot, List.of("3", "True 0 1"));
+			helper.assertTrue(chest(helper, 1).countItem(Items.OAK_LOG) > 0, "no logs in the chest");
+		});
+	}
+
+	/**
 	 * Dirt at the depot's first slot (1, 1, 1), which store may not dig: it skips the slot and places the logs chest at
 	 * (2, 1, 1), leaving the dirt.
 	 */
