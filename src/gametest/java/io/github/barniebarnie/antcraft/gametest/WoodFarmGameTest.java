@@ -663,9 +663,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * 2, 8 and 14 blocks east and south fit and those 20 off do not, which leaves 9 cells, cells 4, 8 and 12 skipped. The
 	 * cells are not built in the world (build_cell and what a round does to them are stubbed). Red: it built cell 4 on.
 	 */
-	// Measured: passes at tick 37 (red: cells 1/76 and cell 4 built).
-	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 120)
+	// Measured: passes at tick 40 (red: cells 1/76 and cell 4 built); corner stubbed (#820).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
 	public void aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		capScript(helper, bot, "None", 10, "[]");
@@ -681,9 +680,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** As aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks with a size of 12: the farm builds 12 cells in turn (#812). */
-	// Measured: passes at tick 45.
-	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 130)
+	// Measured: passes at tick 47; corner stubbed (#820).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 95)
 	public void aSizeBuildsThatManyCellsPastTheRandomTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		capScript(helper, bot, "12", 13, "[]");
@@ -702,9 +700,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * already (under a size, or before #812): they do not count toward the cap, so the farm still builds the 9 cells that
 	 * tick, then says full (#815). Red: "farm full" after 6 cells.
 	 */
-	// Measured: passes at tick 48 (red: farm full at cells 9/9 after 6 built).
-	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 120)
+	// Measured: passes at tick 51 (red: farm full at cells 9/9 after 6 built); corner stubbed (#820).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
 	public void cellsOutsideTheTicksDoNotCountTowardTheCap(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		capScript(helper, bot, "None", 10, "[3, 7, 11]");
@@ -763,7 +760,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Runs jobs.wood_farm.farm for birch up to size cells (a Python expression), laid out from a corner at x and z 15 of
 	 * the chunk of the test's spot, each cell built by a stub, no tree grown; at the waits'th wait prints the cells built
-	 * and stops. The cells of built (a Python list of indices) are marked built first.
+	 * and stops. The cells of built (a Python list of indices) are marked built first. The walk into the corner's chunk
+	 * (corner, #814) is stubbed: 6 to 12 blocks east of the bot, by where the area lands in its chunk, it took up to some
+	 * 60 ticks (#820).
 	 */
 	private static void capScript(GameTestHelper helper, AntBot bot, String size, int waits, String built) {
 		script(helper, bot, """
@@ -790,6 +789,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			jobs.wood_farm.stored_bone_meal = lambda k, name, boxes, radius: None
 			jobs.wood_farm.compost = lambda k, name, boxes, radius: lib.result.result()
 			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.corner = lambda name: None
 			jobs.wood_farm.stocked = lambda k, radius: lib.result.result()
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.terrain.needs = lambda low, high, y: {"tools": {}}
