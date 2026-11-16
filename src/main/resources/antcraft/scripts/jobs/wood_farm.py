@@ -373,6 +373,17 @@ def visit(kind, b):
         goto(lib.treefarm.torches(b[0], b[1])[0], 2)
 
 
+def corner(name):
+    """Walks the bot into the chunk of the farm name's corner, cell 0's low corner, where it stands elsewhere (#814), so
+    the cells ticking counts get random ticks while it waits: to the floor diagonal into cell 0, kept in that chunk."""
+    low = lib.cells.cell(name, 0)[0]
+    p = pos()
+    if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
+        return
+    # ponytail: a corner at chunk-local 15 on both axes sends it onto the corner's torch spot, which a torch does not block.
+    goto(Pos(min(low.x + 1, low.x // 16 * 16 + 15), low.y + 1, min(low.z + 1, low.z // 16 * 16 + 15)))
+
+
 def unplanted(kind, b):
     """The spots of cell b, a (low, high) box, that hold neither a sapling of kind nor a log; none where the bot cannot
     read the cell (lib.treefarm.loaded, #810)."""
@@ -450,7 +461,7 @@ def farm(kind, name, size, radius):
     lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
     lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
     once full composts the extra saplings (compost), and where it felled nothing picks up the drops in the farm (sweep)
-    and waits. Each round takes back the scaffold its walks
+    and waits in its corner's chunk (corner, #814). Each round takes back the scaffold its walks
     placed (lib.trees.take_back) before it waits, and before each felling and build (#654). Where size is None the farm grows to
     limit(kind, name, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
     felled (learn)."""
@@ -465,10 +476,10 @@ def farm(kind, name, size, radius):
         placed_scaffold()
         own()
         # Only the cells the bot can read (#810), but each round it walks to one it cannot, in turn, so every cell is
-        # farmed (#811).
+        # farmed (#811). As the bot waits at the corner (#814), one round in turn visits none, to farm the cells there.
         cells = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
-        far = [b for b in cells if not lib.treefarm.loaded(kind, b[0], b[1])]
-        visited = far[visits % len(far)] if far else None
+        far = [b for b in cells if not lib.treefarm.loaded(kind, b[0], b[1])] + [None]
+        visited = far[visits % len(far)]
         visits += 1
         if visited:
             visit(kind, visited)
@@ -554,6 +565,7 @@ def farm(kind, name, size, radius):
                 tell(told, f"compost: {r['reason']}")
         if not felled:
             sweep(kind, boxes)
+            corner(name)
         lib.trees.take_back()
         if not felled:
             wait(WAIT)

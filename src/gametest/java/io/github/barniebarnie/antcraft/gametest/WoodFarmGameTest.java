@@ -287,8 +287,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * not in the waits' rounds after. The farm is lib.cells's functions swapped for one cell, with no lib.cells.layout:
 	 * a module attribute assigned is what the job's functions see (docs/language/modules.md).
 	 */
-	// Measured: passes at tick 5.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	// Measured: passes at tick 5, some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 70)
 	public void aFarmThatCannotGetAMaterialBacksOff(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -333,7 +333,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * chest can be added, lib.depot.store adds it (DepotGameTest aFullChestGrowsTheRow).
 	 */
 	// Measured: passes at tick 8 (red: said the store line every round, its kept count growing).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
 	public void aFullDepotIsSaidOnceAndTheFarmGoesOn(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -370,7 +371,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * dropped, but says once that its inventory is full and waits (#765).
 	 */
 	// Measured: passes at tick 12 (red: tried to fell it, harvest: no_space, and stored nothing).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 70)
 	public void aFullInventoryThatCannotBeStoredStopsTheFelling(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, SPOT, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES, false);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
@@ -411,7 +413,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * with no size, is full. With HARVEST it would have gone on to a second cell.
 	 */
 	// Measured: passes at tick 14, the farm's cells that tick worked out once (#812).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 70)
 	public void sizesItselfFromTheTicksItSpendsPerTree(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -450,7 +453,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * the birch's kit and a cell take less than a stack, so a stack is what it keeps. It carries a chest for the depot.
 	 */
 	// Measured: passes at tick 24.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
 	public void storesItsDirtButAStack(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -517,8 +521,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * As storesItsDirtButAStack in a round that fells nothing (#766): no tree is grown, yet the bot stores all but a
 	 * stack of its 5 stacks of dirt before it waits, so what builds up between fellings does not fill its inventory.
 	 */
-	// Measured: passes at tick 23 (red: kept all 320 dirt).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
+	// Measured: passes at tick 23 to 40, with a walk into the corner's chunk before its wait (#814) (red: kept all 320 dirt).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
 	public void aRoundWithNoGrownTreeStoresItsSurplus(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -621,7 +625,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * 19, the farm says so and tries the next cell (gets fails, so it says what it lacks).
 	 */
 	// Measured: passes at tick 11, the farm's cells that tick worked out once (#812).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 70)
 	public void aFullFarmSaysWhenItsLimitGrows(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -659,7 +664,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * cells are not built in the world (build_cell and what a round does to them are stubbed). Red: it built cell 4 on.
 	 */
 	// Measured: passes at tick 37 (red: cells 1/76 and cell 4 built).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 120)
 	public void aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		capScript(helper, bot, "None", 10, "[]");
@@ -676,7 +682,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/** As aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks with a size of 12: the farm builds 12 cells in turn (#812). */
 	// Measured: passes at tick 45.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 90)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 130)
 	public void aSizeBuildsThatManyCellsPastTheRandomTicks(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		capScript(helper, bot, "12", 13, "[]");
@@ -696,7 +703,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * tick, then says full (#815). Red: "farm full" after 6 cells.
 	 */
 	// Measured: passes at tick 48 (red: farm full at cells 9/9 after 6 built).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 120)
 	public void cellsOutsideTheTicksDoNotCountTowardTheCap(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		capScript(helper, bot, "None", 10, "[3, 7, 11]");
@@ -811,7 +819,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/** As aFullFarmCompostsItsExtraSaplingsIntoBoneMeal with 32 extras: no composter (#804). */
 	// Measured: passes at tick 8.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
 	public void aFullFarmWith32ExtraSaplingsMakesNoComposter(GameTestHelper helper) {
 		AntBot bot = compostBot(helper, 34);
 		farmScript(helper, bot, 1, 2);
@@ -823,7 +832,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 
 	/** As aFullFarmCompostsItsExtraSaplingsIntoBoneMeal in a farm that still builds cells: no composter (#804). */
 	// Measured: passes at tick 7.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
 	public void aFarmStillBuildingMakesNoComposter(GameTestHelper helper) {
 		AntBot bot = compostBot(helper, 66);
 		farmScript(helper, bot, 2, 2);
@@ -860,7 +870,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * which grows into a tree, and the next round's store puts back what is left.
 	 */
 	// Measured: passes at tick 36 (red: the sapling never grows).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
+	// Up to some 40 ticks more with a walk into the corner's chunk before its first wait (#814).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 120)
 	public void theFarmUsesTheBoneMealStoredInItsDepot(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -902,8 +913,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * it to cell 2's place at the first wait), the next round plants it too. Red: the round crashed on None.id. The farm's
 	 * walk to a cell out of range (visit, #811) is left out here.
 	 */
-	// Measured: passes at tick 70 (red: jobs/wood_farm.py:308: 'NoneType' object has no attribute 'id' at tick 8).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 140)
+	// Measured: passes at tick 70 to 111, with walks into the corner's chunk before its waits (#814) (red:
+	// jobs/wood_farm.py:308: 'NoneType' object has no attribute 'id' at tick 8).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 220)
 	public void aCellOutOfLoadedRangeIsLeftUntilTheBotCanReadIt(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT_2.below(), Blocks.DIRT);
@@ -987,6 +999,36 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			assertCell(helper, bot, SPOT);
 			assertCell(helper, bot, far);
 		});
+	}
+
+	/**
+	 * A bot that ends a round at the far side of the farm, (22, 1, 22), 16 blocks east of cell 1's low corner and so
+	 * in another chunk, walks back into the corner's chunk before it waits, so the cells the farm's cap counts (ticking,
+	 * #812) grow while it waits (#814). The round does nothing else: no tree grown, no cell to tend, the farm full.
+	 */
+	// Measured: passes at tick 181 (red: waited in its own chunk).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 360)
+	public void aBotWaitsInItsCornersChunk(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 22, 1, 22);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			def waited(ticks):
+			    p = pos()
+			    print(p.x // 16 == cell[0].x // 16 and p.z // 16 == cell[0].z // 16)
+			    stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.treefarm.grown = lambda k, low, high: False
+			lib.cells.built = lambda name: []
+			lib.cells.cell = lambda name, i: cell
+			lib.cells.count = lambda name: 1
+			jobs.wood_farm.farm(kind, "birch_farm", 1, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("farm full", "True"), "said"));
 	}
 
 	/**
