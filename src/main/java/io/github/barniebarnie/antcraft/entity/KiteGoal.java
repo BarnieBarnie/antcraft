@@ -39,12 +39,14 @@ public final class KiteGoal extends Goal {
 	 * spend the fuse walking there and back (#717).
 	 */
 	private static final double STEP_IN_RANGE = 3;
+	/** How far, in blocks, a creeper's blast hurts: twice its explosion's power of 3. */
+	private static final double BLAST = 6;
 	/** How many spots further from the creeper the bot weighs when it backs off: it takes the one that gains it most. */
 	private static final int AWAY_TRIES = 10;
 	/** How near the bot, in blocks, a creeper counts when it backs off, lit or not: one about to light is in the way too (#725). */
 	private static final double CREEPERS_RANGE = 2 * RANGE;
 	/**
-	 * How many ticks the bot waits to plan again where a plan found no way off and its weapon is not ready: a plan, 20 random
+	 * How many ticks the bot waits to plan again where a plan found no way off and it is not cornered: a plan, 20 random
 	 * spots and a path, costs about 2 ms, and the next can find a spot this one did not (#759).
 	 */
 	private static final int REPLAN_TICKS = 4;
@@ -113,7 +115,20 @@ public final class KiteGoal extends Goal {
 		// The spot's straight-line gain can lie behind a wall, as all do in a dead end: only a path whose end gains a block
 		// or more counts, as one ending on the bot's own block gains nothing (#733).
 		Path path = this.bot.getNavigation().createPath(BlockPos.containing(best), 0);
-		return path != null && nearest(creepers, Vec3.atBottomCenterOf(path.getEndNode().asBlockPos())) >= now + 1 ? path : null;
+		return path != null && nearest(creepers, Vec3.atBottomCenterOf(path.getEndNode().asBlockPos())) >= now + 1 && !nearer(path, creepers, now) ? path : null;
+	}
+
+	/**
+	 * Whether {@code path} takes the bot more than a block nearer to {@code creepers} than {@code now}, on its way: one that
+	 * ends further off can run past the creeper, through its blast (#785).
+	 */
+	private static boolean nearer(Path path, List<Creeper> creepers, double now) {
+		for (int i = 0; i < path.getNodeCount(); i++) {
+			if (nearest(creepers, Vec3.atBottomCenterOf(path.getNode(i).asBlockPos())) < now - 1) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** How far {@code pos} is from the nearest of {@code creepers}. */
@@ -188,15 +203,17 @@ public final class KiteGoal extends Goal {
 			return;
 		}
 		// Somewhere further from the creeper than the bot is; planned again once there.
-		// With no way off and its weapon not ready, it plans again only every few ticks, not each tick (#759).
-		if ((this.away == null || this.bot.getNavigation().isDone()) && (ready || this.bot.tickCount - this.noWayOffAt >= REPLAN_TICKS)) {
+		// With no way off and not cornered, it plans again only every few ticks, not each tick (#759).
+		if ((this.away == null || this.bot.getNavigation().isDone()) && this.bot.tickCount - this.noWayOffAt >= REPLAN_TICKS) {
 			this.away = this.away(creeper);
 			if (this.away != null) {
 				this.bot.getNavigation().moveTo(this.away, SPEED);
 				return;
 			}
 			this.noWayOffAt = this.bot.tickCount;
-			if (ready) {
+			// Only within the blast's reach, where it is caught anyway: from further off it would walk into the blast, as it
+			// did 8 blocks from a creeper lit for another bot (#785).
+			if (ready && creeper.distanceTo(this.bot) <= BLAST) {
 				this.cornered = true;
 				this.bot.getNavigation().stop();
 				this.bot.getMoveControl().setWantedPosition(creeper.getX(), creeper.getY(), creeper.getZ(), SPEED);

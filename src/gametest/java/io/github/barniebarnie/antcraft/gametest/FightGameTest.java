@@ -640,6 +640,40 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(creeper.getHealth() < health, "not struck"));
 	}
 
+	/**
+	 * A bot at the end of a 1-wide dead end, a creeper lit for another 7.5 blocks off past its mouth, stays put out of the
+	 * blast (#785). In the benchmark creepers case bots died two ways here: a way off that ends further from the creeper
+	 * but runs past it, and cornered by a creeper 8 blocks off, which it walked up to. The creeper stands still, its fuse
+	 * lit by hand and put out before it explodes.
+	 */
+	// Measured: passes at tick 52 (red: came 5.8 blocks near at tick 9).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
+	public void aBotInADeadEndStaysOutOfAFarLitCreepersBlast(GameTestHelper helper) {
+		for (int z = 2; z <= 8; z++) {
+			for (int y = 1; y <= 2; y++) {
+				helper.setBlock(11, y, z, Blocks.STONE);
+				helper.setBlock(13, y, z, Blocks.STONE);
+				if (z == 2) {
+					helper.setBlock(12, y, z, Blocks.STONE);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 11));
+		creeper.setNoAi(true);
+		creeper.setSwellDir(1);
+		helper.onEachTick(() -> {
+			if (creeper.getSwelling(1) >= 0.9F) {
+				creeper.setSwellDir(-1);
+			}
+			if (bot.distanceTo(creeper) < 6.5) {
+				helper.fail("came " + String.format("%.1f", bot.distanceTo(creeper)) + " blocks near the lit creeper, swell " + creeper.getSwelling(1));
+			}
+		});
+		succeedWhenTheFuseWentOut(helper, creeper, 1F);
+	}
+
 	/** A closed stone tunnel along z at x = 12, two high, from z = 3 to z = 13. */
 	private static void deadEnd(GameTestHelper helper) {
 		for (int z = 2; z <= 14; z++) {
