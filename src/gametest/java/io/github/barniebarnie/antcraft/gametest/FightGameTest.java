@@ -358,6 +358,24 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * {@code attack} on a mob hovering out of melee reach, a blaze 5 blocks over the stone floor, walks only to the floor
+	 * under it, not up to it, and gives up with {@code unreachable} (#799). With no blocks to pillar on, its walk to within
+	 * 1 block of the blaze searched 528 nodes by tick 5 for a way up, and on.
+	 */
+	// Measured: passes at tick 25.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 50)
+	public void attackOnAMobHoveringOutOfReachEndsWithUnreachableWithoutALongSearch(GameTestHelper helper) {
+		Blaze blaze = helper.spawn(EntityTypes.BLAZE, 12, 6, 15);
+		blaze.setNoAi(true);
+		blaze.setNoGravity(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 10);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		ScriptRun run = run(helper, bot, attackThe("blaze"));
+		helper.onEachTick(() -> helper.assertTrue(PathCounts.nodes(bot) <= 300, PathCounts.nodes(bot) + " nodes searched"));
+		succeedWhenPrinted(helper, bot, run, List.of("False unreachable"));
+	}
+
+	/**
 	 * A bot brought to flee health while it fights a husk flees home: the flee reflex ends the attack with
 	 * {@code interrupted}. In a wide area, as the flee tests of {@code ReflexGameTest}, so the bot has room to flee.
 	 */

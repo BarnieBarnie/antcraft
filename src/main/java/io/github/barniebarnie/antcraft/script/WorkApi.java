@@ -559,7 +559,7 @@ public final class WorkApi {
 				if (this.arrivals >= ARRIVALS) {
 					return this.finish(Result.fail(Result.UNREACHABLE));
 				}
-				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(target.blockPosition()), 1);
+				this.walk = MoveApi.walk(this.run.host(), EntityInfo.pos(ground(target)), 1);
 				this.walkedTo = target.position();
 			}
 			if (!this.walk.tick()) {
@@ -572,6 +572,19 @@ public final class WorkApi {
 			}
 			this.arrivals++;
 			return false;
+		}
+
+		/**
+		 * Where the bot walks to: the target's block for a mob that stands, the one over the ground under it for one that
+		 * flies or hovers. A walk to within 1 block of a mob in the air searched its whole budget for a way up, tick after
+		 * tick (#799); under it, the bot that still cannot strike it gives up after {@link #ARRIVALS}.
+		 */
+		private static BlockPos ground(LivingEntity target) {
+			BlockPos.MutableBlockPos pos = target.blockPosition().mutable();
+			while (pos.getY() > target.level().getMinY() && target.level().getBlockState(pos.below()).isAir()) {
+				pos.move(Direction.DOWN);
+			}
+			return pos;
 		}
 
 		private boolean finish(Result result) {
