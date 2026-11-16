@@ -380,6 +380,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A moss carpet at (3, 1, 3) with a vine over it at (3, 2, 3), hanging on its north side from bedrock at (3, 2, 2), and
+	 * bedrock at (2, 1, 3) west of the carpet: the bot on the carpet walks west onto that block, nothing over the way out.
+	 * A path counts the carpet a floor as high as a block, but its top is near a block under the bedrock's: the bot jumped
+	 * into the vine and, over the level it walks off from, slid down to the carpet again before it moved off, and again, as
+	 * in seed 13's mangrove crown at (8, 9, 7), where a moss carpet lies under a vine beside the dirt a pillar left: mine's
+	 * walk to a branch log there gave up, and harvest ended out_of_reach (#784).
+	 */
+	// Measured: passes at tick 12 (red: at (3, 1, 3) at its limit of 100, jumping and sliding back).
+	@GameTest(maxTicks = 40)
+	public void walksOffAVineOverACarpetOntoABlock(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(3, 1, 3, Blocks.MOSS_CARPET);
+		helper.setBlock(3, 2, 2, Blocks.BEDROCK);
+		helper.setBlock(3, 2, 3, Blocks.VINE.defaultBlockState().setValue(VineBlock.NORTH, true));
+		helper.setBlock(2, 1, 3, Blocks.BEDROCK);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(3.5, 1 + 1 / 16.0, 3.5));
+		BlockPos target = helper.absolutePos(new BlockPos(2, 2, 3));
+		GameTests.walkTo(bot, target, 0);
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(GameTests.walked(bot) && bot.blockPosition().equals(target) && bot.onGround(),
+			"at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO))));
+	}
+
+	/**
 	 * A bedrock shaft four high round (3, 1, 3): the bot with dirt pillars up out of it, and as it lands on its first block
 	 * a vine grows in where it stands, on the south side. The search plans no pillar out of a vine, but vines grow after it
 	 * planned, and on one a jump only climbs: the bot that jumped only from the ground never rose high enough to place its

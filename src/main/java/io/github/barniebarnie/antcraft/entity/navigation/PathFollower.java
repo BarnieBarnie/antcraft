@@ -236,8 +236,13 @@ public class PathFollower {
 			} else if ((step.type() == MoveType.WALK || step.type() == MoveType.DROP) && this.bot.onClimbable()) {
 				// Off a ladder, steered like a climb: turning to walk away, the move control would bump into the wall, and
 				// climb up it. Not before it has slid down to the floor it walks on, or its head bumps into the top of the way out
-				// and it climbs that: off vines, it rose, slid back and tried again until goto timed out (#776).
-				this.climb(this.bot.getY() > this.stepFrom().getY() + 0.2 ? new Step(MoveType.CLIMB_DOWN, feet, List.of(), List.of()) : step);
+				// and it climbs that: off vines, it rose, slid back and tried again until goto timed out (#776). Not off a low
+				// floor with no top to bump, though: on vines over a carpet, nearly a block under the one it walks onto, it
+				// jumped up past the level it walks off from and slid down to the carpet again, over and over (#784).
+				BlockPos from = this.stepFrom();
+				boolean roofed = !world.isPassable(new BlockPos(step.to().getX(), from.getY() + 2, step.to().getZ()));
+				boolean slide = this.bot.getY() > from.getY() + 0.2 && (roofed || world.floorTop(from.below()) >= 1);
+				this.climb(slide ? new Step(MoveType.CLIMB_DOWN, feet, List.of(), List.of()) : step);
 			} else {
 				this.moveTo(step.to());
 			}
