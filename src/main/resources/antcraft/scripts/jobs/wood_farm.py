@@ -1,7 +1,8 @@
 # A job: grows a wood farm from nothing and farms it until a player stops it. Run it as
 # /antcraft bot run jobs.wood_farm <kind> [x y z [cells [radius]]], such as jobs.wood_farm birch_sapling: a kind of
 # lib.treefarm.KINDS (a sapling, mangrove_propagule, or giant_spruce or giant_jungle), the farm's first corner, by default where the bot stands (or where a stopped run of the kind
-# started), the most cells it grows to (by default most of the ticks a tree takes, learnt as it farms, else HARVEST[kind]) and how far to look for what it needs, in
+# started), the most cells it grows to (by default most of the ticks a tree takes, learnt as it farms, else HARVEST[kind], and no
+# more than the cells that get random ticks round its corner, #812) and how far to look for what it needs, in
 # blocks (32 by default). One project of lib.project, so a stopped run resumes at the step it was on: it gets a kit, the saplings,
 # builds the first cell (lib.treefarm on lib.cells), then farms forever: fells each grown tree and replants, stores the
 # logs, sticks and apples in a depot (lib.depot) north of the farm, and builds the next cell once it has or can get
@@ -148,9 +149,25 @@ def learn(kind, ticks, trees):
     memory["wood_ticks"] = h
 
 
-def limit(kind, size):
-    """The most cells of a farm of kind: size, else most(harvest(kind))."""
-    return size or most(harvest(kind))
+def limit(kind, name, size):
+    """The most cells of the farm name of kind: size, else most(harvest(kind)) but no more than its cells that keep
+    growing (ticking, #812)."""
+    return size or min(most(harvest(kind)), len(ticking(kind, name)))
+
+
+TICKING = {}  # a farm's name to ticking's cells, worked out once a run: a farm's layout does not change
+
+
+def ticking(kind, name):
+    """The indices of the farm name's cells whose saplings get random ticks while the bot is at the farm's corner, the
+    low corner of cell 0, where its depot is (lib.treefarm.ticking, #812): a cell farther off grows only while the bot
+    is near it."""
+    if name not in TICKING:
+        corner = lib.cells.cell(name, 0)[0]
+        # ponytail: the first 32 cells; 8 rows of 4 of the narrowest kind (5 and a path) reach past the 2 chunks east and
+        # south of the corner's that tick. Some 5 ticks of instructions, once.
+        TICKING[name] = [i for i in range(32) if lib.treefarm.ticking(kind, corner, *lib.cells.cell(name, i))]
+    return TICKING[name]
 
 
 def materials(kind):
@@ -172,6 +189,9 @@ def build(kind, name, size, radius):
     """Builds the next cell of the farm name with the tools lib.terrain.needs for its ground and for the ground under
     its sapling spots, marks it built and says so. Gives result()."""
     i = lib.cells.next(name)
+    if not size:
+        # The lowest cell that keeps growing not built (#812).
+        i = ([j for j in ticking(kind, name) if j not in lib.cells.built(name)] + [i])[0]
     low, high = lib.cells.cell(name, i)
     tools = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)["tools"]
     # build_cell mines the ground under each sapling spot that is not SOIL to put dirt there, such as stone (#612, #805).
@@ -188,7 +208,7 @@ def build(kind, name, size, radius):
     if r["ok"]:
         lib.cells.add(name, i)
         say(f"built cell {i + 1}")
-        say(f"cells {lib.cells.count(name)}/{limit(kind, size)}")
+        say(f"cells {lib.cells.count(name)}/{limit(kind, name, size)}")
     return r
 
 
@@ -390,7 +410,7 @@ def farm(kind, name, size, radius):
     once full composts the extra saplings (compost), and where it felled nothing picks up the drops in the farm (sweep)
     and waits. Each round takes back the scaffold its walks
     placed (lib.trees.take_back) before it waits, and before each felling and build (#654). Where size is None the farm grows to
-    limit(kind, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
+    limit(kind, name, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
     felled (learn)."""
     full = False
     told = {}
@@ -466,7 +486,7 @@ def farm(kind, name, size, radius):
         if felled:
             learn(kind, game_time() - start, trees)
             backoff = 0
-        most_cells = limit(kind, size)
+        most_cells = limit(kind, name, size)
         if full and lib.cells.count(name) < most_cells:
             say(f"cells {lib.cells.count(name)}/{most_cells}")  # it learnt it may grow (#662); "farm full" again once it is
             full = False

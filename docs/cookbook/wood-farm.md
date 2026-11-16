@@ -8,7 +8,7 @@ The job `jobs/wood_farm` starts a wood farm with an empty-handed bot and farms i
 /antcraft bot run jobs.wood_farm spruce_sapling 10 64 10 12 16
 ```
 
-The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar), `mangrove_propagule` or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings (see Giants); the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most` of the ticks a tree takes, which the farm learns, see below) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells. A full farm that learns it may grow (see How big) says its new limit, `cells 3/5`, and builds on.
+The arguments are the kind, one of [`lib.treefarm.KINDS`](../reference/modules/lib/treefarm.md): a sapling (oak, birch, spruce, jungle, dark oak, pale oak, acacia, cherry or poplar), `mangrove_propagule` or `giant_spruce` or `giant_jungle`, which grow from four spruce or jungle saplings (see Giants); the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started), the most cells it grows to (by default `most` of the ticks a tree takes, which the farm learns, but no more than the cells that get random ticks while the bot is at the corner, see How big) and how far to look for what it needs, in blocks (default 32). The bot says one line per step it starts, `birch_farm 3/4: cell`, `built cell 2` and `cells 2/47` as the farm grows, and `farm full` once it has all its cells. A full farm that learns it may grow (see How big) says its new limit, `cells 3/5`, and builds on.
 
 The farm, from the corner `x y z` (the cells' floor is the block under it):
 
@@ -93,7 +93,9 @@ A sapling grows on random ticks: each tick, the game gives one to `randomTickSpe
 | giant spruce | 84 (measured: a trunk of 24 took some 3050 to 3300 ticks) | 3200 | 5 |
 | giant jungle | 87 (measured: 67 logs took some 2000 to 2950 ticks, 2250 on average, with no death) | 2250 | 8 |
 
-Pass the most cells as an argument for a farm of another size: the farm keeps to it, whatever it learns.
+A sapling grows only in a chunk that gets random ticks, and a bot's chunk ticket gives them only to its own chunk and the 8 round it (in 26.3 the game random-ticks the chunks at entity-ticking level; the ring past those ticks no random blocks, the next is only loaded). The bot spends most of a round at the farm's corner, by its depot, so a cell farther off grows only while the bot is near it, far slower than `GROWTH`. So a farm with no size also keeps to the cells whose sapling spots lie in the corner's chunk or the ring round it (`lib.treefarm.ticking`, `TICKING` 1 chunk, #812): `limit(kind, name, None)` is the smaller of `most(harvest(kind))` and those cells, and it builds those cells only, the lowest first, skipping one that lies past them, such as the fourth of a row, then says `farm full`. As the cells go east and south of the corner, that is 16 to 31 blocks past the corner each way, by where the corner lies in its chunk: 9 to 20 birch cells, 1 to 9 cherry cells. A corner at the north-west of a chunk (x and z a multiple of 16) gives the most.
+
+Pass the most cells as an argument for a farm of another size: the farm keeps to it, whatever it learns, and builds its cells in turn. The cells past the ticking chunks then grow only in the rounds the bot walks to them (`visit`), so they give few trees.
 
 ## A forester
 

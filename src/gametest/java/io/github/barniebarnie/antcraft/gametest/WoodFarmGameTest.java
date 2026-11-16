@@ -410,8 +410,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * third felled in the farm's first round makes the mean over GROWTH, so most() is 1 and the farm of one cell, run
 	 * with no size, is full. With HARVEST it would have gone on to a second cell.
 	 */
-	// Measured: passes at tick 7.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	// Measured: passes at tick 14, the farm's cells that tick worked out once (#812).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
 	public void sizesItselfFromTheTicksItSpendsPerTree(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -620,8 +620,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * in memory make it full at one cell; after its first wait the test puts three of 1000 ticks there, so the limit is
 	 * 19, the farm says so and tries the next cell (gets fails, so it says what it lacks).
 	 */
-	// Measured: passes at tick 4.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
+	// Measured: passes at tick 11, the farm's cells that tick worked out once (#812).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 30)
 	public void aFullFarmSaysWhenItsLimitGrows(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
@@ -650,6 +650,81 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			""");
 		helper.succeedWhen(() -> helper.assertValueEqual(said(bot),
 			List.of("farm full", "cells 1/19", "next cell: no_item, lacks {'minecraft:dirt': 1}"), "said"));
+	}
+
+	/**
+	 * A farm with no size builds only the cells whose sapling spots lie in the chunks that get random ticks while the bot
+	 * stands at the farm's corner, its own and the ring round it (#812): its corner at x and z 15 of a chunk, so birch spots
+	 * 2, 8 and 14 blocks east and south fit and those 20 off do not, which leaves 9 cells, cells 4, 8 and 12 skipped. The
+	 * cells are not built in the world (build_cell and what a round does to them are stubbed). Red: it built cell 4 on.
+	 */
+	// Measured: passes at tick 37 (red: cells 1/76 and cell 4 built).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 80)
+	public void aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		capScript(helper, bot, "None", 10);
+		List<Integer> cells = List.of(1, 2, 3, 5, 6, 7, 9, 10, 11);
+		List<String> said = new java.util.ArrayList<>();
+		for (int i = 0; i < cells.size(); i++) {
+			said.add("built cell " + cells.get(i));
+			said.add("cells " + (i + 1) + "/9");
+		}
+		said.add("farm full");
+		said.add("[0, 1, 2, 4, 5, 6, 8, 9, 10]");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), said, "said"));
+	}
+
+	/** As aFarmWithNoSizeStopsAtTheCellsThatGetRandomTicks with a size of 12: the farm builds 12 cells in turn (#812). */
+	// Measured: passes at tick 45.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 90)
+	public void aSizeBuildsThatManyCellsPastTheRandomTicks(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		capScript(helper, bot, "12", 13);
+		List<String> said = new java.util.ArrayList<>();
+		for (int i = 1; i <= 12; i++) {
+			said.add("built cell " + i);
+			said.add("cells " + i + "/12");
+		}
+		said.add("farm full");
+		said.add("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), said, "said"));
+	}
+
+	/**
+	 * Runs jobs.wood_farm.farm for birch up to size cells (a Python expression), laid out from a corner at x and z 15 of
+	 * the chunk of the test's spot, each cell built by a stub, no tree grown; at the waits'th wait prints the cells built
+	 * and stops.
+	 */
+	private static void capScript(GameTestHelper helper, AntBot bot, String size, int waits) {
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.terrain
+			import lib.treefarm
+			lib.cells.layout("birch_farm", Pos(spot.x // 16 * 16 + 15, cell[0].y, spot.z // 16 * 16 + 15), (5, 5))
+			waits = [0]
+			def waited(ticks):
+			    if ticks != jobs.wood_farm.WAIT:
+			        return
+			    waits[0] += 1
+			    if waits[0] == %d:
+			        print(lib.cells.built("birch_farm"))
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.visit = lambda k, b: None
+			jobs.wood_farm.unplanted = lambda k, b: []
+			jobs.wood_farm.tend = lambda k, b, radius, told: None
+			jobs.wood_farm.stored_bone_meal = lambda k, name, boxes, radius: None
+			jobs.wood_farm.compost = lambda k, name, boxes, radius: lib.result.result()
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.stocked = lambda k, radius: lib.result.result()
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.terrain.needs = lambda low, high, y: {"tools": {}}
+			lib.treefarm.build_cell = lambda k, low, high: lib.result.result()
+			lib.treefarm.grown = lambda k, low, high: False
+			jobs.wood_farm.farm(kind, "birch_farm", %s, 12)
+			""".formatted(waits, size));
 	}
 
 	/**
