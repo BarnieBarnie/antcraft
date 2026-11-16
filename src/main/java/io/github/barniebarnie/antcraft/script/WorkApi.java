@@ -46,6 +46,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -896,6 +897,8 @@ public final class WorkApi {
 	private static final class PickUp implements ScriptRun.Action {
 		/** How far beyond the bot's box it takes items from: a little more than a player's pickup reach sideways. */
 		private static final double GRAB = 1.0;
+		/** How much farther it reaches for an item lying in a block it cannot walk onto: from anywhere in the block beside it. */
+		private static final double REACH_IN = 0.5;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -934,6 +937,16 @@ public final class WorkApi {
 			}
 			return entity instanceof AbstractArrow arrow && arrow.pickup == AbstractArrow.Pickup.ALLOWED && arrow.isInGround()
 				? arrow.getPickupItemStackOrigin() : null;
+		}
+
+		/**
+		 * Whether {@code dropped} lies in a block, below the top of its collision shape, as in a composter: the bot cannot
+		 * stand there without breaking it. Not one lying on top, as on farmland or a slab, which the bot walks onto.
+		 */
+		private boolean inBlock(ItemEntity dropped) {
+			BlockPos at = dropped.blockPosition();
+			VoxelShape shape = this.bot.level().getBlockState(at).getCollisionShape(this.bot.level(), at);
+			return !shape.isEmpty() && dropped.getY() - at.getY() < shape.max(Direction.Axis.Y) - 1.0E-3;
 		}
 
 		private List<Entity> around() {
@@ -977,6 +990,14 @@ public final class WorkApi {
 			if (this.walk == null) {
 				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround())) {
 					return false; // next to it, waiting for it to land and for its pickup delay to end
+				}
+				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && this.inBlock(dropped)) {
+					// Lying in a block, such as bone meal in a composter: walking onto it would break the block (#817).
+					if (dropped.getBoundingBox().intersects(this.bot.getBoundingBox().inflate(GRAB + REACH_IN, 0.5, GRAB + REACH_IN))) {
+						BotHands.collect(this.bot, dropped);
+						return false;
+					}
+					this.arrivals = 2;
 				}
 				if (this.arrivals >= 2) {
 					this.unreachable.add(this.goal.getId());

@@ -737,6 +737,22 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("True None 1 1"), () -> helper.assertItemEntityPresent(Items.NAUTILUS_SHELL));
 	}
 
+	/**
+	 * Bone meal lying in a composter, in its far half from the bot beside it, out of its grab: it takes the bone meal from
+	 * beside the composter and leaves the composter standing (#817), where it walked onto the item's block and broke it.
+	 */
+	@GameTest(maxTicks = 40)
+	public void pickUpTakesAnItemInABlockWithoutBreakingIt(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.COMPOSTER);
+		ItemEntity meal = helper.spawnItem(Items.BONE_MEAL, new BlockPos(4, 1, 4));
+		Vec3 in = helper.absoluteVec(new Vec3(4.25, 1.125, 4.25));
+		meal.setPos(in.x, in.y, in.z);
+		meal.setDeltaMovement(Vec3.ZERO);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 5.85));
+		expect(helper, bot, "r = pick_up('bone_meal', radius=3)\nprint(r.ok, r.value, count('bone_meal'))\n", List.of("True 1 1"),
+			() -> helper.assertBlockPresent(Blocks.COMPOSTER, 4, 1, 4));
+	}
+
 	// equip
 
 	@GameTest(maxTicks = 20)
