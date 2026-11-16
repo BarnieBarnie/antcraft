@@ -131,9 +131,9 @@ def build(kind, name, size, radius):
     i = lib.cells.next(name)
     low, high = lib.cells.cell(name, i)
     tools = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)["tools"]
-    # build_cell mines the ground under each sapling spot that is not dirt to put dirt there, such as stone (#612).
+    # build_cell mines the ground under each sapling spot that is not SOIL to put dirt there, such as stone (#612, #805).
     for p in lib.treefarm.spots(kind, low, high):
-        if not lib.trees.is_kind(p.down(), "#minecraft:dirt"):
+        if not lib.trees.is_kind(p.down(), lib.treefarm.SOIL):
             for k, uses in lib.terrain.needs(p.down(), p.down(), p.y - 2)["tools"].items():
                 tools[k] = tools.get(k, 0) + uses
     for k, uses in tools.items():

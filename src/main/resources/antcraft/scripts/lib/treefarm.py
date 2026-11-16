@@ -79,6 +79,8 @@ TORCH = "minecraft:torch"
 # A torch at a torch spot, standing or on a wall: a wall torch is a block of its own (#760).
 TORCHES = [TORCH, "minecraft:wall_torch"]
 DIRT = "minecraft:dirt"
+# What a sapling grows on, so soil leaves it: dirt, grass, podzol, mud, moss (#805; #minecraft:dirt is only dirt in 26.3).
+SOIL = "#minecraft:substrate_overworld"
 SLABS = "#minecraft:wooden_slabs"
 # What harvest picks up besides the logs and saplings fell_whole does: what leaves drop.
 DROPS = ["minecraft:stick", "minecraft:apple"]
@@ -182,10 +184,10 @@ def build_cell(kind, low, high):
 
 
 def soil(ground, radius=32):
-    """Puts dirt at ground, a sapling spot's floor, where there is none: mines what is there, such as stone or a block a
+    """Puts dirt at ground, a sapling spot's floor, where it is not SOIL: mines what is there, such as stone or a block a
     path put in, with a pickaxe it gets where it has none (lib.get.ensure_tool), getting the dirt it lacks within radius
     (get_outside), none from under the farm's cells. Gives result(): ok, or the reason with at."""
-    if lib.trees.is_kind(ground, "#minecraft:dirt"):
+    if lib.trees.is_kind(ground, SOIL):
         return result()
     if not block(ground).is_air:
         r = mine(ground)

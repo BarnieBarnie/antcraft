@@ -82,6 +82,41 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** A birch cell whose sapling spot stands on grass (#805): planted as it is, the grass neither mined nor dirt put in. */
+	// Measured: passes at tick 77 (red: mined to dirt at tick 70 to 73).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 180)
+	public void aSpotOnGrassIsPlantedWithoutDirt(GameTestHelper helper) {
+		plantedOn(helper, Blocks.GRASS_BLOCK);
+	}
+
+	/** A birch cell whose sapling spot stands on podzol, as a giant spruce leaves it (#805): planted as it is. */
+	// Measured: passes at tick 77 (red: mined to dirt at tick 70 to 73).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 180)
+	public void aSpotOnPodzolIsPlantedWithoutDirt(GameTestHelper helper) {
+		plantedOn(helper, Blocks.PODZOL);
+	}
+
+	private static void plantedOn(GameTestHelper helper, Block ground) {
+		BlockPos under = new BlockPos(4, 0, 4);
+		helper.setBlock(under, ground);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 10, 1, 10);
+		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT), new ItemStack(Items.BIRCH_SAPLING),
+			new ItemStack(Items.TORCH, 2));
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(under).is(ground)) {
+				helper.fail("the spot's " + ground + " was mined: " + helper.getBlockState(under));
+			}
+		});
+		start(helper, bot, "minecraft:birch_sapling", new BlockPos(2, 0, 2), new BlockPos(6, 0, 6), """
+			r = lib.treefarm.build_cell(kind, low, high)
+			print(r["ok"], r["reason"], count("minecraft:dirt"))
+			""");
+		helper.succeedWhen(() -> {
+			helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("True None 1"), "printed");
+			helper.assertBlockPresent(Blocks.BIRCH_SAPLING, 4, 1, 4);
+		});
+	}
+
 	/**
 	 * A birch cell built again over its own torches, one on the wall of a block beside its corner, one standing (#760):
 	 * neither is mined (flatten keeps them) nor placed again; the bot keeps its 2 torches.

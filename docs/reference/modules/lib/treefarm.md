@@ -73,7 +73,7 @@ print(lib.treefarm.materials("minecraft:oak_sapling"))
 
 ## `build_cell(kind, low, high)`
 
-Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over it ([`lib.terrain.flatten`](terrain.md)), puts dirt under each sapling spot in the cell's middle where the ground is no dirt (`soil`), a torch on the floor at the `low` and `high` corners where no torch, standing or on a wall, is there already (`flatten` keeps one there, so a build tried again leaves them; #760) (torch light reaches every floor block of each kind's cell, the cherry's 11 wide too, under its grown tree), the roof where the spec has one (taking back the scaffold it pillared up with), then plants.
+Builds the cell: levels the floor at `low.y` and clears the `clear` blocks over it ([`lib.terrain.flatten`](terrain.md)), puts dirt under each sapling spot in the cell's middle where the ground is not `SOIL` (`#minecraft:substrate_overworld`: dirt, grass, podzol, mud or moss, which a sapling grows on, is left as it is; #805) (`soil`), a torch on the floor at the `low` and `high` corners where no torch, standing or on a wall, is there already (`flatten` keeps one there, so a build tried again leaves them; #760) (torch light reaches every floor block of each kind's cell, the cherry's 11 wide too, under its grown tree), the roof where the spec has one (taking back the scaffold it pillared up with), then plants.
 
 - **Returns** a [`result()`](result.md): ok, or the reason of the step that failed with `at`.
 - **Pauses** yes.
@@ -91,7 +91,7 @@ Fells the cell's tree whole from the lowest log `grown` sees, the lowest over a 
 
 ## `plant(kind, p, radius=32)`
 
-Plants a sapling of `kind` at the sapling spot `p`, the bot carrying one: first puts dirt under it where there is none (`soil(ground, radius=32)`), as a path may dig the dirt out or put a block there (#764), mining what is there (with a pickaxe it gets or takes from a chest where it has none, such as for stone; #767) and getting a dirt it lacks within `radius` with `get_outside(item, n, radius=32)`: [`lib.get`](get.md), but never from under a cell of a farm in `memory["cells"]` ([`lib.cells`](cells.md)), built or next to build (`outside_cells()`, which narrows [`lib.find.WHERE`](find.md) for that get; the wood farm gets its dirt so too, #768), then mines what stands at `p` and places the sapling. `build_cell`, `harvest` and the wood farm's tending plant with it.
+Plants a sapling of `kind` at the sapling spot `p`, the bot carrying one: first puts dirt under it where the ground is not `SOIL` (`soil(ground, radius=32)`), as a path may dig the dirt out or put a block there (#764), mining what is there (with a pickaxe it gets or takes from a chest where it has none, such as for stone; #767) and getting a dirt it lacks within `radius` with `get_outside(item, n, radius=32)`: [`lib.get`](get.md), but never from under a cell of a farm in `memory["cells"]` ([`lib.cells`](cells.md)), built or next to build (`outside_cells()`, which narrows [`lib.find.WHERE`](find.md) for that get; the wood farm gets its dirt so too, #768), then mines what stands at `p` and places the sapling. `build_cell`, `harvest` and the wood farm's tending plant with it.
 
 - **Returns** a [`result()`](result.md): ok, or the reason of the step that failed with `at`.
 
