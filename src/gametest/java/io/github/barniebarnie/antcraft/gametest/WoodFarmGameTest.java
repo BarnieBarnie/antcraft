@@ -1505,6 +1505,58 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A farm moved to a new corner carries its old depot's stock to its new depot (#823): a farm at AT east 6 whose depot
+	 * (12, 1, 0) east holds 20 birch logs and 5 saplings, run with its corner at AT, ends with both in the new depot's
+	 * chests (6, 1, 0) east and the old chests empty. The bot carries the two chests the new depot takes; lib.project.run
+	 * is stubbed, as only the move is under test. Red: the stock stayed in the old chests.
+	 */
+	// Measured: passes at tick 81.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 160)
+	public void aMovedFarmCarriesItsOldDepotsStock(GameTestHelper helper) {
+		BlockPos logs = new BlockPos(12, 1, 0);
+		BlockPos saplings = new BlockPos(13, 1, 0);
+		helper.setBlock(logs, Blocks.CHEST);
+		helper.setBlock(saplings, Blocks.CHEST);
+		helper.getBlockEntity(logs, ChestBlockEntity.class).setItem(0, new ItemStack(Items.BIRCH_LOG, 20));
+		helper.getBlockEntity(saplings, ChestBlockEntity.class).setItem(0, new ItemStack(Items.BIRCH_SAPLING, 5));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.CHEST, 2));
+		BotScripts.failOnError(helper, bot);
+		BlockPos old = helper.absolutePos(AT.east(6));
+		BlockPos at = helper.absolutePos(AT);
+		BlockPos l = helper.absolutePos(logs);
+		BlockPos s = helper.absolutePos(saplings);
+		BotScripts.run(bot, """
+			import jobs.wood_farm
+			import lib.depot
+			import lib.project
+			import lib.result
+			kind = "minecraft:birch_sapling"
+			memory["wood_farms"] = {kind: Pos(%d, %d, %d)}
+			d = lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
+			d["chests"] = [["logs", Pos(%d, %d, %d)], ["saplings", Pos(%d, %d, %d)]]
+			lib.project.run = lambda name, steps: lib.result.result("stub", "farm")
+			jobs.wood_farm.run(kind, Pos(%d, %d, %d), 1, 12)
+			""".formatted(old.getX(), old.getY(), old.getZ(), l.getX(), l.getY(), l.getZ(), l.getX(), l.getY(), l.getZ(),
+			s.getX(), s.getY(), s.getZ(), at.getX(), at.getY(), at.getZ()));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot).contains("birch_farm stopped: stub at farm"), "said " + said(bot));
+			int newLogs = 0;
+			int newSaplings = 0;
+			for (int x = 6; x <= 11; x++) {
+				if (helper.getLevel().getBlockEntity(helper.absolutePos(new BlockPos(x, 1, 0))) instanceof ChestBlockEntity c) {
+					newLogs += c.countItem(Items.BIRCH_LOG);
+					newSaplings += c.countItem(Items.BIRCH_SAPLING);
+				}
+			}
+			helper.assertValueEqual(newLogs, 20, "logs in the new depot");
+			helper.assertValueEqual(newSaplings, 5, "saplings in the new depot");
+			helper.assertTrue(helper.getBlockEntity(logs, ChestBlockEntity.class).isEmpty(), "old logs chest not empty");
+			helper.assertTrue(helper.getBlockEntity(saplings, ChestBlockEntity.class).isEmpty(), "old saplings chest not empty");
+		});
+	}
+
 	/** tend leaves a cell's torches alone, one on the wall of a block beside its corner, one standing (#760). */
 	// Measured: passes at tick 5.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)

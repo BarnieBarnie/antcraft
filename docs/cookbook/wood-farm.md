@@ -102,7 +102,7 @@ Pass the most cells as an argument for a farm of another size: the farm keeps to
 
 ## Move a farm
 
-Run the job again with another corner, such as the one a hint names, and the farm moves there (#818): the bot says `farm moved to 32 64 -16` and lays the farm out afresh at the new corner, its depot north of it and its home by that depot, then goes through its steps from the kit as a new farm does, building its cell 1 there, and says a hint for the new corner where one fits more. It forgets the old farm's cells and depot (`memory["cells"]`, `memory["depots"]` and its project); they are left standing, nothing is torn down, and what the old chests hold the bot still takes as it takes from any chest within the radius. Run with no corner or the same one, the farm stays as it is.
+Run the job again with another corner, such as the one a hint names, and the farm moves there (#818): the bot says `farm moved to 32 64 -16` and lays the farm out afresh at the new corner, its depot north of it and its home by that depot, then goes through its steps from the kit as a new farm does, building its cell 1 there, and says a hint for the new corner where one fits more. Once the new depot is laid out, the bot carries what the old depot's chests hold into it, in as many trips as its room takes, however far off they are, and keeps what it carried itself (`carry`, #823); where a trip takes nothing and the old chests still hold some, such as when the new depot can get no chest, it says `left 12 items in the old depot` and goes on. It forgets the old farm's cells and depot (`memory["cells"]`, `memory["depots"]` and its project); they are left standing, nothing is torn down. Run with no corner or the same one, the farm stays as it is.
 
 ## A forester
 

@@ -648,11 +648,31 @@ def fertilize(kind, boxes):
                 pass
 
 
+def carry(name, old, radius):
+    """Empties the chests old, a moved farm's old depot, into depot name, in as many trips as the bot's room takes, and
+    keeps what the bot carried itself (#823). Where a trip takes nothing but the old chests still hold some, such as a
+    full depot, it says what is left there and goes on."""
+    keep = list(dict([(s.item, count(s.item)) for s in inventory()]).items())
+    while True:
+        took = 0
+        for chest in old:
+            for s in container(chest) or []:
+                if free_slots():
+                    r = take(chest, s.item, s.count)
+                    took += r.value if r else 0
+        lib.depot.store(name, keep, radius)
+        if not took:
+            break
+    left = sum([s.count for chest in old for s in container(chest) or []])
+    if left:
+        say(f"left {left} items in the old depot")
+
+
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a wood farm of kind (a kind of lib.treefarm.KINDS) with its first corner at at (where the bot
     stands, or where the last farm of kind started), up to size cells (limit: most of the ticks a tree takes, learnt,
     else HARVEST[kind]). An at other than the stored corner of kind moves the farm there,
-    laid out afresh (#818). Never returns but on a failed setup step: gives lib.project.run's result() then."""
+    laid out afresh (#818), its old depot's stock carried to the new one (carry, #823). Never returns but on a failed setup step: gives lib.project.run's result() then."""
     kind = giant(lib.treefarm.key(kind), radius)
     name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
     farms = memory.get("wood_farms", {})
@@ -661,9 +681,12 @@ def run(kind, at=None, size=None, radius=32):
     moved = not new and at != farms[kind]
     farms[kind] = at
     memory["wood_farms"] = farms
+    old = []
     if moved:
+        # The old depot's chests, emptied into the new depot once it is laid out (#823).
+        old = lib.depot.chests(name) if name in memory.get("depots", {}) else []
         # A new corner lays the farm out afresh there, its depot and project with it (#818). The old cells and chests
-        # are left standing, forgotten.
+        # are left standing, forgotten, the chests emptied.
         for key in ("cells", "depots"):
             m = memory.get(key, {})
             m.pop(name, None)
@@ -677,6 +700,8 @@ def run(kind, at=None, size=None, radius=32):
         hint(kind, name, at)
     # The depot north of the farm, a path's width off its first row, going east along it.
     lib.depot.depot(name, at + (0, 0, -2), "east", CATEGORIES)
+    if old:
+        carry(name, old, radius)
     # Home is the path by the depot, so a bot that dies comes back at the farm, and recover fetches what it dropped: a
     # death costs it no more than lib.cost.death (#679).
     set_home(at + (0, 0, -1))
