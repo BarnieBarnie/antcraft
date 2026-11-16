@@ -125,11 +125,18 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A guard with a bow and arrows, and no blocks to pillar up with, shoots a blaze hovering out of its reach (#745), from
 	 * where it stands, about 8 blocks off it sideways: it checks it can walk to the blaze before closing in, not only after
-	 * attack ended with unreachable under it, shooting near straight up (#756).
+	 * attack ended with unreachable under it, shooting near straight up (#756). It plans no way to a mob hovering with
+	 * air under it: such a search runs through all its nodes to find none, 4000 for every guard and every flyer (#786).
 	 */
 	// Measured: passes at tick 72 to 93 (132 when it shot from under the blaze).
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 200)
 	public void aGuardShootsAMobItCannotGetToWithABow(GameTestHelper helper) {
+		// Dirt it could dig and pillar with, as on grass: on bare stone the search ran out of ways in one tick.
+		for (int x = 0; x < 24; x++) {
+			for (int z = 0; z < 24; z++) {
+				helper.setBlock(x, 0, z, Blocks.DIRT);
+			}
+		}
 		Blaze blaze = helper.spawn(EntityTypes.BLAZE, 12, 12, 12);
 		blaze.setNoAi(true);
 		blaze.setNoGravity(true);
@@ -140,6 +147,10 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 		boolean[] shot = {false};
 		helper.onEachTick(() -> {
 			blaze.setDeltaMovement(Vec3.ZERO);
+			String action = bot.getScript() == null ? null : bot.getScript().action();
+			if (action != null && action.startsWith("reachable")) {
+				helper.fail("planned a way to the hovering blaze: " + action);
+			}
 			if (!shot[0] && bot.getInventory().countItem(Items.ARROW) < 16) {
 				shot[0] = true;
 				double sideways = bot.position().subtract(blaze.position()).horizontalDistance();

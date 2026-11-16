@@ -42,6 +42,14 @@ def can_shoot():
     return has(["bow", "crossbow"]) and has("#minecraft:arrows")
 
 
+def hovers(mob):
+    """Whether mob hovers with two blocks of air under it, such as a blaze: shot without planning a way to it first, a
+    search that runs through all its nodes to find none, for every guard and every flyer (#786)."""
+    below = block(mob.pos.down())
+    lower = block(mob.pos.down(2))
+    return below is not None and below.is_air and lower is not None and lower.is_air
+
+
 def mobs(radius):
     """The mobs of MOBS within radius of home, nearest the bot first, but neutral ones and those it skips."""
     now = game_time()
@@ -58,7 +66,7 @@ def run(radius=16):
         lib.food.upkeep()
         near = mobs(radius)
         if near:
-            if can_shoot() and not reachable(near[0].pos, near=1):
+            if can_shoot() and (hovers(near[0]) or not reachable(near[0].pos, near=1)):
                 r = shoot(near[0], min_health=least)  # from where it stands, not from under a flying mob (#756)
             else:
                 hold("sword")
@@ -88,7 +96,7 @@ if args is not None:
 - Each round, under `RETREAT` (12) health, `heal` walks home with [`go_home`](../reference/modules/lib/home.md) and eats the best food it carries ([`lib.food.best`](../reference/modules/lib/food.md)) while it is hurt and not full, so it gets saturation and heals quickly, a point every 10 ticks; at 20 food without saturation it waits, healing a point every 80 ticks, until it has `HEALED` (18) health. Under 18 food with nothing left to eat it can heal no more, and goes back to the fight as it is, fighting that round without `min_health`.
 - It retreats before [`lib.food.upkeep`](../reference/modules/lib/food.md), which would otherwise eat where it fought; `upkeep` gets food from the chests at 14 food or under where it carries none.
 - It then [`attack`](../reference/combat/attack.md)s the mob of `MOBS` nearest it within the radius of [`home()`](../reference/movement/home.md), holding its best sword ([`lib.tools.hold`](../reference/modules/lib/tools.md)), with `min_health=RETREAT`: once its health drops under 12 the attack ends with `hurt`, and it retreats at once, in the middle of the fight. `MOBS` is the game's monsters, [`monsters()`](../reference/world/monsters.md), modded ones too; it leaves out the [`neutral`](../reference/types/entity.md) ones, the mobs the bot's own goals leave alone too (#772): endermen, zombified piglins and piglins, which a blow turns on the bot with their kin, the warden and the bosses. With none near it waits at home.
-- A mob it cannot get to, such as a flying one, it shoots with [`shoot`](../reference/combat/shoot.md) where it carries a bow or crossbow and arrows. With them, it first asks [`reachable`](../reference/movement/reachable.md) whether it can walk to the mob, and shoots one it cannot from where it stands, rather than walking under a flying mob and shooting it straight up (#756); otherwise it tries [`attack`](../reference/combat/attack.md), and shoots where that ends with `unreachable`. Where that fails too, or the fight ends otherwise than with `hurt` or `interrupted`, it leaves that mob alone for `SKIP` (600) ticks and goes for the next, so it does not try the same mob over and over.
+- A mob it cannot get to, such as a flying one, it shoots with [`shoot`](../reference/combat/shoot.md) where it carries a bow or crossbow and arrows. With them, it shoots a mob that `hovers`, with two blocks of [air](../reference/world/block.md) under it, without asking more: a search for a way to it would run through all its nodes to find none (#786). Otherwise it first asks [`reachable`](../reference/movement/reachable.md) whether it can walk to the mob, and shoots one it cannot from where it stands, rather than walking under a flying mob and shooting it straight up (#756); otherwise it tries [`attack`](../reference/combat/attack.md), and shoots where that ends with `unreachable`. Where that fails too, or the fight ends otherwise than with `hurt` or `interrupted`, it leaves that mob alone for `SKIP` (600) ticks and goes for the next, so it does not try the same mob over and over.
 - The flee reflex at `botFleeHealth` (6 by default) stays the last line: it ends the fight with `interrupted` and flees, and once it lets go the bot is under `RETREAT`, so it retreats home and heals as after any fight (see [Reflexes](../features/bots.md#reflexes)).
 - While it is hurt and runs a script, the bot's own goals start no fight with a mob in sight, so a mob far off does not draw it out while it retreats or heals. A mob that follows it home and hurts it is still fought back there.
 
