@@ -162,12 +162,15 @@ ORE_DROPS = {
     "lapis_lazuli": lambda level: 6.5 * ore_drops(level),
     "redstone": lambda level: 4.5 + level / 2,
 }
+# The height a trip is costed to for an ore lib.dig.best_y has none of (#796): emerald, most common at 236 in mountains.
+# ponytail: costed as if a mountain were near; lib.dig.ore still digs no stairs for it.
+TRIP_Y = {"emerald": 236}
 
 
 def ore(item, block, estimate):
     """The Source of a raw item lib.dig.ore digs, with a pickaxe that drops block."""
     return Source(lambda n, radius: lib.dig.ore(item, n, radius), "pickaxe", lib.tools.tier_for(block), estimate,
-                  lib.dig.ORES[item], y=lib.dig.best_y(item), drops=ORE_DROPS.get(item, ore_drops))
+                  lib.dig.ORES[item], y=TRIP_Y.get(item, lib.dig.best_y(item)), drops=ORE_DROPS.get(item, ore_drops))
 
 
 # Raw items get gathers, by id ("#minecraft:logs" for any log). A script adds its own: SOURCES["minecraft:clay_ball"] =

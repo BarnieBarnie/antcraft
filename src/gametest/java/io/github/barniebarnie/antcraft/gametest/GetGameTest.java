@@ -1500,6 +1500,22 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * Emerald's trip follows its height in the mountains (lib.get.TRIP_Y, 236), not the flat DEEP (#796): from below it
+	 * no stairs down, so one branch, as coal. lib.dig.best_y stays None, so ore does not dig for it outside mountains.
+	 */
+	@GameTest(maxTicks = 20)
+	public void emeraldsTripFollowsItsMountainHeight(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		run(helper, bot, """
+			import lib.dig
+			from lib.get import SOURCES
+			s = SOURCES["minecraft:emerald"]
+			print(s.cost(1, 1)[0] - s.estimate == 37 * lib.dig.LENGTH)
+			""");
+		helper.succeedWhen(() -> printed(helper, bot, "True"));
+	}
+
+	/**
 	 * A source's cost counts DEEP once for all it gets, as one flight of stairs reaches a vein, and takes the pickaxe tier
 	 * from the nearest exposed ore block (#536): lodestone, which the game test tags put in needs_iron_tool, 2 blocks away.
 	 * NEEDS says "wooden" for it, so the source's own tier by id (which reads the tags too since #566) differs. In sight it
