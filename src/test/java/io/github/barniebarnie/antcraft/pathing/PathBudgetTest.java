@@ -1,7 +1,9 @@
 package io.github.barniebarnie.antcraft.pathing;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import net.minecraft.core.BlockPos;
 import org.junit.jupiter.api.Test;
 
 class PathBudgetTest {
@@ -78,5 +80,40 @@ class PathBudgetTest {
 		budget.spend(9, 10);
 		assertEquals(new PathBudget.Count(50, 50), budget.takeCount(9), "neither the tick of the last take nor this one");
 		assertEquals(new PathBudget.Count(0, 0), budget.takeCount(10));
+	}
+
+	/**
+	 * A tick's paths stop at its time as well as at its nodes: a node may cost several times another, such as where the
+	 * bot may dig or before the server has compiled the search, and 2000 of them took up to 57 ms in the bot benchmark's
+	 * guard case (#791). What a search has not expanded it goes on with next tick.
+	 */
+	@Test
+	void searchesStopOnceTheTicksTimeIsUsedUp() {
+		long[] now = {0};
+		// Every look at the clock finds it a millisecond on.
+		PathBudget budget = new PathBudget(1000, 10_000_000, () -> now[0] += 1_000_000);
+		PathFinder.Search search = nowhere();
+		int expanded = budget.run(5, "a", search);
+		assertTrue(expanded > 0 && expanded < 1000, "expanded " + expanded);
+		assertEquals(0, budget.run(5, "b", nowhere()), "the tick's time is used up");
+		assertTrue(budget.run(6, "a", search) > 0, "the next tick has time again");
+	}
+
+	/** A search paused last tick gets its part of this tick's time too, not only of its nodes, so it is not left without. */
+	@Test
+	void pausedSearchesShareTheNextTicksTime() {
+		long[] now = {0};
+		PathBudget budget = new PathBudget(1_000_000, 10_000_000, () -> now[0] += 1_000_000);
+		budget.run(5, "a", nowhere());
+		budget.pause(5, "a");
+		budget.run(5, "b", nowhere());
+		budget.pause(5, "b");
+		budget.run(6, "a", nowhere());
+		assertTrue(budget.run(6, "b", nowhere()) > 0, "half the time was kept for b");
+	}
+
+	/** A search that expands nodes until stopped: to a block in the air over a flat floor, which it never reaches. */
+	private static PathFinder.Search nowhere() {
+		return PathFinder.search(GridWorld.flat(40), new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(0, 30, 0)), new PathFinder.Options(false, false, 1_000_000, 3));
 	}
 }

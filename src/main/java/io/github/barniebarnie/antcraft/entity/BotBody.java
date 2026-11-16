@@ -212,9 +212,7 @@ final class BotBody implements MoveApi.Body {
 				if (this.done()) {
 					return 0;
 				}
-				int nodes = PathBudget.SERVER.share(tick, BotBody.this.bot);
-				int expanded = nodes <= 0 ? 0 : TickProfiler.time("path.plan", () -> search.run(nodes));
-				PathBudget.SERVER.spend(tick, expanded);
+				int expanded = TickProfiler.time("path.plan", () -> PathBudget.SERVER.run(tick, BotBody.this.bot, search));
 				if (!this.done()) {
 					PathBudget.SERVER.pause(tick, BotBody.this.bot);
 				}

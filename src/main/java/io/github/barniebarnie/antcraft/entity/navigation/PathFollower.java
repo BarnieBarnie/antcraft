@@ -320,7 +320,7 @@ public class PathFollower {
 	}
 
 	/**
-	 * Runs the search begun for the bot's share of the nodes this tick has left for paths (see {@link PathBudget#share}):
+	 * Runs the search begun for the bot's share of the nodes and time this tick has left for paths (see {@link PathBudget#run}):
 	 * with many bots planning at once, the bot waits where it stands for the next tick's. Once found, follows the path.
 	 * Returns false when the search found no way at all.
 	 */
@@ -331,10 +331,7 @@ public class PathFollower {
 		if (search == null || world == null) {
 			return true;
 		}
-		int nodes = PathBudget.SERVER.share(tick, this.bot);
-		if (nodes > 0) {
-			PathBudget.SERVER.spend(tick, TickProfiler.time("path.find", () -> search.run(nodes)));
-		}
+		TickProfiler.time("path.find", () -> PathBudget.SERVER.run(tick, this.bot, search));
 		Optional<Path> found = search.path();
 		if (found.isEmpty()) {
 			PathBudget.SERVER.pause(tick, this.bot);

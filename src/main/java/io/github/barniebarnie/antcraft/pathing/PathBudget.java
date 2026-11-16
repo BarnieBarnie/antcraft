@@ -2,6 +2,7 @@ package io.github.barniebarnie.antcraft.pathing;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.function.LongSupplier;
 
 /**
  * How many path nodes all bots together may expand in one server tick, so many bots planning at once, such as each
@@ -17,10 +18,20 @@ public final class PathBudget {
 	 */
 	// ponytail: fixed share; measured with the bot benchmark (BenchmarkGameTest), tune from play-tests.
 	public static final int NODES_PER_TICK = 2000;
+	/**
+	 * The time all bots' searches may take in one tick, besides their nodes (see {@link #run}): a node may cost several
+	 * times another, such as where the bot may dig or before the server has compiled the search, and 2000 of them took up
+	 * to 57 ms in the bot benchmark's guard case (#791). The worst a tick was documented to take for paths.
+	 */
+	// ponytail: fixed; measured with the bot benchmark (BenchmarkGameTest), tune from play-tests.
+	public static final long NANOS_PER_TICK = 15_000_000;
 	/** The server's budget, which every bot's path follower shares. */
-	public static final PathBudget SERVER = new PathBudget(NODES_PER_TICK);
+	public static final PathBudget SERVER = new PathBudget(NODES_PER_TICK, NANOS_PER_TICK, System::nanoTime);
 
 	private final int perTick;
+	private final long nanosPerTick;
+	private final LongSupplier clock;
+	private long nanosLeft;
 	private long tick = Long.MIN_VALUE;
 	private int left;
 	/** What {@link #takeCount} gives next: the nodes spent in the ticks after {@link #takenAt} that are over, and the most in one. */
@@ -33,8 +44,16 @@ public final class PathBudget {
 	/** The searches paused this tick. */
 	private Set<Object> paused = new HashSet<>();
 
+	/** A budget of nodes only. */
 	public PathBudget(int perTick) {
+		this(perTick, Long.MAX_VALUE, System::nanoTime);
+	}
+
+	/** A budget of {@code perTick} nodes and {@code nanosPerTick} of {@code clock}'s time a tick. */
+	public PathBudget(int perTick, long nanosPerTick, LongSupplier clock) {
 		this.perTick = perTick;
+		this.nanosPerTick = nanosPerTick;
+		this.clock = clock;
 	}
 
 	/** The nodes left in {@code tick}. */
@@ -45,6 +64,7 @@ public final class PathBudget {
 			this.paused = new HashSet<>();
 			this.tick = tick;
 			this.left = this.perTick;
+			this.nanosLeft = this.nanosPerTick;
 			this.spentThisTick = 0;
 		}
 		return this.left;
@@ -59,6 +79,23 @@ public final class PathBudget {
 		int left = this.available(tick);
 		this.waiting.remove(who);
 		return left / (1 + this.waiting.size());
+	}
+
+	/**
+	 * Runs {@code who}'s {@code search} for its {@link #share} of the nodes left in {@code tick} and the same part of the
+	 * time left, and spends what it used of both. Returns the nodes it expanded; none once the tick's time is used up.
+	 */
+	public int run(long tick, Object who, PathFinder.Search search) {
+		int nodes = this.share(tick, who);
+		long nanos = this.nanosLeft / (1 + this.waiting.size());
+		if (nodes <= 0 || nanos <= 0) {
+			return 0;
+		}
+		long start = this.clock.getAsLong();
+		int expanded = search.run(nodes, () -> this.clock.getAsLong() - start >= nanos);
+		this.nanosLeft -= this.clock.getAsLong() - start;
+		this.spend(tick, expanded);
+		return expanded;
 	}
 
 	/** {@code who}'s search goes on next tick: it gets its part of that tick, even if others ask before it. */

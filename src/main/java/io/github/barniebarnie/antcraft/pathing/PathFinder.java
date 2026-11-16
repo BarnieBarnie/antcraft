@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.PriorityQueue;
+import java.util.function.BooleanSupplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.food.FoodConstants;
@@ -169,6 +170,9 @@ public final class PathFinder {
 		.thenComparing(Comparator.comparingDouble((Entry e) -> e.node().cost()).reversed())
 		.thenComparingLong(Entry::seq);
 
+	/** How many nodes a search expands between asking whether to stop (see {@link Search#run(int, BooleanSupplier)}): a look at the clock costs some 20 ns, a node some 10 µs. */
+	static final int CHECK_EVERY = 16;
+
 	private PathFinder() {
 	}
 
@@ -234,13 +238,21 @@ public final class PathFinder {
 
 		/** Expands up to {@code nodes} more nodes. Returns how many it expanded. */
 		public int run(int nodes) {
+			return this.run(nodes, () -> false);
+		}
+
+		/**
+		 * Expands up to {@code nodes} more nodes, or fewer where {@code stop} says so, as asked every {@link #CHECK_EVERY}
+		 * nodes, such as once a tick's time for paths is used up (see {@link PathBudget#run}). Returns how many it expanded.
+		 */
+		public int run(int nodes, BooleanSupplier stop) {
 			int expanded = 0;
 			while (this.path == null && expanded < nodes) {
 				int before = this.phase.expanded;
-				Path found = this.phase.run(nodes - expanded);
+				Path found = this.phase.run(nodes - expanded, stop);
 				expanded += this.phase.expanded - before;
 				if (found == null) {
-					continue;
+					break; // out of nodes, or stopped
 				}
 				int total = this.expandedBefore + found.expanded();
 				if (this.swimFirst && !found.complete()) {
@@ -295,10 +307,14 @@ public final class PathFinder {
 			this.closestInWater = world.isWater(start);
 		}
 
-		/** Expands up to {@code nodes} more nodes; the path once found or out of nodes, else null. */
-		@Nullable Path run(int nodes) {
+		/** Expands up to {@code nodes} more nodes, or until {@code stop}; the path once found or out of nodes, else null. */
+		@Nullable Path run(int nodes, BooleanSupplier stop) {
+			int first = this.expanded;
 			int limit = this.expanded + Math.min(nodes, this.options.maxNodes() - this.expanded);
 			while (!this.open.isEmpty() && this.expanded < limit) {
+				if (this.expanded > first && (this.expanded - first) % CHECK_EVERY == 0 && stop.getAsBoolean()) {
+					return null;
+				}
 				Node node = this.open.poll().node;
 				if (node.cost > this.bestCost.getOrDefault(node.pos, BLOCKED) && !this.least(node.pos, node.cost, node.placed, false)) {
 					continue; // stale queue entry
