@@ -1002,6 +1002,51 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A farm whose cells 2 and 3, 12 blocks east and south-east of cell 1, lie out of the bot's loaded range (the test's
+	 * lib.treefarm.loaded, as in aCellOutOfLoadedRangeIsVisitedAndTended) tends cell 1, at its corner, every round, and
+	 * visits one far cell a round (#819). The test's corner walks back to cell 1 before each wait. Red: cell 1 was tended
+	 * only in every third round, the one that visited no far cell.
+	 */
+	// Measured: passes at tick 423 (red: said False, False, True).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 860)
+	public void aFarmWithTwoFarCellsTendsItsCornerCellEveryRound(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 7, 1, 3);
+		script(helper, bot, """
+			import lib.cells
+			import lib.depot
+			import lib.result
+			import lib.treefarm
+			boxes = {0: cell, 1: (cell[0] + (12, 0, 0), cell[1] + (12, 0, 0)), 2: (cell[0] + (12, 0, 12), cell[1] + (12, 0, 12))}
+			tended = []
+			def tend(k, b, radius=32, told=None):
+			    tended.append(b == boxes[0])
+			waits = [0]
+			def waited(ticks):
+			    if ticks != jobs.wood_farm.WAIT:
+			        return
+			    print(True in tended)
+			    tended.clear()
+			    waits[0] += 1
+			    if waits[0] == 3:
+			        stop()
+			jobs.wood_farm.wait = waited
+			jobs.wood_farm.tend = tend
+			jobs.wood_farm.unplanted = lambda k, b: []
+			jobs.wood_farm.sweep = lambda k, boxes: None
+			jobs.wood_farm.corner = lambda name: goto(cell[0] + (1, 1, 1))
+			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
+			lib.depot.store = lambda name, keep, radius: lib.result.result()
+			lib.treefarm.grown = lambda k, low, high: False
+			lib.treefarm.loaded = lambda k, low, high: pos().distance(low) <= 6
+			lib.cells.built = lambda name: [0, 1, 2]
+			lib.cells.cell = lambda name, i: boxes[i]
+			lib.cells.count = lambda name: 3
+			jobs.wood_farm.farm(kind, "birch_farm", 3, 12)
+			""");
+		helper.succeedWhen(() -> helper.assertValueEqual(said(bot), List.of("farm full", "True", "True", "True"), "said"));
+	}
+
+	/**
 	 * A bot that ends a round at the far side of the farm, (22, 1, 22), 16 blocks east of cell 1's low corner and so
 	 * in another chunk, walks back into the corner's chunk before it waits, so the cells the farm's cap counts (ticking,
 	 * #812) grow while it waits (#814). The round does nothing else: no tree grown, no cell to tend, the farm full.

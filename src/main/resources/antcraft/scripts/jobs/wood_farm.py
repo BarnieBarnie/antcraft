@@ -464,7 +464,9 @@ def farm(kind, name, size, radius):
     and waits in its corner's chunk (corner, #814). Each round takes back the scaffold its walks
     placed (lib.trees.take_back) before it waits, and before each felling and build (#654). Where size is None the farm grows to
     limit(kind, name, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
-    felled (learn)."""
+    felled (learn). The felling, store and tending go over the cells the bot can read where it stands, then over those it
+    reads at one cell it cannot, in turn, which it walks to (visit, #811), so the corner's cells are farmed every round
+    (#819)."""
     full = False
     told = {}
     backoff = 0  # rounds until stocked is tried again
@@ -475,16 +477,13 @@ def farm(kind, name, size, radius):
         # build's own taken back by them, sweep, tend, get, reap's retry) comes down at its end (#654).
         placed_scaffold()
         own()
-        # Only the cells the bot can read (#810), but each round it walks to one it cannot, in turn, so every cell is
-        # farmed (#811). As the bot waits at the corner (#814), one round in turn visits none, to farm the cells there.
+        # Only the cells the bot can read (#810): first those where it stands (at the corner, #814), then those round
+        # one cell it cannot read, in turn, which it walks to (visit), so every cell is farmed (#811) and the corner's
+        # every round (#819).
         cells = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
-        far = [b for b in cells if not lib.treefarm.loaded(kind, b[0], b[1])] + [None]
-        visited = far[visits % len(far)]
+        far = [b for b in cells if not lib.treefarm.loaded(kind, b[0], b[1])]
+        visited = far[visits % len(far)] if far else None
         visits += 1
-        if visited:
-            visit(kind, visited)
-        boxes = [b for b in cells if lib.treefarm.loaded(kind, b[0], b[1])]
-        grown = [b for b in boxes if lib.treefarm.grown(kind, b[0], b[1])]
         keep = KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))]
         full_bot = False
         # The trees of the small cells a giant farm moved from, felled once and not replanted (#807); not trees of kind,
@@ -499,37 +498,46 @@ def farm(kind, name, size, radius):
                 break
             if reap(k, b, radius, told, False)["ok"]:
                 others += 1
-        start = game_time()
         trees = 0
-        for b in [] if full_bot else grown:
-            # Not with too few empty slots that the depot cannot empty: the tree's drops would be dropped (#765).
-            r = lib.depot.make_room(name, free(kind), keep, radius)
-            if not r["ok"]:
-                full_bot = True
-                tell(told, f"inventory full, store: {r['reason']}; felling stops")
-                break
-            if reap(kind, b, radius, told)["ok"]:
-                trees += 1
+        ticks = 0
+        boxes = []
+        for v in [None] + ([visited] if visited else []):
+            if v:
+                visit(kind, v)
+            here = [b for b in cells if b not in boxes and lib.treefarm.loaded(kind, b[0], b[1])]
+            boxes += here
+            grown = [b for b in here if lib.treefarm.grown(kind, b[0], b[1])]
+            start = game_time()
+            for b in [] if full_bot else grown:
+                # Not with too few empty slots that the depot cannot empty: the tree's drops would be dropped (#765).
+                r = lib.depot.make_room(name, free(kind), keep, radius)
+                if not r["ok"]:
+                    full_bot = True
+                    tell(told, f"inventory full, store: {r['reason']}; felling stops")
+                    break
+                if reap(kind, b, radius, told)["ok"]:
+                    trees += 1
+            # Every round, not only one that fells: what builds up between fellings, such as the dirt flatten and walks
+            # dig, goes in the depot too (#766). A store with nothing over keep walks nowhere.
+            if not full_bot:
+                r = lib.depot.store(name, keep, radius)
+                # Once a reason, not every round: a full depot that takes no new chest leaves the logs carried, more
+                # each round (#763).
+                if not r["ok"] and "store: " + r["reason"] not in told:
+                    told["store: " + r["reason"]] = True
+                    say(f"store: {r['reason']}, kept {r['missing']}")
+            # After the felling, so lib.get breaks the felled trees' leaves for saplings, not those of a tree still to fell.
+            n = sum([len(unplanted(kind, b)) for b in here])
+            s = lib.treefarm.sapling(kind)
+            if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
+                get(s, n, radius)
+            if v:
+                visit(kind, v)  # again where the store walked away from it
+            for b in here:
+                tend(kind, b, radius, told)
+            stored_bone_meal(kind, name, here, radius)
+            ticks += game_time() - start
         felled = trees + others > 0
-        # Every round, not only one that fells: what builds up between fellings, such as the dirt flatten and walks dig,
-        # goes in the depot too (#766). A store with nothing over keep walks nowhere.
-        if not full_bot:
-            r = lib.depot.store(name, keep, radius)
-            # Once a reason, not every round: a full depot that takes no new chest leaves the logs carried, more each
-            # round (#763).
-            if not r["ok"] and "store: " + r["reason"] not in told:
-                told["store: " + r["reason"]] = True
-                say(f"store: {r['reason']}, kept {r['missing']}")
-        # After the felling, so lib.get breaks the felled trees' leaves for saplings, not those of a tree still to fell.
-        n = sum([len(unplanted(kind, b)) for b in boxes])
-        s = lib.treefarm.sapling(kind)
-        if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
-            get(s, n, radius)
-        if visited:
-            visit(kind, visited)  # again where the store walked away from it
-        for b in boxes:
-            tend(kind, b, radius, told)
-        stored_bone_meal(kind, name, boxes, radius)
         # Once the bot has the saplings for a giant, the next cells are giants: a farm of its own beside this one, whose
         # run never returns but on a failed setup step (#803).
         # Its trees the giant farm's rounds fell, its cells not replanted (small, #807).
@@ -537,7 +545,7 @@ def farm(kind, name, size, radius):
         if kind in GIANTS and fours(kind, radius):
             return run(GIANTS[kind], beside(name), None, radius)
         if felled:
-            learn(kind, game_time() - start, trees)
+            learn(kind, ticks, trees)
             backoff = 0
         most_cells = limit(kind, name, size)
         have = built(kind, name, size)
