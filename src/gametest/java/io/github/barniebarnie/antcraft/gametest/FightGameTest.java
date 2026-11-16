@@ -592,14 +592,16 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it each
-	 * time its weapon is ready, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the
-	 * creeper within its 30-tick fuse, so the blast still catches it: accepted, as a death costs only what the bot carries
-	 * (docs/features/bots.md, Fighting creepers; #733). Digging or pillaring out of the blast is not worth its code.
+	 * A bot in a 1-wide dead end with a creeper lit in front of it is cornered: it goes at the creeper and strikes it, which
+	 * knocks it back, rather than stand (#725). It cannot back off 7 blocks, and an iron sword does not kill the creeper
+	 * within its 30-tick fuse, so the blast still catches it. It does not go at the creeper again with the fuse far gone
+	 * (#793): where it struck a second time from 1.4 blocks the blast killed it at full health; staying 4.4 blocks off it
+	 * keeps 12.7. A death would be accepted, as it costs only what the bot carries (docs/features/bots.md, Fighting
+	 * creepers; #733), but this one was avoidable. Digging or pillaring out of the blast is not worth its code.
 	 */
-	// Measured: passes at tick 43 to 46 in 22 runs, 10 at once.
+	// Measured: passes at tick 39 to 48 (red, striking again: the bot dead at tick 60, struck the creeper twice).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
-	public void aBotCorneredInADeadEndStrikesTheLitCreeperAgain(GameTestHelper helper) {
+	public void aBotCorneredInADeadEndStrikesTheLitCreeperAndOutlivesItsBlast(GameTestHelper helper) {
 		deadEnd(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
@@ -612,14 +614,20 @@ public class FightGameTest implements CustomTestMethodInvoker {
 				blows[0]++;
 			}
 			health[0] = creeper.getHealth();
+			if (!bot.isAlive()) {
+				helper.fail("the blast killed the bot, struck the creeper " + blows[0] + " times");
+			}
 		});
-		helper.succeedWhen(() -> helper.assertTrue(blows[0] >= 2, "struck the creeper " + blows[0] + " times"));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(blows[0] >= 1, "never struck the creeper");
+			helper.assertTrue(creeper.isRemoved(), "the creeper has not exploded yet");
+		});
 	}
 
 	/**
-	 * A bot cornered in the dead end of {@link #aBotCorneredInADeadEndStrikesTheLitCreeperAgain} whose weapon is not ready
-	 * plans its way off only every few ticks while it waits for the weapon, not each tick, 20 spots and a path, some 2 ms
-	 * (#759).
+	 * A bot cornered in the dead end of {@link #aBotCorneredInADeadEndStrikesTheLitCreeperAndOutlivesItsBlast} whose weapon
+	 * is not ready plans its way off only every few ticks while it waits for the weapon, not each tick, 20 spots and a path,
+	 * some 2 ms (#759).
 	 */
 	// Measured: passes at tick 18 (red: planned 4 ways off by tick 4).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 40)
@@ -672,6 +680,81 @@ public class FightGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		succeedWhenTheFuseWentOut(helper, creeper, 1F);
+	}
+
+	/**
+	 * A bot at the end of a 1-wide dead end, a creeper lit 5.5 blocks off at its mouth, whose weapon is ready only once
+	 * nearly half the fuse has burnt, stays at the edge of the blast rather than go at the creeper (#793). In the benchmark
+	 * creepers case a bot cornered so at 5.4 blocks with the fuse at 0.82 walked to 2.9 blocks, where the blast killed it at
+	 * full health: it could not get within striking reach before the fuse ran out, and at the edge the blast hurts little.
+	 * The creeper stands still, its fuse lit by hand and put out before it explodes.
+	 */
+	// Measured: passes at tick 54 (red: came 4.6 blocks near at tick 15, swell 0.54).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 110)
+	public void aCorneredBotDoesNotGoAtACreeperWhoseFuseIsTooFarGone(GameTestHelper helper) {
+		for (int z = 2; z <= 8; z++) {
+			for (int y = 1; y <= 2; y++) {
+				helper.setBlock(11, y, z, Blocks.STONE);
+				helper.setBlock(13, y, z, Blocks.STONE);
+				if (z == 2) {
+					helper.setBlock(12, y, z, Blocks.STONE);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 3.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 9));
+		creeper.setNoAi(true);
+		creeper.setSwellDir(1);
+		helper.onEachTick(() -> {
+			if (creeper.getSwelling(1) >= 0.95F) {
+				creeper.setSwellDir(-1);
+			}
+			// Only while the fuse burns: put out by hand 5.5 blocks off, as a real one never is, it may go at the creeper.
+			if (creeper.getSwellDir() > 0 && bot.distanceTo(creeper) < 5) {
+				helper.fail("came " + String.format("%.1f", bot.distanceTo(creeper)) + " blocks near the lit creeper, swell " + creeper.getSwelling(1));
+			}
+		});
+		succeedWhenTheFuseWentOut(helper, creeper, 1F);
+	}
+
+	/**
+	 * A bot that backs off from a lit creeper, as a husk beside it keeps it from stepping in, does not turn back to step in
+	 * when the husk is gone a few ticks later, with the fuse still short (#793). In the benchmark creepers case bots flipped
+	 * so between stepping in and planning a way off every few ticks, as other creepers came and went within 3 blocks. The
+	 * creeper and the husk stand still and come once the bot's weapon is ready; the fuse is put out before it explodes.
+	 */
+	// Measured: passes at tick 67 (red: struck the lit creeper at tick 26, swell 0.39).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 130)
+	public void aBotBackingOffFromACrowdDoesNotTurnBackWhenTheCrowdGoes(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(12.5, 1, 8.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper[] creeper = {null};
+		Husk[] husk = {null};
+		helper.onEachTick(() -> {
+			long tick = helper.getTick();
+			if (tick == 15) {
+				husk[0] = helper.spawn(EntityTypes.HUSK, new Vec3(11.0, 1, 8.5));
+				husk[0].setNoAi(true);
+				creeper[0] = helper.spawn(EntityTypes.CREEPER, new Vec3(12.5, 1, 10.5));
+				creeper[0].setNoAi(true);
+				creeper[0].setSwellDir(1);
+			} else if (tick == 18) {
+				husk[0].discard();
+			}
+			if (creeper[0] == null) {
+				return;
+			}
+			if (creeper[0].getSwelling(1) >= 0.9F) {
+				creeper[0].setSwellDir(-1);
+			}
+			if (KiteGoal.lit(creeper[0]) && creeper[0].getHealth() < creeper[0].getMaxHealth()) {
+				helper.fail("stepped back in and struck the lit creeper, swell " + creeper[0].getSwelling(1));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(creeper[0] != null && creeper[0].getSwellDir() < 0 && creeper[0].getSwelling(1) == 0, "fuse not lit and out yet");
+		});
 	}
 
 	/** A closed stone tunnel along z at x = 12, two high, from z = 3 to z = 13. */

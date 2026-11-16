@@ -58,6 +58,11 @@ public final class KiteGoal extends Goal {
 	private @Nullable Path away;
 	/** Whether the bot, cornered, goes at the creeper to strike it. */
 	private boolean cornered;
+	/**
+	 * Whether another mob kept the bot from stepping in since the goal started: it backs off and does not turn back to
+	 * step in when the mob moves on, or it flips between the two every few ticks as mobs come and go (#793).
+	 */
+	private boolean crowded;
 	/** The tick the last plan found no way off, for {@link #REPLAN_TICKS}. */
 	private int noWayOffAt = -REPLAN_TICKS;
 
@@ -164,6 +169,7 @@ public final class KiteGoal extends Goal {
 		this.creeper = null;
 		this.away = null;
 		this.cornered = false;
+		this.crowded = false;
 		this.noWayOffAt = -REPLAN_TICKS;
 		this.bot.getNavigation().stop();
 	}
@@ -183,7 +189,11 @@ public final class KiteGoal extends Goal {
 			this.cornered = false;
 			return;
 		}
-		if (ready && creeper.getSwelling(1) < STRIKE_SWELL && creeper.distanceTo(this.bot) <= STEP_IN_RANGE && !this.crowded(creeper)) {
+		boolean stepIn = ready && creeper.getSwelling(1) < STRIKE_SWELL && creeper.distanceTo(this.bot) <= STEP_IN_RANGE;
+		if (stepIn && !this.crowded) {
+			this.crowded = this.crowded(creeper);
+		}
+		if (stepIn && !this.crowded) {
 			this.away = null;
 			// Straight at it, so near: a path ends a block short of the creeper's, which can be out of reach (#717).
 			this.bot.getNavigation().stop();
@@ -212,8 +222,11 @@ public final class KiteGoal extends Goal {
 			}
 			this.noWayOffAt = this.bot.tickCount;
 			// Only within the blast's reach, where it is caught anyway: from further off it would walk into the blast, as it
-			// did 8 blocks from a creeper lit for another bot (#785).
-			if (ready && creeper.distanceTo(this.bot) <= BLAST) {
+			// did 8 blocks from a creeper lit for another bot (#785). And only near it or with the fuse just started: from the
+			// edge of the blast with the fuse far gone it gets within reach only as the creeper explodes, where the blast
+			// hurts most, as it killed a bot at full health that set off 5.4 blocks off with the fuse at 0.82 (#793).
+			double distance = creeper.distanceTo(this.bot);
+			if (ready && distance <= BLAST && (distance <= STEP_IN_RANGE || creeper.getSwelling(1) < STRIKE_SWELL)) {
 				this.cornered = true;
 				this.bot.getNavigation().stop();
 				this.bot.getMoveControl().setWantedPosition(creeper.getX(), creeper.getY(), creeper.getZ(), SPEED);
