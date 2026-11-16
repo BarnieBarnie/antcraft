@@ -20,6 +20,8 @@ import org.jspecify.annotations.Nullable;
 public final class PathFinder {
 	public static final double WALK_COST = 5.0;
 	public static final double JUMP_COST = 2.0;
+	/** How far up a bot walks without a jump: a player's step height, as the follower's move control (see PathFollower.moveTo). */
+	static final float STEP_HEIGHT = 0.6f;
 	public static final double FALL_COST_PER_BLOCK = 1.0;
 	public static final double BREAK_OVERHEAD = 5.0;
 	public static final double PLACE_COST = 20.0;
@@ -442,8 +444,18 @@ public final class PathFinder {
 
 		private Candidate walk(BlockPos feet, Direction dir) {
 			BlockPos to = feet.relative(dir);
-			Builder b = new Builder(MoveType.WALK, to, WALK_COST);
-			b.pass(to, dir).pass(to.above(), dir).support(to.below());
+			// From a low floor, such as a carpet, a full block beside it may be more than a step up: a jump (#794).
+			float top = this.world.stairUp(to.below(), dir) ? 0.5f : this.world.floorTop(to.below());
+			if (top - this.world.floorTop(feet.below()) <= STEP_HEIGHT) {
+				Builder b = new Builder(MoveType.WALK, to, WALK_COST);
+				b.pass(to, dir).pass(to.above(), dir).support(to.below());
+				return b.build();
+			}
+			if (this.world.jumpTop(feet.below()) < top) {
+				return null;
+			}
+			Builder b = new Builder(MoveType.STEP_UP, to, WALK_COST + JUMP_COST);
+			b.clear(feet.above(2)).pass(to, dir).pass(to.above(), dir).support(to.below());
 			return b.build();
 		}
 

@@ -129,7 +129,8 @@ class PathFinderTest {
 
 	/**
 	 * From honey a jump goes half as fast, about 0.38 blocks high (#659): no step up onto a full block or a slab one
-	 * higher, nor a pillar; from thin snow, 0.125 high, a slab one up is 1.375 over it, past a jump's 1.25.
+	 * higher, nor a pillar; from thin snow, 0.125 high, a slab one up is 1.375 over it, past a jump's 1.25. Off the
+	 * snow onto the floor beside it is 0.875 up, itself a jump (#794).
 	 */
 	@Test
 	void stepsUpFromNeitherHoneyNorThinSnowWhereTheJumpFallsShort() {
@@ -139,11 +140,28 @@ class PathFinderTest {
 				Path path = find(world, new BlockPos(1, 2, 0), WALK_ONLY);
 
 				assertTrue(path.complete(), from + " onto " + onto);
-				assertEquals(List.of(MoveType.WALK, MoveType.WALK, MoveType.STEP_UP), types(path), from + " onto " + onto);
+				MoveType off = from == 's' ? MoveType.STEP_UP : MoveType.WALK;
+				assertEquals(List.of(off, MoveType.WALK, MoveType.STEP_UP), types(path), from + " onto " + onto);
 			}
 		}
 		Path pillar = find(GridWorld.flat(10).set(0, 0, 0, 'h'), new BlockPos(0, 2, 0), new PathFinder.Options(false, true, 10_000, 3));
 		assertEquals(MoveType.WALK, types(pillar).getFirst());
+	}
+
+	/**
+	 * From a carpet onto a full block beside it is nearly a block up, past a step: a jump, planned as a step up with
+	 * room over the head for it (#794).
+	 */
+	@Test
+	void stepsUpFromACarpetOntoAFullBlockBesideIt() {
+		GridWorld world = GridWorld.flat(10).set(0, 1, 0, 'c').set(1, 1, 0, '#');
+		Path path = PathFinder.find(world, new BlockPos(0, 2, 0), new Goal.Block(new BlockPos(1, 2, 0)), WALK_ONLY);
+
+		assertEquals(List.of(MoveType.STEP_UP), types(path));
+		assertEquals(PathFinder.WALK_COST + PathFinder.JUMP_COST, path.cost(), 1e-9);
+		// With no room to jump under a roof, it goes round by the floor.
+		Path roofed = PathFinder.find(world.set(0, 4, 0, 'B'), new BlockPos(0, 2, 0), new Goal.Block(new BlockPos(1, 2, 0)), WALK_ONLY);
+		assertFalse(types(roofed).equals(List.of(MoveType.STEP_UP)) || types(roofed).equals(List.of(MoveType.WALK)), "jumped under a roof: " + roofed.steps());
 	}
 
 	/** A slab one up from another slab is a block over its top, which a jump makes. */
