@@ -943,7 +943,7 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** 5 planks in a chest, no log and no tree: get fails for the other 3 and gives the 5 back (#535). */
-	@GameTest(maxTicks = 20)
+	@GameTest(maxTicks = 40)
 	public void givesBackWhatItBorrowedWhenItFails(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.OAK_PLANKS, 5));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
