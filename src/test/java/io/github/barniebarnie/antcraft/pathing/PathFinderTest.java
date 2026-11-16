@@ -604,6 +604,38 @@ class PathFinderTest {
 		assertTrue(placed >= 2 && placed <= 1 + dirt, "placed " + placed + ": " + path.steps());
 	}
 
+	/**
+	 * With no scaffold block, a path places only what it dug (#778), and so no move that places is generated for a node
+	 * whose path has none to place (#806): shut in the same box, the bot digs out through the 2 dirt and pillars twice.
+	 */
+	@Test
+	void placesOnlyWhatItDugWithNoScaffold() {
+		GridWorld world = GridWorld.flat(10).fill(-1, 0, -1, 1, 3, 1, 'B').set(0, 1, 0, ' ').set(0, 2, 0, ' ')
+			.set(1, 1, 0, 'D').set(1, 2, 0, 'D').fill(5, 1, 0, 5, 2, 0, '#');
+		BlockPos top = new BlockPos(5, 3, 0);
+		PathFinder.Options none = new PathFinder.Options(true, true, 10_000, 3, null, 0);
+
+		Path path = find(world, top, none);
+		assertTrue(path.complete(), "partial: " + path.steps());
+		int dug = 0;
+		for (Step step : path.steps()) {
+			dug += (int) step.breaks().stream().filter(p -> world.at(p) == 'D').count();
+			dug -= step.places().size();
+			assertTrue(dug >= 0, "placed more than it dug by " + step + ": " + path.steps());
+		}
+		assertTrue(find(GridWorld.flat(10).fill(5, 1, 0, 5, 2, 0, '#'), top, none).steps().stream().allMatch(s -> s.places().isEmpty()));
+	}
+
+	/** It may place the block it digs in the same step: the dirt over its head as it pillars up a bedrock shaft (#778). */
+	@Test
+	void pillarsOnTheDirtItDigsOverItsHeadWithNoScaffold() {
+		GridWorld world = GridWorld.flat(5).fill(-1, 0, -1, 1, 4, 1, 'B').set(0, 1, 0, ' ').set(0, 2, 0, ' ').set(0, 3, 0, 'D');
+
+		Path path = PathFinder.find(world, new BlockPos(0, 1, 0), new Goal.Block(new BlockPos(0, 2, 0)), new PathFinder.Options(true, true, 10_000, 3, null, 0));
+		assertTrue(path.complete(), "partial: " + path.steps());
+		assertEquals(List.of(new Step(MoveType.PILLAR, new BlockPos(0, 2, 0), List.of(new BlockPos(0, 3, 0)), List.of(new BlockPos(0, 1, 0)))), path.steps());
+	}
+
 	@Test
 	void climbsALadderRatherThanPillarBesideIt() {
 		// A wall three high with a ladder on its west face; the goal is on top of the wall.

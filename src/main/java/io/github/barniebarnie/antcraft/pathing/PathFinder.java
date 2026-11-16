@@ -826,6 +826,11 @@ public final class PathFinder {
 				// A block broken that drops a scaffold block counts back, as the follower breaks into its inventory (#771);
 				// the follower breaks before it places, so it may place it in the same step.
 				// ponytail: one the path placed and breaks again is not counted back, nor drops a full inventory spills.
+				// ponytail: a move that places more than is left is built in full and dropped only here. Cutting it short in
+				// support and pillar, and asking the bot's own floor top once per node in walk, won back 0.1 of 0.14 µs a
+				// node that placing with no scaffold adds (#806: 5.29 µs without placing, 5.43 with, 5.33 with both), too
+				// little to see in the benchmark. 0.14 µs is 0.3 ms of a tick's 2000 nodes, so most of the 1.7 ms #798 put on
+				// #778 is not the moves' own work but the world's answers about the nodes the search then expands.
 				int scaffold = this.places.size();
 				if (Planner.this.options.scaffold() != Integer.MAX_VALUE && Planner.this.options.canPlace()) {
 					for (BlockPos pos : this.breaks) {
