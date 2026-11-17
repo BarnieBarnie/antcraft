@@ -45,6 +45,7 @@
 			"io.github.barniebarnie.antcraft.gametest.CocoaFarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.CactusFarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.WartFarmGameTest",
+			"io.github.barniebarnie.antcraft.gametest.MushroomFarmGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ForesterGameTest",
 			"io.github.barniebarnie.antcraft.gametest.SettleGameTest",
 			"io.github.barniebarnie.antcraft.gametest.ToolsGameTest",
