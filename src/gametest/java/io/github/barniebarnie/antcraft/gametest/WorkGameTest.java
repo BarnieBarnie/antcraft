@@ -45,6 +45,7 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.sheep.Sheep;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
@@ -830,6 +831,30 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 				helper.assertBlockPresent(Blocks.AIR, 3, 0, 3);
 				helper.assertTrue(helper.getBlockState(new BlockPos(1, 1, 3)).getFluidState().is(Fluids.WATER), "no water poured at (1, 1, 3)");
 			});
+	}
+
+	/** use on an Entity walks to a cow and feeds it wheat, as a player's right click does: the cow is in love (#837). */
+	// Measured: passes at tick 48 (red: a position is a Pos or a tuple of three ints, not 'Entity').
+	@GameTest(maxTicks = 100)
+	public void useFeedsACowWheat(GameTestHelper helper) {
+		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 6);
+		cow.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.WHEAT, 2));
+		expect(helper, bot, "r = use(entities('cow')[0], 'wheat')\nprint(r.ok, count('wheat'))\n",
+			List.of("True 1"), () -> helper.assertTrue(cow.isInLove(), "the cow is not in love"));
+	}
+
+	/** use with shears on a sheep shears it, its wool dropped; on a sheared sheep it does nothing (blocked) (#837). */
+	// Measured: passes at tick 49.
+	@GameTest(maxTicks = 100)
+	public void useShearsASheepOnce(GameTestHelper helper) {
+		Sheep sheep = helper.spawn(EntityTypes.SHEEP, 6, 1, 6);
+		sheep.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		bot.getInventory().addItem(new ItemStack(Items.SHEARS));
+		expect(helper, bot, "s = entities('sheep')[0]\nr = use(s, 'shears')\nt = use(s, 'shears')\nprint(r.ok, t.ok, t.reason)\n",
+			List.of("True False blocked"), () -> helper.assertTrue(sheep.isSheared(), "the sheep is not sheared"));
 	}
 
 	/** use on a block every face of which another block hides fails out_of_reach and does nothing (#616). */

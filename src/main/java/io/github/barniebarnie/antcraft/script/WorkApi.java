@@ -79,8 +79,19 @@ public final class WorkApi {
 		});
 		natives.register("use", call -> {
 			Object[] args = Args.bind("use", call, 1, "pos", "item");
-			Pos target = Pos.of(args[0]);
 			Selector item = Args.absent(args[1]) ? null : Selector.parse(args[1]);
+			if (args[0] instanceof EntityInfo info) {
+				// On a mob, as a player's right click on it: feeding, shearing, milking (#837).
+				AntBot bot = bot(run, call);
+				UseOn use = new UseOn(run, bot, info, item);
+				@Nullable Entity entity = info.entity();
+				@Nullable Result refused = entity == null || !entity.isAlive() || !(entity instanceof LivingEntity) ? Result.fail(Result.TARGET_GONE)
+					: entity.level() != bot.level() ? Result.fail(Result.WRONG_DIMENSION)
+					: entity == bot ? Result.fail(Result.PROTECTED)
+					: use.item != null && BotHands.find(bot, use.item) == null ? Result.fail(Result.NO_ITEM) : null;
+				return refused != null ? run.done(use.describe(), refused) : run.start(use, call);
+			}
+			Pos target = Pos.of(args[0]);
 			return run.start(new Use(run, bot(run, call), target, item), call, target);
 		});
 		natives.register("equip", 15, call -> {
@@ -522,7 +533,7 @@ public final class WorkApi {
 	 * {@code min_health}, letting go of the target so its own goals do not chase it on (#718). A creeper {@code attack}
 	 * shoots ({@link Shoot}) ends with {@code hurt} likewise (#724).
 	 */
-	private static final class Attack implements ScriptRun.Action {
+	private static class Attack implements ScriptRun.Action {
 		/** How far, in blocks, the target may move from where the bot walks to before the bot walks to where it is now. */
 		private static final double MOVED = 2;
 		/** How often the bot may get to the target without it being in reach before it gives up with {@code unreachable}. */
@@ -535,8 +546,8 @@ public final class WorkApi {
 		private static final int STEP_IN_TICKS = 20;
 
 		private final ScriptRun run;
-		private final AntBot bot;
-		private final EntityInfo info;
+		final AntBot bot;
+		final EntityInfo info;
 		private final long minHealth;
 		private ScriptRun.@Nullable Action walk;
 		private @Nullable Vec3 walkedTo;
@@ -559,7 +570,7 @@ public final class WorkApi {
 			}
 			@Nullable Entity entity = this.info.entity();
 			if (entity instanceof LivingEntity living && living.isDeadOrDying()) {
-				return this.finish(Result.OK);
+				return this.finish(this.died());
 			}
 			if (!(entity instanceof LivingEntity target) || entity.isRemoved() || entity.level() != this.bot.level()
 				|| entity.distanceTo(this.bot) > SenseApi.MAX_ENTITY_RADIUS) {
@@ -579,11 +590,8 @@ public final class WorkApi {
 				this.arrivals = 0;
 				this.steppedIn = 0;
 				this.bot.getLookControl().setLookAt(target);
-				if (this.bot.tickCount - this.struckAt >= BotHands.strikeTicks(this.bot)) {
-					BotHands.strike(this.bot, (ServerLevel) this.bot.level(), target);
-					this.struckAt = this.bot.tickCount;
-				}
-				return false;
+				@Nullable Result done = this.inReach(target);
+				return done != null && this.finish(done);
 			}
 			if (this.walk != null && this.walkedTo != null && target.position().distanceTo(this.walkedTo) > MOVED) {
 				this.stopWalk();
@@ -611,6 +619,20 @@ public final class WorkApi {
 			}
 			this.arrivals++;
 			return false;
+		}
+
+		/** A tick in reach of the target: a blow when the bot may strike again; the result once done, null while it goes on. */
+		@Nullable Result inReach(LivingEntity target) {
+			if (this.bot.tickCount - this.struckAt >= BotHands.strikeTicks(this.bot)) {
+				BotHands.strike(this.bot, (ServerLevel) this.bot.level(), target);
+				this.struckAt = this.bot.tickCount;
+			}
+			return null;
+		}
+
+		/** The result once the target died: ok for a fight. */
+		Result died() {
+			return Result.OK;
 		}
 
 		/**
@@ -657,6 +679,40 @@ public final class WorkApi {
 		@Override
 		public String describe() {
 			return "attack(" + this.info + ")";
+		}
+	}
+
+	/**
+	 * {@code use(entity, item=None)}: walks into reach of a mob as {@code attack} does and uses the held item on it, or first
+	 * holds one {@code item} selects, as a player's right click on it does: wheat to a cow puts it in love, shears shear a
+	 * sheep (#837). Ok when that did something, {@code blocked} when not, {@code target_gone} once it is gone.
+	 */
+	private static final class UseOn extends Attack {
+		private final @Nullable Selector selector;
+		final @Nullable Predicate<ItemStack> item;
+
+		UseOn(ScriptRun run, AntBot bot, EntityInfo info, @Nullable Selector selector) {
+			super(run, bot, info, 0);
+			this.selector = selector;
+			this.item = selector == null ? null : selector.items();
+		}
+
+		@Override
+		@Nullable Result inReach(LivingEntity target) {
+			if (this.item != null && !BotHands.equip(this.bot, this.item)) {
+				return Result.fail(Result.NO_ITEM);
+			}
+			return BotHands.use(this.bot, target) ? Result.OK : Result.fail(Result.BLOCKED);
+		}
+
+		@Override
+		Result died() {
+			return Result.fail(Result.TARGET_GONE);
+		}
+
+		@Override
+		public String describe() {
+			return "use(" + this.info + (this.selector == null ? "" : ", " + this.selector) + ")";
 		}
 	}
 

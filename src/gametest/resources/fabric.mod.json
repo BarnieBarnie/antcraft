@@ -65,7 +65,8 @@
 			"io.github.barniebarnie.antcraft.gametest.AreaGameTest",
 			"io.github.barniebarnie.antcraft.gametest.FloorGameTest",
 			"io.github.barniebarnie.antcraft.gametest.BenchmarkGameTest",
-			"io.github.barniebarnie.antcraft.gametest.SenseCostGameTest"
+			"io.github.barniebarnie.antcraft.gametest.SenseCostGameTest",
+			"io.github.barniebarnie.antcraft.gametest.RanchGameTest"
 		]
 	},
 	"mixins": [

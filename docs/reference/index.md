@@ -74,7 +74,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 |---|---|---|
 | [`mine`](blocks/mine.md) | `mine(pos, hand=False)` | action: break the block with the best tool carried, or by hand |
 | [`place`](blocks/place.md) | `place(pos, item, facing=None, half=None)` | action: place a block |
-| [`use`](blocks/use.md) | `use(pos, item=None)` | action: use the held item, or the block itself, on a block as a right click does |
+| [`use`](blocks/use.md) | `use(pos, item=None)` | action: use the held item, or the block itself, on a block as a right click does; on an `Entity`, on that mob, such as wheat to a cow or shears to a sheep |
 
 ## Containers and crafting
 

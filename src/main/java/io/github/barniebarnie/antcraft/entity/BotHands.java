@@ -24,6 +24,7 @@ import net.minecraft.world.CompoundContainer;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
@@ -333,6 +334,18 @@ public final class BotHands {
 			return failed[0] == null;
 		});
 		return failed[0];
+	}
+
+	/**
+	 * Uses the held item on {@code target}, as a player's right click on a mob does: wheat to a cow, shears to a sheep (#837).
+	 * Whether that did something: on the server a use that did nothing can still give {@code CONSUME}, as shears on a sheared
+	 * sheep do, so that counts as nothing.
+	 */
+	public static boolean use(AntBot bot, Entity target) {
+		return withHand(bot, target.blockPosition(), player -> {
+			InteractionResult result = player.interactOn(target, InteractionHand.MAIN_HAND, Vec3.ZERO);
+			return result.consumesAction() && result != InteractionResult.CONSUME;
+		});
 	}
 
 	/**
