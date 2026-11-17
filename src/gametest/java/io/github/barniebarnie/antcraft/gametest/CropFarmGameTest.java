@@ -105,6 +105,39 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A cell short of seed, with its water, is not tended (#844): the bot carries no seed and no chest holds any, so
+	 * there is nothing to plant, and it walked to the cell every round. A cell that lost its water still is. Cell 1 is
+	 * farmland round its water, cell 2 farmland with none; tend_cell is stood in for, to say which it tends.
+	 */
+	// Measured: passes at tick 14 (red: tended seedless too).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 40)
+	public void aCellShortOfSeedIsNotWalkedTo(GameTestHelper helper) {
+		forEachSpot(1, (x, z) -> helper.setBlock(x, 0, z, Blocks.FARMLAND));
+		forEachSpot(11, (x, z) -> helper.setBlock(x, 0, z, Blocks.FARMLAND));
+		helper.setBlock(5, 0, 8, Blocks.WATER);
+		helper.setBlock(15, 0, 8, Blocks.FARMLAND);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 20, 1, 18);
+		BlockPos one = helper.absolutePos(new BlockPos(1, 0, 4));
+		BlockPos two = helper.absolutePos(new BlockPos(11, 0, 4));
+		BotScripts.run(bot, """
+			import jobs.crop_farm
+			import lib.farm
+			from lib.result import result
+			one = Pos(%d, %d, %d)
+			two = Pos(%d, %d, %d)
+			def tended(c, name, low, high, radius):
+			    print("tended", "dry" if low == two else "seedless")
+			    return result()
+			jobs.crop_farm.tend_cell = tended
+			box = lambda low: (low, Pos(low.x + 8, low.y, low.z + 8))
+			jobs.crop_farm.tend(lib.farm.crop("wheat"), "wheat_farm", [box(one), box(two)], 16, {})
+			print("done")
+			""".formatted(one.getX(), one.getY(), one.getZ(), two.getX(), two.getY(), two.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("tended dry", "done"), "said"));
+	}
+
+	/**
 	 * A dirt floor under both cells, a chest of supplies with seeds of seed, an iron hoe, two water buckets and two chests,
 	 * and, where depot is more than 0, a chest at the depot's first slot holding depot more seeds; the bot by the supplies.
 	 */

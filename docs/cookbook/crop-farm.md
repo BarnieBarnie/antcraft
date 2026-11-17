@@ -29,7 +29,7 @@ steps = [Step("cell", first_cell, (c, name, size, radius)),
 - **farm**, round after round ([`lib.cellfarm.farm`](../reference/modules/lib/cellfarm.md#farmf-name-size-radius)):
     1. harvests each cell whose crops are all ripe, and replants it from the drops (`lib.farm.tend`), once the bot has 6 empty slots (`ROOM`);
     2. stores what it carries in the depot's `crops` chest (the harvest, extra seed, poisonous potatoes), the rest, such as the dirt a pour dug, in `other`; the bot keeps a cell's seed (80), its hoe and its buckets;
-    3. tends each cell that lacks its water or a crop: pours the water again where it is gone and plants the bare spots, getting the seed it lacks;
+    3. tends each cell that lacks its water or a crop: pours the water again where it is gone and plants the bare spots, getting the seed it lacks; a cell with its water is left alone while the bot carries no seed and no chest within the radius holds any, so it does not walk there for nothing;
     4. builds the next cell where the farm has fewer than its most and the bot and the chests hold a cell's seed, 80, beyond what it carries; else says once what it lacks, such as `next cell: no_recipe, lacks {'minecraft:carrot': 40}`, and tries again 10 rounds later, or after the next harvest;
     5. where it harvested nothing, walks into its corner's chunk and waits 100 ticks.
 

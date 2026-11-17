@@ -17,6 +17,7 @@ import jobs.farm
 import lib.cellfarm
 import lib.cells
 import lib.farm
+import lib.stock
 import lib.terrain
 import lib.treefarm
 from lib.cellfarm import tell
@@ -107,13 +108,21 @@ def harvest(c, name, low, high, radius, told):
 
 
 def tend(c, name, boxes, radius, told):
-    """Tends each cell of boxes that lacks its water or a crop (lacking), saying once what it could not."""
-    # ponytail: a cell short of seed is walked to each round; a seed count before the walk would spare it.
+    """Tends each cell of boxes that lacks its water or a crop (lacking), saying once what it could not. A cell with its
+    water is left where there is no seed of crop c to plant, none carried and none in the chests within radius: it was
+    walked to every round for nothing (#844)."""
+    seeded = None  # whether there is seed, looked up once
     for b in boxes:
-        if lacking(b[0], b[1]):
-            r = tend_cell(c, name, b[0], b[1], radius)
-            if not r["ok"]:
-                tell(told, f"tend: {r['reason']} at {r['at']}")
+        if not lacking(b[0], b[1]):
+            continue
+        if block(middle(b[0], b[1])).id == lib.farm.WATER:
+            if seeded is None:
+                seeded = count(c[1]) > 0 or len(lib.stock.where(c[1], radius)) > 0
+            if not seeded:
+                continue
+        r = tend_cell(c, name, b[0], b[1], radius)
+        if not r["ok"]:
+            tell(told, f"tend: {r['reason']} at {r['at']}")
 
 
 def most(c, name):
