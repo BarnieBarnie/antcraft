@@ -789,7 +789,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			jobs.wood_farm.stored_bone_meal = lambda k, name, boxes, radius: None
 			jobs.wood_farm.compost = lambda k, name, boxes, radius: lib.result.result()
 			jobs.wood_farm.sweep = lambda k, boxes: None
-			lib.cellfarm.corner = lambda name: None
+			lib.cellfarm.corner = lambda name, told: None
 			lib.cellfarm.stocked = lambda k, radius: lib.result.result()
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result()
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
@@ -1034,7 +1034,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			jobs.wood_farm.tend = tend
 			jobs.wood_farm.unplanted = lambda k, b: []
 			jobs.wood_farm.sweep = lambda k, boxes: None
-			lib.cellfarm.corner = lambda name: goto(cell[0] + (1, 1, 1))
+			lib.cellfarm.corner = lambda name, told: goto(cell[0] + (1, 1, 1))
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.treefarm.grown = lambda k, low, high: False

@@ -178,14 +178,17 @@ def visit(f, b):
         goto(b[0].up(), 2)
 
 
-def corner(name):
+def corner(name, told):
     """Walks the bot into the chunk of the farm name's corner, cell 0's low corner, where it stands elsewhere (#814), so
-    the cells ticking counts get random ticks while it waits: to corner_spot."""
+    the cells ticking counts get random ticks while it waits: to corner_spot. A walk that fails is said once a reason
+    (tell, into told): one to a spot it could never reach went unnoticed, and left the bot by a cactus (#846, #851)."""
     low, high = lib.cells.cell(name, 0)
     p = pos()
     if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
         return
-    goto(corner_spot(low, high))
+    r = goto(corner_spot(low, high))
+    if not r:
+        tell(told, f"corner: {r.reason}")
 
 
 def corner_spot(low, high):
@@ -295,7 +298,7 @@ def farm(f, name, size, radius):
         if not harvested:
             if "idle" in f:
                 f["idle"](boxes)
-            corner(name)
+            corner(name, told)
         lib.trees.take_back()
         if not harvested:
             wait(WAIT)

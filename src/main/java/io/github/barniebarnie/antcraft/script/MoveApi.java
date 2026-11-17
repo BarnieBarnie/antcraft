@@ -85,6 +85,15 @@ public final class MoveApi {
 		/** Starts walking to within {@code near} blocks (Manhattan) of {@code target}, with the bot's path follower. */
 		void startPath(Pos target, int near);
 
+		/**
+		 * Whether a bot standing at {@code target} is hurt there, such as in a cactus or a berry bush: a hazard, not a fluid
+		 * or a portal, which a walk may end in on purpose. No path ends there, so a walk to it ends wherever the search left
+		 * it, such as pillared over a bush (#845) or by a cactus (#846).
+		 */
+		default boolean hurtsIn(Pos target) {
+			return false;
+		}
+
 		/** Starts walking to where the bot sees {@code target} within {@code reach}, such as {@link #REACH} to work on it. */
 		void startReach(Pos target, double reach);
 
@@ -504,6 +513,9 @@ public final class MoveApi {
 			}
 			waited = 0;
 			if (!walking) {
+				if (reach == 0 && near == 0 && body.hurtsIn(target)) {
+					return finish(Result.fail(Result.HAZARD));
+				}
 				if (keep != null) {
 					body.setKeepItems(keep.items());
 				}

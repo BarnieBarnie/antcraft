@@ -248,7 +248,11 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean isHazard(BlockPos pos) {
-		BlockState state = this.blocks.get(pos);
+		return hazard(this.blocks.get(pos));
+	}
+
+	/** A block a bot is hurt in or on, or a fluid or portal it should not stand in by chance (see {@link #isHazard}). */
+	public static boolean hazard(BlockState state) {
 		return !state.getFluidState().isEmpty()
 			|| state.is(BlockTags.FIRE)
 			|| state.is(Blocks.MAGMA_BLOCK)

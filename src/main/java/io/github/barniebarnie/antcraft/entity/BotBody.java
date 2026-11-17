@@ -46,13 +46,17 @@ final class BotBody implements MoveApi.Body {
 	 * Whether the bot standing on {@code floor} lands at most {@link PathFollower#MAX_DROP} down, as a path drops it, once
 	 * that block is broken: else standing on it is no stand to break it from. Taking back a scaffold pillar whose lower
 	 * blocks it took back from the ground before, it stood on each block left to mine it and fell to the floor (#668).
-	 * Leaves that decay are no floor to land on (#673).
+	 * Leaves that decay are no floor to land on (#673). Nor does it land unhurt in or on a hazard, such as the berry bush a
+	 * scaffold block was placed over: taken back from on top, it dropped the bot into the bush (#845, #851).
 	 */
 	private boolean landsUnhurt(BlockPos floor) {
 		ServerLevel level = this.level();
 		for (int drop = 1; drop <= PathFollower.MAX_DROP; drop++) {
 			BlockPos below = floor.below(drop);
 			BlockState state = level.getBlockState(below);
+			if (LevelWorldView.hazard(state) && !state.getFluidState().is(FluidTags.WATER)) {
+				return false;
+			}
 			if (!state.getCollisionShape(level, below).isEmpty() && !LevelWorldView.decays(state) || state.getFluidState().is(FluidTags.WATER)) {
 				return true;
 			}
@@ -103,6 +107,16 @@ final class BotBody implements MoveApi.Body {
 	@Override
 	public void startPath(Pos target, int near) {
 		this.follower.start(new Goal.Near(new BlockPos(clamp(target.x()), clamp(target.y()), clamp(target.z())), near));
+	}
+
+	@Override
+	public boolean hurtsIn(Pos target) {
+		BlockPos pos = blockPos(target);
+		if (!this.level().isLoaded(pos)) {
+			return false; // reading it would load its chunk, such as a far home's that should stay unloaded
+		}
+		BlockState state = this.level().getBlockState(pos);
+		return LevelWorldView.hazard(state) && state.getFluidState().isEmpty() && !state.is(Blocks.NETHER_PORTAL);
 	}
 
 	@Override

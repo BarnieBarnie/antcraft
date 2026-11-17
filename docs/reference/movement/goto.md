@@ -59,6 +59,7 @@ r = goto(home(), keep="cobblestone")
 | Reason | When |
 |---|---|
 | `unreachable` | the pathfinder finds no way there |
+| `hazard` | the bot would be hurt standing at `pos`, such as in a cactus, a berry bush, fire or powder snow, and `near` is 0: it fails at once, without walking, as no path ends there (#851). A fluid or a nether portal is no such hazard |
 | `not_loaded` | a chunk on the way did not load within a minute, or is not loaded and `botsLoadChunks` is off |
 | `timeout` | the bot got no closer for 2400 ticks |
 | `wrong_dimension` | `pos` is in another dimension than the bot |

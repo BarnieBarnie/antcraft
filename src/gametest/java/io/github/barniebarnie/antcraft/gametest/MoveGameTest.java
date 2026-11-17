@@ -30,6 +30,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.util.ProblemReporter;
 import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
@@ -97,6 +98,28 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		BotScripts.failOnError(helper, bot);
 
 		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False unreachable False")), "printed " + printed(bot)));
+	}
+
+	/**
+	 * A goto onto a block a bot is hurt in, a cactus or a ripe berry bush, fails at once with {@code hazard}: aimed at a
+	 * cactus, a corner walk that could not end left the bot beside it (#846), and at a bush, its path pillared over it
+	 * (#845, #851). The bot carries cobblestone to pillar with, and is never hurt.
+	 */
+	// Measured: passes at tick 3 (red: nothing printed by tick 20, still walking).
+	@GameTest(maxTicks = 20)
+	public void gotoOntoACactusOrABerryBushFailsAtOnceUnhurt(GameTestHelper helper) {
+		helper.setBlock(5, 0, 2, Blocks.SAND);
+		helper.setBlock(5, 1, 2, Blocks.CACTUS);
+		helper.setBlock(5, 0, 5, Blocks.GRASS_BLOCK);
+		helper.setBlock(5, 1, 5, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		bot.getInventory().addItem(new ItemStack(Items.COBBLESTONE, 8));
+		BlockPos cactus = helper.absolutePos(new BlockPos(5, 1, 2));
+		BlockPos bush = helper.absolutePos(new BlockPos(5, 1, 5));
+		BotScripts.run(bot, "for p in [" + pos(cactus) + ", " + pos(bush) + "]:\n    r = goto(p)\n    print(r.ok, r.reason)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt at " + bot.position()));
+		helper.succeedWhen(() -> helper.assertTrue(printed(bot).equals(List.of("False hazard", "False hazard")), "printed " + printed(bot)));
 	}
 
 	/** A bot at the bottom of a pit two deep in bedrock, carrying only cobblestone; returns it. */

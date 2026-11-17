@@ -29,6 +29,8 @@ public record Result(boolean ok, @Nullable String reason, Object value, @Nullabl
 	public static final String PROTECTED = "protected";
 	public static final String TARGET_GONE = "target_gone";
 	public static final String HURT = "hurt";
+	/** {@code goto}: the bot would be hurt standing at the target, such as in a cactus or a berry bush (#851). */
+	public static final String HAZARD = "hazard";
 	public static final String NO_RECIPE = "no_recipe";
 	public static final String MISSING_INGREDIENTS = "missing_ingredients";
 	public static final String NO_BLUEPRINT = "no_blueprint";

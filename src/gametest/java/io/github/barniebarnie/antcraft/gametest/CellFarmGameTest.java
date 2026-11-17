@@ -120,6 +120,32 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A corner walk that fails is said, once a reason (#851): corner ignored its goto's result, so a walk to a spot it
+	 * could never reach, by a cactus, went unnoticed (#846). Here cell 0 is stood in for in a chunk four over and the
+	 * corner spot in mid-air, which the bot has no blocks to climb to; corner is called twice.
+	 */
+	// Measured: passes at tick 40 (red: corner() takes 1 positional argument but 2 were given).
+	@GameTest(maxTicks = 80)
+	public void aCornerWalkThatFailsIsSaidOnce(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		BlockPos spot = helper.absolutePos(new BlockPos(4, 6, 4));
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			import lib.cells
+			low = pos().east(64)
+			lib.cells.cell = lambda name, i: (low, low)
+			lib.cellfarm.corner_spot = lambda low, high: Pos(%d, %d, %d)
+			told = {}
+			lib.cellfarm.corner("test_farm", told)
+			lib.cellfarm.corner("test_farm", told)
+			print("done")
+			""".formatted(spot.getX(), spot.getY(), spot.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(
+			List.of("corner: unreachable", "done")), "said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
+
+	/**
 	 * Where a bot waits in its farm's corner chunk (corner, #814): diagonal into cell 0 from its low corner, but where that
 	 * corner is at the chunk's edge (local 15), a block back from the cell, never on it: a berry farm's bot was sent onto
 	 * a bush, its path pillared over it, and taking the scaffold back dropped it in (#845). Where the cell is deeper than

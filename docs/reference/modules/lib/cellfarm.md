@@ -127,9 +127,9 @@ Walks to cell `b`, a `(low, high)` box, where the bot cannot read it (the spec's
 
 - **Pauses** yes.
 
-## `corner(name)`
+## `corner(name, told)`
 
-Walks the bot into the chunk of the farm `name`'s corner, cell 0's low corner, where it stands elsewhere (#814), so the cells `ticking` counts get random ticks while it waits: to the first block in the corner's chunk and off cell 0 of those diagonal from its low corner, into the cell first, then a block back on z, on x, on both, else diagonal out of the cell's far corner. So never onto a cell: a berry farm's bot was sent onto a bush (#845), a cactus farm's onto its second cactus, which on a 2 by 2 cell is the block diagonal into it (#846).
+Walks the bot into the chunk of the farm `name`'s corner, cell 0's low corner, where it stands elsewhere (#814), so the cells `ticking` counts get random ticks while it waits: to the first block in the corner's chunk and off cell 0 of those diagonal from its low corner, into the cell first, then a block back on z, on x, on both, else diagonal out of the cell's far corner. So never onto a cell: a berry farm's bot was sent onto a bush (#845), a cactus farm's onto its second cactus, which on a 2 by 2 cell is the block diagonal into it (#846). A walk that fails is said once a reason, `corner: <reason>` ([`tell`](#telltold-what) into `told`): one that could never end went unnoticed (#851).
 
 - **Pauses** yes.
 

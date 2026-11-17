@@ -175,7 +175,7 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 			import lib.cellfarm
 			lib.cells.layout("cactus_farm", Pos(%d, %d, %d), (2, 2))
 			lib.cells.add("cactus_farm", 0)
-			lib.cellfarm.corner("cactus_farm")
+			lib.cellfarm.corner("cactus_farm", {})
 			print("waits")
 			""".formatted(at.getX(), at.getY(), at.getZ()));
 		BotScripts.failOnError(helper, bot);

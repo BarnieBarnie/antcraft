@@ -23,6 +23,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.SaplingBlock;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jspecify.annotations.Nullable;
 
@@ -620,6 +621,25 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 					helper.assertBlockNotPresent(Blocks.DIRT, p);
 				}
 			});
+	}
+
+	/**
+	 * take_back does not drop the bot into a hazard under the scaffold it stands on (#845, #851): the bot stands on a dirt
+	 * block over a ripe berry bush, which placed_scaffold, stood in for, lists. It steps off and mines the block from beside,
+	 * then walks away, never hurt: mined from on top, it fell into the bush and was hurt walking out.
+	 */
+	// Measured: passes at tick 37 (red: hurt on tick 21).
+	@GameTest(maxTicks = 80)
+	public void takeBackOverABerryBushLeavesTheBotUnhurt(GameTestHelper helper) {
+		helper.setBlock(3, 0, 3, Blocks.GRASS_BLOCK);
+		helper.setBlock(3, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		helper.setBlock(3, 2, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 3, 3);
+		helper.onEachTick(() -> helper.assertTrue(bot.getHealth() == bot.getMaxHealth(), "hurt at " + bot.position()));
+		expect(helper, bot, "import lib.trees\nq = Pos" + at(helper, 3, 2, 3) + "\n"
+			+ "def one(forget=True, keep=None):\n    return [q] if keep == None and block(q).id == 'minecraft:dirt' else []\n"
+			+ "lib.trees.placed_scaffold = one\nlib.trees.take_back()\nr = goto(Pos" + at(helper, 1, 1, 1) + ")\n"
+			+ "print(block(q).id, r.ok)\n", List.of("minecraft:air True"));
 	}
 
 	/** No spruce log and no dirt above the floor, and a spruce sapling on each spot of the giant's trunk. */
