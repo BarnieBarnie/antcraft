@@ -1,6 +1,6 @@
 # A job: grows a nether wart farm, the base of every potion, and farms it until a player stops it. Run it as
 # /antcraft bot run jobs.wart_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
-# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST at
+# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks of soul sand with
 # wart on each; wart needs no water and grows in any dimension, so the farm can stand in the overworld once a chest holds
 # soul sand and wart from the nether (the bot does not go there). Each round it harvests the ripe wart (age 3) and
@@ -24,9 +24,10 @@ SOUL_SAND = "minecraft:soul_sand"
 NAME = "wart_farm"
 RIPE = 3  # the age of ripe wart
 # Wart ages a stage on 1 in 10 of its random ticks, and each block of a section gets one on 3 of 4096 ticks: some
-# 40000 ticks to ripen. A cell's harvest takes the bot some 200, so it is busy at about 200 cells;
-# ponytail: not measured, the cells that keep growing round its corner cap it first.
-MOST = int(RIPE * 10 * 4096 / 3 // 200)
+# 40000 ticks to ripen. A cell's harvest takes the bot some 200, so it is busy at about 200 cells till it learns
+# its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its corner cap it first.
+GROWTH = RIPE * 10 * 4096 / 3
+HARVEST = 200
 # Kept on the bot, not stored: the crafting table lib.get makes a depot chest with.
 KEEP = ["minecraft:crafting_table"]
 
@@ -110,7 +111,7 @@ def spec(radius=32):
             "materials": lambda: {WART: 3, SOUL_SAND: 3}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": build_cell,
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
-            "most": lambda: MOST}
+            "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 
 def run(at=None, size=None, radius=32):

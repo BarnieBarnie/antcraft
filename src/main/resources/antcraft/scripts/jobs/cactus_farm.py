@@ -1,6 +1,6 @@
 # A job: grows a cactus farm and farms it until a player stops it, for green dye and furnace fuel. Run it as
 # /antcraft bot run jobs.cactus_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
-# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST at
+# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is 2 by 2 floor blocks with cactus on sand at two
 # opposite corners, a checkerboard, as a cactus breaks with a block beside it. Each round it cuts the cactus two or more
 # high down to its bottom block, which grows again, stores the cactus in a depot north of the farm and builds a cell once
@@ -24,9 +24,10 @@ CACTUS = "minecraft:cactus"
 SAND = "minecraft:sand"
 NAME = "cactus_farm"
 # Cactus grows a block on every 16th random tick of its top block, as cane does: some 22000 ticks to grow back to two
-# high. A cell's harvest takes the bot some 200, so it is busy at about 100 cells; ponytail: not measured, the cells
-# that keep growing round its corner cap it first.
-MOST = int(16 * 4096 / 3 // 200)
+# high. A cell's harvest takes the bot some 200, so it is busy at about 100 cells till it learns
+# its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its corner cap it first.
+GROWTH = 16 * 4096 / 3
+HARVEST = 200
 # Kept on the bot, not stored: the crafting table lib.get makes a depot chest with.
 KEEP = ["minecraft:crafting_table"]
 
@@ -101,7 +102,7 @@ def spec(radius=32):
             "materials": lambda: {CACTUS: 2}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
-            "most": lambda: MOST}
+            "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 
 def run(at=None, size=None, radius=32):

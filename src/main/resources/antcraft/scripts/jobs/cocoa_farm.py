@@ -1,6 +1,6 @@
 # A job: grows a cocoa farm and farms it until a player stops it, for brown dye and cookies. Run it as
 # /antcraft bot run jobs.cocoa_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
-# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST at
+# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks going east: a column
 # of two jungle logs on the middle one, a cocoa pod on its west and east side at each height. Each round it breaks the
 # ripe pods (age 2), places a bean back on the log, stores the beans in a depot north of the farm and builds a cell once
@@ -24,9 +24,10 @@ NAME = "cocoa_farm"
 HEIGHT = 2  # the logs of a cell's column
 RIPE = 2  # a pod's age once it drops 3 beans
 # A pod grows an age on 1 in 5 of its random ticks, each block of a section getting one on 3 of 4096 ticks: some 14000
-# ticks from planted to ripe. A cell's harvest takes the bot some 200, so it is busy at about 70 cells; ponytail: not
-# measured, the cells that keep growing round its corner cap it first.
-MOST = int(2 * 5 * 4096 / 3 // 200)
+# ticks from planted to ripe. A cell's harvest takes the bot some 200, so it is busy at about 70 cells till it learns
+# its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its corner cap it first.
+GROWTH = 2 * 5 * 4096 / 3
+HARVEST = 200
 KEEP = ["minecraft:crafting_table"]  # lib.get makes a depot chest with it
 
 
@@ -102,7 +103,8 @@ def spec(radius=32):
     return {"size": (3, 1), "categories": {"cocoa": [BEANS, LOG]}, "corners": "cocoa_farms", "keep": KEEP,
             "materials": lambda: {LOG: HEIGHT, BEANS: 2 * HEIGHT}, "height": HEIGHT,
             "build_cell": build_cell, "ripe": lambda low, high: len(ripe_pods(low, high)) > 0,
-            "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius), "most": lambda: MOST}
+            "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
+            "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 
 def run(at=None, size=None, radius=32):

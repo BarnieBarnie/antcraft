@@ -1,11 +1,11 @@
-# A job: grows a pumpkin or melon farm from a few seeds and farms it until a player stops it. Run it as
-# /antcraft bot run jobs.stem_farm <pumpkin|melon> [x y z [cells [radius]]]: the kind, the farm's first corner (by
-# default where the bot stands, or where a stopped run of the kind started), the most cells it grows to (by default
-# MOST, and no more than the cells that get random ticks round its corner) and how far to look for what it needs, in
-# blocks (32 by default). A cell is 3 by 3: a stem on farmland at each corner, a dirt fruit spot between each two, and
-# water in the middle that keeps the farmland wet. Stems keep fruiting, so the farm only mines the fruit beside its
-# stems, never the stems, and stores it in a depot north of the farm; it builds the next cell once it has or can get 4
-# seeds, crafted from a stored pumpkin or melon slices (docs/cookbook/stem-farm.md, #828). The farm's layout, depot,
+# A job: grows a pumpkin or melon farm from a few seeds and farms it until a player stops it. Run it as /antcraft bot
+# run jobs.stem_farm <pumpkin|melon> [x y z [cells [radius]]]: the kind, the farm's first corner (by default where the
+# bot stands, or where a stopped run of the kind started), the most cells it grows to (by default 24 till it learns its
+# harvest ticks, and no more than the cells that get random ticks round its corner) and how far to look for what it
+# needs, in blocks (32 by default). A cell is 3 by 3: a stem on farmland at each corner, a dirt fruit spot between each
+# two, and water in the middle that keeps the farmland wet. Stems keep fruiting, so the farm only mines the fruit beside
+# its stems, never the stems, and stores it in a depot north of the farm; it builds the next cell once it has or can get
+# 4 seeds, crafted from a stored pumpkin or melon slices (docs/cookbook/stem-farm.md, #828). The farm's layout, depot,
 # growth and rounds are lib.cellfarm's (#826); this module is its spec. Another job starts a farm with run(kind, at);
 # imported, this runs nothing.
 #
@@ -26,10 +26,11 @@ from lib.result import result
 KINDS = {"pumpkin": ("minecraft:pumpkin", "minecraft:pumpkin", "minecraft:pumpkin_seeds", "minecraft:pumpkin_stem"),
          "melon": ("minecraft:melon", "minecraft:melon_slice", "minecraft:melon_seeds", "minecraft:melon_stem")}
 SIZE = (3, 3)
-# ponytail: a guess, not measured. A stem on wet farmland ripens in some 30000 ticks, then fruits about every 5000;
-# 4 stems a cell, some 60 ticks a fruit mined, so a bot keeps up with some 20 cells. lib.cellfarm.limit caps it at the
-# cells that keep growing anyway.
-MOST = 24
+# A stem on wet farmland ripens in some 30000 ticks, then fruits about every 5000: with 4 stems a cell has a fruit some
+# 1250 ticks after its last harvest. A harvest of a fruit takes some 50 ticks, so a bot keeps up with some 24 cells till
+# it learns its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its corner cap it first.
+GROWTH = 5000 / 4
+HARVEST = 52
 KEEP = ["minecraft:bucket", "minecraft:crafting_table"]
 
 
@@ -112,12 +113,12 @@ def spec(kind, name, radius):
             "build_cell": lambda low, high: build_cell(kind, name, low, high, radius),
             "ripe": lambda low, high: len(fruit(kind, low, high)) > 0,
             "harvest": lambda low, high, told: harvest(kind, low, high),
-            "tend": lambda boxes, told: None, "most": lambda: MOST}
+            "tend": lambda boxes, told: None, "most": lambda: lib.cellfarm.most(name, GROWTH, HARVEST)}
 
 
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a stem farm of kind ("pumpkin" or "melon") with its first corner at at, up to size cells (else
-    lib.cellfarm.limit with MOST). Never returns but on a failed step: gives lib.project.run's result() then."""
+    lib.cellfarm.limit). Never returns but on a failed step: gives lib.project.run's result() then."""
     name = kind + "_farm"
     f = spec(kind, name, radius)
     return lib.cellfarm.run(f, name, kind, at, [Step("farm", lib.cellfarm.farm, (f, name, size, radius))], radius)

@@ -1,6 +1,6 @@
 # A job: grows a sugarcane farm and farms it until a player stops it, for paper and books. Run it as
 # /antcraft bot run jobs.cane_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
-# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST at
+# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks: water in the middle
 # (poured with jobs.farm.pour), dirt either side with cane on it. Each round it cuts the cane two or more high down to its
 # bottom block, which grows again, stores the cane in a depot north of the farm and builds a cell once it has or can get
@@ -25,8 +25,10 @@ CANE = "minecraft:sugar_cane"
 NAME = "cane_farm"
 # Cane grows a block on every 16th random tick of its bottom block (age 0 to 15), each tick randomTickSpeed (3) blocks
 # of a 16x16x16 section get one: some 22000 ticks to grow back to two high. A cell's harvest takes the bot some 200, so
-# it is busy at about 100 cells; ponytail: not measured, the cells that keep growing round its corner cap it first.
-MOST = int(16 * 4096 / 3 // 200)
+# it is busy at about 100 cells till it learns
+# its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its corner cap it first.
+GROWTH = 16 * 4096 / 3
+HARVEST = 200
 # Kept on the bot, not stored: the buckets that water a cell, and the crafting table lib.get makes a depot chest with.
 KEEP = ["minecraft:bucket", "minecraft:water_bucket", "minecraft:crafting_table"]
 
@@ -109,7 +111,7 @@ def spec(radius=32):
             "materials": lambda: {CANE: 2}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
-            "most": lambda: MOST}
+            "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 
 def run(at=None, size=None, radius=32):

@@ -1,6 +1,6 @@
 # A job: grows a mushroom farm, for mushroom stew, and farms it until a player stops it. Run it as
 # /antcraft bot run jobs.mushroom_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands, or
-# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST at
+# where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, most()
 # most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks of podzol, which a
 # mushroom grows on in any light, so the farm needs no roof or dark room: a brown mushroom on the west one and a red one
 # on the east one, which spread onto the middle one on their own. Each round it harvests what spread, also onto the path
@@ -29,8 +29,10 @@ GROWS = "#minecraft:mushroom_grow_block"
 NAME = "mushroom_farm"
 # A mushroom tries to spread on 1 in 25 of its random ticks, and each block of a section gets one on 3 of 4096 ticks:
 # some 34000 ticks a try for each of a cell's two. A cell's harvest takes the bot some 200, so it is busy at about 85
-# cells; ponytail: not measured, the cells that keep growing round its corner cap it first.
-MOST = int(4096 / 3 * 25 / 2 // 200)
+# cells till it learns its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its
+# corner cap it first.
+GROWTH = 4096 / 3 * 25 / 2
+HARVEST = 200
 BONE_MEAL = "minecraft:bone_meal"
 STEM = "minecraft:mushroom_stem"
 # What a huge mushroom is made of (#842).
@@ -185,7 +187,7 @@ def spec(radius=32):
             "keep": KEEP, "materials": lambda: {PODZOL: 3, BROWN: 1, RED: 1}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": lambda low, high, told: harvest(low, high, told, radius),"tend": lambda boxes, told: tend(boxes, told, radius),
-            "most": lambda: MOST}
+            "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 
 def run(at=None, size=None, radius=32):

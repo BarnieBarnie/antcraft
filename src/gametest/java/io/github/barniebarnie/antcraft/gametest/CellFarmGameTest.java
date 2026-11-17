@@ -120,6 +120,57 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A farm's cap from its own harvest times (#844), as the wood farm's (#662): most(name, growth, guess) is growth over
+	 * guess until SAMPLES harvests are learnt, then over their mean; farm learns each round's harvests where the spec has
+	 * no learn of its own. Here a harvest that takes 30 ticks is learnt once, then 200 ticks of 2 and 100 of 1 for "x".
+	 */
+	// Measured: passes at tick 52 (red: module 'lib.cellfarm' has no attribute 'most').
+	@GameTest(maxTicks = 120)
+	public void aFarmLearnsItsHarvestTicksAndSizesItselfFromThem(GameTestHelper helper) {
+		helper.setBlock(6, 1, 6, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(6, 1, 6), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.TORCH, 3));
+		chest.setItem(1, new ItemStack(Items.CHEST));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			from lib.project import Step
+			from lib.result import result
+			T = "minecraft:torch"
+			print(lib.cellfarm.most("x", 1000, 500))
+			lib.cellfarm.learn("x", 200, 2)
+			print(lib.cellfarm.most("x", 1000, 500))
+			lib.cellfarm.learn("x", 100, 1)
+			print(lib.cellfarm.most("x", 1000, 500))
+			ripe = [True]
+			waits = [0]
+			def build_cell(low, high):
+			    r = place(low.up(), T)
+			    return result() if r else result(r.reason, low.up())
+			def harvest(low, high, told):
+			    ripe[0] = False
+			    wait(30)
+			    return result()
+			def waited(ticks):
+			    waits[0] += 1
+			    if waits[0] > 1:
+			        h = memory["harvest_ticks"]["test_farm"]
+			        print(len(h), h[0] >= 30)
+			        stop()
+			lib.cellfarm.wait = waited
+			f = {"size": (1, 1), "categories": {"torch": [T]}, "corners": "test_farms", "keep": [T],
+			     "materials": lambda: {T: 1}, "build_cell": build_cell, "ripe": lambda low, high: ripe[0],
+			     "harvest": harvest, "tend": lambda boxes, told: None, "most": lambda: 1}
+			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
+			.filter(l -> !l.contains("cell") && !l.contains("farm")).toList(),
+			List.of("2", "2", "10", "1 True"), "said"));
+	}
+
+	/**
 	 * A corner walk that fails is said, once a reason (#851): corner ignored its goto's result, so a walk to a spot it
 	 * could never reach, by a cactus, went unnoticed (#846). Here cell 0 is stood in for in a chunk four over and the
 	 * corner spot in mid-air, which the bot has no blocks to climb to; corner is called twice.

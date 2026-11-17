@@ -48,7 +48,7 @@ A dict. A cell's hooks take its box, `low` and `high` the corners of its floor (
 | `ripe(low, high)` | whether the cell has something to harvest |
 | `harvest(low, high, told)` | harvests the cell, and replants it where the farm replants; gives `result()`. `told` is the round's dict for [`tell`](#telltold-what) |
 | `tend(boxes, told)` | puts back what the cells `boxes` lack, such as a planting; a farm that never replants (a stem) does nothing here |
-| `most()` | the cells at which the bot is busy; the farm grows to no more ([`limit`](#limitf-name-size)) |
+| `most()` | the cells at which the bot is busy; the farm grows to no more ([`limit`](#limitf-name-size)). A farm learns it from its own harvests with [`most`](#mostname-growth-guess) |
 
 Optional:
 
@@ -64,7 +64,7 @@ Optional:
 | `stock(boxes)` | none | gets what tending `boxes` takes, after the harvest and store |
 | `chores(keep, told)` | none | harvests before the round's own, such as cells of another farm; gives `(harvests, whether the bot is too full)` |
 | `switch()` | none | a farm to go on with instead: its result, which `farm` gives, or `None` |
-| `learn(ticks, n)` | none | `n` harvests of a round took `ticks` game ticks; not called where the round's own harvests are none, only `chores`' |
+| `learn(ticks, n)` | [`learn`](#learnname-ticks-n) under the farm's name | `n` harvests of a round took `ticks` game ticks; not called where the round's own harvests are none, only `chores`' |
 | `full(boxes, told)` | none | what a full farm does each round |
 | `idle(boxes)` | none | what a round that harvested nothing does before the bot walks to its corner and waits |
 
@@ -108,6 +108,14 @@ The indices of the farm `name`'s cells whose spots (the spec's `spots`) all lie 
 ## `hint(f, name, at)`
 
 Says where a corner fits more cells that keep growing than `at` (#813), such as `a corner at 32 64 -16 fits 20 growing cells, this one 9`: the north-west block of `at`'s chunk or of the chunk east, south or south-east of it, whichever is nearest, as each fits the most. Nothing where `at` is such a corner already. Done at once.
+
+## `learn(name, ticks, n)`
+
+Keeps `n` harvests of the farm `name` that took `ticks` game ticks in `memory["harvest_ticks"][name]`: the ticks of its last `WINDOW` (10) harvests, each of a round's its mean (#844). `farm` calls it after each round that harvested, where the spec has no `learn` of its own (the [wood farm](../../../cookbook/wood-farm.md) keeps its own by kind). Done at once.
+
+## `most(name, growth, guess)`
+
+The cells of the farm `name` at which the bot is always busy: `growth`, the ticks a cell takes to be ripe again, over the ticks a harvest takes: the mean of those `learn` kept once there are `SAMPLES` (3), else `guess`; at least 1 (#844). Each farm of `lib.cellfarm` but the wood farm gives it as its spec's `most()`, so the farm starts from a guess and grows or shrinks to its bot's own pace. Done at once.
 
 ## `limit(f, name, size)`
 

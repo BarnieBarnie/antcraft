@@ -1,12 +1,13 @@
 # A job: grows a sweet berry farm, food that needs no replanting and no water, and farms it until a player stops it. Run
 # it as /antcraft bot run jobs.berry_farm [x y z [cells [radius]]]: the farm's corner (by default where the bot stands,
-# or where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST
-# at most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks of dirt with a
-# sweet berry bush on each. Each round it picks the ripe bushes (age 2 or 3) with use, which leaves each bush standing
-# at age 1, never breaking one, picks up the berries, stores them in a depot north of the farm and builds a cell once it
-# has or can get the berries one takes, its own harvest (docs/cookbook/berry-farm.md). A bush hurts what moves through
-# it, so paths never enter one (LevelWorldView.isHazard). The farm's layout, depot, growth and rounds are lib.cellfarm's
-# (#826, #832); this module is its berry spec. Another job starts a farm with run(at); imported, this runs nothing.
+# or where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner,
+# most() at most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks of dirt
+# with a sweet berry bush on each. Each round it picks the ripe bushes (age 2 or 3) with use, which leaves each bush
+# standing at age 1, never breaking one, picks up the berries, stores them in a depot north of the farm and builds a
+# cell once it has or can get the berries one takes, its own harvest (docs/cookbook/berry-farm.md). A bush hurts what
+# moves through it, so paths never enter one (LevelWorldView.isHazard). The farm's layout, depot, growth and rounds are
+# lib.cellfarm's (#826, #832); this module is its berry spec. Another job starts a farm with run(at); imported, this
+# runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -24,9 +25,10 @@ BUSH = "minecraft:sweet_berry_bush"
 NAME = "berry_farm"
 RIPE = 2  # the age from which a bush gives berries
 # A bush ages a stage on 1 in 5 of its random ticks, and each block of a section gets one on 3 of 4096 ticks: some 7000
-# ticks from picked (age 1) to ripe. A cell's harvest takes the bot some 200, so it is busy at about 35 cells;
-# ponytail: not measured, the cells that keep growing round its corner cap it first.
-MOST = int((RIPE - 1) * 5 * 4096 / 3 // 200)
+# ticks from picked (age 1) to ripe. A cell's harvest takes the bot some 200, so it is busy at about 35 cells till
+# it learns its own harvest ticks (lib.cellfarm.most, #844); the cells that keep growing round its corner cap it first.
+GROWTH = (RIPE - 1) * 5 * 4096 / 3
+HARVEST = 200
 # Kept on the bot, not stored: the crafting table lib.get makes a depot chest with.
 KEEP = ["minecraft:crafting_table"]
 
@@ -104,7 +106,7 @@ def spec(radius=32):
             "materials": lambda: {BERRIES: 3}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
             "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
-            "most": lambda: MOST}
+            "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 
 def run(at=None, size=None, radius=32):

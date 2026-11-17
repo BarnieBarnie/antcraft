@@ -8,7 +8,7 @@ The job `jobs/stem_farm` grows a pumpkin or melon farm from a few seeds and farm
 /antcraft bot run jobs.stem_farm pumpkin 10 64 10 6 16
 ```
 
-The arguments are the kind, `pumpkin` or `melon`; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started; another corner moves the farm there); the most cells it grows to (by default `MOST`, 24, but no more than the cells that get random ticks while the bot is at the corner, see [`lib.cellfarm.limit`](../reference/modules/lib/cellfarm.md#limitf-name-size)) and how far to look for what it needs, in blocks (default 32). The bot says `built cell 2` and `cells 2/9` as the farm grows, and `farm full` once it has all its cells.
+The arguments are the kind, `pumpkin` or `melon`; the farm's first corner `x y z` (by default where the bot stands, or where the last farm of that kind started; another corner moves the farm there); the most cells it grows to (by default 24 till the farm has learnt how long its harvests take, then as many as the bot keeps up with, see [`lib.cellfarm.most`](../reference/modules/lib/cellfarm.md#mostname-growth-guess), but no more than the cells that get random ticks while the bot is at the corner, see [`lib.cellfarm.limit`](../reference/modules/lib/cellfarm.md#limitf-name-size)) and how far to look for what it needs, in blocks (default 32). The bot says `built cell 2` and `cells 2/9` as the farm grows, and `farm full` once it has all its cells.
 
 ## The cell
 
@@ -40,4 +40,3 @@ The depot keeps the fruit and seeds in one category, `harvest`; the dirt mined f
 
 - A stem a mob tramples or a player breaks is not replanted.
 - Light: a stem grows only with light 9 or more over it; the farm places no torches, so a farm built in the dark or underground grows only by day.
-- `MOST` is a guess, not measured: a stem on wet farmland ripens in some 30000 ticks and then fruits every few thousand, so a bot keeps up with some 20 cells.

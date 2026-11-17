@@ -17,7 +17,8 @@
 #   get random ticks ([low, high]), loaded(low, high): whether the bot can read the cell (both corners loaded),
 #   room(): empty slots a harvest wants (1), stock(boxes): gets what tending them takes, before the bot walks back to a
 #   cell it visits, chores(keep, told): harvests before the round's, giving (harvests, whether the bot is full),
-#   switch(): a farm to go on with instead, its result, or None, learn(ticks, n): n (> 0) harvests took ticks, full(boxes,
+#   switch(): a farm to go on with instead, its result, or None, learn(ticks, n): n (> 0) harvests took ticks (else
+#   lib.cellfarm.learn keeps them under the farm's name, for most, #844), full(boxes,
 #   told): what a full farm does each round, idle(boxes): what a round that harvested nothing does before its wait.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -42,6 +43,8 @@ BACKOFF = 10
 # chunks at entity-ticking level (31 or less, ChunkMap.forEachBlockTickingChunk), so the bot's chunk and the ring round it.
 TICKING = 1
 TICKING_CELLS = {}  # a farm's name to ticking's cells, worked out once a run: a farm's layout does not change
+SAMPLES = 3  # harvests a farm learns before most sizes it from their mean ticks rather than its guess (#844)
+WINDOW = 10  # the last harvests whose ticks a farm keeps (learn)
 
 
 def tell(told, what):
@@ -62,6 +65,21 @@ def loaded(f, low, high):
     if "loaded" in f:
         return f["loaded"](low, high)
     return block(low) is not None and block(high) is not None
+
+
+def learn(name, ticks, n):
+    """Adds n harvests of the farm name that took ticks, game ticks, to memory["harvest_ticks"]: for each farm the ticks
+    of its last WINDOW harvests, each of a round's its mean (#844, as jobs.wood_farm.learn, #662)."""
+    h = memory.get("harvest_ticks", {})
+    h[name] = (h.get(name, []) + [ticks / n] * n)[-WINDOW:]
+    memory["harvest_ticks"] = h
+
+
+def most(name, growth, guess):
+    """The cells of the farm name at which the bot is always busy: growth, the ticks a cell takes to be ripe again, over
+    the ticks a harvest takes, the mean of those learn kept once there are SAMPLES, else guess; at least one."""
+    ticks = memory.get("harvest_ticks", {}).get(name, [])
+    return max(1, int(growth // (sum(ticks) / len(ticks) if len(ticks) >= SAMPLES else guess)))
 
 
 def ticking(f, name):
@@ -272,6 +290,8 @@ def farm(f, name, size, radius):
         if harvested:
             if n and "learn" in f:  # not where only the chores harvested: no harvest of its own to learn from (#838)
                 f["learn"](ticks, n)
+            elif n:
+                learn(name, ticks, n)
             backoff = 0
         most_cells = limit(f, name, size)
         have = built(f, name, size)

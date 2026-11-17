@@ -30,8 +30,8 @@ CELL = SIZE * SIZE - 1  # the seeds a cell takes: all but the water
 # the same crop), and each block of a section gets one on 3 of 4096 ticks: so a stage takes 6 * 4096 / 3 ticks, some 7
 # minutes, and a crop its ripe age's stages.
 STAGE = 6 * 4096 / 3
-# ponytail: the ticks the bot takes to harvest and replant a cell, measured once in CropFarmGameTest (a wheat cell);
-# learn it as jobs.wood_farm does where farms come out too big or small.
+# The ticks the bot takes to harvest and replant a cell, measured once in CropFarmGameTest (a wheat cell): its guess
+# till it learns its own (lib.cellfarm.most, #844).
 HARVEST = 600
 ROOM = 6  # empty slots before a harvest: some 290 carrots or potatoes of a cell, with poisonous ones, or wheat and seeds
 
@@ -116,9 +116,10 @@ def tend(c, name, boxes, radius, told):
                 tell(told, f"tend: {r['reason']} at {r['at']}")
 
 
-def most(c):
-    """The cells at which the bot is always busy: a crop's ripening ticks (its ripe age's stages) over HARVEST."""
-    return max(1, int(c[3] * STAGE // HARVEST))
+def most(c, name):
+    """The cells of the farm name at which the bot is always busy: crop c's ripening ticks (its ripe age's stages) over
+    the ticks a harvest takes, learnt as it farms, else HARVEST (lib.cellfarm.most)."""
+    return lib.cellfarm.most(name, c[3] * STAGE, HARVEST)
 
 
 def spec(c, name, radius):
@@ -131,7 +132,7 @@ def spec(c, name, radius):
             "ripe": ripe, "room": lambda: ROOM,
             "harvest": lambda low, high, told: harvest(c, name, low, high, radius, told),
             "tend": lambda boxes, told: tend(c, name, boxes, radius, told),
-            "most": lambda: most(c)}
+            "most": lambda: most(c, name)}
 
 
 def first_cell(c, name, size, radius):
