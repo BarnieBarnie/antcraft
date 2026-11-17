@@ -25,4 +25,4 @@ To build one, the bot clears the two blocks over the floor ([`lib.terrain.flatte
 
 ## The rounds
 
-Each round, the ripe pods (age 2) are broken, the bot picks up their 3 beans each and places one back on the log; unripe pods are left to grow. The beans and the logs go in the depot. A log face that lost its pod gets one again from the depot. Once the bot has or can get a cell's 2 logs and 4 beans, the next round builds the next cell. A pod ripens in some 14000 ticks, about 12 minutes; a round that broke nothing waits in the corner's chunk, where the cells get the random ticks they grow on.
+Each round, the ripe pods (age 2) are broken, the bot picks up their 3 beans each and places one back on the log; unripe pods are left to grow. The beans and the logs go in the depot. A log that is gone, which pops its pods off, is stood again from the depot, and a log face that lost its pod gets one again. Once the bot has or can get a cell's 2 logs and 4 beans, the next round builds the next cell. A pod ripens in some 14000 ticks, about 12 minutes; a round that broke nothing waits in the corner's chunk, where the cells get the random ticks they grow on.

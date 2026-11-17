@@ -88,7 +88,14 @@ def harvest(low, high, told):
 
 
 def tend(boxes, told, radius=32):
-    """Places a bean on each log face of the cells boxes that lost its pod, with beans from the chests within radius."""
+    """Stands a log again where a cell of boxes lost one (#844), then places a bean on each log face that lost its pod,
+    with logs and beans from the chests within radius."""
+    gone = [p for b in boxes for p in column(b[0]) if block(p).is_air]
+    if gone and count(LOG) < len(gone):
+        lib.stock.take_up_to(LOG, len(gone), radius)
+    for p in gone:
+        if count(LOG):
+            place(p, LOG, facing="up")
     bare = [(p, f) for b in boxes for p, f in pods(b[0], b[1])
             if block(p).is_air and block(p + {"east": (1, 0, 0), "west": (-1, 0, 0)}[f]).id == LOG]
     if bare and count(BEANS) < len(bare):

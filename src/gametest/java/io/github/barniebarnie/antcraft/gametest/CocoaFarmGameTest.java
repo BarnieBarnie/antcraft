@@ -40,6 +40,11 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Like {@link #farm(GameTestHelper, int, int)}, with the farm, supply chest and bot dz blocks further south. */
 	private static AntBot farm(GameTestHelper helper, int logs, int size, int dz) {
+		return farm(helper, logs, size, dz, true);
+	}
+
+	/** Like {@link #farm(GameTestHelper, int, int, int)}; failing at once on a lost log (failOnLostLog) only where watch. */
+	private static AntBot farm(GameTestHelper helper, int logs, int size, int dz, boolean watch) {
 		helper.setBlock(6, 1, 6 + dz, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(new BlockPos(6, 1, 6 + dz), ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.JUNGLE_LOG, logs));
@@ -52,7 +57,9 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 			jobs.cocoa_farm.run(Pos(%d, %d, %d), %d, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
 		BotScripts.failOnError(helper, bot);
-		failOnLostLog(helper, bot, run, dz);
+		if (watch) {
+			failOnLostLog(helper, bot, run, dz);
+		}
 		return bot;
 	}
 
@@ -203,6 +210,28 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 			BlockState replanted = helper.getBlockState(new BlockPos(1, 1, 3 + dz));
 			helper.assertTrue(replanted.is(Blocks.COCOA) && replanted.getValue(CocoaBlock.AGE) < 2, "the ripe pod not replanted: " + replanted);
 			helper.assertTrue(stored(helper, dz) >= 2, "beans in the depot " + stored(helper, dz));
+		});
+	}
+
+	/**
+	 * A built cell's top log that is gone, its pods popped off with it, is placed again from the spare log in the depot,
+	 * and its pods with the beans the test adds to the supply chest (#844).
+	 */
+	// Measured: passes at tick 131 (red: still air at (2, 2, 3) on tick 402).
+	@GameTest(maxTicks = 270)
+	public void aLostLogIsReplacedAndItsPodsReplanted(GameTestHelper helper) {
+		AntBot bot = farm(helper, 3, 1, 0, false);
+		boolean[] lost = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!lost[0] && said(bot, "built cell 1")) {
+				helper.setBlock(2, 2, 3, Blocks.AIR);
+				helper.getBlockEntity(new BlockPos(6, 1, 6), ChestBlockEntity.class).setItem(5, new ItemStack(Items.COCOA_BEANS, 4));
+				lost[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(lost[0], "cell 1 not built; said " + BotScripts.log(bot, Output.Level.PRINT));
+			assertCell(helper, 1);
 		});
 	}
 }
