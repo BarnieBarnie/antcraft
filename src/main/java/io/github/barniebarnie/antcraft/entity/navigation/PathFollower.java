@@ -243,6 +243,10 @@ public class PathFollower {
 				boolean roofed = !world.isPassable(new BlockPos(step.to().getX(), from.getY() + 2, step.to().getZ()));
 				boolean slide = this.bot.getY() > from.getY() + 0.2 && (roofed || world.floorTop(from.below()) >= 1);
 				this.climb(slide ? new Step(MoveType.CLIMB_DOWN, feet, List.of(), List.of()) : step);
+			} else if (feet.equals(this.stepFrom()) && !this.inRow(feet, step.to()) && hazardBeside(world, feet)) {
+				// Off the middle of its block across the way it heads, its body over the edge, it would cut into a hazard beside
+				// heading straight for the next block, such as a sweet berry bush at the inside of a turn: to the middle first (#845).
+				this.moveTo(feet);
 			} else {
 				this.moveTo(step.to());
 			}
@@ -546,6 +550,26 @@ public class PathFollower {
 	/** Where the current step starts: the end of the step before it, or the start of the path. */
 	private BlockPos stepFrom() {
 		return this.stepIndex == 0 ? this.path.start() : this.path.steps().get(this.stepIndex - 1).to();
+	}
+
+	/**
+	 * Whether the bot's body, heading from {@code from} to the middle of {@code to}, stays in their row: across the way it
+	 * heads, not over the edge of {@code from}.
+	 */
+	private boolean inRow(BlockPos from, BlockPos to) {
+		double most = 0.5 - this.bot.getBbWidth() / 2 - 1.0E-3; // inside, as the game counts a body touching a block in it
+		return (to.getX() == from.getX() || Math.abs(this.bot.getZ() - (from.getZ() + 0.5)) <= most)
+			&& (to.getZ() == from.getZ() || Math.abs(this.bot.getX() - (from.getX() + 0.5)) <= most);
+	}
+
+	/** Whether a hazard that hurts, not water, is in one of the eight blocks round {@code feet}, at its feet or head. */
+	private static boolean hazardBeside(LevelWorldView world, BlockPos feet) {
+		for (BlockPos pos : BlockPos.betweenClosed(feet.offset(-1, 0, -1), feet.offset(1, 1, 1))) {
+			if ((pos.getX() != feet.getX() || pos.getZ() != feet.getZ()) && world.isHazard(pos) && !world.isWater(pos)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private boolean centered(BlockPos pos) {

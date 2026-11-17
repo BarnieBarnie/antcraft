@@ -129,7 +129,7 @@ Walks to cell `b`, a `(low, high)` box, where the bot cannot read it (the spec's
 
 ## `corner(name)`
 
-Walks the bot into the chunk of the farm `name`'s corner, cell 0's low corner, where it stands elsewhere (#814), so the cells `ticking` counts get random ticks while it waits.
+Walks the bot into the chunk of the farm `name`'s corner, cell 0's low corner, where it stands elsewhere (#814), so the cells `ticking` counts get random ticks while it waits: to the block diagonal into cell 0 from its low corner, or, on an axis where that leaves the corner's chunk, a block back from the cell, so never onto a cell (#845).
 
 - **Pauses** yes.
 

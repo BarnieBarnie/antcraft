@@ -117,4 +117,22 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(said.split("chores", -1).length > 3, "not three rounds; said " + said);
 		});
 	}
+
+	/**
+	 * Where a bot waits in its farm's corner chunk (corner, #814): diagonal into cell 0 from its low corner, but where that
+	 * corner is at the chunk's edge (local 15), a block back from the cell, never on it: a berry farm's bot was sent onto
+	 * a bush, its path pillared over it, and taking the scaffold back dropped it in (#845).
+	 */
+	// Measured: passes at tick 5 (red: no attribute corner_spot; the old spot for Pos(1, 0, 15) was on the cell, Pos(2, 1, 15)).
+	@GameTest(maxTicks = 20)
+	public void theCornerSpotIsInTheCornersChunkOffTheCell(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			print(lib.cellfarm.corner_spot(Pos(1, 0, 3)), lib.cellfarm.corner_spot(Pos(1, 0, 15)), lib.cellfarm.corner_spot(Pos(-17, 0, -1)))
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("Pos(2, 1, 4) Pos(2, 1, 14) Pos(-18, 1, -2)"),
+			"said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
 }

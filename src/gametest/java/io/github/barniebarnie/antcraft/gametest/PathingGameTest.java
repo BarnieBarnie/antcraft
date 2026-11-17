@@ -38,6 +38,7 @@ import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.ScaffoldingBlock;
 import net.minecraft.world.level.block.SnowLayerBlock;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
 import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.VineBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -206,6 +207,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
+	}
+
+	/**
+	 * A walk that starts off the middle of its block, at its edge by a row of ripe sweet berry bushes, as a walk that ended
+	 * on entering a block leaves the bot: it steps to the middle before it leaves, so its body never cuts into the bush at
+	 * the corner it heads past (#845). Heading straight from the edge to the next block's middle, it swung into the bush.
+	 */
+	// Measured: passes at tick 15 (red: hurt by sweetBerryBush at 4.16, 1, 2.85 on tick 5).
+	@GameTest(maxTicks = 40)
+	public void leavesABlockByBushesFromItsMiddle(GameTestHelper helper) {
+		room(helper, 0);
+		for (int x = 1; x <= 3; x++) {
+			helper.setBlock(x, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		}
+		fill(helper, 1, 1, 1, 6, 2, 1, Blocks.BEDROCK); // the lane at z 2, between the bushes and a wall
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 2.95));
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(1, 1, 2)));
+
+		helper.onEachTick(() -> {
+			if (bot.getLastDamageSource() != null) {
+				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + helper.relativeVec(bot.position()));
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(1, 1, 2));
 	}
 
 	@GameTest(maxTicks = 150)

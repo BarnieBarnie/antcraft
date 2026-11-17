@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -44,7 +45,7 @@ public class BerryFarmGameTest implements CustomTestMethodInvoker {
 		chest.setItem(3, new ItemStack(Items.CHEST, 3)); // the cobblestone dug goes in a chest of its own
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
-		BotScripts.run(bot, """
+		ScriptRun run = BotScripts.run(bot, """
 			import jobs.berry_farm
 			jobs.berry_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
@@ -52,7 +53,9 @@ public class BerryFarmGameTest implements CustomTestMethodInvoker {
 		helper.onEachTick(() -> {
 			DamageSource hurt = bot.getLastDamageSource();
 			if (hurt != null && hurt.is(DamageTypes.SWEET_BERRY_BUSH)) {
-				helper.fail("a sweet berry bush hurt the bot at " + helper.relativePos(bot.blockPosition()));
+				// Where the bot stood, not just its block, and the call it ran: which step took it into the bush (#845).
+				helper.fail("a sweet berry bush hurt the bot at " + helper.relativeVec(bot.position()) + ", running " + run.action()
+					+ " on line " + run.line());
 			}
 		});
 		return bot;

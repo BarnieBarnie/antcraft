@@ -180,13 +180,21 @@ def visit(f, b):
 
 def corner(name):
     """Walks the bot into the chunk of the farm name's corner, cell 0's low corner, where it stands elsewhere (#814), so
-    the cells ticking counts get random ticks while it waits: to the floor diagonal into cell 0, kept in that chunk."""
+    the cells ticking counts get random ticks while it waits: to corner_spot."""
     low = lib.cells.cell(name, 0)[0]
     p = pos()
     if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
         return
-    # ponytail: a corner at chunk-local 15 on both axes sends it onto the cell's corner block.
-    goto(Pos(min(low.x + 1, low.x // 16 * 16 + 15), low.y + 1, min(low.z + 1, low.z // 16 * 16 + 15)))
+    goto(corner_spot(low))
+
+
+def corner_spot(low):
+    """Where corner sends the bot, over the floor of cell 0's low corner low: diagonal into the cell, but on an axis where
+    that leaves low's chunk (low at chunk-local 15), a block back, off the cell. Kept in the chunk that way, it was sent
+    onto the cell's row, a berry bush, which its path pillared over and dropped it into (#845)."""
+    x = low.x + 1 if (low.x + 1) // 16 == low.x // 16 else low.x - 1
+    z = low.z + 1 if (low.z + 1) // 16 == low.z // 16 else low.z - 1
+    return Pos(x, low.y + 1, z)
 
 
 def farm(f, name, size, radius):
