@@ -78,6 +78,45 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/** Sand under a side is soil too (#844): cane is planted on it, no dirt put in its place. */
+	// Measured: passes at tick 37 (red: dirt put in place of the sand at (1, 0, 3)).
+	@GameTest(maxTicks = 80)
+	public void caneIsPlantedOnSand(GameTestHelper helper) {
+		helper.setBlock(1, 0, 3, Blocks.SAND);
+		helper.setBlock(3, 0, 3, Blocks.RED_SAND);
+		AntBot bot = farm(helper, 2, "1");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot, "built cell 1"), "said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertBlockPresent(Blocks.SAND, 1, 0, 3);
+			helper.assertBlockPresent(Blocks.RED_SAND, 3, 0, 3);
+			helper.assertBlockPresent(Blocks.SUGAR_CANE, 1, 1, 3);
+			helper.assertBlockPresent(Blocks.SUGAR_CANE, 3, 1, 3);
+		});
+	}
+
+	/**
+	 * A cell whose water is gone, its cane popped off with it, gets its water back from the bucket the bot kept and its
+	 * cane planted again (#844).
+	 */
+	// Measured: passes at tick 189 (red: still air at (2, 0, 3) on tick 402).
+	@GameTest(maxTicks = 380)
+	public void aCellsLostWaterIsPouredAgainAndReplanted(GameTestHelper helper) {
+		AntBot bot = farm(helper, 4, "1");
+		boolean[] drained = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!drained[0] && said(bot, "built cell 1")) {
+				helper.setBlock(2, 0, 3, Blocks.AIR);
+				drained[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(drained[0], "cell 1 not built; said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertBlockPresent(Blocks.WATER, 2, 0, 3);
+			helper.assertBlockPresent(Blocks.SUGAR_CANE, 1, 1, 3);
+			helper.assertBlockPresent(Blocks.SUGAR_CANE, 3, 1, 3);
+		});
+	}
+
 	/** Cane three high on one side of the built cell is cut to its bottom block, the two cut stored in the depot. */
 	// Measured: passes at tick 196 to 295.
 	@GameTest(maxTicks = 600)

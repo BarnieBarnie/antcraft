@@ -14,6 +14,7 @@
 import jobs.farm
 import lib.cellfarm
 import lib.cells
+import lib.farm
 import lib.stock
 import lib.terrain
 import lib.treefarm
@@ -23,6 +24,7 @@ from lib.result import result
 
 CANE = "minecraft:sugar_cane"
 NAME = "cane_farm"
+SOIL = "#minecraft:supports_sugar_cane"  # dirt, grass, mud, moss and sand (#844)
 # Cane grows a block on every 16th random tick of its bottom block (age 0 to 15), each tick randomTickSpeed (3) blocks
 # of a 16x16x16 section get one: some 22000 ticks to grow back to two high. A cell's harvest takes the bot some 200, so
 # it is busy at about 100 cells till it learns
@@ -49,22 +51,23 @@ def waters():
 
 
 def tools(low, high):
-    """The tools to dig the water's hole and the sides that are no soil, such as stone: kind to uses."""
+    """The tools to dig the water's hole and the sides that are no soil (SOIL), such as stone: kind to uses."""
     t = {}
-    for p in [water(low)] + [s for s in sides(low, high) if not lib.trees.is_kind(s, lib.treefarm.SOIL)]:
+    for p in [water(low)] + [s for s in sides(low, high) if not lib.trees.is_kind(s, SOIL)]:
         for k, uses in lib.terrain.needs(p, p, p.y - 1)["tools"].items():
             t[k] = t.get(k, 0) + uses
     return t
 
 
 def build_cell(low, high, radius=32):
-    """Clears the block over the floor, puts dirt on each side that is no soil (lib.treefarm.soil), pours the water
-    between them and plants cane on both. Gives result(): ok, or the reason of the step that failed with at."""
+    """Clears the block over the floor, puts dirt on each side that is no soil (SOIL, so sand stays; lib.treefarm.soil),
+    pours the water between them and plants cane on both. Gives result(): ok, or the reason of the step that failed with
+    at."""
     r = lib.terrain.flatten(low, high.up(), low.y)
     if not r["ok"]:
         return r
     for s in sides(low, high):
-        r = lib.treefarm.soil(s, radius)
+        r = lib.treefarm.soil(s, radius, kind=SOIL)
         if not r["ok"]:
             return r
     if not jobs.farm.pour(water(low), radius, waters()):
@@ -96,7 +99,11 @@ def harvest(low, high, told):
 
 
 def tend(boxes, told, radius=32):
-    """Plants cane on each side of the cells boxes that lost it, with cane from the chests within radius."""
+    """Pours the water of each cell of boxes that lost it (jobs.farm.pour, its cane popped off with it, #844), then plants
+    cane on each side that lost it, with cane from the chests within radius."""
+    for b in boxes:
+        if block(water(b[0])).id != lib.farm.WATER:
+            jobs.farm.pour(water(b[0]), radius, waters())
     bare = [s.up() for b in boxes for s in sides(b[0], b[1]) if block(s.up()).is_air]
     if bare and count(CANE) < len(bare):
         lib.stock.take_up_to(CANE, len(bare), radius)
