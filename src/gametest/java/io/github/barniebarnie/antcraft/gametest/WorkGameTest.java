@@ -52,6 +52,8 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.SweetBerryBushBlock;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.SignBlockEntity;
 import net.minecraft.world.level.block.entity.SignTextSlot;
@@ -765,6 +767,26 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 5.85));
 		expect(helper, bot, "r = pick_up('bone_meal', radius=3)\nprint(r.ok, r.value, count('bone_meal'))\n", List.of("True 1 1"),
 			() -> helper.assertBlockPresent(Blocks.COMPOSTER, 4, 1, 4));
+	}
+
+	/**
+	 * Berries lying in a ripe sweet berry bush, in its far half from the bot beside it, out of its grab: it takes them from
+	 * beside the bush, never walking into it, which hurts (#832).
+	 */
+	@GameTest(maxTicks = 40)
+	public void pickUpTakesAnItemInABushWithoutEnteringIt(GameTestHelper helper) {
+		helper.setBlock(4, 1, 4, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		ItemEntity berries = helper.spawnItem(Items.SWEET_BERRIES, new BlockPos(4, 1, 4));
+		Vec3 in = helper.absoluteVec(new Vec3(4.25, 1, 4.25));
+		berries.setPos(in.x, in.y, in.z);
+		berries.setDeltaMovement(Vec3.ZERO);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 5.85));
+		helper.onEachTick(() -> {
+			if (bot.getLastDamageSource() != null && bot.getLastDamageSource().is(DamageTypes.SWEET_BERRY_BUSH)) {
+				helper.fail("the bush hurt the bot at " + helper.relativePos(bot.blockPosition()));
+			}
+		});
+		expect(helper, bot, "r = pick_up('sweet_berries', radius=3)\nprint(r.ok, r.value, count('sweet_berries'))\n", List.of("True 1 1"));
 	}
 
 	// equip

@@ -43,7 +43,8 @@ public final class DefaultScripts {
 		"jobs/cocoa_farm.py",
 		"jobs/cactus_farm.py",
 		"jobs/wart_farm.py",
-		"jobs/mushroom_farm.py");
+		"jobs/mushroom_farm.py",
+		"jobs/berry_farm.py");
 	/** Holds, per script, the hash of the version last copied. */
 	static final String RECORD = ".antcraft-defaults";
 

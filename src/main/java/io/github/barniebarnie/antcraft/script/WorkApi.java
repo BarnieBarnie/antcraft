@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.entity.KiteGoal;
 import io.github.barniebarnie.antcraft.entity.Tools;
 import io.github.barniebarnie.antcraft.entity.navigation.BlockBreaker;
 import io.github.barniebarnie.antcraft.work.Mining;
+import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.NativeCall;
@@ -967,10 +968,14 @@ public final class WorkApi {
 
 		/**
 		 * Whether {@code dropped} lies in a block, below the top of its collision shape, as in a composter: the bot cannot
-		 * stand there without breaking it. Not one lying on top, as on farmland or a slab, which the bot walks onto.
+		 * stand there without breaking it. Not one lying on top, as on farmland or a slab, which the bot walks onto. Also one
+		 * in a hazard a path never enters, such as a sweet berry bush (#832).
 		 */
 		private boolean inBlock(ItemEntity dropped) {
 			BlockPos at = dropped.blockPosition();
+			if (new LevelWorldView(this.bot.level(), this.bot.getInventory(), this.bot.getMainHandItem(), Set.of()).isHazard(at)) {
+				return true;
+			}
 			VoxelShape shape = this.bot.level().getBlockState(at).getCollisionShape(this.bot.level(), at);
 			return !shape.isEmpty() && dropped.getY() - at.getY() < shape.max(Direction.Axis.Y) - 1.0E-3;
 		}
