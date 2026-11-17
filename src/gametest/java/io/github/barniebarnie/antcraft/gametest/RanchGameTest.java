@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -12,7 +13,10 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.chicken.Chicken;
 import net.minecraft.world.entity.animal.cow.Cow;
+import net.minecraft.world.entity.animal.pig.Pig;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -20,6 +24,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -37,6 +42,11 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 
 	/** The pen, a supply chest of supplies and 2 chests, the bot in the pen and jobs.ranch run with cap. */
 	private static AntBot ranch(GameTestHelper helper, int cap, ItemStack... supplies) {
+		return ranch(helper, cap, "", supplies);
+	}
+
+	/** As above, with prelude run first in the bot's script, such as to give it a depot in its memory. */
+	private static AntBot ranch(GameTestHelper helper, int cap, String prelude, ItemStack... supplies) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 3; z < 8; z++) {
 				if (x == 0 || x == 7 || z == 3 || z == 7) {
@@ -61,7 +71,7 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
 		BlockPos low = helper.absolutePos(new BlockPos(1, 1, 4));
 		BlockPos high = helper.absolutePos(new BlockPos(6, 1, 6));
-		BotScripts.run(bot, """
+		BotScripts.run(bot, prelude + """
 			import jobs.ranch
 			jobs.ranch.run(Pos(%d, %d, %d), Pos(%d, %d, %d), %d, 8)
 			""".formatted(low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ(), cap));
@@ -142,6 +152,103 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			int wool = stored(helper, Items.WOOL.white());
 			helper.assertTrue(wool >= 1, wool + " wool stored");
+		});
+	}
+
+	/** Two pigs in the pen, carrots in the chest: the bot feeds both and a piglet appears. */
+	// Measured: passes at tick 100 (it bred already with #837's job; #843 adds the test).
+	@GameTest(maxTicks = 300)
+	public void twoPigsAreBredWithCarrots(GameTestHelper helper) {
+		animal(helper, EntityTypes.PIG, 2, 6, false);
+		animal(helper, EntityTypes.PIG, 5, 6, false);
+		ranch(helper, 4, new ItemStack(Items.CARROT, 8));
+		helper.succeedWhen(() -> {
+			List<Pig> pigs = inPen(helper, Pig.class);
+			helper.assertTrue(pigs.stream().anyMatch(Pig::isBaby), "no piglet among " + pigs.size() + " pigs");
+		});
+	}
+
+	/** Two chickens in the pen, seeds in the chest: the bot feeds both and a chick appears. */
+	// Measured: passes at tick 88 to 105 (as for pigs).
+	@GameTest(maxTicks = 300)
+	public void twoChickensAreBredWithSeeds(GameTestHelper helper) {
+		animal(helper, EntityTypes.CHICKEN, 2, 6, false);
+		animal(helper, EntityTypes.CHICKEN, 5, 6, false);
+		ranch(helper, 4, new ItemStack(Items.WHEAT_SEEDS, 8));
+		helper.succeedWhen(() -> {
+			List<Chicken> chickens = inPen(helper, Chicken.class);
+			helper.assertTrue(chickens.stream().anyMatch(Chicken::isBaby), "no chick among " + chickens.size() + " chickens");
+		});
+	}
+
+	/** A chicken about to lay in the pen: the bot picks up its egg and stores it. */
+	// Measured: passes at tick 145 (red: 0 eggs stored; the egg rolled into the fence's block at z 7.1, so the pen counts
+	// its fence for what lies there).
+	@GameTest(maxTicks = 300)
+	public void anEggLaidInThePenIsStored(GameTestHelper helper) {
+		Chicken chicken = animal(helper, EntityTypes.CHICKEN, 5, 6, false);
+		chicken.eggTime = 40;
+		AntBot bot = ranch(helper, 4);
+		helper.succeedWhen(() -> {
+			int eggs = stored(helper, Items.EGG);
+			List<ItemEntity> laid = helper.getLevel().getEntitiesOfClass(ItemEntity.class, bot.getBoundingBox().inflate(16),
+				i -> i.getItem().is(Items.EGG));
+			helper.assertTrue(eggs >= 1, eggs + " eggs stored, eggs lying at "
+				+ laid.stream().map(i -> helper.relativeVec(i.position())).toList() + ", the bot at "
+				+ helper.relativeVec(bot.position()) + ", " + BotScripts.carries(bot));
+		});
+	}
+
+	/** A cow in the pen, a bucket in the chest: it is milked and the milk stored. */
+	// Measured: passes at tick 31 (red: 0 milk stored).
+	@GameTest(maxTicks = 100)
+	public void aCowIsMilkedAndTheMilkStored(GameTestHelper helper) {
+		animal(helper, EntityTypes.COW, 5, 5, false);
+		ranch(helper, 4, new ItemStack(Items.BUCKET));
+		helper.succeedWhen(() -> {
+			int milk = stored(helper, Items.MILK_BUCKET);
+			helper.assertTrue(milk >= 1, milk + " milk stored");
+		});
+	}
+
+	/**
+	 * A cow outside the pen, south of its fence, wheat in the chest: the bot lures it in with the wheat, through the gate
+	 * on the north side, and shuts the gate behind it.
+	 */
+	// Measured: passes at tick 277 (red: the cow stayed outside; without BotTemptGoal it wanders off, and led straight to
+	// the far corner it stood at the fence nearest the bot, as an animal finds no way round a fence).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
+	public void aCowOutsideThePenIsLuredIn(GameTestHelper helper) {
+		Cow cow = animal(helper, EntityTypes.COW, 3, 10, false);
+		AntBot bot = ranch(helper, 4, new ItemStack(Items.WHEAT, 4));
+		helper.succeedWhen(() -> {
+			helper.assertTrue(inPen(helper, Cow.class).size() == 1, "the cow is not in the pen but at "
+				+ helper.relativeVec(cow.position()) + ", the bot at " + helper.relativeVec(bot.position()) + ", "
+				+ BotScripts.carries(bot) + ", " + BotScripts.log(bot, Output.Level.DEBUG));
+			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
+		});
+	}
+
+	/**
+	 * Two cows in the pen and wheat only in a chest of a crop farm's depot in the bot's memory, too far off for the
+	 * ranch's chest radius (8): the bot fetches the wheat from it and a calf appears.
+	 */
+	// Measured: passes at tick 386 to 390 (red: no calf; the wheat chest is out of the scan radius), the walk there and
+	// back being most of it.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
+	public void theRanchFeedsFromACropFarmsDepot(GameTestHelper helper) {
+		animal(helper, EntityTypes.COW, 2, 6, false);
+		animal(helper, EntityTypes.COW, 5, 6, false);
+		helper.setBlock(18, 1, 18, Blocks.CHEST);
+		helper.getBlockEntity(new BlockPos(18, 1, 18), ChestBlockEntity.class).setItem(0, new ItemStack(Items.WHEAT, 8));
+		BlockPos depot = helper.absolutePos(new BlockPos(18, 1, 18));
+		ranch(helper, 4, """
+			import lib.depot
+			lib.depot.depot("crop_farm", Pos(%1$d, %2$d, %3$d), "east", {"crops": ["minecraft:wheat"]})["chests"].append(["crops", Pos(%1$d, %2$d, %3$d)])
+			""".formatted(depot.getX(), depot.getY(), depot.getZ()));
+		helper.succeedWhen(() -> {
+			List<Cow> cows = inPen(helper, Cow.class);
+			helper.assertTrue(cows.stream().anyMatch(Cow::isBaby), "no calf among " + cows.size() + " cows");
 		});
 	}
 }

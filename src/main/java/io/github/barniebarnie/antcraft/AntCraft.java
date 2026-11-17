@@ -6,6 +6,7 @@ import io.github.barniebarnie.antcraft.command.AntCraftCommands;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.BotChunks;
 import io.github.barniebarnie.antcraft.entity.BotRespawns;
+import io.github.barniebarnie.antcraft.entity.BotTemptGoal;
 import io.github.barniebarnie.antcraft.network.BlueprintNetworking;
 import io.github.barniebarnie.antcraft.network.BotNetworking;
 import io.github.barniebarnie.antcraft.network.ScriptNetworking;
@@ -37,6 +38,7 @@ public class AntCraft implements ModInitializer {
 		ModEntities.register();
 		BotChunks.register();
 		BotRespawns.register();
+		BotTemptGoal.register();
 		ModComponents.register();
 		ModItems.register();
 		AntCraftCommands.register();

@@ -10,3 +10,5 @@ accessible	method	net/minecraft/world/item/ProjectileWeaponItem	shoot	(Lnet/mine
 accessible	method	net/minecraft/world/item/ProjectileWeaponItem	draw	(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/entity/LivingEntity;)Ljava/util/List;
 # pick_up takes back an arrow stuck in a block that a player could pick up (#720).
 accessible	method	net/minecraft/world/entity/projectile/arrow/AbstractArrow	isInGround	()Z
+# Animals follow a bot holding their food as TemptGoal follows a player, at its speed (BotTemptGoal, #843).
+accessible	field	net/minecraft/world/entity/ai/goal/TemptGoal	speedModifier	D
