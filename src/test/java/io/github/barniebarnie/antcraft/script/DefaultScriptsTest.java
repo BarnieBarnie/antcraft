@@ -112,6 +112,7 @@ class DefaultScriptsTest {
 		assertTrue(bundled.containsKey("jobs/forester.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("lib/food.py"), "bundled " + bundled.keySet());
 		assertTrue(bundled.containsKey("jobs/guard.py"), "bundled " + bundled.keySet());
+		assertTrue(bundled.containsKey("jobs/stem_farm.py"), "bundled " + bundled.keySet());
 		bundled.forEach((file, source) -> Compiler.compile(Parser.parse(file, source)));
 	}
 
