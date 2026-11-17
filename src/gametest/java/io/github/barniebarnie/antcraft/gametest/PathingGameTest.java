@@ -186,6 +186,28 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Like {@link #walksRoundAFenceRatherThanThroughIt}, with iron bars and a bot with a diamond pickaxe. */
+	/** A cactus in the way: the bot walks round it a block off, never beside it, and the cactus never hurts it (#830). */
+	// Measured: passes at tick 41 (red, without PathFinder.PRICKLY_COST: walked beside the cactus at 2, 1, 3 on tick 7).
+	@GameTest(maxTicks = 80)
+	public void walksRoundACactusWithoutBrushingIt(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(3, 0, 3, Blocks.SAND);
+		helper.setBlock(3, 1, 3, Blocks.CACTUS);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(5, 1, 3)));
+
+		helper.onEachTick(() -> {
+			if (bot.getLastDamageSource() != null) {
+				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO)));
+			}
+			BlockPos at = bot.blockPosition().subtract(helper.absolutePos(BlockPos.ZERO));
+			if (at.distManhattan(new BlockPos(3, 1, 3)) == 1) {
+				helper.fail("walked beside the cactus at " + at.toShortString());
+			}
+		});
+		succeedWhenAt(helper, bot, new BlockPos(5, 1, 3));
+	}
+
 	@GameTest(maxTicks = 150)
 	public void walksRoundIronBarsRatherThanThroughThem(GameTestHelper helper) {
 		room(helper, 0);

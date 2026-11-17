@@ -16,7 +16,8 @@ import net.minecraft.core.Direction;
  * 'C' = another climbable, such as weeping, twisting or cave vines or scaffolding (climbed, and walked and fallen through, unbreakable),
  * 'F' = fire (walked through, but a hazard), 'P' = a nether portal (walked through, but a hazard unless it is the goal),
  * 'l' = a bottom slab (stood on, but too low to jump a full block up from), 's' = snow two layers deep (an eighth high),
- * 'h' = a honey block (stood on, but halves the jump), 'c' = a carpet (stood on, a sixteenth high).
+ * 'h' = a honey block (stood on, but halves the jump), 'c' = a carpet (stood on, a sixteenth high),
+ * 'K' = a cactus (a hazard, and {@link #isPrickly prickly}: it hurts a bot beside it).
  * A climbable holds on to the faces set with {@link #hangsOn}, or else a ladder or vine to every solid neighbour beside it
  * (and above, for a vine), a vine with none hanging from the vine above, on its faces; other climbables to none.
  */
@@ -155,7 +156,12 @@ public final class GridWorld implements WorldView {
 	@Override
 	public boolean isHazard(BlockPos pos) {
 		char c = this.at(pos);
-		return c == 'L' || c == 'W' || c == 'F' || c == 'P';
+		return c == 'L' || c == 'W' || c == 'F' || c == 'P' || c == 'K';
+	}
+
+	@Override
+	public boolean isPrickly(BlockPos pos) {
+		return this.at(pos) == 'K';
 	}
 
 	@Override

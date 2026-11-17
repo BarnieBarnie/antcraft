@@ -929,6 +929,27 @@ class PathFinderTest {
 		assertFalse(types(path).contains(MoveType.SWIM), "swam: " + path.steps());
 	}
 
+	/**
+	 * A cactus hurts a bot that brushes it from beside (#830): a path keeps off the blocks beside it, at its feet or its
+	 * head, where a detour of a few blocks goes round, and still goes beside one where that is the only way.
+	 */
+	@Test
+	void keepsOffTheBlocksBesideACactus() {
+		for (int y : new int[] {1, 2}) {
+			GridWorld world = GridWorld.flat(10).set(3, y, 0, 'K').set(3, 1, 0, y == 2 ? '#' : 'K');
+			Path path = find(world, new BlockPos(6, 1, 0), WALK_ONLY);
+
+			assertTrue(path.complete());
+			assertTrue(positions(path).stream().noneMatch(p -> beside(world, p, 'K')), "beside a cactus: " + positions(path));
+		}
+		GridWorld corridor = GridWorld.flat(10).fill(0, 1, 1, 6, 2, 1, '#').fill(0, 1, -1, 6, 2, -1, '#').set(3, 2, 1, 'K');
+		assertTrue(find(corridor, new BlockPos(6, 1, 0), WALK_ONLY).complete());
+	}
+
+	private static boolean beside(GridWorld world, BlockPos feet, char block) {
+		return Direction.Plane.HORIZONTAL.stream().anyMatch(d -> world.at(feet.relative(d)) == block || world.at(feet.above().relative(d)) == block);
+	}
+
 	@Test
 	void neverGoesThroughLava() {
 		GridWorld world = GridWorld.flat(10).fill(2, 1, -10, 2, 1, 10, 'L');

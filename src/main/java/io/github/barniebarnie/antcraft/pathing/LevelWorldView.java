@@ -262,6 +262,11 @@ public class LevelWorldView implements WorldView {
 	}
 
 	@Override
+	public boolean isPrickly(BlockPos pos) {
+		return this.blocks.get(pos).is(Blocks.CACTUS);
+	}
+
+	@Override
 	public boolean isPortal(BlockPos pos) {
 		return this.blocks.get(pos).is(Blocks.NETHER_PORTAL);
 	}

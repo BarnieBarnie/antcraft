@@ -51,6 +51,24 @@ public interface WorldView {
 	/** Never enter, stand on, or open up next to this block (lava, fire, any fluid), except to swim in it if {@link #isWater}. */
 	boolean isHazard(BlockPos pos);
 
+	/**
+	 * A block that hurts a bot brushing it from beside, such as a cactus (#830): paths keep off the blocks beside it
+	 * ({@link #besidePrickly}). One a bot is hurt only inside of, such as a sweet berry bush, is just a {@link #isHazard hazard}.
+	 */
+	default boolean isPrickly(BlockPos pos) {
+		return false;
+	}
+
+	/** A bot with its feet at {@code feet} stands beside a {@link #isPrickly prickly} block, at its feet or its head. */
+	default boolean besidePrickly(BlockPos feet) {
+		for (Direction dir : Direction.Plane.HORIZONTAL) {
+			if (this.isPrickly(feet.relative(dir)) || this.isPrickly(feet.above().relative(dir))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/** A nether portal: a {@link #isHazard hazard} a path enters only to stand in it at its goal, to go through on purpose. */
 	default boolean isPortal(BlockPos pos) {
 		return false;

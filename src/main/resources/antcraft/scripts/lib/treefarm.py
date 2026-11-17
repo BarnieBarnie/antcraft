@@ -189,11 +189,12 @@ def build_cell(kind, low, high):
     return result()
 
 
-def soil(ground, radius=32):
+def soil(ground, radius=32, item=DIRT, kind=SOIL):
     """Puts dirt at ground, a sapling spot's floor, where it is not SOIL: mines what is there, such as stone or a block a
     path put in, with a pickaxe it gets where it has none (lib.get.ensure_tool), getting the dirt it lacks within radius
-    (get_outside), none from under the farm's cells. Gives result(): ok, or the reason with at."""
-    if lib.trees.is_kind(ground, SOIL):
+    (get_outside), none from under the farm's cells. Another item and kind, such as sand for a cactus (#830), put that
+    where the floor is not of kind. Gives result(): ok, or the reason with at."""
+    if lib.trees.is_kind(ground, kind):
         return result()
     if not block(ground).is_air:
         r = mine(ground)
@@ -205,11 +206,11 @@ def soil(ground, radius=32):
             r = mine(ground)
         if not r and r.reason != "target_gone":
             return result(r.reason, ground)
-    if not count(DIRT):
-        r = get_outside(DIRT, 1, radius)
+    if not count(item):
+        r = get_outside(item, 1, radius)
         if not r["ok"]:
             return r
-    r = place(ground, DIRT)
+    r = place(ground, item)
     return result() if r else result(r.reason, ground)
 
 

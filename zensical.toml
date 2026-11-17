@@ -104,6 +104,7 @@ nav = [
     "cookbook/crop-farm.md",
     "cookbook/bamboo-farm.md",
     "cookbook/cocoa-farm.md",
+    "cookbook/cactus-farm.md",
     "cookbook/guard.md",
   ] },
   { "Development" = ["development/index.md"] },

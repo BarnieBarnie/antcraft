@@ -59,6 +59,13 @@ public final class PathFinder {
 	/** Climbing a block up or down a ladder: vanilla climbs at 0.2 blocks a tick and slides down at 0.15. */
 	public static final double CLIMB_COST = 6.0;
 
+	/**
+	 * Ending a move beside a {@link WorldView#isPrickly prickly} block, such as a cactus, which hurts a bot that brushes
+	 * it (#830): paths go a few blocks round rather than past one.
+	 */
+	// ponytail: a flat guess of what a brush costs, some 4 blocks of walk; cost it by the hurt (Death) if bots still brush cacti.
+	public static final double PRICKLY_COST = 20.0;
+
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
 	/**
@@ -349,7 +356,7 @@ public final class PathFinder {
 				}
 
 				for (Candidate move : this.planner.moves(node)) {
-					double cost = node.cost + move.cost;
+					double cost = node.cost + move.cost + (this.world.besidePrickly(move.step.to()) ? PRICKLY_COST : 0);
 					int placed = node.placed + move.scaffold;
 					boolean least = this.least(move.step.to(), cost, placed, true);
 					if (cost < this.bestCost.getOrDefault(move.step.to(), BLOCKED)) {

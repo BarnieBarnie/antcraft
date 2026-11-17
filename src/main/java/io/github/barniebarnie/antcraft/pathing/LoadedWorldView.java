@@ -43,6 +43,11 @@ public final class LoadedWorldView implements WorldView {
 	}
 
 	@Override
+	public boolean isPrickly(BlockPos pos) {
+		return this.loaded.test(pos) && this.world.isPrickly(pos);
+	}
+
+	@Override
 	public boolean isPortal(BlockPos pos) {
 		return this.loaded.test(pos) && this.world.isPortal(pos);
 	}

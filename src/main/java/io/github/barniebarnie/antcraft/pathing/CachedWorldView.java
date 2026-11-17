@@ -30,6 +30,7 @@ final class CachedWorldView implements WorldView {
 	private static final int STAIR_UP = 11;
 	private static final int VINE = 15;
 	private static final int DROPS_SCAFFOLD = 16;
+	private static final int BESIDE_PRICKLY = 17;
 
 	private final WorldView world;
 	/** Per block, the answers so far, two bits per question. */
@@ -50,6 +51,7 @@ final class CachedWorldView implements WorldView {
 	private final Predicate<BlockPos> bedrock;
 	private final Predicate<BlockPos> mayPlace;
 	private final Predicate<BlockPos> dropsScaffold;
+	private final Predicate<BlockPos> besidePrickly;
 	/** {@code canOpen} and {@code stairUp}, by {@link Direction#get2DDataValue}. */
 	private final List<Predicate<BlockPos>> canOpen;
 	private final List<Predicate<BlockPos>> stairUp;
@@ -68,6 +70,7 @@ final class CachedWorldView implements WorldView {
 		this.bedrock = world::isBedrock;
 		this.mayPlace = world::mayPlace;
 		this.dropsScaffold = world::dropsScaffold;
+		this.besidePrickly = world::besidePrickly;
 		this.canOpen = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
 			.<Predicate<BlockPos>>map(dir -> pos -> world.canOpen(pos, dir)).toList();
 		this.stairUp = Direction.Plane.HORIZONTAL.stream().sorted((a, b) -> a.get2DDataValue() - b.get2DDataValue())
@@ -113,6 +116,17 @@ final class CachedWorldView implements WorldView {
 	@Override
 	public boolean isHazard(BlockPos pos) {
 		return this.answer(pos, HAZARD, this.hazard);
+	}
+
+	/** Not cached: a search asks {@link #besidePrickly}, which is. */
+	@Override
+	public boolean isPrickly(BlockPos pos) {
+		return this.world.isPrickly(pos);
+	}
+
+	@Override
+	public boolean besidePrickly(BlockPos feet) {
+		return this.answer(feet, BESIDE_PRICKLY, this.besidePrickly);
 	}
 
 	/** Not cached: asked only of hazards, which are few. */
