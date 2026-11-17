@@ -35,7 +35,8 @@ public final class DefaultScripts {
 		"lib/build.py", "jobs/build.py",
 		"lib/terrain.py", "jobs/flatten.py",
 		"lib/cells.py", "lib/depot.py", "lib/treefarm.py", "lib/cellfarm.py", "jobs/wood_farm.py", "jobs/forester.py",
-		"jobs/settle.py", "lib/food.py", "jobs/guard.py");
+		"jobs/settle.py", "lib/food.py", "jobs/guard.py",
+		"jobs/cane_farm.py");
 	/** Holds, per script, the hash of the version last copied. */
 	static final String RECORD = ".antcraft-defaults";
 
