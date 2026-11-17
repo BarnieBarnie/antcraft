@@ -80,7 +80,7 @@ public class BambooFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** On a stone floor: the cell's three spots get dirt with bamboo planted on it. */
-	// Measured: passes at tick 71 to 73 (red: No module named 'jobs.bamboo_farm').
+	// Measured: passes at tick 71 to 73, also under load (red: No module named 'jobs.bamboo_farm').
 	@GameTest(maxTicks = 160)
 	public void aCellIsPlantedFromBamboo(GameTestHelper helper) {
 		AntBot bot = farm(helper, "1");
@@ -93,8 +93,8 @@ public class BambooFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Stalks five high in the built cell are cut to their bottom block, the 12 cut picked up and stored in the depot. */
-	// Measured: passes at tick 351 to 377.
-	@GameTest(maxTicks = 700)
+	// Measured: passes at tick 326 to 377, up to 389 under load (another Gradle build at the same time, #839).
+	@GameTest(maxTicks = 780)
 	public void tallBambooIsCutToOneAndStored(GameTestHelper helper) {
 		AntBot bot = farm(helper, "1");
 		boolean[] grown = new boolean[1];
@@ -120,7 +120,7 @@ public class BambooFarmGameTest implements CustomTestMethodInvoker {
 	 * With bamboo for one cell only, the farm builds cell 1, then lacks bamboo for cell 2; bamboo grown in cell 1 is
 	 * harvested and stored, and cell 2 is planted from the depot's bamboo, 3 of the 12 cut.
 	 */
-	// Measured: passes at tick 388 to 505.
+	// Measured: passes at tick 375 to 505, up to 456 under load (#839).
 	@GameTest(maxTicks = 1000)
 	public void aSecondCellIsPlantedFromStoredBamboo(GameTestHelper helper) {
 		AntBot bot = farm(helper, "2");

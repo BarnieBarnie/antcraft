@@ -83,7 +83,7 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** On the stone floor: two jungle logs stand in the cell's middle, a pod on each of their west and east sides. */
-	// Measured: passes at tick 25 (red: No module named 'jobs.cocoa_farm').
+	// Measured: passes at tick 25 to 27, also under load (red: No module named 'jobs.cocoa_farm').
 	@GameTest(maxTicks = 60)
 	public void aCellIsBuiltWithPodsOnTheLogsSides(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, 1);
@@ -98,8 +98,8 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 	 * random tick cannot ripen it): the ripe pod is broken and a bean placed back, the 2 beans over stored, the unripe one
 	 * left.
 	 */
-	// Measured: passes at tick 147.
-	@GameTest(maxTicks = 300)
+	// Measured: passes at tick 147 to 149, up to 179 under load (another Gradle build at the same time, #839).
+	@GameTest(maxTicks = 360)
 	public void ripePodsAreHarvestedAndReplantedUnripeOnesLeft(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, 1);
 		boolean[] grown = new boolean[1];
@@ -126,8 +126,8 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 	 * With beans for one cell only, the farm builds cell 1 and lacks beans for cell 2; cell 1's pods ripened are
 	 * harvested, the beans stored, and cell 2 is built from the depot's beans and the supply's other 2 logs.
 	 */
-	// Measured: passes at tick 182 to 183.
-	@GameTest(maxTicks = 400)
+	// Measured: passes at tick 182 to 184, up to 239 under load (#839).
+	@GameTest(maxTicks = 480)
 	public void aSecondCellIsBuiltFromStoredBeansAndLogs(GameTestHelper helper) {
 		AntBot bot = farm(helper, 4, 2);
 		boolean[] grown = new boolean[1];
