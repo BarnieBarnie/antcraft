@@ -8,6 +8,7 @@ import io.github.barniebarnie.antcraft.pathing.LevelWorldView;
 import io.github.barniebarnie.antcraft.pathing.LoadedBlocks;
 import io.github.barniebarnie.antcraft.pathing.PathFinder;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.HashSet;
@@ -231,6 +232,40 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		succeedWhenAt(helper, bot, new BlockPos(1, 1, 2));
+	}
+
+	/**
+	 * A walk planned while the bot still moves on from its last one, which ended mid-step: it slides out of the block the
+	 * path starts at into the one south of it. Followed from there, the path's first step east led it straight across the
+	 * corner between the two, a sweet berry bush; it plans again from where it is instead (#848). So a berry farm's bot
+	 * walked into a bush: pick_up's walk south ended as it took the berry, and take's walk east began.
+	 */
+	// Measured: passes at tick 20 (red: hurt by sweetBerryBush at (2.86, 1.0, 3.01) on tick 13).
+	@GameTest(maxTicks = 40)
+	public void aWalkFromTheBlockBesideWherePlannedPlansAgain(GameTestHelper helper) {
+		room(helper, 0);
+		helper.setBlock(3, 1, 3, Blocks.SWEET_BERRY_BUSH.defaultBlockState().setValue(SweetBerryBushBlock.AGE, 3));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		ScriptRun run = BotScripts.run(bot, "wait(5)\ngoto((%d, %d, %d))\nwhile True:\n    wait(1000)\n".formatted(
+			helper.absolutePos(new BlockPos(3, 1, 2)).getX(), helper.absolutePos(new BlockPos(3, 1, 2)).getY(), helper.absolutePos(new BlockPos(3, 1, 2)).getZ()));
+
+		boolean[] pushed = new boolean[1];
+		helper.onEachTick(() -> {
+			// Entities tick before onEachTick: the walk planned from (2, 1, 2) this tick; set the bot moving south, over the
+			// block's edge, as the walk before left it.
+			if (!pushed[0] && run.walking()) {
+				bot.setPos(bot.getX(), bot.getY(), helper.absoluteVec(new Vec3(2.5, 1, 2.95)).z);
+				bot.setDeltaMovement(0, 0, 0.2);
+				pushed[0] = true;
+			}
+			if (bot.getLastDamageSource() != null) {
+				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + helper.relativeVec(bot.position()));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(pushed[0] && !run.walking(), "still walking, at " + helper.relativeVec(bot.position()));
+			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(new BlockPos(3, 1, 2))), "stopped at " + helper.relativeVec(bot.position()));
+		});
 	}
 
 	@GameTest(maxTicks = 150)

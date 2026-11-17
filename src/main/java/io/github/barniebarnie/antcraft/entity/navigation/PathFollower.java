@@ -193,6 +193,18 @@ public class PathFollower {
 		LevelWorldView world = new LevelWorldView(level, this.bot.getInventory(), this.bot.getMainHandItem(), Set.of());
 		this.skipRisenPast(feet, world);
 		Step step = this.path.steps().get(this.stepIndex);
+		BlockPos start = this.stepFrom();
+		if (step.type() == MoveType.WALK && step.to().getY() == start.getY() && feet.getY() == start.getY() && feet.distManhattan(start) == 1
+				&& !feet.equals(step.to()) && this.bot.onGround() && !this.bot.onClimbable()) {
+			// Slid on along the ground into the block beside where a level walk starts, such as from a walk that ended mid-step:
+			// heading straight from there for the step's block, it cut across the corner between them, into a sweet berry bush
+			// there (#848). Plan again from where it is.
+			if (!this.replan()) {
+				this.stop();
+				return Status.FAILED;
+			}
+			return Status.RUNNING;
+		}
 
 		for (BlockPos pos : step.breaks()) {
 			if (!world.isPassable(pos)) {
