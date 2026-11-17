@@ -28,8 +28,17 @@ public final class PathBudget {
 	 */
 	// ponytail: fixed; measured with the bot benchmark (BenchmarkGameTest), tune from play-tests.
 	public static final long NANOS_PER_TICK = 15_000_000;
-	/** The server's budget, which every bot's path follower shares. */
-	public static final PathBudget SERVER = new PathBudget(NODES_PER_TICK, NANOS_PER_TICK, System::nanoTime);
+	/**
+	 * The server's budget, which every bot's path follower shares. Game tests set the system property
+	 * {@code antcraft.pathNodesOnly} (build.gradle, all but the bot benchmark), so a test takes as many ticks on a busy
+	 * machine as on an idle one (#847).
+	 */
+	public static final PathBudget SERVER = server(Boolean.getBoolean("antcraft.pathNodesOnly"), System::nanoTime);
+
+	/** The server's {@link #NODES_PER_TICK}, and its {@link #NANOS_PER_TICK} of {@code clock}'s time unless {@code nodesOnly}. */
+	static PathBudget server(boolean nodesOnly, LongSupplier clock) {
+		return new PathBudget(NODES_PER_TICK, nodesOnly ? Long.MAX_VALUE : NANOS_PER_TICK, clock);
+	}
 
 	private final int perTick;
 	private final long nanosPerTick;

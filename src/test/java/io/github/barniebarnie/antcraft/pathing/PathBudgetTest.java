@@ -99,6 +99,20 @@ class PathBudgetTest {
 		assertTrue(budget.run(6, "a", search) > 0, "the next tick has time again");
 	}
 
+	/**
+	 * Game tests plan by nodes only (#847): however slow the clock, a tick gives its nodes, so a test takes as many ticks
+	 * on a busy machine as on an idle one. The server's budget otherwise also stops at its time.
+	 */
+	@Test
+	void aNodeOnlyServerBudgetGivesItsNodesHoweverSlowTheClock() {
+		long[] now = {0};
+		// Every look at the clock finds it a second on.
+		PathBudget nodesOnly = PathBudget.server(true, () -> now[0] += 1_000_000_000);
+		assertEquals(PathBudget.NODES_PER_TICK, nodesOnly.run(5, "a", nowhere()));
+		PathBudget timed = PathBudget.server(false, () -> now[0] += 1_000_000_000);
+		assertTrue(timed.run(5, "a", nowhere()) < PathBudget.NODES_PER_TICK, "the real budget stops at its time");
+	}
+
 	/** A search paused last tick gets its part of this tick's time too, not only of its nodes, so it is not left without. */
 	@Test
 	void pausedSearchesShareTheNextTicksTime() {

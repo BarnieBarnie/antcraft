@@ -88,6 +88,10 @@ tasks.matching { it.name == "runGameTest" }.configureEach {
 		// A fresh world, so colonies of earlier runs, saved with it, do not run along and runs compare.
 		def world = file('build/run/gameTest/world')
 		doFirst { world.deleteDir() }
+	} else {
+		// Path search by nodes only, not wall-clock time, so a test's ticks do not depend on load (PathBudget, #847).
+		// The benchmark keeps the real budget, as it measures tick time.
+		jvmArgs "-Dantcraft.pathNodesOnly=true"
 	}
 	if (gameTestFilter.isPresent()) {
 		jvmArgs "-Dfabric-api.gametest.filter=${gameTestFilter.get()}"
