@@ -3,8 +3,9 @@
 # where a stopped run started), the most cells it grows to (by default as many as keep growing round its corner, MOST at
 # most) and how far to look for what it needs (32 by default). A cell is a row of three floor blocks of podzol, which a
 # mushroom grows on in any light, so the farm needs no roof or dark room: a brown mushroom on the west one and a red one
-# on the east one, which spread onto the middle one on their own. Each round it harvests what spread, leaving the two to
-# spread again, stores it in a depot north of the farm and builds a cell once it has or can get the podzol and the two
+# on the east one, which spread onto the middle one on their own. Each round it harvests what spread, also onto the path
+# round a cell, leaving the two to spread again, fells the huge mushrooms that bone meal from the chests grew on those two
+# where there was room (#842), stores it in a depot north of the farm and builds a cell once it has or can get the podzol and the two
 # mushrooms one takes: the mushrooms from its own harvest, the podzol from the chests (docs/cookbook/mushroom-farm.md).
 # The farm's layout, depot, growth and rounds are lib.cellfarm's (#826, #836); this module is its mushroom spec.
 # Another job starts a farm with run(at); imported, this runs nothing.
@@ -30,8 +31,17 @@ NAME = "mushroom_farm"
 # some 34000 ticks a try for each of a cell's two. A cell's harvest takes the bot some 200, so it is busy at about 85
 # cells; ponytail: not measured, the cells that keep growing round its corner cap it first.
 MOST = int(4096 / 3 * 25 / 2 // 200)
-# Kept on the bot, not stored: the crafting table lib.get makes a depot chest with.
-KEEP = ["minecraft:crafting_table"]
+BONE_MEAL = "minecraft:bone_meal"
+STEM = "minecraft:mushroom_stem"
+# What a huge mushroom is made of (#842).
+HUGE = [STEM, "minecraft:brown_mushroom_block", "minecraft:red_mushroom_block"]
+# A huge mushroom grows 4 to 6 over its mushroom (8 to 12 on 1 in 12), its cap at the top: the air room looks for.
+TALL = 6
+# The scaffold the bot carries to climb to a cap, 7 over the floor at most where TALL.
+SCAFFOLD = "#antcraft:scaffold_blocks"
+CLIMB = 8
+# Kept on the bot, not stored: the crafting table lib.get makes a depot chest with, and the bone meal.
+KEEP = ["minecraft:crafting_table", BONE_MEAL]
 
 
 def spots(low, high):
@@ -73,30 +83,85 @@ def build_cell(low, high, radius=32):
 
 
 def spread(low, high):
-    """The cell's mushrooms that spread, to harvest: those on the middle spot."""
-    p = low.up() + (1, 0, 0)
-    return [p] if block(p).id in (BROWN, RED) else []
+    """The cell's mushrooms that spread, to harvest: those on the middle spot and on the path round the cell, where they
+    spread in the dark (#842)."""
+    out = []
+    for x in range(low.x - 1, high.x + 2):
+        for z in range(low.z - 1, high.z + 2):
+            p = Pos(x, low.y + 1, z)
+            if p not in (low.up(), high.up()) and block(p).id in (BROWN, RED):
+                out.append(p)
+    return out
+
+
+def huge(low, high):
+    """The stems of the huge mushrooms grown from the cell's kept spots."""
+    return [p for p, m in kept(low, high) if block(p).id == STEM]
 
 
 def ripe(low, high):
-    """Whether a mushroom spread onto the cell."""
-    return len(spread(low, high)) > 0
+    """Whether a mushroom spread onto the cell or its path, or a huge mushroom grew on it."""
+    return len(spread(low, high)) > 0 or len(huge(low, high)) > 0
 
 
-def harvest(low, high, told):
-    """Mines what spread and picks it up, leaving the two it spread from. Gives result(): ok, or the reason of the mine
-    that failed with at."""
+def mushroom_blocks(base):
+    """The blocks of the huge mushroom whose stem stands at base: those of HUGE reached from it, diagonal steps too, at
+    most 256 (a cap is some 50)."""
+    seen = {base: True}
+    todo = [base]
+    out = []
+    while todo and len(out) < 256:
+        p = todo.pop()
+        out.append(p)
+        for d in lib.trees.AROUND:
+            q = p + d
+            if q not in seen:
+                seen[q] = True
+                b = block(q)
+                if b is not None and b.id in HUGE:
+                    todo.append(q)
+    return out
+
+
+def harvest(low, high, told, radius=32):
+    """Fells each huge mushroom of the cell (lib.trees.fell_whole over its blocks, with scaffold from the chests to
+    climb), mines what spread, and picks up the mushrooms, leaving the two kept. Gives result(): ok, or the reason of
+    the felling or mine that failed with at. The felling's one stand is in the stem's column, the head just under the
+    cap's top, which reaches the whole cap: lib.trees.stands took some 170 ticks to work a cap of 50 blocks out, and its
+    stands some 600 to fell it, against 300 from the one."""
+    for p in huge(low, high):
+        if count(SCAFFOLD) < CLIMB:
+            lib.stock.take_up_to(SCAFFOLD, CLIMB, radius)
+        blocks = mushroom_blocks(p)
+        top = max([q.y for q in blocks])
+        r = lib.trees.fell_whole(p, False, blocks, [Pos(p.x, top - 2, p.z)])
+        if not r["ok"]:
+            lib.cellfarm.tell(told, f"harvest: {r['reason']} at {r['at']}")
+            return r
     for p in spread(low, high):
         r = mine(p)
         if not r:
             return result(r.reason, p)
-    pick_up(BROWN)
-    pick_up(RED)
+    pick_up([BROWN, RED])
     return result()
 
 
+def room(p, m):
+    """Whether a huge mushroom of m has room to grow from p: air up to TALL over it, round the stem as far as its cap
+    reaches (3 for a brown one, 2 for a red one). ponytail: one box, not the cap's shape; a huge mushroom taller than
+    TALL (1 in 12) finds no room and leaves the mushroom, as vanilla does."""
+    r = 3 if m == BROWN else 2
+    for y in range(p.y + 1, p.y + TALL + 1):
+        for x in range(p.x - r, p.x + r + 1):
+            for z in range(p.z - r, p.z + r + 1):
+                if not block(Pos(x, y, z)).is_air:
+                    return False
+    return True
+
+
 def tend(boxes, told, radius=32):
-    """Plants a mushroom where a cell of boxes lost one it keeps, with mushrooms from the chests within radius."""
+    """Plants a mushroom where a cell of boxes lost one it keeps, with mushrooms from the chests within radius, then
+    uses bone meal on each kept one with room for a huge mushroom until it grows, bone meal from those chests (#842)."""
     for b in boxes:
         for p, m in kept(b[0], b[1]):
             if block(p).is_air and lib.trees.is_kind(p.down(), GROWS):
@@ -104,6 +169,14 @@ def tend(boxes, told, radius=32):
                     lib.stock.take_up_to(m, 1, radius)
                 if count(m):
                     place(p, m)
+    # ponytail: a chest scan a round while the bot has no bone meal.
+    if not count(BONE_MEAL):
+        lib.stock.take_up_to(BONE_MEAL, 64, radius)
+    for b in boxes:
+        for p, m in kept(b[0], b[1]):
+            if count(BONE_MEAL) and block(p).id == m and room(p, m):
+                while count(BONE_MEAL) and block(p).id == m and use(p, BONE_MEAL):
+                    pass
 
 
 def spec(radius=32):
@@ -111,7 +184,7 @@ def spec(radius=32):
     return {"size": (3, 1), "categories": {"mushrooms": [BROWN, RED, PODZOL]}, "corners": "mushroom_farms",
             "keep": KEEP, "materials": lambda: {PODZOL: 3, BROWN: 1, RED: 1}, "gets": lib.treefarm.get_outside,
             "tools": tools, "build_cell": lambda low, high: build_cell(low, high, radius),
-            "ripe": ripe, "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
+            "ripe": ripe, "harvest": lambda low, high, told: harvest(low, high, told, radius),"tend": lambda boxes, told: tend(boxes, told, radius),
             "most": lambda: MOST}
 
 
