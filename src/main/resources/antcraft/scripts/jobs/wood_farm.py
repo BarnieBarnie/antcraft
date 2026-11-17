@@ -11,21 +11,22 @@
 # them unplanted (#803, #807). A full farm composts its extra saplings
 # into bone meal for its saplings (compost, #804), and uses the bone meal stored in its depot on them (#809). Its home is by the depot, so after a death it comes back to the farm and
 # recovers (lib.trees.recover, #679). Another job starts a farm with run(kind, at); imported, this runs nothing.
+# The farm's layout, depot, growth and rounds are lib.cellfarm's (#826); this module is its tree spec (spec) and the
+# setup steps of a farm that starts with nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
 
 import lib.area
 import lib.bootstrap
-import lib.borrow
+import lib.cellfarm
 import lib.cells
 import lib.depot
-import lib.food
-import lib.project
 import lib.stock
 import lib.terrain
 import lib.treefarm
 import lib.trees
+from lib.cellfarm import WAIT, tell
 from lib.get import chest_held, ensure_tool, get
 from lib.project import Step
 from lib.result import result
@@ -57,10 +58,6 @@ HARVEST = {"minecraft:oak_sapling": 200, "minecraft:birch_sapling": 250, "minecr
            "minecraft:mangrove_propagule": 1700, "giant_spruce": 3200, "giant_jungle": 2250}
 SAMPLES = 3  # trees a farm fells before it sizes itself from its own ticks a tree rather than HARVEST
 WINDOW = 10  # the last trees harvest is the mean of, so the first slow trees of a farm fade out (#662)
-WAIT = 100  # ticks between looks at the farm while nothing has grown
-# Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
-# be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a felling tries at once.
-BACKOFF = 10
 KIT = [("stone_axe", 1), (lib.treefarm.DIRT, 16)]  # dirt to climb a tall tree with and to put under the saplings; more for a giant (kit)
 # A mangrove's roots and moss carpet, which harvest mines too (#768), go with the logs, not in a chest of their own (#788).
 CATEGORIES = {"saplings": ["#minecraft:saplings"], "apples": ["minecraft:apple"],
@@ -149,61 +146,6 @@ def learn(kind, ticks, trees):
     memory["wood_ticks"] = h
 
 
-def limit(kind, name, size):
-    """The most cells of the farm name of kind: size, else most(harvest(kind)) but no more than its cells that keep
-    growing (ticking, #812)."""
-    return size or min(most(harvest(kind)), len(ticking(kind, name)))
-
-
-def built(kind, name, size):
-    """How many cells of the farm name of kind count toward limit: all built, else with no size those built that keep
-    growing (ticking), so cells outside them built under a size or before #812 leave its room (#815)."""
-    if size:
-        return lib.cells.count(name)
-    return len([i for i in lib.cells.built(name) if i in ticking(kind, name)])
-
-
-TICKING = {}  # a farm's name to ticking's cells, worked out once a run: a farm's layout does not change
-
-
-def ticking(kind, name):
-    """The indices of the farm name's cells whose saplings get random ticks while the bot is at the farm's corner, the
-    low corner of cell 0, where its depot is (lib.treefarm.ticking, #812): a cell farther off grows only while the bot
-    is near it."""
-    if name not in TICKING:
-        TICKING[name] = ticking_at(kind, name, lib.cells.cell(name, 0)[0])
-    return TICKING[name]
-
-
-def ticking_at(kind, name, corner):
-    """ticking's cells of the farm name were its cell 0's low corner at corner instead."""
-    low = lib.cells.cell(name, 0)[0]
-    d = (corner.x - low.x, 0, corner.z - low.z)
-    # ponytail: the first 32 cells; 8 rows of 4 of the narrowest kind (5 and a path) reach past the 2 chunks east and
-    # south of the corner's that tick. Some 5 ticks of instructions a corner.
-    return [i for i in range(32) if lib.treefarm.ticking(kind, corner, *[p + d for p in lib.cells.cell(name, i)])]
-
-
-def hint(kind, name, at):
-    """Says where a corner fits more cells that keep growing than at, the new farm name's (#813). A corner at the
-    north-west block of a chunk (x and z a multiple of 16) fits the most, the same at any chunk, so it counts one such
-    corner and names the nearest of those of at's chunk and of the chunks east, south and south-east. How many fit
-    depends on where at lies in its chunk: from x and z 15, 9 birch cells, from 0, 20. The farm keeps at."""
-    if at.x % 16 == 0 and at.z % 16 == 0:
-        return  # the most already; nothing counted
-    x, z = at.x // 16 * 16, at.z // 16 * 16
-    best = len(ticking_at(kind, name, Pos(x, at.y, z)))
-    n = len(ticking(kind, name))
-    if best > n:
-        c = None
-        for dx in (0, 16):
-            for dz in (0, 16):
-                p = Pos(x + dx, at.y, z + dz)
-                if c is None or p.distance(at) < c.distance(at):
-                    c = p
-        say(f"a corner at {c.x} {c.y} {c.z} fits {best} growing cells, this one {n}")
-
-
 def materials(kind):
     """What the farm wants on hand to build a cell of kind: lib.treefarm.materials and a spare sapling for each spot, for
     replanting."""
@@ -211,52 +153,6 @@ def materials(kind):
     s = lib.treefarm.sapling(kind)
     m[s] = m[s] * 2
     return m
-
-
-def own():
-    """Strikes what the bot borrowed off lib.borrow: the farm keeps what it took for good."""
-    for b in lib.borrow.borrowed():
-        lib.borrow.keep(b["item"])
-
-
-def following(kind, name, size):
-    """The index of the cell build builds next: lib.cells.next, else with no size the lowest cell that keeps growing not
-    built (ticking, #812). Kept as "next" in the farm's memory["cells"][name], so lib.treefarm.outside_cells keeps dirt
-    gets off it (#816)."""
-    i = lib.cells.next(name)
-    if not size:
-        i = ([j for j in ticking(kind, name) if j not in lib.cells.built(name)] + [i])[0]
-    lib.cells.farm(name)["next"] = i
-    return i
-
-
-def build(kind, name, size, radius):
-    """Builds the next cell of the farm name with the tools lib.terrain.needs for its ground and for the ground under
-    its sapling spots, and the dirt its floor's holes take on top of lib.treefarm.materials' (gets, #821), marks it
-    built and says so. Gives result()."""
-    i = following(kind, name, size)
-    low, high = lib.cells.cell(name, i)
-    needs = lib.terrain.needs(low, Pos(high.x, low.y + lib.treefarm.spec(kind)["clear"], high.z), low.y)
-    r = gets(lib.treefarm.DIRT, needs.get("fill", 0) + lib.treefarm.materials(kind)[lib.treefarm.DIRT], radius)
-    if not r["ok"]:
-        return r
-    tools = needs["tools"]
-    # build_cell mines the ground under each sapling spot that is not SOIL to put dirt there, such as stone (#612, #805).
-    for p in lib.treefarm.spots(kind, low, high):
-        if not lib.trees.is_kind(p.down(), lib.treefarm.SOIL):
-            for k, uses in lib.terrain.needs(p.down(), p.down(), p.y - 2)["tools"].items():
-                tools[k] = tools.get(k, 0) + uses
-    for k, uses in tools.items():
-        r = ensure_tool(k, uses, None if k == "pickaxe" else "hand", radius)
-        if not r["ok"]:
-            return r
-    lib.trees.take_back()  # what earlier walks placed comes down before the cell goes up, as before reap's harvest (#654)
-    r = lib.treefarm.build_cell(kind, low, high)
-    if r["ok"]:
-        lib.cells.add(name, i)
-        say(f"built cell {i + 1}")
-        say(f"cells {built(kind, name, size)}/{limit(kind, name, size)}")
-    return r
 
 
 def gets(item, n, radius):
@@ -281,7 +177,7 @@ def first_cell(kind, name, size, radius):
         r = growing(kind, name, lambda: gets(item, n, radius))
         if not r["ok"]:
             return r
-    return build(kind, name, size, radius)
+    return lib.cellfarm.build(spec(kind, name, radius), name, size, radius)
 
 
 def kits(kind, name, n, radius):
@@ -340,17 +236,6 @@ def grow(kind, name):
     return result("no_logs", spot)
 
 
-def stocked(kind, radius):
-    """Makes the bot carry materials(kind) by gets, as first_cell does (#643): what it lacks from the chests within
-    radius, else torches crafted, dirt dug, saplings from leaves, oak slabs for the roof. Gives result(): ok, or the
-    failed get's for the first item it could not get."""
-    for item, n in materials(kind).items():
-        r = gets(item, n, radius)
-        if not r["ok"]:
-            return r
-    return result()
-
-
 def sweep(kind, boxes):
     """Picks up the saplings of kind, sticks and apples lying in the farm, its cells boxes up to their clear height:
     leaves left after a felling decay over the next minutes and drop them then (#643)."""
@@ -368,25 +253,6 @@ def sweep(kind, boxes):
         goto(near[0].pos)
         if not pick_up(what).value:
             return
-
-
-def visit(kind, b):
-    """Walks to cell b where the bot cannot read it (lib.treefarm.loaded), as a bot keeps only the chunks within 3 of
-    its own loaded and goto loads those on its way (#811)."""
-    # ponytail: a goto that fails (botsLoadChunks off) leaves the cell for another round.
-    if not lib.treefarm.loaded(kind, b[0], b[1]):
-        goto(lib.treefarm.torches(b[0], b[1])[0], 2)
-
-
-def corner(name):
-    """Walks the bot into the chunk of the farm name's corner, cell 0's low corner, where it stands elsewhere (#814), so
-    the cells ticking counts get random ticks while it waits: to the floor diagonal into cell 0, kept in that chunk."""
-    low = lib.cells.cell(name, 0)[0]
-    p = pos()
-    if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
-        return
-    # ponytail: a corner at chunk-local 15 on both axes sends it onto the corner's torch spot, which a torch does not block.
-    goto(Pos(min(low.x + 1, low.x // 16 * 16 + 15), low.y + 1, min(low.z + 1, low.z // 16 * 16 + 15)))
 
 
 def unplanted(kind, b):
@@ -417,13 +283,6 @@ def tend(kind, b, radius=32, told=None):
             if not block(t).is_air:
                 mine(t)
             place(t, lib.treefarm.TORCH)
-
-
-def tell(told, what):
-    """Says what once: not where told, a dict of what was said, holds it already."""
-    if what not in told:
-        told[what] = True
-        say(what)
 
 
 def scaffold(kind):
@@ -458,130 +317,6 @@ def reap(kind, b, radius, told, replant=True):
         lib.trees.take_back()
         r = lib.treefarm.harvest(kind, b[0], b[1], radius, replant)
     return r
-
-
-def farm(kind, name, size, radius):
-    """Farms forever: each round fells every grown tree (reap, so logs a failed felling left are felled again), stores
-    what it carries (each round, #766), tends each cell (replants it with saplings from the chests, else from the leaves of the kind with
-    lib.get), builds the next cell where the farm is below size and stocked gets what one takes (else says once what it
-    lacks, and tries again BACKOFF rounds later, or in the next round that felled a tree, whose logs may make it), and
-    once full composts the extra saplings (compost), and where it felled nothing picks up the drops in the farm (sweep)
-    and waits in its corner's chunk (corner, #814). Each round takes back the scaffold its walks
-    placed (lib.trees.take_back) before it waits, and before each felling and build (#654). Where size is None the farm grows to
-    limit(kind, name, None), as its rounds learn the ticks a tree takes: from the felling to the replanting, over the trees
-    felled (learn). The felling, store and tending go over the cells the bot can read where it stands, then over those it
-    reads at one cell it cannot, in turn, which it walks to (visit, #811), so the corner's cells are farmed every round
-    (#819)."""
-    full = False
-    told = {}
-    backoff = 0  # rounds until stocked is tried again
-    visits = 0  # rounds that looked for a cell out of loaded range, to visit those in turn (#811)
-    while True:
-        lib.food.upkeep(radius)
-        # What the setup steps' walks placed is not the round's; what the round's walks place (the felling's and the
-        # build's own taken back by them, sweep, tend, get, reap's retry) comes down at its end (#654).
-        placed_scaffold()
-        own()
-        # Only the cells the bot can read (#810): first those where it stands (at the corner, #814), then those round
-        # one cell it cannot read, in turn, which it walks to (visit), so every cell is farmed (#811) and the corner's
-        # every round (#819).
-        cells = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
-        far = [b for b in cells if not lib.treefarm.loaded(kind, b[0], b[1])]
-        visited = far[visits % len(far)] if far else None
-        visits += 1
-        keep = KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))]
-        full_bot = False
-        # The trees of the small cells a giant farm moved from, felled once and not replanted (#807); not trees of kind,
-        # so before start, not learnt.
-        k, left = small(kind)
-        others = 0
-        for b in left:
-            r = lib.depot.make_room(name, free(k), keep, radius)
-            if not r["ok"]:
-                full_bot = True
-                tell(told, f"inventory full, store: {r['reason']}; felling stops")
-                break
-            if reap(k, b, radius, told, False)["ok"]:
-                others += 1
-        trees = 0
-        ticks = 0
-        boxes = []
-        for v in [None] + ([visited] if visited else []):
-            if v:
-                visit(kind, v)
-            here = [b for b in cells if b not in boxes and lib.treefarm.loaded(kind, b[0], b[1])]
-            boxes += here
-            grown = [b for b in here if lib.treefarm.grown(kind, b[0], b[1])]
-            start = game_time()
-            for b in [] if full_bot else grown:
-                # Not with too few empty slots that the depot cannot empty: the tree's drops would be dropped (#765).
-                r = lib.depot.make_room(name, free(kind), keep, radius)
-                if not r["ok"]:
-                    full_bot = True
-                    tell(told, f"inventory full, store: {r['reason']}; felling stops")
-                    break
-                if reap(kind, b, radius, told)["ok"]:
-                    trees += 1
-            # Every round, not only one that fells: what builds up between fellings, such as the dirt flatten and walks
-            # dig, goes in the depot too (#766). A store with nothing over keep walks nowhere.
-            if not full_bot:
-                r = lib.depot.store(name, keep, radius)
-                # Once a reason, not every round: a full depot that takes no new chest leaves the logs carried, more
-                # each round (#763).
-                if not r["ok"] and "store: " + r["reason"] not in told:
-                    told["store: " + r["reason"]] = True
-                    say(f"store: {r['reason']}, kept {r['missing']}")
-            # After the felling, so lib.get breaks the felled trees' leaves for saplings, not those of a tree still to fell.
-            n = sum([len(unplanted(kind, b)) for b in here])
-            s = lib.treefarm.sapling(kind)
-            if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
-                get(s, n, radius)
-            if v:
-                visit(kind, v)  # again where the store walked away from it
-            for b in here:
-                tend(kind, b, radius, told)
-            stored_bone_meal(kind, name, here, radius)
-            ticks += game_time() - start
-        felled = trees + others > 0
-        # Once the bot has the saplings for a giant, the next cells are giants: a farm of its own beside this one, whose
-        # run never returns but on a failed setup step (#803).
-        # Its trees the giant farm's rounds fell, its cells not replanted (small, #807).
-        # ponytail: a chest scan a round (stocked's gets scan too).
-        if kind in GIANTS and fours(kind, radius):
-            return run(GIANTS[kind], beside(name), None, radius)
-        if felled:
-            learn(kind, ticks, trees)
-            backoff = 0
-        most_cells = limit(kind, name, size)
-        have = built(kind, name, size)
-        if full and have < most_cells:
-            say(f"cells {have}/{most_cells}")  # it learnt it may grow (#662); "farm full" again once it is
-            full = False
-        if have < most_cells and backoff:
-            backoff -= 1
-        elif have < most_cells:
-            # Before stocked's dirt get (#816); a farm not laid out, as a test's with lib.cells stubbed, has no cell to keep.
-            if name in memory.get("cells", {}):
-                following(kind, name, size)
-            r = stocked(kind, radius)
-            if r["ok"]:
-                build(kind, name, size, radius)
-            else:
-                tell(told, f"next cell: {r['reason']}, lacks {r['missing']}")
-                backoff = BACKOFF
-        elif not full:
-            say("farm full")
-            full = True
-        if full:
-            r = compost(kind, name, boxes, radius)
-            if not r["ok"]:
-                tell(told, f"compost: {r['reason']}")
-        if not felled:
-            sweep(kind, boxes)
-            corner(name)
-        lib.trees.take_back()
-        if not felled:
-            wait(WAIT)
 
 
 EXTRA = 32  # the saplings beyond what replanting keeps (materials) over which a full farm composts them (#804)
@@ -648,73 +383,106 @@ def fertilize(kind, boxes):
                 pass
 
 
-def carry(name, old, radius):
-    """Empties the chests old, a moved farm's old depot, into depot name, in as many trips as the bot's room takes, and
-    keeps what the bot carried itself (#823). Where a trip takes nothing but the old chests still hold some, such as a
-    full depot, it says what is left there and goes on."""
-    keep = list(dict([(s.item, count(s.item)) for s in inventory()]).items())
-    while True:
-        took = 0
-        for chest in old:
-            for s in container(chest) or []:
-                if free_slots():
-                    r = take(chest, s.item, s.count)
-                    took += r.value if r else 0
-        lib.depot.store(name, keep, radius)
-        if not took:
-            break
-    left = sum([s.count for chest in old for s in container(chest) or []])
-    if left:
-        say(f"left {left} items in the old depot")
+def soil_tools(kind, low, high):
+    """The tools build_cell takes to mine the ground under each sapling spot of the cell that is not SOIL, to put dirt
+    there, such as stone (#612, #805): kind to uses."""
+    tools = {}
+    for p in lib.treefarm.spots(kind, low, high):
+        if not lib.trees.is_kind(p.down(), lib.treefarm.SOIL):
+            for k, uses in lib.terrain.needs(p.down(), p.down(), p.y - 2)["tools"].items():
+                tools[k] = tools.get(k, 0) + uses
+    return tools
+
+
+def restock(kind, boxes, radius):
+    """Gets the saplings the cells boxes' empty spots take that the bot lacks: from the chests within radius, else from
+    leaves of the kind (lib.get). After the felling, so it breaks the felled trees' leaves, not those of a tree to fell."""
+    n = sum([len(unplanted(kind, b)) for b in boxes])
+    s = lib.treefarm.sapling(kind)
+    if n and count(s) < n and not lib.stock.take_up_to(s, n, radius)["ok"]:
+        get(s, n, radius)
+
+
+def fell_small(kind, name, keep, radius, told):
+    """Fells the trees of the small cells a giant farm of kind moved from, and does not replant them (small, #807); not
+    trees of kind, so not learnt. Gives (trees felled, whether the bot was too full to fell, #765)."""
+    k, left = small(kind)
+    others = 0
+    for b in left:
+        r = lib.depot.make_room(name, free(k), keep, radius)
+        if not r["ok"]:
+            tell(told, f"inventory full, store: {r['reason']}; felling stops")
+            return others, True
+        if reap(k, b, radius, told, False)["ok"]:
+            others += 1
+    return others, False
+
+
+def composted(kind, name, boxes, radius, told):
+    """compost, saying once why it could not."""
+    r = compost(kind, name, boxes, radius)
+    if not r["ok"]:
+        tell(told, f"compost: {r['reason']}")
+
+
+def spec(kind, name, radius):
+    """The lib.cellfarm spec of the wood farm name of kind: a cell a tree (lib.treefarm), harvested by reap and tended by
+    tend, its saplings composted once the farm is full; a spruce or jungle farm moves to giants once the bot has 4
+    saplings (GIANTS, #803). Each hook calls this module's function as it stands when called, so a script or test that
+    swaps one (jobs.wood_farm.reap = ...) is heard."""
+    w = lib.treefarm.spec(kind)["size"]
+    return {"size": (w, w), "categories": CATEGORIES, "corners": "wood_farms",
+            "keep": KEEP + [lib.treefarm.sapling(kind), (lib.treefarm.DIRT, dirt(kind))],
+            "materials": lambda: materials(kind), "gets": lambda item, n, r: gets(item, n, r),
+            "fill": lib.treefarm.DIRT, "height": lib.treefarm.spec(kind)["clear"],
+            "tools": lambda low, high: soil_tools(kind, low, high),
+            "build_cell": lambda low, high: lib.treefarm.build_cell(kind, low, high),
+            "spots": lambda low, high: lib.treefarm.spots(kind, low, high),
+            "loaded": lambda low, high: lib.treefarm.loaded(kind, low, high),
+            "ripe": lambda low, high: lib.treefarm.grown(kind, low, high),
+            "room": lambda: free(kind),
+            "harvest": lambda low, high, told: reap(kind, (low, high), radius, told),
+            "stock": lambda boxes: restock(kind, boxes, radius),
+            "tend": lambda boxes, told: tend_all(kind, name, boxes, radius, told),
+            "chores": lambda keep, told: fell_small(kind, name, keep, radius, told),
+            # ponytail: a chest scan a round (stocked's gets scan too).
+            "switch": lambda: run(GIANTS[kind], beside(name), None, radius) if kind in GIANTS and fours(kind, radius) else None,
+            "most": lambda: most(harvest(kind)), "learn": lambda ticks, n: learn(kind, ticks, n),
+            "full": lambda boxes, told: composted(kind, name, boxes, radius, told),
+            "idle": lambda boxes: sweep(kind, boxes)}
+
+
+def tend_all(kind, name, boxes, radius, told):
+    """tend each cell of boxes, then uses the depot's bone meal on their saplings (stored_bone_meal)."""
+    for b in boxes:
+        tend(kind, b, radius, told)
+    stored_bone_meal(kind, name, boxes, radius)
+
+
+def farm(kind, name, size, radius):
+    """Farms the wood farm name of kind forever (lib.cellfarm.farm on spec): each round fells every grown tree (reap, so
+    logs a failed felling left are felled again) and the small cells' a giant farm moved from (fell_small), stores what
+    it carries, tends each cell (replants it with saplings from the chests, else from the leaves of the kind, restock),
+    moves to giants once it can (GIANTS), builds the next cell where it is below size (else limit: most of the ticks a
+    tree takes, learnt from the felling to the replanting, learn, no more than the cells that keep growing), once full
+    composts the extra saplings (compost), and where it felled nothing picks up the drops in the farm (sweep) and waits
+    in its corner's chunk."""
+    return lib.cellfarm.farm(spec(kind, name, radius), name, size, radius)
 
 
 def run(kind, at=None, size=None, radius=32):
     """Grows and farms a wood farm of kind (a kind of lib.treefarm.KINDS) with its first corner at at (where the bot
     stands, or where the last farm of kind started), up to size cells (limit: most of the ticks a tree takes, learnt,
-    else HARVEST[kind]). An at other than the stored corner of kind moves the farm there,
-    laid out afresh (#818), its old depot's stock carried to the new one (carry, #823). Never returns but on a failed setup step: gives lib.project.run's result() then."""
+    else HARVEST[kind]). An at other than the stored corner of kind moves the farm there (lib.cellfarm.run). Never
+    returns but on a failed setup step: gives lib.project.run's result() then."""
     kind = giant(lib.treefarm.key(kind), radius)
     name = kind.split(":")[-1].replace("_sapling", "") + "_farm"
-    farms = memory.get("wood_farms", {})
-    new = kind not in farms
-    at = Pos(at) if at is not None else farms.get(kind, pos())
-    moved = not new and at != farms[kind]
-    farms[kind] = at
-    memory["wood_farms"] = farms
-    old = []
-    if moved:
-        # The old depot's chests, emptied into the new depot once it is laid out (#823).
-        old = lib.depot.chests(name) if name in memory.get("depots", {}) else []
-        # A new corner lays the farm out afresh there, its depot and project with it (#818). The old cells and chests
-        # are left standing, forgotten, the chests emptied.
-        for key in ("cells", "depots"):
-            m = memory.get(key, {})
-            m.pop(name, None)
-            memory[key] = m
-        TICKING.pop(name, None)
-        lib.project.reset(name)
-        say(f"farm moved to {at.x} {at.y} {at.z}")
-    w = lib.treefarm.spec(kind)["size"]
-    lib.cells.layout(name, at.down(), (w, w))
-    if new or moved:
-        hint(kind, name, at)
-    # The depot north of the farm, a path's width off its first row, going east along it.
-    lib.depot.depot(name, at + (0, 0, -2), "east", CATEGORIES)
-    if old:
-        carry(name, old, radius)
-    # Home is the path by the depot, so a bot that dies comes back at the farm, and recover fetches what it dropped: a
-    # death costs it no more than lib.cost.death (#679).
-    set_home(at + (0, 0, -1))
-    lib.trees.recover()
     n = 4 if lib.treefarm.spec(kind)["square"] else 1
     steps = [Step("kit", kits, (kind, name, n, radius)),
              Step("sapling", saplings, (kind, n, radius)),
              Step("cell", first_cell, (kind, name, size, radius)),
              Step("farm", farm, (kind, name, size, radius))]
-    r = lib.project.run(name, steps)
-    lacks = ", ".join([f"{k} x{v}" for k, v in r.get("lacks", {}).items()])
-    say(f"{name} stopped: {r['reason']} at {r['at']}" + (f", missing {lacks}" if lacks else ""))
-    return r
+    return lib.cellfarm.run(spec(kind, name, radius), name, kind, at, steps, radius)
 
 
 try:

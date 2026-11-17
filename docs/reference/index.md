@@ -182,6 +182,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/cells`](modules/lib/cells.md): `layout(name, origin, size, row=4, gap=1)`, `cell(name, i)`, `built(name)`, `add(name, i)`, `next(name)`, `count(name)`, a grid of farm cells that grows one cell at a time, kept in `memory["cells"]`.
 - [`lib/treefarm`](modules/lib/treefarm.md): `KINDS`, `sapling(kind)`, `materials(kind)`, `build_cell(kind, low, high)`, `grown(kind, low, high)`, `harvest(kind, low, high, radius=32)`, tree cells per kind (a sapling, or a giant spruce or jungle) for a wood farm.
+- [`lib/cellfarm`](modules/lib/cellfarm.md): `run(f, name, key, at, steps, radius=32)`, `farm(f, name, size, radius)`, `build`, `stocked`, `ticking`, `limit`, a self-expanding farm of cells, its cells, depot and rounds, given a spec of hooks.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `RESPAWN`, `DESPAWN`, `walk(a, b)`, `breaking(n, material, tier)`, `death(at, start=None)`.
 - [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(what)`, `hold(kind)`.

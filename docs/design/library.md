@@ -23,7 +23,7 @@ The library is written the Unix way: small functions that each do one thing well
 
 ```text
  jobs/        jobs/bootstrap.py  jobs/get.py  jobs/giant_tree.py  jobs/strip_mine.py  jobs/explore.py  jobs/build.py  jobs/wood_farm.py  jobs/forester.py   run with bot run jobs.<job> [args]
- kits         lib/bootstrap  lib/gather  lib/project  lib/build  lib/depot  lib/treefarm  lib/food  a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end; a storage row that grows; tree cells; eating from chests or get (lazily)
+ kits         lib/bootstrap  lib/gather  lib/project  lib/build  lib/depot  lib/treefarm  lib/cellfarm  lib/food  a set of things a job starts with; make and gather over get; resumable steps; a blueprint end to end; a storage row that grows; tree cells; a self-expanding farm of cells; eating from chests or get (lazily)
  resolver     lib/get          get(item, n), ensure_tool(kind, uses), SOURCES           chests, crafting, gathering, recursively
  skills       lib/trees  lib/dig  lib/craft  lib/stock  lib/tools  lib/inv  lib/shaft  lib/mine  lib/explore  lib/farm  lib/storage  lib/terrain     one skill each, preconditions assumed
  primitives   lib/result  lib/find  lib/borrow  lib/cost  lib/area  lib/cells  lib/retry  lib/home  no ticks, or a single action
@@ -56,6 +56,7 @@ New modules are marked *new*; the others exist and grow.
 - `lib/terrain` (#573): `needs(low, high, y)` the fill and digging it takes, `flatten(low, high, y, fill)` mines above `y` and fills the holes at `y` (air, water or lava, sources first) down to solid ground, over `lib/area`.
 - Existing: `lib/inv`, `lib/shaft`, `lib/mine`.
 - `lib/treefarm` (#605), a kit over `lib/terrain`, `lib/area` and `lib/trees`: `KINDS` a spec per sapling from the game's tree features (cell size, 2x2, the air the tree needs over its floor, a slab roof for oak), `materials(kind)`, `build_cell`, `grown`, `harvest` (`fell_whole` with replant) on a `lib/cells` cell; the wood farm (#606) is built on it.
+- `lib/cellfarm` (#826), a kit over `lib/cells`, `lib/depot`, `lib/project` and `lib/terrain`: the engine of a self-expanding farm (see [Farms](#farms)), its layout, the cells that keep growing round its corner, its growth, its rounds and its move to a new corner, given a spec of hooks (cell size, `build_cell`, `ripe`, `harvest`, `tend`, `materials`, `most`); the wood farm is its tree spec.
 
 ### The resolver: `lib/get`
 
@@ -84,7 +85,7 @@ New modules are marked *new*; the others exist and grow.
 
 ## Farms
 
-A farm is a job that runs until a player stops it, grows itself as it earns its materials, and picks up where it was after a stop, a reload or a death. `jobs/wood_farm.py` (#606, [cookbook](../cookbook/wood-farm.md)) is the first; a later farmer, such as a cobblestone generator or a sugar cane farm, follows the same pattern:
+A farm is a job that runs until a player stops it, grows itself as it earns its materials, and picks up where it was after a stop, a reload or a death. `jobs/wood_farm.py` (#606, [cookbook](../cookbook/wood-farm.md)) is the first; a later farmer, such as a cobblestone generator or a sugar cane farm, follows the same pattern, whose points 1 to 4 `lib/cellfarm` does for it, given a spec of hooks (#826):
 
 1. **Cells** (`lib/cells`): the farm is a grid of identical cells laid out once from an origin; it builds `next` and marks it `add`ed, so what is built survives a rerun. The farm's own kit builds, checks and harvests one cell (`lib/treefarm` for trees).
 2. **Depot** (`lib/depot`): a row of chests by the farm, a category each, that adds a chest as one fills, so the farm never stops on a full chest. The bot keeps what it needs for its cells and stores the rest.

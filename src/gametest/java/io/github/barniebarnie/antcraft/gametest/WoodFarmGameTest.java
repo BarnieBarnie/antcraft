@@ -229,8 +229,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    print("wait", count(kind), count("stick"), count("apple"))
 			    if waits[0] == 3:
 			        stop()
-			jobs.wood_farm.wait = counted
-			jobs.wood_farm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
+			lib.cellfarm.wait = counted
+			lib.cellfarm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
 			lib.depot.store = lambda name, keep, radius: lib.result.result()  # no depot: a farm with no store
 			lib.cells.layout("birch_farm", cell[0], (5, 5))
 			lib.cells.add("birch_farm", 0)
@@ -265,8 +265,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			def counted(ticks):
 			    print("wait", count(kind), count("dirt"))
 			    stop()
-			jobs.wood_farm.wait = counted
-			jobs.wood_farm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
+			lib.cellfarm.wait = counted
+			lib.cellfarm.stocked = lambda k, r: lib.result.result("no_item", None, {"minecraft:torch": 2})
 			lib.depot.store = lambda name, keep, radius: lib.result.result()  # no depot: a farm with no store
 			lib.cells.layout("birch_farm", cell[0], (5, 5))
 			lib.cells.add("birch_farm", 0)
@@ -314,7 +314,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    tree[0] = False
 			    return lib.result.result()
 			jobs.wood_farm.gets = failing
-			jobs.wood_farm.wait = counted
+			lib.cellfarm.wait = counted
 			jobs.wood_farm.reap = reaped
 			lib.treefarm.grown = lambda k, low, high: tree[0]
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
@@ -350,7 +350,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    if waits[0] == 3:
 			        print("waits", waits[0])
 			        stop()
-			jobs.wood_farm.wait = counted
+			lib.cellfarm.wait = counted
 			# A grown tree each round that is not felled, so the round waits.
 			jobs.wood_farm.reap = lambda k, b, radius, told: lib.result.result("no_tool")
 			lib.treefarm.grown = lambda k, low, high: True
@@ -392,7 +392,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			        print("waits", waits[0])
 			        stop()
 			lib.depot.depot("birch_farm", Pos(%d, %d, %d), "east", jobs.wood_farm.CATEGORIES)
-			jobs.wood_farm.wait = counted
+			lib.cellfarm.wait = counted
 			lib.depot.add_chest = lambda name, cat, radius: lib.result.result("blocked")
 			lib.cells.built = lambda name: [0]
 			lib.cells.cell = lambda name, i: cell
@@ -436,7 +436,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    print(len(h), jobs.wood_farm.harvest(kind) > jobs.wood_farm.GROWTH)
 			    stop()
 			jobs.wood_farm.reap = reaped
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.grown = lambda k, low, high: tree[0]
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
@@ -478,7 +478,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    print(count("minecraft:dirt"))
 			    stop()
 			jobs.wood_farm.reap = reaped
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.grown = lambda k, low, high: tree[0]
 			lib.cells.built = lambda name: [0]
@@ -541,7 +541,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			def waited(ticks):
 			    print(count("minecraft:dirt"))
 			    stop()
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.grown = lambda k, low, high: False
 			lib.cells.built = lambda name: [0]
@@ -586,7 +586,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    stop()
 			w.free = lambda k: 9
 			w.reap = reaped
-			w.wait = waited
+			lib.cellfarm.wait = waited
 			w.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.depot.make_room = roomed
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
@@ -644,7 +644,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    if rounds[0] > 1:
 			        stop()
 			    memory["wood_ticks"] = {kind: [1000, 1000, 1000]}
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.grown = lambda k, low, high: False
@@ -782,15 +782,15 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    if waits[0] == %d:
 			        print(lib.cells.built("birch_farm"))
 			        stop()
-			jobs.wood_farm.wait = waited
-			jobs.wood_farm.visit = lambda k, b: None
+			lib.cellfarm.wait = waited
+			lib.cellfarm.visit = lambda k, b: None
 			jobs.wood_farm.unplanted = lambda k, b: []
 			jobs.wood_farm.tend = lambda k, b, radius, told: None
 			jobs.wood_farm.stored_bone_meal = lambda k, name, boxes, radius: None
 			jobs.wood_farm.compost = lambda k, name, boxes, radius: lib.result.result()
 			jobs.wood_farm.sweep = lambda k, boxes: None
-			jobs.wood_farm.corner = lambda name: None
-			jobs.wood_farm.stocked = lambda k, radius: lib.result.result()
+			lib.cellfarm.corner = lambda name: None
+			lib.cellfarm.stocked = lambda k, radius: lib.result.result()
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result()
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.terrain.needs = lambda low, high, y: {"tools": {}}
@@ -891,7 +891,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    if waits[0] == 2:
 			        print(count("minecraft:bone_meal"))
 			        stop()
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.grown = lambda k, low, high: False
@@ -943,8 +943,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    else:
 			        print(block(Pos(%d, %d, %d)).id)
 			        stop()
-			jobs.wood_farm.wait = waited
-			jobs.wood_farm.visit = lambda k, b: None  # not 30000 blocks off: #811's test walks to a far cell
+			lib.cellfarm.wait = waited
+			lib.cellfarm.visit = lambda k, b: None  # not 30000 blocks off: #811's test walks to a far cell
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.cells.built = lambda name: [0, 1]
@@ -987,7 +987,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    waits[0] += 1
 			    if waits[0] == 3:
 			        stop()
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.loaded = lambda k, low, high: pos().distance(low) <= 6
@@ -1030,11 +1030,11 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    waits[0] += 1
 			    if waits[0] == 3:
 			        stop()
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.tend = tend
 			jobs.wood_farm.unplanted = lambda k, b: []
 			jobs.wood_farm.sweep = lambda k, boxes: None
-			jobs.wood_farm.corner = lambda name: goto(cell[0] + (1, 1, 1))
+			lib.cellfarm.corner = lambda name: goto(cell[0] + (1, 1, 1))
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.treefarm.grown = lambda k, low, high: False
@@ -1065,7 +1065,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    p = pos()
 			    print(p.x // 16 == cell[0].x // 16 and p.z // 16 == cell[0].z // 16)
 			    stop()
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.treefarm.grown = lambda k, low, high: False
@@ -1112,7 +1112,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    if waits[0] == %d:
 			        print(count(kind))
 			        stop()
-			jobs.wood_farm.wait = waited
+			lib.cellfarm.wait = waited
 			jobs.wood_farm.sweep = lambda k, boxes: None
 			jobs.wood_farm.gets = lambda item, n, radius: lib.result.result("no_item", None, {item: n})
 			lib.treefarm.grown = lambda k, low, high: False
@@ -1731,15 +1731,15 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			    if ticks == jobs.wood_farm.WAIT:
 			        print(lib.cells.built("birch_farm"), count("minecraft:dirt"))
 			        stop()
-			jobs.wood_farm.wait = waited
-			jobs.wood_farm.ticking = lambda k, name: [0, 2]
-			jobs.wood_farm.visit = lambda k, b: None
+			lib.cellfarm.wait = waited
+			lib.cellfarm.ticking = lambda k, name: [0, 2]
+			lib.cellfarm.visit = lambda k, b: None
 			jobs.wood_farm.unplanted = lambda k, b: []
 			jobs.wood_farm.tend = lambda k, b, radius, told: None
 			jobs.wood_farm.stored_bone_meal = lambda k, name, boxes, radius: None
 			jobs.wood_farm.compost = lambda k, name, boxes, radius: lib.result.result()
 			jobs.wood_farm.sweep = lambda k, boxes: None
-			jobs.wood_farm.stocked = lambda k, radius: jobs.wood_farm.gets("minecraft:dirt", 1, 32)
+			lib.cellfarm.stocked = lambda k, radius: jobs.wood_farm.gets("minecraft:dirt", 1, 32)
 			lib.depot.store = lambda name, keep, radius: lib.result.result()
 			lib.terrain.needs = lambda low, high, y: {"tools": {}}
 			lib.treefarm.build_cell = lambda k, low, high: lib.result.result()
@@ -2184,7 +2184,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 		BlockPos l = helper.absolutePos(new BlockPos(6, 0, 2));
 		BlockPos h = helper.absolutePos(new BlockPos(10, 0, 6));
 		BlockPos s = helper.absolutePos(SPOT);
-		BotScripts.run(bot, "import jobs.wood_farm\nkind = 'minecraft:birch_sapling'\ncell = (Pos(" + l.getX() + ", " + l.getY() + ", "
+		BotScripts.run(bot, "import jobs.wood_farm\nimport lib.cellfarm\nkind = 'minecraft:birch_sapling'\ncell = (Pos(" + l.getX() + ", " + l.getY() + ", "
 			+ l.getZ() + "), Pos(" + h.getX() + ", " + h.getY() + ", " + h.getZ() + "))\nspot = Pos(" + s.getX() + ", " + s.getY()
 			+ ", " + s.getZ() + ")\n" + body);
 		BotScripts.failOnError(helper, bot);

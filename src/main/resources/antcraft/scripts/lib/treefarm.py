@@ -135,20 +135,6 @@ def loaded(kind, low, high):
     return all([block(p) is not None for p in spots(kind, low, high) + torches(low, high)])
 
 
-# The chunks round a bot's own that get random ticks, so grow saplings (#812): a bot's ticket (BotChunks, radius 3) gives
-# its chunk simulation level 30, one more a chunk out, and in 26.3 ServerChunkCache.tickChunks random-ticks only the
-# chunks at entity-ticking level (31 or less, ChunkMap.forEachBlockTickingChunk), so the bot's chunk and the ring round it.
-TICKING = 1
-
-
-def ticking(kind, corner, low, high):
-    """Whether the cell's sapling spots all lie in the chunks that get random ticks while a bot stands at corner: its
-    chunk and those within TICKING of it (#812)."""
-    corner = Pos(corner)
-    return all([abs(p.x // 16 - corner.x // 16) <= TICKING and abs(p.z // 16 - corner.z // 16) <= TICKING
-                for p in spots(kind, low, high)])
-
-
 def materials(kind):
     """The items one cell of kind takes, item to count: dirt under each sapling, the saplings, torches, roof slabs and,
     for a roof, clear more dirt to pillar up to it with, which build_cell takes back. The fill to level the cell depends
