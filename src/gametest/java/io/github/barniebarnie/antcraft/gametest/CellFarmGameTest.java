@@ -81,4 +81,40 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 				"no hay in the depot; said " + BotScripts.log(bot, Output.Level.PRINT));
 		});
 	}
+	/**
+	 * A round whose chores harvest but whose cells give nothing, as a giant wood farm's that fells only the small farms'
+	 * trees: learn is not called with no harvest of its own (#838), here a learn that divides by n.
+	 */
+	// Measured: passes at tick 21 (red: division by zero on tick 12).
+	@GameTest(maxTicks = 60)
+	public void aRoundOfOnlyChoresLearnsNothing(GameTestHelper helper) {
+		helper.setBlock(6, 1, 6, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(6, 1, 6), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.TORCH, 3));
+		chest.setItem(1, new ItemStack(Items.CHEST));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			from lib.project import Step
+			from lib.result import result
+			T = "minecraft:torch"
+			def build_cell(low, high):
+			    r = place(low.up(), T)
+			    return result() if r else result(r.reason, low.up())
+			def chores(keep, told):
+			    say("chores")
+			    return 1, False
+			f = {"size": (1, 1), "categories": {"torch": [T]}, "corners": "test_farms", "keep": [T],
+			     "materials": lambda: {T: 1}, "build_cell": build_cell, "ripe": lambda low, high: False,
+			     "harvest": lambda low, high, told: result(), "tend": lambda boxes, told: None, "most": lambda: 1,
+			     "chores": chores, "learn": lambda ticks, n: say(f"learnt {ticks // n}")}
+			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			String said = String.join("\n", BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertTrue(said.split("chores", -1).length > 3, "not three rounds; said " + said);
+		});
+	}
 }

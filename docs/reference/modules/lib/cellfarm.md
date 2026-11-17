@@ -64,7 +64,7 @@ Optional:
 | `stock(boxes)` | none | gets what tending `boxes` takes, after the harvest and store |
 | `chores(keep, told)` | none | harvests before the round's own, such as cells of another farm; gives `(harvests, whether the bot is too full)` |
 | `switch()` | none | a farm to go on with instead: its result, which `farm` gives, or `None` |
-| `learn(ticks, n)` | none | `n` harvests of a round took `ticks` game ticks |
+| `learn(ticks, n)` | none | `n` harvests of a round took `ticks` game ticks; not called where the round's own harvests are none, only `chores`' |
 | `full(boxes, told)` | none | what a full farm does each round |
 | `idle(boxes)` | none | what a round that harvested nothing does before the bot walks to its corner and waits |
 

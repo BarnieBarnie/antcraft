@@ -17,7 +17,7 @@
 #   get random ticks ([low, high]), loaded(low, high): whether the bot can read the cell (both corners loaded),
 #   room(): empty slots a harvest wants (1), stock(boxes): gets what tending them takes, before the bot walks back to a
 #   cell it visits, chores(keep, told): harvests before the round's, giving (harvests, whether the bot is full),
-#   switch(): a farm to go on with instead, its result, or None, learn(ticks, n): n harvests took ticks, full(boxes,
+#   switch(): a farm to go on with instead, its result, or None, learn(ticks, n): n (> 0) harvests took ticks, full(boxes,
 #   told): what a full farm does each round, idle(boxes): what a round that harvested nothing does before its wait.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
@@ -254,7 +254,7 @@ def farm(f, name, size, radius):
             if r is not None:
                 return r
         if harvested:
-            if "learn" in f:
+            if n and "learn" in f:  # not where only the chores harvested: no harvest of its own to learn from (#838)
                 f["learn"](ticks, n)
             backoff = 0
         most_cells = limit(f, name, size)
