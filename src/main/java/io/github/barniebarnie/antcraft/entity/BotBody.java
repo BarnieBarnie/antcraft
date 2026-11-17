@@ -107,7 +107,12 @@ final class BotBody implements MoveApi.Body {
 
 	@Override
 	public void startReach(Pos target, double reach) {
-		this.follower.start(new Goal.InSight(blockPos(target), reach, this.sight));
+		BlockPos pos = blockPos(target);
+		Goal goal = new Goal.InSight(pos, reach, this.sight);
+		// A block in water or under it, such as kelp or the floor of a pool, may be worked swimming at the surface where no
+		// dry spot is in reach (#840). Only there: an afloat goal searches without breaking first (PathFinder.Search).
+		boolean wet = this.level().getFluidState(pos).is(FluidTags.WATER) || this.level().getFluidState(pos.above()).is(FluidTags.WATER);
+		this.follower.start(wet ? new Goal.Afloat(goal) : goal);
 	}
 
 	@Override

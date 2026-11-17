@@ -18,7 +18,8 @@ import net.minecraft.world.level.block.entity.ChestBlockEntity;
 /**
  * {@code jobs/kelp_farm.py} (#835; docs/cookbook/kelp-farm.md): a kelp farm in a pool of water. Each test's ground is
  * stone up to y 2, the bot walking at y 3; the pool is dug into it, two deep, water at y 1 and 2 over the floor x 2 to 4,
- * z 3 to 4, the six blocks kelp stands on. The depot's first chest is at (2, 3, 1), north of the pool.
+ * z 3 to 4, the six blocks kelp stands on. The depot's first chest is at (2, 3, 1), north of the pool. A pool 3 deep
+ * (#840) has its ground, water and depot a block higher.
  */
 public class KelpFarmGameTest implements CustomTestMethodInvoker {
 	@Override
@@ -30,19 +31,23 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 
 	/** The pool, a supply chest of six kelp and a chest for the depot, the bot by it, and jobs.kelp_farm run over the pool. */
 	private static AntBot farm(GameTestHelper helper) {
+		return farm(helper, 2);
+	}
+
+	private static AntBot farm(GameTestHelper helper, int depth) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				boolean pool = x >= 2 && x <= 4 && z >= 3 && z <= 4;
-				for (int y = 1; y <= 2; y++) {
+				for (int y = 1; y <= depth; y++) {
 					helper.setBlock(x, y, z, pool ? Blocks.WATER : Blocks.STONE);
 				}
 			}
 		}
-		helper.setBlock(6, 3, 6, Blocks.CHEST);
-		Container chest = helper.getBlockEntity(new BlockPos(6, 3, 6), ChestBlockEntity.class);
+		helper.setBlock(6, depth + 1, 6, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(6, depth + 1, 6), ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.KELP, 6));
 		chest.setItem(1, new ItemStack(Items.CHEST));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, 3, 6);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 5, depth + 1, 6);
 		BlockPos low = helper.absolutePos(new BlockPos(2, 0, 3));
 		BlockPos high = helper.absolutePos(new BlockPos(4, 0, 4));
 		BotScripts.run(bot, """
@@ -101,6 +106,38 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertBlockPresent(Blocks.CHEST, 2, 3, 1);
 			int stored = helper.getBlockEntity(new BlockPos(2, 3, 1), ChestBlockEntity.class).countItem(Items.KELP);
 			helper.assertTrue(stored >= 2, "kelp in the depot " + stored + " of the 2 cut; " + said(bot));
+		});
+	}
+
+	/**
+	 * In a pool 3 deep, whose floor is out of reach from the rim, kelp is planted from the surface, and kelp grown up to the
+	 * surface is cut down to its bottom block and stored (#840).
+	 */
+	// Measured: passes at tick 141 (red: no depot chest at (2, 4, 1), at the rim of a pool two deep).
+	@GameTest(maxTicks = 300)
+	public void aPoolThreeDeepIsPlantedAndCutFromTheSurface(GameTestHelper helper) {
+		AntBot bot = farm(helper, 3);
+		boolean[] grown = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!grown[0] && planted(helper)) {
+				for (int x : new int[] {2, 4}) {
+					helper.setBlock(x, 1, 3, Blocks.KELP_PLANT);
+					helper.setBlock(x, 2, 3, Blocks.KELP_PLANT);
+					helper.setBlock(x, 3, 3, Blocks.KELP);
+				}
+				grown[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grown[0], "not planted; " + said(bot));
+			for (int x : new int[] {2, 4}) {
+				helper.assertTrue(helper.getBlockState(new BlockPos(x, 1, 3)).is(Blocks.KELP), "bottom block at " + x + " gone");
+				helper.assertBlockPresent(Blocks.WATER, x, 2, 3);
+				helper.assertBlockPresent(Blocks.WATER, x, 3, 3);
+			}
+			helper.assertBlockPresent(Blocks.CHEST, 2, 4, 1);
+			int stored = helper.getBlockEntity(new BlockPos(2, 4, 1), ChestBlockEntity.class).countItem(Items.KELP);
+			helper.assertTrue(stored >= 4, "kelp in the depot " + stored + " of the 4 cut; " + said(bot));
 		});
 	}
 }

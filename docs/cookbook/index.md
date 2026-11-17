@@ -25,7 +25,7 @@ Recipes: complete scripts that combine builtins into useful bots, each with how 
 - [Grow a nether wart farm](wart-farm.md): `jobs.wart_farm` plants cells of three wart on soul sand on `lib/cellfarm`, harvests and replants the ripe wart, stores the rest and builds a new cell from it and stored soul sand.
 - [Grow a mushroom farm](mushroom-farm.md): `jobs.mushroom_farm` plants a brown and a red mushroom on cells of three podzol on `lib/cellfarm`, harvests what they spread onto, stores it and builds a new cell from it and stored podzol.
 - [Grow a sweet berry farm](berry-farm.md): `jobs.berry_farm` plants cells of three sweet berry bushes on dirt on `lib/cellfarm`, picks the ripe bushes without breaking them, stores the berries and plants a new cell from them, its paths never entering a bush.
-- [Farm kelp](kelp-farm.md): `jobs.kelp_farm` plants kelp on the floor of a pool two deep, cuts it to its bottom block from the rim and stores it.
+- [Farm kelp](kelp-farm.md): `jobs.kelp_farm` plants kelp on the floor of a pool two deep or more, cuts it to its bottom block from the rim or, where that is out of reach, from the surface of the water, and stores it.
 - [Keep a ranch](ranch.md): `jobs.ranch` lures cows, sheep, pigs and chickens into a fenced pen and breeds them with their food, kills the adults over a cap but never a baby, shears the sheep, milks the cows and stores the meat, leather, wool, eggs and milk.
 - [Guard home](guard.md): `jobs.guard` fights the hostile mobs near home with `attack`, and when hurt walks home, eats with `lib/food` and heals before it fights again.
 

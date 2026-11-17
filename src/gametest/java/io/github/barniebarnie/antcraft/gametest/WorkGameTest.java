@@ -518,6 +518,45 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		}
 	}
 
+	// afloat (#840)
+
+	/**
+	 * A pool 3 deep, 5 by 5, in stone up to y 3: water at y 1 to 3 over the floor x 2 to 6, z 2 to 6. The bot stands at
+	 * (0, 4, 0), on the rim; the middle of the pool's bottom is out of reach (4 from the eyes) from every block of the rim.
+	 */
+	private static AntBot pool(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				boolean pool = x >= 2 && x <= 6 && z >= 2 && z <= 6;
+				for (int y = 1; y <= 3; y++) {
+					helper.setBlock(x, y, z, pool ? Blocks.WATER : Blocks.STONE);
+				}
+			}
+		}
+		return helper.spawn(ModEntities.ANT_BOT, 0, 4, 0);
+	}
+
+	/** {@code place} on the floor of the middle of a pool 3 deep swims out and places from the surface. */
+	// Measured: passes at tick 32 (red: out_of_reach).
+	@GameTest(maxTicks = 70)
+	public void placeOnTheFloorOfADeepPoolFromTheSurface(GameTestHelper helper) {
+		AntBot bot = pool(helper);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT));
+		expect(helper, bot, "r = place(" + at(helper, 4, 1, 4) + ", 'dirt')\nprint(r.ok, r.reason)\n", List.of("True None"),
+			() -> helper.assertBlockPresent(Blocks.DIRT, 4, 1, 4));
+	}
+
+	/** {@code mine} of kelp in the middle of a pool 3 deep swims out and cuts it from the surface. */
+	// Measured: passes at tick 27 (red: out_of_reach).
+	@GameTest(maxTicks = 70)
+	public void mineKelpInADeepPoolFromTheSurface(GameTestHelper helper) {
+		AntBot bot = pool(helper);
+		helper.setBlock(4, 1, 4, Blocks.KELP_PLANT);
+		helper.setBlock(4, 2, 4, Blocks.KELP);
+		expect(helper, bot, "r = mine(" + at(helper, 4, 2, 4) + ")\nprint(r.ok, r.reason, count('kelp'))\n", List.of("True None 1"),
+			() -> helper.assertBlockPresent(Blocks.WATER, 4, 2, 4));
+	}
+
 	// place
 
 	@GameTest(maxTicks = 60)

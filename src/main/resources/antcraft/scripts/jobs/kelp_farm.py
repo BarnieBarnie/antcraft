@@ -1,11 +1,10 @@
 # A job: farms kelp in a pool of water until a player stops it, for dried kelp (food) and dried kelp blocks (fuel). Run
 # it as /antcraft bot run jobs.kelp_farm [x1 y1 z1 x2 y2 z2 [radius]]: the corners of the pool's floor, the blocks kelp
 # stands on (by default those of the last run), and how far to look for kelp to plant (32 by default). The pool is one
-# already there, two deep: the bot works it from its rim, as a path never ends afloat and the reach of place and mine
-# (4 from the eyes) gets to the floor of a pool no deeper (docs/cookbook/kelp-farm.md). Each round it plants kelp on
-# each floor block under water that lacks it, cuts the kelp two high at its second block, so the bottom block grows
-# again, and stores the kelp mined in a depot north of the pool. Another job farms a pool with run(low, high); imported,
-# this runs nothing.
+# already there, two deep or more: the bot works it from its rim where the reach of place and mine (4 from the eyes) gets
+# there, else swimming at the surface (#840; docs/cookbook/kelp-farm.md). Each round it plants kelp on each floor block
+# under water that lacks it, cuts the kelp two high or more down to its bottom block, so it grows again, and stores the
+# kelp mined in a depot north of the pool. Another job farms a pool with run(low, high); imported, this runs nothing.
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -40,15 +39,26 @@ def plant(low, high, radius=32):
     return n
 
 
+def surface(low):
+    """The height of the pool's rim: the first block over the floor at low that holds neither water nor kelp."""
+    y = low.y + 1
+    while block(Pos(low.x, y, low.z)).id in [WATER] + STALK:
+        y += 1
+    return y
+
+
 def harvest(low, high):
-    """Mines each kelp at its spot's second block, so the bottom block stays and grows again; the kelp goes straight
-    into the inventory. Gives how many it cut."""
-    # ponytail: no pick_up, as in a pool two deep nothing stands over the second block to float up.
+    """Mines each kelp from its top down to its spot's second block, so the bottom block stays and grows again; the kelp
+    goes straight into the inventory, none left to float up. Gives how many stalks it cut."""
+    top = surface(low)
     n = 0
     for s in spots(low, high):
-        p = s.up(2)
-        if block(p).id in STALK and mine(p):
-            n += 1
+        cut = False
+        for y in range(top - 1, s.y + 1, -1):
+            p = Pos(s.x, y, s.z)
+            if block(p).id in STALK and mine(p):
+                cut = True
+        n += 1 if cut else 0
     return n
 
 
@@ -61,8 +71,8 @@ def run(low=None, high=None, radius=32):
         return
     memory[NAME] = box
     low, high = box
-    # At the rim, over the two blocks of water, two north of the pool.
-    lib.depot.depot(NAME, Pos(min(low.x, high.x), low.y + 3, min(low.z, high.z) - 2), "east", {"kelp": [KELP]})
+    # At the rim, over the water, two north of the pool.
+    lib.depot.depot(NAME, Pos(min(low.x, high.x), surface(low), min(low.z, high.z) - 2), "east", {"kelp": [KELP]})
     told = False
     while True:
         lib.food.upkeep(radius)

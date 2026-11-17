@@ -992,6 +992,18 @@ class PathFinderTest {
 	}
 
 	@Test
+	void anAfloatGoalInReachFromTheBankEndsOnTheBank() {
+		// A pool 5 wide and 13 long: a block by its west bank is in reach from that bank, a walk of 20 blocks round the pool,
+		// and from the water a swim of two blocks out from the east bank, the cheaper way.
+		GridWorld world = new GridWorld().fill(-10, -2, -10, 10, 1, 10, '#').fill(-2, 0, -6, 2, 1, 6, 'W').forbidAllPlacing();
+		Goal.Reach floor = new Goal.Reach(new BlockPos(-2, 0, 0), 4.0);
+		Path path = PathFinder.find(world, new BlockPos(3, 2, 0), new Goal.Afloat(floor), new PathFinder.Options(false, false, 10_000, 3));
+
+		assertTrue(path.complete(), "no way to it: " + path.steps());
+		assertFalse(world.isWater(path.end()), "ended afloat: " + path.steps());
+	}
+
+	@Test
 	void anAfloatGoalSwimsOutRatherThanDigIntoTheBank() {
 		// Out of reach from the dirt bank, but not from a spot dug down into it, a block from the water.
 		GridWorld world = new GridWorld().fill(-10, -3, -10, 10, 1, 10, 'D').fill(-2, -1, -2, 2, 1, 2, 'W').forbidAllPlacing();

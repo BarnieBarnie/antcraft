@@ -21,7 +21,7 @@ A [`Result`](../types/result.md), ok once the block is placed.
 
 ## Pauses
 
-Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the spot within 4 blocks of its eyes, and places the block in the tick it gets there.
+Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the spot within 4 blocks of its eyes, on dry ground where it can, else, for a spot in water or under it, swimming at the surface (#840), and places the block in the tick it gets there.
 
 ## Cost
 

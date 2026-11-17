@@ -66,6 +66,13 @@ public final class PathFinder {
 	// ponytail: a flat guess of what a brush costs, some 4 blocks of walk; cost it by the hurt (Death) if bots still brush cacti.
 	public static final double PRICKLY_COST = 20.0;
 
+	/**
+	 * Ending a path afloat rather than on land, for a goal that {@link Goal#mayEndAfloat may}: a path ends on land where
+	 * one does for as much again as two blocks of swimming (#840), so a bot works a pool from its bank where it can.
+	 */
+	// ponytail: a flat guess; a strict land-first search costs a whole failed search where no land end is near.
+	public static final double AFLOAT_END_COST = 2 * SWIM_COST;
+
 	private static final double BLOCKED = Double.POSITIVE_INFINITY;
 
 	/**
@@ -164,9 +171,10 @@ public final class PathFinder {
 	}
 
 	/** An open node, its cost kept beside it so the queue's order reads no node (see {@link #compareTo}). */
-	private record Entry(Node node, double priority, double cost, long seq) implements Comparable<Entry> {
+	/** {@code end}: the node ends the path afloat, queued at its cost and {@link #AFLOAT_END_COST}. */
+	private record Entry(Node node, double priority, double cost, long seq, boolean end) implements Comparable<Entry> {
 		Entry(Node node, double priority, long seq) {
-			this(node, priority, node.cost(), seq);
+			this(node, priority, node.cost(), seq, false);
 		}
 
 		/**
@@ -332,17 +340,25 @@ public final class PathFinder {
 				if (this.expanded > first && (this.expanded - first) % CHECK_EVERY == 0 && stop.getAsBoolean()) {
 					return null;
 				}
-				Node node = this.open.poll().node;
+				Entry entry = this.open.poll();
+				Node node = entry.node;
 				if (node.cost > this.bestCost.getOrDefault(node.pos, BLOCKED) && !this.least(node.pos, node.cost, node.placed, false)) {
 					continue; // stale queue entry
+				}
+				if (entry.end) {
+					return toPath(this.start, node, true, this.expanded);
 				}
 				this.planner.node = node;
 				boolean inWater = this.world.isWater(node.pos);
 				// Afloat in water whose cover the path broke, such as a pond under a lid it dug into, counts as at the surface.
 				boolean afloat = this.planner.swimmable(node.pos) || inWater && brokenOnTheWay(node, node.pos.above());
-				if ((!inWater && !this.planner.hanging(node.pos) || this.goal.mayEndAfloat() && afloat)
-						&& this.goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
-					return toPath(this.start, node, true, this.expanded);
+				boolean dry = !inWater && !this.planner.hanging(node.pos);
+				if ((dry || this.goal.mayEndAfloat() && afloat) && this.goal.isReached(node.pos, pos -> brokenOnTheWay(node, pos))) {
+					if (dry) {
+						return toPath(this.start, node, true, this.expanded);
+					}
+					// Afloat: ends here once nothing cheaper than this end and its cost is left, such as an end on land.
+					this.open.add(new Entry(node, node.cost + AFLOAT_END_COST, node.cost, this.added++, true));
 				}
 				this.expanded++;
 

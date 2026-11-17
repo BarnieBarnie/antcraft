@@ -19,7 +19,7 @@ A [`Result`](../types/result.md), ok once the block is broken.
 
 ## Pauses
 
-Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the block within 4 blocks of its eyes, then digs as long as the block takes to break with the tool.
+Yes: it walks, as [`goto`](../movement/goto.md) does, to where the bot sees the block within 4 blocks of its eyes, on dry ground where it can, else, for a block in water or under it, swimming at the surface (#840), then digs as long as the block takes to break with the tool.
 
 ## Cost
 
