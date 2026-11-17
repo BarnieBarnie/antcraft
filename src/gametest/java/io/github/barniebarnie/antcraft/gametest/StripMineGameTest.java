@@ -172,7 +172,7 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 		List<String> log = BotScripts.log(bot, Output.Level.PRINT);
 		helper.assertTrue(log.equals(List.of("strip mined " + n + " coal")), "printed " + log);
 		helper.assertTrue(run != null && run.state() == ScriptRun.State.FINISHED, "the job " + (run == null ? null : run.state()));
-		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(start)), "the bot is at " + helper.relativePos(bot.blockPosition()));
+		helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(start)), "the bot is at " + TestPositions.relative(helper, bot.blockPosition()));
 		helper.assertTrue(GameTests.carried(bot, Items.COAL) == n, "carries " + GameTests.carried(bot, Items.COAL) + " coal");
 	}
 

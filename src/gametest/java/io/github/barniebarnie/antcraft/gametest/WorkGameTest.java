@@ -823,7 +823,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 5.85));
 		helper.onEachTick(() -> {
 			if (bot.getLastDamageSource() != null && bot.getLastDamageSource().is(DamageTypes.SWEET_BERRY_BUSH)) {
-				helper.fail("the bush hurt the bot at " + helper.relativePos(bot.blockPosition()));
+				helper.fail("the bush hurt the bot at " + TestPositions.relative(helper, bot.blockPosition()));
 			}
 		});
 		expect(helper, bot, "r = pick_up('sweet_berries', radius=3)\nprint(r.ok, r.value, count('sweet_berries'))\n", List.of("True 1 1"));

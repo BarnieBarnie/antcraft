@@ -54,7 +54,7 @@ public class BerryFarmGameTest implements CustomTestMethodInvoker {
 			DamageSource hurt = bot.getLastDamageSource();
 			if (hurt != null && hurt.is(DamageTypes.SWEET_BERRY_BUSH)) {
 				// Where the bot stood, not just its block, and the call it ran: which step took it into the bush (#845).
-				helper.fail("a sweet berry bush hurt the bot at " + helper.relativeVec(bot.position()) + ", running " + run.action()
+				helper.fail("a sweet berry bush hurt the bot at " + TestPositions.relative(helper, bot.position()) + ", running " + run.action()
 					+ " on line " + run.line());
 			}
 		});

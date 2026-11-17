@@ -58,7 +58,7 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 			DamageSource hurt = bot.getLastDamageSource();
 			if (hurt != null && hurt.is(DamageTypes.CACTUS)) {
 				// Where the bot stood in the test, not just its block, and the call it ran: which step touched the cactus (#846).
-				helper.fail("a cactus hurt the bot at " + helper.relativeVec(bot.position()) + ", running " + run.action()
+				helper.fail("a cactus hurt the bot at " + TestPositions.relative(helper, bot.position()) + ", running " + run.action()
 					+ " on line " + run.line());
 			}
 		});
@@ -184,12 +184,12 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(said(bot, "waits"), "said " + BotScripts.log(bot, Output.Level.PRINT));
 			BlockPos feet = bot.blockPosition();
 			helper.assertTrue(feet.getX() >> 4 == at.getX() >> 4 && feet.getZ() >> 4 == at.getZ() >> 4,
-				"the bot at " + helper.relativeVec(bot.position()) + ", not in the corner's chunk");
+				"the bot at " + TestPositions.relative(helper, bot.position()) + ", not in the corner's chunk");
 			helper.assertTrue(Math.abs(feet.getX() - at.getX()) <= 1 && Math.abs(feet.getZ() - at.getZ()) <= 1,
-				"the bot at " + helper.relativeVec(bot.position()) + ", not by the corner " + low);
+				"the bot at " + TestPositions.relative(helper, bot.position()) + ", not by the corner " + low);
 			for (Direction dir : Direction.Plane.HORIZONTAL) {
 				helper.assertFalse(bot.level().getBlockState(feet.relative(dir)).is(Blocks.CACTUS),
-					"the bot at " + helper.relativeVec(bot.position()) + ", beside a cactus");
+					"the bot at " + TestPositions.relative(helper, bot.position()) + ", beside a cactus");
 			}
 			helper.assertBlockPresent(Blocks.CACTUS, low.above());
 			helper.assertBlockPresent(Blocks.CACTUS, high.above());

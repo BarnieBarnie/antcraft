@@ -837,7 +837,7 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	// that climbed.
 	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 10000)
 	public void aSeed37GiantJungleIsFelledWholeByABotThatDiesUpIt(GameTestHelper helper) {
-		fellsTheSeed37GiantJungle(helper, bot -> helper.relativePos(bot.blockPosition()).getY() >= 4);
+		fellsTheSeed37GiantJungle(helper, bot -> TestPositions.relative(helper, bot.blockPosition()).getY() >= 4);
 	}
 
 	/**
@@ -875,8 +875,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 				return;
 			}
 			fetched[0] |= now.getInventory().countItem(Items.DIRT) >= 20;
-			if (!fetched[0] && helper.relativePos(now.blockPosition()).getY() > 2) {
-				helper.fail("walked up to " + helper.relativePos(now.blockPosition()).toShortString() + " before it fetched its dirt");
+			if (!fetched[0] && TestPositions.relative(helper, now.blockPosition()).getY() > 2) {
+				helper.fail("walked up to " + TestPositions.relative(helper, now.blockPosition()).toShortString() + " before it fetched its dirt");
 			}
 		});
 		helper.succeedWhen(() -> {

@@ -315,7 +315,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 				ServerLevel level = helper.getLevel();
 				helper.assertTrue(p.getY() == at.getY() && p.distManhattan(at) == 1 && level.getBlockState(p).isAir()
 						&& level.getBlockState(p.above()).isAir(),
-					"respawned at " + helper.relativePos(p).toShortString() + ", not standing free beside the core at " + core.toShortString());
+					"respawned at " + TestPositions.relative(helper, p).toShortString() + ", not standing free beside the core at " + core.toShortString());
 			}
 		});
 		return () -> {
@@ -969,7 +969,7 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 		helper.setBlock(1, 2, 6, Blocks.STONE);
 		runDefault(helper, lumberjack, "colony.lumberjack");
 		failOnWarning(helper, lumberjack);
-		Runnable recovered = killedOnce(helper, lumberjack, new BlockPos(1, 1, 6), b -> helper.relativePos(b.blockPosition()).getY() >= 2);
+		Runnable recovered = killedOnce(helper, lumberjack, new BlockPos(1, 1, 6), b -> TestPositions.relative(helper, b.blockPosition()).getY() >= 2);
 		helper.succeedWhen(() -> {
 			recovered.run();
 			for (int x = 0; x < 8; x++) {

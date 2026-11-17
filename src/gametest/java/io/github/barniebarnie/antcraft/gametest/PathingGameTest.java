@@ -228,7 +228,7 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 
 		helper.onEachTick(() -> {
 			if (bot.getLastDamageSource() != null) {
-				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + helper.relativeVec(bot.position()));
+				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + TestPositions.relative(helper, bot.position()));
 			}
 		});
 		succeedWhenAt(helper, bot, new BlockPos(1, 1, 2));
@@ -259,12 +259,12 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 				pushed[0] = true;
 			}
 			if (bot.getLastDamageSource() != null) {
-				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + helper.relativeVec(bot.position()));
+				helper.fail("hurt by " + bot.getLastDamageSource().getMsgId() + " at " + TestPositions.relative(helper, bot.position()));
 			}
 		});
 		helper.succeedWhen(() -> {
-			helper.assertTrue(pushed[0] && !run.walking(), "still walking, at " + helper.relativeVec(bot.position()));
-			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(new BlockPos(3, 1, 2))), "stopped at " + helper.relativeVec(bot.position()));
+			helper.assertTrue(pushed[0] && !run.walking(), "still walking, at " + TestPositions.relative(helper, bot.position()));
+			helper.assertTrue(bot.blockPosition().equals(helper.absolutePos(new BlockPos(3, 1, 2))), "stopped at " + TestPositions.relative(helper, bot.position()));
 		});
 	}
 

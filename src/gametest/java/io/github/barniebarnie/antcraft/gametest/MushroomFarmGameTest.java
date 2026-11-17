@@ -130,7 +130,7 @@ public class MushroomFarmGameTest implements CustomTestMethodInvoker {
 				}
 			}
 			helper.assertTrue(stored > 3, stored + " mushrooms stored; said " + BotScripts.log(bot, Output.Level.PRINT)
-				+ "; " + BotScripts.carries(bot) + " at " + helper.relativeVec(bot.position()));
+				+ "; " + BotScripts.carries(bot) + " at " + TestPositions.relative(helper, bot.position()));
 		});
 	}
 

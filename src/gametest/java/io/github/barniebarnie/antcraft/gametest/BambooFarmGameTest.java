@@ -93,7 +93,7 @@ public class BambooFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Stalks five high in the built cell are cut to their bottom block, the 12 cut picked up and stored in the depot. */
-	// Measured: passes at tick 326 to 377, up to 389 under load (another Gradle build at the same time, #839).
+	// Measured: passes at tick 326 to 377 alone, up to 398 in three full runs (#850).
 	@GameTest(maxTicks = 780)
 	public void tallBambooIsCutToOneAndStored(GameTestHelper helper) {
 		AntBot bot = farm(helper, "1");

@@ -194,8 +194,8 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 			List<ItemEntity> laid = helper.getLevel().getEntitiesOfClass(ItemEntity.class, bot.getBoundingBox().inflate(16),
 				i -> i.getItem().is(Items.EGG));
 			helper.assertTrue(eggs >= 1, eggs + " eggs stored, eggs lying at "
-				+ laid.stream().map(i -> helper.relativeVec(i.position())).toList() + ", the bot at "
-				+ helper.relativeVec(bot.position()) + ", " + BotScripts.carries(bot));
+				+ laid.stream().map(i -> TestPositions.relative(helper, i.position())).toList() + ", the bot at "
+				+ TestPositions.relative(helper, bot.position()) + ", " + BotScripts.carries(bot));
 		});
 	}
 
@@ -223,7 +223,7 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		AntBot bot = ranch(helper, 4, new ItemStack(Items.WHEAT, 4));
 		helper.succeedWhen(() -> {
 			helper.assertTrue(inPen(helper, Cow.class).size() == 1, "the cow is not in the pen but at "
-				+ helper.relativeVec(cow.position()) + ", the bot at " + helper.relativeVec(bot.position()) + ", "
+				+ TestPositions.relative(helper, cow.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()) + ", "
 				+ BotScripts.carries(bot) + ", " + BotScripts.log(bot, Output.Level.DEBUG));
 			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
 		});

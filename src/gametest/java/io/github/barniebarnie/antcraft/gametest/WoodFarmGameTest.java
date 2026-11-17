@@ -117,7 +117,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 					helper.setBlock(SPOT.above(y), Blocks.BIRCH_LOG);
 				}
 				grew[0] = true;
-			} else if (grew[0] && died[0] < 0 && bot.isAlive() && helper.relativePos(bot.blockPosition()).getY() >= 4) {
+			} else if (grew[0] && died[0] < 0 && bot.isAlive() && TestPositions.relative(helper, bot.blockPosition()).getY() >= 4) {
 				bot.kill(helper.getLevel());
 				died[0] = helper.getTick();
 			} else if (died[0] >= 0 && respawned[0] < 0 && now != null && now != bot) {
@@ -1608,8 +1608,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * tend for a spot with no dirt under it, the bot carrying none (#764): it gets one from the chest within radius and
 	 * plants; with none to get anywhere it says so once over two tends and goes on.
 	 */
-	// Measured: passes at tick 51 to 53 (red: tend took no radius or told).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 100)
+	// Measured: passes at tick 51 to 53 alone, 90 in full runs (red: tend took no radius or told).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 190)
 	public void tendGetsTheDirtItLacksOrSaysSoOnce(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.AIR);
 		helper.setBlock(SPOT_2.below(), Blocks.AIR);
@@ -1635,8 +1635,8 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * tend for a spot with no dirt under it, the bot carrying none, two cells built (#767): the dirt under the empty spot of
 	 * the next cell is nearer, but the bot digs the dirt outside the cells.
 	 */
-	// Measured: passes at tick 172 (red: the dirt under the next cell's spot dug).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 350)
+	// Measured: passes at tick 172 alone, 318 in full runs (red: the dirt under the next cell's spot dug).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 640)
 	public void tendDigsNoDirtFromUnderAnotherSpot(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.AIR);
 		helper.setBlock(SPOT_2.below(), Blocks.DIRT);
@@ -1677,8 +1677,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * gets dirt, as stocked and first_cell get a cell's and reap its scaffold, two cells built (#768, as soil's of #767):
 	 * the dirt under the spots of both cells is nearer, but the bot digs the dirt outside the cells.
 	 */
-	// Measured: passes at tick 130 (red: the dirt under the first cell's spot dug).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 260)
+	// Measured: passes at tick 131 alone, 265 in each of three full runs (red: the dirt under the first cell's spot dug).
+	// A full run is slower as the 50 tests of its batch share SenseApi.SCAN_BUDGET: with it lifted, tick 125 (#850).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 530)
 	public void getsDigsNoDirtFromUnderTheFarmsSpots(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT_2.below(), Blocks.DIRT);
@@ -2063,7 +2064,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			if (said(now).stream().anyMatch(l -> l.contains("stopped"))) {
 				helper.fail("said " + BotScripts.log(now, Output.Level.DEBUG));
 			}
-			if (killAt > 0 && grewAt[0] >= 0 && !killed[0] && helper.relativePos(now.blockPosition()).getY() >= killAt) {
+			if (killAt > 0 && grewAt[0] >= 0 && !killed[0] && TestPositions.relative(helper, now.blockPosition()).getY() >= killAt) {
 				killed[0] = true;
 				now.kill(helper.getLevel());
 				return;
@@ -2088,7 +2089,7 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(killAt == 0 || now.getDeaths() >= 1, "not killed; said " + said(now));
 			for (BlockPos p : BlockPos.betweenClosed(0, 1, 0, 23, 39, 23)) {
 				if (helper.getBlockState(p).is(logBlock)) {
-					helper.fail("a log left at " + p + ", health " + now.getHealth() + " at " + helper.relativePos(now.blockPosition())
+					helper.fail("a log left at " + p + ", health " + now.getHealth() + " at " + TestPositions.relative(helper, now.blockPosition())
 						+ "; said " + said(now));
 				}
 			}

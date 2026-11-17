@@ -611,8 +611,8 @@ public class TreesGameTest implements CustomTestMethodInvoker {
 					helper.setBlock(3, y, 3, Blocks.AIR);
 				}
 			}
-			if (helper.relativePos(bot.blockPosition()).getY() > 11) {
-				helper.fail("climbed to " + helper.relativePos(bot.blockPosition()).toShortString());
+			if (TestPositions.relative(helper, bot.blockPosition()).getY() > 11) {
+				helper.fail("climbed to " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
 			}
 		});
 		expect(helper, bot, "import lib.trees\nr = goto(Pos" + at(helper, 3, 10, 3) + ")\nprint('up')\nwait(2)\n"
