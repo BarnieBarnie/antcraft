@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
+import java.util.List;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
 import net.fabricmc.fabric.api.gametest.v1.GameTest;
 import net.minecraft.core.BlockPos;
@@ -121,18 +122,25 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	/**
 	 * Where a bot waits in its farm's corner chunk (corner, #814): diagonal into cell 0 from its low corner, but where that
 	 * corner is at the chunk's edge (local 15), a block back from the cell, never on it: a berry farm's bot was sent onto
-	 * a bush, its path pillared over it, and taking the scaffold back dropped it in (#845).
+	 * a bush, its path pillared over it, and taking the scaffold back dropped it in (#845). Where the cell is deeper than
+	 * a row, as a cactus farm's 2 by 2, that diagonal is on the cell, its second cactus: then a block north of the cell
+	 * instead (#846).
 	 */
-	// Measured: passes at tick 5 (red: no attribute corner_spot; the old spot for Pos(1, 0, 15) was on the cell, Pos(2, 1, 15)).
+	// Measured: passes at tick 5 (red: no attribute corner_spot; the old spot for Pos(1, 0, 15) was on the cell, Pos(2, 1, 15);
+	// #846 red: corner_spot() takes 1 positional argument but 2 were given, and took no high to keep off a 2 by 2 cell).
 	@GameTest(maxTicks = 20)
 	public void theCornerSpotIsInTheCornersChunkOffTheCell(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		BotScripts.run(bot, """
 			import lib.cellfarm
-			print(lib.cellfarm.corner_spot(Pos(1, 0, 3)), lib.cellfarm.corner_spot(Pos(1, 0, 15)), lib.cellfarm.corner_spot(Pos(-17, 0, -1)))
+			print(lib.cellfarm.corner_spot(Pos(1, 0, 3), Pos(3, 0, 3)), lib.cellfarm.corner_spot(Pos(1, 0, 15), Pos(3, 0, 15)),
+				lib.cellfarm.corner_spot(Pos(-17, 0, -1), Pos(-15, 0, -1)))
+			print(lib.cellfarm.corner_spot(Pos(1, 0, 3), Pos(2, 0, 4)), lib.cellfarm.corner_spot(Pos(1, 0, 16), Pos(2, 0, 17)),
+				lib.cellfarm.corner_spot(Pos(16, 0, 16), Pos(17, 0, 17)))
 			""");
 		BotScripts.failOnError(helper, bot);
-		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("Pos(2, 1, 4) Pos(2, 1, 14) Pos(-18, 1, -2)"),
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).equals(
+			List.of("Pos(2, 1, 4) Pos(2, 1, 14) Pos(-18, 1, -2)", "Pos(2, 1, 2) Pos(0, 1, 17) Pos(18, 1, 18)")),
 			"said " + BotScripts.log(bot, Output.Level.PRINT)));
 	}
 }

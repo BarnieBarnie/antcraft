@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -42,18 +43,25 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 		chest.setItem(3, new ItemStack(Items.CHEST, 3)); // the cobblestone over goes in a chest of its own
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
-		BotScripts.run(bot, """
+		ScriptRun run = BotScripts.run(bot, """
 			import jobs.cactus_farm
 			jobs.cactus_farm.run(Pos(%d, %d, %d), %s, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ(), size));
 		BotScripts.failOnError(helper, bot);
+		failOnCactus(helper, bot, run);
+		return bot;
+	}
+
+	/** Fails the test at once where a cactus hurts the bot. */
+	private static void failOnCactus(GameTestHelper helper, AntBot bot, ScriptRun run) {
 		helper.onEachTick(() -> {
 			DamageSource hurt = bot.getLastDamageSource();
 			if (hurt != null && hurt.is(DamageTypes.CACTUS)) {
-				helper.fail("a cactus hurt the bot at " + bot.blockPosition());
+				// Where the bot stood in the test, not just its block, and the call it ran: which step touched the cactus (#846).
+				helper.fail("a cactus hurt the bot at " + helper.relativeVec(bot.position()) + ", running " + run.action()
+					+ " on line " + run.line());
 			}
 		});
-		return bot;
 	}
 
 	/** The cactus in the depot's chests, along its row east of (1, 1, 1). */
@@ -139,6 +147,52 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 			cell(helper, 1, 3);
 			int stored = stored(helper);
 			helper.assertTrue(stored == 2, "cactus in the depot " + stored + " of the 4 cut, 2 planted");
+		});
+	}
+
+	/**
+	 * A round that harvests nothing walks the bot into the chunk of the farm's corner where it stands elsewhere
+	 * (lib.cellfarm.corner, #814), to a block by the corner beside no cactus: the block diagonal into the cell from its
+	 * corner, where it was sent before, is the cell's second cactus, so the walk failed as unreachable and left the bot
+	 * where its search gave up, by the cactus or outside the chunk (#846). The corner is 12 blocks into its chunk along x,
+	 * the bot 6 east of it, in the next chunk.
+	 */
+	// Measured: passes at tick 27 (red: the bot stopped at (14.34, 1, 5.5), beside the cactus at (13, 1, 5); in other
+	// runs at (9.27, 1, 5.5), 6 from the corner in the next chunk, or (11.09, 1, 5.4), 3 from it).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 80)
+	public void theCornerWalkEndsBesideNoCactus(GameTestHelper helper) {
+		int x = Math.floorMod(12 - helper.absolutePos(BlockPos.ZERO).getX(), 16);
+		BlockPos low = new BlockPos(x < 2 ? x + 16 : x, 0, 4);
+		BlockPos high = low.offset(1, 0, 1);
+		for (BlockPos spot : new BlockPos[] {low, high}) {
+			helper.setBlock(spot, Blocks.SAND);
+			helper.setBlock(spot.above(), Blocks.CACTUS);
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, low.offset(6, 1, 1));
+		BlockPos at = helper.absolutePos(low);
+		ScriptRun run = BotScripts.run(bot, """
+			import lib.cells
+			import lib.cellfarm
+			lib.cells.layout("cactus_farm", Pos(%d, %d, %d), (2, 2))
+			lib.cells.add("cactus_farm", 0)
+			lib.cellfarm.corner("cactus_farm")
+			print("waits")
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		failOnCactus(helper, bot, run);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot, "waits"), "said " + BotScripts.log(bot, Output.Level.PRINT));
+			BlockPos feet = bot.blockPosition();
+			helper.assertTrue(feet.getX() >> 4 == at.getX() >> 4 && feet.getZ() >> 4 == at.getZ() >> 4,
+				"the bot at " + helper.relativeVec(bot.position()) + ", not in the corner's chunk");
+			helper.assertTrue(Math.abs(feet.getX() - at.getX()) <= 1 && Math.abs(feet.getZ() - at.getZ()) <= 1,
+				"the bot at " + helper.relativeVec(bot.position()) + ", not by the corner " + low);
+			for (Direction dir : Direction.Plane.HORIZONTAL) {
+				helper.assertFalse(bot.level().getBlockState(feet.relative(dir)).is(Blocks.CACTUS),
+					"the bot at " + helper.relativeVec(bot.position()) + ", beside a cactus");
+			}
+			helper.assertBlockPresent(Blocks.CACTUS, low.above());
+			helper.assertBlockPresent(Blocks.CACTUS, high.above());
 		});
 	}
 }

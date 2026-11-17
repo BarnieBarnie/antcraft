@@ -181,19 +181,24 @@ def visit(f, b):
 def corner(name):
     """Walks the bot into the chunk of the farm name's corner, cell 0's low corner, where it stands elsewhere (#814), so
     the cells ticking counts get random ticks while it waits: to corner_spot."""
-    low = lib.cells.cell(name, 0)[0]
+    low, high = lib.cells.cell(name, 0)
     p = pos()
     if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
         return
-    goto(corner_spot(low))
+    goto(corner_spot(low, high))
 
 
-def corner_spot(low):
-    """Where corner sends the bot, over the floor of cell 0's low corner low: diagonal into the cell, but on an axis where
-    that leaves low's chunk (low at chunk-local 15), a block back, off the cell. Kept in the chunk that way, it was sent
-    onto the cell's row, a berry bush, which its path pillared over and dropped it into (#845)."""
-    x = low.x + 1 if (low.x + 1) // 16 == low.x // 16 else low.x - 1
-    z = low.z + 1 if (low.z + 1) // 16 == low.z // 16 else low.z - 1
+def corner_spot(low, high):
+    """Where corner sends the bot, over the floor by cell 0's low corner low, the cell's floor reaching to high: the first
+    in low's chunk and off the cell of the blocks diagonal from low, into the cell first, then a block back on z, on x,
+    on both, else diagonal out of the cell's far corner. Kept in the chunk by capping, it was sent onto the cell's row,
+    a berry bush, which its path pillared over and dropped it into (#845); into the cell, on a cell deeper than a row, it
+    was sent onto a cactus farm's second cactus, a walk that cannot end, which left it by the cactus (#846)."""
+    for x, z in [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 1),
+                 (high.x + 1, high.z + 1)]:
+        on_cell = low.x <= x <= high.x and low.z <= z <= high.z
+        if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not on_cell:
+            break
     return Pos(x, low.y + 1, z)
 
 
