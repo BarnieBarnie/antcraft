@@ -946,6 +946,23 @@ class PathFinderTest {
 		assertTrue(find(corridor, new BlockPos(6, 1, 0), WALK_ONLY).complete());
 	}
 
+	/**
+	 * A brush past a cactus costs its point of hurt, as a drop's (Death#hurt, #844), not a flat guess: a wall with two
+	 * gaps, one beside a cactus on the way, the other 6 blocks off it. A bot whose food heals the point quickly (10 ticks
+	 * and its food) goes past the cactus; one that heals it slowly (80 ticks) goes round by the far gap.
+	 */
+	@Test
+	void aBrushPastACactusCostsTheHurtItDoes() {
+		GridWorld world = GridWorld.flat(10).fill(3, 1, -10, 3, 2, 10, '#').set(3, 1, 0, ' ').set(3, 2, 0, ' ')
+			.set(3, 1, 1, 'K').set(3, 1, 6, ' ').set(3, 2, 6, ' ');
+		BlockPos goal = new BlockPos(6, 1, 0);
+		Path quick = find(world, goal, walkOnly(fed(20, null, 20, 0)));
+		Path slow = find(world, goal, walkOnly(fed(20, null, 0, 20)));
+
+		assertTrue(positions(quick).contains(new BlockPos(3, 1, 0)), "round the cactus: " + positions(quick));
+		assertTrue(positions(slow).contains(new BlockPos(3, 1, 6)), "past the cactus: " + positions(slow));
+	}
+
 	private static boolean beside(GridWorld world, BlockPos feet, char block) {
 		return Direction.Plane.HORIZONTAL.stream().anyMatch(d -> world.at(feet.relative(d)) == block || world.at(feet.above().relative(d)) == block);
 	}

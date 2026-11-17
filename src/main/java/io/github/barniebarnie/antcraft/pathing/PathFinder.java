@@ -61,9 +61,9 @@ public final class PathFinder {
 
 	/**
 	 * Ending a move beside a {@link WorldView#isPrickly prickly} block, such as a cactus, which hurts a bot that brushes
-	 * it (#830): paths go a few blocks round rather than past one.
+	 * it (#830), where the search has no {@link Death} to cost its point of hurt by ({@link #pricklyCost pricklyCost},
+	 * #844): paths go a few blocks round rather than past one. About what a fed bot pays to heal the point (17.5).
 	 */
-	// ponytail: a flat guess of what a brush costs, some 4 blocks of walk; cost it by the hurt (Death) if bots still brush cacti.
 	public static final double PRICKLY_COST = 20.0;
 
 	/**
@@ -153,6 +153,16 @@ public final class PathFinder {
 			return quick * Math.min(QUICK_HEAL_TICKS + HEAL_FOOD, share) + slow * Math.min(SLOW_HEAL_TICKS + HEAL_FOOD, share)
 				+ (damage - quick - slow) * share;
 		}
+	}
+
+	/**
+	 * What ending a move at {@code to}, beside a prickly block, costs a search with {@code options}: the point of hurt a
+	 * brush does, as a drop's ({@link Death#hurt}: the ticks healing it takes and its food, or its share of a death), else
+	 * {@link #PRICKLY_COST} (#844). A bot that heals slowly goes further round a cactus than a fed one.
+	 */
+	private static double pricklyCost(Options options, BlockPos to) {
+		Death death = options.death();
+		return death != null ? death.hurt(1, to) : PRICKLY_COST;
 	}
 
 	/**
@@ -372,7 +382,8 @@ public final class PathFinder {
 				}
 
 				for (Candidate move : this.planner.moves(node)) {
-					double cost = node.cost + move.cost + (this.world.besidePrickly(move.step.to()) ? PRICKLY_COST : 0);
+					double prickly = this.world.besidePrickly(move.step.to()) ? pricklyCost(this.options, move.step.to()) : 0;
+					double cost = node.cost + move.cost + prickly;
 					int placed = node.placed + move.scaffold;
 					boolean least = this.least(move.step.to(), cost, placed, true);
 					if (cost < this.bestCost.getOrDefault(move.step.to(), BLOCKED)) {
