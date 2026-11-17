@@ -1,6 +1,6 @@
 # Grow a pumpkin or melon farm
 
-The job `jobs/stem_farm` grows a pumpkin or melon farm from a few seeds and farms it until a player stops it (the stop command or the bot's screen). A stem keeps fruiting once it is grown, so the farm never replants: each round it mines the fruit beside its stems and stores it in a depot, and each time it has or can get the 4 seeds a cell takes, it builds the next cell. It is a spec of [`lib/cellfarm`](../reference/modules/lib/cellfarm.md), the engine the [wood farm](wood-farm.md) runs on too, so it lays out, grows, stores, moves and resumes as that one does.
+The job `jobs/stem_farm` grows a pumpkin or melon farm from a few seeds and farms it until a player stops it (the stop command or the bot's screen). A stem keeps fruiting once it is grown, so the farm replants only a stem that is gone: each round it mines the fruit beside its stems and stores it in a depot, and each time it has or can get the 4 seeds a cell takes, it builds the next cell. It is a spec of [`lib/cellfarm`](../reference/modules/lib/cellfarm.md), the engine the [wood farm](wood-farm.md) runs on too, so it lays out, grows, stores, moves and resumes as that one does.
 
 ```text
 /antcraft bot run jobs.stem_farm pumpkin
@@ -20,7 +20,7 @@ D W D     D  a dirt fruit spot
 S D S     W  water, which keeps the farmland wet
 ```
 
-A grown stem puts its fruit on a free block beside it that stands on dirt, grass or farmland: one of the fruit spots of its cell, or the path round it. The farm mines every pumpkin or melon beside a stem, wherever it grew, with the best tool the bot carries (an axe where it has one), never the stem or the soil under the fruit, so the spot stays free and solid for the next.
+A grown stem puts its fruit on a free block beside it that stands on dirt, grass or farmland: one of the fruit spots of its cell, or the path round it. The farm mines every pumpkin or melon beside a stem, wherever it grew, with the best tool the bot carries (an axe where it has one), never the stem or the soil under the fruit, so the spot stays free and solid for the next. A stem a mob trampled or a player broke is planted again: the bot tills its dirt with a hoe and plants a seed from the depot (#844).
 
 | What | Where, from the corner |
 |---|---|
@@ -38,5 +38,4 @@ The depot keeps the fruit and seeds in one category, `harvest`; the dirt mined f
 
 ## Limits
 
-- A stem a mob tramples or a player breaks is not replanted.
 - Light: a stem grows only with light 9 or more over it; the farm places no torches, so a farm built in the dark or underground grows only by day.

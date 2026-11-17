@@ -16,6 +16,7 @@ import jobs.farm
 import lib.cellfarm
 import lib.cells
 import lib.farm
+import lib.stock
 import lib.terrain
 import lib.treefarm
 from lib.get import ensure_tool, get
@@ -97,6 +98,25 @@ def harvest(kind, low, high):
     return result()
 
 
+def tend(kind, boxes, told, radius):
+    """Plants a stem again on each stem spot of the cells boxes that lost it, such as one a mob trampled, which turns its
+    farmland to dirt (#844): tills the dirt with a hoe and plants a seed of kind from the chests within radius; says
+    once where it gets no hoe."""
+    seed = KINDS[kind][2]
+    bare = [s for b in boxes for s in stems(b[0], b[1]) if block(s.up()).is_air]
+    if not bare:
+        return
+    if [s for s in bare if block(s).id in lib.farm.SOIL]:
+        r = ensure_tool("hoe", len(bare), None, radius)
+        if not r["ok"]:
+            lib.cellfarm.tell(told, f"tend: {r['reason']}")
+            return
+    if count(seed) < len(bare):
+        lib.stock.take_up_to(seed, len(bare), radius)
+    lib.farm.till(bare)
+    lib.farm.plant(bare, seed)
+
+
 def gets(item, n, radius):
     """get, but dirt none from under a farm's cells (lib.treefarm.get_outside)."""
     if item == lib.treefarm.DIRT:
@@ -106,14 +126,15 @@ def gets(item, n, radius):
 
 def spec(kind, name, radius):
     """The lib.cellfarm spec of the stem farm name of kind: ripe where fruit stands beside a stem, harvested by mining
-    it, never replanted."""
+    it; a stem that is gone is planted again (tend)."""
     fruit_item, seed = KINDS[kind][1], KINDS[kind][2]
     return {"size": SIZE, "categories": {"harvest": [fruit_item, seed]}, "corners": "stem_farms", "keep": KEEP,
             "materials": lambda: {seed: 4}, "gets": lambda item, n, r: gets(item, n, r),
             "build_cell": lambda low, high: build_cell(kind, name, low, high, radius),
             "ripe": lambda low, high: len(fruit(kind, low, high)) > 0,
             "harvest": lambda low, high, told: harvest(kind, low, high),
-            "tend": lambda boxes, told: None, "most": lambda: lib.cellfarm.most(name, GROWTH, HARVEST)}
+            "tend": lambda boxes, told: tend(kind, boxes, told, radius),
+            "most": lambda: lib.cellfarm.most(name, GROWTH, HARVEST)}
 
 
 def run(kind, at=None, size=None, radius=32):

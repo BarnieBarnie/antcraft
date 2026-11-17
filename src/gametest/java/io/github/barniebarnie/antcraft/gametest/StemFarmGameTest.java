@@ -35,6 +35,11 @@ public class StemFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Dirt at y 1, a supply chest at (6, 2, 7) holding items, the bot by it running the pumpkin farm of cells. */
 	private static AntBot farm(GameTestHelper helper, int cells, ItemStack... items) {
+		return farm(helper, "pumpkin", cells, items);
+	}
+
+	/** farm, of kind ("pumpkin" or "melon"). */
+	private static AntBot farm(GameTestHelper helper, String kind, int cells, ItemStack... items) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				helper.setBlock(x, 1, z, Blocks.DIRT);
@@ -49,8 +54,8 @@ public class StemFarmGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(1, 2, 3));
 		BotScripts.run(bot, """
 			import jobs.stem_farm
-			jobs.stem_farm.run("pumpkin", Pos(%d, %d, %d), %d, 8)
-			""".formatted(at.getX(), at.getY(), at.getZ(), cells));
+			jobs.stem_farm.run("%s", Pos(%d, %d, %d), %d, 8)
+			""".formatted(kind, at.getX(), at.getY(), at.getZ(), cells));
 		BotScripts.failOnError(helper, bot);
 		return bot;
 	}
@@ -108,6 +113,67 @@ public class StemFarmGameTest implements CustomTestMethodInvoker {
 				}
 			}
 			helper.assertTrue(stored == 1, stored + " pumpkins in the depot, not 1; said " + BotScripts.log(bot, Output.Level.PRINT));
+		});
+	}
+
+	/**
+	 * A stem trampled, its farmland turned to dirt and the stem popped off, is tilled and planted again (#844), with the
+	 * spare seed the depot got.
+	 */
+	// Measured: passes at tick 191 (red: dirt still at (1, 1, 3) on tick 402).
+	@GameTest(maxTicks = 400)
+	public void aTrampledStemIsReplanted(GameTestHelper helper) {
+		AntBot bot = farm(helper, 1, new ItemStack(Items.PUMPKIN_SEEDS, 5), new ItemStack(Items.WATER_BUCKET),
+			new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.CHEST, 3));
+		boolean[] trampled = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!trampled[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1")) {
+				helper.setBlock(1, 2, 3, Blocks.AIR);
+				helper.setBlock(1, 1, 3, Blocks.DIRT);
+				trampled[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(trampled[0], "cell 1 not built; said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertBlockPresent(Blocks.FARMLAND, 1, 1, 3);
+			helper.assertBlockPresent(Blocks.PUMPKIN_STEM, 1, 2, 3);
+		});
+	}
+
+	/**
+	 * The melon farm (#844): two melons put beside cell 1's stems are mined, their slices (3 to 7 each, so one may give
+	 * too few) stored in the depot, and 4 of them crafted into the seeds cell 2 takes, so cell 2 is built with melon stems.
+	 */
+	// Measured: passes at tick 287 to 289 (passed before the change too: the melon farm only lacked a test).
+	@GameTest(maxTicks = 600)
+	public void aMelonIsHarvestedStoredAndSeedsTheNextCell(GameTestHelper helper) {
+		AntBot bot = farm(helper, "melon", 2, new ItemStack(Items.MELON_SEEDS, 4), new ItemStack(Items.WATER_BUCKET, 1),
+			new ItemStack(Items.WATER_BUCKET, 1), new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.CHEST, 3));
+		boolean[] grown = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!grown[0] && BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1")) {
+				helper.setBlock(2, 2, 3, Blocks.MELON);
+				helper.setBlock(1, 2, 4, Blocks.MELON);
+				grown[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grown[0], "cell 1 not built; said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertBlockPresent(Blocks.AIR, 2, 2, 3);
+			helper.assertBlockPresent(Blocks.AIR, 1, 2, 4);
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("built cell 2"),
+				"cell 2 not built; said " + BotScripts.log(bot, Output.Level.PRINT));
+			for (int[] s : STEMS) {
+				helper.assertBlockPresent(Blocks.MELON_STEM, s[0], 2, s[1]);
+				helper.assertBlockPresent(Blocks.MELON_STEM, s[0] + 4, 2, s[1]);
+			}
+			int stored = 0;
+			for (int x = 0; x < 8; x++) {
+				if (helper.getBlockState(new BlockPos(x, 2, 1)).is(Blocks.CHEST)) {
+					stored += helper.getBlockEntity(new BlockPos(x, 2, 1), ChestBlockEntity.class).countItem(Items.MELON_SLICE);
+				}
+			}
+			helper.assertTrue(stored > 0, "no melon slices in the depot; said " + BotScripts.log(bot, Output.Level.PRINT));
 		});
 	}
 }
