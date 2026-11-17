@@ -99,6 +99,24 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * {@code attack} on a mob standing still at the far edge of its block, the bot in the block beside it but out of melee
+	 * reach, steps in to strike it (#825). A walk to within a block of the mob's ends where the bot stands, so each one
+	 * counted an arrival at once and the attack gave {@code unreachable} after three, 7 ticks in, as it did now and then on
+	 * a creeper that stopped 1.6 blocks off to light its fuse.
+	 */
+	// Measured: passes at tick 34.
+	@GameTest(maxTicks = 60)
+	public void attackStepsInToAMobAtTheFarEdgeOfItsBlock(GameTestHelper helper) {
+		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, new Vec3(6.95, 1, 3.5));
+		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		zombie.setNoAi(true);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(5.2, 1, 3.5));
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		ScriptRun run = run(helper, bot, attackThe("zombie"));
+		succeedWhenPrinted(helper, bot, run, List.of("True None"));
+	}
+
+	/**
 	 * A bot with bare hands walks to a cow and kills it: the bot's own goals target only monsters, so only {@code attack}
 	 * can kill it.
 	 */

@@ -526,6 +526,12 @@ public final class WorkApi {
 		private static final double MOVED = 2;
 		/** How often the bot may get to the target without it being in reach before it gives up with {@code unreachable}. */
 		private static final int ARRIVALS = 3;
+		/**
+		 * How many ticks the bot, arrived but out of reach of a target that stands on its level, steps straight at it before it
+		 * walks again: a walk to within a block of the target's block can end out of melee reach of a mob at the block's far
+		 * edge, and each walk after it ends there at once (#825).
+		 */
+		private static final int STEP_IN_TICKS = 20;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -534,6 +540,7 @@ public final class WorkApi {
 		private ScriptRun.@Nullable Action walk;
 		private @Nullable Vec3 walkedTo;
 		private int arrivals;
+		private int steppedIn;
 		private int struckAt = Integer.MIN_VALUE / 2;
 		private @Nullable Result result;
 
@@ -569,6 +576,7 @@ public final class WorkApi {
 			if (BotHands.inStrikingReach(this.bot, target)) {
 				this.stopWalk();
 				this.arrivals = 0;
+				this.steppedIn = 0;
 				this.bot.getLookControl().setLookAt(target);
 				if (this.bot.tickCount - this.struckAt >= BotHands.strikeTicks(this.bot)) {
 					BotHands.strike(this.bot, (ServerLevel) this.bot.level(), target);
@@ -580,6 +588,12 @@ public final class WorkApi {
 				this.stopWalk();
 			}
 			if (this.walk == null) {
+				if (this.arrivals > 0 && this.steppedIn < STEP_IN_TICKS && Math.abs(target.getY() - this.bot.getY()) < 1) {
+					// Straight at it, as the kite goal steps in: a walk there would end where the bot stands (#825).
+					this.steppedIn++;
+					this.bot.getMoveControl().setWantedPosition(target.getX(), target.getY(), target.getZ(), 1);
+					return false;
+				}
 				if (this.arrivals >= ARRIVALS) {
 					return this.finish(Result.fail(Result.UNREACHABLE));
 				}
