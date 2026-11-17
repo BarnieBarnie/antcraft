@@ -5,10 +5,11 @@ The job `jobs/kelp_farm` farms kelp in a pool of water until a player stops it. 
 ```text
 /antcraft bot run jobs.kelp_farm 10 62 10 14 62 12
 /antcraft bot run jobs.kelp_farm 10 62 10 14 62 12 16
+/antcraft bot run jobs.kelp_farm 10 62 10 14 62 12 32 dry
 /antcraft bot run jobs.kelp_farm
 ```
 
-The arguments are the corners `x1 y1 z1 x2 y2 z2` of the pool's floor, the blocks the kelp stands on (by default those of the last run), and how far to look for kelp to plant, in blocks (default 32). The bot says `planted 6 kelp` once it has planted the pool, and `cut 2 kelp` each round that cut some.
+The arguments are the corners `x1 y1 z1 x2 y2 z2` of the pool's floor, the blocks the kelp stands on (by default those of the last run), how far to look for kelp to plant, a furnace, a crafting table and fuel, in blocks (default 32), and `dry` to make dried kelp and dried kelp blocks of it ([Drying the kelp](#drying-the-kelp)). The bot says `planted 6 kelp` once it has planted the pool, and `cut 2 kelp` each round that cut some.
 
 ## The pool
 
@@ -25,7 +26,15 @@ The farm builds no water: it farms a pool that is already there, such as one dug
 
 Each round the bot plants kelp on each floor block whose water lacks it, with kelp it carries or takes from the chests within the radius (the depot's too), mines the kelp two high or more from its top down to its second block, never the bottom block, which grows again (cut from the top, nothing breaks loose to float up), and stores what it carries in the depot. A round that cut nothing waits 100 ticks. Kelp grows on random ticks, so the pool must be within a few chunks of the bot for it to grow, as the bot stands at the pool.
 
+## Drying the kelp
+
+Without `dry` the bot stores raw kelp. With it (from a script, `jobs.kelp_farm.run(low, high, radius, True)`), each round after cutting it also:
+
+1. takes the kelp the depot holds, up to a stack with what it carries, and smelts it to dried kelp in the nearest furnace within the radius, which it walks to. Where there is none it puts one down and takes it back after ([`lib.craft.smelt_here`](../reference/modules/lib/craft.md)), which needs a pickaxe and a furnace or what to craft one of. It burns a dried kelp block (20 kelp each), else coal or charcoal (8 each), carried or taken from the chests within the radius, else the best fuel it carries, as [`smelt`](../reference/crafting/smelt.md) picks it. Once the farm has made a block it fuels itself. A smelt takes 10 seconds a kelp.
+2. takes the dried kelp the depot holds and crafts each 9 into a dried kelp block, at the nearest crafting table within the radius, else one it places from planks it carries ([`lib.craft.craft_here`](../reference/modules/lib/craft.md)). Fewer than 9 left over stay dried kelp, food.
+
+The depot keeps raw kelp in its `kelp` chests and dried kelp and its blocks in its `dried` chests. Kelp in other chests, such as the one the bot planted from, is left alone as planting stock. Put a furnace and a crafting table by the depot, and a few coal in a chest nearby to start.
+
 ## Not yet
 
-- Smelting the kelp to dried kelp, and crafting dried kelp blocks: the bot stores raw kelp.
 - Growing the farm: it builds no new water cells, as a cell two deep takes a few water buckets poured block by block.
