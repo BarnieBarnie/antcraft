@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -538,11 +539,20 @@ public final class TaskPlanner {
 
 		/**
 		 * Burns stock of the fuels up to {@code rank} and makes {@code item} for the rest, or returns
-		 * null when stock alone covers it.
+		 * null when stock alone covers it. The recipe's ingredients are not burnt: a log is kept to
+		 * make four planks that burn as long as it each (#937).
 		 */
 		@Nullable Map<I, Integer> makeFuel(State<I> state, int smelts, int rank, I item, Recipe<I> recipe, Set<I> path) {
 			Map<I, Integer> used = new LinkedHashMap<>();
-			long ticks = this.burnStock(state, this.book.fuels().subList(0, rank + 1), (long) smelts * SMELT_TICKS, used);
+			Set<I> ingredients = new HashSet<>();
+			recipe.ingredients().keySet().forEach(ingredients::addAll);
+			List<Fuel<I>> burnable = new ArrayList<>();
+			for (Fuel<I> fuel : this.book.fuels().subList(0, rank + 1)) {
+				Set<I> items = new LinkedHashSet<>(fuel.items());
+				items.removeAll(ingredients);
+				burnable.add(new Fuel<>(items, fuel.burnTicks()));
+			}
+			long ticks = this.burnStock(state, burnable, (long) smelts * SMELT_TICKS, used);
 			if (ticks <= 0) {
 				return null;
 			}

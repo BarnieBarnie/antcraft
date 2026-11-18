@@ -188,6 +188,21 @@ class TaskPlannerTest {
 				new TaskPlanner.Fuel<>(Set.of("oak_log", "birch_log"), 300));
 		}
 	};
+	/** {@link #FURNACE_BOOK} with planks burning as long as logs, ranked with them as {@link Fuels#order} does. */
+	private static final TaskPlanner.RecipeBook<String> PLANK_FUEL_BOOK = new TaskPlanner.RecipeBook<>() {
+		@Override
+		public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+			return FURNACE_BOOK.recipesFor(item);
+		}
+
+		@Override
+		public List<TaskPlanner.Fuel<String>> fuels() {
+			return List.of(
+				new TaskPlanner.Fuel<>(Set.of("coal"), 1600),
+				new TaskPlanner.Fuel<>(Set.of("charcoal"), 1600),
+				new TaskPlanner.Fuel<>(Set.of("oak_log", "birch_log", "oak_planks", "birch_planks"), 300));
+		}
+	};
 	private static final Set<String> GATHERABLE_ORES = Set.of("oak_log", "birch_log", "cobblestone", "raw_iron", "coal");
 
 	private static TaskPlanner.Plan<String> smeltPlan(String item, int count, Map<String, Integer> stock) {
@@ -247,11 +262,14 @@ class TaskPlannerTest {
 	}
 
 	@Test
-	void burnsLogsWhenThereIsNoCoal() {
-		// A log burns for one and a half items.
-		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 2, Map.of("raw_iron", 2, "birch_log", 5));
+	void burnsPlanksFromLogsWhenThereIsNoCoal() {
+		// A plank burns as long as a log, for one and a half items, and a log makes four (#937).
+		TaskPlanner.Plan<String> plan = TaskPlanner.plan("iron_ingot", 2, new HashMap<>(Map.of("raw_iron", 2, "birch_log", 5)), PLANK_FUEL_BOOK, GATHERABLE_ORES::contains);
 
-		assertEquals(Map.of("birch_log", 2), smeltStep(plan).fuel());
+		assertEquals(Map.of("birch_planks", 2), smeltStep(plan).fuel());
+		assertEquals(List.of("birch_planks", "iron_ingot"), craftOrder(plan));
+		// One log made into planks: four logs and two planks kept, where burning logs kept three logs.
+		assertEquals(1, plan.crafts().getFirst().times());
 		assertTrue(plan.isReady());
 	}
 
@@ -296,10 +314,13 @@ class TaskPlannerTest {
 	}
 
 	@Test
-	void burnsALogDirectlyForOneItem() {
-		TaskPlanner.Plan<String> plan = smeltPlan("iron_ingot", 1, Map.of("raw_iron", 1, "oak_log", 5));
+	void oneItemFromALogBurnsAPlankAndKeepsThree() {
+		TaskPlanner.Plan<String> plan = TaskPlanner.plan("iron_ingot", 1, new HashMap<>(Map.of("raw_iron", 1, "oak_log", 1)), PLANK_FUEL_BOOK, GATHERABLE_ORES::contains);
 
-		assertEquals(Map.of("oak_log", 1), smeltStep(plan).fuel());
+		assertEquals(Map.of("oak_planks", 1), smeltStep(plan).fuel());
+		// The log makes four planks, so three are kept.
+		assertEquals(List.of("oak_planks", "iron_ingot"), craftOrder(plan));
+		assertEquals(1, plan.crafts().getFirst().times());
 		assertTrue(plan.isReady());
 	}
 
