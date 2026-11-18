@@ -29,6 +29,7 @@ Senses are done at once and return a value. Actions take ticks, pause the script
 | [`home_dimension`](movement/home_dimension.md) | `home_dimension()` | the id of the dimension of the bot's home |
 | [`dimension`](movement/dimension.md) | `dimension()` | the id of the dimension the bot is in, such as `"minecraft:overworld"` |
 | [`portals`](movement/portals.md) | `portals()` | both ends of the nether portals the bot went through, newest first |
+| [`keep_blocks`](movement/keep_blocks.md) | `keep_blocks(blocks)` | keeps the blocks at `blocks` from the bot's walks: no path breaks them, until the script ends |
 | [`placed_scaffold`](movement/placed_scaffold.md) | `placed_scaffold(forget=True, keep=())` | where the script's walks placed scaffold blocks since it last asked, and forgets them, but those in `keep`, unless `forget` is false |
 
 ## The world around
@@ -182,7 +183,7 @@ The mod's default library, scripts that any script can import (see [Modules & im
 - [`lib/area`](modules/lib/area.md): `box(a, b)`, `clear(a, b)`, `fill(a, b, item)`, `bounds(positions, margin=0)`, `inside(p, low, high)`, `centre(low, high)`.
 - [`lib/cells`](modules/lib/cells.md): `layout(name, origin, size, row=4, gap=1)`, `cell(name, i)`, `built(name)`, `add(name, i)`, `next(name)`, `count(name)`, a grid of farm cells that grows one cell at a time, kept in `memory["cells"]`.
 - [`lib/treefarm`](modules/lib/treefarm.md): `KINDS`, `sapling(kind)`, `materials(kind)`, `build_cell(kind, low, high)`, `grown(kind, low, high)`, `harvest(kind, low, high, radius=32)`, tree cells per kind (a sapling, or a giant spruce or jungle) for a wood farm.
-- [`lib/cellfarm`](modules/lib/cellfarm.md): `run(f, name, key, at, steps, radius=32)`, `farm(f, name, size, radius)`, `build`, `stocked`, `ticking`, `limit`, a self-expanding farm of cells, its cells, depot and rounds, given a spec of hooks.
+- [`lib/cellfarm`](modules/lib/cellfarm.md): `run(f, name, key, at, steps, radius=32)`, `farm(f, name, size, radius)`, `build`, `keep_cells`, `stocked`, `ticking`, `limit`, a self-expanding farm of cells, its cells, depot and rounds, given a spec of hooks.
 - [`lib/result`](modules/lib/result.md): `result(reason=None, at=None, missing=None)`, the dict every doer gives.
 - [`lib/cost`](modules/lib/cost.md): `WALK`, `BREAK`, `USES`, `SMELT`, `RESPAWN`, `DESPAWN`, `walk(a, b)`, `breaking(n, material, tier)`, `death(at, start=None)`.
 - [`lib/tools`](modules/lib/tools.md): `uses_left(stack)`, `best(kind)`, `enough(kind, uses)`, `tier_for(what)`, `hold(kind)`.

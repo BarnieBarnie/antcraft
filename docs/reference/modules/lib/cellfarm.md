@@ -63,6 +63,7 @@ Optional:
 | `room()` | `1` | empty slots the bot wants before a harvest ([`lib.depot.make_room`](depot.md)) |
 | `stock(boxes)` | none | gets what tending `boxes` takes, after the harvest and store |
 | `chores(keep, told)` | none | harvests before the round's own, such as cells of another farm; gives `(harvests, whether the bot is too full)` |
+| `kept(low, high)` | none | the cell's blocks no walk of the bot's may break, such as the cocoa farm's logs ([`keep_cells`](#keep_cellsf-name), #856) |
 | `switch()` | none | a farm to go on with instead: its result, which `farm` gives, or `None` |
 | `learn(ticks, n)` | [`learn`](#learnname-ticks-n) under the farm's name | `n` harvests of a round took `ticks` game ticks; not called where the round's own harvests are none, only `chores`' |
 | `full(boxes, told)` | none | what a full farm does each round |
@@ -77,7 +78,7 @@ Sets up the farm `name` of spec `f` and runs its `steps` with [`lib.project.run`
 
 ## `farm(f, name, size, radius)`
 
-Farms forever. Each round it eats ([`lib.food.upkeep`](food.md)), does the spec's `chores`, then harvests every ripe cell (once the bot has the spec's `room()`, else it stores first, and where it still has too little says once `inventory full, store: <reason>; felling stops` and harvests nothing, #765), stores what it carries in the depot (each round, #766), does the spec's `stock` and `tend`; then the spec's `switch`. It builds the next cell where the farm is below [`limit`](#limitf-name-size) and [`stocked`](#stockedf-radius) gets what one takes, else says once `next cell: <reason>, lacks {...}` and tries again `BACKOFF` (10) rounds later, or in the next round that harvested. A build that fails it says once a reason, `cell not built: <reason> at <at>` (#853), and backs off the same way (#866), so a cell that can never be built is not tried every round. Once it has all its cells it says `farm full` and does the spec's `full` each round. Where it harvested nothing, it does the spec's `idle`, walks into its corner's chunk ([`corner`](#cornername), #814) and waits `WAIT` (100) ticks. Each round takes back the scaffold its walks placed ([`lib.trees.take_back`](trees.md#take_backkeep)).
+Farms forever. Each round it eats ([`lib.food.upkeep`](food.md)), keeps the built cells' blocks from its walks ([`keep_cells`](#keep_cellsf-name)), does the spec's `chores`, then harvests every ripe cell (once the bot has the spec's `room()`, else it stores first, and where it still has too little says once `inventory full, store: <reason>; felling stops` and harvests nothing, #765), stores what it carries in the depot (each round, #766), does the spec's `stock` and `tend`; then the spec's `switch`. It builds the next cell where the farm is below [`limit`](#limitf-name-size) and [`stocked`](#stockedf-radius) gets what one takes, else says once `next cell: <reason>, lacks {...}` and tries again `BACKOFF` (10) rounds later, or in the next round that harvested. A build that fails it says once a reason, `cell not built: <reason> at <at>` (#853), and backs off the same way (#866), so a cell that can never be built is not tried every round. Once it has all its cells it says `farm full` and does the spec's `full` each round. Where it harvested nothing, it does the spec's `idle`, walks into its corner's chunk ([`corner`](#cornername), #814) and waits `WAIT` (100) ticks. Each round takes back the scaffold its walks placed ([`lib.trees.take_back`](trees.md#take_backkeep)).
 
 The harvest, store and tending go over the cells the bot can read where it stands, then over those it reads at one cell it cannot, the next each round, which it walks to ([`visit`](#visitf-b), #811), so the corner's cells are farmed every round (#819). With `size`, the farm grows to `size` cells; with `None`, to `limit`.
 
@@ -85,10 +86,14 @@ The harvest, store and tending go over the cells the bot can read where it stand
 
 ## `build(f, name, size, radius)`
 
-Builds the next cell of the farm `name` ([`following`](#followingf-name-size)): gets the fill [`lib.terrain.needs`](terrain.md) names for its floor's holes up to the spec's `height`, on top of the materials' fill, with the spec's `gets` (#821), the tools it names and the spec's `tools` with [`ensure_tool`](get.md), takes back the scaffold earlier walks placed, then the spec's `build_cell`. Where that is ok it marks the cell built ([`lib.cells.add`](cells.md)) and says `built cell N` and `cells N/M`.
+Builds the next cell of the farm `name` ([`following`](#followingf-name-size)): gets the fill [`lib.terrain.needs`](terrain.md) names for its floor's holes up to the spec's `height`, on top of the materials' fill, with the spec's `gets` (#821), the tools it names and the spec's `tools` with [`ensure_tool`](get.md), takes back the scaffold earlier walks placed, then the spec's `build_cell`. Where that is ok it marks the cell built ([`lib.cells.add`](cells.md)), keeps its blocks from the walks ([`keep_cells`](#keep_cellsf-name)) and says `built cell N` and `cells N/M`.
 
 - **Returns** `result()`: ok, or the failed get's or `build_cell`'s.
 - **Pauses** yes.
+
+## `keep_cells(f, name)`
+
+Keeps the blocks the spec's `kept(low, high)` gives of each built cell of the farm `name` from the bot's walks with [`keep_blocks`](../../movement/keep_blocks.md), replacing those it kept before: a walk may break any block without a block entity, and a corner walk whose way went through a cocoa cell broke both its logs (#849). Nothing where the spec has no `kept`. `farm` calls it each round and `build` once it built a cell. Done at once.
 
 ## `stocked(f, radius)`
 

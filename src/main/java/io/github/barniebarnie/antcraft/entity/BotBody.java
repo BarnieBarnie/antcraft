@@ -11,7 +11,9 @@ import io.github.barniebarnie.antcraft.profile.TickProfiler;
 import io.github.barniebarnie.antcraft.script.MoveApi;
 import io.github.barniebarnie.antcraft.script.Pos;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.Identifier;
@@ -32,9 +34,14 @@ final class BotBody implements MoveApi.Body {
 	/** One per bot: goals compare by value (see {@link Goal.InSight}). */
 	private final Goal.Sight sight;
 
+	/** What {@link #setBuildScaffold} keeps, and {@link #setKeptBlocks}: walks break neither. */
+	private Predicate<BlockPos> buildKeep = pos -> false;
+	private Set<BlockPos> kept = Set.of();
+
 	BotBody(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
+		this.follower.setKeep(pos -> this.kept.contains(pos) || this.buildKeep.test(pos));
 		// Where the bot is now, over the edge of the only block it rests on, its feet count as beside it (#668): that spot
 		// is no stand to break the block from either, so the walk drops off rather than arrive there and get nowhere (#753).
 		this.sight = (feet, target, broken) -> LineOfSight.sees(bot.level(), feet, target, broken)
@@ -133,7 +140,12 @@ final class BotBody implements MoveApi.Body {
 	public void setBuildScaffold(@Nullable Predicate<Pos> mayPlace, Predicate<Pos> keep) {
 		this.follower.setScaffold(mayPlace == null ? PathFollower.SCAFFOLD_BLOCKS : PathFollower.FAST_SCAFFOLD_BLOCKS);
 		this.follower.setMayPlaceAt(mayPlace == null ? pos -> true : pos -> mayPlace.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
-		this.follower.setKeep(pos -> keep.test(new Pos(pos.getX(), pos.getY(), pos.getZ())));
+		this.buildKeep = pos -> keep.test(new Pos(pos.getX(), pos.getY(), pos.getZ()));
+	}
+
+	@Override
+	public void setKeptBlocks(Set<Pos> kept) {
+		this.kept = kept.stream().map(BotBody::blockPos).collect(Collectors.toUnmodifiableSet());
 	}
 
 	@Override

@@ -110,7 +110,7 @@ def spec(radius=32):
     return {"size": (3, 1), "categories": {"cocoa": [BEANS, LOG]}, "corners": "cocoa_farms", "keep": KEEP,
             "materials": lambda: {LOG: HEIGHT, BEANS: 2 * HEIGHT}, "height": HEIGHT,
             "build_cell": build_cell, "ripe": lambda low, high: len(ripe_pods(low, high)) > 0,
-            "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius),
+            "harvest": harvest, "tend": lambda boxes, told: tend(boxes, told, radius), "kept": lambda low, high: column(low),
             "most": lambda: lib.cellfarm.most(NAME, GROWTH, HARVEST)}
 
 

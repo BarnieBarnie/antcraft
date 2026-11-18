@@ -89,6 +89,38 @@ public class MoveGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
+	/**
+	 * A stone wall across the area and past it, up to the roof, with two jungle logs in it on the bot's way: broken by
+	 * hand a log takes 60 ticks, a stone 150, so the cheapest way goes through the logs. Kept with {@code keep_blocks},
+	 * as a farm keeps its cells' blocks (#856), the walk digs through the stone beside them and the logs stay.
+	 */
+	// Measured: passes at tick 335 (red, keep_blocks a no-op: broke the kept log at 3 1 3 on tick 69).
+	@GameTest(maxTicks = 700)
+	public void gotoGoesRoundKeptBlocks(GameTestHelper helper) {
+		for (int z = -1; z <= 8; z++) {
+			for (int y = 1; y <= 7; y++) {
+				helper.setBlock(3, y, z, z == 3 && y <= 2 ? Blocks.JUNGLE_LOG : Blocks.STONE);
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 3);
+		BlockPos target = helper.absolutePos(new BlockPos(5, 1, 3));
+		String logs = pos(helper.absolutePos(new BlockPos(3, 1, 3))) + ", " + pos(helper.absolutePos(new BlockPos(3, 2, 3)));
+		ScriptRun run = BotScripts.run(bot, "keep_blocks([" + logs + "])\nr = goto(" + pos(target) + ")\nprint(r.ok, r.reason)\n");
+		BotScripts.failOnError(helper, bot);
+		helper.onEachTick(() -> {
+			for (int y = 1; y <= 2; y++) {
+				if (!helper.getBlockState(new BlockPos(3, y, 3)).is(Blocks.JUNGLE_LOG)) {
+					helper.fail("broke the kept log at 3 " + y + " 3, bot at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+				}
+			}
+		});
+
+		helper.succeedWhen(() -> {
+			helper.assertTrue(printed(bot).equals(List.of("True None")), "printed " + printed(bot) + ", script " + run.state());
+			helper.assertValueEqual(bot.blockPosition(), target, "bot");
+		});
+	}
+
 	/** A spot in mid-air, and no blocks to climb with. */
 	@GameTest(maxTicks = 100)
 	public void gotoASpotThatCannotBeReachedIsUnreachable(GameTestHelper helper) {

@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
@@ -245,6 +246,8 @@ public final class ScriptRun {
 	private long[] progressData = new long[0];
 	/** Where the run's walks placed scaffold, oldest first, until {@code placed_scaffold()} takes them ({@link #takePlaced}). Saved. */
 	private final LinkedHashSet<Pos> placed = new LinkedHashSet<>();
+	/** Whether the script kept blocks with {@code keep_blocks}, which its end lets go again (#856). */
+	private boolean keepsBlocks;
 	/** How many {@link #placed} positions a run keeps, the last placed, for a script that never takes them. */
 	static final int PLACED_MAX = 4096;
 	/**
@@ -393,6 +396,15 @@ public final class ScriptRun {
 	private void ended() {
 		this.placed.forEach(this::disown);
 		this.placed.clear();
+		if (this.keepsBlocks) {
+			this.keepsBlocks = false;
+			this.host.body().setKeptBlocks(Set.of());
+		}
+	}
+
+	/** Notes whether the script keeps blocks ({@code keep_blocks}), so its end lets them go. */
+	void keepsBlocks(boolean keeps) {
+		this.keepsBlocks = keeps;
 	}
 
 	/** Whether any run's scaffold is noted, so {@link #blockChanged} has something to do. */

@@ -12,6 +12,7 @@ import io.github.barniebarnie.antcraft.script.lang.Output.Level;
 import io.github.barniebarnie.antcraft.script.lang.Parser;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -43,6 +44,13 @@ class MoveApiTest {
 		List<Pos> portals = List.of();
 		/** Where a loaded block is not a nether portal. */
 		List<Pos> noPortal = List.of();
+		/** What keep_blocks last kept. */
+		Set<Pos> kept = Set.of();
+
+		@Override
+		public void setKeptBlocks(Set<Pos> kept) {
+			this.kept = kept;
+		}
 
 		@Override
 		public long gameTime() {
@@ -225,6 +233,24 @@ class MoveApiTest {
 		tick(run);
 		assertEquals(List.of(), log.last(100, Level.ERROR).stream().map(BotLog.Entry::text).toList());
 		assertEquals("goto(Pos(0, 64, 0))", run.action());
+	}
+
+	/** keep_blocks hands its blocks to the body for the walks, and the script's end lets them go (#856). */
+	@Test
+	void keepBlocksKeepsTillTheScriptEnds() {
+		ScriptRun run = start("keep_blocks([(1, 2, 3), Pos(4, 5, 6)])\ngoto((9, 64, 0))\n");
+		tick(run);
+		assertEquals(Set.of(new Pos(1, 2, 3), new Pos(4, 5, 6)), bot.kept);
+		run.stop();
+		assertEquals(Set.of(), bot.kept);
+	}
+
+	/** A position in another dimension than the bot's is not kept: its coordinates are another block here (#360, #856). */
+	@Test
+	void keepBlocksLeavesOutPositionsInAnotherDimension() {
+		ScriptRun run = start("keep_blocks([Pos(1, 2, 3, 'minecraft:the_nether'), Pos(4, 5, 6, 'minecraft:overworld')])\nwait(10)\n");
+		tick(run);
+		assertEquals(Set.of(new Pos(4, 5, 6, "minecraft:overworld")), bot.kept, log.last(100, Level.ERROR).toString());
 	}
 
 	@Test

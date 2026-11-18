@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Moving the bot (docs/reference/index.md): {@code goto(pos, near=0, keep=None)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
+ * Moving the bot (docs/reference/index.md): {@code goto(pos, near=0, keep=None)}, {@code keep_blocks(blocks)}, {@code home()}, {@code set_home(pos)}, {@code dimension()}
  * and {@code home_dimension()}, {@code travel(portal)}, {@code portals()},
  * and the sense {@code reachable(pos, near=0)}, which plans a walk without taking it.
  * The world is reached through the bot's {@link Body}.
@@ -103,6 +103,13 @@ public final class MoveApi {
 		 * for any scaffold block anywhere. Nor do they break a block {@code keep} says, such as one its blueprint has in place.
 		 */
 		default void setBuildScaffold(@Nullable Predicate<Pos> mayPlace, Predicate<Pos> keep) {
+		}
+
+		/**
+		 * Blocks the bot's walks never break, on top of {@link #setBuildScaffold}'s, as {@code keep_blocks} says, such as a
+		 * farm's cell blocks (#856); none unless set.
+		 */
+		default void setKeptBlocks(Set<Pos> kept) {
 		}
 
 		/** Which scaffold blocks the next walks may not place, as {@code goto(keep=)} says; none unless set. */
@@ -216,6 +223,22 @@ public final class MoveApi {
 			}
 			Selector keep = Args.absent(args[2]) ? null : Selector.parse(args[2]);
 			return run.start(new Goto(run.host(), target, (int) Math.min(near, Integer.MAX_VALUE), 0, keep), call, target);
+		});
+		natives.register("keep_blocks", call -> {
+			Object blocks = Args.bind("keep_blocks", call, 1, "blocks")[0];
+			if (!(blocks instanceof PyList list)) {
+				throw new ScriptError("keep_blocks() takes a list of positions");
+			}
+			Set<Pos> kept = new HashSet<>();
+			for (Object b : list.items) {
+				Pos p = Pos.of(b);
+				if (!run.elsewhere(p)) { // another dimension's coordinates are another block here (#360)
+					kept.add(p);
+				}
+			}
+			run.host().body().setKeptBlocks(kept);
+			run.keepsBlocks(!kept.isEmpty());
+			return PyNone.NONE;
 		});
 		natives.register("travel", call -> {
 			Pos portal = Pos.of(Args.bind("travel", call, 1, "portal")[0]);

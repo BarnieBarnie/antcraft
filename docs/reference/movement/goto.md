@@ -67,4 +67,4 @@ r = goto(home(), keep="cobblestone")
 
 ## See also
 
-[`reachable`](reachable.md), [`travel`](travel.md), [`placed_scaffold`](placed_scaffold.md), [`pos`](pos.md), [`home`](home.md), [`Result` and reason codes](../types/result.md#reason-codes), [Chunk loading](../../features/scripts.md#chunk-loading).
+[`reachable`](reachable.md), [`travel`](travel.md), [`placed_scaffold`](placed_scaffold.md), [`keep_blocks`](keep_blocks.md), [`pos`](pos.md), [`home`](home.md), [`Result` and reason codes](../types/result.md#reason-codes), [Chunk loading](../../features/scripts.md#chunk-loading).

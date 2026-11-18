@@ -45,6 +45,11 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 
 	/** Like {@link #farm(GameTestHelper, int, int, int)}; failing at once on a lost log (failOnLostLog) only where watch. */
 	private static AntBot farm(GameTestHelper helper, int logs, int size, int dz, boolean watch) {
+		return farm(helper, logs, size, dz, watch, "");
+	}
+
+	/** Like {@link #farm(GameTestHelper, int, int, int, boolean)}, the script running prelude after its imports. */
+	private static AntBot farm(GameTestHelper helper, int logs, int size, int dz, boolean watch, String prelude) {
 		helper.setBlock(6, 1, 6 + dz, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(new BlockPos(6, 1, 6 + dz), ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.JUNGLE_LOG, logs));
@@ -54,8 +59,10 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3 + dz));
 		ScriptRun run = BotScripts.run(bot, """
 			import jobs.cocoa_farm
+			import lib.cellfarm
+			%s
 			jobs.cocoa_farm.run(Pos(%d, %d, %d), %d, 8)
-			""".formatted(at.getX(), at.getY(), at.getZ(), size));
+			""".formatted(prelude, at.getX(), at.getY(), at.getZ(), size));
 		BotScripts.failOnError(helper, bot);
 		if (watch) {
 			failOnLostLog(helper, bot, run, dz);
@@ -210,6 +217,23 @@ public class CocoaFarmGameTest implements CustomTestMethodInvoker {
 			BlockState replanted = helper.getBlockState(new BlockPos(1, 1, 3 + dz));
 			helper.assertTrue(replanted.is(Blocks.COCOA) && replanted.getValue(CocoaBlock.AGE) < 2, "the ripe pod not replanted: " + replanted);
 			helper.assertTrue(stored(helper, dz) >= 2, "beans in the depot " + stored(helper, dz));
+		});
+	}
+
+	/**
+	 * The corner walk of {@link #aHarvestWithTheCornerOnItsChunksLastRowLeavesTheLogs} sent onto cell 0's lower log, as
+	 * before #845: the farm keeps its cells' logs from its walks' breaks (keep_blocks, #856), so the walk cannot end there
+	 * and says so, and both logs stay (failOnLostLog).
+	 */
+	// Measured: passes at tick 46 (red, no kept: the log at (2, 1, 3) gone on tick 105, the bot running the corner's goto).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 100)
+	public void aCornerWalkSentThroughACellLeavesItsLogs(GameTestHelper helper) {
+		int dz = Math.floorMod(15 - helper.absolutePos(new BlockPos(0, 0, 3)).getZ(), 16);
+		AntBot bot = farm(helper, 2, 1, dz, true, "lib.cellfarm.corner_spot = lambda low, high: low + (1, 1, 0)");
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot, "corner: unreachable"), "said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertBlockPresent(Blocks.JUNGLE_LOG, 2, 1, 3 + dz);
+			helper.assertBlockPresent(Blocks.JUNGLE_LOG, 2, 2, 3 + dz);
 		});
 	}
 

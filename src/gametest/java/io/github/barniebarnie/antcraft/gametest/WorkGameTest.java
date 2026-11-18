@@ -208,7 +208,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 		Map.entry("mineshaft_at", "mineshaft_at(h, [0])"),
 		Map.entry("ore_vein", "ore_vein(h)"),
 		Map.entry("find_nearest", "find_nearest('chest', around=h)"),
-		Map.entry("scan", "scan('chest', around=h)"));
+		Map.entry("scan", "scan('chest', around=h)"),
+		Map.entry("keep_blocks", "keep_blocks([h])"));
 
 	/**
 	 * The bot natives and {@code Pos} methods that take no position, or take one on purpose from any dimension:
@@ -236,7 +237,7 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			source.append("print('").append(name).append("', ").append(call).append(")\n");
 			expected.add(name + " " + switch (name) {
 				case "reachable" -> "False";
-				case "block", "biome", "surface", "container", "room", "mineshaft", "mineshaft_at", "find_nearest" -> "None";
+				case "block", "biome", "surface", "container", "room", "mineshaft", "mineshaft_at", "find_nearest", "keep_blocks" -> "None";
 				case "ore_vein", "scan" -> "[]";
 				default -> Result.WRONG_DIMENSION;
 			});

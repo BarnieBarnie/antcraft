@@ -17,7 +17,8 @@
 #   get random ticks ([low, high]), loaded(low, high): whether the bot can read the cell (both corners loaded),
 #   room(): empty slots a harvest wants (1), stock(boxes): gets what tending them takes, before the bot walks back to a
 #   cell it visits, chores(keep, told): harvests before the round's, giving (harvests, whether the bot is full),
-#   switch(): a farm to go on with instead, its result, or None, learn(ticks, n): n (> 0) harvests took ticks (else
+#   switch(): a farm to go on with instead, its result, or None, kept(low, high): the cell's blocks no walk may break,
+#   such as a cocoa cell's logs (keep_cells, #856), learn(ticks, n): n (> 0) harvests took ticks (else
 #   lib.cellfarm.learn keeps them under the farm's name, for most, #844), full(boxes,
 #   told): what a full farm does each round, idle(boxes): what a round that harvested nothing does before its wait.
 #
@@ -58,6 +59,13 @@ def own():
     """Strikes what the bot borrowed off lib.borrow: the farm keeps what it took for good."""
     for b in lib.borrow.borrowed():
         lib.borrow.keep(b["item"])
+
+
+def keep_cells(f, name):
+    """Keeps the blocks the spec's kept gives of each built cell of the farm name from the bot's walks' breaks
+    (keep_blocks): a walk whose way went through a cell broke its logs (#849, #856)."""
+    if "kept" in f:
+        keep_blocks([p for i in lib.cells.built(name) for p in f["kept"](*lib.cells.cell(name, i))])
 
 
 def loaded(f, low, high):
@@ -173,6 +181,7 @@ def build(f, name, size, radius):
     r = f["build_cell"](low, high)
     if r["ok"]:
         lib.cells.add(name, i)
+        keep_cells(f, name)
         say(f"built cell {i + 1}")
         say(f"cells {built(f, name, size)}/{limit(f, name, size)}")
     return r
@@ -246,6 +255,7 @@ def farm(f, name, size, radius):
         # build's own taken back by them, idle, tend, get) comes down at its end (#654).
         placed_scaffold()
         own()
+        keep_cells(f, name)
         cells = [lib.cells.cell(name, i) for i in lib.cells.built(name)]
         far = [b for b in cells if not loaded(f, b[0], b[1])]
         visited = far[visits % len(far)] if far else None
