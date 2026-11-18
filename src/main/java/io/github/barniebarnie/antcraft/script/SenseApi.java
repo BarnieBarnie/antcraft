@@ -488,7 +488,7 @@ public final class SenseApi {
 
 	private static <T extends Entity> PyList near(AntBot bot, Class<T> type, Predicate<? super T> what, int radius) {
 		double r2 = (double) radius * radius;
-		List<T> found = new ArrayList<>(bot.level().getEntitiesOfClass(type, bot.getBoundingBox().inflate(radius),
+		List<T> found = new ArrayList<>(bot.entitiesNear(type, bot.getBoundingBox().inflate(radius),
 			entity -> entity != bot && entity.isAlive() && entity.distanceToSqr(bot) <= r2 && what.test(entity)));
 		found.sort(Comparator.comparingDouble(entity -> entity.distanceToSqr(bot)));
 		PyList entities = new PyList();

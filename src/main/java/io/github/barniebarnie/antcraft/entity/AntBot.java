@@ -28,6 +28,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import com.mojang.serialization.Codec;
 import net.minecraft.core.BlockPos;
@@ -86,6 +87,7 @@ import net.minecraft.world.level.storage.TagValueInput;
 import net.minecraft.world.level.storage.TagValueOutput;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jspecify.annotations.Nullable;
@@ -190,6 +192,14 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 
 	public static int countIn(ServerLevel level) {
 		return level.getEntities(ModEntities.ANT_BOT, AntBot::isAlive).size();
+	}
+
+	/**
+	 * The entities of {@code type} in {@code box} that pass {@code test}: what the bot sees of them, its entities() and
+	 * its goals alike. In game tests only those in its test's area (EntityAreaMixin, #742, #899).
+	 */
+	public <T extends Entity> List<T> entitiesNear(Class<T> type, AABB box, Predicate<? super T> test) {
+		return this.level().getEntitiesOfClass(type, box, test);
 	}
 
 	@Override

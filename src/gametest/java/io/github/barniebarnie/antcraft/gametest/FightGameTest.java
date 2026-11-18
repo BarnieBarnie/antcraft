@@ -492,6 +492,25 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * The kite goal sees no creeper beside the test's area (GameTests.hides, #899): of a lit creeper 2 blocks off just
+	 * outside it and one 4 blocks off inside it, the bot keeps clear of the inside one.
+	 */
+	@GameTest(maxTicks = 10)
+	public void theKiteGoalSeesNoCreeperBesideTheTestArea(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 3);
+		Creeper inside = helper.spawnWithNoFreeWill(EntityTypes.CREEPER, 2, 1, 3);
+		Creeper outside = helper.spawnWithNoFreeWill(EntityTypes.CREEPER, 8, 1, 3);
+		inside.setSwellDir(1);
+		outside.setSwellDir(1);
+		GameTests.onEnd(helper, () -> {
+			inside.discard();
+			outside.discard();
+		});
+		helper.succeedWhen(() -> helper.assertTrue(KiteGoal.litNear(bot) == inside,
+			"kites from " + (KiteGoal.litNear(bot) == outside ? "the creeper outside the area" : KiteGoal.litNear(bot))));
+	}
+
+	/**
 	 * A bot with an iron sword fights two creepers and a husk that come at it together, and no blast hurts it (#706): it
 	 * kills the husk and each creeper, or a creeper explodes with the bot out of its blast, 6 to 7 blocks off, where the
 	 * fuse burns on (SwellGoal), as in about 1 run in 50 (#868). Only a blast that hurts the bot fails it, as in

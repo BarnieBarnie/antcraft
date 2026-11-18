@@ -86,7 +86,7 @@ public final class KiteGoal extends Goal {
 	 * selector checks every other tick), under 1% of the tick, so no cheaper check is needed (#732).
 	 */
 	public static @Nullable Creeper litNear(AntBot bot) {
-		return TickProfiler.time("bot.kite", () -> bot.level().getEntitiesOfClass(Creeper.class, bot.getBoundingBox().inflate(RANGE),
+		return TickProfiler.time("bot.kite", () -> bot.entitiesNear(Creeper.class, bot.getBoundingBox().inflate(RANGE),
 				creeper -> creeper.isAlive() && lit(creeper) && creeper.distanceTo(bot) <= RANGE)
 			.stream().min(Comparator.comparingDouble(creeper -> creeper.distanceToSqr(bot))).orElse(null));
 	}
@@ -106,7 +106,7 @@ public final class KiteGoal extends Goal {
 	 */
 	private @Nullable Path away(Creeper creeper) {
 		this.bot.kitePlans++;
-		List<Creeper> creepers = this.bot.level().getEntitiesOfClass(Creeper.class, this.bot.getBoundingBox().inflate(CREEPERS_RANGE), Creeper::isAlive);
+		List<Creeper> creepers = this.bot.entitiesNear(Creeper.class, this.bot.getBoundingBox().inflate(CREEPERS_RANGE), Creeper::isAlive);
 		double now = nearest(creepers, this.bot.position());
 		Path out = this.outOfReach(creepers, now);
 		if (out != null) {
@@ -189,7 +189,7 @@ public final class KiteGoal extends Goal {
 
 	/** Whether a hostile mob other than {@code creeper} is within {@link #CROWD} of the bot. */
 	private boolean crowded(Creeper creeper) {
-		return !this.bot.level().getEntitiesOfClass(Mob.class, this.bot.getBoundingBox().inflate(CROWD),
+		return !this.bot.entitiesNear(Mob.class, this.bot.getBoundingBox().inflate(CROWD),
 			mob -> mob != creeper && mob instanceof Enemy && mob.isAlive() && mob.distanceTo(this.bot) <= CROWD).isEmpty();
 	}
 
