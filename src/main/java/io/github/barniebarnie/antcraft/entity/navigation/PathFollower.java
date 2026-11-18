@@ -32,10 +32,12 @@ import net.minecraft.world.Container;
 import net.minecraft.world.Difficulty;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.SwingAnimation;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.DoorBlock;
@@ -458,12 +460,31 @@ public class PathFollower {
 
 	/**
 	 * Whether a bot opened the door or gate at pos to walk through and has not shut it yet (see {@link #closeBehind});
-	 * such a gate stays shut to animals (FenceGateBlockMixin, #863). A bot that opened one is beside it, as it shuts it
+	 * such a gate or door stays shut to animals (FenceGateBlockMixin, BlockStateBaseMixin, #863, #878). A bot that opened one is beside it, as it shuts it
 	 * once it has passed.
 	 */
 	public static boolean openedByBot(Level level, BlockPos pos) {
 		return level instanceof ServerLevel && !level.getEntitiesOfClass(AntBot.class, new AABB(pos).inflate(2),
 			bot -> bot.getOpened().containsKey(pos)).isEmpty();
+	}
+
+	/**
+	 * The shape an open gate or door at pos has for an animal it is shut to (see {@link #openedByBot}): its shut panel,
+	 * reaching on to the far side of its block, away from the animal, as high. A chicken held only by the thin panel
+	 * stood in it once the gate shut, and so slipped through it, as an entity moves freely out of a shape it is in. Its
+	 * near face is the shut panel's, so the gate or door shuts clear of any animal against it.
+	 */
+	public static VoxelShape shutTo(Entity animal, BlockState state, BlockGetter getter, BlockPos pos) {
+		VoxelShape shut = state.setValue(BlockStateProperties.OPEN, false).getCollisionShape(getter, pos);
+		double top = shut.max(Direction.Axis.Y);
+		if (state.getValue(BlockStateProperties.HORIZONTAL_FACING).getAxis() == Direction.Axis.Z) {
+			return animal.getZ() > pos.getZ() + 0.5
+				? Shapes.box(0, 0, 0, 1, top, shut.max(Direction.Axis.Z))
+				: Shapes.box(0, 0, shut.min(Direction.Axis.Z), 1, top, 1);
+		}
+		return animal.getX() > pos.getX() + 0.5
+			? Shapes.box(0, 0, 0, shut.max(Direction.Axis.X), top, 1)
+			: Shapes.box(shut.min(Direction.Axis.X), 0, 0, 1, top, 1);
 	}
 
 	private static void setOpen(AntBot bot, ServerLevel level, BlockPos pos, BlockState state, boolean open) {

@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.FenceGateBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -25,27 +24,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * that holds its food ({@link BotTemptGoal}) goes through it only the way it swung open, away from whoever opened it
  * (#879): a lured animal follows the bot in, a penned one does not follow it out.
  * <p>
- * Shut to an animal, it is a shut gate's panel reaching on to the far side of its block, away from the animal, as high:
- * a chicken held only by the thin panel stood in it once the gate shut, and so slipped through it, as an entity moves
- * freely out of a shape it is in. Its near face is the shut panel's, so the gate shuts clear of any animal against it.
+ * Shut to an animal, it is {@link PathFollower#shutTo}'s panel.
  */
 @Mixin(FenceGateBlock.class)
 abstract class FenceGateBlockMixin {
-	private static final VoxelShape TO_NORTH = Block.box(0, 0, 0, 16, 24, 10);
-	private static final VoxelShape TO_SOUTH = Block.box(0, 0, 6, 16, 24, 16);
-	private static final VoxelShape TO_WEST = Block.box(0, 0, 0, 10, 24, 16);
-	private static final VoxelShape TO_EAST = Block.box(6, 0, 0, 16, 24, 16);
-
 	@Inject(method = "getCollisionShape", at = @At("HEAD"), cancellable = true)
 	private void antcraft$shutToAnimals(BlockState state, BlockGetter getter, BlockPos pos, CollisionContext context,
 		CallbackInfoReturnable<VoxelShape> cir) {
 		if (state.getValue(BlockStateProperties.OPEN) && context instanceof EntityCollisionContext entityContext
 			&& entityContext.getEntity() instanceof Animal animal
 			&& (PathFollower.openedByBot(animal.level(), pos) || BotTemptGoal.leads(animal) && pastSwing(state, pos, animal))) {
-			boolean acrossZ = state.getValue(BlockStateProperties.HORIZONTAL_FACING).getAxis() == Direction.Axis.Z;
-			cir.setReturnValue(acrossZ
-				? animal.getZ() > pos.getZ() + 0.5 ? TO_NORTH : TO_SOUTH
-				: animal.getX() > pos.getX() + 0.5 ? TO_WEST : TO_EAST);
+			cir.setReturnValue(PathFollower.shutTo(animal, state, getter, pos));
 		}
 	}
 
