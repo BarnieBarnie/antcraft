@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import net.fabricmc.fabric.api.gametest.v1.CustomTestMethodInvoker;
@@ -37,6 +38,19 @@ public class MushroomFarmGameTest implements CustomTestMethodInvoker {
 
 	/** farm with the farm's corner at corner, the supply chest at supply and the bot 2 west of it, extra in the chest. */
 	private static AntBot farm(GameTestHelper helper, BlockPos corner, BlockPos supply, ItemStack... extra) {
+		return run(helper, corner, supply, extra).bot();
+	}
+
+	/** farm's bot and its script run. */
+	private record Farm(AntBot bot, ScriptRun run) {
+		/** What the bot carries, where it is and the call its script runs: which step it is stuck in (#852). */
+		String where(GameTestHelper helper) {
+			return BotScripts.carries(bot) + " at " + TestPositions.relative(helper, bot.position()) + ", running "
+				+ run.action() + " on line " + run.line() + ", last " + run.lastResult();
+		}
+	}
+
+	private static Farm run(GameTestHelper helper, BlockPos corner, BlockPos supply, ItemStack... extra) {
 		helper.setBlock(supply, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(supply, ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.PODZOL, 3));
@@ -49,12 +63,12 @@ public class MushroomFarmGameTest implements CustomTestMethodInvoker {
 		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, supply.getX() - 2, supply.getY(), supply.getZ());
 		BlockPos at = helper.absolutePos(corner);
-		BotScripts.run(bot, """
+		ScriptRun run = BotScripts.run(bot, """
 			import jobs.mushroom_farm
 			jobs.mushroom_farm.run(Pos(%d, %d, %d), 1, 8)
 			""".formatted(at.getX(), at.getY(), at.getZ()));
 		BotScripts.failOnError(helper, bot);
-		return bot;
+		return new Farm(bot, run);
 	}
 
 	private static boolean said(AntBot bot, String what) {
@@ -111,27 +125,67 @@ public class MushroomFarmGameTest implements CustomTestMethodInvoker {
 	 * Bone meal from the chests grows a huge mushroom on a kept mushroom, which is mined and its mushrooms stored (#842).
 	 * The cap reaches 3 blocks round its stem and up to 7 over the floor, so a tall area with the cell in its middle. A
 	 * use grows it on 2 in 5, so 64 bone meal leave no room for chance. More than 3 mushrooms stored come only from a cap:
-	 * the cell's two spread on some 1 in 34000 ticks.
+	 * the cell's two spread on some 1 in 34000 ticks. The dirt is scaffold for one of the tall kind (1 in 12), up to 13
+	 * over the floor: the 3 cobblestone the cell dug climbed only a short one (#852).
 	 */
-	// Measured: passes at tick 696 to 991, the felling some 300 of it (red: no huge mushroom grew).
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 2000)
+	// Measured: passes at tick 658 to 991, the felling some 300 of it (red: no huge mushroom grew); a tall one's felling
+	// takes some 1000 (aTallHugeMushroom...), so the limit leaves room for one.
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 3000)
 	public void boneMealGrowsAHugeMushroomWhichIsMinedAndStored(GameTestHelper helper) {
-		AntBot bot = farm(helper, new BlockPos(8, 1, 8), new BlockPos(12, 1, 11), new ItemStack(Items.BONE_MEAL, 64));
+		Farm farm = run(helper, new BlockPos(8, 1, 8), new BlockPos(12, 1, 11), new ItemStack(Items.BONE_MEAL, 64),
+			new ItemStack(Items.DIRT, 16));
+		AntBot bot = farm.bot();
 		boolean[] grew = new boolean[1];
 		helper.onEachTick(() -> grew[0] |= helper.getBlockState(new BlockPos(8, 1, 8)).is(Blocks.MUSHROOM_STEM)
 			|| helper.getBlockState(new BlockPos(10, 1, 8)).is(Blocks.MUSHROOM_STEM));
 		helper.succeedWhen(() -> {
 			helper.assertTrue(grew[0], "no huge mushroom grew; said " + BotScripts.log(bot, Output.Level.PRINT));
-			int stored = 0;
-			for (int x = 8; x < 12; x++) {
-				if (helper.getBlockState(new BlockPos(x, 1, 6)).is(Blocks.CHEST)) {
-					ChestBlockEntity c = helper.getBlockEntity(new BlockPos(x, 1, 6), ChestBlockEntity.class);
-					stored += c.countItem(Items.BROWN_MUSHROOM) + c.countItem(Items.RED_MUSHROOM);
-				}
-			}
-			helper.assertTrue(stored > 3, stored + " mushrooms stored; said " + BotScripts.log(bot, Output.Level.PRINT)
-				+ "; " + BotScripts.carries(bot) + " at " + TestPositions.relative(helper, bot.position()));
+			assertCapStored(helper, farm);
 		});
+	}
+
+	/**
+	 * A huge mushroom of the tall kind, which bone meal grows on 1 in 12, is felled with scaffold from the chests, its
+	 * mushrooms stored (#852): the bot took 8 scaffold at most, too few to climb its stem, and spent the test walking
+	 * under its cap. The test grows it once the cell is built: a stem 13 high on the brown spot, a brown cap over it.
+	 */
+	// Measured: passes at tick 1060 to 1098 (red: harvest: out_of_reach at a cap block, 2 mushrooms stored on tick 2002).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 2200)
+	public void aTallHugeMushroomIsFelledWithScaffoldFromTheChests(GameTestHelper helper) {
+		Farm farm = run(helper, new BlockPos(8, 1, 8), new BlockPos(12, 1, 11), new ItemStack(Items.DIRT, 16));
+		boolean[] grew = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!grew[0] && said(farm.bot(), "built cell 1")) {
+				for (int y = 1; y <= 13; y++) {
+					helper.setBlock(8, y, 8, Blocks.MUSHROOM_STEM);
+				}
+				for (int x = 5; x <= 11; x++) {
+					for (int z = 5; z <= 11; z++) {
+						if (Math.abs(x - 8) + Math.abs(z - 8) < 6) { // no corners, as vanilla's cap
+							helper.setBlock(x, 14, z, Blocks.BROWN_MUSHROOM_BLOCK);
+						}
+					}
+				}
+				grew[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grew[0], "cell 1 not built; said " + BotScripts.log(farm.bot(), Output.Level.PRINT));
+			assertCapStored(helper, farm);
+		});
+	}
+
+	/** More than 3 mushrooms in the depot's chests, along its row east of (8, 1, 6): only a huge mushroom's cap gives those. */
+	private static void assertCapStored(GameTestHelper helper, Farm farm) {
+		int stored = 0;
+		for (int x = 8; x < 12; x++) {
+			if (helper.getBlockState(new BlockPos(x, 1, 6)).is(Blocks.CHEST)) {
+				ChestBlockEntity c = helper.getBlockEntity(new BlockPos(x, 1, 6), ChestBlockEntity.class);
+				stored += c.countItem(Items.BROWN_MUSHROOM) + c.countItem(Items.RED_MUSHROOM);
+			}
+		}
+		helper.assertTrue(stored > 3, stored + " mushrooms stored; said " + BotScripts.log(farm.bot(), Output.Level.PRINT)
+			+ "; " + farm.where(helper));
 	}
 
 	/** A mushroom that spread onto the path beside a cell, as one does in the dark, is mined (#842). */

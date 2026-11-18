@@ -39,9 +39,8 @@ STEM = "minecraft:mushroom_stem"
 HUGE = [STEM, "minecraft:brown_mushroom_block", "minecraft:red_mushroom_block"]
 # A huge mushroom grows 4 to 6 over its mushroom (8 to 12 on 1 in 12), its cap at the top: the air room looks for.
 TALL = 6
-# The scaffold the bot carries to climb to a cap, 7 over the floor at most where TALL.
+# The scaffold the bot climbs to a cap with, from the chests: as many blocks as the cap is high over its mushroom (harvest).
 SCAFFOLD = "#antcraft:scaffold_blocks"
-CLIMB = 8
 # Kept on the bot, not stored: the crafting table lib.get makes a depot chest with, and the bone meal.
 KEEP = ["minecraft:crafting_table", BONE_MEAL]
 
@@ -130,12 +129,14 @@ def harvest(low, high, told, radius=32):
     climb), mines what spread, and picks up the mushrooms, leaving the two kept. Gives result(): ok, or the reason of
     the felling or mine that failed with at. The felling's one stand is in the stem's column, the head just under the
     cap's top, which reaches the whole cap: lib.trees.stands took some 170 ticks to work a cap of 50 blocks out, and its
-    stands some 600 to fell it, against 300 from the one."""
+    stands some 600 to fell it, against 300 from the one. The scaffold is as much as the stand's height takes: a fixed 8
+    left the bot short under a tall one's cap, walking there till it gave up (#852)."""
     for p in huge(low, high):
-        if count(SCAFFOLD) < CLIMB:
-            lib.stock.take_up_to(SCAFFOLD, CLIMB, radius)
         blocks = mushroom_blocks(p)
         top = max([q.y for q in blocks])
+        climb = top - p.y
+        if count(SCAFFOLD) < climb:
+            lib.stock.take_up_to(SCAFFOLD, climb, radius)
         r = lib.trees.fell_whole(p, False, blocks, [Pos(p.x, top - 2, p.z)])
         if not r["ok"]:
             lib.cellfarm.tell(told, f"harvest: {r['reason']} at {r['at']}")
