@@ -114,6 +114,32 @@ public class DeathGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot whose script had already finished, so it idles, and that then dies respawns idle (#929): death is no player's
+	 * choice, so a one-off script such as a build is not run again; picking the bot up does run it again (#922).
+	 */
+	@GameTest(maxTicks = 440)
+	public void aBotThatDiesIdleAfterItsScriptFinishedRespawnsIdle(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
+		UUID id = bot.getUUID();
+		bot.setHome(helper.absolutePos(new BlockPos(6, 1, 6)));
+		BotScripts.run(bot, "memory['runs'] = memory.get('runs', 0) + 1\n");
+		boolean[] killed = {false};
+		helper.onEachTick(() -> {
+			if (!killed[0] && bot.isIdling()) {
+				killed[0] = true;
+				bot.kill(helper.getLevel());
+			}
+		});
+		helper.succeedWhen(() -> {
+			AntBot again = bot(helper, id);
+			helper.assertTrue(again != null && again.getDeaths() == 1, "not respawned");
+			AntBot back = Objects.requireNonNull(again);
+			helper.assertTrue(back.isIdling(), "runs " + (back.getScript() == null ? null : back.getScript().name()));
+			helper.assertValueEqual(String.valueOf(back.getMemory().get("runs")), "1", "memory['runs']");
+		});
+	}
+
+	/**
 	 * lib.cost.death(at) is what a death at {@code at} costs in ticks (#679): lib.cost.RESPAWN, which the test measures as
 	 * the ticks from the kill to the script's first line run again at home, plus the walk from home back to {@code at}.
 	 */

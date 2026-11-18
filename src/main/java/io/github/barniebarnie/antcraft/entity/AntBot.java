@@ -991,7 +991,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 		this.tellOwner(Component.literal("[" + this.getName().getString() + "] " + line).withStyle(ChatFormatting.RED));
 		// A bot that dies before it resumed the script it was saved running comes back running that one, from the top.
 		this.resumeSavedScript();
-		// The script it ran itself, not the idle.py it fell back to, which it runs anyway once back.
+		// The script it ran itself, not the idle.py it fell back to, which it runs anyway once back. Not lastRun: a script
+		// that had already finished is not run again after a death, only after a pickup (docs/features/death.md, Death; #929).
 		ScriptRun last = this.idling ? null : this.script;
 		boolean library = this.scriptSource != null;
 		Code code = this.scriptCode;
