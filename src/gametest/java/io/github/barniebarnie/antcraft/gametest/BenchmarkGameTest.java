@@ -373,8 +373,48 @@ public class BenchmarkGameTest {
 		return helper.getBounds().inflate(32);
 	}
 
-	private static int totalTicks() {
-		return CASES.stream().mapToInt(c -> WARM_UP_TICKS + c.ticks() + 1).sum();
+	/**
+	 * The cases {@code names} picks, comma-separated, in the order of {@link #CASES}; all for none. Set by
+	 * {@code -Pbenchmark=kiting,creepers} as the {@code antcraft.benchmark.cases} system property (#921).
+	 */
+	static List<Case> selected(String names) {
+		Set<String> wanted = new HashSet<>();
+		for (String name : names.split(",")) {
+			if (!name.isBlank()) {
+				wanted.add(name.strip());
+			}
+		}
+		if (wanted.isEmpty()) {
+			return CASES;
+		}
+		List<String> known = CASES.stream().map(Case::name).toList();
+		List<String> unknown = wanted.stream().filter(name -> !known.contains(name)).sorted().toList();
+		if (!unknown.isEmpty()) {
+			throw new IllegalArgumentException("no benchmark case " + String.join(", ", unknown) + "; the cases are: " + String.join(", ", known));
+		}
+		return CASES.stream().filter(c -> wanted.contains(c.name())).toList();
+	}
+
+	private static int totalTicks(List<Case> cases) {
+		return cases.stream().mapToInt(c -> WARM_UP_TICKS + c.ticks() + 1).sum();
+	}
+
+	/** {@code -Pbenchmark=kiting,creepers} runs only the named cases, in the order they come; plain {@code -Pbenchmark} all (#921). */
+	@GameTest(maxTicks = 1)
+	public void onlyTheNamedCasesRun(GameTestHelper helper) {
+		helper.assertValueEqual(CASES, selected(""), "the cases of a plain -Pbenchmark");
+		helper.assertValueEqual(List.of("creepers", "kiting"), selected(" kiting, creepers ").stream().map(Case::name).toList(),
+			"the cases of kiting, creepers");
+		helper.assertValueEqual(List.of("loop at the cap"), selected("loop at the cap").stream().map(Case::name).toList(),
+			"the cases of a name with spaces");
+		try {
+			selected("kiting,kitting");
+			helper.fail("an unknown case was taken");
+		} catch (IllegalArgumentException e) {
+			helper.assertTrue(e.getMessage().contains("kitting") && e.getMessage().contains("loop at the cap"),
+				"the message names the unknown case and the known ones: " + e.getMessage());
+		}
+		helper.succeed();
 	}
 
 	@GameTest(structure = "antcraft-gametest:benchmark", maxTicks = 30_000, manualOnly = true)
@@ -385,13 +425,15 @@ public class BenchmarkGameTest {
 			tree(helper, tree[0], tree[1]);
 		}
 		helper.setBlock(24, GROUND + 1, 10, ModBlocks.COLONY_CORE);
-		helper.assertTrue(totalTicks() < 30_000, "the cases take " + totalTicks() + " ticks");
-		new Run(helper).register();
+		List<Case> cases = selected(System.getProperty("antcraft.benchmark.cases", ""));
+		helper.assertTrue(totalTicks(cases) < 30_000, "the cases take " + totalTicks(cases) + " ticks");
+		new Run(helper, cases).register();
 	}
 
 	/** Runs the cases one after another from a single tick listener, as listeners must not be added from inside one. */
 	private static final class Run {
 		private final GameTestHelper helper;
+		private final List<Case> cases;
 		private final List<AntBot> bots = new ArrayList<>();
 		/** What the bots are at, sampled every 100 ticks: the action their script waits on, or that it thinks. */
 		private final Map<String, Integer> doing = new TreeMap<>();
@@ -404,8 +446,9 @@ public class BenchmarkGameTest {
 		/** The ticks there were until the server's next autosave when the run began. */
 		private int autosaveIn;
 
-		Run(GameTestHelper helper) {
+		Run(GameTestHelper helper, List<Case> cases) {
 			this.helper = helper;
+			this.cases = cases;
 		}
 
 		void register() {
@@ -423,23 +466,23 @@ public class BenchmarkGameTest {
 
 		private void tick() {
 			long tick = this.helper.getTick();
-			if (this.index < 0 || tick == this.caseStart + WARM_UP_TICKS + CASES.get(this.index).ticks()) {
+			if (this.index < 0 || tick == this.caseStart + WARM_UP_TICKS + this.cases.get(this.index).ticks()) {
 				if (this.index >= 0) {
-					this.finish(CASES.get(this.index));
+					this.finish(this.cases.get(this.index));
 				}
 				this.index++;
-				if (this.index == CASES.size()) {
+				if (this.index == this.cases.size()) {
 					this.autosave().antcraft$setTicksUntilAutosave(this.autosaveIn);
 					LOGGER.info("Benchmark: summary, {} bots\n  {}", BOTS, String.join("\n  ", this.summary));
 					this.helper.succeed();
 					return;
 				}
-				this.begin(CASES.get(this.index), tick);
+				this.begin(this.cases.get(this.index), tick);
 				return;
 			}
 			long since = tick - this.caseStart;
 			if (since % MOB_TICKS == 0) {
-				CASES.get(this.index).mobs().accept(this.helper);
+				this.cases.get(this.index).mobs().accept(this.helper);
 			}
 			if (since == WARM_UP_TICKS) {
 				this.executedAtStart = this.executed();
@@ -454,7 +497,7 @@ public class BenchmarkGameTest {
 					boolean stopped = run == null || !run.running() || !run.name().equals("test");
 					if (bot.isAlive() && stopped && this.stopped.add(bot)) {
 						// Measuring goes on, but a case whose scripts fail measures less than it says.
-						LOGGER.warn("Benchmark: {}: a script stopped: {}", CASES.get(this.index).name(), BotScripts.log(bot, Output.Level.ERROR));
+						LOGGER.warn("Benchmark: {}: a script stopped: {}", this.cases.get(this.index).name(), BotScripts.log(bot, Output.Level.ERROR));
 					}
 					String what = !bot.isAlive() ? "dead" : stopped ? "stopped" : run.action() == null ? "thinking" : run.action().replaceFirst("[ (].*", "");
 					this.doing.merge(what, 1, Integer::sum);

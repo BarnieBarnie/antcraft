@@ -110,6 +110,13 @@ The bot benchmark (`BenchmarkGameTest`) runs 30 bots in a 48x48 area through a s
 grep -A10 'Benchmark: summary' build/check.log   # the summary, when run through scripts/check.sh (-A30 'Benchmark:' for each case)
 ```
 
+To run only some cases, name them after `-Pbenchmark`, comma-separated, as the summary names them (`BenchmarkGameTest.CASES`); they run in their usual order, and a name that is no case fails the run with the list of cases (#921). Two cases take well under a minute:
+
+```sh
+scripts/check.sh runGameTest -Pbenchmark=kiting,creepers
+scripts/check.sh runGameTest -Pbenchmark='loop at the cap,scan r32'   # quote names with spaces
+```
+
 `SenseCostGameTest`, manual-only too, times senses that are done at once against each other in one tick, each native called straight from Java, and logs each one's median time a call and the cost it implies at 20 ns an instruction (#588). The ratios hold on a busy machine, where absolute times do not:
 
 ```sh
