@@ -68,8 +68,9 @@ def tools(low, high):
 def build_cell(low, high, radius=32):
     """Clears the block over the floor, puts dirt on each side that is no soil (SOIL, so sand stays; lib.treefarm.soil),
     pours the water between them and plants cane on both. Gives result(): ok, or the reason of the step that failed with
-    at."""
-    r = lib.terrain.flatten(low, high.up(), low.y)
+    at; no_water says what pour lacked (jobs.farm.lacks)."""
+    # The water spot is left out of the fill, so a source a player put there stays (#926); pour fills it otherwise.
+    r = lib.terrain.flatten(low, high.up(), low.y, keep=[water(low)])
     if not r["ok"]:
         return r
     for s in sides(low, high):
@@ -77,7 +78,7 @@ def build_cell(low, high, radius=32):
         if not r["ok"]:
             return r
     if not jobs.farm.pour(water(low), radius, waters()):
-        return result("no_water", water(low))
+        return result(f"no_water: {jobs.farm.lacks(radius, waters())}", water(low))
     for s in sides(low, high):
         if block(s.up()).id != CANE:
             r = place(s.up(), CANE)

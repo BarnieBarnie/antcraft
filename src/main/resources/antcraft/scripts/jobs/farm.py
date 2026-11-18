@@ -50,6 +50,15 @@ def pour(at, radius=32, keep=None, faces=None):
     return block(at).id == lib.farm.WATER
 
 
+def lacks(radius=32, keep=None):
+    """What a pour(at, radius, keep) that poured nothing lacked, in words for a player (#926)."""
+    if lib.farm.water(radius, keep) is None:
+        return f"no water bucket, nor a water source within {radius} blocks to fill a bucket from"
+    if not bucket_at_hand(radius):
+        return "no water bucket, nor a bucket or iron to make one"
+    return "the bucket poured no water"
+
+
 def farm(low, high, c, kept):
     """Waters a dry field (pour, a source per dry patch until none is dry), gets the hoe and seeds for crop c (of
     lib.farm.CROPS), tends the field, gives back what it borrowed and stores the harvest beyond what kept, (item, count)

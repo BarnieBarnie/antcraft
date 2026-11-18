@@ -63,7 +63,8 @@ def needs(low, high, y):
 def flatten(low, high, y, fill="minecraft:dirt", keep=(), each=None):
     """Mines every block of the box above y (lib.area.clear), then fills each hole at y down to solid ground with fill,
     layer by layer bottom up, water and lava sources first in each layer, so the plot's top is level at y. fill is an item
-    or a list of items, of which each block takes the first the bot has. keep: positions whose blocks it leaves. each, where
+    or a list of items, of which each block takes the first the bot has. keep: positions whose blocks it leaves, neither
+    mined nor filled, such as a water source a farm keeps (#926). each, where
     given, is called with no arguments before each block it mines or places, such as lib.food.upkeep to keep the bot fed
     on a long plot (#757); lib.terrain imports nothing above it. Gives result(): ok, the reason of the mine or
     place that failed with at, or missing_ingredients with missing {fill (the first of a list): blocks left to place}
@@ -82,7 +83,7 @@ def flatten(low, high, y, fill="minecraft:dirt", keep=(), each=None):
     ps = sorted(ps, key=lambda p: (p.y, 0 if block(p).state.get("level", 1) == 0 else 1))
     for i in range(len(ps)):
         # Read again: flowing water comes and goes as the holes fill.
-        if not _open(block(ps[i])):
+        if not _open(block(ps[i])) or ps[i] in keep:
             continue
         item = None
         for f in fills:

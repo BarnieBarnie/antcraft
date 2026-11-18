@@ -225,4 +225,48 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 			helper.assertTrue(stored == 2, "cane in the depot " + stored + " of the 4 cut, 2 planted");
 		});
 	}
+
+	/** jobs.cane_farm.build_cell of cell 1 (1, 0, 3) to (3, 0, 3), dirt either side, the bot holding 4 dirt and 2 cane. */
+	private static AntBot buildCell(GameTestHelper helper) {
+		helper.setBlock(1, 0, 3, Blocks.DIRT);
+		helper.setBlock(3, 0, 3, Blocks.DIRT);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 4));
+		bot.getInventory().addItem(new ItemStack(Items.SUGAR_CANE, 2));
+		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 3));
+		BlockPos high = helper.absolutePos(new BlockPos(3, 0, 3));
+		BotScripts.run(bot, """
+			import jobs.cane_farm
+			r = jobs.cane_farm.build_cell(Pos(%d, %d, %d), Pos(%d, %d, %d), 8)
+			print("built", r["ok"], r["reason"])
+			""".formatted(low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ()));
+		BotScripts.failOnError(helper, bot);
+		return bot;
+	}
+
+	/**
+	 * A water source a player put in a cell's water spot is kept (#926): flatten leaves it out of its fill, so with no
+	 * other water nor bucket around the cell is built round it, not buried in dirt and failing no_water.
+	 */
+	// Measured: passes at tick 13 (red: said built False no_water, the spot filled with dirt).
+	@GameTest(maxTicks = 120)
+	public void aWaterSourceInACellsWaterSpotIsKept(GameTestHelper helper) {
+		helper.setBlock(2, 0, 3, Blocks.WATER);
+		AntBot bot = buildCell(helper);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(said(bot, "built True None"), "said " + BotScripts.log(bot, Output.Level.PRINT));
+			helper.assertBlockPresent(Blocks.WATER, 2, 0, 3);
+			helper.assertBlockPresent(Blocks.SUGAR_CANE, 1, 1, 3);
+			helper.assertBlockPresent(Blocks.SUGAR_CANE, 3, 1, 3);
+		});
+	}
+
+	/** A cell whose water spot is dry, with no water source around to fill a bucket from, says so in its no_water (#926). */
+	// Measured: passes at tick 8 (red: said built False no_water, nothing on what it lacked).
+	@GameTest(maxTicks = 120)
+	public void noWaterSaysThereIsNoSourceToFillFrom(GameTestHelper helper) {
+		AntBot bot = buildCell(helper);
+		helper.succeedWhen(() -> helper.assertTrue(said(bot, "built False no_water: no water bucket, nor a water source within 8 blocks"),
+			"said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
 }
