@@ -171,6 +171,44 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A cell build that fails (#866) is not tried again the next round but BACKOFF (10) rounds later, as where the next
+	 * cell is short of stock (#651): build_cell always fails here, nothing ripens, and each round's wait notes how many
+	 * builds were tried; the reason is said once (#853).
+	 */
+	// Measured: passes at tick 24 (red: tried every round, [1, 2, ..., 12]).
+	@GameTest(maxTicks = 50)
+	public void aFailedBuildBacksOff(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			from lib.project import Step
+			from lib.result import result
+			T = "minecraft:torch"
+			builds = [0]
+			seen = []
+			def build_cell(low, high):
+			    builds[0] += 1
+			    return result("blocked", low)
+			def waited(ticks):
+			    seen.append(builds[0])
+			    if len(seen) == 12:
+			        print(seen)
+			        stop()
+			lib.cellfarm.wait = waited
+			f = {"size": (1, 1), "categories": {"torch": [T]}, "corners": "test_farms", "keep": [T],
+			     "materials": lambda: {}, "build_cell": build_cell, "ripe": lambda low, high: False,
+			     "harvest": lambda low, high, told: result(), "tend": lambda boxes, told: None, "most": lambda: 1}
+			lib.cellfarm.run(f, "test_farm", "torch", Pos(%d, %d, %d), [Step("farm", lib.cellfarm.farm, (f, "test_farm", None, 8))], 8)
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT).stream()
+			.filter(l -> !l.endsWith(": farm")).toList(),
+			List.of("cell not built: blocked at Pos(" + at.below().toShortString() + ")", "[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2]"),
+			"said"));
+	}
+
+	/**
 	 * A corner walk that fails is said, once a reason (#851): corner ignored its goto's result, so a walk to a spot it
 	 * could never reach, by a cactus, went unnoticed (#846). Here cell 0 is stood in for in a chunk four over and the
 	 * corner spot in mid-air, which the bot has no blocks to climb to; corner is called twice.

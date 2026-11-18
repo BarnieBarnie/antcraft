@@ -37,7 +37,7 @@ from lib.result import result
 WAIT = 100  # ticks between looks at the farm while nothing was ripe
 # Rounds the farm lets pass before it tries again to get what the next cell takes, where it could not (#651): a get can
 # be a long chain (charcoal, a furnace, cobblestone, a pickaxe). Some 1000 ticks of waits; a harvest tries at once.
-BACKOFF = 10
+BACKOFF = 10  # also after a cell build that failed (#866)
 # The chunks round a bot's own that get random ticks, so grow plants (#812): a bot's ticket (BotChunks, radius 3) gives
 # its chunk simulation level 30, one more a chunk out, and in 26.3 ServerChunkCache.tickChunks random-ticks only the
 # chunks at entity-ticking level (31 or less, ChunkMap.forEachBlockTickingChunk), so the bot's chunk and the ring round it.
@@ -231,7 +231,7 @@ def farm(f, name, size, radius):
     where it still has too little says so once and harvests nothing, #765), stores what it carries (each round, #766),
     tends the cells, builds the next cell where the farm is below limit and stocked gets what one takes (else says once
     what it lacks, and tries again BACKOFF rounds later, or in the next round that harvested; a build that fails it says
-    once a reason, #853, and tries again the next round), and where it harvested
+    once a reason, #853, and backs off the same, #866), and where it harvested
     nothing does the spec's idle and waits in its corner's chunk (corner, #814). Each round takes back the scaffold its
     walks placed (lib.trees.take_back) before it waits. The harvest, store and tending go over the cells the bot can
     read where it stands, then over those it reads at one cell it cannot, in turn, which it walks to (visit, #811), so
@@ -313,6 +313,7 @@ def farm(f, name, size, radius):
                 r = build(f, name, size, radius)
                 if not r["ok"]:
                     tell(told, f"cell not built: {r['reason']} at {r.get('at')}")
+                    backoff = BACKOFF  # not tried every round where it can never be built (#866)
             else:
                 tell(told, f"next cell: {r['reason']}, lacks {r['missing']}")
                 backoff = BACKOFF
