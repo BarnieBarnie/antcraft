@@ -283,4 +283,71 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 					+ depot.countItem(Items.DRIED_KELP) + "; " + said(bot));
 		});
 	}
+
+	/**
+	 * jobs.kelp_farm.grow over stone up to y 2 with 2 cells (#857): its corner at (1, 3, 3), so cell 1 is the column at
+	 * (1, 3), dug 2 deep, water at y 1 and 2 over the floor at y 0, and cell 2 the same at (3, 3); the depot's first chest
+	 * is at (1, 3, 1). A supply chest holds the kelp and water buckets two cells take, a pickaxe and chests.
+	 */
+	private static AntBot cells(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 0; z < 8; z++) {
+				for (int y = 1; y <= 2; y++) {
+					helper.setBlock(x, y, z, Blocks.STONE);
+				}
+			}
+		}
+		helper.setBlock(6, 3, 6, Blocks.CHEST);
+		Container chest = helper.getBlockEntity(new BlockPos(6, 3, 6), ChestBlockEntity.class);
+		chest.setItem(0, new ItemStack(Items.KELP, 2));
+		for (int i = 1; i <= 4; i++) {
+			chest.setItem(i, new ItemStack(Items.WATER_BUCKET));
+		}
+		chest.setItem(5, new ItemStack(Items.STONE_PICKAXE));
+		chest.setItem(6, new ItemStack(Items.CHEST, 3)); // the cobblestone dug goes in a chest of its own
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 6);
+		BlockPos at = helper.absolutePos(new BlockPos(1, 3, 3));
+		BotScripts.run(bot, """
+			import jobs.kelp_farm
+			jobs.kelp_farm.grow(Pos(%d, %d, %d), 2, 8)
+			""".formatted(at.getX(), at.getY(), at.getZ()));
+		BotScripts.failOnError(helper, bot);
+		return bot;
+	}
+
+	/** The blocks of the cell at (x, 3), y 0 to 3. */
+	private static String column(GameTestHelper helper, int x) {
+		StringBuilder s = new StringBuilder("(" + x + ", 3):");
+		for (int y = 0; y <= 3; y++) {
+			s.append(' ').append(helper.getBlockState(new BlockPos(x, y, 3)).getBlock().getName().getString());
+		}
+		return s.toString();
+	}
+
+	private static boolean kelp(GameTestHelper helper, int x, int y, int z) {
+		return helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.KELP) || helper.getBlockState(new BlockPos(x, y, z)).is(Blocks.KELP_PLANT);
+	}
+
+	/** The farm digs a second water cell, fills it with water and plants kelp on its floor, the first cell kept planted. */
+	// It fails at once where the farm says a cell was not built, with both cells' blocks. Measured: passes at tick 216 to
+	// 238 (red: module 'jobs.kelp_farm' has no attribute 'grow'; then, the top poured over the kelp: no_water, the water
+	// gone into the kelp).
+	@GameTest(maxTicks = 480)
+	public void aSecondWaterCellIsBuiltAndPlanted(GameTestHelper helper) {
+		AntBot bot = cells(helper);
+		helper.onEachTick(() -> {
+			if (BotScripts.log(bot, Output.Level.PRINT).stream().anyMatch(l -> l.contains("cell not built") || l.contains("next cell:"))) {
+				helper.fail("a cell not built; cells " + column(helper, 1) + ", " + column(helper, 3) + ", the bot at "
+					+ TestPositions.relative(helper, bot.position()) + ", carrying " + bot.getInventory().getItems() + "; " + said(bot));
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("built cell 2"), said(bot));
+			for (int x : new int[] {1, 3}) {
+				helper.assertTrue(kelp(helper, x, 1, 3), "no kelp at (" + x + ", 1, 3); " + said(bot));
+				helper.assertTrue(helper.getBlockState(new BlockPos(x, 2, 3)).is(Blocks.WATER) || kelp(helper, x, 2, 3),
+					"no water at (" + x + ", 2, 3): " + helper.getBlockState(new BlockPos(x, 2, 3)) + "; " + said(bot));
+			}
+		});
+	}
 }

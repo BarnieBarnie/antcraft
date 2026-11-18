@@ -557,6 +557,19 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			() -> helper.assertBlockPresent(Blocks.WATER, 4, 2, 4));
 	}
 
+	/**
+	 * {@code use} of an empty bucket on the water of the middle of a pool 3 deep's bottom swims out and fills it from the
+	 * surface, as use walks into reach as place and mine do (#857).
+	 */
+	// Measured: passes at tick 32 (green already: use walks with BotBody.startReach, as place and mine do).
+	@GameTest(maxTicks = 70)
+	public void useABucketOnWaterInADeepPoolFromTheSurface(GameTestHelper helper) {
+		AntBot bot = pool(helper);
+		bot.getInventory().addItem(new ItemStack(Items.BUCKET));
+		expect(helper, bot, "r = use(" + at(helper, 4, 1, 4) + ", 'bucket')\nprint(r.ok, r.reason, count('water_bucket'))\n",
+			List.of("True None 1"));
+	}
+
 	// place
 
 	@GameTest(maxTicks = 60)

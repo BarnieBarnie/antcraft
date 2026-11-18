@@ -14,7 +14,7 @@ The arguments are the corners `x1 y1 z1 x2 y2 z2` of the pool's floor, the block
 
 ## The pool
 
-The farm builds no water: it farms a pool that is already there, such as one dug into the ground and filled with a few water buckets. The pool is **two blocks deep or more**, water source blocks over a floor kelp stands on (any solid block but magma), with ground round it level with the top of the water, where the bot walks.
+Without `cells` ([Growing water cells](#growing-water-cells)) the farm builds no water: it farms a pool that is already there, such as one dug into the ground and filled with a few water buckets. The pool is **two blocks deep or more**, water source blocks over a floor kelp stands on (any solid block but magma), with ground round it level with the top of the water, where the bot walks.
 
 [`place`](../reference/blocks/place.md) and [`mine`](../reference/blocks/mine.md) reach 4 blocks from the bot's eyes, which gets to the floor of a pool two deep from its rim, not three. Where the rim is out of reach, they swim out and work from the surface of the water (#840), so a deeper pool is farmed too, a block more of it from the water for each block deeper. Under water a bot only swims up for air ([Bots](../features/bots.md)), so it is never sent down to work there: the floor of a pool deeper than about four blocks is out of reach from the surface as well, and left unplanted (its `place` fails `out_of_reach`).
 
@@ -36,6 +36,24 @@ Without `dry` the bot stores raw kelp. With it (from a script, `jobs.kelp_farm.r
 
 The depot keeps raw kelp in its `kelp` chests and dried kelp and its blocks in its `dried` chests. Kelp in other chests, such as the one the bot planted from, is left alone as planting stock. Put a furnace and a crafting table by the depot, and a few coal in a chest nearby to start.
 
+## Growing water cells
+
+With `cells` first the job builds its own water instead of farming a pool: a farm of water cells that grows a cell at a time on [`lib.cellfarm`](../reference/modules/lib/cellfarm.md), as the [sugarcane farm](cane-farm.md) does (#857).
+
+```text
+/antcraft bot run jobs.kelp_farm cells
+/antcraft bot run jobs.kelp_farm cells 10 63 10
+/antcraft bot run jobs.kelp_farm cells 10 63 10 8 16
+```
+
+The arguments after `cells` are the farm's corner `x y z` (by default where the bot stands, or where the last run started), the most cells it grows to (by default as many as keep growing round its corner) and the radius (default 32). From a script, `jobs.kelp_farm.grow(at, size, radius)`.
+
+A cell is one column of the ground under the corner's level, dug two deep: water in both blocks, kelp on the block under them, which must be solid. The cells go east and south of the corner with a block of path between them, the depot north of them, as for every `lib.cellfarm` farm. To build one, the bot clears the block over the cell, digs its top block and pours water into it, then digs the block under that water, so the water falls into it, pours a source there over the falling water and plants a kelp in it. In that order because a bucket's look goes through water: poured over a kelp, the water would go into the kelp and be lost. It pours with [`jobs.farm`'s `pour`](farm.md#the-bundled-job): a water bucket from a chest, else an empty bucket filled at a water source within the radius, never one of the farm's own. A cell takes two water buckets and a kelp; the bot keeps its buckets, and the stone it dug goes in the depot.
+
+Each round, kelp grown up to a cell's top block is cut there from the surface, its bottom block left to grow again, and stored in the depot's `kelp` chests; a cell whose kelp is gone is planted again from the depot. Once the depot holds a kelp the next round builds the next cell with it. Kelp grows a block in some 9800 ticks, so a cell gives a kelp about every 8 minutes.
+
 ## Not yet
 
-- Growing the farm: it builds no new water cells, as a cell two deep takes a few water buckets poured block by block.
+- `dry` for the water cells: their kelp is stored raw.
+- A water cell whose top block lost its water over the kelp is not poured again, as a bucket poured there would go into the kelp: pour it by hand, aimed at the side of the hole.
+- Water cells deeper than two blocks, which would give more kelp a cut.
