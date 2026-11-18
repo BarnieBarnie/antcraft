@@ -330,6 +330,41 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A cow outside the pen walled in with bedrock, which no walk gets through, wheat in the chest: the bot cannot get to
+	 * it, so it does not lure it, neither opening the gate for it nor waiting in its corner, and says why once (#883).
+	 * Fails at once where the bot waits for the cow.
+	 */
+	// Measured: passes at tick 400, its fixed end (red: on tick 228 the bot opened the gate with use for the cow it
+	// never got to).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
+	public void anUnreachableStrayIsNotLured(GameTestHelper helper) {
+		for (int x = 2; x <= 4; x++) {
+			for (int z = 11; z <= 13; z++) {
+				for (int y = 1; y <= 3; y++) {
+					if (x != 3 || z != 12 || y == 3) {
+						helper.setBlock(x, y, z, Blocks.BEDROCK);
+					}
+				}
+			}
+		}
+		animal(helper, EntityTypes.COW, 3, 12, false);
+		AntBot bot = ranch(helper, 4, new ItemStack(Items.WHEAT, 4));
+		helper.onEachTick(() -> {
+			String action = bot.getScript() == null ? null : bot.getScript().action();
+			// The pen holds no animal, so the only use is the lure's of the gate; the walks open and shut it themselves.
+			if (action != null && (action.equals("wait(10)") || action.startsWith("use("))) {
+				helper.fail("the bot lures an unreachable cow, doing " + action + ", the gate "
+					+ (helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN) ? "open" : "shut"));
+			}
+		});
+		helper.succeedWhen(() -> {
+			List<String> said = BotScripts.log(bot, Output.Level.PRINT).stream().filter(s -> s.startsWith("lure")).toList();
+			helper.assertTrue(helper.getTick() >= 400, "waiting for a few rounds");
+			helper.assertTrue(said.size() == 1, "said " + said);
+		});
+	}
+
+	/**
 	 * Two cows in the pen and wheat only in a chest of a crop farm's depot in the bot's memory, too far off for the
 	 * ranch's chest radius (8): the bot fetches the wheat from it and a calf appears.
 	 */

@@ -85,12 +85,14 @@ def gate(low, high):
     return None
 
 
-def lure(kind, animals, low, high, cap, radius):
+def lure(kind, animals, low, high, cap, radius, told):
     """Leads one animal of kind from outside the pen in, while the kind is under cap: with its food in hand (an animal
     follows a bot holding its food, as it does a player) the bot walks to it, then to the block outside the gate, so it
     follows there, opens the gate and walks to the pen's corner farthest from the gate. There it waits until the animal
     is in, two blocks clear of the gate, or LURE ticks have gone by; then it shuts the gate. An animal does not find its
-    way round a fence to a bot on the other side, so the bot leads it to the gate first."""
+    way round a fence to a bot on the other side, so the bot leads it to the gate first. Where a walk fails it lures none
+    this round, and says why once (into told, a dict of what was said): the gate opened for an animal it never got to
+    (#883)."""
     strays = [e for e in entities(kind, min(radius, 64)) if not inside(e.pos, low, high)]
     if len(animals) >= cap or not strays:
         return
@@ -101,9 +103,16 @@ def lure(kind, animals, low, high, cap, radius):
     equip(FOOD[kind])
     # Near enough only outside the fence: within 3 a bot in the pen got there through the fence and left the animal
     # behind (#874).
-    goto(stray.pos, near=1)
+    r = goto(stray.pos, near=1)
     out = Pos(g.x + (1 if g.x > high.x else -1 if g.x < low.x else 0), g.y, g.z + (1 if g.z > high.z else -1 if g.z < low.z else 0))
-    goto(out)
+    if r:
+        r = goto(out)
+    if not r:
+        what = f"lure: {r.reason}"
+        if what not in told:
+            told[what] = True
+            say(what)
+        return
     wait(2)  # a gate the walk opened is shut once the bot has passed it; left open, the next walk would shut it (#874)
     # The gate stands open while the stray comes in; the penned animals that follow the food follow the bot to its corner,
     # and none of a pen full of others walked out in RanchGameTest aLureLetsNoPennedAnimalOut (#855).
@@ -170,10 +179,10 @@ def collect(low, high):
         pick_up(PRODUCE, radius=min(16, int(m.distance(high)) + 2))
 
 
-def tend(low, high, cap, radius):
-    """One round over each kind, then picks up what lies in the pen and stores the produce."""
+def tend(low, high, cap, radius, told):
+    """One round over each kind, then picks up what lies in the pen and stores the produce; told holds what lure said."""
     for kind in FOOD:
-        lure(kind, herd(kind, low, high), low, high, cap, radius)
+        lure(kind, herd(kind, low, high), low, high, cap, radius, told)
         animals = herd(kind, low, high)
         # Youngest first, so cull kills the oldest past the cap (#871).
         adults = sorted([a for a in animals if not a.baby], key=lambda a: a.age)
@@ -194,8 +203,9 @@ def run(low, high, cap=None, radius=32):
     if cap is None:
         cap = default_cap(low, high)
     lib.depot.depot(NAME, low + (0, 0, -3), "east", {"produce": PRODUCE})
+    told = {}
     while True:
-        tend(low, high, cap, radius)
+        tend(low, high, cap, radius, told)
         wait(REST)
 
 
