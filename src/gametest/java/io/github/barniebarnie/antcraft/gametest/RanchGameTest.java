@@ -14,6 +14,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.animal.Animal;
 import net.minecraft.world.entity.animal.chicken.Chicken;
@@ -680,5 +681,40 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		BotScripts.failOnError(helper, bot);
 		failWhereOneGetsOut(helper, penned, bot);
 		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("done"), "the bot is still walking"));
+	}
+
+	/**
+	 * A cow at (1, 1, 5) behind still cows at x 1 to 2, z 4 to 6 of a pen with no gate, the bot outside the fence at
+	 * (1, 1, 2): {@code attack} strikes it over the fence, as a player reaches 3 blocks from the eye (#902). With a mob's
+	 * melee reach, 0.8 past the bot's box, the bot had to get beside the cow, and a cull in a crowded pen ended unreachable
+	 * or took hundreds of ticks (#882).
+	 */
+	// Measured: passes at tick 16 (red: False unreachable on tick 42, the bot walking round the fence for a way in).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 40)
+	public void aBotKillsACowBehindOtherCowsOverTheFence(GameTestHelper helper) {
+		pen(helper);
+		helper.setBlock(3, 1, 3, Blocks.OAK_FENCE);
+		Cow target = animal(helper, EntityTypes.COW, 1, 5, false);
+		target.setNoAi(true);
+		for (int x = 1; x <= 2; x++) {
+			for (int z = 4; z <= 6; z++) {
+				if (x != 1 || z != 5) {
+					animal(helper, EntityTypes.COW, x, z, false).setNoAi(true);
+				}
+			}
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 2);
+		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
+		BotScripts.run(bot, """
+			for e in entities('cow', 8):
+			    if e.id == '%s':
+			        r = attack(e)
+			        print(r.ok, r.reason)
+			""".formatted(target.getUUID()));
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> {
+			List<String> printed = BotScripts.log(bot, Output.Level.PRINT);
+			helper.assertTrue(printed.equals(List.of("True None")), "printed " + printed + ", cow at " + target.getHealth() + " health");
+		});
 	}
 }

@@ -96,6 +96,19 @@ public final class BotHands {
 		return bot.isWithinMeleeAttackRange(target) && bot.getSensing().hasLineOfSight(target);
 	}
 
+	/** A player's entity interaction range, measured from the eye to the target's box (docs/reference/combat/attack.md). */
+	static final double PLAYER_REACH = 3;
+
+	/**
+	 * Whether {@code target} is within a player's reach of the bot's eye and in its sight, as the script's {@code attack} and
+	 * {@code use} strike (#902). The bot's own fighting keeps {@link #inStrikingReach}, a mob's melee range, which the kite
+	 * goal's step-in timing against a creeper's fuse was tuned to (#868, #898).
+	 */
+	public static boolean inPlayerReach(AntBot bot, LivingEntity target) {
+		return target.getBoundingBox().distanceToSqr(bot.getEyePosition()) < PLAYER_REACH * PLAYER_REACH
+			&& bot.getSensing().hasLineOfSight(target);
+	}
+
 	/**
 	 * Swings the held item at {@code target}, as a mob strikes: its damage is the bot's attack damage with what it holds. A
 	 * blow that lands with a sword also sweeps ({@link #sweep}); a player's critical hit and sprint knockback a bot never

@@ -602,7 +602,7 @@ public final class WorkApi {
 				this.stopWalk();
 				return false;
 			}
-			if (BotHands.inStrikingReach(this.bot, target)) {
+			if (BotHands.inPlayerReach(this.bot, target)) {
 				this.stopWalk();
 				this.arrivals = 0;
 				this.steppedIn = 0;

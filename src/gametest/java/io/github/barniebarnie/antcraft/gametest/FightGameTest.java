@@ -248,11 +248,11 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * A sword's blow sweeps (#423), as a player's: a bot with a sword attacking one cow also hurts the cow beside it. Which
 	 * of the two it attacks does not matter.
 	 */
-	// Measured: passes at tick 12, the first blow.
+	// Measured: passes at tick 2, the first blow (tick 12 when the bot walked in from 3 blocks off, before #902).
 	@GameTest(maxTicks = 25)
 	public void aSwordAlsoHurtsTheMobBesideTheTarget(GameTestHelper helper) {
 		List<Cow> cows = List.of(stillCow(helper, new Vec3(3, 1, 4.5)), stillCow(helper, new Vec3(4.2, 1, 4.5)));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
 		run(helper, bot, "attack(entities('cow', 5)[0])\n");
 		helper.succeedWhen(() -> {
@@ -266,7 +266,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	@GameTest(maxTicks = 70)
 	public void anAxeHurtsOnlyTheTarget(GameTestHelper helper) {
 		List<Cow> cows = List.of(stillCow(helper, new Vec3(3, 1, 4.5)), stillCow(helper, new Vec3(4.2, 1, 4.5)));
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_AXE));
 		run(helper, bot, "attack(entities('cow', 5)[0])\n");
 		// The first blow lands at about tick 12, the second 20 ticks later.
@@ -293,7 +293,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		named.setCustomName(Component.literal("Daisy"));
 		AntBot other = helper.spawn(ModEntities.ANT_BOT, new Vec3(4.5, 1, 4.5));
 		other.setNoAi(true);
-		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.DIAMOND_SWORD));
 		run(helper, bot, "attack(entities('pig', 8)[0])\n");
 		helper.onEachTick(() -> {
