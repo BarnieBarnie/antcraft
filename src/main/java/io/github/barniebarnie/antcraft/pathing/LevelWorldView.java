@@ -88,13 +88,17 @@ public class LevelWorldView implements WorldView {
 	}
 
 	/**
-	 * A crop, sapling, sugar cane, sweet berry bush, nether wart, mushroom or kelp, such as a farm grows: paths treat it
-	 * as air (kelp as water) but never put scaffold in its place, so they go round it (#865, #870). Grass and flowers are
-	 * not: wild terrain is full of them, and scaffold breaks them with their drops (#608). Kelp is under water, which
-	 * bridges never cross, so only a pillar from the kelp bed would replace it.
+	 * A crop (melon and pumpkin stems among them), attached stem, sapling, bamboo shoot, crimson or warped fungus, sugar
+	 * cane, sweet berry bush, nether wart, mushroom or kelp, such as a farm grows or a lumberjack plants: paths treat it
+	 * as air (kelp as water) but never put scaffold in its place, so they go round it (#865, #870, #892). Grass and
+	 * flowers are not: wild terrain is full of them, and scaffold breaks them with their drops (#608). Kelp is under
+	 * water, which bridges never cross, so only a pillar from the kelp bed would replace it. Cocoa, cactus and grown
+	 * bamboo are left out: they have collision, so paths never treat them as air.
 	 */
 	static boolean isPlant(BlockState state) {
 		return state.is(BlockTags.CROPS) || state.is(BlockTags.SAPLINGS) || state.is(Blocks.SUGAR_CANE)
+			|| state.is(Blocks.ATTACHED_MELON_STEM) || state.is(Blocks.ATTACHED_PUMPKIN_STEM)
+			|| state.is(Blocks.BAMBOO_SAPLING) || state.is(Blocks.CRIMSON_FUNGUS) || state.is(Blocks.WARPED_FUNGUS)
 			|| state.is(Blocks.SWEET_BERRY_BUSH) || state.is(Blocks.NETHER_WART)
 			|| state.is(Blocks.BROWN_MUSHROOM) || state.is(Blocks.RED_MUSHROOM)
 			|| state.is(Blocks.KELP) || state.is(Blocks.KELP_PLANT);

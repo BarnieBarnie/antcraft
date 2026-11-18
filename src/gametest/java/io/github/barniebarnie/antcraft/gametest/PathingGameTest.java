@@ -990,6 +990,30 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * As {@link #pillaringGoesRoundAMushroom}, with a crimson fungus on crimson nylium, as a lumberjack plants where a
+	 * huge fungus stood (#892): the path pillars up its own half and the fungus stays.
+	 */
+	// Measured: passes at tick 23 (red: the fungus became dirt on tick 3).
+	@GameTest(maxTicks = 50)
+	public void pillaringGoesRoundAFungus(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 6, Blocks.BEDROCK);
+		fill(helper, 2, 1, 3, 3, 7, 3, Blocks.AIR);
+		helper.setBlock(3, 0, 3, Blocks.CRIMSON_NYLIUM);
+		helper.setBlock(3, 1, 3, Blocks.CRIMSON_FUNGUS);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		BotScripts.failOnError(helper, bot);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.CRIMSON_FUNGUS)) {
+				helper.fail("the fungus became " + helper.getBlockState(new BlockPos(3, 1, 3)));
+			}
+		});
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 4, 3)));
+		succeedWhenAt(helper, bot, new BlockPos(3, 4, 3));
+	}
+
+	/**
 	 * A bot on a block, its body over the block's edge into the air beside it, steps up onto a block it bridges there
 	 * (#656): it steps back off the edge to place it, as its own body was in the way, where it waited till it gave up
 	 * unreachable, such as beside a felled poplar's trunk.
