@@ -29,20 +29,24 @@ def bucket_at_hand(radius=32):
             or make_cost("bucket", 1, radius, None, BUCKET_TICKS) is not None)
 
 
-def pour(at, radius=32, keep=None):
+def pour(at, radius=32, keep=None, faces=None):
     """Pours a water source at at, a spot of soil, with a water bucket from lib.get, else an empty bucket from lib.get (a
     chest's, or made of three iron ingots) filled at the nearest water source but for those at keep, positions such as
     the field's own (#592). With no water source within radius, or no bucket at hand, no bucket is got and nothing
     poured. A borrowed water bucket is given back empty (#629). Flowing water at at is poured over, so a source is there
-    after (#857). Gives whether water is at at."""
+    after (#857). With faces, sides of at such as "north", the bucket is aimed at each of those faces of at in turn
+    until one pours, so its look meets the block beside at rather than one under it, such as a kelp, into which the
+    water would go and be lost (#877). Gives whether water is at at."""
     if block(at).id == lib.farm.WATER and block(at).state["level"] == 0:
         return True
     if (count("water_bucket") or get("water_bucket", 1, radius)["ok"]
             or lib.farm.water(radius, keep) is not None and bucket_at_hand(radius) and get("bucket", 1, radius)["ok"]
             and lib.farm.fill_bucket(radius, keep)["ok"]):
         mine(at)
-        if use(at, "water_bucket"):  # aimed at the hole itself, so the water goes in, not over its rim
-            turned("water_bucket", "bucket")
+        for face in faces or [None]:
+            if use(at, "water_bucket", face=face):  # aimed at the hole itself, so the water goes in, not over its rim
+                turned("water_bucket", "bucket")
+                break
     return block(at).id == lib.farm.WATER
 
 

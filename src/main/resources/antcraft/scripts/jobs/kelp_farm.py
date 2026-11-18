@@ -8,10 +8,10 @@
 # under water that lacks it, cuts the kelp two high or more down to its bottom block, so it grows again, and stores the
 # kelp mined (or, with dry, the dried kelp and its blocks) in a depot north of the pool. Another job farms a pool with run(low, high); imported, this runs nothing.
 #
-# Run as /antcraft bot run jobs.kelp_farm cells [x y z [cells [radius]]] it grows a farm of water cells instead (#857),
-# its kelp water-cell spec on lib.cellfarm (cell_spec, grow): each cell a column of the ground dug two deep, water
-# poured in (jobs.farm.pour) and kelp planted on its floor, harvested from the surface; the corner, cells and radius as
-# jobs.cane_farm's.
+# Run as /antcraft bot run jobs.kelp_farm cells [x y z [cells [radius [dry [food]]]]] it grows a farm of water cells
+# instead (#857), its kelp water-cell spec on lib.cellfarm (cell_spec, grow): each cell a column of the ground dug two
+# deep, water poured in (jobs.farm.pour) and kelp planted on its floor, harvested from the surface; the corner, cells and
+# radius as jobs.cane_farm's, dry and food as the pool's (#877).
 #
 # This is the mod's default. Change it and the mod leaves your version alone;
 # delete it and the default comes back when the server starts.
@@ -45,6 +45,8 @@ GROWTH = 4096 / 3 / 0.14
 HARVEST = 100
 # Kept on the bot, not stored: the buckets that water a cell, and the crafting table lib.get makes a depot chest with.
 KEEP = ["minecraft:bucket", "minecraft:water_bucket", "minecraft:crafting_table"]
+# The faces of a cell's top block a bucket is aimed at to pour it over the kelp: its look meets the ground beside it (#877).
+SIDES = ["north", "south", "east", "west"]
 
 
 def spots(low, high):
@@ -89,16 +91,17 @@ def harvest(low, high):
     return n
 
 
-def dry(radius=32, food=0):
+def dry(radius=32, food=0, name=NAME, spare=0):
     """Smelts the kelp the bot carries and the depot holds, a stack at most, to dried kelp in a furnace within radius
     (else one lib.craft.smelt_here puts down), burning a dried kelp block, else coal or charcoal, carried or taken from
     the chests within radius (else the best fuel carried), and puts what it took and did not burn back (#858); then
     crafts each 9 dried kelp the bot carries and the depot holds, but food of them kept as food (#858), to a dried kelp
     block, at a crafting table within radius (else lib.craft.craft_here's). Kelp in other chests, the planting stock, is
-    left alone. Gives how many kelp it smelted."""
+    left alone. The depot is name's; spare kelp are left raw, as the water cells' planting stock (#877). Gives how many
+    kelp it smelted."""
     since = len(lib.borrow.borrowed())
-    lib.stock.take_up_to(KELP, lib.craft.STACK, chests=lib.depot.chests(NAME))
-    n = min(count(KELP), lib.craft.STACK)
+    lib.stock.take_up_to(KELP, lib.craft.STACK, chests=lib.depot.chests(name))
+    n = max(0, min(count(KELP) - spare, lib.craft.STACK))
     before = count(DRIED)
     if n:
         fuel = None
@@ -115,7 +118,7 @@ def dry(radius=32, food=0):
     # The fuel left over, and any kelp over a stack, back to their chests.
     lib.borrow.give_back(since=since)
     smelted = count(DRIED) - before
-    lib.stock.take_up_to(DRIED, lib.craft.STACK, chests=lib.depot.chests(NAME))
+    lib.stock.take_up_to(DRIED, lib.craft.STACK, chests=lib.depot.chests(name))
     k = max(0, count(DRIED) - food) // 9
     if k:
         table = find_nearest("minecraft:crafting_table", radius=radius)
@@ -143,17 +146,22 @@ def cell_tools(low, high):
 
 def plant_cell(low, radius=32):
     """Plants kelp in the cell at low's bottom block where it lacks it, a water source poured there first where it is
-    none (jobs.farm.pour), with kelp the bot carries or takes from the chests within radius. Gives result(): ok, else
+    none (jobs.farm.pour), with kelp the bot carries or takes from the chests within radius; then pours a source in its
+    top block where it lost it, aimed at a side of the hole (SIDES), not into the kelp (#877). Gives result(): ok, else
     no_water or the reason the place failed, with at."""
     bottom = low.down()
-    if block(bottom).id in STALK:
-        return result()
-    if not jobs.farm.pour(bottom, radius, waters(low)):
-        return result("no_water", bottom)
-    if not count(KELP):
-        lib.stock.take_up_to(KELP, 1, radius)
-    r = place(bottom, KELP)
-    return result() if r else result(r.reason, bottom)
+    if block(bottom).id not in STALK:
+        if not jobs.farm.pour(bottom, radius, waters(low)):
+            return result("no_water", bottom)
+        if not count(KELP):
+            lib.stock.take_up_to(KELP, 1, radius)
+        r = place(bottom, KELP)
+        if not r:
+            return result(r.reason, bottom)
+    # ponytail: every side is taken as ground, as the cell is dug in it.
+    if block(low).id not in STALK and not jobs.farm.pour(low, radius, waters(low), SIDES):
+        return result("no_water", low)
+    return result()
 
 
 def build_water_cell(low, high, radius=32):
@@ -161,8 +169,7 @@ def build_water_cell(low, high, radius=32):
     falls, pours a source over that falling water and plants kelp in it (plant_cell). In that order: a bucket's look goes
     through water and over kelp would pour into the kelp, where the water is lost, so the top block is poured while the
     hole is one deep. Gives result()."""
-    # ponytail: the floor under the cell is taken as solid, as the ground it is dug in; a cave there fails the place. A
-    # cell whose top lost its water over the kelp is not poured again.
+    # ponytail: the floor under the cell is taken as solid, as the ground it is dug in; a cave there fails the place.
     for p in (low.up(), low):
         if not block(p).is_air and block(p).id not in [WATER] + STALK:
             r = mine(p)
@@ -187,21 +194,31 @@ def harvest_cell(low, high, told):
     return result()
 
 
-def cell_spec(radius=32):
-    """The lib.cellfarm spec of the kelp water-cell farm."""
-    return {"size": (1, 1), "categories": {"kelp": [KELP]}, "corners": "kelp_farms", "keep": KEEP,
+def dry_cells(radius, food):
+    """The water-cell farm's chores with dried: dry over its depot, a kelp left raw to plant the next cell with; no
+    harvest of its own (#877)."""
+    dry(radius, food, CELLS, 1)
+    return 0, False
+
+
+def cell_spec(radius=32, dried=False, food=0):
+    """The lib.cellfarm spec of the kelp water-cell farm; with dried, its kelp dried each round (dry_cells)."""
+    f = {"size": (1, 1), "categories": {"kelp": [KELP], "dried": [DRIED, BLOCK]}, "corners": "kelp_farms", "keep": KEEP,
             "materials": lambda: {KELP: 1}, "gets": lib.treefarm.get_outside, "tools": cell_tools,
             "build_cell": lambda low, high: build_water_cell(low, high, radius),
             "ripe": lambda low, high: block(low).id in STALK, "harvest": harvest_cell,
             "tend": lambda boxes, told: [plant_cell(b[0], radius) for b in boxes],
             "most": lambda: lib.cellfarm.most(CELLS, GROWTH, HARVEST)}
+    if dried:
+        f["chores"] = lambda keep, told: dry_cells(radius, food)
+    return f
 
 
-def grow(at=None, size=None, radius=32):
+def grow(at=None, size=None, radius=32, dried=False, food=0):
     """Grows and farms the kelp water-cell farm with its corner at at (where the bot stands, or where the last run
-    started), up to size cells (else lib.cellfarm.limit). Never returns but on a failed step: gives lib.project.run's
-    result() then."""
-    f = cell_spec(radius)
+    started), up to size cells (else lib.cellfarm.limit); with dried, its kelp smelted and pressed as run's (dry), food
+    dried kelp left uncrafted. Never returns but on a failed step: gives lib.project.run's result() then."""
+    f = cell_spec(radius, dried, food)
     return lib.cellfarm.run(f, CELLS, "kelp", at, [Step("farm", lib.cellfarm.farm, (f, CELLS, size, radius))], radius)
 
 
@@ -240,7 +257,8 @@ except NameError:
 if args is not None:
     if args and args[0] == "cells":
         grow(Pos(int(args[1]), int(args[2]), int(args[3])) if len(args) > 3 else None,
-             int(args[4]) if len(args) > 4 else None, int(args[5]) if len(args) > 5 else 32)
+             int(args[4]) if len(args) > 4 else None, int(args[5]) if len(args) > 5 else 32,
+             len(args) > 6 and args[6] == "dry", int(args[7]) if len(args) > 7 else 0)
     elif len(args) >= 6:
         run(Pos(int(args[0]), int(args[1]), int(args[2])), Pos(int(args[3]), int(args[4]), int(args[5])),
             int(args[6]) if len(args) > 6 else 32, len(args) > 7 and args[7] == "dry", int(args[8]) if len(args) > 8 else 0)

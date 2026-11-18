@@ -317,10 +317,15 @@ public final class BotHands {
 	 * would act on another block (docs/reference/blocks/use.md), and {@link Result#BLOCKED} when the use did nothing.
 	 */
 	public static @Nullable String use(AntBot bot, BlockPos pos) {
+		return use(bot, pos, null);
+	}
+
+	/** As {@link #use(AntBot, BlockPos)}, aimed at the middle of {@code face} of the block where one is given (#877). */
+	public static @Nullable String use(AntBot bot, BlockPos pos, @Nullable Direction face) {
 		ServerLevel level = (ServerLevel) bot.level();
 		String[] failed = {Result.BLOCKED};
 		withHand(bot, pos, player -> {
-			BlockHitResult hit = aim(level, player, PathFollower.feet(bot), pos);
+			BlockHitResult hit = aim(level, player, PathFollower.feet(bot), pos, face);
 			if (hit == null) {
 				failed[0] = Result.OUT_OF_REACH;
 				return false;
@@ -354,10 +359,10 @@ public final class BotHands {
 	 * another block first. An item that casts its own ray along the player's look, such as a bucket, then meets this block
 	 * too, not one in front of it.
 	 */
-	private static @Nullable BlockHitResult aim(ServerLevel level, FakePlayer player, BlockPos feet, BlockPos pos) {
+	private static @Nullable BlockHitResult aim(ServerLevel level, FakePlayer player, BlockPos feet, BlockPos pos, @Nullable Direction face) {
 		Vec3 eyes = LineOfSight.eyes(feet);
 		player.snapTo(eyes.x, eyes.y - player.getEyeHeight(), eyes.z, player.getYRot(), player.getXRot());
-		BlockHitResult hit = LineOfSight.aim(level, eyes, pos);
+		BlockHitResult hit = LineOfSight.aim(level, eyes, pos, face);
 		if (hit != null) {
 			player.lookAt(EntityAnchorArgument.Anchor.EYES, hit.getLocation());
 		}

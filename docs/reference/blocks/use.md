@@ -1,7 +1,7 @@
 # `use`
 
 ```text
-use(pos, item=None)
+use(pos, item=None, face=None)
 ```
 
 Walks into reach of a block and uses the held item on it, as a player's right click does.
@@ -12,6 +12,7 @@ Walks into reach of a block and uses the held item on it, as a player's right cl
 |---|---|---|---|
 | `pos` | [`Pos`](../types/pos.md), tuple or [`Entity`](../types/entity.md) | | the block to use, or the mob to use the item on (see [On a mob](#on-a-mob)) |
 | `item` | [selector](../types/selectors.md) | `None` | an item to hold first, such as `"#minecraft:hoes"`; `None` uses what the bot holds |
+| `face` | str | `None` | `"north"`, `"south"`, `"east"`, `"west"`, `"up"` or `"down"`: aim at the middle of that face of the block only (see [Description](#description)); not on a mob |
 
 ## Returns
 
@@ -30,6 +31,8 @@ One instruction, the call itself. The walk plans its path as `goto` does.
 The use goes through the game's own code with a stand-in player at the bot, so items behave as for a player: a bucket fills or empties, a hoe tills and wears down, bone meal grows a crop, flint and steel lights a fire. With an empty hand it uses the block itself, such as a lever or a door.
 
 The stand-in player stands over the middle of the block the bot's feet are in (on farmland, a slab or snow, the one over it, #660), where the walk judged what the bot sees, and looks at the first point of the block its eyes see: the middle, else the middle of a face. A line counts as seen when no other block's outline is in its way, so a cobweb or tall grass in front hides the block, as it would stop a bucket's ray; the walk judges the same way, so where it stops `use` can aim, and so do [`mine`](mine.md) and [`place`](place.md), from the same eyes. An item that casts its own ray along that look, such as a bucket, so meets this block and not one in front of it. Where every such line hits another block first, such as the floor of a 1x1 hole seen past its rim, `use` fails with `out_of_reach` and does nothing. To pour water into a hole, use the hole itself: `use(hole, "water_bucket")`.
+
+With `face`, the look goes to just inside the middle of that face and nowhere else, failing `out_of_reach` where the bot does not see it from where the walk stopped. A bucket's ray then goes on past the face into the block beyond it. That pours water into a hole over a kelp, seagrass or other block that holds water itself: aimed at the hole, the ray would meet that block's water and the bucket would pour into it, where the water is lost; aimed at a side, `use(hole, "water_bucket", face="north")`, it meets the wall and the water goes into the hole (#877). [`jobs.kelp_farm`](../../cookbook/kelp-farm.md) refills its water cells this way.
 
 ### On a mob
 

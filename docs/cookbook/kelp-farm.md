@@ -44,16 +44,17 @@ With `cells` first the job builds its own water instead of farming a pool: a far
 /antcraft bot run jobs.kelp_farm cells
 /antcraft bot run jobs.kelp_farm cells 10 63 10
 /antcraft bot run jobs.kelp_farm cells 10 63 10 8 16
+/antcraft bot run jobs.kelp_farm cells 10 63 10 8 16 dry 18
 ```
 
-The arguments after `cells` are the farm's corner `x y z` (by default where the bot stands, or where the last run started), the most cells it grows to (by default as many as keep growing round its corner) and the radius (default 32). From a script, `jobs.kelp_farm.grow(at, size, radius)`.
+The arguments after `cells` are the farm's corner `x y z` (by default where the bot stands, or where the last run started), the most cells it grows to (by default as many as keep growing round its corner), the radius (default 32), and `dry` and the food count as for a pool. From a script, `jobs.kelp_farm.grow(at, size, radius, dried, food)`.
 
 A cell is one column of the ground under the corner's level, dug two deep: water in both blocks, kelp on the block under them, which must be solid. The cells go east and south of the corner with a block of path between them, the depot north of them, as for every `lib.cellfarm` farm. To build one, the bot clears the block over the cell, digs its top block and pours water into it, then digs the block under that water, so the water falls into it, pours a source there over the falling water and plants a kelp in it. In that order because a bucket's look goes through water: poured over a kelp, the water would go into the kelp and be lost. It pours with [`jobs.farm`'s `pour`](farm.md#the-bundled-job): a water bucket from a chest, else an empty bucket filled at a water source within the radius, never one of the farm's own. A cell takes two water buckets and a kelp; the bot keeps its buckets, and the stone it dug goes in the depot.
 
-Each round, kelp grown up to a cell's top block is cut there from the surface, its bottom block left to grow again, and stored in the depot's `kelp` chests; a cell whose kelp is gone is planted again from the depot. Once the depot holds a kelp the next round builds the next cell with it. Kelp grows a block in some 9800 ticks, so a cell gives a kelp about every 8 minutes.
+Each round, kelp grown up to a cell's top block is cut there from the surface, its bottom block left to grow again, and stored in the depot's `kelp` chests; a cell whose kelp is gone is planted again from the depot. A cell whose top block lost its water over the kelp is poured again, the bucket aimed at a side of the hole ([`use`](../reference/blocks/use.md)'s `face`) so its water goes into the hole and not into the kelp (#877). Once the depot holds a kelp the next round builds the next cell with it. Kelp grows a block in some 9800 ticks, so a cell gives a kelp about every 8 minutes.
+
+With `dry`, each round starts by drying the depot's kelp as for a pool ([Drying the kelp](#drying-the-kelp)), the dried kelp and its blocks going in the depot's `dried` chests, but one kelp stays raw in the depot to plant the next cell or replant one (#877).
 
 ## Not yet
 
-- `dry` for the water cells: their kelp is stored raw.
-- A water cell whose top block lost its water over the kelp is not poured again, as a bucket poured there would go into the kelp: pour it by hand, aimed at the side of the hole.
-- Water cells deeper than two blocks, which would give more kelp a cut.
+- Water cells deeper than two blocks, which would give more kelp a cut: each layer needs its own pour, in order.

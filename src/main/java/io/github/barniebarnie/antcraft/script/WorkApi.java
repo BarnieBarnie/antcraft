@@ -78,8 +78,9 @@ public final class WorkApi {
 			return run.start(new Place(run, bot(run, call), target, item, facing, half), call, target);
 		});
 		natives.register("use", call -> {
-			Object[] args = Args.bind("use", call, 1, "pos", "item");
+			Object[] args = Args.bind("use", call, 1, "pos", "item", "face");
 			Selector item = Args.absent(args[1]) ? null : Selector.parse(args[1]);
+			Direction face = Args.absent(args[2]) ? null : facing(args[2]);
 			if (args[0] instanceof EntityInfo info) {
 				// On a mob, as a player's right click on it: feeding, shearing, milking (#837).
 				AntBot bot = bot(run, call);
@@ -92,7 +93,7 @@ public final class WorkApi {
 				return refused != null ? run.done(use.describe(), refused) : run.start(use, call);
 			}
 			Pos target = Pos.of(args[0]);
-			return run.start(new Use(run, bot(run, call), target, item), call, target);
+			return run.start(new Use(run, bot(run, call), target, item, face), call, target);
 		});
 		natives.register("equip", 15, call -> {
 			Selector item = Selector.parse(Args.bind("equip", call, 1, "item")[0]);
@@ -489,15 +490,20 @@ public final class WorkApi {
 		}
 	}
 
-	/** {@code use(pos, item=None)}: uses the held item, or first holds one {@code item} selects, on the block. */
+	/**
+	 * {@code use(pos, item=None, face=None)}: uses the held item, or first holds one {@code item} selects, on the block; aimed
+	 * at the middle of its {@code face} where one is given (#877).
+	 */
 	private static final class Use extends OnBlock {
 		private final @Nullable Selector selector;
 		private final @Nullable Predicate<ItemStack> item;
+		private final @Nullable Direction face;
 
-		Use(ScriptRun run, AntBot bot, Pos target, @Nullable Selector selector) {
+		Use(ScriptRun run, AntBot bot, Pos target, @Nullable Selector selector, @Nullable Direction face) {
 			super(run, bot, target);
 			this.selector = selector;
 			this.item = selector == null ? null : selector.items();
+			this.face = face;
 		}
 
 		@Override
@@ -512,7 +518,7 @@ public final class WorkApi {
 			}
 			ItemStack held = this.bot.getMainHandItem();
 			String using = held.isEmpty() ? "an empty hand" : BuiltInRegistries.ITEM.getKey(held.getItem()).toString();
-			String failed = BotHands.use(this.bot, this.pos);
+			String failed = BotHands.use(this.bot, this.pos, this.face);
 			if (Result.BLOCKED.equals(failed)) {
 				return Result.fail(failed, PyNone.NONE, "using " + using + " on " + BuiltInRegistries.BLOCK.getKey(state.getBlock()) + " at " + EntityInfo.pos(this.pos) + " did nothing");
 			}
@@ -521,7 +527,8 @@ public final class WorkApi {
 
 		@Override
 		public String describe() {
-			return "use(" + this.target + (this.selector == null ? "" : ", " + this.selector) + ")";
+			return "use(" + this.target + (this.selector == null ? "" : ", " + this.selector)
+				+ (this.face == null ? "" : ", face='" + this.face.getSerializedName() + "'") + ")";
 		}
 	}
 

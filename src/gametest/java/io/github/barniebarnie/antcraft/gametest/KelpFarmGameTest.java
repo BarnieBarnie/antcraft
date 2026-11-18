@@ -290,6 +290,14 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 	 * is at (1, 3, 1). A supply chest holds the kelp and water buckets two cells take, a pickaxe and chests.
 	 */
 	private static AntBot cells(GameTestHelper helper) {
+		return cells(helper, 2, false);
+	}
+
+	/**
+	 * As cells, growing up to size cells, the supply chest holding a kelp a cell; with dry the job dries the kelp (#877):
+	 * a furnace at (7, 3, 6) and a crafting table at (7, 3, 4), a coal in the supply chest.
+	 */
+	private static AntBot cells(GameTestHelper helper, int size, boolean dry) {
 		for (int x = 0; x < 8; x++) {
 			for (int z = 0; z < 8; z++) {
 				for (int y = 1; y <= 2; y++) {
@@ -299,18 +307,23 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 		}
 		helper.setBlock(6, 3, 6, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(new BlockPos(6, 3, 6), ChestBlockEntity.class);
-		chest.setItem(0, new ItemStack(Items.KELP, 2));
+		chest.setItem(0, new ItemStack(Items.KELP, size));
 		for (int i = 1; i <= 4; i++) {
 			chest.setItem(i, new ItemStack(Items.WATER_BUCKET));
 		}
 		chest.setItem(5, new ItemStack(Items.STONE_PICKAXE));
 		chest.setItem(6, new ItemStack(Items.CHEST, 3)); // the cobblestone dug goes in a chest of its own
+		if (dry) {
+			chest.setItem(7, new ItemStack(Items.COAL));
+			helper.setBlock(7, 3, 6, Blocks.FURNACE);
+			helper.setBlock(7, 3, 4, Blocks.CRAFTING_TABLE);
+		}
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 3, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(1, 3, 3));
 		BotScripts.run(bot, """
 			import jobs.kelp_farm
-			jobs.kelp_farm.grow(Pos(%d, %d, %d), 2, 8)
-			""".formatted(at.getX(), at.getY(), at.getZ()));
+			jobs.kelp_farm.grow(Pos(%d, %d, %d), %d, 8%s)
+			""".formatted(at.getX(), at.getY(), at.getZ(), size, dry ? ", True" : ""));
 		BotScripts.failOnError(helper, bot);
 		return bot;
 	}
@@ -348,6 +361,82 @@ public class KelpFarmGameTest implements CustomTestMethodInvoker {
 				helper.assertTrue(helper.getBlockState(new BlockPos(x, 2, 3)).is(Blocks.WATER) || kelp(helper, x, 2, 3),
 					"no water at (" + x + ", 2, 3): " + helper.getBlockState(new BlockPos(x, 2, 3)) + "; " + said(bot));
 			}
+		});
+	}
+
+	/** Whether cell 1, the column at (1, 3), is built and planted: kelp on its floor and water over it. */
+	private static boolean cellPlanted(GameTestHelper helper, AntBot bot) {
+		return BotScripts.log(bot, Output.Level.PRINT).contains("built cell 1") && helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP)
+			&& helper.getBlockState(new BlockPos(1, 2, 3)).is(Blocks.WATER);
+	}
+
+	/** How many of item the cell farm's depot holds, its chests from (1, 3, 1) going east. */
+	private static int inCellDepot(GameTestHelper helper, Item item) {
+		int n = 0;
+		for (int x = 1; x <= 5; x++) {
+			if (helper.getBlockState(new BlockPos(x, 3, 1)).is(Blocks.CHEST)) {
+				n += helper.getBlockEntity(new BlockPos(x, 3, 1), ChestBlockEntity.class).countItem(item);
+			}
+		}
+		return n;
+	}
+
+	/** Kelp grown up to a water cell's top block is cut there, its bottom block left, and stored in the depot (#877). */
+	// Measured: passes at tick 187 to 235 (green already: harvest_cell cut it).
+	@GameTest(maxTicks = 480)
+	public void aWaterCellsGrownKelpIsCutAndStored(GameTestHelper helper) {
+		AntBot bot = cells(helper, 1, false);
+		boolean[] grown = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!grown[0] && cellPlanted(helper, bot)) {
+				helper.setBlock(1, 1, 3, Blocks.KELP_PLANT);
+				helper.setBlock(1, 2, 3, Blocks.KELP);
+				grown[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(grown[0], "not planted; " + column(helper, 1) + "; " + said(bot));
+			helper.assertTrue(helper.getBlockState(new BlockPos(1, 1, 3)).is(Blocks.KELP), "bottom block gone; " + column(helper, 1));
+			helper.assertBlockPresent(Blocks.WATER, 1, 2, 3);
+			int stored = inCellDepot(helper, Items.KELP);
+			helper.assertTrue(stored >= 1, "kelp in the depot " + stored + "; " + said(bot));
+		});
+	}
+
+	/** A water cell whose top block lost its water over the kelp is poured again, from the side of the hole (#877). */
+	// Measured: passes at tick 186 to 242 (red: not refilled, Stone Kelp Air Air; aimed at the hole, not a side, the same).
+	@GameTest(maxTicks = 480)
+	public void aWaterCellsLostTopWaterIsRefilled(GameTestHelper helper) {
+		AntBot bot = cells(helper, 1, false);
+		boolean[] drained = new boolean[1];
+		helper.onEachTick(() -> {
+			if (!drained[0] && cellPlanted(helper, bot)) {
+				helper.setBlock(1, 2, 3, Blocks.AIR);
+				drained[0] = true;
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(drained[0], "not planted; " + column(helper, 1) + "; " + said(bot));
+			helper.assertTrue(helper.getBlockState(new BlockPos(1, 2, 3)).is(Blocks.WATER)
+				&& helper.getBlockState(new BlockPos(1, 2, 3)).getFluidState().isSource(), "not refilled; " + column(helper, 1) + "; " + said(bot));
+			helper.assertTrue(kelp(helper, 1, 1, 3), "kelp gone; " + column(helper, 1));
+		});
+	}
+
+	/** With dry, a water cell's kelp, grown and cut twice, is smelted to dried kelp in the furnace, one kept raw for planting (#877). */
+	// Measured: passes at tick 407 to 462, the smelt taking 200 ticks (red: grow() takes from 0 to 3 positional arguments).
+	@GameTest(maxTicks = 920)
+	public void aWaterCellsKelpIsDried(GameTestHelper helper) {
+		AntBot bot = cells(helper, 1, true);
+		helper.onEachTick(() -> {
+			if (cellPlanted(helper, bot)) {
+				helper.setBlock(1, 1, 3, Blocks.KELP_PLANT);
+				helper.setBlock(1, 2, 3, Blocks.KELP);
+			}
+		});
+		helper.succeedWhen(() -> {
+			int dried = inCellDepot(helper, Items.DRIED_KELP);
+			helper.assertTrue(dried >= 1, "dried kelp in the depot " + dried + ", kelp " + inCellDepot(helper, Items.KELP) + "; " + said(bot));
 		});
 	}
 }
