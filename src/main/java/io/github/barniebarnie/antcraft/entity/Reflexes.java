@@ -157,8 +157,8 @@ final class Reflexes {
 	boolean tick(ServerLevel level) {
 		int fleeHealth = AntCraftConfig.botFleeHealth();
 		// Only a bot low on health flees, so only it looks for hostile mobs, the costlier of the two entity searches (#336).
-		@Nullable Mob hostile = this.bot.getHealth() <= fleeHealth ? this.nearestHostile(level) : null;
-		Senses senses = new Senses(this.inHazard(level), !this.fallingAbove(level, this.bot.getBoundingBox()).isEmpty(), this.bot.isUnderWater(),
+		@Nullable Mob hostile = this.bot.getHealth() <= fleeHealth ? this.nearestHostile() : null;
+		Senses senses = new Senses(this.inHazard(level), !this.fallingAbove(this.bot.getBoundingBox()).isEmpty(), this.bot.isUnderWater(),
 			this.bot.getAirSupply(), this.bot.getHealth(), hostile != null);
 		Kind kind = choose(senses, fleeHealth, AntCraftConfig.botSurfaceAir());
 		if (kind == null && this.inTheWay()) {
@@ -269,7 +269,7 @@ final class Reflexes {
 				return this.stepAside(world, feet, same, pos -> nextToLava(level, pos));
 			}
 			case FALLING_BLOCK -> {
-				return this.stepAside(world, feet, same, pos -> !this.fallingAbove(level, new AABB(pos)).isEmpty());
+				return this.stepAside(world, feet, same, pos -> !this.fallingAbove(new AABB(pos)).isEmpty());
 			}
 			case SURFACE -> {
 				List<BlockPos> way = Escape.wayToAir(world, feet);
@@ -402,14 +402,14 @@ final class Reflexes {
 	}
 
 	/** The falling blocks over {@code box}: those whose column overlaps it, from its bottom up to {@link #FALL_RANGE} above it. */
-	private List<FallingBlockEntity> fallingAbove(ServerLevel level, AABB box) {
+	private List<FallingBlockEntity> fallingAbove(AABB box) {
 		AABB column = box.expandTowards(0, FALL_RANGE, 0);
-		return level.getEntitiesOfClass(FallingBlockEntity.class, column, falling -> falling.isAlive() && falling.getY() >= box.minY);
+		return this.bot.entitiesNear(FallingBlockEntity.class, column, falling -> falling.isAlive() && falling.getY() >= box.minY);
 	}
 
 	/** The nearest hostile mob within {@link #HOSTILE_RANGE}, or null. */
-	private @Nullable Mob nearestHostile(ServerLevel level) {
-		return level.getEntitiesOfClass(Mob.class, this.bot.getBoundingBox().inflate(HOSTILE_RANGE),
+	private @Nullable Mob nearestHostile() {
+		return this.bot.entitiesNear(Mob.class, this.bot.getBoundingBox().inflate(HOSTILE_RANGE),
 				mob -> mob instanceof Enemy && mob.isAlive() && mob.distanceTo(this.bot) <= HOSTILE_RANGE)
 			.stream().min(Comparator.comparingDouble(mob -> mob.distanceToSqr(this.bot))).orElse(null);
 	}

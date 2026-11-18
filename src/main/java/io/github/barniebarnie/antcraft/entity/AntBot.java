@@ -198,8 +198,8 @@ public class AntBot extends PathfinderMob implements InventoryCarrier {
 	}
 
 	/**
-	 * The entities of {@code type} in {@code box} that pass {@code test}: what the bot sees of them, its entities() and
-	 * its goals alike. In game tests only those in its test's area (EntityAreaMixin, #742, #899).
+	 * The entities of {@code type} in {@code box} that pass {@code test}: what the bot sees of them, its entities(), its
+	 * goals and its reflexes alike. In game tests only those in its test's area (EntityAreaMixin, #742, #899, #907).
 	 */
 	public <T extends Entity> List<T> entitiesNear(Class<T> type, AABB box, Predicate<? super T> test) {
 		return this.level().getEntitiesOfClass(type, box, test);

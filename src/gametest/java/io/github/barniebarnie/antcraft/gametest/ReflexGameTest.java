@@ -310,6 +310,31 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> helper.assertTrue(husk.getHealth() == 186, "husk health " + husk.getHealth()));
 	}
 
+	/**
+	 * A bot low on health does not flee a husk just outside its test's area, two blocks off: it sees no mob beside the area,
+	 * as its goals do not (EntityAreaMixin, #742, #907), so a neighbouring test's mob does not set it fleeing.
+	 */
+	@GameTest(maxTicks = 30)
+	public void fleesNoHostileMobBesideTheTestArea(GameTestHelper helper) {
+		helper.setBlock(8, 0, 3, Blocks.STONE);
+		helper.setBlock(8, 1, 3, Blocks.AIR);
+		helper.setBlock(8, 2, 3, Blocks.AIR);
+		Husk husk = helper.spawn(EntityTypes.HUSK, 8, 1, 3);
+		husk.setNoAi(true);
+		GameTests.onEnd(helper, husk::discard);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 6, 1, 3);
+		Vec3 start = bot.position();
+		// Once the bot waits.
+		helper.runAfterDelay(2, () -> GameTests.hurt(bot, 4));
+		BotScripts.run(bot, WAIT);
+		helper.onEachTick(() -> {
+			if (bot.position().subtract(start).horizontalDistance() > 0.5) {
+				helper.fail("bot fled the husk outside the area, to " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
+		helper.runAtTickTime(20, helper::succeed);
+	}
+
 	/** Brings the bot to low health once its script waits, and passes once it is out of the husk's reach. */
 	private static void fleeFrom(GameTestHelper helper, AntBot bot, Husk husk) {
 		husk.setNoAi(true);

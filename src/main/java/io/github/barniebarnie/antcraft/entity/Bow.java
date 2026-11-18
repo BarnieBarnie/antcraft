@@ -112,7 +112,7 @@ public final class Bow {
 		}
 		item.shoot(level, bot, InteractionHand.MAIN_HAND, weapon, arrows, speed, 1.0F, bow, null);
 		// As a player's arrow, the bot's may be picked up again (#720); an infinite or multishot one stays CREATIVE_ONLY.
-		for (AbstractArrow arrow : level.getEntitiesOfClass(AbstractArrow.class, bot.getBoundingBox().inflate(2),
+		for (AbstractArrow arrow : bot.entitiesNear(AbstractArrow.class, bot.getBoundingBox().inflate(2),
 			arrow -> arrow.getOwner() == bot && arrow.tickCount == 0 && arrow.pickup == AbstractArrow.Pickup.DISALLOWED)) {
 			arrow.pickup = AbstractArrow.Pickup.ALLOWED;
 		}
