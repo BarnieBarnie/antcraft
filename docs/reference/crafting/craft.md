@@ -1,7 +1,7 @@
 # `craft`
 
 ```text
-craft(item, n=1, table=None)
+craft(item, n=1, table=None, use=None)
 ```
 
 Crafts an item from carried items, at a crafting table if the recipe needs one.
@@ -13,6 +13,7 @@ Crafts an item from carried items, at a crafting table if the recipe needs one.
 | `item` | str | | the one item to make, such as `"oak_planks"`; a tag or a list is an error |
 | `n` | int | `1` | how many to make at least |
 | `table` | [`Pos`](../types/pos.md) or tuple | `None` | a crafting table to walk to; `None` uses one within reach, if the recipe needs a table |
+| `use` | list of str | `None` | items to take first, in this order, where an ingredient may be any of several; each one item as `item` |
 
 ## Returns
 
@@ -28,7 +29,7 @@ A 2x2 recipe is crafted at once, without pausing. A 3x3 recipe pauses: at a `tab
 
 ## Description
 
-It takes the first crafting recipe for `item` whose ingredients the bot carries, its hand included, and works it again and again until it made at least `n` or runs out. It works that one recipe only, so a bot carrying birch logs and oak logs makes planks from one kind. Where an ingredient may be any of several items (any planks for sticks), it takes the one the bot carries most of, the first of the recipe's on a tie, as [`needs`](needs.md) plans it, so a craft leaves what a plan keeps for a later step: sticks from 3 oak and 4 birch planks take birch planks, and the oak planks are left for oak slabs (#925).
+It takes the first crafting recipe for `item` whose ingredients the bot carries, its hand included, and works it again and again until it made at least `n` or runs out. It works that one recipe only, so a bot carrying birch logs and oak logs makes planks from one kind. Where an ingredient may be any of several items (any planks for sticks), it takes the one the bot carries most of, the first of the recipe's on a tie, as [`needs`](needs.md) plans it, so a craft leaves what a plan keeps for a later step: sticks from 3 oak and 4 birch planks take birch planks, and the oak planks are left for oak slabs (#925). Items of `use` come before the rest, in its order: `craft("crafting_table", use=["birch_planks"])` with 4 oak and 3 birch planks takes the 3 birch planks and one oak plank (#930).
 
 2x2 recipes are crafted anywhere, as in a player's inventory. 3x3 recipes need a crafting table at `table`, or without `table` one the bot sees within 4 blocks of its eyes where it stands; it does not look further. An `n` below 1, or an item the game does not know, stops the script with an error.
 

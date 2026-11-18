@@ -91,14 +91,15 @@ public final class CraftApi {
 			return run.start(new Take(run, WorkApi.bot(run, call), target, item, count("take", args[2])), call, target);
 		});
 		natives.register("craft", 40, call -> {
-			Object[] args = Args.bind("craft", call, 1, "item", "n", "table");
+			Object[] args = Args.bind("craft", call, 1, "item", "n", "table", "use");
 			Item item = oneItem("craft", args[0]);
 			long n = Args.absent(args[1]) ? 1 : Args.integer(args[1]);
 			if (n < 1) {
 				throw new ScriptError("craft() n must be at least 1, not " + n);
 			}
 			Pos table = Args.absent(args[2]) ? null : Pos.of(args[2]);
-			return craft(run, WorkApi.bot(run, call), item, n, table, call);
+			List<Item> use = Args.absent(args[3]) ? List.of() : Values.elements(args[3]).stream().map(one -> oneItem("craft", one)).toList();
+			return craft(run, WorkApi.bot(run, call), item, n, table, use, call);
 		});
 		natives.register("needs", NEEDS_COST, call -> {
 			Object[] args = Args.bind("needs", call, 1, "item", "n", "also", "extra");
@@ -355,11 +356,12 @@ public final class CraftApi {
 	// craft
 
 	/**
-	 * {@code craft(item, n=1, table=None)}: works one recipe for {@code item} from carried items until it made at least
-	 * {@code n}, the first recipe whose ingredients the bot carries. A 2x2 recipe is worked at once; a 3x3 one at the
-	 * crafting table at {@code table}, walked to, or at one within reach.
+	 * {@code craft(item, n=1, table=None, use=None)}: works one recipe for {@code item} from carried items until it made at
+	 * least {@code n}, the first recipe whose ingredients the bot carries. A 2x2 recipe is worked at once; a 3x3 one at the
+	 * crafting table at {@code table}, walked to, or at one within reach. Of interchangeable items it takes those of
+	 * {@code use} first (#930).
 	 */
-	private static Object craft(ScriptRun run, AntBot bot, Item item, long n, @Nullable Pos table, NativeCall call) {
+	private static Object craft(ScriptRun run, AntBot bot, Item item, long n, @Nullable Pos table, List<Item> use, NativeCall call) {
 		String describe = "craft(" + Values.repr(BuiltInRegistries.ITEM.getKey(item).toString()) + ", " + n + (table == null ? "" : ", table=" + table) + ")";
 		if (run.elsewhere(table)) {
 			return run.done(describe, Result.fail(Result.WRONG_DIMENSION));
@@ -375,24 +377,24 @@ public final class CraftApi {
 			return run.done(describe, Result.fail(Result.MISSING_INGREDIENTS));
 		}
 		if (!recipe.get().large()) {
-			return run.done(describe, craftTimes(bot, recipe.get(), n));
+			return run.done(describe, craftTimes(bot, recipe.get(), n, use));
 		}
 		Pos at = table != null ? table : inReach(run, bot, state -> state.is(Blocks.CRAFTING_TABLE));
 		if (at == null) {
 			return run.done(describe, Result.fail(Result.NO_TABLE));
 		}
-		return run.start(new AtTable(run, bot, at, recipe.get(), n, describe), call);
+		return run.start(new AtTable(run, bot, at, recipe.get(), n, use, describe), call);
 	}
 
 	/** Works {@code recipe} until it made at least {@code n} items; its value is how many it made. */
-	private static Result craftTimes(AntBot bot, TaskPlanner.Recipe<Item> recipe, long n) {
+	private static Result craftTimes(AntBot bot, TaskPlanner.Recipe<Item> recipe, long n, List<Item> use) {
 		Container carried = BotHands.carried(bot);
 		long made = 0;
 		while (made < n) {
 			if (!Storage.canCraft(carried, recipe, 1)) {
 				return Result.fail(Result.MISSING_INGREDIENTS, made);
 			}
-			if (!Storage.craft(carried, recipe)) {
+			if (!Storage.craft(carried, recipe, use)) {
 				return Result.fail(Result.NO_SPACE, made);
 			}
 			made += recipe.count();
@@ -404,12 +406,14 @@ public final class CraftApi {
 	private static final class AtTable extends WorkApi.OnBlock {
 		private final TaskPlanner.Recipe<Item> recipe;
 		private final long n;
+		private final List<Item> use;
 		private final String describe;
 
-		AtTable(ScriptRun run, AntBot bot, Pos table, TaskPlanner.Recipe<Item> recipe, long n, String describe) {
+		AtTable(ScriptRun run, AntBot bot, Pos table, TaskPlanner.Recipe<Item> recipe, long n, List<Item> use, String describe) {
 			super(run, bot, table);
 			this.recipe = recipe;
 			this.n = n;
+			this.use = use;
 			this.describe = describe;
 		}
 
@@ -421,7 +425,7 @@ public final class CraftApi {
 		@Override
 		Result work(BlockState state) {
 			swing(this.bot, this.pos);
-			return craftTimes(this.bot, this.recipe, this.n);
+			return craftTimes(this.bot, this.recipe, this.n, this.use);
 		}
 
 		@Override

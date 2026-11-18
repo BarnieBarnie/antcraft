@@ -118,7 +118,8 @@ def fetch(more, chests):
 
 def craft_here(item, n=1):
     """craft_all(item, n), and where a step finds no crafting table within reach, the one within REACH walked to, else
-    one placed beside the bot for it: the carried one, else one crafted from carried planks or logs. The placed table is
+    one placed beside the bot for it: the carried one, else one crafted first, as plan(item, n) plans it (craft_table,
+    #930), from carried planks or logs. The placed table is
     mined back after, also when a step fails. Gives craft_all's result, missing_ingredients with missing where plan(item,
     n) lacks raw items, before it crafts anything, so a table or furnace is not made from what the item needs, no_tool,
     also before it crafts anything, where a step smelts in a furnace it could not mine back, or no_table where no table
@@ -128,6 +129,10 @@ def craft_here(item, n=1):
         return result("missing_ingredients", None, p["gather"])
     if p["no_tool"]:
         return result("no_tool")
+    if "crafting_table" in p["also"]:
+        r = craft_table(p, item, n)
+        if not r["ok"]:
+            return r
     r = craft_all(item, n)
     if r["reason"] != "no_table":
         return r
@@ -135,7 +140,7 @@ def craft_here(item, n=1):
     near = find_nearest("crafting_table", radius=REACH)
     if near is not None:
         return craft_all(item, n, table=near)
-    if count("crafting_table") == 0 and not craft_all("crafting_table")["ok"]:
+    if count("crafting_table") == 0:
         return r
     spot = place_beside("crafting_table")
     if spot is None:
@@ -144,6 +149,24 @@ def craft_here(item, n=1):
         return craft_all(item, n, table=spot)
     finally:
         take_back(spot, "crafting_table")
+
+
+def craft_table(p, item, n):
+    """Crafts the crafting table plan(item, n) p plans first, by its steps up to the table, and the table of the items
+    carried before those steps first, as the plan takes carried items before it makes more (#930): the planks a step
+    made for it would be what the bot has most of, maybe those the plan keeps for item."""
+    carried = dict([(s.item, 0) for s in inventory()])
+    for s in inventory():
+        carried[s.item] += s.count
+    use = sorted(carried, key=lambda i: -carried[i])
+    for step, k, how in p["crafts"]:
+        table = step == "minecraft:crafting_table"
+        r = craft(step, k, use=use) if table else craft(step, k)
+        if not r:
+            return lacking(result(r.reason), item, n, step, k)
+        if table:
+            return result()
+    return result()
 
 
 def smelt_here(item, n=1, fuel=None):

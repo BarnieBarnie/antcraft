@@ -82,6 +82,16 @@ class StorageTest {
 		assertEquals(2, tie.countItem(Items.BIRCH_PLANKS));
 	}
 
+	/** use (#930): of interchangeable items, those named first, in that order, though there is more of another. */
+	@Test
+	void aCraftTakesTheItemsItIsToUseFirst() {
+		TaskPlanner.Recipe<Item> table = new TaskPlanner.Recipe<>(Items.CRAFTING_TABLE, 1, Map.of(new LinkedHashSet<>(List.of(Items.OAK_PLANKS, Items.BIRCH_PLANKS)), 4));
+		SimpleContainer container = full(new ItemStack(Items.OAK_PLANKS, 4), new ItemStack(Items.BIRCH_PLANKS, 3), ItemStack.EMPTY);
+		assertTrue(Storage.craft(container, table, List.of(Items.BIRCH_PLANKS)));
+		assertEquals(3, container.countItem(Items.OAK_PLANKS));
+		assertEquals(0, container.countItem(Items.BIRCH_PLANKS));
+	}
+
 	@Test
 	void addItemTopsUpStacksBeforeFillingEmptySlots() {
 		SimpleContainer container = full(ItemStack.EMPTY, new ItemStack(Items.COBBLESTONE, 60), ItemStack.EMPTY, new ItemStack(Items.COBBLESTONE, 10));

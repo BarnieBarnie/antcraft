@@ -479,6 +479,19 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 			List.of("True None {} 1 1 0"), tablesInTheArea(helper, 0));
 	}
 
+	/**
+	 * An oak boat from two oak logs and three birch planks, no table near (#930): the plan makes the table of the birch
+	 * planks and an oak plank and the boat of the other oak planks, so craft_here crafts the table as that plan does.
+	 */
+	@GameTest(maxTicks = 170)
+	public void craftHereCraftsTheTableFromThePlansOwnPlanks(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
+		bot.getInventory().addItem(new ItemStack(Items.OAK_LOG, 2));
+		bot.getInventory().addItem(new ItemStack(Items.BIRCH_PLANKS, 3));
+		expect(helper, bot, craftHere("'oak_boat'", "oak_boat", "crafting_table", "oak_log", "birch_planks"),
+			List.of("True None {} 1 1 0 0"), tablesInTheArea(helper, 0));
+	}
+
 	/** A table within reach: it is used, and the carried one stays carried. */
 	@GameTest(maxTicks = 20)
 	public void craftHereWithATableInReachPlacesNone(GameTestHelper helper) {

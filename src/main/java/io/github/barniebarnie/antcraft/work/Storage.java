@@ -160,11 +160,16 @@ public final class Storage {
 	 * craft that uses up a whole stack has that slot for its result.
 	 */
 	public static boolean fits(Container container, TaskPlanner.Recipe<Item> recipe) {
+		return fits(container, recipe, List.of());
+	}
+
+	/** {@link #fits(Container, TaskPlanner.Recipe)}, the ingredients taken as {@link #craft(Container, TaskPlanner.Recipe, List)} takes them. */
+	public static boolean fits(Container container, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
 		List<ItemStack> slots = new ArrayList<>();
 		for (int i = 0; i < container.getContainerSize(); i++) {
 			slots.add(container.getItem(i).copy());
 		}
-		takeIngredients(slots, recipe);
+		takeIngredients(slots, recipe, use);
 		ItemStack result = new ItemStack(recipe.output(), recipe.count());
 		int room = 0;
 		for (ItemStack slot : slots) {
@@ -182,14 +187,22 @@ public final class Storage {
 	 * and returns false if the container lacks an ingredient or has no room for the result.
 	 */
 	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe) {
-		if (!canCraft(container, recipe, 1) || !fits(container, recipe)) {
+		return craft(container, recipe, List.of());
+	}
+
+	/**
+	 * {@link #craft(Container, TaskPlanner.Recipe)}, but of interchangeable items those of {@code use} first, in its order
+	 * (#930): what a plan made its crafting table of, not what there is most of.
+	 */
+	public static boolean craft(Container container, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
+		if (!canCraft(container, recipe, 1) || !fits(container, recipe, use)) {
 			return false;
 		}
 		List<ItemStack> slots = new ArrayList<>();
 		for (int i = 0; i < container.getContainerSize(); i++) {
 			slots.add(container.getItem(i));
 		}
-		takeIngredients(slots, recipe);
+		takeIngredients(slots, recipe, use);
 		addItem(container, new ItemStack(recipe.output(), recipe.count()));
 		container.setChanged();
 		return true;
@@ -198,15 +211,16 @@ public final class Storage {
 	/**
 	 * Shrinks the stacks by the ingredients of one craft: of interchangeable items, the one there is most of first, as
 	 * the planner takes them (TaskPlanner needAny), so a craft leaves what the plan keeps for a later step (#925); each
-	 * from the first slots first.
+	 * from the first slots first. Those of {@code use} come before the rest, in its order (#930).
 	 */
-	private static void takeIngredients(List<ItemStack> slots, TaskPlanner.Recipe<Item> recipe) {
+	private static void takeIngredients(List<ItemStack> slots, TaskPlanner.Recipe<Item> recipe, List<Item> use) {
 		Map<Item, Integer> stock = new HashMap<>();
 		slots.forEach(stack -> stock.merge(stack.getItem(), stack.getCount(), Integer::sum));
 		for (Map.Entry<Set<Item>, Integer> ingredient : recipe.ingredients().entrySet()) {
 			int needed = ingredient.getValue();
 			List<Item> byStock = new ArrayList<>(ingredient.getKey());
-			byStock.sort(Comparator.comparingInt((Item option) -> stock.getOrDefault(option, 0)).reversed());
+			byStock.sort(Comparator.comparingInt((Item option) -> use.contains(option) ? use.indexOf(option) : use.size())
+				.thenComparing(Comparator.comparingInt((Item option) -> stock.getOrDefault(option, 0)).reversed()));
 			for (Item option : byStock) {
 				for (int i = 0; i < slots.size() && needed > 0; i++) {
 					ItemStack stack = slots.get(i);
