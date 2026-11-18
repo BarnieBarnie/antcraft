@@ -40,4 +40,4 @@ By default the pen keeps as many adults of each kind as the bot tends in the 5 m
 
 ## Animals nearby
 
-Every cow, sheep, pig and chicken follows any bot that holds its food, also a [crop farm](crop-farm.md)'s bot planting seeds or carrots; it still finishes its rounds with animals round it (#855). Penned animals stay in while the gate stands open for a lure: they follow the bot to its corner, away from the gate. A bot walking out through the gate can still shove a crowd of animals pressed against it out ahead of it; the next round lures them back.
+Every cow, sheep, pig and chicken follows any bot that holds its food, also a [crop farm](crop-farm.md)'s bot planting seeds or carrots; it still finishes its rounds with animals round it (#855). Penned animals stay in while the gate stands open for a lure: they follow the bot to its corner, away from the gate. Nor do they get out while the bot walks through the gate, however they crowd against it: a gate a bot opened to walk through stays shut to animals until it shuts it behind it (#863). A gate opened otherwise, such as for a lure, is open to them as usual.

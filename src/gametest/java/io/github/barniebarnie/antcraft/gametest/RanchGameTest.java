@@ -49,21 +49,7 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 
 	/** As above, with prelude run first in the bot's script, such as to give it a depot in its memory. */
 	private static AntBot ranch(GameTestHelper helper, int cap, String prelude, ItemStack... supplies) {
-		for (int x = 0; x < 8; x++) {
-			for (int z = 3; z < 8; z++) {
-				if (x == 0 || x == 7 || z == 3 || z == 7) {
-					helper.setBlock(x, 1, z, x == 3 && z == 3 ? Blocks.OAK_FENCE_GATE : Blocks.OAK_FENCE);
-				}
-			}
-		}
-		// Each fence joins the ones beside it, which were placed after it or before.
-		for (int x = 0; x < 8; x++) {
-			for (int z = 3; z < 8; z++) {
-				BlockPos at = helper.absolutePos(new BlockPos(x, 1, z));
-				BlockState state = helper.getLevel().getBlockState(at);
-				helper.getLevel().setBlockAndUpdate(at, Block.updateFromNeighbourShapes(state, helper.getLevel(), at));
-			}
-		}
+		pen(helper);
 		helper.setBlock(6, 1, 1, Blocks.CHEST);
 		ChestBlockEntity chest = helper.getBlockEntity(new BlockPos(6, 1, 1), ChestBlockEntity.class);
 		chest.setItem(0, new ItemStack(Items.CHEST, 2));
@@ -79,6 +65,25 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 			""".formatted(low.getX(), low.getY(), low.getZ(), high.getX(), high.getY(), high.getZ(), cap));
 		BotScripts.failOnError(helper, bot);
 		return bot;
+	}
+
+	/** The pen's oak fence, with its gate at (3, 1, 3). */
+	private static void pen(GameTestHelper helper) {
+		for (int x = 0; x < 8; x++) {
+			for (int z = 3; z < 8; z++) {
+				if (x == 0 || x == 7 || z == 3 || z == 7) {
+					helper.setBlock(x, 1, z, x == 3 && z == 3 ? Blocks.OAK_FENCE_GATE : Blocks.OAK_FENCE);
+				}
+			}
+		}
+		// Each fence joins the ones beside it, which were placed after it or before.
+		for (int x = 0; x < 8; x++) {
+			for (int z = 3; z < 8; z++) {
+				BlockPos at = helper.absolutePos(new BlockPos(x, 1, z));
+				BlockState state = helper.getLevel().getBlockState(at);
+				helper.getLevel().setBlockAndUpdate(at, Block.updateFromNeighbourShapes(state, helper.getLevel(), at));
+			}
+		}
 	}
 
 	private static <T extends Animal> T animal(GameTestHelper helper, EntityType<T> type, int x, int z, boolean baby) {
@@ -289,7 +294,8 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 	 * gate. Fails at once where one is.
 	 */
 	// Measured: passes at tick 262 to 289, the gate open some 53 ticks. Already green with #843's lure. With the chickens
-	// crowded against the gate instead, one in two runs failed: the bot walking out through the gate shoved one out ahead.
+	// crowded against the gate instead, one in two runs failed: the bot walking out through the gate shoved one out ahead
+	// (#863, see aBotWalkingThroughACrowdedGateLetsNoAnimalOut).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 600)
 	public void aLureLetsNoPennedAnimalOut(GameTestHelper helper) {
 		List<Animal> penned = new ArrayList<>();
@@ -299,6 +305,16 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 		penned.add(animal(helper, EntityTypes.COW, 5, 5, false));
 		Pig stray = animal(helper, EntityTypes.PIG, 3, 10, false);
 		AntBot bot = ranch(helper, 8, new ItemStack(Items.CARROT, 4));
+		failWhereOneGetsOut(helper, penned, bot);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(inPen(helper, Pig.class).contains(stray), "the pig is not in the pen but at "
+				+ TestPositions.relative(helper, stray.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()));
+			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
+		});
+	}
+
+	/** Fails at once where one of penned dies or is beyond the middle of the pen's fence or gate. */
+	private static void failWhereOneGetsOut(GameTestHelper helper, List<? extends Animal> penned, AntBot bot) {
 		helper.onEachTick(() -> {
 			for (Animal a : penned) {
 				Vec3 at = TestPositions.relative(helper, a.position());
@@ -309,10 +325,35 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 				}
 			}
 		});
-		helper.succeedWhen(() -> {
-			helper.assertTrue(inPen(helper, Pig.class).contains(stray), "the pig is not in the pen but at "
-				+ TestPositions.relative(helper, stray.position()) + ", the bot at " + TestPositions.relative(helper, bot.position()));
-			helper.assertTrue(!helper.getBlockState(new BlockPos(3, 1, 3)).getValue(BlockStateProperties.OPEN), "the gate is open");
-		});
+	}
+
+	/**
+	 * Six chickens crowded against the inside of the pen's gate, two on each block along it: the bot walks out through
+	 * the gate and back in six times, and none of them gets out. Fails at once where one is beyond the fence's middle.
+	 */
+	// Measured: 20 trips passed at tick 1219 to 1261, so six some 380 (red: on tick 24 of the first trip a chicken the
+	// bot shoved ahead was out; with bots not pushing animals, one in two runs one the crowd pressed in or that walked
+	// in itself; with the gate shut to animals but only as its thin panel, one in four, as a chicken pressed into the
+	// panel slipped through it, and another jumped clear of the gate's block over it).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 800)
+	public void aBotWalkingThroughACrowdedGateLetsNoAnimalOut(GameTestHelper helper) {
+		pen(helper);
+		List<Chicken> penned = new ArrayList<>();
+		for (int x = 2; x <= 4; x++) {
+			penned.add(animal(helper, EntityTypes.CHICKEN, x, 4, false));
+			penned.add(animal(helper, EntityTypes.CHICKEN, x, 4, false));
+		}
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 6);
+		BlockPos out = helper.absolutePos(new BlockPos(3, 1, 0));
+		BlockPos in = helper.absolutePos(new BlockPos(3, 1, 6));
+		BotScripts.run(bot, """
+			for i in range(6):
+			    if not goto(Pos(%d, %d, %d)) or not goto(Pos(%d, %d, %d)):
+			        raise Exception("no way through the gate")
+			print("done")
+			""".formatted(out.getX(), out.getY(), out.getZ(), in.getX(), in.getY(), in.getZ()));
+		BotScripts.failOnError(helper, bot);
+		failWhereOneGetsOut(helper, penned, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).contains("done"), "the bot is still walking"));
 	}
 }

@@ -432,6 +432,16 @@ public class PathFollower {
 		});
 	}
 
+	/**
+	 * Whether a bot opened the door or gate at pos to walk through and has not shut it yet (see {@link #closeBehind});
+	 * such a gate stays shut to animals (FenceGateBlockMixin, #863). A bot that opened one is beside it, as it shuts it
+	 * once it has passed.
+	 */
+	public static boolean openedByBot(Level level, BlockPos pos) {
+		return level instanceof ServerLevel && !level.getEntitiesOfClass(AntBot.class, new AABB(pos).inflate(2),
+			bot -> bot.getOpened().containsKey(pos)).isEmpty();
+	}
+
 	private static void setOpen(AntBot bot, ServerLevel level, BlockPos pos, BlockState state, boolean open) {
 		if (state.getBlock() instanceof DoorBlock door) {
 			door.setOpen(bot, level, state, pos, open);
