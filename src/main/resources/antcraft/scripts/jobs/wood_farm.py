@@ -112,8 +112,13 @@ def small(kind):
 
 def saplings(kind, n, radius):
     """get(sapling, 2 * n, radius): a spare for each of a cell's n spots; ok with the n the first cell takes where no
-    more can be had (#803). Gives result()."""
+    more can be had (#803). A giant farm moved from a small one (small) takes only what the chests hold, ok with n: the
+    small cells' trees its rounds fell give the spares, where breaking their leaves by hand took some 600 ticks (#875).
+    Gives result()."""
     s = lib.treefarm.sapling(kind)
+    if small(kind)[0]:
+        r = lib.stock.take_up_to(s, 2 * n, radius)
+        return result() if count(s) >= n else r
     r = get(s, 2 * n, radius)
     return result() if not r["ok"] and lib.stock.take_up_to(s, n, radius)["ok"] else r
 

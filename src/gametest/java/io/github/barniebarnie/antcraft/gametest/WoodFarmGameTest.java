@@ -1365,7 +1365,9 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	 * giants, as random ticks grow it in about 1 run in 100: it stands once the giant cell does (#862).
 	 */
 	// Measured: passes at tick 1255 to 1544 (red: the giant cell built, the small cell holds spruce_log, on tick 1268).
-	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 3000)
+	// Since the giant farm no longer breaks the small spruce's leaves for spare saplings (#875): passes at tick 763, as
+	// the sapling case (758); before, 1432, the sapling step alone 280 to 959.
+	@GameTest(structure = "antcraft-gametest:giant", maxTicks = 1700)
 	public void theSmallCellsTreeGrownDuringTheMoveToGiantsIsFelledAndNotReplanted(GameTestHelper helper) {
 		smallCellsTree(helper, true);
 	}
