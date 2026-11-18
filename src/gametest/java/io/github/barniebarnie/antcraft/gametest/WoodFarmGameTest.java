@@ -853,19 +853,20 @@ public class WoodFarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
-	 * fertilize uses the bot's bone meal on the farm's saplings (#804): 16 bone meal on the birch sapling of cell 1 grow
-	 * it into a tree (each advances it a stage 45% of the time, 2 stages make a tree), and it keeps the rest.
+	 * fertilize uses the bot's bone meal on the farm's saplings (#804): a stack of 64 bone meal on the birch sapling of
+	 * cell 1 grows it into a tree (each advances it a stage 45% of the time, 2 stages make a tree), and it keeps the rest.
+	 * With 16, about 1 run in 250 used them all or grew no tree (#895); 64 run out about once in 10^14.
 	 */
-	// Measured: passes at tick 27 (red: no fertilize).
+	// Measured: passes at tick 27 (red: no fertilize); 28 at the slowest of 750 copies.
 	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 60)
 	public void fertilizeGrowsTheFarmsSaplingsWithBoneMeal(GameTestHelper helper) {
 		helper.setBlock(SPOT.below(), Blocks.DIRT);
 		helper.setBlock(SPOT, Blocks.BIRCH_SAPLING);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
-		bot.getInventory().addItem(new ItemStack(Items.BONE_MEAL, 16));
+		bot.getInventory().addItem(new ItemStack(Items.BONE_MEAL, 64));
 		script(helper, bot, """
 			jobs.wood_farm.fertilize(kind, [cell])
-			print(0 < count("minecraft:bone_meal") < 16)
+			print(0 < count("minecraft:bone_meal") < 64)
 			""");
 		helper.succeedWhen(() -> {
 			helper.assertValueEqual(said(bot), List.of("True"), "said");
