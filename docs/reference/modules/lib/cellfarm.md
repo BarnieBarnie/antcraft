@@ -98,7 +98,7 @@ Keeps the blocks the spec's `kept(low, high)` gives of each built cell of the fa
 
 ## `floor(low, high)`
 
-The blocks of a cell's floor, from `low` to `high` at `low.y`: its soil and water, what most specs give as `kept` (#869). Not the plants on it: paths treat those as air and put no scaffold in their place (#865). The wood farm gives it too, the dirt under its saplings (#890); the kelp farm keeps nothing, as its cells stand in water and a path never breaks a block beside a fluid. Done at once.
+A cell's floor, from `low` to `high` at `low.y`, as a list of one box `(low, high)` for [`keep_blocks`](../../movement/keep_blocks.md) (a box costs the script as little as one block, its 81 blocks some 1,400 instructions, #891): its soil and water, what most specs give as `kept` (#869). Not the plants on it: paths treat those as air and put no scaffold in their place (#865). The wood farm gives it too, the dirt under its saplings (#890); the kelp farm keeps nothing, as its cells stand in water and a path never breaks a block beside a fluid. Done at once.
 
 ## `stocked(f, radius)`
 

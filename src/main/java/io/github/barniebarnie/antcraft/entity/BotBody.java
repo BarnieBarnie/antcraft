@@ -13,9 +13,7 @@ import io.github.barniebarnie.antcraft.script.Pos;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
@@ -41,12 +39,12 @@ final class BotBody implements MoveApi.Body {
 
 	/** What {@link #setBuildScaffold} keeps, and {@link #setKeptBlocks}: walks break neither. */
 	private Predicate<BlockPos> buildKeep = pos -> false;
-	private Set<BlockPos> kept = Set.of();
+	private Predicate<Pos> kept = pos -> false;
 
 	BotBody(AntBot bot) {
 		this.bot = bot;
 		this.follower = new PathFollower(bot);
-		this.follower.setKeep(pos -> this.kept.contains(pos) || this.buildKeep.test(pos));
+		this.follower.setKeep(pos -> this.kept.test(new Pos(pos.getX(), pos.getY(), pos.getZ())) || this.buildKeep.test(pos));
 		// Where the bot is now, over the edge of the only block it rests on, its feet count as beside it (#668): that spot
 		// is no stand to break the block from either, so the walk drops off rather than arrive there and get nowhere (#753).
 		this.sight = this.sight(null);
@@ -161,8 +159,8 @@ final class BotBody implements MoveApi.Body {
 	}
 
 	@Override
-	public void setKeptBlocks(Set<Pos> kept) {
-		this.kept = kept.stream().map(BotBody::blockPos).collect(Collectors.toUnmodifiableSet());
+	public void setKeptBlocks(Predicate<Pos> kept) {
+		this.kept = kept;
 	}
 
 	@Override

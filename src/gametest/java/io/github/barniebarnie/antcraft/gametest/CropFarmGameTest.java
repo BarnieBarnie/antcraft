@@ -3,6 +3,7 @@ package io.github.barniebarnie.antcraft.gametest;
 import io.github.barniebarnie.antcraft.config.AntCraftConfig;
 import io.github.barniebarnie.antcraft.entity.AntBot;
 import io.github.barniebarnie.antcraft.registry.ModEntities;
+import io.github.barniebarnie.antcraft.script.ScriptRun;
 import io.github.barniebarnie.antcraft.script.lang.Output;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -207,6 +208,33 @@ public class CropFarmGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.succeedWhen(() -> helper.assertValueEqual(BotScripts.log(bot, Output.Level.PRINT), List.of("False unreachable"), "said"));
+	}
+
+	/**
+	 * What lib.cellfarm.keep_cells costs a round on a large farm (#891): 32 built crop cells, 81 floor blocks each, kept by
+	 * one bot, laid out alone by another; the first runs more instructions than the second by keep_cells' cost, under 5000
+	 * now its floors are boxes. The bot's budget is 2000 instructions a tick (scriptInstructionsPerTick).
+	 */
+	// Measured: 3571 instructions (red, the floors as 2592 blocks: 45811, some 23 ticks of a bot's budget each round); passes at tick 8.
+	@GameTest(maxTicks = 20)
+	public void keepingTheCellsOfALargeFarmCostsLittle(GameTestHelper helper) {
+		String setup = """
+			import jobs.crop_farm
+			import lib.cellfarm
+			import lib.cells
+			import lib.farm
+			f = jobs.crop_farm.spec(lib.farm.crop("wheat"), "wheat_farm", 16)
+			lib.cells.layout("wheat_farm", Pos(1000, 64, 1000), (9, 9))
+			for i in range(32):
+			    lib.cells.add("wheat_farm", i)
+			""";
+		ScriptRun kept = BotScripts.run(helper.spawn(ModEntities.ANT_BOT, 1, 1, 1), setup + "lib.cellfarm.keep_cells(f, \"wheat_farm\")\n");
+		ScriptRun free = BotScripts.run(helper.spawn(ModEntities.ANT_BOT, 5, 1, 5), setup);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(kept.state() == ScriptRun.State.FINISHED && free.state() == ScriptRun.State.FINISHED, "scripts " + kept.state() + " " + free.state());
+			long cost = kept.executed() - free.executed();
+			helper.assertTrue(cost < 5000, "keep_cells of 32 cells cost " + cost + " instructions");
+		});
 	}
 
 	/**

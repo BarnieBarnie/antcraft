@@ -72,8 +72,9 @@ def keep_cells(f, name):
 
 def floor(low, high):
     """A cell's floor, its soil and water: what most specs' kept gives (#869). Not the plants on it: paths treat those as
-    air and put no scaffold in their place (#865)."""
-    return [Pos(x, low.y, z) for x in range(low.x, high.x + 1) for z in range(low.z, high.z + 1)]
+    air and put no scaffold in their place (#865). One (low, high) box for keep_blocks, not its 81 blocks: a farm of 32
+    crop cells cost some 46,000 instructions a round as blocks (#891)."""
+    return [(Pos(low.x, low.y, low.z), Pos(high.x, low.y, high.z))]
 
 
 def loaded(f, low, high):

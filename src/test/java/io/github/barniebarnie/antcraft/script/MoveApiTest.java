@@ -13,6 +13,7 @@ import io.github.barniebarnie.antcraft.script.lang.Parser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,10 +46,10 @@ class MoveApiTest {
 		/** Where a loaded block is not a nether portal. */
 		List<Pos> noPortal = List.of();
 		/** What keep_blocks last kept. */
-		Set<Pos> kept = Set.of();
+		Predicate<Pos> kept = pos -> false;
 
 		@Override
-		public void setKeptBlocks(Set<Pos> kept) {
+		public void setKeptBlocks(Predicate<Pos> kept) {
 			this.kept = kept;
 		}
 
@@ -240,9 +241,20 @@ class MoveApiTest {
 	void keepBlocksKeepsTillTheScriptEnds() {
 		ScriptRun run = start("keep_blocks([(1, 2, 3), Pos(4, 5, 6)])\ngoto((9, 64, 0))\n");
 		tick(run);
-		assertEquals(Set.of(new Pos(1, 2, 3), new Pos(4, 5, 6)), bot.kept);
+		assertTrue(bot.kept.test(new Pos(1, 2, 3)) && bot.kept.test(new Pos(4, 5, 6)));
+		assertFalse(bot.kept.test(new Pos(1, 2, 4)));
 		run.stop();
-		assertEquals(Set.of(), bot.kept);
+		assertFalse(bot.kept.test(new Pos(1, 2, 3)));
+	}
+
+	/** A (low, high) box keeps every block in it, its corners either way round (#891). */
+	@Test
+	void keepBlocksKeepsTheBlocksOfABox() {
+		ScriptRun run = start("keep_blocks([(Pos(2, 64, 3), (0, 64, 0)), Pos(9, 9, 9)])\nwait(10)\n");
+		tick(run);
+		assertTrue(bot.kept.test(new Pos(0, 64, 0)) && bot.kept.test(new Pos(1, 64, 2)) && bot.kept.test(new Pos(2, 64, 3)));
+		assertTrue(bot.kept.test(new Pos(9, 9, 9)));
+		assertFalse(bot.kept.test(new Pos(3, 64, 0)) || bot.kept.test(new Pos(1, 65, 1)) || bot.kept.test(new Pos(1, 64, -1)));
 	}
 
 	/** A position in another dimension than the bot's is not kept: its coordinates are another block here (#360, #856). */
@@ -250,7 +262,16 @@ class MoveApiTest {
 	void keepBlocksLeavesOutPositionsInAnotherDimension() {
 		ScriptRun run = start("keep_blocks([Pos(1, 2, 3, 'minecraft:the_nether'), Pos(4, 5, 6, 'minecraft:overworld')])\nwait(10)\n");
 		tick(run);
-		assertEquals(Set.of(new Pos(4, 5, 6, "minecraft:overworld")), bot.kept, log.last(100, Level.ERROR).toString());
+		assertTrue(bot.kept.test(new Pos(4, 5, 6)), log.last(100, Level.ERROR).toString());
+		assertFalse(bot.kept.test(new Pos(1, 2, 3)));
+	}
+
+	/** A box whose low corner is in another dimension is not kept either (#891). */
+	@Test
+	void keepBlocksLeavesOutABoxInAnotherDimension() {
+		ScriptRun run = start("keep_blocks([(Pos(0, 0, 0, 'minecraft:the_nether'), (2, 2, 2))])\nwait(10)\n");
+		tick(run);
+		assertFalse(bot.kept.test(new Pos(1, 1, 1)), log.last(100, Level.ERROR).toString());
 	}
 
 	@Test

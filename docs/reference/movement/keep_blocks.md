@@ -10,7 +10,7 @@ Keeps the blocks at `blocks` from the bot's walks: no path breaks them (#856) or
 
 | Name | Type | Default | Meaning |
 |---|---|---|---|
-| `blocks` | list of [`Pos`](../types/pos.md) or tuples | | the blocks to keep; a `Pos` in another dimension than the bot's is left out; `[]` keeps none again |
+| `blocks` | list of [`Pos`](../types/pos.md), tuples or boxes | | the blocks to keep: a position, or a box `(low, high)` of two positions, which keeps every block from one corner to the other (#891); a `Pos` or box (by `low`) in another dimension than the bot's is left out; `[]` keeps none again |
 
 ## Returns
 
@@ -22,7 +22,7 @@ No, it is done at once.
 
 ## Cost
 
-Nothing besides the call.
+Nothing besides the call. Building a long list of positions in the script costs instructions: a box costs as little as one position, so give a large area, such as a cell's floor, as a box.
 
 ## Description
 
@@ -37,6 +37,12 @@ Walk past a cocoa column without breaking its logs:
 ```python
 keep_blocks([Pos(10, 64, 3), Pos(10, 65, 3)])
 goto(Pos(14, 64, 3))
+```
+
+Keep a 9 by 9 floor:
+
+```python
+keep_blocks([(Pos(0, 63, 0), Pos(8, 63, 8))])
 ```
 
 ## See also

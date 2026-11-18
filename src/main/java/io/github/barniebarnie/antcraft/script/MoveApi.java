@@ -5,6 +5,7 @@ import io.github.barniebarnie.antcraft.script.lang.Args;
 import io.github.barniebarnie.antcraft.script.lang.Natives;
 import io.github.barniebarnie.antcraft.script.lang.PyList;
 import io.github.barniebarnie.antcraft.script.lang.PyNone;
+import io.github.barniebarnie.antcraft.script.lang.PyTuple;
 import io.github.barniebarnie.antcraft.script.lang.ScriptError;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -113,9 +114,9 @@ public final class MoveApi {
 
 		/**
 		 * Blocks the bot's walks never break, on top of {@link #setBuildScaffold}'s, as {@code keep_blocks} says, such as a
-		 * farm's cell blocks (#856); none unless set.
+		 * farm's cell blocks (#856); none unless set. It is asked of positions in no dimension.
 		 */
-		default void setKeptBlocks(Set<Pos> kept) {
+		default void setKeptBlocks(Predicate<Pos> kept) {
 		}
 
 		/** Which scaffold blocks the next walks may not place, as {@code goto(keep=)} says; none unless set. */
@@ -240,15 +241,27 @@ public final class MoveApi {
 			if (!(blocks instanceof PyList list)) {
 				throw new ScriptError("keep_blocks() takes a list of positions");
 			}
+			// A (low, high) box is kept as its bounds, not its blocks: a farm's cell floors cost the script little (#891).
 			Set<Pos> kept = new HashSet<>();
+			List<Pos[]> boxes = new ArrayList<>();
 			for (Object b : list.items) {
+				if (b instanceof PyTuple box && box.items().size() == 2) {
+					Pos low = Pos.of(box.items().get(0));
+					Pos high = Pos.of(box.items().get(1));
+					if (!run.elsewhere(low)) {
+						boxes.add(new Pos[] {new Pos(Math.min(low.x(), high.x()), Math.min(low.y(), high.y()), Math.min(low.z(), high.z())),
+							new Pos(Math.max(low.x(), high.x()), Math.max(low.y(), high.y()), Math.max(low.z(), high.z()))});
+					}
+					continue;
+				}
 				Pos p = Pos.of(b);
 				if (!run.elsewhere(p)) { // another dimension's coordinates are another block here (#360)
 					kept.add(p);
 				}
 			}
-			run.host().body().setKeptBlocks(kept);
-			run.keepsBlocks(!kept.isEmpty());
+			run.host().body().setKeptBlocks(p -> kept.contains(p) || boxes.stream().anyMatch(box -> box[0].x() <= p.x() && p.x() <= box[1].x()
+				&& box[0].y() <= p.y() && p.y() <= box[1].y() && box[0].z() <= p.z() && p.z() <= box[1].z()));
+			run.keepsBlocks(!kept.isEmpty() || !boxes.isEmpty());
 			return PyNone.NONE;
 		});
 		natives.register("travel", call -> {
