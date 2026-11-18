@@ -141,7 +141,8 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 	 * Home lies further from the husk than the bot, so in its home's dimension the bot would run there, but within 8 of the
 	 * husk, off the way away from it. Wide like {@link #fleesAHostileMobAtLowHealth}.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 60)
+	// Full runs: passes at up to tick 35 (#861).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
 	public void fleesAwayNotHomeInAnotherDimension(GameTestHelper helper) {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 15, 1, 15);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 13, 1, 13);

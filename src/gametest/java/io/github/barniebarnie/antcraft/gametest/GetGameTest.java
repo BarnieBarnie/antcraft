@@ -438,7 +438,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * gave 141 for 200 ticks. Measured: make_cost 200, get 193 to 200 ticks (test tick 225); 20 blocks along x alone
 	 * 100 for 101, 10 along each 100 for 92.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 400)
+	// Full runs: passes at up to tick 248 (#861).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 500)
 	public void makeCostOfADiagonalChestIsCloseToItsTicks(GameTestHelper helper) {
 		chest(helper, new BlockPos(21, 1, 21), new ItemStack(Items.RAW_IRON, 2));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
@@ -596,7 +597,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * log and SMELT a coal, so a vein in sight wins and #661's cheaper vein does not change the choice. Measured: coal
 	 * make_cost 76 (80 before #675), get 70 to 77 ticks; charcoal 620, get 739 to 740 (test tick 820).
 	 */
-	@GameTest(maxTicks = 1650)
+	// Full runs: passes at up to tick 990 (#861).
+	@GameTest(maxTicks = 2000)
 	public void coalFromAVeinInSightBeatsCharcoal(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper);
 		helper.setBlock(1, 1, 7, Blocks.COAL_ORE);
@@ -781,7 +783,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * (#630): making the wooden one costs the table put down and mined back by hand, more than the walk, so ensure_tool
 	 * takes the chest's.
 	 */
-	@GameTest(maxTicks = 20)
+	// Full runs: passes at up to tick 12 (#861).
+	@GameTest(maxTicks = 30)
 	public void theTableToMineBackMakesAChestToolCheaper(GameTestHelper helper) {
 		Container chest = chest(helper, new ItemStack(Items.STONE_PICKAXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -861,7 +864,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * An empty bot, no log and no chest in its area (#562): ensure_tool fails no_logs, the reason of the log source,
 	 * without costing options (replaced here by one that prints "costed"): tick 4 alone and 7 in a group run, 114 before.
 	 */
-	@GameTest(maxTicks = 30)
+	// Full runs: passes at up to tick 18 (#861).
+	@GameTest(maxTicks = 40)
 	public void ensureToolFailsFastWithoutLogs(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		run(helper, bot, where(helper, 7) + """
@@ -1023,7 +1027,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * bucket, where it planned again from beside the chest, saw no table within reach and failed no_logs crafting one.
 	 */
 	// Measured: passes at tick 70 (red: printed False no_logs 0 at tick 45).
-	@GameTest(maxTicks = 140)
+	// Full runs: passes at up to tick 90 (#861).
+	@GameTest(maxTicks = 180)
 	public void walksBackToTheTableAfterTakingFromAFarChest(GameTestHelper helper) {
 		Container chest = chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.IRON_INGOT, 3));
 		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
@@ -1137,7 +1142,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * plan alone, which used the carried log too, so the log counted twice and it costed one more to gather.
 	 */
 	// Measured: passes at tick 9 (red: printed 55).
-	@GameTest(maxTicks = 30)
+	// Full runs: passes at up to tick 17 (#861).
+	@GameTest(maxTicks = 40)
 	public void makeCostCountsACarriedItemTwoStepsUseOnce(GameTestHelper helper) {
 		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.STICK, 4));
 		helper.setBlock(1, 1, 1, Blocks.CRAFTING_TABLE);
@@ -1162,7 +1168,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * steps of the plan, and the chest's planks counted for each.
 	 */
 	// Measured: passes at tick 15 (red: printed 110 {}, the chest walked to twice and its planks counted twice).
-	@GameTest(maxTicks = 30)
+	// Full runs: passes at up to tick 17 (#861).
+	@GameTest(maxTicks = 40)
 	public void storedCountsAChestOnceForTwoStepsOfOneItem(GameTestHelper helper) {
 		chest(helper, new BlockPos(7, 1, 7), new ItemStack(Items.OAK_PLANKS, 3));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 1);
@@ -1228,7 +1235,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * 4 birch planks in a chest within radius 8 but not 2 (#580): the make cost of a crafting table is the walk to them, as
 	 * get takes them, not the log it costs without the chest.
 	 */
-	@GameTest(maxTicks = 20)
+	// Full runs: passes at up to tick 14 (#861).
+	@GameTest(maxTicks = 30)
 	public void chestPlanksLowerTheMakeCostToTheWalk(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.BIRCH_PLANKS, 4));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -1246,7 +1254,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * the sticks), and the plan made again counts the rest for the pickaxe's head, so it takes one more step of 4, gathers
 	 * nothing and has 3 left. This worked before #580: the planner keeps what a step makes beyond its need for later steps.
 	 */
-	@GameTest(maxTicks = 30)
+	// Full runs: passes at up to tick 18 (#861).
+	@GameTest(maxTicks = 40)
 	public void theRestOfATakenStepCountsForLaterSteps(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.OAK_PLANKS, 8));
 		helper.setBlock(3, 1, 5, Blocks.CRAFTING_TABLE);
@@ -1283,7 +1292,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * logs, for a wooden one's planks or the pickaxe a stone one's cobblestone takes, so ensure_tool fails no_logs without
 	 * costing options.
 	 */
-	@GameTest(maxTicks = 30)
+	// Full runs: passes at up to tick 26 (#861).
+	@GameTest(maxTicks = 60)
 	public void ensureToolFailsFastWithSticksButNoLogs(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
 		bot.getInventory().addItem(new ItemStack(Items.STICK, 2));
@@ -1300,7 +1310,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * An iron axe in a chest 20 blocks off (walk 100), an empty bot (#580): walking there and felling 30 logs with it costs
 	 * less than making a wooden axe from logs and felling with that, so ensure_tool takes it without costing options.
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 200)
+	// Full runs: passes at up to tick 124 (#861).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 250)
 	public void aChestToolCheaperThanMakingOneIsTakenWithoutCosting(GameTestHelper helper) {
 		Container chest = chest(helper, new BlockPos(12, 1, 12), new ItemStack(Items.IRON_AXE));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
@@ -1345,7 +1356,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * Without the ore in sight the make cost digs stairs for it (#529), and the stone axes win; without coal ore it burns
 	 * wood for the fuel, as get would (#536).
 	 */
-	@GameTest(maxTicks = 140)
+	// Full runs: passes at up to tick 86 (#861).
+	@GameTest(maxTicks = 180)
 	public void chooseStoneForFewUsesIronForMany(GameTestHelper helper) {
 		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -1361,7 +1373,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * with no iron ore within radius 2 pays for a stone pickaxe and DEEP once for the raw iron, more than a bot that carries a
 	 * stone pickaxe and sees exposed iron ore within radius 8.
 	 */
-	@GameTest(maxTicks = 40)
+	// Full runs: passes at up to tick 23 (#861).
+	@GameTest(maxTicks = 50)
 	public void ironCostsMoreWithoutAPickaxeOrOreInSight(GameTestHelper helper) {
 		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
 		AntBot bare = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
@@ -1400,7 +1413,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * A stone pickaxe in a chest within radius 8 but not 2, iron ore within both: the make cost of an iron axe walks to the
 	 * chest for the pickaxe raw iron needs, less than making one (#536).
 	 */
-	@GameTest(maxTicks = 40)
+	// Full runs: passes at up to tick 23 (#861).
+	@GameTest(maxTicks = 50)
 	public void aChestPickaxeLowersAnIronToolsCost(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.STONE_PICKAXE));
 		helper.setBlock(2, 1, 5, Blocks.IRON_ORE);
@@ -1418,7 +1432,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * Coal in a chest within radius 8 but not 2 (#548): the make cost of four torches, whose one coal costs charcoal or
 	 * digging without the chest, is that of their stick plus the walk to the chest with it, as get takes from chests first.
 	 */
-	@GameTest(maxTicks = 20)
+	// Full runs: passes at up to tick 12 (#861).
+	@GameTest(maxTicks = 30)
 	public void chestCoalLowersATorchsCostToTheWalk(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.COAL));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -1435,7 +1450,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * 1 coal in a chest covers one of the 2 coal of 8 torches (#555): make_cost counts the walk to it and the other coal
 	 * as with no chest, so it lies between the walk and sticks alone and the cost with no chest within radius.
 	 */
-	@GameTest(maxTicks = 20)
+	// Full runs: passes at up to tick 13 (#861).
+	@GameTest(maxTicks = 30)
 	public void chestCoalCoversOnlyWhatTheChestHolds(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.COAL));
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 4);
@@ -1634,7 +1650,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * An iron axe in a chest: it beats making one for 30 logs, but for 500 it is not enough and an iron one is made, with
 	 * iron ore in sight (see chooseStoneForFewUsesIronForMany).
 	 */
-	@GameTest(maxTicks = 110)
+	// Full runs: passes at up to tick 63 (#861).
+	@GameTest(maxTicks = 130)
 	public void chooseAChestToolThatIsEnough(GameTestHelper helper) {
 		chest(helper, new ItemStack(Items.IRON_AXE));
 		helper.setBlock(6, 1, 7, Blocks.IRON_ORE);
@@ -1695,7 +1712,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * dropped. The game test data pack makes every cherry leaves block drop one (1 in 20 in the game), so the test does
 	 * not wait on chance; no other test breaks cherry leaves.
 	 */
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 38 (#861).
+	@GameTest(maxTicks = 80)
 	public void getsCherrySaplingsFromItsLeaves(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, false);
 		leavesTest(helper, "cherry_sapling");
@@ -1706,7 +1724,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * into leaves (the data pack's cherry leaves drop themselves to shears or silk touch, as in the game), so the source
 	 * breaks them by hand.
 	 */
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 38 (#861).
+	@GameTest(maxTicks = 80)
 	public void getsSaplingsFromLeavesWithShearsCarried(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.CHERRY_LOG, Blocks.CHERRY_LEAVES, false);
 		leavesTest(helper, "cherry_sapling", new ItemStack(Items.SHEARS));
@@ -1737,7 +1756,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * its dirt to break it for a sapling, and takes the pillar back, so no dirt stands in the area after.
 	 */
 	// Measured: passes at tick 75.
-	@GameTest(maxTicks = 150)
+	// Full runs: passes at up to tick 88 (#861).
+	@GameTest(maxTicks = 180)
 	public void getsSaplingsFromHighLeavesAndTakesItsPillarBack(GameTestHelper helper) {
 		for (int y = 1; y <= 5; y++) {
 			helper.setBlock(4, y, 4, Blocks.STONE);
@@ -1801,7 +1821,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * A dark oak tree (#602): get("apple") breaks its leaves. The game test data pack makes every dark oak leaves block
 	 * drop an apple (1 in 200 in the game) to a bot tagged {@link #APPLES}, as leavesTest's is (#790).
 	 */
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 40 (#861).
+	@GameTest(maxTicks = 80)
 	public void getsApplesFromDarkOakLeaves(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(4, 1, 4), Blocks.DARK_OAK_LOG, Blocks.DARK_OAK_LEAVES, false);
 		leavesTest(helper, "apple");
@@ -1931,7 +1952,8 @@ public class GetGameTest implements CustomTestMethodInvoker {
 	 * now exposed. lib.find.WHERE, the branch's row up to the area's east edge and the chest's column x 1, stops a second branch there and leaves ore
 	 * no facing to turn to (#561).
 	 */
-	@GameTest(maxTicks = 600)
+	// Full runs: passes at up to tick 372 (#861).
+	@GameTest(maxTicks = 750)
 	public void getRetriesAVeinLeftForItsTierWithABetterPickaxe(GameTestHelper helper) {
 		// From y=0: the template's floor is below it, so a bot in the pocket would fall into the branch's floor.
 		for (BlockPos pos : BlockPos.betweenClosed(0, 0, 0, 7, 4, 7)) {

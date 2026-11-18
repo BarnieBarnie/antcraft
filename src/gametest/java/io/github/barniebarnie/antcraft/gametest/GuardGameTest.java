@@ -171,7 +171,8 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 	 * A guard leaves an enderman nearer than a zombie alone and kills the zombie: jobs.guard reads the bot's own list of
 	 * mobs it leaves alone (Entity.neutral, #772), as an idle bot does (FightGameTest anIdleBotLeavesAnEndermanAlone...).
 	 */
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 200)
+	// Full runs: passes at up to tick 138 (#861).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 280)
 	public void aGuardLeavesAnEndermanAlone(GameTestHelper helper) {
 		Enderman enderman = helper.spawn(EntityTypes.ENDERMAN, 6, 1, 6);
 		enderman.setNoAi(true);
@@ -203,7 +204,8 @@ public class GuardGameTest implements CustomTestMethodInvoker {
 	 * kills both zombies. The near zombie is more than 8 blocks (HOSTILE_RANGE) from home, so the bot stops fleeing there.
 	 */
 	// Measured: passes at tick 839 to 845.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1600)
+	// Full runs: passes at up to tick 960 (#861).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 2000)
 	public void aGuardTheFleeReflexRunsHomeEatsHealsAndFightsAgain(GameTestHelper helper) {
 		Zombie near = zombie(helper, 12, 12);
 		Zombie far = zombie(helper, 20, 20);

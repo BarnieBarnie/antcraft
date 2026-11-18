@@ -236,7 +236,8 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	 * gives the bucket back.
 	 */
 	// Measured: passes at tick 78 (red: no water in the middle of the field by tick 402).
-	@GameTest(maxTicks = 160)
+	// Full runs: passes at up to tick 97 (#861).
+	@GameTest(maxTicks = 200)
 	public void theJobWatersADryFieldFromAPool(GameTestHelper helper) {
 		List<BlockPos> spots = field(helper);
 		helper.setBlock(2, 0, 2, Blocks.DIRT);
@@ -263,7 +264,8 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	 * water bucket, pours it in the middle of the field and gives the empty bucket back to the chest, with no warning.
 	 */
 	// Measured: passes at tick 86 (red: no bucket in the chest, the bot kept it).
-	@GameTest(maxTicks = 160)
+	// Full runs: passes at up to tick 103 (#861).
+	@GameTest(maxTicks = 210)
 	public void theJobGivesTheBorrowedWaterBucketBackEmpty(GameTestHelper helper) {
 		List<BlockPos> spots = field(helper);
 		helper.setBlock(2, 0, 2, Blocks.DIRT);

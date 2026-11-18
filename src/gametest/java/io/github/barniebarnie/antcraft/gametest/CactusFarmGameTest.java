@@ -103,7 +103,8 @@ public class CactusFarmGameTest implements CustomTestMethodInvoker {
 
 	/** A cactus three high in the built cell is cut to its bottom block, the two cut stored in the depot, the bot unhurt. */
 	// Measured: passes at tick 191.
-	@GameTest(maxTicks = 400)
+	// Full runs: passes at up to tick 240 (#861).
+	@GameTest(maxTicks = 480)
 	public void aCactusThreeHighIsCutToOneAndStored(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, "1");
 		boolean[] grown = new boolean[1];

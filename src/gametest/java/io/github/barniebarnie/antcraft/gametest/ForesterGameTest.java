@@ -81,7 +81,8 @@ public class ForesterGameTest implements CustomTestMethodInvoker {
 	 * Measured: 6,663 with a next_tree a kind, 3,766 now.
 	 */
 	// Measured: passes at tick 5.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 12)
+	// Full runs: passes at up to tick 7 (#861).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 20)
 	public void candidatesScansTheLogsOnce(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper, new BlockPos(12, 1, 8), Blocks.OAK_LOG, Blocks.OAK_LEAVES);
 		TreesGameTest.plantTree(helper, BIRCH, Blocks.BIRCH_LOG, Blocks.BIRCH_LEAVES);

@@ -148,7 +148,8 @@ public class CaneFarmGameTest implements CustomTestMethodInvoker {
 	// bot's call, line and position (#853). Measured: passes at tick 250 to 347 (red: cobblestone in place of the cane
 	// at (3, 1, 3) on tick 183, the bot running pick_up('minecraft:sugar_cane'): its walk headed for a cut cane still
 	// falling, so the path pillared at the cane under it).
-	@GameTest(maxTicks = 600)
+	// Full runs: passes at up to tick 337 (#861).
+	@GameTest(maxTicks = 680)
 	public void aSecondCellIsPlantedFromStoredCane(GameTestHelper helper) {
 		AntBot bot = farm(helper, 2, "2");
 		boolean[] grown = new boolean[1];

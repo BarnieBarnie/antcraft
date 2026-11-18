@@ -121,7 +121,8 @@ public class StemFarmGameTest implements CustomTestMethodInvoker {
 	 * spare seed the depot got.
 	 */
 	// Measured: passes at tick 191 (red: dirt still at (1, 1, 3) on tick 402).
-	@GameTest(maxTicks = 400)
+	// Full runs: passes at up to tick 251 (#861).
+	@GameTest(maxTicks = 510)
 	public void aTrampledStemIsReplanted(GameTestHelper helper) {
 		AntBot bot = farm(helper, 1, new ItemStack(Items.PUMPKIN_SEEDS, 5), new ItemStack(Items.WATER_BUCKET),
 			new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.CHEST, 3));
@@ -145,7 +146,8 @@ public class StemFarmGameTest implements CustomTestMethodInvoker {
 	 * too few) stored in the depot, and 4 of them crafted into the seeds cell 2 takes, so cell 2 is built with melon stems.
 	 */
 	// Measured: passes at tick 287 to 289 (passed before the change too: the melon farm only lacked a test).
-	@GameTest(maxTicks = 600)
+	// Full runs: passes at up to tick 352 (#861).
+	@GameTest(maxTicks = 710)
 	public void aMelonIsHarvestedStoredAndSeedsTheNextCell(GameTestHelper helper) {
 		AntBot bot = farm(helper, "melon", 2, new ItemStack(Items.MELON_SEEDS, 4), new ItemStack(Items.WATER_BUCKET, 1),
 			new ItemStack(Items.WATER_BUCKET, 1), new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.CHEST, 3));

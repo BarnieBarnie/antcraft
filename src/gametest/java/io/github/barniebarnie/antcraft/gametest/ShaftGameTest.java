@@ -390,7 +390,8 @@ public class ShaftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The bot climbs out through the shut hatch, back down to the deepest landing and out again; the hatch is shut after (#387). */
-	@GameTest(maxTicks = MAX_TICKS)
+	// Full runs: passes at up to tick 460 (#861), slower than the other digs.
+	@GameTest(maxTicks = 920)
 	public void theBotPassesTheShutHatchBothWays(GameTestHelper helper) {
 		AntBot bot = miner(helper, COLUMN.size() - 1);
 		run(helper, bot, SCRIPT + """

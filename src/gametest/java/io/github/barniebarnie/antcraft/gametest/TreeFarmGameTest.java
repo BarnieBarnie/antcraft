@@ -246,7 +246,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * the trunk, keep its logs inside the cell.
 	 */
 	// Measured: passes at tick 229 to 230.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 460)
+	// Full runs: passes at up to tick 258 (#861).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 520)
 	public void aCherryCellGrowsItsTreeInside(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 16, 1, 16);
 		give(bot, new ItemStack(Items.STONE_PICKAXE), new ItemStack(Items.DIRT), new ItemStack(Items.CHERRY_SAPLING),
@@ -386,7 +387,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * logs stop the sapling growing; harvest fells them and leaves the sapling.
 	 */
 	// Measured: passes at tick 184 to 185.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 370)
+	// Full runs: passes at up to tick 209 (#861).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 420)
 	public void logsLeftOverTheSaplingAreATreeToFell(GameTestHelper helper) {
 		helper.setBlock(4, 0, 4, Blocks.DIRT);
 		helper.setBlock(4, 1, 4, Blocks.BIRCH_SAPLING);
@@ -495,7 +497,8 @@ public class TreeFarmGameTest implements CustomTestMethodInvoker {
 	 * jobs.wood_farm's sweep leaves for later.
 	 */
 	// Measured: passes at tick 128.
-	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 260)
+	// Full runs: passes at up to tick 159 (#861).
+	@GameTest(structure = "antcraft-gametest:wide_tall", maxTicks = 320)
 	public void harvestDoesNotPillarToADropOnLeaves(GameTestHelper helper) {
 		for (int y = 1; y <= 3; y++) {
 			helper.setBlock(4, y, 4, Blocks.BIRCH_LOG);

@@ -138,7 +138,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 
 	// mine
 
-	@GameTest(maxTicks = 70)
+	// Full runs: passes at up to tick 41 (#861).
+	@GameTest(maxTicks = 90)
 	public void mineWalksIntoReachBreaksWithTheBestToolAndPicksUpTheDrops(GameTestHelper helper) {
 		helper.setBlock(6, 1, 6, Blocks.STONE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
@@ -573,7 +574,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 
 	// place
 
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 36 (#861).
+	@GameTest(maxTicks = 80)
 	public void placeWalksIntoReachAndPlacesFacingTheWayAsked(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.FURNACE));
@@ -1056,7 +1058,8 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 	// drop
 
 	/** Dropped items land on the ground, and the bot does not pick them up again by itself. */
-	@GameTest(maxTicks = 100)
+	// Full runs: passes at up to tick 61 (#861).
+	@GameTest(maxTicks = 130)
 	public void dropThrowsItemsOutAndLeavesThem(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.NAUTILUS_SHELL, 5));

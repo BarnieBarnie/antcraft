@@ -79,7 +79,8 @@ public class HungerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A hurt bot at 18 food without saturation heals a point every 80 ticks, as a player does. */
-	@GameTest(maxTicks = 120)
+	// Full runs: passes at up to tick 80 (#861).
+	@GameTest(maxTicks = 160)
 	public void aFedBotHeals(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.getFood().setFoodLevel(18);
@@ -102,7 +103,8 @@ public class HungerGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot at 0 food starves: it loses a point every 80 ticks. */
-	@GameTest(maxTicks = 120)
+	// Full runs: passes at up to tick 80 (#861).
+	@GameTest(maxTicks = 160)
 	public void aStarvingBotLosesHealth(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.getFood().setFoodLevel(0);

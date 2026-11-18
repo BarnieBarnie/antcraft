@@ -154,7 +154,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The Colony Core stores items like a chest: a script {@code put}s into it, reads it with {@code container} and {@code take}s back. */
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 34 (#861).
+	@GameTest(maxTicks = 70)
 	public void aScriptPutsIntoAndTakesFromTheColonyCore(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 6);
 		AntBot bot = member(helper, colony, 1, 1, 1);
@@ -416,7 +417,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * ticks, longer than the hold after its last build: the idle bot keeps off the site while the builder holds its build
 	 * job (#391), and is asked once.
 	 */
-	@GameTest(maxTicks = 500)
+	// Full runs: passes at up to tick 316 (#861).
+	@GameTest(maxTicks = 640)
 	public void anIdleBotKeepsOffWhileTheBuilderHoldsItsBuildJob(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -547,7 +549,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A haul job's item is a selector: one for {@code #minecraft:logs} brings birch logs from a chest to the core (#376). */
-	@GameTest(maxTicks = 40)
+	// Full runs: passes at up to tick 27 (#861).
+	@GameTest(maxTicks = 60)
 	public void aHaulJobForATagBringsMatchingItemsToTheCore(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -591,7 +594,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A haul that finds nothing says why its take failed (#566): from an empty chest, no_item. */
-	@GameTest(maxTicks = 40)
+	// Full runs: passes at up to tick 25 (#861).
+	@GameTest(maxTicks = 50)
 	public void aHaulThatFindsNothingWarnsWithTheReason(GameTestHelper helper) {
 		Colony colony = colonyAt(helper, 6, 1, 1);
 		colony.setRadius(7);
@@ -858,7 +862,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * An idle lumberjack tries once to walk to a sapling it cannot reach, on top of a bedrock pillar 4 high, and not again
 	 * on its next idle loop 200 ticks later, which tried it again before (#686, second goto at about tick 260).
 	 */
-	@GameTest(maxTicks = 400)
+	// Full runs: passes at up to tick 320 (#861), the fixed wait where it checks.
+	@GameTest(maxTicks = 640)
 	public void anIdleLumberjackDoesNotWalkAgainToASaplingItCannotReach(GameTestHelper helper) {
 		for (int y = 1; y <= 4; y++) {
 			helper.setBlock(6, y, 6, Blocks.BEDROCK);
@@ -882,7 +887,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * axe from the logs of an oak of four logs at (6, 1, 6), not the giant's, then fells the giant whole with dirt and
 	 * saplings from the core, takes back its scaffold, replants four saplings and stores the 26 logs (#541). Passes at about tick 1700.
 	 */
-	@GameTest(maxTicks = 2300)
+	// Full runs: passes at up to tick 1427 (#861).
+	@GameTest(maxTicks = 2900)
 	public void aLumberjackMakesAnAxeAndFellsAGiantTree(GameTestHelper helper) {
 		TreesGameTest.plantGiant(helper);
 		TreesGameTest.crownGiant(helper);
@@ -1484,7 +1490,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	 * With carrots in the core the farmer plants carrots, harvests the ripe ones and stores what it does not replant (#377).
 	 * The core's 16 carrots all go into the 16 bare spots, so carrots back in the core came from the harvest.
 	 */
-	@GameTest(maxTicks = 240)
+	// Full runs: passes at up to tick 148 (#861).
+	@GameTest(maxTicks = 300)
 	public void aFarmerGrowsCarrotsFromTheCore(GameTestHelper helper) {
 		List<BlockPos> spots = farm(helper, Blocks.CARROTS.defaultBlockState().setValue(CropBlock.AGE, 7), 8,
 				new ItemStack(Items.CARROT, 16));
@@ -1500,7 +1507,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A farmer with no seeds harvests ripe potatoes and replants them with potatoes from the harvest (#377). */
-	@GameTest(maxTicks = 100)
+	// Full runs: passes at up to tick 57 (#861).
+	@GameTest(maxTicks = 120)
 	public void aFarmerReplantsHarvestedPotatoes(GameTestHelper helper) {
 		farm(helper, Blocks.POTATOES.defaultBlockState().setValue(CropBlock.AGE, 7), 2);
 		helper.succeedWhen(() -> {
@@ -1512,7 +1520,8 @@ public class ColonyGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A farmer with no seeds harvests ripe beetroot and replants it with the seeds from the harvest (#382). */
-	@GameTest(maxTicks = 180)
+	// Full runs: passes at up to tick 109 (#861).
+	@GameTest(maxTicks = 220)
 	public void aFarmerReplantsHarvestedBeetroot(GameTestHelper helper) {
 		farm(helper, Blocks.BEETROOTS.defaultBlockState().setValue(BeetrootBlock.AGE, 3), 2);
 		Container core = container(helper, 7, 1, 7);

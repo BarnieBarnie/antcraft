@@ -76,7 +76,8 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** An idle bot (no script: idle.py) at food 5 eats the two bread it carries (#723). */
-	@GameTest(maxTicks = 100)
+	// Full runs: passes at up to tick 66 (#861).
+	@GameTest(maxTicks = 140)
 	public void anIdleHungryBotEatsItsBread(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		bot.setHome(helper.absolutePos(new BlockPos(3, 1, 3)));
@@ -302,7 +303,8 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 	 * A farmer with wheat to bake but no crafting table in reach, nor one or logs in the core or trees in the colony, warns
 	 * that it has none and tries again only after lib.food.RETRY (1200) ticks, not every round of 400 ticks (#744): 3 tries by tick 950 before.
 	 */
-	@GameTest(maxTicks = 1000)
+	// Full runs: passes at up to tick 950 (#861), the fixed wait where it checks.
+	@GameTest(maxTicks = 1900)
 	public void aFarmerWithNoTableTriesOncePerRetry(GameTestHelper helper) {
 		AntBot farmer = hungryMember(helper);
 		farmer.getFood().setFoodLevel(20);
@@ -338,7 +340,8 @@ public class FoodGameTest implements CustomTestMethodInvoker {
 	 * A farmer that warned it has no crafting table and is restarted does not try again before lib.food.RETRY ticks
 	 * (#755): the time it last tried is kept in memory, not in the script.
 	 */
-	@GameTest(maxTicks = 700)
+	// Full runs: passes at up to tick 650 (#861), the fixed wait where it checks.
+	@GameTest(maxTicks = 1300)
 	public void aFarmerWithNoTableKeepsItsRetryTimeAcrossARestart(GameTestHelper helper) {
 		AntBot farmer = hungryMember(helper);
 		farmer.getFood().setFoodLevel(20);

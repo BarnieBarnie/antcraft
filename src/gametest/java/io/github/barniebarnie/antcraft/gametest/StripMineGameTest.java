@@ -45,7 +45,8 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** The bot with the kit, y passed: it ends back at the surface with the 3 coal. */
-	@GameTest(maxTicks = 1000)
+	// Full runs: passes at up to tick 608 (#861).
+	@GameTest(maxTicks = 1300)
 	public void minesTheSeededCoalAndComesBackUp(GameTestHelper helper) {
 		AntBot bot = miner(helper, START, new ItemStack(Items.STONE_PICKAXE));
 		ScriptRun job = run(helper, bot, "coal 3 %d");
@@ -56,7 +57,8 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	 * Facing east from the west edge (#523): the stairs go down east and the branch runs east, past the area's east edge
 	 * through stone filled under it, beside the two coal at x=4; the coal north of the branch's line is left.
 	 */
-	@GameTest(maxTicks = 1000)
+	// Full runs: passes at up to tick 582 (#861).
+	@GameTest(maxTicks = 1200)
 	public void facingEastDigsEast(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(8, -4, 2, 12, -1, 4)) {
 			helper.setBlock(pos, Blocks.STONE);
@@ -107,7 +109,8 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	 * through stone filled past the area's east edge, mining the two coal in its north wall. Nothing past the edge is dug,
 	 * the seeded coal there neither.
 	 */
-	@GameTest(maxTicks = 1000)
+	// Full runs: passes at up to tick 595 (#861).
+	@GameTest(maxTicks = 1200)
 	public void aColonyMemberStopsAtTheColonyEdge(GameTestHelper helper) {
 		for (BlockPos pos : BlockPos.betweenClosed(8, -4, 2, 12, -1, 4)) {
 			helper.setBlock(pos, Blocks.STONE);
@@ -132,7 +135,8 @@ public class StripMineGameTest implements CustomTestMethodInvoker {
 	 * The kit's pickaxe has 10 uses left, enough for the stairs but not for a branch: before the branch the job makes a
 	 * new stone one from the cobblestone the stairs gave and the two sticks it carries, and the old one breaks.
 	 */
-	@GameTest(maxTicks = 1200)
+	// Full runs: passes at up to tick 710 (#861).
+	@GameTest(maxTicks = 1500)
 	public void aNearlyBrokenPickaxeIsReplaced(GameTestHelper helper) {
 		ItemStack worn = new ItemStack(Items.STONE_PICKAXE);
 		worn.setDamageValue(worn.getMaxDamage() - 10);

@@ -34,7 +34,8 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	 * stores it in its depot north of the cells (a chest from the supply chest) and plants the cell again.
 	 */
 	// Measured: passes at tick 256 to 257, alone and with the wood farm tests (red: No module named 'lib.cellfarm').
-	@GameTest(maxTicks = 520)
+	// Full runs: passes at up to tick 302 (#861).
+	@GameTest(maxTicks = 610)
 	public void aSpecOfOneBlockCellsIsLaidOutGrownAndHarvested(GameTestHelper helper) {
 		helper.setBlock(6, 1, 6, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(new BlockPos(6, 1, 6), ChestBlockEntity.class);
@@ -125,7 +126,8 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	 * no learn of its own. Here a harvest that takes 30 ticks is learnt once, then 200 ticks of 2 and 100 of 1 for "x".
 	 */
 	// Measured: passes at tick 52 (red: module 'lib.cellfarm' has no attribute 'most').
-	@GameTest(maxTicks = 120)
+	// Full runs: passes at up to tick 95 (#861).
+	@GameTest(maxTicks = 190)
 	public void aFarmLearnsItsHarvestTicksAndSizesItselfFromThem(GameTestHelper helper) {
 		helper.setBlock(6, 1, 6, Blocks.CHEST);
 		Container chest = helper.getBlockEntity(new BlockPos(6, 1, 6), ChestBlockEntity.class);
@@ -176,7 +178,8 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 	 * builds were tried; the reason is said once (#853).
 	 */
 	// Measured: passes at tick 24 (red: tried every round, [1, 2, ..., 12]).
-	@GameTest(maxTicks = 50)
+	// Full runs: passes at up to tick 45 (#861).
+	@GameTest(maxTicks = 90)
 	public void aFailedBuildBacksOff(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
 		BlockPos at = helper.absolutePos(new BlockPos(1, 1, 3));

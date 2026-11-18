@@ -352,7 +352,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	 * A bedrock ceiling at y=4 with a hatch: a shut oak trapdoor over a ladder. A bot with no blocks climbs the ladder,
 	 * opens the trapdoor, climbs out onto the ceiling and shuts the trapdoor behind it.
 	 */
-	@GameTest(maxTicks = 110)
+	// Full runs: passes at up to tick 64 (#861).
+	@GameTest(maxTicks = 130)
 	public void climbsALadderUpThroughAShutTrapdoorAndShutsIt(GameTestHelper helper) {
 		BlockPos hatch = hatch(helper);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 1);
@@ -1445,7 +1446,8 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Like {@link #walksThroughAColumnOfScaffoldingMidway}: a walk that ends inside the column stays there, standing. */
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 39 (#861).
+	@GameTest(maxTicks = 80)
 	public void stopsInsideAColumnOfScaffoldingMidway(GameTestHelper helper) {
 		room(helper, 0);
 		scaffoldingColumn(helper);

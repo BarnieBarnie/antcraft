@@ -57,7 +57,8 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 		});
 	}
 
-	@GameTest(maxTicks = 190)
+	// Full runs: passes at up to tick 128 (#861).
+	@GameTest(maxTicks = 260)
 	public void wieldsSwordFromInventoryWhenFighting(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
@@ -100,7 +101,8 @@ public class ToolGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** Bedrock cannot be broken, so the breaker never reports it broken: callers would act as if it were gone (#246). */
-	@GameTest(maxTicks = 30)
+	// Full runs: passes at up to tick 20 (#861).
+	@GameTest(maxTicks = 40)
 	public void neverReportsBedrockBroken(GameTestHelper helper) {
 		BlockPos bedrock = new BlockPos(3, 1, 3);
 		helper.setBlock(bedrock, Blocks.BEDROCK);

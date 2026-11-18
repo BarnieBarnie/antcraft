@@ -93,7 +93,8 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** {@code say} shows its text above the bot for {@link SayBubble#TICKS} ticks; then it is gone from the world. */
-	@GameTest(maxTicks = SayBubble.TICKS + 40)
+	// Full runs: passes at up to tick 101 (#861), just after the text is gone.
+	@GameTest(maxTicks = 2 * SayBubble.TICKS)
 	public void sayShowsTheTextAboveTheBotForAWhile(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 3, 1, 3);
 		BotScripts.run(bot, "say('hello there')\nwhile True:\n    wait(10)\n");
@@ -921,7 +922,8 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A bot that never ran a script runs {@code idle.py}: it walks home and waits there. */
-	@GameTest(maxTicks = 120)
+	// Full runs: passes at up to tick 73 (#861).
+	@GameTest(maxTicks = 150)
 	public void aBotThatNeverRanAScriptWalksHomeAndWaits(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));
@@ -952,7 +954,8 @@ public class ScriptGameTest implements CustomTestMethodInvoker {
 	 * A bot saved by an older version, in a colony and with a job's role, its scaffold and a walk target, loads and runs
 	 * {@code idle.py}; the fields it no longer knows are ignored.
 	 */
-	@GameTest(maxTicks = 120)
+	// Full runs: passes at up to tick 73 (#861).
+	@GameTest(maxTicks = 150)
 	public void aBotSavedWithColonyWorkLoadsAndRunsIdle(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		BlockPos home = helper.absolutePos(new BlockPos(6, 1, 6));

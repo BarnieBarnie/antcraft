@@ -33,7 +33,8 @@ public class GetJobGameTest implements CustomTestMethodInvoker {
 	 * An empty bot by the oak of {@link TreesGameTest}, eighteen stone and three exposed iron ore: logs by hand, a wooden
 	 * pickaxe, cobblestone, a stone pickaxe, raw iron, a furnace and the smelting, then the iron pickaxe.
 	 */
-	@GameTest(maxTicks = 3100)
+	// Full runs: passes at up to tick 1784 (#861).
+	@GameTest(maxTicks = 3600)
 	public void ironPickaxeFromNothing(GameTestHelper helper) {
 		TreesGameTest.plantTree(helper);
 		for (int x = 1; x <= 3; x++) {

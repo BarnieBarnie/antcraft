@@ -105,7 +105,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * a creeper that stopped 1.6 blocks off to light its fuse.
 	 */
 	// Measured: passes at tick 34.
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 34 (#861).
+	@GameTest(maxTicks = 70)
 	public void attackStepsInToAMobAtTheFarEdgeOfItsBlock(GameTestHelper helper) {
 		Zombie zombie = helper.spawn(EntityTypes.ZOMBIE, new Vec3(6.95, 1, 3.5));
 		zombie.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
@@ -325,7 +326,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * it. Up, not sideways, so it does not land in another test's area; without gravity, so it stays there. Once the script
 	 * ends the test notes how the cow was and discards it.
 	 */
-	@GameTest(maxTicks = 40)
+	// Full runs: passes at up to tick 23 (#861).
+	@GameTest(maxTicks = 50)
 	public void attackOnATargetBeyondRangeEndsWithTargetGone(GameTestHelper helper) {
 		Cow cow = helper.spawn(EntityTypes.COW, 6, 1, 3);
 		cow.setNoAi(true);
@@ -907,7 +909,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * {@code attack(min_health=...)} lets go once hurt: it still targets the still zombie 20 blocks off, but stays put.
 	 */
 	// Passes at tick 60, where it checks.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
+	// Full runs: passes at up to tick 60 (#861), the fixed wait where it checks.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
 	public void aHurtBotWithABowDoesNotCloseInOnAMobOutOfRange(GameTestHelper helper) {
 		AntBot bot = archer(helper, 12, 1, 16);
 		bot.setHealth(10);
@@ -930,7 +933,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * searched each tick it was done, as a way to the zombie never got it anywhere.
 	 */
 	// Passes at tick 60, where it checks; it planned 58 times before.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 70)
+	// Full runs: passes at up to tick 60 (#861), the fixed wait where it checks.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
 	public void aBotWithABowPlansAWayToAMobItCannotGetNearerToOnlyNowAndThen(GameTestHelper helper) {
 		for (int x = 11; x <= 13; x++) {
 			for (int z = 2; z <= 4; z++) {
@@ -991,7 +995,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * An idle bot leaves an enderman near it alone, as arrows do not hit it and a blow turns it on the bot (#750); once the
 	 * enderman hurts it, it fights back (HurtByTargetGoal). The enderman has no AI, so it neither wanders nor teleports.
 	 */
-	@GameTest(maxTicks = 70)
+	// Full runs: passes at up to tick 42 (#861).
+	@GameTest(maxTicks = 90)
 	public void anIdleBotLeavesAnEndermanAloneUntilHurtByIt(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
@@ -1059,7 +1064,8 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	 * fire, and that bot is never hurt. The bot in front has no AI, so it stays put and leaves the husk alone.
 	 */
 	// Measured: passes at tick 70.
-	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	// Full runs: passes at up to tick 91 (#861).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 190)
 	public void aBotsArrowPassesThroughABotInTheLineOfFire(GameTestHelper helper) {
 		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 18);
 		husk.setNoAi(true);

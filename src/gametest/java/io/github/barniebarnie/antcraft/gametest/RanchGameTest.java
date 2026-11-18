@@ -180,7 +180,8 @@ public class RanchGameTest implements CustomTestMethodInvoker {
 
 	/** A sheep in the pen, shears in the chest: it is sheared and its wool (1 to 3) stored. */
 	// Measured: passes at tick 47 to 48.
-	@GameTest(maxTicks = 120)
+	// Full runs: passes at up to tick 98 (#861).
+	@GameTest(maxTicks = 200)
 	public void aSheepIsShearedAndTheWoolStored(GameTestHelper helper) {
 		animal(helper, EntityTypes.SHEEP, 5, 5, false);
 		ranch(helper, 4, new ItemStack(Items.SHEARS));

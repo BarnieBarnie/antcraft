@@ -189,7 +189,8 @@ public class CraftGameTest implements CustomTestMethodInvoker {
 	}
 
 	/** A pickaxe needs a crafting table: one at the given position, walked to. */
-	@GameTest(maxTicks = 60)
+	// Full runs: passes at up to tick 44 (#861).
+	@GameTest(maxTicks = 90)
 	public void craftWalksToTheTableForA3x3Recipe(GameTestHelper helper) {
 		helper.setBlock(6, 1, 6, Blocks.CRAFTING_TABLE);
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 1, 1, 1);
