@@ -239,12 +239,16 @@ def corner_spot(low, high, clear=False):
     depot touches no cell block. Where clear, as for a farm whose cells hurt (the spec's hurts), the first of those in
     low's chunk that touches no block of any cell, not even diagonally, comes before them all: the block diagonal into
     the gap after cell 0 sat on the path by a berry farm's middle bush, and its walk could end over the edge of its
-    block toward one (#872). Other farms keep their spots: with the clear one, stem farm tests lost stems."""
+    block toward one (#872). Where none of those is clear in the chunk, two blocks west of low, north of the depot's first
+    chest, or east of the first row's last cell, a path's width off (#888). Other farms keep their spots: with the clear
+    one, stem farm tests lost stems."""
     spots = [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 2),
              (high.x + 1, high.z + 1)]
     # ponytail: no spot north of the depot: it left the test areas of farms laid out 2 blocks in (#854).
     if clear:
-        for x, z in spots:
+        # At the chunk's edges (corner at chunk-local x 0, or z 0 or 1) none of those is clear and in the chunk (#888):
+        # then two west of the corner, north of the depot's first chest, or east of the first row's last cell.
+        for x, z in spots + [(low.x - 2, low.z), (low.x, low.z - 3), (low.x + 4 * (high.x - low.x + 2), low.z)]:
             if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not by_cells(x, z, low, high):
                 return Pos(x, low.y + 1, z)
     for x, z in spots:

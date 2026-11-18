@@ -322,4 +322,37 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			&& BotScripts.log(bot, Output.Level.PRINT).stream().allMatch(l -> l.contains(": True")),
 			"said " + BotScripts.log(bot, Output.Level.PRINT)));
 	}
+
+	/**
+	 * A clear corner spot, as for a farm whose cells hurt, touches no cell block and stays in the corner's chunk at the
+	 * chunk's edges too (#888): with the corner at chunk-local x 0, or z 0 or 1, none of #872's candidates was both, so
+	 * the bot fell back to a spot beside a bush. Berry cells (3 by 1) and cactus cells (2 by 2) are laid out from corners
+	 * at those edges, and for each whether the clear spot is in the corner's chunk and two blocks or more off every one of
+	 * the first eight cells is said.
+	 */
+	// Measured: passes at tick 11 (red: False for all six, the old fallback spots, such as Pos(17, 1, 6) on the path by
+	// cell 0's first bush for the berry corner at chunk-local x 0).
+	@GameTest(maxTicks = 20)
+	public void aClearCornerSpotAtAChunkEdgeTouchesNoCell(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			import lib.cells
+			cases = [((3, 1), Pos(16, 0, 5)), ((3, 1), Pos(5, 0, 16)), ((3, 1), Pos(5, 0, 17)),
+				((2, 2), Pos(16, 0, 5)), ((2, 2), Pos(5, 0, 16)), ((2, 2), Pos(1, 0, 17))]
+			for size, low in cases:
+				name = f"test_farm_{size[0]}_{low.x}_{low.z}"
+				lib.cells.layout(name, low, size)
+				s = lib.cellfarm.corner_spot(*lib.cells.cell(name, 0), True)
+				clear = s.x // 16 == low.x // 16 and s.z // 16 == low.z // 16
+				for i in range(8):
+					a, b = lib.cells.cell(name, i)
+					clear = clear and max(a.x - s.x, s.x - b.x, a.z - s.z, s.z - b.z) >= 2
+				print(f"{size} {low}: {clear} {s}")
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).size() == 6
+			&& BotScripts.log(bot, Output.Level.PRINT).stream().allMatch(l -> l.contains(": True")),
+			"said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
 }
