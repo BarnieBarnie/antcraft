@@ -60,9 +60,9 @@ def lacks(radius=32, keep=None):
 
 
 def farm(low, high, c, kept):
-    """Waters a dry field (pour, a source per dry patch until none is dry), gets the hoe and seeds for crop c (of
-    lib.farm.CROPS), tends the field, gives back what it borrowed and stores the harvest beyond what kept, (item, count)
-    pairs, says the bot carried. Gives result()."""
+    """Waters a dry field (pour, a source per dry patch until none is dry, else warns what it lacked), gets the hoe and
+    seeds for crop c (of lib.farm.CROPS), tends the field, gives back what it borrowed and stores the harvest beyond what
+    kept, (item, count) pairs, says the bot carried. Gives result()."""
     spots = lib.farm.field(low, high)
     # One source wets up to 9 by 9 round it: pour one where it wets the most dry spots, never filling at a source poured
     # in the field, until it is all wet or no water is left (#629). Each pour takes a spot, so this ends.
@@ -72,6 +72,8 @@ def farm(low, high, c, kept):
         poured.append(at)
         spots = lib.farm.field(low, high)
         at = lib.farm.source(spots)
+    if at is not None:
+        warn("farm: dry field:", lacks(32, poured))  # tended dry all the same (#928)
     till = len([s for s in spots if block(s).id in lib.farm.SOIL and block(s.up()).is_air])
     if till:
         r = ensure_tool("hoe", till)

@@ -117,9 +117,9 @@ def lacks(radius=32, keep=None):
 
 
 def farm(low, high, c, kept):
-    """Waters a dry field (pour, a source per dry patch until none is dry), gets the hoe and seeds for crop c (of
-    lib.farm.CROPS), tends the field, gives back what it borrowed and stores the harvest beyond what kept, (item, count)
-    pairs, says the bot carried. Gives result()."""
+    """Waters a dry field (pour, a source per dry patch until none is dry, else warns what it lacked), gets the hoe and
+    seeds for crop c (of lib.farm.CROPS), tends the field, gives back what it borrowed and stores the harvest beyond what
+    kept, (item, count) pairs, says the bot carried. Gives result()."""
     spots = lib.farm.field(low, high)
     # One source wets up to 9 by 9 round it: pour one where it wets the most dry spots, never filling at a source poured
     # in the field, until it is all wet or no water is left (#629). Each pour takes a spot, so this ends.
@@ -129,6 +129,8 @@ def farm(low, high, c, kept):
         poured.append(at)
         spots = lib.farm.field(low, high)
         at = lib.farm.source(spots)
+    if at is not None:
+        warn("farm: dry field:", lacks(32, poured))  # tended dry all the same (#928)
     till = len([s for s in spots if block(s).id in lib.farm.SOIL and block(s.up()).is_air])
     if till:
         r = ensure_tool("hoe", till)
@@ -197,7 +199,7 @@ if args is not None:
 ```
 
 - [`field`](../reference/modules/lib/farm.md) lists the soil of the box: in each column, the top farmland, dirt or grass with air or a crop over it.
-- Where [`dry`](../reference/modules/lib/farm.md#dryspots) finds soil with no water within 4 blocks, `pour` digs the spot [`source`](../reference/modules/lib/farm.md#sourcespots) names, of the spots that would wet the first dry one, the one that wets the most (the middle of a field all dry), and pours a water source into it, which wets up to 9 by 9 round it; on a bigger field it pours again, one source per dry patch, until `source` finds none dry or no water is left. It pours with a water bucket by `get`, else an empty bucket by `get` (from a chest, or made of three iron ingots where that costs at most `BUCKET_TICKS`, never an ore dig, as `bucket_at_hand` checks) that [`fill_bucket`](../reference/modules/lib/farm.md#fill_bucketradius32-keepnone) fills at the nearest water source, never one it poured in the field. A water bucket borrowed from a chest goes back to it as the empty bucket it leaves ([`turned`](../reference/modules/lib/borrow.md#turneditem-into-n1)). With neither, the field is tended dry. `jobs.settle` waters its field with the same `pour`.
+- Where [`dry`](../reference/modules/lib/farm.md#dryspots) finds soil with no water within 4 blocks, `pour` digs the spot [`source`](../reference/modules/lib/farm.md#sourcespots) names, of the spots that would wet the first dry one, the one that wets the most (the middle of a field all dry), and pours a water source into it, which wets up to 9 by 9 round it; on a bigger field it pours again, one source per dry patch, until `source` finds none dry or no water is left. It pours with a water bucket by `get`, else an empty bucket by `get` (from a chest, or made of three iron ingots where that costs at most `BUCKET_TICKS`, never an ore dig, as `bucket_at_hand` checks) that [`fill_bucket`](../reference/modules/lib/farm.md#fill_bucketradius32-keepnone) fills at the nearest water source, never one it poured in the field. A water bucket borrowed from a chest goes back to it as the empty bucket it leaves ([`turned`](../reference/modules/lib/borrow.md#turneditem-into-n1)). With neither, the field is tended dry, and the job warns what it lacked (`lacks`), such as `farm: dry field: no water bucket, nor a water source within 32 blocks to fill a bucket from`. `jobs.settle` waters its field with the same `pour`.
 - [`ensure_tool("hoe", till)`](../reference/modules/lib/get.md) gets a hoe only where there is soil to till: carried, borrowed from a chest, or made. [`get`](../reference/modules/lib/get.md) brings the seeds for the bare spots; where there are too few, the field is still tended and its ripe crops are replanted from their own drops.
 - [`tend`](../reference/modules/lib/farm.md) harvests the ripe crops and replants them, tills the dirt and plants the rest; it says `no_item` where farmland was left bare, and the job stops there.
 - [`give_back`](../reference/modules/lib/borrow.md) returns the hoe and the seeds before the harvest is stored: carrots and potatoes are their own seed, so the borrowed ones go back to the chest they came from, not into the nearest chest of [`lib/stock`](../reference/modules/lib/stock.md) with the rest of the harvest. The job stores only what the bot carries beyond what it held when it started, so carrots or potatoes it brought along stay with it.

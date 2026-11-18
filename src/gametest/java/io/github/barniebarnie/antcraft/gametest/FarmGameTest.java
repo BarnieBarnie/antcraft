@@ -283,6 +283,27 @@ public class FarmGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A dry field with a hoe and seeds in a chest at (6, 1, 2) and neither water bucket, bucket nor pool (#928): jobs.farm
+	 * warns what the pour lacked, then tends the field dry.
+	 */
+	// Measured: passes at tick 23 (red: no warning by tick 202).
+	@GameTest(maxTicks = 60)
+	public void theJobSaysWhatADryFieldLacks(GameTestHelper helper) {
+		field(helper);
+		helper.setBlock(2, 0, 2, Blocks.DIRT);
+		chest(helper, 6, 1, 2, new ItemStack(Items.WOODEN_HOE), new ItemStack(Items.WHEAT_SEEDS, 8));
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 5);
+		BlockPos low = helper.absolutePos(new BlockPos(1, 0, 1));
+		BlockPos high = helper.absolutePos(new BlockPos(3, 0, 3));
+		BotScripts.command(helper, "antcraft bot " + bot.getStringUUID() + " run jobs.farm " + low.getX() + " " + low.getY() + " "
+			+ low.getZ() + " " + high.getX() + " " + high.getY() + " " + high.getZ() + " wheat");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.warnings(bot).stream().anyMatch(w -> w.contains(
+			"farm: dry field: no water bucket, nor a water source within 32 blocks to fill a bucket from")),
+			"warned " + BotScripts.warnings(bot)));
+	}
+
+	/**
 	 * A dry row of soil 11 long from (3, 0, 4) to (13, 0, 4) in the wide area, a 2 by 2 pool at (10, 1, 12), which a
 	 * filled source refills, and a hoe, 11 seeds and an empty bucket in a chest at (18, 1, 4) (#629): one source wets at
 	 * most 9 by 9, so jobs.farm pours one per dry patch, never filling the bucket at a source it poured, until every

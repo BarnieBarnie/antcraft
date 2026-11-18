@@ -161,12 +161,12 @@ def plant_cell(low, radius=32, depth=2):
     """Plants kelp in the cell at low's bottom block where it lacks it, a water source poured there first where it is
     none (jobs.farm.pour), with kelp the bot carries or takes from the chests within radius; then pours a source in each
     layer over it, from the bottom up, where it lost it, aimed at a side of the hole (SIDES), not into the kelp (#877).
-    Gives result(): ok, else no_water or the reason the place failed, with at."""
+    Gives result(): ok, else no_water: what pour lacked (jobs.farm.lacks) or the reason the place failed, with at."""
     cell = layers(low, depth)
     bottom = cell[-1]
     if block(bottom).id not in STALK:
         if not jobs.farm.pour(bottom, radius, waters(low, depth)):
-            return result("no_water", bottom)
+            return result(f"no_water: {jobs.farm.lacks(radius, waters(low, depth))}", bottom)
         if not count(KELP):
             lib.stock.take_up_to(KELP, 1, radius)
         r = place(bottom, KELP)
@@ -175,7 +175,7 @@ def plant_cell(low, radius=32, depth=2):
     # ponytail: every side is taken as ground, as the cell is dug in it.
     for p in reversed(cell[:-1]):
         if block(p).id not in STALK and not jobs.farm.pour(p, radius, waters(low, depth), SIDES):
-            return result("no_water", p)
+            return result(f"no_water: {jobs.farm.lacks(radius, waters(low, depth))}", p)
     return result()
 
 
@@ -192,7 +192,7 @@ def build_water_cell(low, high, radius=32, depth=2):
             if not r:
                 return result(r.reason, p)
         if p in cell[:-1] and block(p).id not in STALK and not jobs.farm.pour(p, radius, waters(low, depth)):
-            return result("no_water", p)
+            return result(f"no_water: {jobs.farm.lacks(radius, waters(low, depth))}", p)
     return plant_cell(low, radius, depth)
 
 

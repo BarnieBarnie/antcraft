@@ -78,7 +78,7 @@ def build_cell(kind, name, low, high, radius):
             return r
     wells = [centre(lib.cells.cell(name, i)[0]) for i in lib.cells.built(name)]
     if not jobs.farm.pour(centre(low), radius, wells):
-        return result("no_water", centre(low))
+        return result(f"no_water: {jobs.farm.lacks(radius, wells)}", centre(low))
     if [s for s in ss if block(s).id in lib.farm.SOIL]:
         r = ensure_tool("hoe", len(ss), None, radius)
         if not r["ok"]:

@@ -69,7 +69,7 @@ def tend_cell(c, name, low, high, radius):
 def build_cell(c, name, low, high, radius):
     """Builds the cell: levels its floor (lib.terrain.flatten, clearing the block over it), puts dirt where its floor is
     not soil, such as stone (lib.treefarm.soil), pours the water in its middle, then tills and plants it (tend_cell).
-    Gives result(): ok, no_water at the middle where no water could be poured, or the reason of the step that failed."""
+    Gives result(): ok, no_water: what pour lacked (jobs.farm.lacks) at the middle where no water could be poured, or the reason of the step that failed."""
     r = lib.terrain.flatten(low, Pos(high.x, low.y + 1, high.z), low.y)
     if not r["ok"]:
         return r
@@ -82,7 +82,7 @@ def build_cell(c, name, low, high, radius):
                 if not r["ok"]:
                     return r
     if not jobs.farm.pour(mid, radius, waters(name)):
-        return result("no_water", mid)
+        return result(f"no_water: {jobs.farm.lacks(radius, waters(name))}", mid)
     return tend_cell(c, name, low, high, radius)
 
 
