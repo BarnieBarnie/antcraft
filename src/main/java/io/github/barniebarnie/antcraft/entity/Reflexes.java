@@ -61,6 +61,8 @@ final class Reflexes {
 	private static final double STEP_SPEED = 1.0;
 	/** How far from a mob a bot that does not flee home runs: a little beyond {@link #HOSTILE_RANGE}. */
 	private static final double FLEE_RANGE = HOSTILE_RANGE + 2;
+	/** How much further than it stands a bot flees a mob that hurt it from beyond {@link #FLEE_RANGE}: out of a bow's 15. */
+	private static final double SHOOTER_MARGIN = 4;
 	/**
 	 * How many nodes a flight's path may take to plan: a short search, so the bot starts running soon, along a partial
 	 * path toward the goal if need be.
@@ -345,7 +347,8 @@ final class Reflexes {
 		if (this.bot.level().dimension() == this.bot.getHomeDimension() && fleesHome(this.bot.position().distanceTo(mob), home.distanceTo(mob), this.bot.position().distanceTo(home))) {
 			return new Goal.Near(this.bot.getScriptHome(), 1);
 		}
-		return new Goal.Away(hostile.blockPosition(), FLEE_RANGE);
+		// Beyond the mob's reach: a shooter further off than FLEE_RANGE is fled a few blocks further, out of its range (#918).
+		return new Goal.Away(hostile.blockPosition(), Math.max(FLEE_RANGE, this.bot.distanceTo(hostile) + SHOOTER_MARGIN));
 	}
 
 	/**
@@ -407,10 +410,15 @@ final class Reflexes {
 		return this.bot.entitiesNear(FallingBlockEntity.class, column, falling -> falling.isAlive() && falling.getY() >= box.minY);
 	}
 
-	/** The nearest hostile mob within {@link #HOSTILE_RANGE}, or null. */
+	/**
+	 * The nearest hostile mob within {@link #HOSTILE_RANGE}, or else the mob that last hurt the bot, whatever its distance,
+	 * such as a skeleton shooting it from afar (#918), until the bot forgets it, 100 ticks after its last blow
+	 * (LivingEntity.baseTick); or null.
+	 */
 	private @Nullable Mob nearestHostile() {
-		return this.bot.entitiesNear(Mob.class, this.bot.getBoundingBox().inflate(HOSTILE_RANGE),
+		Mob near = this.bot.entitiesNear(Mob.class, this.bot.getBoundingBox().inflate(HOSTILE_RANGE),
 				mob -> mob instanceof Enemy && mob.isAlive() && mob.distanceTo(this.bot) <= HOSTILE_RANGE)
 			.stream().min(Comparator.comparingDouble(mob -> mob.distanceToSqr(this.bot))).orElse(null);
+		return near == null && this.bot.getLastHurtByMob() instanceof Mob attacker && attacker.isAlive() ? attacker : near;
 	}
 }

@@ -14,6 +14,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.EntityTypes;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.monster.skeleton.Skeleton;
 import net.minecraft.world.entity.monster.zombie.Husk;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -333,6 +334,42 @@ public class ReflexGameTest implements CustomTestMethodInvoker {
 			}
 		});
 		helper.runAtTickTime(20, helper::succeed);
+	}
+
+	/**
+	 * A bot at flee health shot by a skeleton 12 blocks off, beyond {@code HOSTILE_RANGE} (8), runs out of its bow's range
+	 * (15), rather than stand under its arrows (#918). The skeleton is kept where it stands, so it does not follow; it
+	 * wears a helmet so it does not burn in daylight. The bot wears iron armour to live through a few arrows, and is fed
+	 * just short of healing (17), so it stays at flee health.
+	 */
+	// Measured: passes at tick 64 alone (red: stood 8.4 blocks from the skeleton on tick 302 of 300).
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 150)
+	public void fleesTheSkeletonShootingItFromAfar(GameTestHelper helper) {
+		Skeleton skeleton = helper.spawn(EntityTypes.SKELETON, 2, 1, 12);
+		skeleton.setItemSlot(EquipmentSlot.MAINHAND, new ItemStack(Items.BOW));
+		skeleton.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.LEATHER_HELMET));
+		Vec3 stand = skeleton.position();
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 14, 1, 12);
+		bot.setHome(bot.blockPosition());
+		bot.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+		bot.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+		bot.setItemSlot(EquipmentSlot.LEGS, new ItemStack(Items.IRON_LEGGINGS));
+		bot.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+		GameTests.hurt(bot, AntCraftConfig.botFleeHealth());
+		BotScripts.run(bot, WAIT);
+		boolean[] shot = {false};
+		helper.onEachTick(() -> {
+			skeleton.teleportTo(stand.x, stand.y, stand.z);
+			skeleton.setTarget(bot);
+			shot[0] |= bot.getLastHurtByMob() == skeleton;
+			if (!bot.isAlive()) {
+				helper.fail("bot shot dead at " + TestPositions.relative(helper, bot.blockPosition()).toShortString());
+			}
+		});
+		helper.succeedWhen(() -> {
+			helper.assertTrue(shot[0], "skeleton has not shot the bot");
+			helper.assertTrue(bot.distanceTo(skeleton) > 15.5, "bot " + bot.distanceTo(skeleton) + " blocks from the skeleton");
+		});
 	}
 
 	/** Brings the bot to low health once its script waits, and passes once it is out of the husk's reach. */
