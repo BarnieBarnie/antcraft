@@ -355,4 +355,37 @@ public class CellFarmGameTest implements CustomTestMethodInvoker {
 			&& BotScripts.log(bot, Output.Level.PRINT).stream().allMatch(l -> l.contains(": True")),
 			"said " + BotScripts.log(bot, Output.Level.PRINT)));
 	}
+
+	/**
+	 * by_cells and the clear corner spot take the row and gap of the farm's layout from lib.cells (#889), not a row of 4
+	 * and a gap of 1 of their own. A farm of 1 by 1 cells is laid out with a row of 2 and a gap of 2; by_cells must
+	 * agree, block by block, with the cells lib.cells gives, and the clear spot must be two or more off each of them.
+	 */
+	// Measured: passes at tick 34 (red: by_cells() takes 4 positional arguments but 6 were given).
+	@GameTest(maxTicks = 70)
+	public void byCellsReadsTheLayoutsRowAndGap(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 4, 1, 6);
+		BotScripts.run(bot, """
+			import lib.cellfarm
+			import lib.cells
+			name = "test_farm_layout"
+			lib.cells.layout(name, Pos(16, 0, 5), (1, 1), 2, 2)
+			f = lib.cells.farm(name)
+			low, high = lib.cells.cell(name, 0)
+			cells = [lib.cells.cell(name, i) for i in range(8)]
+			wrong = []
+			for x in range(14, 22):
+				for z in range(3, 16):
+					near = any([a.x - 1 <= x <= b.x + 1 and a.z - 1 <= z <= b.z + 1 for a, b in cells])
+					if near != lib.cellfarm.by_cells(x, z, low, high, f["row"], f["gap"]):
+						wrong.append((x, z))
+			s = lib.cellfarm.corner_spot(low, high, True, f["row"], f["gap"])
+			clear = all([max(a.x - s.x, s.x - b.x, a.z - s.z, s.z - b.z) >= 2 for a, b in cells])
+			print(f"wrong {wrong} clear {clear} {s}")
+			""");
+		BotScripts.failOnError(helper, bot);
+		helper.succeedWhen(() -> helper.assertTrue(BotScripts.log(bot, Output.Level.PRINT).size() == 1
+			&& BotScripts.log(bot, Output.Level.PRINT).get(0).startsWith("wrong [] clear True"),
+			"said " + BotScripts.log(bot, Output.Level.PRINT)));
+	}
 }

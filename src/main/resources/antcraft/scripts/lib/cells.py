@@ -14,7 +14,12 @@ def farm(name):
     return f
 
 
-def layout(name, origin, size, row=4, gap=1):
+# The layout's defaults, a row of 4 cells along x and a gap of 1 between cells; a farm keeps its own in memory.
+ROW = 4
+GAP = 1
+
+
+def layout(name, origin, size, row=ROW, gap=GAP):
     """Sets up the farm name: cells of size (w, d) blocks, row cells to a row along x, rows along z, gap blocks of path
     between cells, cell 0 with its low corner at origin. A farm already laid out keeps its layout and the cells built.
     Gives the farm, a dict with origin, size, row, gap and built."""

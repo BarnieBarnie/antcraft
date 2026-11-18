@@ -223,12 +223,16 @@ def corner(name, told, clear=False):
     if p.x // 16 == low.x // 16 and p.z // 16 == low.z // 16:
         return
     # Two arguments where not clear: tests stub corner_spot so.
-    r = goto(corner_spot(low, high, True) if clear else corner_spot(low, high))
+    if clear:
+        f = lib.cells.farm(name)
+        r = goto(corner_spot(low, high, True, f["row"], f["gap"]))
+    else:
+        r = goto(corner_spot(low, high))
     if not r:
         tell(told, f"corner: {r.reason}")
 
 
-def corner_spot(low, high, clear=False):
+def corner_spot(low, high, clear=False, row=lib.cells.ROW, gap=lib.cells.GAP):
     """Where corner sends the bot, over the floor by cell 0's low corner low, the cell's floor reaching to high: the first
     in low's chunk and off the cell of the blocks diagonal into the cell from low, then a block back on z, on x, then
     west of the depot's first chest, a block back on x and two on z, else diagonal out of the cell's far corner. Kept in
@@ -241,15 +245,15 @@ def corner_spot(low, high, clear=False):
     the gap after cell 0 sat on the path by a berry farm's middle bush, and its walk could end over the edge of its
     block toward one (#872). Where none of those is clear in the chunk, two blocks west of low, north of the depot's first
     chest, or east of the first row's last cell, a path's width off (#888). Other farms keep their spots: with the clear
-    one, stem farm tests lost stems."""
+    one, stem farm tests lost stems. row and gap are the farm's layout's (lib.cells, #889)."""
     spots = [(low.x + 1, low.z + 1), (low.x + 1, low.z - 1), (low.x - 1, low.z + 1), (low.x - 1, low.z - 2),
              (high.x + 1, high.z + 1)]
     # ponytail: no spot north of the depot: it left the test areas of farms laid out 2 blocks in (#854).
     if clear:
         # At the chunk's edges (corner at chunk-local x 0, or z 0 or 1) none of those is clear and in the chunk (#888):
         # then two west of the corner, north of the depot's first chest, or east of the first row's last cell.
-        for x, z in spots + [(low.x - 2, low.z), (low.x, low.z - 3), (low.x + 4 * (high.x - low.x + 2), low.z)]:
-            if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not by_cells(x, z, low, high):
+        for x, z in spots + [(low.x - 2, low.z), (low.x, low.z - 3), (low.x + row * (high.x - low.x + 1 + gap), low.z)]:
+            if x // 16 == low.x // 16 and z // 16 == low.z // 16 and not by_cells(x, z, low, high, row, gap):
                 return Pos(x, low.y + 1, z)
     for x, z in spots:
         on_cell = low.x <= x <= high.x and low.z <= z <= high.z
@@ -258,14 +262,14 @@ def corner_spot(low, high, clear=False):
     return Pos(x, low.y + 1, z)
 
 
-def by_cells(x, z, low, high):
+def by_cells(x, z, low, high, row=lib.cells.ROW, gap=lib.cells.GAP):
     """Whether the block at x, z is on or touches, diagonally too, a block of a cell of the farm whose cell 0 is low to
-    high, laid out as run lays it (lib.cells.layout's row of 4 and gap of 1), any number of rows."""
+    high, laid out with row cells to a row and gap blocks between cells (lib.cells.layout's), any number of rows."""
     w, d = high.x - low.x + 1, high.z - low.z + 1
     for dx in [-1, 0, 1]:
         for dz in [-1, 0, 1]:
             rx, rz = x + dx - low.x, z + dz - low.z
-            if 0 <= rx < 4 * (w + 1) and rz >= 0 and rx % (w + 1) < w and rz % (d + 1) < d:
+            if 0 <= rx < row * (w + gap) and rz >= 0 and rx % (w + gap) < w and rz % (d + gap) < d:
                 return True
     return False
 
