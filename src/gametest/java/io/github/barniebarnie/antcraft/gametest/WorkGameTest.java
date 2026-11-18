@@ -890,6 +890,17 @@ public class WorkGameTest implements CustomTestMethodInvoker {
 			List.of("False out_of_reach 0"));
 	}
 
+	/** An item that may never be picked up (infinite pickup delay): pick_up gives up waiting by it (#920). */
+	// Measured: passes at tick 120 (red: script RUNNING on tick 202 of 200).
+	@GameTest(maxTicks = 240)
+	public void pickUpLeavesAnItemItMayNeverTake(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 2);
+		ItemEntity cane = helper.spawnItem(Items.SUGAR_CANE, new BlockPos(4, 1, 4));
+		cane.setNeverPickUp();
+		expect(helper, bot, "r = pick_up('sugar_cane', radius=6)\nprint(r.ok, r.reason, count('sugar_cane'))\n",
+			List.of("False out_of_reach 0"));
+	}
+
 	/** A cane cell along x at z 4, water at (4, y, 4) with its floor kept, a cane resting at the water's bottom. */
 	private static void pickUpCaneInACellsWater(GameTestHelper helper, AntBot bot, int y) {
 		helper.setBlock(3, y, 4, Blocks.DIRT);

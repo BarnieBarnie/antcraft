@@ -1009,6 +1009,11 @@ public final class WorkApi {
 		 * no gravity never lands (#913).
 		 */
 		private static final int LANDING_TICKS = 40;
+		/**
+		 * How long it waits beside an item before it leaves it: well past a drop's pickup delay (10 ticks, 40 for a player's
+		 * throw), but one that may never be picked up has an endless one (#920).
+		 */
+		private static final int WAITING_TICKS = 100;
 
 		private final ScriptRun run;
 		private final AntBot bot;
@@ -1029,6 +1034,8 @@ public final class WorkApi {
 		private boolean beside;
 		/** How many ticks it has waited for the current goal to land. */
 		private int falling;
+		/** How many ticks it has waited beside the current goal, for it to land or for its pickup delay to end. */
+		private int waiting;
 		/** How many of the items the bot carried when it started, to tell how many it took, also by walking over them. */
 		private final long before;
 		private long taken;
@@ -1109,6 +1116,7 @@ public final class WorkApi {
 				this.arrivals = 0;
 				this.beside = false;
 				this.falling = 0;
+				this.waiting = 0;
 			}
 			if (this.walk == null) {
 				if (this.arrivals == 0 && this.goal instanceof ItemEntity dropped && !dropped.onGround() && !dropped.isInLiquid()) {
@@ -1121,7 +1129,12 @@ public final class WorkApi {
 					return false;
 				}
 				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (dropped.hasPickUpDelay() || !dropped.onGround() && !this.beside)) {
-					return false; // next to it, waiting for it to land and for its pickup delay to end
+					// Next to it, waiting for it to land and for its pickup delay to end.
+					if (++this.waiting > WAITING_TICKS) {
+						this.unreachable.add(this.goal.getId());
+						this.goal = null;
+					}
+					return false;
 				}
 				if (this.arrivals > 0 && this.goal instanceof ItemEntity dropped && (this.beside || this.inBlock(dropped))) {
 					// Lying in a block, such as bone meal in a composter: walking onto it would break the block (#817).
