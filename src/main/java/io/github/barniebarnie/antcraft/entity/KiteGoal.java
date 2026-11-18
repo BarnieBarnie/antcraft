@@ -1,6 +1,7 @@
 package io.github.barniebarnie.antcraft.entity;
 
 import io.github.barniebarnie.antcraft.profile.TickProfiler;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -43,6 +44,12 @@ public final class KiteGoal extends Goal {
 	private static final double BLAST = 6;
 	/** How many spots further from the creeper the bot weighs when it backs off: it takes the one that gains it most. */
 	private static final int AWAY_TRIES = 10;
+	/** In how many directions round the bot it looks for a spot out of every creeper's reach (#868). */
+	private static final int RING = 16;
+	/** How far, in blocks, it looks in each of them. */
+	private static final int RING_REACH = 16;
+	/** How many of those spots, nearest first, it plans a path to before it falls back to random ones. */
+	private static final int RING_PATHS = 4;
 	/** How near the bot, in blocks, a creeper counts when it backs off, lit or not: one about to light is in the way too (#725). */
 	private static final double CREEPERS_RANGE = 2 * RANGE;
 	/**
@@ -101,6 +108,10 @@ public final class KiteGoal extends Goal {
 		this.bot.kitePlans++;
 		List<Creeper> creepers = this.bot.level().getEntitiesOfClass(Creeper.class, this.bot.getBoundingBox().inflate(CREEPERS_RANGE), Creeper::isAlive);
 		double now = nearest(creepers, this.bot.position());
+		Path out = this.outOfReach(creepers, now);
+		if (out != null) {
+			return out;
+		}
 		Vec3 best = null;
 		double bestGain = 0;
 		for (int i = 0; i < 2 * AWAY_TRIES; i++) {
@@ -121,6 +132,41 @@ public final class KiteGoal extends Goal {
 		// or more counts, as one ending on the bot's own block gains nothing (#733).
 		Path path = this.bot.getNavigation().createPath(BlockPos.containing(best), 0);
 		return path != null && nearest(creepers, Vec3.atBottomCenterOf(path.getEndNode().asBlockPos())) >= now + 1 && !nearer(path, creepers, now) ? path : null;
+	}
+
+	/**
+	 * The path to the nearest spot out of every creeper's reach, or null where none of the {@link #RING_PATHS} nearest such
+	 * spots has one: in each of {@link #RING} directions round the bot, at its level or a block up or down, the nearest spot it can stand on at least
+	 * {@link #RANGE} from {@code creepers}, tried nearest first and judged by where its path ends. Straight away gains most
+	 * for each block walked, which near a corner of walls backs the bot into it, inside the blast (#868).
+	 */
+	private @Nullable Path outOfReach(List<Creeper> creepers, double now) {
+		Vec3 at = this.bot.position();
+		List<BlockPos> spots = new ArrayList<>();
+		ray:
+		for (int i = 0; i < RING; i++) {
+			double angle = 2 * Math.PI * i / RING;
+			for (int r = 1; r <= RING_REACH; r++) {
+				BlockPos to = BlockPos.containing(at.add(r * Math.cos(angle), 0, r * Math.sin(angle)));
+				if (nearest(creepers, Vec3.atBottomCenterOf(to)) >= RANGE + 0.5) {
+					// The first spot of the ray it can stand on, at its level or a block up or down.
+					for (int dy : new int[] {0, 1, -1}) {
+						if (this.bot.getNavigation().isStableDestination(to.above(dy))) {
+							spots.add(to.above(dy));
+							continue ray;
+						}
+					}
+				}
+			}
+		}
+		spots.sort(Comparator.comparingDouble(to -> to.distToCenterSqr(at)));
+		for (BlockPos to : spots.subList(0, Math.min(RING_PATHS, spots.size()))) {
+			Path path = this.bot.getNavigation().createPath(to, 0);
+			if (path != null && nearest(creepers, Vec3.atBottomCenterOf(path.getEndNode().asBlockPos())) >= RANGE && !nearer(path, creepers, now)) {
+				return path;
+			}
+		}
+		return null;
 	}
 
 	/**

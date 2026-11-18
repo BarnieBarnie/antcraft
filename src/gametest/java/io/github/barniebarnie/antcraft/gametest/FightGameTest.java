@@ -491,19 +491,24 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		succeedWhenPrinted(helper, bot, run, List.of("True None"));
 	}
 
-	/** A bot with an iron sword kills two creepers and a husk that come at it together, and neither creeper explodes (#706). */
-	// Measured: passes at tick 477 to 485 in 3 runs alone, 802 in a full run.
+	/**
+	 * A bot with an iron sword fights two creepers and a husk that come at it together, and no blast hurts it (#706): it
+	 * kills the husk and each creeper, or a creeper explodes with the bot out of its blast, 6 to 7 blocks off, where the
+	 * fuse burns on (SwellGoal), as in about 1 run in 50 (#868). Only a blast that hurts the bot fails it, as in
+	 * {@link #aBotBetweenTwoCreepersGetsOutOfBothBlastsNotCornered} (#781).
+	 */
+	// Measured: passes at tick 477 to 485 in 3 runs alone, 802 in a full run; 432 to 897 in 200 copies at once (#868).
 	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 1600)
-	public void aBotKillsTwoCreepersAndAHuskWithoutAnExplosion(GameTestHelper helper) {
+	public void aBotKillsTwoCreepersAndAHuskUnhurtByABlast(GameTestHelper helper) {
 		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 12, 1, 8);
 		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
 		Creeper[] creepers = {helper.spawn(EntityTypes.CREEPER, 9, 1, 14), helper.spawn(EntityTypes.CREEPER, 15, 1, 14)};
 		// Husks do not burn in daylight, so only the bot can kill it.
 		Husk husk = helper.spawn(EntityTypes.HUSK, 12, 1, 15);
-		failOnExplosion(helper, bot, creepers);
+		failOnExplosion(helper, bot);
 		helper.succeedWhen(() -> {
 			for (Creeper creeper : creepers) {
-				helper.assertTrue(creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health");
+				helper.assertTrue(creeper.isRemoved() || creeper.isDeadOrDying(), "creeper alive with " + creeper.getHealth() + " health");
 			}
 			helper.assertTrue(husk.isDeadOrDying(), "husk alive with " + husk.getHealth() + " health");
 			helper.assertTrue(bot.isAlive(), "bot dead");
@@ -551,7 +556,7 @@ public class FightGameTest implements CustomTestMethodInvoker {
 	/**
 	 * A bot between a creeper whose fuse lights at once and another 5 blocks off gets out of both blasts (#725). It ran
 	 * straight away from the lit one, into the other, which lit in turn and cornered it at the edge of the area, where it
-	 * stood until it exploded, as about 1 run in 52 of {@link #aBotKillsTwoCreepersAndAHuskWithoutAnExplosion}: it now
+	 * stood until it exploded, as about 1 run in 52 of {@link #aBotKillsTwoCreepersAndAHuskUnhurtByABlast}: it now
 	 * backs off from the nearest creeper of all, lit or not, to the side. A creeper may explode with the bot out of its
 	 * blast, 6 to 7 blocks off, where the fuse burns on (SwellGoal): that passes, as only a blast that hurts the bot fails
 	 * it (#781). It failed once so in a full run (#759: an explosion at tick 32, the bot at full health).
@@ -571,6 +576,34 @@ public class FightGameTest implements CustomTestMethodInvoker {
 		helper.succeedWhen(() -> {
 			helper.assertTrue(wasLit[0], "the fuse was never lit");
 			helper.assertTrue(KiteGoal.litNear(bot) == null && out(lit) && out(other), "a fuse burns");
+		});
+	}
+
+	/**
+	 * A bot near a corner of the area, a lit creeper on the open side and its weapon not ready, gets out of the blast
+	 * rather than back into the corner (#868). Straight away gained most for each block walked, so it backed into the
+	 * corner, 4 to 6 blocks from the creeper, and stood there until it exploded, as in 4 of 200 copies of
+	 * {@link #aBotKillsTwoCreepersAndAHuskUnhurtByABlast}. Only a blast that hurts the bot fails it (#781).
+	 */
+	// Measured: passes in 100 of 100 copies at once (on main: hurt in 100 of 100); at tick 46 alone.
+	@GameTest(structure = "antcraft-gametest:wide", maxTicks = 120)
+	public void aBotBacksOffALitCreeperNearACornerUnhurt(GameTestHelper helper) {
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, new Vec3(2.5, 1, 2.5));
+		bot.getInventory().addItem(new ItemStack(Items.IRON_SWORD));
+		Creeper creeper = helper.spawn(EntityTypes.CREEPER, new Vec3(5, 1, 5));
+		creeper.setTarget(bot);
+		// Once the bot stands on the floor: a bot just spawned plans no path, and lost 4 of the fuse's 30 ticks.
+		helper.runAfterDelay(2, () -> {
+			creeper.setSwellDir(1);
+			// Struck it just now: the weapon is not ready, so the bot backs off rather than step in.
+			bot.setLastHurtMob(creeper);
+		});
+		failOnExplosion(helper, bot);
+		boolean[] wasLit = {false};
+		helper.onEachTick(() -> wasLit[0] |= creeper.getSwelling(1) > 0);
+		helper.succeedWhen(() -> {
+			helper.assertTrue(wasLit[0], "the fuse was never lit");
+			helper.assertTrue(out(creeper), "fuse still lit, swell " + creeper.getSwelling(1));
 		});
 	}
 
