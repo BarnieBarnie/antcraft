@@ -470,13 +470,16 @@ public final class TaskPlanner {
 			}
 			// The first ingredient takes the stock it likes best and can leave a later one short where another order
 			// would not: charcoal for torches smelts one log and burns the other, leaving none for the stick (#931).
-			// ponytail: tries only the reverse order, not every permutation; enough for two ingredient sets.
-			if (before != null && shortage(state) > shortage(before) && !this.exhausted()) {
-				Collections.reverse(ingredients);
-				before.boundBy(state.score());
-				this.needAll(before, ingredients, times, innerPath, conversions);
-				if (!before.pruned && !before.cycle) {
-					state.assign(before);
+			// So each other ingredient set is tried first, the rest after it in recipe order, while a shortage is left (#936).
+			// ponytail: one set moved to the front per try, not every permutation; add permutations when a recipe needs two sets moved.
+			for (int first = 1; before != null && first < ingredients.size() && shortage(state) > shortage(before) && !this.exhausted(); first++) {
+				List<Map.Entry<Set<I>, Integer>> order = new ArrayList<>(ingredients);
+				order.addFirst(order.remove(first));
+				State<I> trial = before.copy();
+				trial.boundBy(state.score());
+				this.needAll(trial, order, times, innerPath, conversions);
+				if (!trial.pruned && !trial.cycle) {
+					state.assign(trial);
 				}
 			}
 			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count(), innerPath) : Map.of();

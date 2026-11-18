@@ -342,6 +342,33 @@ class TaskPlannerTest {
 		assertTrue(plan.isReady(), "plan: " + plan);
 	}
 
+	/**
+	 * Only the middle ingredient first works: the first and the last each take a p the middle needs, as the p is what
+	 * they have most of. Recipe order and its reverse both leave a p short (#936).
+	 */
+	@Test
+	void threeIngredientsWhereOnlyTheMiddleFirstWorksPlanNoShortage() {
+		Map<Set<String>, Integer> ingredients = new LinkedHashMap<>();
+		ingredients.put(Set.of("p", "q"), 1);
+		ingredients.put(Set.of("p"), 3);
+		ingredients.put(Set.of("p", "r"), 1);
+		TaskPlanner.RecipeBook<String> book = new TaskPlanner.RecipeBook<>() {
+			@Override
+			public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+				return item.equals("x") ? List.of(recipe("x", 1, ingredients)) : List.of();
+			}
+
+			@Override
+			public List<TaskPlanner.Fuel<String>> fuels() {
+				return List.of();
+			}
+		};
+
+		TaskPlanner.Plan<String> plan = TaskPlanner.plan("x", 1, new HashMap<>(Map.of("p", 3, "q", 1, "r", 1)), book, item -> false);
+
+		assertTrue(plan.isReady(), "plan: " + plan);
+	}
+
 	@Test
 	void charcoalIsNotMadeToFuelMakingCharcoal() {
 		TaskPlanner.Plan<String> plan = smeltPlan("charcoal", 16, Map.of("oak_log", 32));
