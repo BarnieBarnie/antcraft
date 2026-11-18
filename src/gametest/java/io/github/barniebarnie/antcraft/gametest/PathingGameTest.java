@@ -856,6 +856,32 @@ public class PathingGameTest implements CustomTestMethodInvoker {
 	}
 
 	/**
+	 * A bot at the bottom of a two-wide shaft whose other half holds a sugar cane: pillaring up the cane's half is the
+	 * cheapest way to the top there, but a path never puts scaffold where a plant stands (#865). It pillars up its own
+	 * half and bridges over, and the cane stays, as a farm's crop, cane or bush would.
+	 */
+	// Measured: passes at tick 23 (red: the cane became dirt on tick 3).
+	@GameTest(maxTicks = 50)
+	public void pillaringGoesRoundACane(GameTestHelper helper) {
+		room(helper, 0);
+		fill(helper, 1, 1, 1, 6, 7, 6, Blocks.BEDROCK);
+		fill(helper, 2, 1, 3, 3, 7, 3, Blocks.AIR);
+		helper.setBlock(3, 0, 3, Blocks.SAND);
+		helper.setBlock(4, 0, 3, Blocks.WATER);
+		helper.setBlock(3, 1, 3, Blocks.SUGAR_CANE);
+		AntBot bot = helper.spawn(ModEntities.ANT_BOT, 2, 1, 3);
+		BotScripts.failOnError(helper, bot);
+		bot.getInventory().addItem(new ItemStack(Items.DIRT, 16));
+		helper.onEachTick(() -> {
+			if (!helper.getBlockState(new BlockPos(3, 1, 3)).is(Blocks.SUGAR_CANE)) {
+				helper.fail("the cane became " + helper.getBlockState(new BlockPos(3, 1, 3)));
+			}
+		});
+		GameTests.walkTo(bot, helper.absolutePos(new BlockPos(3, 4, 3)));
+		succeedWhenAt(helper, bot, new BlockPos(3, 4, 3));
+	}
+
+	/**
 	 * A bot on a block, its body over the block's edge into the air beside it, steps up onto a block it bridges there
 	 * (#656): it steps back off the edge to place it, as its own body was in the way, where it waited till it gave up
 	 * unreachable, such as beside a felled poplar's trunk.

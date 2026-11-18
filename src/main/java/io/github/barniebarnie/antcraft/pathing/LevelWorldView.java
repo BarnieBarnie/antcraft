@@ -81,7 +81,17 @@ public class LevelWorldView implements WorldView {
 
 	@Override
 	public boolean mayPlace(BlockPos pos) {
-		return this.mayPlace.test(pos);
+		return this.mayPlace.test(pos) && !isPlant(this.blocks.get(pos));
+	}
+
+	/**
+	 * A crop, sapling, sugar cane, sweet berry bush or nether wart, such as a farm grows: paths treat it as air but never
+	 * put scaffold in its place, so they go round it (#865). Grass and flowers are not: scaffold breaks them with their
+	 * drops (#608).
+	 */
+	static boolean isPlant(BlockState state) {
+		return state.is(BlockTags.CROPS) || state.is(BlockTags.SAPLINGS) || state.is(Blocks.SUGAR_CANE)
+			|| state.is(Blocks.SWEET_BERRY_BUSH) || state.is(Blocks.NETHER_WART);
 	}
 
 	@Override
