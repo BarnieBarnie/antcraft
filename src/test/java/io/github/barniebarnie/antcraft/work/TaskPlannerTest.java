@@ -311,6 +311,37 @@ class TaskPlannerTest {
 		assertTrue(plan.isReady());
 	}
 
+	/**
+	 * With an oak and a birch log, 4 torches need no gathering: one log makes planks for the stick and the fuel, the other
+	 * smelts into charcoal. Planning the charcoal first took one log to smelt and burnt the other, leaving none for the
+	 * stick (#931).
+	 */
+	@Test
+	void torchesFromTwoMixedLogsGatherNothing() {
+		Map<Set<String>, Integer> torch = new LinkedHashMap<>();
+		torch.put(Set.of("coal", "charcoal"), 1);
+		torch.put(Set.of("stick"), 1);
+		TaskPlanner.RecipeBook<String> book = new TaskPlanner.RecipeBook<>() {
+			@Override
+			public List<TaskPlanner.Recipe<String>> recipesFor(String item) {
+				return item.equals("torch") ? List.of(recipe("torch", 4, torch)) : FURNACE_BOOK.recipesFor(item);
+			}
+
+			@Override
+			public List<TaskPlanner.Fuel<String>> fuels() {
+				return List.of(
+					new TaskPlanner.Fuel<>(Set.of("coal"), 1600),
+					new TaskPlanner.Fuel<>(Set.of("charcoal"), 1600),
+					new TaskPlanner.Fuel<>(Set.of("oak_log", "birch_log", "oak_planks", "birch_planks"), 300));
+			}
+		};
+
+		TaskPlanner.Plan<String> plan = TaskPlanner.plan("torch", 4, new HashMap<>(Map.of("oak_log", 1, "birch_log", 1)), book, GATHERABLE::contains);
+
+		assertEquals(Map.of(), plan.toGather(), "plan: " + plan.crafts());
+		assertTrue(plan.isReady(), "plan: " + plan);
+	}
+
 	@Test
 	void charcoalIsNotMadeToFuelMakingCharcoal() {
 		TaskPlanner.Plan<String> plan = smeltPlan("charcoal", 16, Map.of("oak_log", 32));

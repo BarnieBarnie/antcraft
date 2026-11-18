@@ -462,10 +462,21 @@ public final class TaskPlanner {
 			innerPath.add(recipe.output());
 			// What a conversion recipe converts is never converted itself: converting it straight from the original is as good.
 			boolean conversions = !this.isConversion(recipe);
-			for (Map.Entry<Set<I>, Integer> ingredient : recipe.ingredients().entrySet()) {
-				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, innerPath, conversions);
-				if (state.pruned) {
-					return;
+			List<Map.Entry<Set<I>, Integer>> ingredients = new ArrayList<>(recipe.ingredients().entrySet());
+			State<I> before = ingredients.size() > 1 ? state.copy() : null;
+			this.needAll(state, ingredients, times, innerPath, conversions);
+			if (state.pruned) {
+				return;
+			}
+			// The first ingredient takes the stock it likes best and can leave a later one short where another order
+			// would not: charcoal for torches smelts one log and burns the other, leaving none for the stick (#931).
+			// ponytail: tries only the reverse order, not every permutation; enough for two ingredient sets.
+			if (before != null && shortage(state) > shortage(before) && !this.exhausted()) {
+				Collections.reverse(ingredients);
+				before.boundBy(state.score());
+				this.needAll(before, ingredients, times, innerPath, conversions);
+				if (!before.pruned && !before.cycle) {
+					state.assign(before);
 				}
 			}
 			Map<I, Integer> fuel = recipe.smelting() ? this.fuel(state, times * recipe.count(), innerPath) : Map.of();
@@ -622,6 +633,22 @@ public final class TaskPlanner {
 				}
 				return false;
 			});
+		}
+
+		/** Needs each ingredient {@code times} over, in the given order, until the plan is abandoned. */
+		void needAll(State<I> state, List<Map.Entry<Set<I>, Integer>> ingredients, int times, Set<I> path, boolean conversions) {
+			for (Map.Entry<Set<I>, Integer> ingredient : ingredients) {
+				this.needAny(state, ingredient.getKey(), ingredient.getValue() * times, path, conversions);
+				if (state.pruned) {
+					return;
+				}
+			}
+		}
+
+		/** Items a plan still has to gather or cannot get. */
+		static long shortage(State<?> state) {
+			long[] score = state.score();
+			return score[0] + score[1];
 		}
 
 		/** Needs {@code count} items, any mix of {@code options}. */
